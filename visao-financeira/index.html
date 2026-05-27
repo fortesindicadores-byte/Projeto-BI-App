@@ -311,12 +311,12 @@ table.dre tr.total td.imp-cell{font-size:14px;}
       </div>
     </div>
 
-    <!-- Nível 3: multi-select -->
+    <!-- Projeto: multi-select -->
     <div class="filter-group">
-      <span class="filter-label">Nível 3</span>
+      <span class="filter-label">Projeto</span>
       <div class="ms-wrap" id="ms-nv3">
         <button class="ms-btn" onclick="toggleMs('ms-nv3')">
-          <span class="ms-lbl">Nível 3</span><span class="ms-cnt"></span>
+          <span class="ms-lbl">Projeto</span><span class="ms-cnt"></span>
           <svg width="10" height="6" viewBox="0 0 10 6"><path d="M0 0l5 6 5-6z" fill="#F97316"/></svg>
         </button>
         <div class="ms-panel"><div class="ms-search"><svg width="12" height="12" viewBox="0 0 12 12"><circle cx="5" cy="5" r="4" stroke="#94A3B8" stroke-width="1.5" fill="none"/><line x1="8.5" y1="8.5" x2="11" y2="11" stroke="#94A3B8" stroke-width="1.5"/></svg><input type="text" placeholder="Digite para pesquisar…"></div><div class="ms-list"></div></div>
@@ -530,6 +530,7 @@ const PACOTES_MAP = {
   'Seguro de Veículos e Equipamentos':'Seguros e licenças','Seguros':'Seguros e licenças',
 };
 const getPac = r => PACOTES_MAP[r[C.cta]] || '-';
+const getNv3Prefix = v => v ? v.split('-')[0].trim() : v;
 
 const CONTAS = [
   'Combustíveis','Estorno ICMS','Manutenção de Carrocerias',
@@ -722,9 +723,10 @@ function populateFilters(rows){
   buildVigMsFilter(vigs);
 
   const unis=[...new Set(rows.map(r=>r[C.uni]).filter(Boolean))].sort();
-  const nv3s=[...new Set(rows.map(r=>r[C.nv3]).filter(Boolean))].sort();
-  const pacs=[...new Set(rows.map(r=>getPac(r)).filter(v=>v&&v!=='-'))].sort();
-  const ctas=[...new Set(rows.map(r=>r[C.cta]).filter(v=>v&&v!=='Receita Líquida'))].sort();
+  const hasVal = r => Math.abs(+r[C.rem])>0 || Math.abs(+r[C.real])>0;
+  const nv3s=[...new Set(rows.filter(hasVal).map(r=>getNv3Prefix(r[C.nv3])).filter(Boolean))].sort();
+  const pacs=[...new Set(rows.filter(hasVal).map(r=>getPac(r)).filter(v=>v&&v!=='-'))].sort();
+  const ctas=[...new Set(rows.filter(r=>hasVal(r)&&r[C.cta]!=='Receita Líquida').map(r=>r[C.cta]).filter(Boolean))].sort();
 
   buildMsFilter('ms-uni', unis);
   buildMsFilter('ms-nv3', nv3s);
@@ -745,7 +747,7 @@ function getF(){
 function applyFilters(r, f){
   if(f.uni.length && !f.uni.includes(r[C.uni]))   return false;
   // Nível 3 e Pacote: Receita Líquida sempre passa (necessária para AV)
-  if(f.nv3.length && r[C.cta] !== 'Receita Líquida' && !f.nv3.includes(r[C.nv3]))   return false;
+  if(f.nv3.length && r[C.cta] !== 'Receita Líquida' && !f.nv3.includes(getNv3Prefix(r[C.nv3])))   return false;
   if(f.pac.length && r[C.cta] !== 'Receita Líquida' && !f.pac.includes(getPac(r)))   return false;
   // Conta: Receita Líquida sempre passa (necessária para AV)
   if(f.cta.length && r[C.cta] !== 'Receita Líquida' && !f.cta.includes(r[C.cta])) return false;
