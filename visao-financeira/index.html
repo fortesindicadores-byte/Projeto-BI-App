@@ -48,6 +48,11 @@ body{
   background:rgba(249,115,22,.15);border:1px solid rgba(249,115,22,.3);
   border-radius:4px;padding:3px 10px;white-space:nowrap;
 }
+.access-badge{
+  font-size:10px;color:var(--text2);
+  background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);
+  border-radius:4px;padding:3px 10px;white-space:nowrap;
+}
 .header-filters{
   flex-basis:100%;order:3;margin-top:10px;
   display:flex;gap:10px;flex-wrap:wrap;align-items:flex-start;
@@ -263,6 +268,7 @@ table.dre tr.total td.imp-cell{font-size:14px;}
       </svg>
     </button>
     <span class="status-badge" id="status-badge">Carregando…</span>
+    <span class="access-badge" id="access-badge" style="display:none"></span>
   </div>
   <div class="header-filters">
 
@@ -1019,7 +1025,24 @@ async function init(){
     set('status-badge','Erro ao carregar dados');
   }
 }
-document.addEventListener('DOMContentLoaded',init);
+function initAccessLog(){
+  let name=localStorage.getItem('bi_user_name');
+  if(!name){
+    name=prompt('Qual é o seu nome?')||'Desconhecido';
+    localStorage.setItem('bi_user_name',name);
+  }
+  const lastRaw=localStorage.getItem('bi_last_access');
+  if(lastRaw){
+    const d=new Date(lastRaw);
+    const lastUser=localStorage.getItem('bi_last_user')||name;
+    const badge=document.getElementById('access-badge');
+    badge.textContent=`Último acesso: ${d.toLocaleDateString('pt-BR')} ${d.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})} · ${lastUser}`;
+    badge.style.display='';
+  }
+  localStorage.setItem('bi_last_access',new Date().toISOString());
+  localStorage.setItem('bi_last_user',name);
+}
+document.addEventListener('DOMContentLoaded',()=>{initAccessLog();init();});
 </script>
 </body>
 </html>
