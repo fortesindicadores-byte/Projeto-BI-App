@@ -120,7 +120,7 @@ body{
 .ms-list::-webkit-scrollbar-thumb{background:#2a3a50;border-radius:2px;}
 
 /* ── MAIN ── */
-.main{padding:20px 24px;max-width:1440px;margin:0 auto;}
+.main{padding:20px 24px;}
 
 /* ── KPI GRID ── */
 .kpi-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:14px;}
@@ -531,13 +531,9 @@ function populateFilters(){
   buildMsFilter('ms-vig',vigs);
 }
 function getVisibleMonths(){
+  // Gráficos temporais: filtra só por Ano; Vigência não restringe a série histórica
   const anos=getMsValues('ms-ano');
-  const vigs=getMsValues('ms-vig');
-  return M.filter(m=>{
-    if(anos.length>0&&!anos.includes('20'+m.lb.slice(-2))) return false;
-    if(vigs.length>0&&!vigs.includes(m.lb)) return false;
-    return true;
-  });
+  return M.filter(m=> anos.length===0 || anos.includes('20'+m.lb.slice(-2)));
 }
 function getDetailMonth(){
   const vigs=getMsValues('ms-vig');
@@ -613,7 +609,7 @@ function buildDonut(m){
 
 // ── RENDER ────────────────────────────────────────────────────
 function renderAll(){
-  const visible=getVisibleMonths().length>0?getVisibleMonths():M;
+  const visible=getVisibleMonths();
   const m=getDetailMonth();
   const idx=M.indexOf(m);
 
