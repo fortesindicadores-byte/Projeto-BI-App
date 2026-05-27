@@ -229,6 +229,16 @@ const STATIC = {
   </div>
   <div class="header-filters">
     <div class="filter-group">
+      <span class="filter-label">Ano</span>
+      <div class="ms-wrap" id="ms-ano">
+        <button class="ms-btn" onclick="toggleMs('ms-ano')">
+          <span class="ms-lbl">Ano</span><span class="ms-cnt"></span>
+          <svg width="10" height="6" viewBox="0 0 10 6"><path d="M0 0l5 6 5-6z" fill="#F97316"/></svg>
+        </button>
+        <div class="ms-panel"><div class="ms-search"><svg width="12" height="12" viewBox="0 0 12 12"><circle cx="5" cy="5" r="4" stroke="#94A3B8" stroke-width="1.5" fill="none"/><line x1="8.5" y1="8.5" x2="11" y2="11" stroke="#94A3B8" stroke-width="1.5"/></svg><input type="text" placeholder="Digite para pesquisar…"></div><div class="ms-list"></div></div>
+      </div>
+    </div>
+    <div class="filter-group">
       <span class="filter-label">Vigência</span>
       <div class="ms-wrap" id="ms-vig">
         <button class="ms-btn" onclick="toggleMs('ms-vig')">
@@ -549,10 +559,11 @@ function renderStatic() {
 // ═══════════════════════════════════════════════
 const getNv3Prefix = v => v ? v.split('-')[0].trim() : v;
 function getMsValues(id){ const w=document.getElementById(id); return w&&w._sel?[...w._sel]:[]; }
-function getFilters(){ return { vigencia:getMsValues('ms-vig'), unidade:getMsValues('ms-uni'), nivel3:getMsValues('ms-nv3') }; }
+function getFilters(){ return { ano:getMsValues('ms-ano'), vigencia:getMsValues('ms-vig'), unidade:getMsValues('ms-uni'), nivel3:getMsValues('ms-nv3') }; }
 function filtrarRows(rows) {
   const f = getFilters();
   return rows.filter(r =>
+    (f.ano.length     ===0 || f.ano.includes(String(r.vigencia).slice(-4)))      &&
     (f.vigencia.length===0 || f.vigencia.includes(String(r.vigencia))) &&
     (f.unidade.length ===0 || f.unidade.includes(String(r.unidade)))  &&
     (f.nivel3.length  ===0 || f.nivel3.includes(getNv3Prefix(String(r.nivel3))))
@@ -701,7 +712,11 @@ async function atualizar() {
   try {
     const json = await gvFetch();
     allRows = json.rows || [];
-    if (json.vigencias) buildVigMsFilter(json.vigencias);
+    if (json.vigencias) {
+      const anos=[...new Set(json.vigencias.map(v=>v.slice(-4)))].sort().reverse();
+      buildMsFilter('ms-ano', anos);
+      buildVigMsFilter(json.vigencias);
+    }
     if (json.unidades)  buildMsFilter('ms-uni', json.unidades);
     if (json.nivel3s)   buildMsFilter('ms-nv3', [...new Set(json.nivel3s.map(v=>getNv3Prefix(v)))].sort());
 

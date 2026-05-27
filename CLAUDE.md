@@ -77,11 +77,25 @@ Samsung S25 Ultra tem bug de orientação conhecido — não resolvível sem rel
 ### Filtros disponíveis
 | ID | Nome | Comportamento |
 |---|---|---|
+| `ms-ano` | **Ano** | **OBRIGATÓRIO em todos os painéis** — aparece sempre antes de `ms-vig` |
 | `ms-vig` | Vigência | filtra tudo incluindo Receita Líquida |
 | `ms-uni` | Unidade | filtra tudo incluindo Receita Líquida |
 | `ms-nv3` | Projeto | filtra tudo incluindo Receita Líquida; usa prefixo antes do `-` |
 | `ms-pac` | Pacotes | Receita Líquida sempre passa |
 | `ms-cta` | Conta | Receita Líquida sempre passa |
+
+### Filtro Ano — padrão obrigatório
+Extrair anos das vigências após carregar os dados, sempre antes de construir `ms-vig`:
+```javascript
+// Vigência formato Date (visao-financeira):
+const anos = [...new Set(vigs.map(d => String(d.getFullYear())))].sort().reverse();
+buildMsFilter('ms-ano', anos);
+
+// Vigência formato "MM/YYYY" (demais painéis):
+const anos = [...new Set(vigencias.map(v => v.slice(-4)))].sort().reverse();
+buildMsFilter('ms-ano', anos);
+```
+Adicionar check de ano em toda função de filtragem de linhas.
 
 ### Regra crítica
 A **Receita Líquida deve sempre passar** nos filtros de Pacote e Conta (necessária para calcular AV%).

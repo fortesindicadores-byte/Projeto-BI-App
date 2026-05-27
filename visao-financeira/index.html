@@ -287,6 +287,18 @@ table.dre tr.total td.imp-cell{font-size:14px;}
   </div>
   <div class="header-filters">
 
+    <!-- Ano: multi-select -->
+    <div class="filter-group">
+      <span class="filter-label">Ano</span>
+      <div class="ms-wrap" id="ms-ano">
+        <button class="ms-btn" onclick="toggleMs('ms-ano')">
+          <span class="ms-lbl">Ano</span><span class="ms-cnt"></span>
+          <svg width="10" height="6" viewBox="0 0 10 6"><path d="M0 0l5 6 5-6z" fill="#F97316"/></svg>
+        </button>
+        <div class="ms-panel"><div class="ms-search"><svg width="12" height="12" viewBox="0 0 12 12"><circle cx="5" cy="5" r="4" stroke="#94A3B8" stroke-width="1.5" fill="none"/><line x1="8.5" y1="8.5" x2="11" y2="11" stroke="#94A3B8" stroke-width="1.5"/></svg><input type="text" placeholder="Digite para pesquisar…"></div><div class="ms-list"></div></div>
+      </div>
+    </div>
+
     <!-- Vigência: single-select dropdown -->
     <div class="filter-group">
       <span class="filter-label">Vigência</span>
@@ -720,6 +732,8 @@ function populateFilters(rows){
   const vMap=new Map();
   rows.forEach(r=>{ const d=parseVig(r[C.vig]); if(d) vMap.set(vigKey(d),d); });
   vigs=[...vMap.values()].sort((a,b)=>a-b);
+  const anos=[...new Set(vigs.map(d=>String(d.getFullYear())))].sort().reverse();
+  buildMsFilter('ms-ano', anos);
   buildVigMsFilter(vigs);
 
   const unis=[...new Set(rows.map(r=>r[C.uni]).filter(Boolean))].sort();
@@ -737,7 +751,8 @@ function populateFilters(rows){
 
 function getF(){
   return {
-    vig: getMsValues('ms-vig'),   // array de vigKeys
+    ano: getMsValues('ms-ano'),
+    vig: getMsValues('ms-vig'),
     uni: getMsValues('ms-uni'),
     nv3: getMsValues('ms-nv3'),
     pac: getMsValues('ms-pac'),
@@ -758,6 +773,7 @@ function applyFilters(r, f){
 function filterMes(rows, f, vigOverride){
   return rows.filter(r=>{
     const d=parseVig(r[C.vig]); if(!d) return false;
+    if(f.ano&&f.ano.length>0 && !f.ano.includes(String(d.getFullYear()))) return false;
     if(vigOverride){
       if(vigKey(d)!==vigOverride) return false;
     } else if(f.vig&&f.vig.length>0){
