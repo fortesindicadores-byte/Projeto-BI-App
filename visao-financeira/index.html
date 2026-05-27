@@ -566,7 +566,7 @@ const colI = (el,bad) => { if(el) el.style.color = bad ? 'var(--red)' : 'var(--g
 // ═══════════════════════════════════
 // ESTADO
 // ═══════════════════════════════════
-let allRows=[], vigs=[], chReceita=null, chAV=null;
+let allRows=[], vigs=[], chReceita=null, chAV=null, lastF=null;
 
 // ═══════════════════════════════════
 // MULTI-SELECT  (estado em Set, busca persistente)
@@ -1005,6 +1005,7 @@ function renderAnalise(rows, bodyId, vsOrc){
 // ═══════════════════════════════════
 function atualizar(){
   const f=getF();
+  lastF=f;
   const activeRows=filterMes(allRows,f);
   const activeAgg=agg(activeRows);
   let prevAgg={};
@@ -1060,11 +1061,11 @@ function initAccessLog(){
   localStorage.setItem('bi_last_user',name);
 }
 document.addEventListener('DOMContentLoaded',()=>{initAccessLog();init();});
-const _ro=new ResizeObserver(()=>{
-  if(chReceita) chReceita.resize();
-  if(chAV) chAV.resize();
+let _resizeTimer;
+window.addEventListener('resize',()=>{
+  clearTimeout(_resizeTimer);
+  _resizeTimer=setTimeout(()=>{ if(lastF) renderCharts(lastF); },400);
 });
-document.querySelectorAll('.chart-wrap').forEach(el=>_ro.observe(el));
 </script>
 </body>
 </html>
