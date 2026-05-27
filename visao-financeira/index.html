@@ -253,10 +253,10 @@ table.dre tr.total td.imp-cell{font-size:14px;}
   /* tabelas: encaixam na tela sem scroll, proporcional como os cards */
   .tbl-wrap{overflow-x:hidden;}
   .tbl-section{padding:12px 10px 10px;}
-  table.dre{table-layout:fixed;width:100%;font-size:1.9vw;}
+  table.dre{table-layout:fixed;width:100%;font-size:1.6vmin;}
   table.dre td,table.dre th{padding:4px 2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-  table.dre tr.total td{font-size:1.9vw;padding-top:6px;padding-bottom:4px;}
-  table.dre td.imp-cell,table.dre tr.total td.imp-cell{font-size:2.1vw;}
+  table.dre tr.total td{font-size:1.6vmin;padding-top:6px;padding-bottom:4px;}
+  table.dre td.imp-cell,table.dre tr.total td.imp-cell{font-size:1.8vmin;}
   .w-conta{width:30%;}
   .w-num{width:12%;}
   .w-d{width:11%;}
@@ -450,6 +450,7 @@ table.dre tr.total td.imp-cell{font-size:14px;}
             <th class="w-d   num">Δ BRL</th>
             <th class="w-pct num">Δ %</th>
             <th class="w-d   num">Δ YTD</th>
+            <th class="w-pct num">Δ YTD %</th>
           </tr>
         </thead>
         <tbody id="body-pacote"></tbody>
@@ -955,13 +956,15 @@ function renderPacote(rows,allRowsRef,f){
     if(mm.rem===0&&mm.real===0) return; // oculta contas sem dados
     const dB=mm.real-mm.rem, dP=mm.rem?(dB/Math.abs(mm.rem)*100):null;
     const ytdB=yy.real-yy.rem;
+    const ytdP=yy.rem?(ytdB/Math.abs(yy.rem)*100):null;
     const bad=dB<0, ytdBad=ytdB<0;
     totR+=mm.rem; totX+=mm.real; totYR+=yy.rem; totYX+=yy.real;
-    html+=`<tr><td class="conta">${c}</td><td class="num">${fmt(mm.rem)}</td><td class="num">${fmt(mm.real)}</td><td class="num ${bad?'cr':'cg'}">${fmt(dB)}</td><td class="num ${bad?'cr-t':'cg-t'}">${pctInt(dP)}</td><td class="num ${ytdBad?'cr':'cg'}">${fmt(ytdB)}</td></tr>`;
+    html+=`<tr><td class="conta">${c}</td><td class="num">${fmt(mm.rem)}</td><td class="num">${fmt(mm.real)}</td><td class="num ${bad?'cr':'cg'}">${fmt(dB)}</td><td class="num ${bad?'cr-t':'cg-t'}">${pctInt(dP)}</td><td class="num ${ytdBad?'cr':'cg'}">${fmt(ytdB)}</td><td class="num ${ytdBad?'cr-t':'cg-t'}">${pctInt(ytdP)}</td></tr>`;
   });
   const tdB=totX-totR,tdP=totR?(tdB/Math.abs(totR)*100):null,bT=tdB<0;
   const ytdTD=totYX-totYR,ytdBT=ytdTD<0;
-  html+=`<tr class="total"><td class="conta">Total Pacote Frota</td><td class="num">${fmt(totR)}</td><td class="num">${fmt(totX)}</td><td class="num ${bT?'cr':'cg'}">${fmt(tdB)}</td><td class="num ${bT?'cr-t':'cg-t'}">${pctInt(tdP)}</td><td class="num ${ytdBT?'cr':'cg'}">${fmt(ytdTD)}</td></tr>`;
+  const ytdTDP=totYR?(ytdTD/Math.abs(totYR)*100):null;
+  html+=`<tr class="total"><td class="conta">Total Pacote Frota</td><td class="num">${fmt(totR)}</td><td class="num">${fmt(totX)}</td><td class="num ${bT?'cr':'cg'}">${fmt(tdB)}</td><td class="num ${bT?'cr-t':'cg-t'}">${pctInt(tdP)}</td><td class="num ${ytdBT?'cr':'cg'}">${fmt(ytdTD)}</td><td class="num ${ytdBT?'cr-t':'cg-t'}">${pctInt(ytdTDP)}</td></tr>`;
   document.getElementById('body-pacote').innerHTML=html;
 }
 
@@ -1057,11 +1060,13 @@ function initAccessLog(){
   localStorage.setItem('bi_last_user',name);
 }
 document.addEventListener('DOMContentLoaded',()=>{initAccessLog();init();});
-window.addEventListener('orientationchange',()=>{
-  setTimeout(()=>{
+let _resizeTimer;
+window.addEventListener('resize',()=>{
+  clearTimeout(_resizeTimer);
+  _resizeTimer=setTimeout(()=>{
     if(chReceita) chReceita.resize();
     if(chAV) chAV.resize();
-  },300);
+  },250);
 });
 </script>
 </body>
