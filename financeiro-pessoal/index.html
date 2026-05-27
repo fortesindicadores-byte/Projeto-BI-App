@@ -1,0 +1,789 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Controle Financeiro · Renan &amp; Tati</title>
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<style>
+:root {
+  --bg:      #0C1017;
+  --card:    #141B26;
+  --card2:   #1A2335;
+  --border:  #1E2D40;
+  --orange:  #F97316;
+  --orange-d:#EA580C;
+  --text:    #F1F5F9;
+  --text2:   #94A3B8;
+  --text3:   #475569;
+  --green:   #22C55E;
+  --red:     #EF4444;
+  --blue:    #60A5FA;
+}
+*{margin:0;padding:0;box-sizing:border-box;}
+body{
+  background:
+    radial-gradient(ellipse at 10% 25%, rgba(249,115,22,.06) 0%, transparent 50%),
+    radial-gradient(ellipse at 90% 75%, rgba(56,189,248,.05) 0%, transparent 50%),
+    var(--bg);
+  color:var(--text);
+  font-family:'Montserrat',-apple-system,sans-serif;
+  font-size:13px;min-height:100vh;
+}
+
+/* ── HEADER ── */
+.header{
+  background:rgba(12,16,23,.75);border-bottom:1px solid rgba(255,255,255,.07);
+  padding:10px 24px 12px;display:flex;flex-wrap:wrap;align-items:center;
+  position:sticky;top:0;z-index:100;
+  backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);
+  box-shadow:0 2px 12px rgba(0,0,0,.3);
+}
+.brand{flex:1;order:1;}
+.brand h1{font-size:16px;font-weight:700;color:var(--orange);}
+.brand p{font-size:10px;color:var(--text2);margin-top:2px;}
+.header-right{flex-shrink:0;order:2;display:flex;align-items:center;gap:8px;}
+.status-badge{
+  font-size:10px;color:var(--text);
+  background:rgba(249,115,22,.15);border:1px solid rgba(249,115,22,.3);
+  border-radius:4px;padding:3px 10px;white-space:nowrap;
+}
+.access-badge{
+  font-size:10px;color:var(--text2);
+  background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);
+  border-radius:4px;padding:3px 10px;white-space:nowrap;
+}
+.refresh-btn{
+  background:rgba(249,115,22,.15);border:1px solid rgba(249,115,22,.3);
+  border-radius:4px;padding:5px 7px;cursor:pointer;color:var(--orange);
+  display:flex;align-items:center;
+}
+.refresh-btn:hover{background:rgba(249,115,22,.25);}
+.header-filters{
+  flex-basis:100%;order:3;margin-top:10px;
+  display:flex;gap:10px;flex-wrap:wrap;align-items:flex-start;
+}
+.filter-group{display:flex;flex-direction:column;gap:3px;}
+.filter-label{font-size:9px;color:var(--text2);text-transform:uppercase;letter-spacing:.5px;}
+.filter-hint{flex-basis:100%;font-size:10px;color:var(--text3);font-style:italic;margin-top:3px;line-height:1.2;}
+
+/* ── MULTI-SELECT ── */
+.ms-wrap{position:relative;}
+.ms-btn{
+  display:flex;align-items:center;gap:8px;
+  background:#0a0f18;color:var(--text);
+  border:1px solid #2a3a50;border-radius:4px;
+  font-family:'Montserrat',sans-serif;font-size:11px;font-weight:700;
+  padding:6px 12px;cursor:pointer;text-transform:uppercase;
+  letter-spacing:.5px;white-space:nowrap;min-width:110px;
+}
+.ms-btn:hover{border-color:var(--orange);}
+.ms-lbl{flex:1;}
+.ms-cnt{
+  background:var(--orange);color:#000;border-radius:10px;
+  padding:1px 6px;font-size:9px;font-weight:800;display:none;
+}
+.ms-btn svg{flex-shrink:0;opacity:.8;}
+.ms-panel{
+  display:none;flex-direction:column;
+  position:absolute;top:calc(100% + 4px);left:0;z-index:500;
+  background:#0f1824;border:1px solid #2a3a50;border-radius:4px;
+  min-width:200px;max-height:280px;
+  box-shadow:0 8px 24px rgba(0,0,0,.7);
+}
+.ms-panel.open{display:flex;}
+.ms-search{
+  padding:7px 10px;border-bottom:1px solid #1e2d40;
+  display:flex;align-items:center;gap:6px;flex-shrink:0;
+}
+.ms-search svg{opacity:.4;flex-shrink:0;}
+.ms-search input{
+  flex:1;background:transparent;border:none;
+  color:var(--text);font-family:'Montserrat',sans-serif;
+  font-size:11px;outline:none;
+}
+.ms-search input::placeholder{color:var(--text3);}
+.ms-list{overflow-y:auto;flex:1;}
+.ms-opt{
+  display:flex;align-items:center;gap:8px;
+  padding:7px 12px;cursor:pointer;
+  font-size:11px;color:var(--text2);
+  text-transform:uppercase;letter-spacing:.3px;
+}
+.ms-opt:hover{background:rgba(255,255,255,.05);color:var(--text);}
+.ms-opt.all-opt{border-bottom:1px solid #1e2d40;color:var(--text);font-weight:700;}
+.ms-opt input[type=checkbox]{accent-color:var(--orange);cursor:pointer;width:14px;height:14px;flex-shrink:0;}
+.ms-list::-webkit-scrollbar{width:4px;}
+.ms-list::-webkit-scrollbar-track{background:transparent;}
+.ms-list::-webkit-scrollbar-thumb{background:#2a3a50;border-radius:2px;}
+
+/* ── MAIN ── */
+.main{padding:20px 24px;max-width:1440px;margin:0 auto;}
+
+/* ── KPI GRID ── */
+.kpi-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:14px;}
+.kpi{
+  background:rgba(20,27,38,.55);border:1px solid rgba(255,255,255,.07);border-radius:8px;
+  padding:14px 16px;position:relative;overflow:hidden;
+  backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);
+  box-shadow:0 2px 12px rgba(0,0,0,.25);
+}
+.kpi::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;}
+.kpi.g::before{background:var(--green);}
+.kpi.r::before{background:var(--red);}
+.kpi.b::before{background:var(--blue);}
+.kpi.o::before{background:var(--orange);}
+.kpi-lbl{font-size:10px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;color:var(--text2);margin-bottom:8px;}
+.kpi-val{font-size:24px;font-weight:800;line-height:1;}
+.kpi-val.g{color:var(--green);}
+.kpi-val.r{color:var(--red);}
+.kpi-val.b{color:var(--blue);}
+.kpi-val.o{color:var(--orange);}
+.kpi-sub{font-size:11px;color:var(--text3);margin-top:6px;}
+
+/* ── CARDS / CHARTS ── */
+.row2{display:grid;grid-template-columns:1fr 360px;gap:14px;margin-bottom:14px;}
+.row3{display:grid;grid-template-columns:1fr 290px;gap:14px;margin-bottom:14px;}
+.card{
+  background:rgba(20,27,38,.55);border:1px solid rgba(255,255,255,.07);border-radius:8px;
+  padding:18px;
+  backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);
+  box-shadow:0 2px 12px rgba(0,0,0,.25);
+}
+.card-hd{
+  font-size:13px;font-weight:800;color:var(--text);text-transform:uppercase;letter-spacing:.5px;
+  display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;
+}
+.card-hd small{font-size:10px;font-weight:400;color:var(--text2);text-transform:none;letter-spacing:0;}
+.chart-box{position:relative;}
+.legend-row{display:flex;gap:14px;flex-wrap:wrap;margin-bottom:10px;}
+.leg{display:flex;align-items:center;gap:5px;font-size:10px;color:var(--text2);}
+.leg-dot{width:8px;height:8px;border-radius:2px;}
+
+/* ── INVEST STATS ── */
+.inv-stats{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+.inv-stat{background:var(--card2);border:1px solid var(--border);border-radius:8px;padding:10px 12px;}
+.inv-stat-lbl{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.6px;color:var(--text2);margin-bottom:4px;}
+.inv-stat-val{font-size:17px;font-weight:800;}
+.inv-stat-val.o{color:var(--orange);}
+.inv-stat-val.g{color:var(--green);}
+.inv-stat-val.b{color:var(--blue);}
+.prog-wrap{margin:14px 0 4px;}
+.prog-bg{height:7px;background:var(--border);border-radius:4px;overflow:hidden;}
+.prog-fill{height:100%;background:linear-gradient(90deg,var(--orange-d),var(--orange));border-radius:4px;transition:width .6s ease;}
+.prog-labels{display:flex;justify-content:space-between;font-size:10px;color:var(--text3);margin-top:4px;}
+
+/* ── BADGE PROJETADO ── */
+.badge-proj{
+  font-size:10px;font-weight:700;letter-spacing:.5px;
+  background:rgba(249,115,22,.12);color:var(--orange);
+  border:1px solid rgba(249,115,22,.25);
+  padding:2px 8px;border-radius:20px;display:none;
+}
+
+/* ── TABLE ── */
+.tbl-wrap{overflow-x:auto;margin-top:4px;}
+table{width:100%;border-collapse:collapse;font-size:12px;}
+th{text-align:left;padding:7px 10px;font-size:9px;font-weight:700;letter-spacing:.9px;text-transform:uppercase;color:var(--text3);border-bottom:1px solid var(--border);}
+td{padding:8px 10px;border-bottom:1px solid rgba(30,41,59,.4);}
+tr:last-child td{border-bottom:none;}
+tr:hover td{background:rgba(255,255,255,.02);}
+.tag{font-size:10px;font-weight:600;padding:2px 7px;border-radius:20px;display:inline-block;white-space:nowrap;}
+.t-moradia   {background:rgba(249,115,22,.15);color:#fb923c;}
+.t-transporte{background:rgba(96,165,250,.15);color:#60a5fa;}
+.t-telecom   {background:rgba(168,85,247,.15);color:#c084fc;}
+.t-educacao  {background:rgba(251,191,36,.15);color:#fbbf24;}
+.t-dividas   {background:rgba(239,68,68,.15);color:#f87171;}
+.t-pj        {background:rgba(34,197,94,.15);color:#4ade80;}
+.t-bemstar   {background:rgba(20,184,166,.15);color:#2dd4bf;}
+.t-invest    {background:rgba(249,115,22,.18);color:var(--orange);}
+.t-outros    {background:rgba(148,163,184,.12);color:#94a3b8;}
+.status-pill{font-size:10px;font-weight:700;padding:2px 8px;border-radius:20px;display:inline-block;letter-spacing:.3px;}
+.status-pill.paid   {background:rgba(34,197,94,.18);color:#4ade80;}
+.status-pill.pending{background:rgba(251,191,36,.15);color:#fbbf24;}
+.amt{font-weight:600;text-align:right;font-variant-numeric:tabular-nums;}
+.tfoot-row td{font-weight:700;border-top:1px solid var(--border);font-size:13px;padding-top:10px;}
+
+/* ── MOBILE ── */
+@media(max-width:900px){
+  .row2,.row3{grid-template-columns:1fr;}
+  .kpi-grid{grid-template-columns:repeat(2,1fr);}
+}
+@media(max-width:768px){
+  .main{padding:12px 10px;}
+  .header{padding:8px 12px 10px;}
+  .header-right{flex-direction:column;align-items:flex-end;gap:4px;}
+  .header-right .refresh-btn{display:none;}
+  .kpi-val{font-size:19px;}
+}
+</style>
+</head>
+<body>
+
+<header class="header">
+  <div class="brand">
+    <h1>Controle Financeiro</h1>
+    <p>Renan &amp; Tati</p>
+  </div>
+  <div class="header-right">
+    <button class="refresh-btn" id="refreshBtn" title="Importar dados da planilha .xlsx">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+        <polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/>
+        <path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/>
+      </svg>
+    </button>
+    <span class="status-badge" id="status-badge">—</span>
+    <span class="access-badge" id="access-badge" style="display:none"></span>
+  </div>
+  <div class="header-filters">
+    <div class="filter-group">
+      <span class="filter-label">Ano</span>
+      <div class="ms-wrap" id="ms-ano">
+        <button class="ms-btn" onclick="toggleMs('ms-ano')">
+          <span class="ms-lbl">Ano</span><span class="ms-cnt"></span>
+          <svg width="10" height="6" viewBox="0 0 10 6"><path d="M0 0l5 6 5-6z" fill="#F97316"/></svg>
+        </button>
+        <div class="ms-panel"><div class="ms-search"><svg width="12" height="12" viewBox="0 0 12 12"><circle cx="5" cy="5" r="4" stroke="#94A3B8" stroke-width="1.5" fill="none"/><line x1="8.5" y1="8.5" x2="11" y2="11" stroke="#94A3B8" stroke-width="1.5"/></svg><input type="text" placeholder="Digite para pesquisar…"></div><div class="ms-list"></div></div>
+      </div>
+    </div>
+    <div class="filter-group">
+      <span class="filter-label">Vigência</span>
+      <div class="ms-wrap" id="ms-vig">
+        <button class="ms-btn" onclick="toggleMs('ms-vig')">
+          <span class="ms-lbl">Vigência</span><span class="ms-cnt"></span>
+          <svg width="10" height="6" viewBox="0 0 10 6"><path d="M0 0l5 6 5-6z" fill="#F97316"/></svg>
+        </button>
+        <div class="ms-panel"><div class="ms-search"><svg width="12" height="12" viewBox="0 0 12 12"><circle cx="5" cy="5" r="4" stroke="#94A3B8" stroke-width="1.5" fill="none"/><line x1="8.5" y1="8.5" x2="11" y2="11" stroke="#94A3B8" stroke-width="1.5"/></svg><input type="text" placeholder="Digite para pesquisar…"></div><div class="ms-list"></div></div>
+      </div>
+    </div>
+    <span class="filter-hint">* O painel inicia com a vigência mais recente realizada pré-selecionada. Selecionar Ano e Vigência simultaneamente pode resultar em dados zerados se os filtros forem conflitantes.</span>
+  </div>
+</header>
+
+<input type="file" id="fileInput" accept=".xlsx,.xls" style="display:none">
+
+<div class="main">
+
+  <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;">
+    <span class="badge-proj" id="projBadge">PROJETADO</span>
+    <span id="detailLbl" style="font-size:11px;color:var(--text2);"></span>
+  </div>
+
+  <div class="kpi-grid">
+    <div class="kpi g">
+      <div class="kpi-lbl">Receita Total</div>
+      <div class="kpi-val g" id="kR">—</div>
+      <div class="kpi-sub" id="kRsub"></div>
+    </div>
+    <div class="kpi r">
+      <div class="kpi-lbl">Total Contas</div>
+      <div class="kpi-val r" id="kC">—</div>
+      <div class="kpi-sub" id="kCsub"></div>
+    </div>
+    <div class="kpi b">
+      <div class="kpi-lbl">Saldo do Mês</div>
+      <div class="kpi-val" id="kS">—</div>
+      <div class="kpi-sub" id="kSsub"></div>
+    </div>
+    <div class="kpi o">
+      <div class="kpi-lbl">Investimento</div>
+      <div class="kpi-val o" id="kI">—</div>
+      <div class="kpi-sub" id="kIsub"></div>
+    </div>
+  </div>
+
+  <div class="row2">
+    <div class="card">
+      <div class="card-hd">
+        Evolução Mensal
+        <small id="evolutionRangeLbl"></small>
+      </div>
+      <div class="legend-row">
+        <div class="leg"><div class="leg-dot" style="background:var(--green);border-radius:50%"></div>Receita</div>
+        <div class="leg"><div class="leg-dot" style="background:var(--red);border-radius:50%"></div>Contas</div>
+        <div class="leg"><div class="leg-dot" style="background:var(--blue);border-radius:50%"></div>Saldo</div>
+      </div>
+      <div class="chart-box" style="height:220px"><canvas id="evChart"></canvas></div>
+    </div>
+    <div class="card">
+      <div class="card-hd">
+        Clusters de Gastos
+        <small id="clusterLbl"></small>
+      </div>
+      <div class="chart-box" style="height:185px"><canvas id="donutChart"></canvas></div>
+      <div id="donutLegend" style="margin-top:10px;display:grid;grid-template-columns:1fr 1fr;gap:3px"></div>
+    </div>
+  </div>
+
+  <div class="row3">
+    <div class="card">
+      <div class="card-hd">
+        Acumulado de Investimentos
+        <small>Patrimônio acumulado com 0,79% a.m. · Aporte mensal</small>
+      </div>
+      <div class="legend-row">
+        <div class="leg"><div class="leg-dot" style="background:var(--orange);border-radius:50%"></div>Patrimônio acumulado</div>
+        <div class="leg"><div class="leg-dot" style="background:rgba(249,115,22,.5);border-radius:50%"></div>Aporte mensal</div>
+      </div>
+      <div class="chart-box" style="height:185px"><canvas id="invChart"></canvas></div>
+    </div>
+    <div class="card">
+      <div class="card-hd">Meta de Patrimônio</div>
+      <div class="inv-stats">
+        <div class="inv-stat">
+          <div class="inv-stat-lbl">Acumulado atual</div>
+          <div class="inv-stat-val o" id="sAcum">—</div>
+        </div>
+        <div class="inv-stat">
+          <div class="inv-stat-lbl" id="sMetaLbl">Projeção —</div>
+          <div class="inv-stat-val g" id="sMeta">—</div>
+        </div>
+        <div class="inv-stat">
+          <div class="inv-stat-lbl">Rend. estimado</div>
+          <div class="inv-stat-val b" id="sRend">—</div>
+        </div>
+        <div class="inv-stat">
+          <div class="inv-stat-lbl">Média mensal</div>
+          <div class="inv-stat-val o" id="sMedia">—</div>
+        </div>
+      </div>
+      <div class="prog-wrap">
+        <div class="prog-bg"><div class="prog-fill" id="progBar" style="width:0%"></div></div>
+        <div class="prog-labels">
+          <span id="progStart">—</span>
+          <span id="progPct" style="font-weight:700;color:var(--orange)">0%</span>
+          <span id="progEnd">—</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-hd">
+      Contas do Mês — Detalhe
+      <small id="tblLbl"></small>
+    </div>
+    <div class="tbl-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Conta</th><th>Cluster</th><th>Status</th>
+            <th style="text-align:right">Valor</th><th style="text-align:right">%</th>
+          </tr>
+        </thead>
+        <tbody id="tblBody"></tbody>
+        <tfoot>
+          <tr class="tfoot-row">
+            <td colspan="3">Total</td>
+            <td class="amt" id="tblTotal" style="text-align:right"></td>
+            <td style="text-align:right;color:var(--text3)">100%</td>
+          </tr>
+        </tfoot>
+      </table>
+    </div>
+  </div>
+
+</div>
+
+<script>
+// === DATA START ===
+const M = [
+  { id:'05_26', lb:'Mai/26', proj:false, r:23500, c:23498.89, s:1.11000000000058, iv:4011.87, ri:{'Conlog':17000,'Upfleet':0,'Tati Fixo':6500}, ci:{'Aluguel Imob':400,'Aluguel Prop.':3600,'Condomínio Aluguel':500,'Seguro Fiança':407,'Carro 1/12':2150,'Luz':400,'Internet':120,'Celulares Tati':47.99,'Celular Renan':160,'FIES':591.03,'Estacionamento':400,'Cartão Sicredi':50,'Cartão Porto (parcela empréstimo)':7000,'Inglês':170,'Academia':150,'MBA Renanzinho':590,'Chat GPT':100,'Contador Renan':250,'DAS':81,'INSS Renan':500,'Simples':1120,'Investimento':4011.87}, cs:{'Aluguel Imob':true,'Aluguel Prop.':true,'Condomínio Aluguel':true,'Seguro Fiança':true,'Carro 1/12':true,'Luz':true,'Internet':true,'Celulares Tati':true,'Celular Renan':true,'FIES':true,'Estacionamento':true,'Cartão Sicredi':true,'Cartão Porto (parcela empréstimo)':true,'Inglês':true,'Academia':true,'MBA Renanzinho':true,'Chat GPT':true,'Contador Renan':true,'DAS':true,'INSS Renan':true,'Simples':true,'Investimento':true} },
+  { id:'06_26', lb:'Jun/26', proj:true, r:23500, c:20487.02, s:3012.98, iv:1000, ri:{'Conlog':17000,'Upfleet':0,'Tati Fixo':6500}, ci:{'Aluguel Imob':400,'Aluguel Prop.':3600,'Condomínio Aluguel':500,'Seguro Fiança':407,'Carro 1/12':2150,'Luz':400,'Internet':120,'Celulares Tati':47.99,'Celular Renan':160,'FIES':591.03,'Estacionamento':400,'Cartão Sicredi':50,'Cartão Porto (parcela empréstimo)':7000,'Inglês':170,'Academia':150,'MBA Renanzinho':590,'Chat GPT':100,'Contador Renan':250,'DAS':81,'INSS Renan':500,'Simples':1120,'Investimento':1000}, cs:{'Aluguel Imob':false,'Aluguel Prop.':false,'Condomínio Aluguel':false,'Seguro Fiança':false,'Carro 1/12':false,'Luz':false,'Internet':false,'Celulares Tati':false,'Celular Renan':false,'FIES':false,'Estacionamento':false,'Cartão Sicredi':false,'Cartão Porto (parcela empréstimo)':false,'Inglês':false,'Academia':false,'MBA Renanzinho':false,'Chat GPT':false,'Contador Renan':false,'DAS':false,'INSS Renan':false,'Simples':false,'Investimento':false} },
+  { id:'07_26', lb:'Jul/26', proj:true, r:23500, c:20487.02, s:3012.98, iv:3000, ri:{'Conlog':17000,'Upfleet':0,'Tati Fixo':6500}, ci:{'Aluguel Imob':400,'Aluguel Prop.':3600,'Condomínio Aluguel':500,'Seguro Fiança':407,'Carro 2/12':2150,'Luz':400,'Internet':120,'Celulares Tati':47.99,'Celular Renan':160,'FIES':591.03,'Estacionamento':400,'Cartão Sicredi':50,'Cartão Porto (parcela empréstimo)':5000,'Inglês':170,'Academia':150,'MBA Renanzinho':590,'Chat GPT':100,'Contador Renan':250,'DAS':81,'INSS Renan':500,'Simples':1120,'Investimento':3000}, cs:{'Aluguel Imob':false,'Aluguel Prop.':false,'Condomínio Aluguel':false,'Seguro Fiança':false,'Carro 2/12':false,'Luz':false,'Internet':false,'Celulares Tati':false,'Celular Renan':false,'FIES':false,'Estacionamento':false,'Cartão Sicredi':false,'Cartão Porto (parcela empréstimo)':false,'Inglês':false,'Academia':false,'MBA Renanzinho':false,'Chat GPT':false,'Contador Renan':false,'DAS':false,'INSS Renan':false,'Simples':false,'Investimento':false} },
+  { id:'08_26', lb:'Ago/26', proj:true, r:23500, c:20487.02, s:3012.98, iv:3000, ri:{'Conlog':17000,'Upfleet':0,'Tati Fixo':6500}, ci:{'Aluguel Imob':400,'Aluguel Prop.':3600,'Condomínio Aluguel':500,'Seguro Fiança':407,'Carro 3/12':2150,'Luz':400,'Internet':120,'Celulares Tati':47.99,'Celular Renan':160,'FIES':591.03,'Estacionamento':400,'Cartão Sicredi':50,'Cartão Porto (parcela empréstimo)':5000,'Inglês':170,'Academia':150,'MBA Renanzinho':590,'Chat GPT':100,'Contador Renan':250,'DAS':81,'INSS Renan':500,'Simples':1120,'Investimento':3000}, cs:{'Aluguel Imob':false,'Aluguel Prop.':false,'Condomínio Aluguel':false,'Seguro Fiança':false,'Carro 3/12':false,'Luz':false,'Internet':false,'Celulares Tati':false,'Celular Renan':false,'FIES':false,'Estacionamento':false,'Cartão Sicredi':false,'Cartão Porto (parcela empréstimo)':false,'Inglês':false,'Academia':false,'MBA Renanzinho':false,'Chat GPT':false,'Contador Renan':false,'DAS':false,'INSS Renan':false,'Simples':false,'Investimento':false} },
+  { id:'09_26', lb:'Set/26', proj:true, r:23500, c:20487.02, s:3012.98, iv:3000, ri:{'Conlog':17000,'Upfleet':0,'Tati Fixo':6500}, ci:{'Aluguel Imob':400,'Aluguel Prop.':3600,'Condomínio Aluguel':500,'Seguro Fiança':407,'Carro 4/12':2150,'Luz':400,'Internet':120,'Celulares Tati':47.99,'Celular Renan':160,'FIES':591.03,'Estacionamento':400,'Cartão Sicredi':50,'Cartão Porto (parcela empréstimo)':5000,'Inglês':170,'Academia':150,'MBA Renanzinho':590,'Chat GPT':100,'Contador Renan':250,'DAS':81,'INSS Renan':500,'Simples':1120,'Investimento':3000}, cs:{'Aluguel Imob':false,'Aluguel Prop.':false,'Condomínio Aluguel':false,'Seguro Fiança':false,'Carro 4/12':false,'Luz':false,'Internet':false,'Celulares Tati':false,'Celular Renan':false,'FIES':false,'Estacionamento':false,'Cartão Sicredi':false,'Cartão Porto (parcela empréstimo)':false,'Inglês':false,'Academia':false,'MBA Renanzinho':false,'Chat GPT':false,'Contador Renan':false,'DAS':false,'INSS Renan':false,'Simples':false,'Investimento':false} },
+  { id:'10_26', lb:'Out/26', proj:true, r:23500, c:21487.02, s:2012.98, iv:4000, ri:{'Conlog':17000,'Upfleet':0,'Tati Fixo':6500}, ci:{'Aluguel Imob':400,'Aluguel Prop.':3600,'Condomínio Aluguel':500,'Seguro Fiança':407,'Carro 5/12':2150,'Luz':400,'Internet':120,'Celulares Tati':47.99,'Celular Renan':160,'FIES':591.03,'Estacionamento':400,'Cartão Sicredi':50,'Cartão Porto (parcela empréstimo)':5000,'Inglês':170,'Academia':150,'MBA Renanzinho':590,'Chat GPT':100,'Contador Renan':250,'DAS':81,'INSS Renan':500,'Simples':1120,'Investimento':4000}, cs:{'Aluguel Imob':false,'Aluguel Prop.':false,'Condomínio Aluguel':false,'Seguro Fiança':false,'Carro 5/12':false,'Luz':false,'Internet':false,'Celulares Tati':false,'Celular Renan':false,'FIES':false,'Estacionamento':false,'Cartão Sicredi':false,'Cartão Porto (parcela empréstimo)':false,'Inglês':false,'Academia':false,'MBA Renanzinho':false,'Chat GPT':false,'Contador Renan':false,'DAS':false,'INSS Renan':false,'Simples':false,'Investimento':false} },
+  { id:'11_26', lb:'Nov/26', proj:true, r:23500, c:19487.02, s:4012.98, iv:4000, ri:{'Conlog':17000,'Upfleet':0,'Tati Fixo':6500}, ci:{'Aluguel Imob':400,'Aluguel Prop.':3600,'Condomínio Aluguel':500,'Seguro Fiança':407,'Carro 6/12':2150,'Luz':400,'Internet':120,'Celulares Tati':47.99,'Celular Renan':160,'FIES':591.03,'Estacionamento':400,'Cartão Sicredi':50,'Cartão Porto (parcela empréstimo)':3000,'Inglês':170,'Academia':150,'MBA Renanzinho':590,'Chat GPT':100,'Contador Renan':250,'DAS':81,'INSS Renan':500,'Simples':1120,'Investimento':4000}, cs:{'Aluguel Imob':false,'Aluguel Prop.':false,'Condomínio Aluguel':false,'Seguro Fiança':false,'Carro 6/12':false,'Luz':false,'Internet':false,'Celulares Tati':false,'Celular Renan':false,'FIES':false,'Estacionamento':false,'Cartão Sicredi':false,'Cartão Porto (parcela empréstimo)':false,'Inglês':false,'Academia':false,'MBA Renanzinho':false,'Chat GPT':false,'Contador Renan':false,'DAS':false,'INSS Renan':false,'Simples':false,'Investimento':false} },
+  { id:'12_26', lb:'Dez/26', proj:true, r:41350, c:33487.02, s:7862.98, iv:18000, ri:{'Conlog':17850,'Tati Fixo':6500,'13º Renan':17000}, ci:{'Aluguel Imob':400,'Aluguel Prop.':3600,'Condomínio Aluguel':500,'Seguro Fiança':407,'Carro 7/12':2150,'Luz':400,'Internet':120,'Celulares Tati':47.99,'Celular Renan':160,'FIES':591.03,'Estacionamento':400,'Cartão Sicredi':50,'Cartão Porto (parcela empréstimo)':3000,'Inglês':170,'Academia':150,'MBA Renanzinho':590,'Chat GPT':100,'Contador Renan':250,'DAS':81,'INSS Renan':500,'Simples':1120,'Investimento':18000}, cs:{'Aluguel Imob':false,'Aluguel Prop.':false,'Condomínio Aluguel':false,'Seguro Fiança':false,'Carro 7/12':false,'Luz':false,'Internet':false,'Celulares Tati':false,'Celular Renan':false,'FIES':false,'Estacionamento':false,'Cartão Sicredi':false,'Cartão Porto (parcela empréstimo)':false,'Inglês':false,'Academia':false,'MBA Renanzinho':false,'Chat GPT':false,'Contador Renan':false,'DAS':false,'INSS Renan':false,'Simples':false,'Investimento':false} },
+  { id:'01_27', lb:'Jan/27', proj:true, r:24350, c:18487.02, s:5862.98, iv:3000, ri:{'Conlog':17850,'Tati Fixo':6500}, ci:{'Aluguel Imob':400,'Aluguel Prop.':3600,'Condomínio Aluguel':500,'Seguro Fiança':407,'Carro 8/12':2150,'Luz':400,'Internet':120,'Celulares Tati':47.99,'Celular Renan':160,'FIES':591.03,'Estacionamento':400,'Cartão Sicredi':50,'Cartão Porto (parcela empréstimo)':3000,'Inglês':170,'Academia':150,'MBA Renanzinho':590,'Chat GPT':100,'Contador Renan':250,'DAS':81,'INSS Renan':500,'Simples':1120,'Investimento':3000}, cs:{'Aluguel Imob':false,'Aluguel Prop.':false,'Condomínio Aluguel':false,'Seguro Fiança':false,'Carro 8/12':false,'Luz':false,'Internet':false,'Celulares Tati':false,'Celular Renan':false,'FIES':false,'Estacionamento':false,'Cartão Sicredi':false,'Cartão Porto (parcela empréstimo)':false,'Inglês':false,'Academia':false,'MBA Renanzinho':false,'Chat GPT':false,'Contador Renan':false,'DAS':false,'INSS Renan':false,'Simples':false,'Investimento':false} },
+  { id:'02_27', lb:'Fev/27', proj:true, r:24350, c:20397.02, s:3952.98, iv:5500, ri:{'Conlog':17850,'Tati Fixo':6500}, ci:{'Aluguel Imob':400,'Aluguel Prop.':3600,'Condomínio Aluguel':500,'Seguro Fiança':407,'Carro 9/12':2150,'Luz':400,'Internet':120,'Celulares Tati':47.99,'Celular Renan':160,'FIES':591.03,'Estacionamento':400,'Cartão Sicredi':50,'Cartão Porto (parcela empréstimo)':3000,'Inglês':170,'Academia':150,'Chat GPT':100,'Contador Renan':250,'DAS':81,'INSS Renan':500,'Simples':1120,'Investimento':5500}, cs:{'Aluguel Imob':false,'Aluguel Prop.':false,'Condomínio Aluguel':false,'Seguro Fiança':false,'Carro 9/12':false,'Luz':false,'Internet':false,'Celulares Tati':false,'Celular Renan':false,'FIES':false,'Estacionamento':false,'Cartão Sicredi':false,'Cartão Porto (parcela empréstimo)':false,'Inglês':false,'Academia':false,'Chat GPT':false,'Contador Renan':false,'DAS':false,'INSS Renan':false,'Simples':false,'Investimento':false} },
+  { id:'03_27', lb:'Mar/27', proj:true, r:24350, c:20397.02, s:3952.98, iv:5500, ri:{'Conlog':17850,'Tati Fixo':6500}, ci:{'Aluguel Imob':400,'Aluguel Prop.':3600,'Condomínio Aluguel':500,'Seguro Fiança':407,'Carro 10/12':2150,'Luz':400,'Internet':120,'Celulares Tati':47.99,'Celular Renan':160,'FIES':591.03,'Estacionamento':400,'Cartão Sicredi':50,'Cartão Porto (parcela empréstimo)':3000,'Inglês':170,'Academia':150,'Chat GPT':100,'Contador Renan':250,'DAS':81,'INSS Renan':500,'Simples':1120,'Investimento':5500}, cs:{'Aluguel Imob':false,'Aluguel Prop.':false,'Condomínio Aluguel':false,'Seguro Fiança':false,'Carro 10/12':false,'Luz':false,'Internet':false,'Celulares Tati':false,'Celular Renan':false,'FIES':false,'Estacionamento':false,'Cartão Sicredi':false,'Cartão Porto (parcela empréstimo)':false,'Inglês':false,'Academia':false,'Chat GPT':false,'Contador Renan':false,'DAS':false,'INSS Renan':false,'Simples':false,'Investimento':false} },
+  { id:'04_27', lb:'Abr/27', proj:true, r:34350, c:29897.02, s:4452.98, iv:16000, ri:{'Conlog':17850,'Bônus':10000,'Tati Fixo':6500}, ci:{'Aluguel Imob':400,'Aluguel Prop.':3600,'Condomínio Aluguel':500,'Seguro Fiança':407,'Carro 11/12':2150,'Luz':400,'Internet':120,'Celulares Tati':47.99,'Celular Renan':160,'FIES':591.03,'Estacionamento':400,'Cartão Sicredi':50,'Cartão Porto (parcela empréstimo)':2000,'Inglês':170,'Academia':150,'Chat GPT':100,'Contador Renan':250,'DAS':81,'INSS Renan':500,'Simples':1120,'Investimento':16000}, cs:{'Aluguel Imob':false,'Aluguel Prop.':false,'Condomínio Aluguel':false,'Seguro Fiança':false,'Carro 11/12':false,'Luz':false,'Internet':false,'Celulares Tati':false,'Celular Renan':false,'FIES':false,'Estacionamento':false,'Cartão Sicredi':false,'Cartão Porto (parcela empréstimo)':false,'Inglês':false,'Academia':false,'Chat GPT':false,'Contador Renan':false,'DAS':false,'INSS Renan':false,'Simples':false,'Investimento':false} },
+  { id:'05_27', lb:'Mai/27', proj:true, r:24350, c:20397.02, s:3952.98, iv:6500, ri:{'Conlog':17850,'Tati Fixo':6500}, ci:{'Aluguel Imob':400,'Aluguel Prop.':3600,'Condomínio Aluguel':500,'Seguro Fiança':407,'Carro 12/12':2150,'Luz':400,'Internet':120,'Celulares Tati':47.99,'Celular Renan':160,'FIES':591.03,'Estacionamento':400,'Cartão Sicredi':50,'Cartão Porto (parcela empréstimo)':2000,'Inglês':170,'Academia':150,'Chat GPT':100,'Contador Renan':250,'DAS':81,'INSS Renan':500,'Simples':1120,'Investimento':6500}, cs:{'Aluguel Imob':false,'Aluguel Prop.':false,'Condomínio Aluguel':false,'Seguro Fiança':false,'Carro 12/12':false,'Luz':false,'Internet':false,'Celulares Tati':false,'Celular Renan':false,'FIES':false,'Estacionamento':false,'Cartão Sicredi':false,'Cartão Porto (parcela empréstimo)':false,'Inglês':false,'Academia':false,'Chat GPT':false,'Contador Renan':false,'DAS':false,'INSS Renan':false,'Simples':false,'Investimento':false} },
+  { id:'06_27', lb:'Jun/27', proj:true, r:24350, c:20247.02, s:4102.98, iv:8500, ri:{'Conlog':17850,'Tati Fixo':6500}, ci:{'Aluguel Imob':400,'Aluguel Prop.':3600,'Condomínio Aluguel':500,'Seguro Fiança':407,'Luz':400,'Internet':120,'Celulares Tati':47.99,'Celular Renan':160,'FIES':591.03,'Estacionamento':400,'Cartão Sicredi':50,'Cartão Porto (parcela empréstimo)':2000,'Inglês':170,'Academia':150,'Chat GPT':100,'Contador Renan':250,'DAS':81,'INSS Renan':500,'Simples':1120,'Investimento':8500}, cs:{'Aluguel Imob':false,'Aluguel Prop.':false,'Condomínio Aluguel':false,'Seguro Fiança':false,'Luz':false,'Internet':false,'Celulares Tati':false,'Celular Renan':false,'FIES':false,'Estacionamento':false,'Cartão Sicredi':false,'Cartão Porto (parcela empréstimo)':false,'Inglês':false,'Academia':false,'Chat GPT':false,'Contador Renan':false,'DAS':false,'INSS Renan':false,'Simples':false,'Investimento':false} },
+  { id:'07_27', lb:'Jul/27', proj:true, r:24350, c:20247.02, s:4102.98, iv:8500, ri:{'Conlog':17850,'Tati Fixo':6500}, ci:{'Aluguel Imob':400,'Aluguel Prop.':3600,'Condomínio Aluguel':500,'Seguro Fiança':407,'Luz':400,'Internet':120,'Celulares Tati':47.99,'Celular Renan':160,'FIES':591.03,'Estacionamento':400,'Cartão Sicredi':50,'Cartão Porto (parcela empréstimo)':2000,'Inglês':170,'Academia':150,'Chat GPT':100,'Contador Renan':250,'DAS':81,'INSS Renan':500,'Simples':1120,'Investimento':8500}, cs:{'Aluguel Imob':false,'Aluguel Prop.':false,'Condomínio Aluguel':false,'Seguro Fiança':false,'Luz':false,'Internet':false,'Celulares Tati':false,'Celular Renan':false,'FIES':false,'Estacionamento':false,'Cartão Sicredi':false,'Cartão Porto (parcela empréstimo)':false,'Inglês':false,'Academia':false,'Chat GPT':false,'Contador Renan':false,'DAS':false,'INSS Renan':false,'Simples':false,'Investimento':false} },
+  { id:'08_27', lb:'Ago/27', proj:true, r:24350, c:20247.02, s:4102.98, iv:8500, ri:{'Conlog':17850,'Tati Fixo':6500}, ci:{'Aluguel Imob':400,'Aluguel Prop.':3600,'Condomínio Aluguel':500,'Seguro Fiança':407,'Luz':400,'Internet':120,'Celulares Tati':47.99,'Celular Renan':160,'FIES':591.03,'Estacionamento':400,'Cartão Sicredi':50,'Cartão Porto (parcela empréstimo)':2000,'Inglês':170,'Academia':150,'Chat GPT':100,'Contador Renan':250,'DAS':81,'INSS Renan':500,'Simples':1120,'Investimento':8500}, cs:{'Aluguel Imob':false,'Aluguel Prop.':false,'Condomínio Aluguel':false,'Seguro Fiança':false,'Luz':false,'Internet':false,'Celulares Tati':false,'Celular Renan':false,'FIES':false,'Estacionamento':false,'Cartão Sicredi':false,'Cartão Porto (parcela empréstimo)':false,'Inglês':false,'Academia':false,'Chat GPT':false,'Contador Renan':false,'DAS':false,'INSS Renan':false,'Simples':false,'Investimento':false} },
+  { id:'09_27', lb:'Set/27', proj:true, r:24350, c:20247.02, s:4102.98, iv:8500, ri:{'Conlog':17850,'Tati Fixo':6500}, ci:{'Aluguel Imob':400,'Aluguel Prop.':3600,'Condomínio Aluguel':500,'Seguro Fiança':407,'Luz':400,'Internet':120,'Celulares Tati':47.99,'Celular Renan':160,'FIES':591.03,'Estacionamento':400,'Cartão Sicredi':50,'Cartão Porto (parcela empréstimo)':2000,'Inglês':170,'Academia':150,'Chat GPT':100,'Contador Renan':250,'DAS':81,'INSS Renan':500,'Simples':1120,'Investimento':8500}, cs:{'Aluguel Imob':false,'Aluguel Prop.':false,'Condomínio Aluguel':false,'Seguro Fiança':false,'Luz':false,'Internet':false,'Celulares Tati':false,'Celular Renan':false,'FIES':false,'Estacionamento':false,'Cartão Sicredi':false,'Cartão Porto (parcela empréstimo)':false,'Inglês':false,'Academia':false,'Chat GPT':false,'Contador Renan':false,'DAS':false,'INSS Renan':false,'Simples':false,'Investimento':false} },
+  { id:'10_27', lb:'Out/27', proj:true, r:24350, c:20247.02, s:4102.98, iv:8500, ri:{'Conlog':17850,'Tati Fixo':6500}, ci:{'Aluguel Imob':400,'Aluguel Prop.':3600,'Condomínio Aluguel':500,'Seguro Fiança':407,'Luz':400,'Internet':120,'Celulares Tati':47.99,'Celular Renan':160,'FIES':591.03,'Estacionamento':400,'Cartão Sicredi':50,'Cartão Porto (parcela empréstimo)':2000,'Inglês':170,'Academia':150,'Chat GPT':100,'Contador Renan':250,'DAS':81,'INSS Renan':500,'Simples':1120,'Investimento':8500}, cs:{'Aluguel Imob':false,'Aluguel Prop.':false,'Condomínio Aluguel':false,'Seguro Fiança':false,'Luz':false,'Internet':false,'Celulares Tati':false,'Celular Renan':false,'FIES':false,'Estacionamento':false,'Cartão Sicredi':false,'Cartão Porto (parcela empréstimo)':false,'Inglês':false,'Academia':false,'Chat GPT':false,'Contador Renan':false,'DAS':false,'INSS Renan':false,'Simples':false,'Investimento':false} },
+  { id:'11_27', lb:'Nov/27', proj:true, r:24350, c:20247.02, s:4102.98, iv:8500, ri:{'Conlog':17850,'Tati Fixo':6500}, ci:{'Aluguel Imob':400,'Aluguel Prop.':3600,'Condomínio Aluguel':500,'Seguro Fiança':407,'Luz':400,'Internet':120,'Celulares Tati':47.99,'Celular Renan':160,'FIES':591.03,'Estacionamento':400,'Cartão Sicredi':50,'Cartão Porto (parcela empréstimo)':2000,'Inglês':170,'Academia':150,'Chat GPT':100,'Contador Renan':250,'DAS':81,'INSS Renan':500,'Simples':1120,'Investimento':8500}, cs:{'Aluguel Imob':false,'Aluguel Prop.':false,'Condomínio Aluguel':false,'Seguro Fiança':false,'Luz':false,'Internet':false,'Celulares Tati':false,'Celular Renan':false,'FIES':false,'Estacionamento':false,'Cartão Sicredi':false,'Cartão Porto (parcela empréstimo)':false,'Inglês':false,'Academia':false,'Chat GPT':false,'Contador Renan':false,'DAS':false,'INSS Renan':false,'Simples':false,'Investimento':false} },
+  { id:'12_27', lb:'Dez/27', proj:true, r:43092.5, c:38747.02, s:4345.48, iv:27000, ri:{'Conlog':18742.5,'Tati Fixo':6500,'13º Renan':17850}, ci:{'Aluguel Imob':400,'Aluguel Prop.':3600,'Condomínio Aluguel':500,'Seguro Fiança':407,'Luz':400,'Internet':120,'Celulares Tati':47.99,'Celular Renan':160,'FIES':591.03,'Estacionamento':400,'Cartão Sicredi':50,'Cartão Porto (parcela empréstimo)':2000,'Inglês':170,'Academia':150,'Chat GPT':100,'Contador Renan':250,'DAS':81,'INSS Renan':500,'Simples':1120,'Investimento':27000}, cs:{'Aluguel Imob':false,'Aluguel Prop.':false,'Condomínio Aluguel':false,'Seguro Fiança':false,'Luz':false,'Internet':false,'Celulares Tati':false,'Celular Renan':false,'FIES':false,'Estacionamento':false,'Cartão Sicredi':false,'Cartão Porto (parcela empréstimo)':false,'Inglês':false,'Academia':false,'Chat GPT':false,'Contador Renan':false,'DAS':false,'INSS Renan':false,'Simples':false,'Investimento':false} },
+];
+// === DATA END ===
+
+// ── CLUSTER MAP ─────────────────────────────────────────────
+const CL = {
+  'Moradia':          { keys:['Aluguel Imob','Aluguel Prop.','Condomínio Aluguel','Condomínio (Prop)','Seguro Fiança','Luz'], cls:'t-moradia', color:'#fb923c' },
+  'Transporte':       { keys:['Carro','Estacionamento'], cls:'t-transporte', color:'#60a5fa' },
+  'Telecomunicações': { keys:['Internet','Celulares Tati','Celular Renan','Chat GPT'], cls:'t-telecom', color:'#c084fc' },
+  'Educação':         { keys:['FIES','Inglês','MBA Renanzinho','Faculdade'], cls:'t-educacao', color:'#fbbf24' },
+  'Dívidas':          { keys:['Cartão Sicredi','Cartão Porto','Empréstimo'], cls:'t-dividas', color:'#f87171' },
+  'PJ / Impostos':    { keys:['Contador Renan','DAS','IRPJ','INSS Renan','Simples'], cls:'t-pj', color:'#4ade80' },
+  'Bem-estar':        { keys:['Academia','Depilação'], cls:'t-bemstar', color:'#2dd4bf' },
+  'Investimento':     { keys:['Investimento'], cls:'t-invest', color:'#F97316' },
+  'Outros':           { keys:['Outros','Extras'], cls:'t-outros', color:'#94a3b8' },
+};
+function cluster(k){
+  for(const [name,def] of Object.entries(CL)){
+    for(const key of def.keys){
+      if(k===key) return name;
+      if(key==='Carro'&&k.startsWith('Carro')) return name;
+      if(key==='Empréstimo'&&k.startsWith('Empréstimo')) return name;
+      if(key==='Extras'&&k.startsWith('Extras')) return name;
+      if(key==='IRPJ'&&k.startsWith('IRPJ')) return name;
+    }
+  }
+  return 'Outros';
+}
+
+// ── UTILS ─────────────────────────────────────────────────────
+const fmt  = v => 'R$ '+Math.round(v).toLocaleString('pt-BR');
+const fmtK = v => v>=1000?'R$ '+(v/1000).toFixed(1).replace('.',',')+' k':fmt(v);
+const set  = (id,val) => { const e=document.getElementById(id); if(e) e.textContent=val; };
+
+// ── CUMULATIVE INVEST (0,79% / mês) ──────────────────────────
+const RATE=0.0079;
+let cumInv=[], cumInvPlan=[], finalInv=0;
+function effectiveInv(m){ if(m.proj) return m.iv; if(m.cs&&m.cs['Investimento']===false) return 0; return m.iv; }
+function recomputeCumInv(){
+  cumInv=[]; cumInvPlan=[];
+  let acc=0,accP=0;
+  for(const m of M){
+    acc=acc*(1+RATE)+effectiveInv(m);
+    accP=accP*(1+RATE)+m.iv;
+    cumInv.push(Math.round(acc));
+    cumInvPlan.push(Math.round(accP));
+  }
+  finalInv=cumInvPlan[cumInvPlan.length-1]||0;
+}
+recomputeCumInv();
+
+function paidTotal(m){ if(!m.cs) return m.c; let s=0; for(const [k,v] of Object.entries(m.ci)) if(m.cs[k]) s+=v; return s; }
+
+// ── MULTI-SELECT ─────────────────────────────────────────────
+function _buildMs(wrap,renderFn){
+  if(!(wrap._sel instanceof Set)) wrap._sel=new Set();
+  const sel=wrap._sel;
+  const list=wrap.querySelector('.ms-list');
+  const srch=wrap.querySelector('.ms-search input');
+  const render=(q='')=>{ renderFn(list,sel,q); syncBadge(wrap); };
+  list.addEventListener('change',e=>{
+    const box=e.target;
+    if(box.classList.contains('ms-all')){
+      sel.clear();
+      list.querySelectorAll('input:not(.ms-all)').forEach(b=>b.checked=false);
+    } else {
+      box.checked?sel.add(box.dataset.v):sel.delete(box.dataset.v);
+    }
+    syncBadge(wrap); renderAll();
+  });
+  srch.addEventListener('input',()=>render(srch.value));
+  srch.addEventListener('click',e=>e.stopPropagation());
+  render();
+}
+function buildMsFilter(id,items){
+  const wrap=document.getElementById(id); if(!wrap) return;
+  _buildMs(wrap,(list,sel,q)=>{
+    const f=q.toLowerCase();
+    const shown=items.filter(v=>v.toLowerCase().includes(f));
+    list.innerHTML=
+      (!q?`<label class="ms-opt all-opt"><input type="checkbox" class="ms-all" ${sel.size===0?'checked':''}> Todos</label>`:'')+
+      shown.map(v=>`<label class="ms-opt"><input type="checkbox" data-v="${v}" ${sel.has(v)?'checked':''}> ${v}</label>`).join('');
+  });
+}
+function syncBadge(wrap){
+  const cnt=wrap.querySelector('.ms-cnt'),n=wrap._sel?wrap._sel.size:0;
+  if(cnt){cnt.textContent=n;cnt.style.display=n?'':'none';}
+}
+function toggleMs(id){
+  document.querySelectorAll('.ms-panel.open').forEach(p=>{
+    if(p.closest('.ms-wrap').id!==id) p.classList.remove('open');
+  });
+  const panel=document.querySelector(`#${id} .ms-panel`);
+  panel.classList.toggle('open');
+  if(panel.classList.contains('open')){
+    const inp=panel.querySelector('input[type=text]');
+    if(inp) setTimeout(()=>inp.focus(),50);
+  }
+}
+function getMsValues(id){
+  const wrap=document.getElementById(id); if(!wrap) return [];
+  return wrap._sel?[...wrap._sel]:[];
+}
+document.addEventListener('click',e=>{
+  if(!e.target.closest('.ms-wrap'))
+    document.querySelectorAll('.ms-panel.open').forEach(p=>p.classList.remove('open'));
+});
+
+// ── FILTROS ───────────────────────────────────────────────────
+function populateFilters(){
+  // Ano: extrai de "Mai/26" → "2026"
+  const anos=[...new Set(M.map(m=>'20'+m.lb.slice(-2)))].sort().reverse();
+  buildMsFilter('ms-ano',anos);
+  // Vigência: pré-seleciona último mês realizado
+  const vigs=M.map(m=>m.lb);
+  const vigWrap=document.getElementById('ms-vig');
+  vigWrap._sel=new Set();
+  const lastReal=M.filter(m=>!m.proj).slice(-1)[0];
+  if(lastReal) vigWrap._sel.add(lastReal.lb);
+  buildMsFilter('ms-vig',vigs);
+}
+function getVisibleMonths(){
+  const anos=getMsValues('ms-ano');
+  const vigs=getMsValues('ms-vig');
+  return M.filter(m=>{
+    if(anos.length>0&&!anos.includes('20'+m.lb.slice(-2))) return false;
+    if(vigs.length>0&&!vigs.includes(m.lb)) return false;
+    return true;
+  });
+}
+function getDetailMonth(){
+  const vigs=getMsValues('ms-vig');
+  if(vigs.length>0){
+    const sel=M.filter(m=>vigs.includes(m.lb));
+    if(sel.length>0) return sel[sel.length-1];
+  }
+  return M.filter(m=>!m.proj).slice(-1)[0]||M[M.length-1];
+}
+
+// ── CHART OPTS ────────────────────────────────────────────────
+const grid={color:'rgba(255,255,255,.06)'};
+const tick={color:'#94A3B8',font:{family:'Montserrat',size:10}};
+const tooltip={backgroundColor:'#141B26',titleColor:'#F97316',bodyColor:'#F1F5F9',borderColor:'#1E2D40',borderWidth:1,titleFont:{family:'Montserrat'},bodyFont:{family:'Montserrat'}};
+const legend={labels:{color:'#F1F5F9',font:{family:'Montserrat',size:10},boxWidth:14}};
+
+// ── CHART INSTANCES ───────────────────────────────────────────
+let evChart=null, donutChart=null, invChart=null;
+
+function buildEvChart(visible){
+  if(evChart) evChart.destroy();
+  const detM=getDetailMonth();
+  evChart=new Chart(document.getElementById('evChart'),{
+    type:'line',
+    data:{
+      labels:visible.map(m=>m.lb),
+      datasets:[
+        {label:'RECEITA',data:visible.map(m=>m.r),borderColor:'#22C55E',borderWidth:2.5,tension:.3,fill:false,pointRadius:visible.map(m=>m===detM?7:3),pointBackgroundColor:visible.map(m=>m===detM?'#22C55E':'rgba(34,197,94,.5)'),borderDash:[]},
+        {label:'CONTAS', data:visible.map(m=>m.c),borderColor:'#EF4444',borderWidth:2,tension:.3,fill:false,pointRadius:visible.map(m=>m===detM?7:3),pointBackgroundColor:visible.map(m=>m===detM?'#EF4444':'rgba(239,68,68,.5)'),borderDash:[5,3]},
+        {label:'SALDO',  data:visible.map(m=>m.s),borderColor:'#60A5FA',borderWidth:2,tension:.3,fill:false,pointRadius:visible.map(m=>m===detM?7:3),pointBackgroundColor:visible.map(m=>m===detM?'#60A5FA':'rgba(96,165,250,.5)'),borderDash:[3,2]},
+      ]
+    },
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend,tooltip:{...tooltip,callbacks:{label:c=>` ${c.dataset.label}: ${fmt(c.raw)}`}}},scales:{x:{grid,ticks:tick},y:{grid,ticks:{...tick,callback:v=>fmtK(v)}}}}
+  });
+}
+
+function buildInvChart(visible){
+  if(invChart) invChart.destroy();
+  const detM=getDetailMonth();
+  const idxs=visible.map(m=>M.indexOf(m));
+  invChart=new Chart(document.getElementById('invChart'),{
+    type:'line',
+    data:{
+      labels:visible.map(m=>m.lb),
+      datasets:[
+        {label:'PATRIMÔNIO',data:idxs.map(i=>cumInv[i]),borderColor:'#F97316',borderWidth:2.5,tension:.3,fill:false,pointRadius:visible.map(m=>m===detM?7:3),pointBackgroundColor:visible.map(m=>m===detM?'#F97316':'rgba(249,115,22,.5)')},
+        {label:'APORTE',   data:visible.map(m=>m.iv), borderColor:'rgba(249,115,22,.45)',borderWidth:1.5,tension:.3,fill:false,pointRadius:2,pointBackgroundColor:'rgba(249,115,22,.4)',borderDash:[4,3]},
+      ]
+    },
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend,tooltip:{...tooltip,callbacks:{label:c=>` ${c.dataset.label}: ${fmt(c.raw)}`}}},scales:{x:{grid,ticks:tick},y:{grid,ticks:{...tick,callback:v=>fmtK(v)}}}}
+  });
+}
+
+function buildDonut(m){
+  const tots={};
+  for(const [k,v] of Object.entries(m.ci)){ const cl=cluster(k); tots[cl]=(tots[cl]||0)+v; }
+  const labels=Object.keys(tots),vals=labels.map(l=>tots[l]),colors=labels.map(l=>CL[l]?.color||'#94a3b8');
+  const total=vals.reduce((a,b)=>a+b,0);
+  const ctx=document.getElementById('donutChart').getContext('2d');
+  if(donutChart) donutChart.destroy();
+  donutChart=new Chart(ctx,{
+    type:'doughnut',
+    data:{labels,datasets:[{data:vals,backgroundColor:colors.map(c=>c+'CC'),borderColor:colors,borderWidth:2,hoverOffset:8}]},
+    options:{responsive:true,maintainAspectRatio:false,cutout:'64%',plugins:{legend:{display:false},tooltip:{...tooltip,callbacks:{label:c=>` ${fmt(c.raw)} — ${((c.raw/total)*100).toFixed(1)}%`}}}}
+  });
+  document.getElementById('donutLegend').innerHTML=labels.map((l,i)=>
+    `<div style="display:flex;align-items:center;gap:5px;padding:2px 0;font-size:10px">
+      <div style="width:7px;height:7px;border-radius:2px;flex-shrink:0;background:${colors[i]}"></div>
+      <span style="color:var(--text2);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${l}</span>
+      <span style="color:var(--text);font-weight:700">${((vals[i]/total)*100).toFixed(0)}%</span>
+    </div>`).join('');
+}
+
+// ── RENDER ────────────────────────────────────────────────────
+function renderAll(){
+  const visible=getVisibleMonths().length>0?getVisibleMonths():M;
+  const m=getDetailMonth();
+  const idx=M.indexOf(m);
+
+  // Badge projetado
+  const pb=document.getElementById('projBadge');
+  pb.style.display=m.proj?'':'none';
+  set('detailLbl',m.lb.toUpperCase());
+  set('clusterLbl',m.lb);
+  set('tblLbl',m.lb);
+
+  // KPIs
+  set('kR',fmt(m.r));
+  document.getElementById('kRsub').textContent=Object.entries(m.ri).filter(([,v])=>v>0).map(([k])=>k).join(' · ');
+  set('kC',fmt(m.c));
+  const paid=paidTotal(m);
+  const pctP=m.c>0?(paid/m.c*100):0;
+  document.getElementById('kCsub').textContent=m.cs?`${pctP.toFixed(0)}% pago · ${(m.c/m.r*100).toFixed(0)}% da receita`:`${(m.c/m.r*100).toFixed(1)}% da receita`;
+  const sel=document.getElementById('kS');
+  sel.textContent=fmt(m.s);
+  sel.className='kpi-val '+(m.s>=0?'b':'r');
+  document.getElementById('kSsub').textContent=`${(m.s/m.r*100).toFixed(1)}% da receita`;
+  set('kI',fmt(m.iv));
+  const ivPaid=!m.cs||m.cs['Investimento']!==false;
+  document.getElementById('kIsub').textContent=ivPaid?'Acumulado real: '+fmt(cumInv[idx]):'⚠ Não pago · Acumulado: '+fmt(cumInv[idx]);
+
+  // Invest stats
+  const rawAcc=M.slice(0,idx+1).reduce((s,x)=>s+x.iv,0);
+  const rend=cumInv[idx]-rawAcc;
+  const media=rawAcc/(idx+1);
+  set('sAcum',fmt(cumInv[idx]));
+  set('sMeta',fmt(finalInv));
+  set('sRend',fmt(rend));
+  set('sMedia',fmt(media));
+  const pct=Math.min(100,(cumInv[idx]/finalInv)*100);
+  document.getElementById('progBar').style.width=pct+'%';
+  document.getElementById('progPct').textContent=pct.toFixed(1)+'%';
+  set('sMetaLbl',`Projeção ${M[M.length-1].lb}`);
+  set('progStart',M[0].lb);
+  set('progEnd',M[M.length-1].lb);
+  set('evolutionRangeLbl',`${visible[0].lb} → ${visible[visible.length-1].lb}`);
+
+  // Tabela
+  const entries=Object.entries(m.ci).sort((a,b)=>b[1]-a[1]);
+  document.getElementById('tblBody').innerHTML=entries.map(([k,v])=>{
+    const cl=cluster(k),def=CL[cl]||CL['Outros'],pct=((v/m.c)*100).toFixed(1);
+    const isPaid=!m.cs||m.cs[k]===true;
+    const chip=m.cs?(isPaid?'<span class="status-pill paid">Pago</span>':'<span class="status-pill pending">Pendente</span>'):'<span style="color:var(--text3)">—</span>';
+    return `<tr><td>${k}</td><td><span class="tag ${def.cls}">${cl}</span></td><td>${chip}</td><td class="amt">${fmt(v)}</td><td style="text-align:right;color:var(--text3);font-size:11px">${pct}%</td></tr>`;
+  }).join('');
+  set('tblTotal',fmt(m.c));
+
+  // Gráficos
+  buildEvChart(visible);
+  buildInvChart(visible);
+  buildDonut(m);
+}
+
+// ── ÚLTIMO ACESSO ─────────────────────────────────────────────
+function initAccessLog(){
+  let name=localStorage.getItem('bi_user_name');
+  if(!name){name=prompt('Qual é o seu nome?')||'Desconhecido';localStorage.setItem('bi_user_name',name);}
+  const lastRaw=localStorage.getItem('bi_last_access');
+  if(lastRaw){
+    const d=new Date(lastRaw);
+    const lastUser=localStorage.getItem('bi_last_user')||name;
+    const badge=document.getElementById('access-badge');
+    badge.textContent=`Último acesso: ${d.toLocaleDateString('pt-BR')} ${d.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})} · ${lastUser}`;
+    badge.style.display='';
+  }
+  localStorage.setItem('bi_last_access',new Date().toISOString());
+  localStorage.setItem('bi_last_user',name);
+}
+
+// ── XLSX IMPORT ───────────────────────────────────────────────
+const STORAGE_KEY='dashboard_financeiro_v1';
+const MONTH_NAMES=['','Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+const SKIP_R=new Set(['Rendas','Receitas','Controle de Custos','Custos','$']);
+const SKIP_C=new Set(['Custos','Total','Valor']);
+
+function parseSheet(sheet){
+  const ref=sheet['!ref'];if(!ref)return null;
+  const range=XLSX.utils.decode_range(ref);
+  const receitas={},custos={},status={};
+  let totalR=0,totalC=0,saldo=0,invest=0;
+  const num=c=>(c&&c.t!=='e'&&typeof c.v==='number')?c.v:null;
+  const str=c=>(!c||c.t==='e')?'':String(c.v??'').trim();
+  for(let r=range.s.r;r<=range.e.r;r++){
+    const b=str(sheet[XLSX.utils.encode_cell({c:1,r})]);
+    const cN=num(sheet[XLSX.utils.encode_cell({c:2,r})]);
+    const e=str(sheet[XLSX.utils.encode_cell({c:4,r})]);
+    const fN=num(sheet[XLSX.utils.encode_cell({c:5,r})]);
+    const h=str(sheet[XLSX.utils.encode_cell({c:7,r})]);
+    if(cN!==null){
+      if(b==='Total')totalR=cN;
+      else if(b==='Contas')totalC=cN;
+      else if(b==='Saldo')saldo=cN;
+      else if(b&&!SKIP_R.has(b))receitas[b]=cN;
+    }
+    if(fN!==null&&e&&!SKIP_C.has(e)){
+      custos[e]=fN;status[e]=h.toLowerCase()==='pago';
+      if(e==='Investimento')invest=fN;
+    }
+  }
+  if(totalR===0&&Object.keys(receitas).length)totalR=Object.values(receitas).reduce((a,b)=>a+b,0);
+  if(totalC===0&&Object.keys(custos).length)totalC=Object.values(custos).reduce((a,b)=>a+b,0);
+  if(saldo===0&&totalR&&totalC)saldo=totalR-totalC;
+  return{receitas,custos,status,totalR,totalC,saldo,invest};
+}
+
+async function importXlsx(file){
+  const btn=document.getElementById('refreshBtn');
+  const sb=document.getElementById('status-badge');
+  btn.disabled=true;sb.textContent='Lendo planilha…';
+  try{
+    const buf=await file.arrayBuffer();
+    const wb=XLSX.read(buf,{type:'array'});
+    const now=new Date(),nowNum=now.getFullYear()*100+(now.getMonth()+1);
+    const monthRe=/^\d{2}_\d{2}$/;
+    const valid=wb.SheetNames.filter(n=>monthRe.test(n));
+    valid.sort((a,b)=>{
+      const [am,ay]=a.split('_'),[bm,by]=b.split('_');
+      return(parseInt('20'+ay)*100+parseInt(am))-(parseInt('20'+by)*100+parseInt(bm));
+    });
+    const newM=[];
+    for(const name of valid){
+      const data=parseSheet(wb.Sheets[name]);
+      if(!data)continue;if(data.totalR===0&&data.totalC===0)continue;
+      const mm=name.substring(0,2),yy=name.substring(3,5);
+      const ymNum=parseInt('20'+yy)*100+parseInt(mm);
+      newM.push({id:name,lb:`${MONTH_NAMES[parseInt(mm)]}/${yy}`,proj:ymNum>nowNum,r:data.totalR,c:data.totalC,s:data.saldo,iv:data.invest,ri:data.receitas,ci:data.custos,cs:data.status});
+    }
+    if(newM.length===0)throw new Error('Nenhuma aba mensal válida');
+    M.length=0;M.push(...newM);
+    recomputeCumInv();
+    localStorage.setItem(STORAGE_KEY,JSON.stringify({data:newM,updatedAt:Date.now()}));
+    populateFilters();
+    renderAll();
+    const now2=new Date();
+    sb.textContent=`Atualizado ${now2.toLocaleDateString('pt-BR')} ${now2.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})}`;
+  }catch(err){
+    console.error(err);
+    sb.textContent='Erro: '+err.message;
+  }finally{btn.disabled=false;}
+}
+
+function loadFromStorage(){
+  const stored=localStorage.getItem(STORAGE_KEY);if(!stored)return false;
+  try{
+    const{data}=JSON.parse(stored);
+    if(!Array.isArray(data)||data.length===0)return false;
+    const now=new Date(),nowNum=now.getFullYear()*100+(now.getMonth()+1);
+    for(const m of data){const[mm,yy]=m.id.split('_');m.proj=(parseInt('20'+yy)*100+parseInt(mm))>nowNum;}
+    M.length=0;M.push(...data);recomputeCumInv();return true;
+  }catch(e){return false;}
+}
+
+document.getElementById('refreshBtn').addEventListener('click',()=>document.getElementById('fileInput').click());
+document.getElementById('fileInput').addEventListener('change',e=>{if(e.target.files.length){importXlsx(e.target.files[0]);e.target.value='';}});
+
+// ── INIT ─────────────────────────────────────────────────────
+window.addEventListener('DOMContentLoaded',()=>{
+  initAccessLog();
+  loadFromStorage();
+  populateFilters();
+  renderAll();
+  const now=new Date();
+  set('status-badge',`Atualizado ${now.toLocaleDateString('pt-BR')} ${now.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})}`);
+});
+let _rt;
+window.addEventListener('resize',()=>{clearTimeout(_rt);_rt=setTimeout(renderAll,400);});
+</script>
+</body>
+</html>

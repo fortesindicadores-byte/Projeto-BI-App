@@ -19,6 +19,7 @@ Projeto-BI-App/
 │   ├── eficiencia-kml/     → (vazio)
 │   ├── preco-litro/        → (vazio)
 │   └── consumo-co2/        → (vazio)
+├── financeiro-pessoal/     → Controle Financeiro Renan & Tati (ATIVO)
 ├── painel-km/              → (vazio)
 ├── eficiencia-ativacao/    → (vazio)
 ├── rs-por-km/              → (vazio)
