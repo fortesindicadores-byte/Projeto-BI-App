@@ -54,19 +54,54 @@ body { font-family: 'Montserrat', -apple-system, BlinkMacSystemFont, 'Segoe UI',
 .filter-group{display:flex;flex-direction:column;gap:3px;}
 .filter-label{font-size:9px;color:var(--text2);text-transform:uppercase;letter-spacing:.5px;}
 
-/* ── Filter selects ── */
-.filter-select{
-  display:flex;align-items:center;
+.ms-wrap{position:relative;}
+.ms-btn{
+  display:flex;align-items:center;gap:8px;
   background:#0a0f18;color:var(--text);
   border:1px solid #2a3a50;border-radius:4px;
   font-family:'Montserrat',sans-serif;font-size:11px;font-weight:700;
-  padding:6px 28px 6px 12px;cursor:pointer;text-transform:uppercase;
-  letter-spacing:.5px;white-space:nowrap;min-width:110px;appearance:none;
-  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%23F97316'/%3E%3C/svg%3E");
-  background-repeat:no-repeat;background-position:right 10px center;
+  padding:6px 12px;cursor:pointer;text-transform:uppercase;
+  letter-spacing:.5px;white-space:nowrap;min-width:110px;
 }
-.filter-select:hover{border-color:var(--orange);}
-.filter-select:focus{outline:none;border-color:var(--orange);}
+.ms-btn:hover{border-color:var(--orange);}
+.ms-lbl{flex:1;}
+.ms-cnt{
+  background:var(--orange);color:#000;border-radius:10px;
+  padding:1px 6px;font-size:9px;font-weight:800;display:none;
+}
+.ms-btn svg{flex-shrink:0;opacity:.8;}
+.ms-panel{
+  display:none;flex-direction:column;
+  position:absolute;top:calc(100% + 4px);left:0;z-index:500;
+  background:#0f1824;border:1px solid #2a3a50;border-radius:4px;
+  min-width:230px;max-height:300px;
+  box-shadow:0 8px 24px rgba(0,0,0,.7);
+}
+.ms-panel.open{display:flex;}
+.ms-search{
+  padding:7px 10px;border-bottom:1px solid #1e2d40;
+  display:flex;align-items:center;gap:6px;flex-shrink:0;
+}
+.ms-search svg{opacity:.4;flex-shrink:0;}
+.ms-search input{
+  flex:1;background:transparent;border:none;
+  color:var(--text);font-family:'Montserrat',sans-serif;
+  font-size:11px;outline:none;
+}
+.ms-search input::placeholder{color:var(--text3);}
+.ms-list{overflow-y:auto;flex:1;}
+.ms-opt{
+  display:flex;align-items:center;gap:8px;
+  padding:7px 12px;cursor:pointer;
+  font-size:11px;color:var(--text2);
+  text-transform:uppercase;letter-spacing:.3px;
+}
+.ms-opt:hover{background:rgba(255,255,255,.05);color:var(--text);}
+.ms-opt.all-opt{border-bottom:1px solid #1e2d40;color:var(--text);font-weight:700;}
+.ms-opt input[type=checkbox]{accent-color:var(--orange);cursor:pointer;width:14px;height:14px;flex-shrink:0;}
+.ms-list::-webkit-scrollbar{width:4px;}
+.ms-list::-webkit-scrollbar-track{background:transparent;}
+.ms-list::-webkit-scrollbar-thumb{background:#2a3a50;border-radius:2px;}
 @keyframes spin{to{transform:rotate(360deg);}}
 
 /* ── Main ── */
@@ -150,7 +185,6 @@ body { font-family: 'Montserrat', -apple-system, BlinkMacSystemFont, 'Segoe UI',
   .header-right{flex-direction:column;align-items:flex-end;gap:4px;}
   .header-right .refresh-btn{display:none;}
   .header-filters{overflow-x:auto;flex-wrap:nowrap;}
-  .filter-select{min-width:110px;font-size:10px;}
   .main{padding:14px;overflow-x:auto;}
 }
 </style>
@@ -196,15 +230,33 @@ const STATIC = {
   <div class="header-filters">
     <div class="filter-group">
       <span class="filter-label">Vigência</span>
-      <select class="filter-select" id="fVigencia"><option value="">Vigência</option></select>
+      <div class="ms-wrap" id="ms-vig">
+        <button class="ms-btn" onclick="toggleMs('ms-vig')">
+          <span class="ms-lbl">Vigência</span><span class="ms-cnt"></span>
+          <svg width="10" height="6" viewBox="0 0 10 6"><path d="M0 0l5 6 5-6z" fill="#F97316"/></svg>
+        </button>
+        <div class="ms-panel"><div class="ms-search"><svg width="12" height="12" viewBox="0 0 12 12"><circle cx="5" cy="5" r="4" stroke="#94A3B8" stroke-width="1.5" fill="none"/><line x1="8.5" y1="8.5" x2="11" y2="11" stroke="#94A3B8" stroke-width="1.5"/></svg><input type="text" placeholder="Digite para pesquisar…"></div><div class="ms-list"></div></div>
+      </div>
     </div>
     <div class="filter-group">
       <span class="filter-label">Unidade</span>
-      <select class="filter-select" id="fUnidade"><option value="">Unidade</option></select>
+      <div class="ms-wrap" id="ms-uni">
+        <button class="ms-btn" onclick="toggleMs('ms-uni')">
+          <span class="ms-lbl">Unidade</span><span class="ms-cnt"></span>
+          <svg width="10" height="6" viewBox="0 0 10 6"><path d="M0 0l5 6 5-6z" fill="#F97316"/></svg>
+        </button>
+        <div class="ms-panel"><div class="ms-search"><svg width="12" height="12" viewBox="0 0 12 12"><circle cx="5" cy="5" r="4" stroke="#94A3B8" stroke-width="1.5" fill="none"/><line x1="8.5" y1="8.5" x2="11" y2="11" stroke="#94A3B8" stroke-width="1.5"/></svg><input type="text" placeholder="Digite para pesquisar…"></div><div class="ms-list"></div></div>
+      </div>
     </div>
     <div class="filter-group">
       <span class="filter-label">Projeto</span>
-      <select class="filter-select" id="fNivel3"><option value="">Projeto</option></select>
+      <div class="ms-wrap" id="ms-nv3">
+        <button class="ms-btn" onclick="toggleMs('ms-nv3')">
+          <span class="ms-lbl">Projeto</span><span class="ms-cnt"></span>
+          <svg width="10" height="6" viewBox="0 0 10 6"><path d="M0 0l5 6 5-6z" fill="#F97316"/></svg>
+        </button>
+        <div class="ms-panel"><div class="ms-search"><svg width="12" height="12" viewBox="0 0 12 12"><circle cx="5" cy="5" r="4" stroke="#94A3B8" stroke-width="1.5" fill="none"/><line x1="8.5" y1="8.5" x2="11" y2="11" stroke="#94A3B8" stroke-width="1.5"/></svg><input type="text" placeholder="Digite para pesquisar…"></div><div class="ms-list"></div></div>
+      </div>
     </div>
   </div>
 </header>
@@ -495,30 +547,80 @@ function renderStatic() {
 // ═══════════════════════════════════════════════
 // FILTROS
 // ═══════════════════════════════════════════════
-function populateSelect(selId, values, label) {
-  const sel = id(selId), cur = sel.value;
-  sel.innerHTML = `<option value="">${label} — Todas</option>`;
-  values.forEach(v => { const o = document.createElement('option'); o.value = o.textContent = v; sel.appendChild(o); });
-  if (cur) sel.value = cur;
-}
-function getFilters() {
-  return { vigencia: id('fVigencia').value, unidade: id('fUnidade').value, nivel3: id('fNivel3').value };
-}
+const getNv3Prefix = v => v ? v.split('-')[0].trim() : v;
+function getMsValues(id){ const w=document.getElementById(id); return w&&w._sel?[...w._sel]:[]; }
+function getFilters(){ return { vigencia:getMsValues('ms-vig'), unidade:getMsValues('ms-uni'), nivel3:getMsValues('ms-nv3') }; }
 function filtrarRows(rows) {
   const f = getFilters();
   return rows.filter(r =>
-    (!f.vigencia || String(r.vigencia) === f.vigencia) &&
-    (!f.unidade  || String(r.unidade)  === f.unidade)  &&
-    (!f.nivel3   || String(r.nivel3)   === f.nivel3)
+    (f.vigencia.length===0 || f.vigencia.includes(String(r.vigencia))) &&
+    (f.unidade.length ===0 || f.unidade.includes(String(r.unidade)))  &&
+    (f.nivel3.length  ===0 || f.nivel3.includes(getNv3Prefix(String(r.nivel3))))
   );
 }
-function onFilterChange() {
-  if (allRows.length > 0) {
-    const k = calcular(filtrarRows(allRows));
-    if (k) { renderKPIs(k); setTimeout(fitAndDraw, 60); }
+function _buildMs(wrap, renderFn){
+  if(!(wrap._sel instanceof Set)) wrap._sel=new Set();
+  const sel=wrap._sel;
+  const list=wrap.querySelector('.ms-list');
+  const srch=wrap.querySelector('.ms-search input');
+  const render=(q='')=>{ renderFn(list,sel,q); syncBadge(wrap); };
+  list.addEventListener('change',e=>{
+    const box=e.target;
+    if(box.classList.contains('ms-all')){
+      sel.clear();
+      list.querySelectorAll('input:not(.ms-all)').forEach(b=>b.checked=false);
+    } else {
+      box.checked ? sel.add(box.dataset.v) : sel.delete(box.dataset.v);
+    }
+    syncBadge(wrap); onFilterChange();
+  });
+  srch.addEventListener('input',()=>render(srch.value));
+  srch.addEventListener('click',e=>e.stopPropagation());
+  render();
+}
+function buildMsFilter(id, items){
+  const wrap=document.getElementById(id); if(!wrap) return;
+  _buildMs(wrap,(list,sel,q)=>{
+    const f=q.toLowerCase();
+    const shown=items.filter(v=>v.toLowerCase().includes(f));
+    list.innerHTML=
+      (!q?`<label class="ms-opt all-opt"><input type="checkbox" class="ms-all" ${sel.size===0?'checked':''}> Todos</label>`:'')+
+      shown.map(v=>`<label class="ms-opt"><input type="checkbox" data-v="${v}" ${sel.has(v)?'checked':''}> ${v}</label>`).join('');
+  });
+}
+function buildVigMsFilter(items){
+  const wrap=document.getElementById('ms-vig'); if(!wrap) return;
+  if(!(wrap._sel instanceof Set)){
+    wrap._sel=new Set();
+    if(items.length) wrap._sel.add(items[items.length-1]);
+  }
+  buildMsFilter('ms-vig', items);
+}
+function syncBadge(wrap){
+  const cnt=wrap.querySelector('.ms-cnt'), n=wrap._sel?wrap._sel.size:0;
+  if(cnt){cnt.textContent=n; cnt.style.display=n?'':'none';}
+}
+function toggleMs(id){
+  document.querySelectorAll('.ms-panel.open').forEach(p=>{
+    if(p.closest('.ms-wrap').id!==id) p.classList.remove('open');
+  });
+  const panel=document.querySelector(`#${id} .ms-panel`);
+  panel.classList.toggle('open');
+  if(panel.classList.contains('open')){
+    const inp=panel.querySelector('input[type=text]');
+    if(inp) setTimeout(()=>inp.focus(),50);
   }
 }
-['fVigencia','fUnidade','fNivel3'].forEach(s => document.getElementById(s).addEventListener('change', onFilterChange));
+document.addEventListener('click',e=>{
+  if(!e.target.closest('.ms-wrap'))
+    document.querySelectorAll('.ms-panel.open').forEach(p=>p.classList.remove('open'));
+});
+function onFilterChange(){
+  if(allRows.length>0){
+    const k=calcular(filtrarRows(allRows));
+    if(k){ renderKPIs(k); setTimeout(fitAndDraw,60); }
+  }
+}
 
 // ═══════════════════════════════════════════════
 // FETCH — Google Sheets gviz/tq (sem Apps Script)
@@ -599,9 +701,9 @@ async function atualizar() {
   try {
     const json = await gvFetch();
     allRows = json.rows || [];
-    if (json.vigencias) populateSelect('fVigencia', json.vigencias, 'Vigência');
-    if (json.unidades)  populateSelect('fUnidade',  json.unidades,  'Unidade');
-    if (json.nivel3s)   populateSelect('fNivel3',   json.nivel3s,   'Projeto');
+    if (json.vigencias) buildVigMsFilter(json.vigencias);
+    if (json.unidades)  buildMsFilter('ms-uni', json.unidades);
+    if (json.nivel3s)   buildMsFilter('ms-nv3', [...new Set(json.nivel3s.map(v=>getNv3Prefix(v)))].sort());
 
     const k = calcular(filtrarRows(allRows));
     if (k) renderKPIs(k); else renderStatic();
