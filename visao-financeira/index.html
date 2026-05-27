@@ -253,9 +253,9 @@ table.dre tr.total td.imp-cell{font-size:14px;}
   /* tabelas: encaixam na tela sem scroll, proporcional como os cards */
   .tbl-wrap{overflow-x:hidden;}
   .tbl-section{padding:12px 10px 10px;}
-  table.dre{table-layout:fixed;width:100%;font-size:2.3vw;}
-  table.dre td,table.dre th{padding:5px 2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-  table.dre td.imp-cell,table.dre tr.total td.imp-cell{font-size:2.5vw;}
+  table.dre{table-layout:fixed;width:100%;font-size:1.9vw;}
+  table.dre td,table.dre th{padding:4px 2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  table.dre td.imp-cell,table.dre tr.total td.imp-cell{font-size:2.1vw;}
   .w-conta{width:30%;}
   .w-num{width:12%;}
   .w-d{width:11%;}
@@ -555,7 +555,8 @@ const CONTAS_ALIAS = {
 // ═══════════════════════════════════
 const fmt  = v => { const neg=+v<0,a=Math.abs(+v); let s; if(a>=1e9) s=(a/1e9).toFixed(2)+' bi'; else if(a>=1e6) s=(a/1e6).toFixed(2)+' mi'; else if(a>=1e5) s=(a/1e3).toFixed(2)+'k'; else s=Math.round(a).toLocaleString('pt-BR'); return (neg?'-':'')+s; };
 const fmtD = v => (+v>0?'+':'')+fmt(v);
-const pct  = v => v==null||!isFinite(v) ? '-' : (v>=0?'+':'')+v.toFixed(1)+'%';
+const pct    = v => v==null||!isFinite(v) ? '-' : (v>=0?'+':'')+v.toFixed(1)+'%';
+const pctInt = v => v==null||!isFinite(v) ? '-' : (v>=0?'+':'')+Math.round(v)+'%';
 const pp   = v => v==null||!isFinite(v) ? '-' : (v>=0?'+':'')+v.toFixed(2)+' pp';
 const set  = (id,val) => { const e=document.getElementById(id); if(e) e.textContent=val; };
 const colI = (el,bad) => { if(el) el.style.color = bad ? 'var(--red)' : 'var(--green)'; };
@@ -955,11 +956,11 @@ function renderPacote(rows,allRowsRef,f){
     const ytdB=yy.real-yy.rem;
     const bad=dB<0, ytdBad=ytdB<0;
     totR+=mm.rem; totX+=mm.real; totYR+=yy.rem; totYX+=yy.real;
-    html+=`<tr><td class="conta">${c}</td><td class="num">${fmt(mm.rem)}</td><td class="num">${fmt(mm.real)}</td><td class="num ${bad?'cr':'cg'}">${fmt(dB)}</td><td class="num ${bad?'cr-t':'cg-t'}">${pct(dP)}</td><td class="num ${ytdBad?'cr':'cg'}">${fmt(ytdB)}</td></tr>`;
+    html+=`<tr><td class="conta">${c}</td><td class="num">${fmt(mm.rem)}</td><td class="num">${fmt(mm.real)}</td><td class="num ${bad?'cr':'cg'}">${fmt(dB)}</td><td class="num ${bad?'cr-t':'cg-t'}">${pctInt(dP)}</td><td class="num ${ytdBad?'cr':'cg'}">${fmt(ytdB)}</td></tr>`;
   });
   const tdB=totX-totR,tdP=totR?(tdB/Math.abs(totR)*100):null,bT=tdB<0;
   const ytdTD=totYX-totYR,ytdBT=ytdTD<0;
-  html+=`<tr class="total"><td class="conta">Total Pacote Frota</td><td class="num">${fmt(totR)}</td><td class="num">${fmt(totX)}</td><td class="num ${bT?'cr':'cg'}">${fmt(tdB)}</td><td class="num ${bT?'cr-t':'cg-t'}">${pct(tdP)}</td><td class="num ${ytdBT?'cr':'cg'}">${fmt(ytdTD)}</td></tr>`;
+  html+=`<tr class="total"><td class="conta">Total Pacote Frota</td><td class="num">${fmt(totR)}</td><td class="num">${fmt(totX)}</td><td class="num ${bT?'cr':'cg'}">${fmt(tdB)}</td><td class="num ${bT?'cr-t':'cg-t'}">${pctInt(tdP)}</td><td class="num ${ytdBT?'cr':'cg'}">${fmt(ytdTD)}</td></tr>`;
   document.getElementById('body-pacote').innerHTML=html;
 }
 
@@ -983,15 +984,15 @@ function renderAnalise(rows, bodyId, vsOrc){
   contaData.sort((a,b)=>a.imp-b.imp);
   const contaVis=contaData.filter(({d,ref})=>d.real!==0||ref!==0);
   const refRl=vsOrc?r.orc:r.rem, dRl=r.real-refRl, dRlP=refRl?(dRl/Math.abs(refRl)*100):null, badRl=dRl<0;
-  let html=`<tr class="ref-row"><td class="conta">Receita Líquida</td><td class="num" style="font-weight:700">${fmt(refRl)}</td><td class="num" style="font-weight:700">${fmt(r.real)}</td><td class="num ${badRl?'cr':'cg'}" style="font-weight:700">${fmt(dRl)}</td><td class="num ${badRl?'cr-t':'cg-t'}" style="font-weight:700">${pct(dRlP)}</td><td class="num sep-l">100,00%</td><td class="num">100,00%</td><td class="num">—</td><td class="num imp-cell sep-l">—</td></tr>`;
+  let html=`<tr class="ref-row"><td class="conta">Receita Líquida</td><td class="num" style="font-weight:700">${fmt(refRl)}</td><td class="num" style="font-weight:700">${fmt(r.real)}</td><td class="num ${badRl?'cr':'cg'}" style="font-weight:700">${fmt(dRl)}</td><td class="num ${badRl?'cr-t':'cg-t'}" style="font-weight:700">${pctInt(dRlP)}</td><td class="num sep-l">100,00%</td><td class="num">100,00%</td><td class="num">—</td><td class="num imp-cell sep-l">—</td></tr>`;
   let totRef=0,totReal=0;
   contaVis.forEach(({c,d,ref,avRef,avReal,dBrl,dPct,dPp,dPpP,imp,bBrl,bPp})=>{
     totRef+=ref; totReal+=d.real;
-    html+=`<tr><td class="conta">${c}</td><td class="num">${fmt(ref)}</td><td class="num">${fmt(d.real)}</td><td class="num ${bBrl?'cr':'cg'}">${fmt(dBrl)}</td><td class="num ${bBrl?'cr-t':'cg-t'}">${pct(dPct)}</td><td class="num sep-l">${avRef.toFixed(2)}%</td><td class="num">${avReal.toFixed(2)}%</td><td class="num ${bPp?'cr':'cg'}">${pp(dPp)}</td><td class="num imp-cell sep-l" style="color:${bPp?'var(--red)':'var(--green)'}">${fmt(imp)}</td></tr>`;
+    html+=`<tr><td class="conta">${c}</td><td class="num">${fmt(ref)}</td><td class="num">${fmt(d.real)}</td><td class="num ${bBrl?'cr':'cg'}">${fmt(dBrl)}</td><td class="num ${bBrl?'cr-t':'cg-t'}">${pctInt(dPct)}</td><td class="num sep-l">${avRef.toFixed(2)}%</td><td class="num">${avReal.toFixed(2)}%</td><td class="num ${bPp?'cr':'cg'}">${pp(dPp)}</td><td class="num imp-cell sep-l" style="color:${bPp?'var(--red)':'var(--green)'}">${fmt(imp)}</td></tr>`;
   });
   const totD=totReal-totRef, totAvRef=rlRef?(totRef/rlRef*100):0, totAvReal=rlReal?(totReal/rlReal*100):0;
   const totDPct=totRef?(totD/Math.abs(totRef)*100):null, totPp=totAvReal-totAvRef, totImp=totPp/100*rlReal, bTot=totD<0;
-  html+=`<tr class="total"><td class="conta">Total</td><td class="num">${fmt(totRef)}</td><td class="num">${fmt(totReal)}</td><td class="num ${bTot?'cr':'cg'}">${fmt(totD)}</td><td class="num ${bTot?'cr-t':'cg-t'}">${pct(totDPct)}</td><td class="num sep-l">${totAvRef.toFixed(2)}%</td><td class="num">${totAvReal.toFixed(2)}%</td><td class="num ${bTot?'cr':'cg'}">${pp(totPp)}</td><td class="num imp-cell sep-l" style="color:${bTot?'var(--red)':'var(--green)'}">${fmt(totImp)}</td></tr>`;
+  html+=`<tr class="total"><td class="conta">Total</td><td class="num">${fmt(totRef)}</td><td class="num">${fmt(totReal)}</td><td class="num ${bTot?'cr':'cg'}">${fmt(totD)}</td><td class="num ${bTot?'cr-t':'cg-t'}">${pctInt(totDPct)}</td><td class="num sep-l">${totAvRef.toFixed(2)}%</td><td class="num">${totAvReal.toFixed(2)}%</td><td class="num ${bTot?'cr':'cg'}">${pp(totPp)}</td><td class="num imp-cell sep-l" style="color:${bTot?'var(--red)':'var(--green)'}">${fmt(totImp)}</td></tr>`;
   document.getElementById(bodyId).innerHTML=html;
 }
 
