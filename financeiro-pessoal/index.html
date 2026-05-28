@@ -204,7 +204,6 @@ tr:hover td{background:rgba(255,255,255,.02);}
 /* ── MOBILE ── */
 @media(max-width:900px){
   .row2{grid-template-columns:1fr;}
-  .kpi-cards-row{grid-template-columns:repeat(2,1fr);}
 }
 @media(max-width:768px){
   .main{padding:12px 10px;}
@@ -213,7 +212,11 @@ tr:hover td{background:rgba(255,255,255,.02);}
   .header-right .refresh-btn{display:none;}
   .hero-value{font-size:36px;}
   .hero-delta b{font-size:12px;}
-  .kpi-card .card-value{font-size:16px;}
+  .kpi-cards-row{gap:5px;}
+  .kpi-card{padding:8px 6px;}
+  .kpi-card .card-label{font-size:7px;letter-spacing:0;}
+  .kpi-card .card-value{font-size:12px;}
+  .kpi-card .card-sub{font-size:8px;}
 }
 </style>
 </head>
@@ -286,14 +289,17 @@ tr:hover td{background:rgba(255,255,255,.02);}
     <div class="kpi-card">
       <div class="card-label">Custo Médio</div>
       <div class="card-value" id="m-cmed" style="color:var(--red)">—</div>
+      <div class="card-sub" id="m-cmed-sub"></div>
     </div>
     <div class="kpi-card">
       <div class="card-label">Custo Acum.</div>
       <div class="card-value" id="m-cacum" style="color:var(--red)">—</div>
+      <div class="card-sub" id="m-cacum-sub"></div>
     </div>
     <div class="kpi-card">
       <div class="card-label">Custo Projetado</div>
       <div class="card-value" id="m-cproj" style="color:var(--red)">—</div>
+      <div class="card-sub" id="m-cproj-sub"></div>
     </div>
   </div>
 
@@ -307,14 +313,17 @@ tr:hover td{background:rgba(255,255,255,.02);}
     <div class="kpi-card">
       <div class="card-label">Invest. Médio</div>
       <div class="card-value" id="m-imed" style="color:var(--orange)">—</div>
+      <div class="card-sub" id="m-imed-sub"></div>
     </div>
     <div class="kpi-card">
       <div class="card-label">Invest. Acum.</div>
       <div class="card-value" id="m-iacum" style="color:var(--orange)">—</div>
+      <div class="card-sub" id="m-iacum-sub"></div>
     </div>
     <div class="kpi-card">
       <div class="card-label">Invest. Projetado</div>
       <div class="card-value" id="m-iproj" style="color:var(--orange)">—</div>
+      <div class="card-sub" id="m-iproj-sub"></div>
     </div>
   </div>
 
@@ -328,14 +337,17 @@ tr:hover td{background:rgba(255,255,255,.02);}
     <div class="kpi-card">
       <div class="card-label">Saldo Médio</div>
       <div class="card-value" id="m-smed">—</div>
+      <div class="card-sub" id="m-smed-sub"></div>
     </div>
     <div class="kpi-card">
       <div class="card-label">Saldo Acum.</div>
       <div class="card-value" id="m-sacum">—</div>
+      <div class="card-sub" id="m-sacum-sub"></div>
     </div>
     <div class="kpi-card">
       <div class="card-label">Projeção de Saldo</div>
       <div class="card-value" id="m-sproj">—</div>
+      <div class="card-sub" id="m-sproj-sub"></div>
     </div>
   </div>
 
@@ -677,24 +689,36 @@ function renderAll(){
   set('kR-acum',fmt(sumR));
   set('kR-proj',fmt(projR));
 
+  const avgR=sumR/n;
+  const pctR=(v,r)=>'% Receita: '+(v/r*100).toFixed(1).replace('.',',')+' %';
+
   // Custos
   set('m-cm',fmt(m0.c));
-  set('m-cm-sub',`${(m0.c/m0.r*100).toFixed(1)}% da receita`);
+  set('m-cm-sub',pctR(m0.c,m0.r));
   set('m-cmed',fmt(sumC/n));
+  set('m-cmed-sub',pctR(sumC/n,avgR));
   set('m-cacum',fmt(sumC));
+  set('m-cacum-sub',pctR(sumC,sumR));
   set('m-cproj',fmt(projC));
+  set('m-cproj-sub',pctR(projC,projR));
 
   // Investimento
   set('m-im',fmt(m0.iv));
-  set('m-im-sub',`${(m0.iv/m0.r*100).toFixed(1)}% da receita`);
+  set('m-im-sub',pctR(m0.iv,m0.r));
   set('m-imed',fmt(sumI/n));
+  set('m-imed-sub',pctR(sumI/n,avgR));
   set('m-iacum',fmt(sumI));
+  set('m-iacum-sub',pctR(sumI,sumR));
   set('m-iproj',fmt(projI));
+  set('m-iproj-sub',pctR(projI,projR));
 
   // Saldo (cor dinâmica)
   const cs=v=>{const e=document.getElementById(v[0]);if(e){e.textContent=fmt(v[1]);e.style.color=v[1]>=0?'var(--blue)':'var(--red)';}};
   cs(['m-sm',m0.s]); cs(['m-smed',sumS/n]); cs(['m-sacum',sumS]); cs(['m-sproj',projS]);
-  set('m-sm-sub',`${(m0.s/m0.r*100).toFixed(1)}% da receita`);
+  set('m-sm-sub',pctR(m0.s,m0.r));
+  set('m-smed-sub',pctR(sumS/n,avgR));
+  set('m-sacum-sub',pctR(sumS,sumR));
+  set('m-sproj-sub',pctR(projS,projR));
 
   // Meta de Patrimônio (usa último mês visível como referência acumulada)
   const lastIdx=M.indexOf(visible[visible.length-1]);
@@ -743,7 +767,6 @@ function initAccessLog(){
 }
 
 // ── XLSX IMPORT ───────────────────────────────────────────────
-const STORAGE_KEY='dashboard_financeiro_v1';
 const MONTH_NAMES=['','Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
 const SKIP_R=new Set(['Rendas','Receitas','Controle de Custos','Custos','$']);
 const SKIP_C=new Set(['Custos','Total','Valor']);
@@ -803,7 +826,6 @@ async function importXlsx(file){
     if(newM.length===0)throw new Error('Nenhuma aba mensal válida');
     M.length=0;M.push(...newM);
     recomputeCumInv();
-    localStorage.setItem(STORAGE_KEY,JSON.stringify({data:newM,updatedAt:Date.now()}));
     populateFilters();
     renderAll();
     const now2=new Date();
@@ -814,24 +836,12 @@ async function importXlsx(file){
   }finally{btn.disabled=false;}
 }
 
-function loadFromStorage(){
-  const stored=localStorage.getItem(STORAGE_KEY);if(!stored)return false;
-  try{
-    const{data}=JSON.parse(stored);
-    if(!Array.isArray(data)||data.length===0)return false;
-    const now=new Date(),nowNum=now.getFullYear()*100+(now.getMonth()+1);
-    for(const m of data){const[mm,yy]=m.id.split('_');m.proj=(parseInt('20'+yy)*100+parseInt(mm))>nowNum;}
-    M.length=0;M.push(...data);recomputeCumInv();return true;
-  }catch(e){return false;}
-}
-
 document.getElementById('refreshBtn').addEventListener('click',()=>document.getElementById('fileInput').click());
 document.getElementById('fileInput').addEventListener('change',e=>{if(e.target.files.length){importXlsx(e.target.files[0]);e.target.value='';}});
 
 // ── INIT ─────────────────────────────────────────────────────
 window.addEventListener('DOMContentLoaded',()=>{
   initAccessLog();
-  loadFromStorage();
   populateFilters();
   renderAll();
   const now=new Date();
