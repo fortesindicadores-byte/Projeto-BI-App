@@ -149,6 +149,72 @@ function initAccessLog(){
 
 ---
 
+## Padrão Light/Dark Mode
+
+Todos os painéis têm alternância de tema com botão lua/sol no `.header-right`.
+
+### CSS obrigatório (após `.refresh-btn:hover`)
+```css
+.theme-btn{background:rgba(249,115,22,.15);border:1px solid rgba(249,115,22,.3);border-radius:4px;padding:5px 7px;cursor:pointer;color:var(--orange);display:flex;align-items:center;}
+.theme-btn:hover{background:rgba(249,115,22,.25);}
+body.light-mode .main{background:#F0F0F0;--text:#1a1a1a;--text2:#444444;--text3:#666666;}
+/* Cards ficam branco translúcido com texto escuro */
+body.light-mode .card,body.light-mode .kpi-card{background:rgba(255,255,255,.70)!important;border-color:rgba(0,0,0,.22)!important;--text:#1a1a1a;--text2:#444444;--text3:#555555;}
+/* Para painéis com .chart-card e .tbl-section (visao-financeira): */
+body.light-mode .chart-card,body.light-mode .tbl-section{background:rgba(255,255,255,.70)!important;border-color:rgba(0,0,0,.22)!important;--text:#1a1a1a;--text2:#444444;--text3:#555555;}
+```
+
+**Regras:**
+- `body` NÃO muda — só `.main`. Header e filtros permanecem escuros.
+- Cards: `rgba(255,255,255,.70)` + borda `rgba(0,0,0,.22)` + texto `#1a1a1a`.
+- Cards com `color:` hardcoded (não CSS var): adicionar override explícito em `.kpi-card .elemento`.
+
+### HTML — botão no `.header-right` (antes do `.refresh-btn`)
+```html
+<button class="theme-btn" id="themeBtn" title="Modo claro/escuro"></button>
+```
+
+### JS (ao final do `<script>`, antes de `</script>`)
+```javascript
+const _sun=`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>`;
+const _moon=`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>`;
+function applyTheme(t){
+  document.body.classList.toggle('light-mode',t==='light');
+  localStorage.setItem('bi_theme',t);
+  const b=document.getElementById('themeBtn');
+  if(b) b.innerHTML=t==='light'?_moon:_sun;
+  // Re-renderizar gráficos Chart.js para aplicar cores dinâmicas:
+  if(typeof lastF!=='undefined'&&lastF) renderCharts(lastF); // visao-financeira
+  // if(M.length) renderAll();                                 // financeiro-pessoal
+}
+(function(){
+  const t=localStorage.getItem('bi_theme')||'dark';
+  applyTheme(t);
+  document.getElementById('themeBtn').addEventListener('click',
+    ()=>applyTheme(document.body.classList.contains('light-mode')?'dark':'light'));
+})();
+```
+
+### Cores dinâmicas no Chart.js
+Qualquer cor hardcoded nos charts que precise mudar entre temas:
+```javascript
+// Em vez de constantes fixas, usar getters:
+const getGrid=()=>({color:document.body.classList.contains('light-mode')?'rgba(0,0,0,.08)':'rgba(255,255,255,.06)'});
+const getTick=(sz=10)=>({color:document.body.classList.contains('light-mode')?'#444444':'#94A3B8',font:{family:'Montserrat',size:sz}});
+// Linhas brancas (ex: Orçado, Receita):
+const orcC=isLight?'#999999':'#F1F5F9';
+// Datalabels:
+color:document.body.classList.contains('light-mode')?'#333333':'#F1F5F9'
+// Legend:
+const legend={labels:{color:isLight?'#1a1a1a':'#F1F5F9',...}};
+```
+`isLight` deve ser declarada **antes** de qualquer uso dentro da função render.
+
+### localStorage
+- `bi_theme` → `'dark'` | `'light'` (padrão: `'dark'`)
+
+---
+
 ## Como criar um novo painel
 
 1. Copiar `_template/index.html` para a pasta correspondente

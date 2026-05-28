@@ -65,8 +65,7 @@ body{
 .theme-btn{background:rgba(249,115,22,.15);border:1px solid rgba(249,115,22,.3);border-radius:4px;padding:5px 7px;cursor:pointer;color:var(--orange);display:flex;align-items:center;}
 .theme-btn:hover{background:rgba(249,115,22,.25);}
 body.light-mode .main{background:#F0F0F0;--text:#1a1a1a;--text2:#444444;--text3:#666666;}
-body.light-mode .card{background:#141B26!important;border-color:#1E2D40!important;}
-body.light-mode .card,body.light-mode .kpi-card{--text:#F1F5F9;--text2:#94A3B8;--text3:#475569;}
+body.light-mode .card,body.light-mode .kpi-card{background:rgba(255,255,255,.70)!important;border-color:rgba(0,0,0,.22)!important;--text:#1a1a1a;--text2:#444444;--text3:#555555;}
 .header-filters{
   flex-basis:100%;order:3;margin-top:10px;
   display:flex;gap:10px;flex-wrap:wrap;align-items:flex-start;
@@ -580,8 +579,8 @@ function getChartMonths(){
 }
 
 // ── CHART OPTS ────────────────────────────────────────────────
-const grid={color:'rgba(255,255,255,.06)'};
-const tick={color:'#94A3B8',font:{family:'Montserrat',size:10}};
+const getGrid=()=>({color:document.body.classList.contains('light-mode')?'rgba(0,0,0,.08)':'rgba(255,255,255,.06)'});
+const getTick=(sz=10)=>({color:document.body.classList.contains('light-mode')?'#444444':'#94A3B8',font:{family:'Montserrat',size:sz}});
 const tooltip={backgroundColor:'#141B26',titleColor:'#F97316',bodyColor:'#F1F5F9',borderColor:'#1E2D40',borderWidth:1,titleFont:{family:'Montserrat'},bodyFont:{family:'Montserrat'}};
 const legend={display:false};
 
@@ -605,12 +604,12 @@ function buildEvChart(visible,detM){
     data:{
       labels:chartM.map(m=>m.lb),
       datasets:[
-        {label:'RECEITA',data:chartM.map(m=>m.r),borderColor:'#F1F5F9',borderWidth:2,  tension:.3,fill:false,borderDash:[5,3],...mk('#F1F5F9')},
+        {label:'RECEITA',data:chartM.map(m=>m.r),borderColor:document.body.classList.contains('light-mode')?'#999999':'#F1F5F9',borderWidth:2,  tension:.3,fill:false,borderDash:[5,3],...mk(document.body.classList.contains('light-mode')?'#999999':'#F1F5F9')},
         {label:'CONTAS', data:chartM.map(m=>m.c),borderColor:'#EF4444',borderWidth:2,  tension:.3,fill:false,borderDash:[5,3],...mk('#EF4444')},
         {label:'SALDO',  data:chartM.map(m=>m.s),borderColor:'#22C55E',borderWidth:2,  tension:.3,fill:false,borderDash:[3,2],...mk('#22C55E')},
       ]
     },
-    options:{responsive:true,maintainAspectRatio:false,plugins:{legend,datalabels:{display:false},tooltip:{...tooltip,callbacks:{label:c=>` ${c.dataset.label}: ${numFmt(c.raw)}`}}},scales:{x:{grid,ticks:{...tick,callback:function(v){return _lbFmt(this.getLabelForValue(v));},maxRotation:45,minRotation:0,autoSkip:false,font:{family:'Montserrat',size:9}}},y:{grid,ticks:{...tick,callback:v=>numFmt(v)}}}}
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend,datalabels:{display:false},tooltip:{...tooltip,callbacks:{label:c=>` ${c.dataset.label}: ${numFmt(c.raw)}`}}},scales:{x:{grid:getGrid(),ticks:{...getTick(9),callback:function(v){return _lbFmt(this.getLabelForValue(v));},maxRotation:45,minRotation:0,autoSkip:false}},y:{grid:getGrid(),ticks:{...getTick(),callback:v=>numFmt(v)}}}}
   });
 }
 
@@ -640,7 +639,7 @@ function buildInvChart(visible,detM){
          pointHoverRadius:7},
       ]
     },
-    options:{responsive:true,maintainAspectRatio:false,plugins:{legend,datalabels:{display:false},tooltip:{...tooltip,callbacks:{label:c=>` ${c.dataset.label}: ${numFmt(c.raw)}`}}},scales:{x:{grid,ticks:{...tick,callback:function(v){return _lbFmt(this.getLabelForValue(v));},maxRotation:45,minRotation:0,autoSkip:false,font:{family:'Montserrat',size:9}}},y:{grid,ticks:{...tick,callback:v=>numFmt(v)}}}}
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend,datalabels:{display:false},tooltip:{...tooltip,callbacks:{label:c=>` ${c.dataset.label}: ${numFmt(c.raw)}`}}},scales:{x:{grid:getGrid(),ticks:{...getTick(9),callback:function(v){return _lbFmt(this.getLabelForValue(v));},maxRotation:45,minRotation:0,autoSkip:false}},y:{grid:getGrid(),ticks:{...getTick(),callback:v=>numFmt(v)}}}}
   });
 }
 
@@ -665,13 +664,13 @@ function buildClusterCharts(m){
           tooltip:{...tooltip,callbacks:{label:c=>` ${ttFmt(c.raw)}`}},
           datalabels:{
             display:true,anchor:'end',align:'end',offset:2,
-            color:'#F1F5F9',font:{family:'Montserrat',size:9,weight:'700'},
+            color:document.body.classList.contains('light-mode')?'#333333':'#F1F5F9',font:{family:'Montserrat',size:9,weight:'700'},
             formatter:dlFmt,
           }
         },
         scales:{
-          x:{grid:{display:false},ticks:{...tick,maxRotation:45,minRotation:0,font:{family:'Montserrat',size:9}}},
-          y:{grid,ticks:{...tick,callback:yFmt}}
+          x:{grid:{display:false},ticks:{...getTick(9),maxRotation:45,minRotation:0}},
+          y:{grid:getGrid(),ticks:{...getTick(),callback:yFmt}}
         }
       }
     });
@@ -870,7 +869,7 @@ let _rt;
 window.addEventListener('resize',()=>{clearTimeout(_rt);_rt=setTimeout(renderAll,400);});
 const _sun=`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>`;
 const _moon=`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>`;
-function applyTheme(t){document.body.classList.toggle('light-mode',t==='light');localStorage.setItem('bi_theme',t);const b=document.getElementById('themeBtn');if(b)b.innerHTML=t==='light'?_moon:_sun;}
+function applyTheme(t){document.body.classList.toggle('light-mode',t==='light');localStorage.setItem('bi_theme',t);const b=document.getElementById('themeBtn');if(b)b.innerHTML=t==='light'?_moon:_sun;if(M.length)renderAll();}
 (function(){const t=localStorage.getItem('bi_theme')||'dark';applyTheme(t);document.getElementById('themeBtn').addEventListener('click',()=>applyTheme(document.body.classList.contains('light-mode')?'dark':'light'));})();
 </script>
 </body>
