@@ -978,15 +978,15 @@ function renderPacote(rows,allRowsRef,f){
     const mm=m[c]||{rem:0,real:0};
     const yy=ytdM[c]||{rem:0,real:0};
     if(mm.rem===0&&mm.real===0) return; // oculta contas sem dados
-    const dB=mm.real-mm.rem, dP=mm.rem?(dB/Math.abs(mm.rem)*100):null;
-    const ytdB=yy.real-yy.rem;
+    const dB=mm.rem-mm.real, dP=mm.rem?(dB/Math.abs(mm.rem)*100):null;
+    const ytdB=yy.rem-yy.real;
     const ytdP=yy.rem?(ytdB/Math.abs(yy.rem)*100):null;
-    const bad=dB<0, ytdBad=ytdB<0;
+    const bad=dB>0, ytdBad=ytdB>0;
     totR+=mm.rem; totX+=mm.real; totYR+=yy.rem; totYX+=yy.real;
     html+=`<tr><td class="conta">${c}</td><td class="num">${fmt(mm.rem)}</td><td class="num">${fmt(mm.real)}</td><td class="num ${bad?'cr':'cg'}">${fmt(dB)}</td><td class="num ${bad?'cr-t':'cg-t'}">${pctInt(dP)}</td><td class="num ${ytdBad?'cr':'cg'}">${fmt(ytdB)}</td><td class="num ${ytdBad?'cr-t':'cg-t'}">${pctInt(ytdP)}</td></tr>`;
   });
-  const tdB=totX-totR,tdP=totR?(tdB/Math.abs(totR)*100):null,bT=tdB<0;
-  const ytdTD=totYX-totYR,ytdBT=ytdTD<0;
+  const tdB=totR-totX,tdP=totR?(tdB/Math.abs(totR)*100):null,bT=tdB>0;
+  const ytdTD=totYR-totYX,ytdBT=ytdTD>0;
   const ytdTDP=totYR?(ytdTD/Math.abs(totYR)*100):null;
   html+=`<tr class="total"><td class="conta">Total Pacote Frota</td><td class="num">${fmt(totR)}</td><td class="num">${fmt(totX)}</td><td class="num ${bT?'cr':'cg'}">${fmt(tdB)}</td><td class="num ${bT?'cr-t':'cg-t'}">${pctInt(tdP)}</td><td class="num ${ytdBT?'cr':'cg'}">${fmt(ytdTD)}</td><td class="num ${ytdBT?'cr-t':'cg-t'}">${pctInt(ytdTDP)}</td></tr>`;
   document.getElementById('body-pacote').innerHTML=html;
@@ -1003,10 +1003,10 @@ function renderAnalise(rows, bodyId, vsOrc){
     const d=ag[c]||{orc:0,rem:0,real:0};
     const ref=vsOrc?d.orc:d.rem;
     const avRef=rlRef?ref/rlRef*100:0, avReal=rlReal?d.real/rlReal*100:0;
-    const dBrl=d.real-ref, dPct=ref?dBrl/Math.abs(ref)*100:null;
+    const dBrl=ref-d.real, dPct=ref?dBrl/Math.abs(ref)*100:null;
     const dPp=avReal-avRef, dPpP=avRef?(avReal-avRef)/Math.abs(avRef)*100:null;
     const imp=dPp/100*rlReal;
-    return {c,d,ref,avRef,avReal,dBrl,dPct,dPp,dPpP,imp,bBrl:dBrl<0,bPp:dPp<0};
+    return {c,d,ref,avRef,avReal,dBrl,dPct,dPp,dPpP,imp,bBrl:dBrl>0,bPp:dPp<0};
   });
   // ordena por Impacto asc (mais negativo/pior primeiro); remove contas sem dados
   contaData.sort((a,b)=>a.imp-b.imp);
@@ -1018,8 +1018,8 @@ function renderAnalise(rows, bodyId, vsOrc){
     totRef+=ref; totReal+=d.real;
     html+=`<tr><td class="conta">${c}</td><td class="num">${fmt(ref)}</td><td class="num">${fmt(d.real)}</td><td class="num ${bBrl?'cr':'cg'}">${fmt(dBrl)}</td><td class="num ${bBrl?'cr-t':'cg-t'}">${pctInt(dPct)}</td><td class="num sep-l">${avRef.toFixed(2)}%</td><td class="num">${avReal.toFixed(2)}%</td><td class="num ${bPp?'cr':'cg'}">${pp(dPp)}</td><td class="num imp-cell sep-l" style="color:${bPp?'var(--red)':'var(--green)'}">${fmt(imp)}</td></tr>`;
   });
-  const totD=totReal-totRef, totAvRef=rlRef?(totRef/rlRef*100):0, totAvReal=rlReal?(totReal/rlReal*100):0;
-  const totDPct=totRef?(totD/Math.abs(totRef)*100):null, totPp=totAvReal-totAvRef, totImp=totPp/100*rlReal, bTot=totD<0;
+  const totD=totRef-totReal, totAvRef=rlRef?(totRef/rlRef*100):0, totAvReal=rlReal?(totReal/rlReal*100):0;
+  const totDPct=totRef?(totD/Math.abs(totRef)*100):null, totPp=totAvReal-totAvRef, totImp=totPp/100*rlReal, bTot=totD>0;
   html+=`<tr class="total"><td class="conta">Total</td><td class="num">${fmt(totRef)}</td><td class="num">${fmt(totReal)}</td><td class="num ${bTot?'cr':'cg'}">${fmt(totD)}</td><td class="num ${bTot?'cr-t':'cg-t'}">${pctInt(totDPct)}</td><td class="num sep-l">${totAvRef.toFixed(2)}%</td><td class="num">${totAvReal.toFixed(2)}%</td><td class="num ${bTot?'cr':'cg'}">${pp(totPp)}</td><td class="num imp-cell sep-l" style="color:${bTot?'var(--red)':'var(--green)'}">${fmt(totImp)}</td></tr>`;
   document.getElementById(bodyId).innerHTML=html;
 }
