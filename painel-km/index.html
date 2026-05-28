@@ -600,15 +600,15 @@ function renderTable(F, YTD) {
     const real  = m.reduce((s, r) => s + r.real, 0);
     const delta = real - rem;
     const deltaPct = rem ? (delta / rem) * 100 : 0;
-    const rskm  = m.length ? m.reduce((s, r) => s + r.rskm, 0) / m.length : 0;
-    const imp   = delta * rskm;
+    const rskmSum = m.reduce((s, r) => s + r.rskm, 0);
+    const imp     = rem > 0 ? delta * rskmSum / rem : 0;
 
-    const ytdRem   = y.reduce((s, r) => s + r.rem, 0);
-    const ytdReal  = y.reduce((s, r) => s + r.real, 0);
-    const ytdDelta = ytdReal - ytdRem;
+    const ytdRem      = y.reduce((s, r) => s + r.rem,  0);
+    const ytdReal     = y.reduce((s, r) => s + r.real, 0);
+    const ytdDelta    = ytdReal - ytdRem;
     const ytdDeltaPct = ytdRem ? (ytdDelta / ytdRem) * 100 : 0;
-    const ytdRskm  = y.length ? y.reduce((s, r) => s + r.rskm, 0) / y.length : 0;
-    const ytdImp   = ytdDelta * ytdRskm;
+    const ytdRskmSum  = y.reduce((s, r) => s + r.rskm, 0);
+    const ytdImp      = ytdRem > 0 ? ytdDelta * ytdRskmSum / ytdRem : 0;
 
     return { und, rem, real, delta, deltaPct, imp, ytdRem, ytdReal, ytdDelta, ytdDeltaPct, ytdImp };
   });
@@ -742,11 +742,11 @@ function renderCharts(F) {
   });
 
   /* ── 2. Impacto Financeiro (barras laranjas, eixo fixo jan-dez) ── */
-  // Impacto = Δ total × R$/km médio (não soma de por-linha)
+  // Impacto = Δ × (sum_R$ / sum_rem) — taxa efetiva ponderada pelo km base
   const impData = MONTHS.map((_, i) => {
     const m = i + 1;
-    if(mData[m].cnt === 0) return null;
-    return (mData[m].real - mData[m].rem) * (mData[m].rskmSum / mData[m].cnt);
+    if(mData[m].cnt === 0 || mData[m].rem === 0) return null;
+    return (mData[m].real - mData[m].rem) * mData[m].rskmSum / mData[m].rem;
   });
   const impBg   = MONTHS.map((_, i) => {
     const m = i + 1;
