@@ -254,15 +254,15 @@ th.num{text-align:right;}
         <span class="hero-info-label">REM:</span>
         <span class="hero-info-val" id="hero-rem">—</span>
       </span>
-      <span class="hero-info-item">
-        <span class="hero-info-label">KM / FROTA ATIVA:</span>
-        <span class="hero-info-val" id="hero-kmfrota">—</span>
-      </span>
     </div>
     <div class="hero-deltas">
       <div class="hero-delta"><span>Δ Rem</span><b id="d-rem-abs">—</b></div>
       <div class="hero-delta"><span>Δ Rem %</span><b id="d-rem-pct">—</b></div>
+      <div class="hero-delta"><span>Impacto</span><b id="d-imp">—</b></div>
+      <div class="hero-delta"><span>YTD %</span><b id="d-ytd-pct">—</b></div>
       <div class="hero-delta"><span>YoY %</span><b id="d-yoy">—</b></div>
+      <div class="hero-delta"><span>Km/Frota Ativa</span><b id="hero-kmfrota" style="color:var(--text);font-weight:800;">—</b></div>
+      <div class="hero-delta"><span>Km/Viagem</span><b id="hero-kmviagem" style="color:var(--text);font-weight:800;">—</b></div>
     </div>
   </div>
 
@@ -280,11 +280,18 @@ th.num{text-align:right;}
     </div>
   </div>
 
-  <!-- Gráfico linha 2: Km/Frota Ativa (largura total) -->
-  <div class="chart-card chart-card-full">
-    <div class="chart-title">Km / Frota Ativa</div>
-    <div class="chart-sub">Média por vigência · período filtrado</div>
-    <div class="chart-wrap"><canvas id="chart-kmfrota"></canvas></div>
+  <!-- Gráfico linha 2: Km/Frota Ativa + Km/Viagem -->
+  <div class="charts-grid" style="margin-bottom:16px;">
+    <div class="chart-card">
+      <div class="chart-title">Km / Frota Ativa</div>
+      <div class="chart-sub">Média por mês · período filtrado</div>
+      <div class="chart-wrap"><canvas id="chart-kmfrota"></canvas></div>
+    </div>
+    <div class="chart-card">
+      <div class="chart-title">Km / Viagem</div>
+      <div class="chart-sub">Km realizado ÷ viagens · por mês</div>
+      <div class="chart-wrap"><canvas id="chart-kmviagem"></canvas></div>
+    </div>
   </div>
 
   <!-- Gráficos linha 3: Δ KM e Δ% por Projeto -->
@@ -335,7 +342,7 @@ const SHEET_ID  = '1wCoRGsvOgmIvfLW4F9Sxr-5AX9Go-aFlRVjrQ_B2ilM';
 const SHEET_TAB = 'Dispersão de km';
 
 let ALL = [];
-let chEvo = null, chImp = null, chKmFrota = null, chProjKm = null, chProjPct = null;
+let chEvo = null, chImp = null, chKmFrota = null, chKmViagem = null, chProjKm = null, chProjPct = null;
 
 /* ── Formatters ── */
 const numFmt = v => {
@@ -405,6 +412,7 @@ function parseRow(row) {
     proj:    (s(14) || '').split('-')[0].trim(),    // O: Projeto (antes do "-")
     rem:     parseFloat(v(31)) || 0,                // AF: Km Remunerado
     real:    parseFloat(v(32)) || 0,                // AG: Km Realizado
+    viagens: parseFloat(v(22)) || 0,                // W:  Viagens Real
     imp:     parseFloat(v(36)) || 0                 // AK: Impacto (BRL) — pré-calculado na planilha
   };
 }
@@ -547,7 +555,7 @@ function render() {
   const F = getFiltered();
 
   if(!F.length) {
-    ['hero-val','hero-rem','hero-kmfrota','d-rem-abs','d-rem-pct','d-yoy'].forEach(id => set(id, '—'));
+    ['hero-val','hero-rem','d-rem-abs','d-rem-pct','d-imp','d-ytd-pct','d-yoy','hero-kmfrota','hero-kmviagem'].forEach(id => set(id, '—'));
     const body = document.getElementById('tbl-body');
     if(body) body.innerHTML = `<tr><td colspan="9" style="text-align:center;color:var(--text2);padding:24px 8px;">Sem dados para os filtros selecionados</td></tr>`;
     const foot = document.getElementById('tbl-foot');
@@ -556,33 +564,55 @@ function render() {
     return;
   }
 
-  const totRem    = F.reduce((s, r) => s + r.rem, 0);
-  const totReal   = F.reduce((s, r) => s + r.real, 0);
-  const totDelta  = totReal - totRem;
+  const totRem      = F.reduce((s, r) => s + r.rem,     0);
+  const totReal     = F.reduce((s, r) => s + r.real,    0);
+  const totDelta    = totReal - totRem;
   const totDeltaPct = totRem ? (totDelta / totRem) * 100 : 0;
-  const avgKmFrota  = F.reduce((s, r) => s + r.kmFrota, 0) / F.length;
+  const totImp      = F.reduce((s, r) => s + r.imp,     0);
+  const avgKmFrota  = F.length ? F.reduce((s, r) => s + r.kmFrota, 0) / F.length : 0;
+  const totViagens  = F.reduce((s, r) => s + r.viagens, 0);
+  const avgKmViagem = totViagens ? totReal / totViagens : 0;
 
-  /* Hero: Real (grande) + Rem (menor) */
+  const YTDrows     = getYTDRows(F);
+  const ytdReal     = YTDrows.reduce((s, r) => s + r.real, 0);
+  const ytdRem      = YTDrows.reduce((s, r) => s + r.rem,  0);
+  const ytdDelta    = ytdReal - ytdRem;
+  const ytdDeltaPct = ytdRem ? (ytdDelta / ytdRem) * 100 : 0;
+
+  /* Hero */
   set('hero-val', fmt(totReal));
   set('hero-rem', fmt(totRem));
 
-  const bad = totDelta > 0;
+  const bad    = totDelta > 0;
   const dAbsEl = document.getElementById('d-rem-abs');
   const dPctEl = document.getElementById('d-rem-pct');
+  const dImpEl = document.getElementById('d-imp');
+  const dYtdEl = document.getElementById('d-ytd-pct');
   if(dAbsEl) { dAbsEl.textContent = (totDelta >= 0 ? '+' : '') + fmt(totDelta); dAbsEl.className = bad ? 'cr' : 'cg'; }
   if(dPctEl) { dPctEl.textContent = pctInt(totDeltaPct); dPctEl.className = bad ? 'cr' : 'cg'; }
+  if(dImpEl) { dImpEl.textContent = (totImp >= 0 ? '+' : '') + fmt(totImp); dImpEl.className = totImp > 0 ? 'cr' : 'cg'; }
+  if(dYtdEl) { dYtdEl.textContent = pctInt(ytdDeltaPct); dYtdEl.className = ytdDeltaPct > 0 ? 'cr' : 'cg'; }
+  set('hero-kmfrota', avgKmFrota ? fmt(avgKmFrota) : '—');
+  set('hero-kmviagem', avgKmViagem ? fmt(avgKmViagem) : '—');
 
-  /* YoY (Real vs Real do ano anterior) */
+  /* YoY — funciona com ou sem filtro de ano */
   const anos  = getSel('ms-ano');
   const vigs  = getSel('ms-vig');
   const unds  = getSel('ms-und');
   const projs = getSel('ms-proj');
   const yoyEl = document.getElementById('d-yoy');
-  if(yoyEl && anos.length) {
-    const prevYears = anos.map(a => String(+a - 1));
-    const prevReal  = ALL.filter(r =>
+  if(yoyEl) {
+    const effectiveYears = anos.length ? anos :
+      vigs.length ? [...new Set(vigs.map(v => v.split('/')[1]))] :
+      [...new Set(F.map(r => r.ano))];
+    const prevYears = effectiveYears.map(a => String(+a - 1));
+    // Se vigência está filtrada, compara os mesmos meses no ano anterior
+    const prevVigs = vigs.length
+      ? vigs.map(v => { const p = v.split('/'); return p[0] + '/' + String(+p[1] - 1); })
+      : null;
+    const prevReal = ALL.filter(r =>
       prevYears.includes(r.ano) &&
-      (!vigs.length  || vigs.includes(r.vig))  &&
+      (!prevVigs || prevVigs.includes(r.vig)) &&
       (!unds.length  || unds.includes(r.und))  &&
       (!projs.length || projs.includes(r.proj))
     ).reduce((s, r) => s + r.real, 0);
@@ -591,11 +621,9 @@ function render() {
       yoyEl.textContent = pctInt(yoy);
       yoyEl.className = yoy >= 0 ? 'cg' : 'cr';
     } else { yoyEl.textContent = '—'; yoyEl.className = ''; }
-  } else if(yoyEl) { yoyEl.textContent = '—'; yoyEl.className = ''; }
+  }
 
-  set('hero-kmfrota', fmt(avgKmFrota));
-
-  renderTable(F, getYTDRows(F));
+  renderTable(F, YTDrows);
   renderCharts(F);
 }
 
@@ -663,11 +691,12 @@ function renderTable(F, YTD) {
 
 /* ── Charts ── */
 function renderCharts(F) {
-  if(chEvo)     { chEvo.destroy();     chEvo     = null; }
-  if(chImp)     { chImp.destroy();     chImp     = null; }
-  if(chKmFrota) { chKmFrota.destroy(); chKmFrota = null; }
-  if(chProjKm)  { chProjKm.destroy();  chProjKm  = null; }
-  if(chProjPct) { chProjPct.destroy(); chProjPct = null; }
+  if(chEvo)      { chEvo.destroy();      chEvo      = null; }
+  if(chImp)      { chImp.destroy();      chImp      = null; }
+  if(chKmFrota)  { chKmFrota.destroy();  chKmFrota  = null; }
+  if(chKmViagem) { chKmViagem.destroy(); chKmViagem = null; }
+  if(chProjKm)   { chProjKm.destroy();   chProjKm   = null; }
+  if(chProjPct)  { chProjPct.destroy();  chProjPct  = null; }
   if(!F.length) return;
 
   const isLight = document.body.classList.contains('light-mode');
@@ -690,14 +719,16 @@ function renderCharts(F) {
   // Meses fixos jan-dez para Evolução e Impacto
   const MONTHS = ['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
   const mData  = {};
-  for(let i = 1; i <= 12; i++) mData[i] = {rem:0, real:0, impSum:0, cnt:0};
+  for(let i = 1; i <= 12; i++) mData[i] = {rem:0, real:0, impSum:0, kmFrotaSum:0, viagensSum:0, cnt:0};
   chartRows.forEach(r => {
     const m = +r.vig.split('/')[0];
     if(m >= 1 && m <= 12) {
-      mData[m].rem    += r.rem;
-      mData[m].real   += r.real;
-      mData[m].impSum += r.imp;
-      mData[m].cnt    += 1;
+      mData[m].rem        += r.rem;
+      mData[m].real       += r.real;
+      mData[m].impSum     += r.imp;
+      mData[m].kmFrotaSum += r.kmFrota;
+      mData[m].viagensSum += r.viagens;
+      mData[m].cnt        += 1;
     }
   });
 
@@ -742,7 +773,15 @@ function renderCharts(F) {
       plugins:{
         legend:{labels:{color:isLight?'#1a1a1a':'#F1F5F9',font:{family:'Montserrat',size:10},boxWidth:14}},
         tooltip,
-        datalabels:{display:false}
+        datalabels:{
+          display: ctx => {
+            const v = ctx.dataset.data[ctx.dataIndex];
+            return v !== null && hiMonths.has(ctx.dataIndex + 1);
+          },
+          anchor:'end', align:'top', color:dlColor,
+          font:{family:'Montserrat',size:9,weight:'700'},
+          formatter: v => fmt(v)
+        }
       },
       scales:{
         x:{grid, ticks:tick},
@@ -773,6 +812,7 @@ function renderCharts(F) {
     },
     options:{
       responsive:true, maintainAspectRatio:false,
+      layout:{padding:{top:35}},
       plugins:{
         legend:{display:false}, tooltip,
         datalabels:{
@@ -788,43 +828,76 @@ function renderCharts(F) {
     }
   });
 
-  /* ── 3. Km/Frota Ativa (linha branca, eixo mês/ano) ── */
-  const xTick = {...tick, callback: function(v){ return vigLabelShort(this.getLabelForValue(v)); }};
-  const frotaMap = {};
-  chartRows.forEach(r => {
-    if(!frotaMap[r.vig]) frotaMap[r.vig] = {sum:0, cnt:0};
-    frotaMap[r.vig].sum += r.kmFrota;
-    frotaMap[r.vig].cnt += 1;
+  /* ── 3. Km/Frota Ativa (linha branca, eixo fixo jan-dez) ── */
+  const kmFrotaLine = MONTHS.map((_, i) => {
+    const m = i + 1;
+    return mData[m].cnt > 0 ? mData[m].kmFrotaSum / mData[m].cnt : null;
   });
-  const frotaVigs = Object.keys(frotaMap).sort(sortVig);
-  const frotaData = frotaVigs.map(v => frotaMap[v].cnt ? frotaMap[v].sum / frotaMap[v].cnt : 0);
-
-  const frotaPts = {
-    pointRadius:          frotaVigs.map((v, i) => (hasVigFilter && selVigs.includes(v)) ? 6 : 3),
-    pointBackgroundColor: frotaVigs.map((v, i) => (hasVigFilter && selVigs.includes(v)) ? '#F97316' : orcC),
-    pointBorderColor:     orcC,
-    pointBorderWidth:     frotaVigs.map((v, i) => (hasVigFilter && selVigs.includes(v)) ? 2 : 0),
-    pointHoverRadius: 8,
-  };
 
   chKmFrota = new Chart(document.getElementById('chart-kmfrota').getContext('2d'), {
     type:'line',
     data:{
-      labels: frotaVigs,
+      labels: MONTHS,
       datasets:[{
-        label:'KM/FROTA ATIVA', data:frotaData,
+        label:'KM/FROTA ATIVA', data:kmFrotaLine,
         borderColor:orcC, borderWidth:2, tension:.3, fill:false,
-        ...frotaPts
+        ...mkPts(orcC,'#F97316')
       }]
     },
     options:{
       responsive:true, maintainAspectRatio:false,
       plugins:{
         legend:{display:false}, tooltip,
-        datalabels:{display:false}
+        datalabels:{
+          display: ctx => {
+            const v = ctx.dataset.data[ctx.dataIndex];
+            return v !== null && hiMonths.has(ctx.dataIndex + 1);
+          },
+          anchor:'end', align:'top', color:dlColor,
+          font:{family:'Montserrat',size:9,weight:'700'},
+          formatter: v => fmt(v)
+        }
       },
       scales:{
-        x:{grid, ticks:xTick},
+        x:{grid, ticks:tick},
+        y:{grid, ticks:{...tick, callback:v=>fmt(v)}, beginAtZero:false}
+      }
+    }
+  });
+
+  /* ── 3b. Km/Viagem (linha azul, eixo fixo jan-dez) ── */
+  const kmViagemLine = MONTHS.map((_, i) => {
+    const m = i + 1;
+    if(mData[m].cnt === 0 || mData[m].viagensSum === 0) return null;
+    return mData[m].real / mData[m].viagensSum;
+  });
+
+  chKmViagem = new Chart(document.getElementById('chart-kmviagem').getContext('2d'), {
+    type:'line',
+    data:{
+      labels: MONTHS,
+      datasets:[{
+        label:'KM/VIAGEM', data:kmViagemLine,
+        borderColor:'#38BDF8', borderWidth:2, tension:.3, fill:false,
+        ...mkPts('#38BDF8','#F97316')
+      }]
+    },
+    options:{
+      responsive:true, maintainAspectRatio:false,
+      plugins:{
+        legend:{display:false}, tooltip,
+        datalabels:{
+          display: ctx => {
+            const v = ctx.dataset.data[ctx.dataIndex];
+            return v !== null && hiMonths.has(ctx.dataIndex + 1);
+          },
+          anchor:'end', align:'top', color:dlColor,
+          font:{family:'Montserrat',size:9,weight:'700'},
+          formatter: v => fmt(v)
+        }
+      },
+      scales:{
+        x:{grid, ticks:tick},
         y:{grid, ticks:{...tick, callback:v=>fmt(v)}, beginAtZero:false}
       }
     }
