@@ -158,10 +158,10 @@ Todos os painéis têm alternância de tema com botão lua/sol no `.header-right
 .theme-btn{background:rgba(249,115,22,.15);border:1px solid rgba(249,115,22,.3);border-radius:4px;padding:5px 7px;cursor:pointer;color:var(--orange);display:flex;align-items:center;}
 .theme-btn:hover{background:rgba(249,115,22,.25);}
 body.light-mode .main{background:#F0F0F0;--text:#1a1a1a;--text2:#444444;--text3:#666666;}
-/* Cards: glass card sutil — branco 85% + blur + borda discreta */
-body.light-mode .card,body.light-mode .kpi-card{background:rgba(255,255,255,.85)!important;border-color:rgba(0,0,0,.12)!important;backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);--text:#1a1a1a;--text2:#444444;--text3:#555555;}
+/* Cards: branco sólido + sombra sutil, sem borda */
+body.light-mode .card,body.light-mode .kpi-card{background:#FFFFFF!important;border-color:transparent!important;box-shadow:0 2px 12px rgba(0,0,0,.10)!important;--text:#1a1a1a;--text2:#444444;--text3:#555555;}
 /* Para painéis com .chart-card e .tbl-section (visao-financeira): */
-body.light-mode .chart-card,body.light-mode .tbl-section{background:rgba(255,255,255,.85)!important;border-color:rgba(0,0,0,.12)!important;backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);--text:#1a1a1a;--text2:#444444;--text3:#555555;}
+body.light-mode .chart-card,body.light-mode .tbl-section{background:#FFFFFF!important;border-color:transparent!important;box-shadow:0 2px 12px rgba(0,0,0,.10)!important;--text:#1a1a1a;--text2:#444444;--text3:#555555;}
 ```
 
 **Regras:**
