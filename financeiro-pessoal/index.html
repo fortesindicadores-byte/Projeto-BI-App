@@ -6,6 +6,7 @@
 <title>Controle Financeiro · Renan &amp; Tati</title>
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0/dist/chartjs-plugin-datalabels.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <style>
 :root {
@@ -634,7 +635,7 @@ function buildEvChart(visible,detM){
         {label:'SALDO',  data:chartM.map(m=>m.s),borderColor:'#22C55E',borderWidth:2,  tension:.3,fill:false,borderDash:[3,2],...mk('#22C55E')},
       ]
     },
-    options:{responsive:true,maintainAspectRatio:false,plugins:{legend,tooltip:{...tooltip,callbacks:{label:c=>` ${c.dataset.label}: ${fmt(c.raw)}`}}},scales:{x:{grid,ticks:{...tick,callback:_lbFmt,maxRotation:45,minRotation:0,autoSkip:false,font:{family:'Montserrat',size:9}}},y:{grid,ticks:{...tick,callback:v=>fmtK(v)}}}}
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend,datalabels:{display:false},tooltip:{...tooltip,callbacks:{label:c=>` ${c.dataset.label}: ${fmt(c.raw)}`}}},scales:{x:{grid,ticks:{...tick,callback:_lbFmt,maxRotation:45,minRotation:0,autoSkip:false,font:{family:'Montserrat',size:9}}},y:{grid,ticks:{...tick,callback:v=>fmtK(v)}}}}
   });
 }
 
@@ -664,7 +665,7 @@ function buildInvChart(visible,detM){
          pointHoverRadius:7},
       ]
     },
-    options:{responsive:true,maintainAspectRatio:false,plugins:{legend,tooltip:{...tooltip,callbacks:{label:c=>` ${c.dataset.label}: ${fmt(c.raw)}`}}},scales:{x:{grid,ticks:{...tick,callback:_lbFmt,maxRotation:45,minRotation:0,autoSkip:false,font:{family:'Montserrat',size:9}}},y:{grid,ticks:{...tick,callback:v=>fmtK(v)}}}}
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend,datalabels:{display:false},tooltip:{...tooltip,callbacks:{label:c=>` ${c.dataset.label}: ${fmt(c.raw)}`}}},scales:{x:{grid,ticks:{...tick,callback:_lbFmt,maxRotation:45,minRotation:0,autoSkip:false,font:{family:'Montserrat',size:9}}},y:{grid,ticks:{...tick,callback:v=>fmtK(v)}}}}
   });
 }
 
@@ -677,22 +678,32 @@ function buildClusterCharts(m){
   const total=vals.reduce((a,b)=>a+b,0);
   const pcts=vals.map(v=>+(v/total*100).toFixed(1));
   const BC='rgba(239,68,68,.7)',BB='#EF4444';
-  const yAx={grid:{display:false},ticks:{...tick,font:{family:'Montserrat',size:10}}};
+  const base={responsive:true,maintainAspectRatio:false,layout:{padding:{top:24}},
+    scales:{
+      x:{grid:{display:false},ticks:{...tick,maxRotation:45,minRotation:0,font:{family:'Montserrat',size:9}}},
+      y:{grid,ticks:{...tick}}
+    }
+  };
+  const dlBase={anchor:'end',align:'top',color:'#F1F5F9',font:{family:'Montserrat',size:9,weight:'700'},clamp:true};
   if(barNomChart) barNomChart.destroy();
   barNomChart=new Chart(document.getElementById('barNomChart'),{
     type:'bar',
     data:{labels,datasets:[{data:vals,backgroundColor:BC,borderColor:BB,borderWidth:1,borderRadius:3}]},
-    options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,
-      plugins:{legend:{display:false},tooltip:{...tooltip,callbacks:{label:c=>` ${fmt(c.raw)}`}}},
-      scales:{x:{grid,ticks:{...tick,callback:v=>fmtK(v)}},y:yAx}}
+    options:{...base,
+      plugins:{legend:{display:false},datalabels:{...dlBase,formatter:v=>fmtK(v)},
+        tooltip:{...tooltip,callbacks:{label:c=>` ${fmt(c.raw)}`}}},
+      scales:{...base.scales,y:{...base.scales.y,ticks:{...tick,callback:v=>fmtK(v)}}}
+    }
   });
   if(barPctChart) barPctChart.destroy();
   barPctChart=new Chart(document.getElementById('barPctChart'),{
     type:'bar',
     data:{labels,datasets:[{data:pcts,backgroundColor:BC,borderColor:BB,borderWidth:1,borderRadius:3}]},
-    options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,
-      plugins:{legend:{display:false},tooltip:{...tooltip,callbacks:{label:c=>` ${c.raw.toFixed(1)}%`}}},
-      scales:{x:{grid,ticks:{...tick,callback:v=>v+'%'}},y:yAx}}
+    options:{...base,
+      plugins:{legend:{display:false},datalabels:{...dlBase,formatter:v=>v.toFixed(1).replace('.',',')+' %'},
+        tooltip:{...tooltip,callbacks:{label:c=>` ${c.raw.toFixed(1)}%`}}},
+      scales:{...base.scales,y:{...base.scales.y,ticks:{...tick,callback:v=>v+'%'}}}
+    }
   });
 }
 
