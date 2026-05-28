@@ -537,12 +537,18 @@ function getVisibleMonths(){
   return M.filter(m=> anos.length===0 || anos.includes('20'+m.lb.slice(-2)));
 }
 function getDetailMonth(){
+  const anos=getMsValues('ms-ano');
   const vigs=getMsValues('ms-vig');
+  // Vigência selecionada → usa ela (filtrada por Ano se necessário)
   if(vigs.length>0){
-    const sel=M.filter(m=>vigs.includes(m.lb));
-    if(sel.length>0) return sel[sel.length-1];
+    let pool=M.filter(m=>vigs.includes(m.lb));
+    if(anos.length>0) pool=pool.filter(m=>anos.includes('20'+m.lb.slice(-2)));
+    if(pool.length>0) return pool[pool.length-1];
   }
-  return M.filter(m=>!m.proj).slice(-1)[0]||M[M.length-1];
+  // Sem vigência → último realizado dentro do Ano selecionado
+  let pool=anos.length>0?M.filter(m=>anos.includes('20'+m.lb.slice(-2))):M;
+  const realized=pool.filter(m=>!m.proj);
+  return realized.length>0?realized[realized.length-1]:pool[pool.length-1]||M[M.length-1];
 }
 
 // ── CHART OPTS ────────────────────────────────────────────────
