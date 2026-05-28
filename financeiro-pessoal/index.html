@@ -389,35 +389,6 @@ tr:hover td{background:rgba(255,255,255,.02);}
     </div>
   </div>
 
-  <div class="card" style="margin-bottom:14px;">
-    <div class="card-hd">Meta de Patrimônio</div>
-    <div class="inv-stats">
-      <div class="inv-stat">
-        <div class="inv-stat-lbl">Acumulado atual</div>
-        <div class="inv-stat-val o" id="sAcum">—</div>
-      </div>
-      <div class="inv-stat">
-        <div class="inv-stat-lbl" id="sMetaLbl">Projeção —</div>
-        <div class="inv-stat-val g" id="sMeta">—</div>
-      </div>
-      <div class="inv-stat">
-        <div class="inv-stat-lbl">Rend. estimado</div>
-        <div class="inv-stat-val b" id="sRend">—</div>
-      </div>
-      <div class="inv-stat">
-        <div class="inv-stat-lbl">Média mensal</div>
-        <div class="inv-stat-val o" id="sMedia">—</div>
-      </div>
-    </div>
-    <div class="prog-wrap">
-      <div class="prog-bg"><div class="prog-fill" id="progBar" style="width:0%"></div></div>
-      <div class="prog-labels">
-        <span id="progStart">—</span>
-        <span id="progPct" style="font-weight:700;color:var(--orange)">0%</span>
-        <span id="progEnd">—</span>
-      </div>
-    </div>
-  </div>
 
   <div class="card">
     <div class="card-hd">
@@ -496,6 +467,8 @@ function cluster(k){
   }
   return 'Outros';
 }
+
+Chart.register(ChartDataLabels);
 
 // ── UTILS ─────────────────────────────────────────────────────
 const fmt  = v => 'R$ '+Math.round(v).toLocaleString('pt-BR');
@@ -678,33 +651,33 @@ function buildClusterCharts(m){
   const total=vals.reduce((a,b)=>a+b,0);
   const pcts=vals.map(v=>+(v/total*100).toFixed(1));
   const BC='rgba(239,68,68,.7)',BB='#EF4444';
-  const base={responsive:true,maintainAspectRatio:false,layout:{padding:{top:24}},
-    scales:{
-      x:{grid:{display:false},ticks:{...tick,maxRotation:45,minRotation:0,font:{family:'Montserrat',size:9}}},
-      y:{grid,ticks:{...tick}}
-    }
+  const mkBar=(id,data,yFmt,dlFmt,ttFmt)=>{
+    return new Chart(document.getElementById(id),{
+      type:'bar',
+      data:{labels,datasets:[{data,backgroundColor:BC,borderColor:BB,borderWidth:1,borderRadius:3}]},
+      options:{
+        responsive:true,maintainAspectRatio:false,
+        layout:{padding:{top:30}},
+        plugins:{
+          legend:{display:false},
+          tooltip:{...tooltip,callbacks:{label:c=>` ${ttFmt(c.raw)}`}},
+          datalabels:{
+            display:true,anchor:'end',align:'end',offset:2,
+            color:'#F1F5F9',font:{family:'Montserrat',size:9,weight:'700'},
+            formatter:dlFmt,
+          }
+        },
+        scales:{
+          x:{grid:{display:false},ticks:{...tick,maxRotation:45,minRotation:0,font:{family:'Montserrat',size:9}}},
+          y:{grid,ticks:{...tick,callback:yFmt}}
+        }
+      }
+    });
   };
-  const dlBase={anchor:'end',align:'top',color:'#F1F5F9',font:{family:'Montserrat',size:9,weight:'700'},clamp:true};
   if(barNomChart) barNomChart.destroy();
-  barNomChart=new Chart(document.getElementById('barNomChart'),{
-    type:'bar',
-    data:{labels,datasets:[{data:vals,backgroundColor:BC,borderColor:BB,borderWidth:1,borderRadius:3}]},
-    options:{...base,
-      plugins:{legend:{display:false},datalabels:{...dlBase,formatter:v=>fmtK(v)},
-        tooltip:{...tooltip,callbacks:{label:c=>` ${fmt(c.raw)}`}}},
-      scales:{...base.scales,y:{...base.scales.y,ticks:{...tick,callback:v=>fmtK(v)}}}
-    }
-  });
+  barNomChart=mkBar('barNomChart',vals,v=>fmtK(v),v=>fmtK(v),v=>fmt(v));
   if(barPctChart) barPctChart.destroy();
-  barPctChart=new Chart(document.getElementById('barPctChart'),{
-    type:'bar',
-    data:{labels,datasets:[{data:pcts,backgroundColor:BC,borderColor:BB,borderWidth:1,borderRadius:3}]},
-    options:{...base,
-      plugins:{legend:{display:false},datalabels:{...dlBase,formatter:v=>v.toFixed(1).replace('.',',')+' %'},
-        tooltip:{...tooltip,callbacks:{label:c=>` ${c.raw.toFixed(1)}%`}}},
-      scales:{...base.scales,y:{...base.scales.y,ticks:{...tick,callback:v=>v+'%'}}}
-    }
-  });
+  barPctChart=mkBar('barPctChart',pcts,v=>v+'%',v=>v.toFixed(1).replace('.',',')+' %',v=>v.toFixed(1)+'%');
 }
 
 // ── RENDER ────────────────────────────────────────────────────
