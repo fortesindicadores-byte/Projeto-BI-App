@@ -459,9 +459,16 @@ function cluster(k){
 Chart.register(ChartDataLabels);
 
 // ── UTILS ─────────────────────────────────────────────────────
-const fmt  = v => 'R$ '+Math.round(v).toLocaleString('pt-BR');
-const fmtK = v => v>=1000?'R$ '+(v/1000).toFixed(1).replace('.',',')+' k':fmt(v);
-const numK = v => v>=1000?(v/1000).toFixed(1).replace('.',',')+' k':Math.round(v).toLocaleString('pt-BR');
+// formato padrão: ≥1bi→bi | ≥1mi→mi | ≥100k→k | <100k→pt-BR
+const numFmt = v => {
+  const a=Math.abs(v),s=v<0?'-':'';
+  if(a>=1e9) return s+(a/1e9).toFixed(1)+' bi';
+  if(a>=1e6) return s+(a/1e6).toFixed(1)+' mi';
+  if(a>=1e5) return s+(a/1e3).toFixed(1)+'k';
+  return s+Math.round(a).toLocaleString('pt-BR');
+};
+const fmt  = v => 'R$ '+numFmt(v);
+const fmtK = fmt;
 const set  = (id,val) => { const e=document.getElementById(id); if(e) e.textContent=val; };
 
 // ── CUMULATIVE INVEST (0,79% / mês) ──────────────────────────
@@ -597,7 +604,7 @@ function buildEvChart(visible,detM){
         {label:'SALDO',  data:chartM.map(m=>m.s),borderColor:'#22C55E',borderWidth:2,  tension:.3,fill:false,borderDash:[3,2],...mk('#22C55E')},
       ]
     },
-    options:{responsive:true,maintainAspectRatio:false,plugins:{legend,datalabels:{display:false},tooltip:{...tooltip,callbacks:{label:c=>` ${c.dataset.label}: ${numK(c.raw)}`}}},scales:{x:{grid,ticks:{...tick,callback:function(v){return _lbFmt(this.getLabelForValue(v));},maxRotation:45,minRotation:0,autoSkip:false,font:{family:'Montserrat',size:9}}},y:{grid,ticks:{...tick,callback:v=>numK(v)}}}}
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend,datalabels:{display:false},tooltip:{...tooltip,callbacks:{label:c=>` ${c.dataset.label}: ${numFmt(c.raw)}`}}},scales:{x:{grid,ticks:{...tick,callback:function(v){return _lbFmt(this.getLabelForValue(v));},maxRotation:45,minRotation:0,autoSkip:false,font:{family:'Montserrat',size:9}}},y:{grid,ticks:{...tick,callback:v=>numFmt(v)}}}}
   });
 }
 
@@ -627,7 +634,7 @@ function buildInvChart(visible,detM){
          pointHoverRadius:7},
       ]
     },
-    options:{responsive:true,maintainAspectRatio:false,plugins:{legend,datalabels:{display:false},tooltip:{...tooltip,callbacks:{label:c=>` ${c.dataset.label}: ${numK(c.raw)}`}}},scales:{x:{grid,ticks:{...tick,callback:function(v){return _lbFmt(this.getLabelForValue(v));},maxRotation:45,minRotation:0,autoSkip:false,font:{family:'Montserrat',size:9}}},y:{grid,ticks:{...tick,callback:v=>numK(v)}}}}
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend,datalabels:{display:false},tooltip:{...tooltip,callbacks:{label:c=>` ${c.dataset.label}: ${numFmt(c.raw)}`}}},scales:{x:{grid,ticks:{...tick,callback:function(v){return _lbFmt(this.getLabelForValue(v));},maxRotation:45,minRotation:0,autoSkip:false,font:{family:'Montserrat',size:9}}},y:{grid,ticks:{...tick,callback:v=>numFmt(v)}}}}
   });
 }
 
@@ -664,7 +671,7 @@ function buildClusterCharts(m){
     });
   };
   if(barNomChart) barNomChart.destroy();
-  barNomChart=mkBar('barNomChart',vals,v=>numK(v),v=>numK(v),v=>numK(v));
+  barNomChart=mkBar('barNomChart',vals,v=>numFmt(v),v=>numFmt(v),v=>numFmt(v));
   if(barPctChart) barPctChart.destroy();
   barPctChart=mkBar('barPctChart',pcts,v=>Math.round(v)+'%',v=>Math.round(v)+'%',v=>Math.round(v)+'%');
 }
@@ -745,9 +752,9 @@ function renderAll(){
       :`<span style="color:var(--text3)">—</span>`;
     const clusterTxt=`<span>${cl}</span>`;
     const pInt=Math.round(v/m0.c*100);
-    return `<tr><td>${k}</td><td>${clusterTxt}</td><td>${statusTxt}</td><td class="amt">${numK(v)}</td><td class="amt" style="color:var(--text2)">${pInt}%</td></tr>`;
+    return `<tr><td>${k}</td><td>${clusterTxt}</td><td>${statusTxt}</td><td class="amt">${numFmt(v)}</td><td class="amt">${pInt}%</td></tr>`;
   }).join('');
-  set('tblTotal',numK(m0.c));
+  set('tblTotal',numFmt(m0.c));
 
   // Gráficos
   buildEvChart(visible,m0);
