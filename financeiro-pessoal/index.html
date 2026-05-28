@@ -602,7 +602,6 @@ function getChartMonths(){
 }
 
 // ── CHART OPTS ────────────────────────────────────────────────
-const hexRgb=h=>{const r=parseInt(h.slice(1,3),16),g=parseInt(h.slice(3,5),16),b=parseInt(h.slice(5,7),16);return`${r},${g},${b}`;};
 const grid={color:'rgba(255,255,255,.06)'};
 const tick={color:'#94A3B8',font:{family:'Montserrat',size:10}};
 const tooltip={backgroundColor:'#141B26',titleColor:'#F97316',bodyColor:'#F1F5F9',borderColor:'#1E2D40',borderWidth:1,titleFont:{family:'Montserrat'},bodyFont:{family:'Montserrat'}};
@@ -615,29 +614,21 @@ function buildEvChart(visible,detM){
   if(evChart) evChart.destroy();
   const chartM=getChartMonths();
   const visSet=new Set(visible.map(m=>m.id));
-  const hlCol=(base,sel)=>sel?base:'rgba('+hexRgb(base)+',.18)';
-  const pr=(m)=>visSet.has(m.id)?(m===detM?7:4):2;
-  const seg=(base)=>({
-    borderColor:ctx=>{
-      const a=visSet.has(chartM[ctx.p0DataIndex]?.id),b=visSet.has(chartM[ctx.p1DataIndex]?.id);
-      return (a||b)?base:'rgba('+hexRgb(base)+',.15)';
-    },
-    borderWidth:ctx=>{
-      const a=visSet.has(chartM[ctx.p0DataIndex]?.id),b=visSet.has(chartM[ctx.p1DataIndex]?.id);
-      return (a&&b)?2.5:1;
-    }
+  const mk=(c)=>({
+    pointRadius:      chartM.map(m=>visSet.has(m.id)?9:3),
+    pointBackgroundColor: chartM.map(m=>visSet.has(m.id)?'#fff':c),
+    pointBorderColor: c,
+    pointBorderWidth: chartM.map(m=>visSet.has(m.id)?3:0),
+    pointHoverRadius: 11,
   });
   evChart=new Chart(document.getElementById('evChart'),{
     type:'line',
     data:{
       labels:chartM.map(m=>m.lb),
       datasets:[
-        {label:'RECEITA',data:chartM.map(m=>m.r),borderColor:'#22C55E',borderWidth:2,tension:.3,fill:false,borderDash:[],
-         pointRadius:chartM.map(pr),pointBackgroundColor:chartM.map(m=>visSet.has(m.id)?'#22C55E':'rgba(34,197,94,.2)'),segment:seg('#22C55E')},
-        {label:'CONTAS', data:chartM.map(m=>m.c),borderColor:'#EF4444',borderWidth:2,tension:.3,fill:false,borderDash:[5,3],
-         pointRadius:chartM.map(pr),pointBackgroundColor:chartM.map(m=>visSet.has(m.id)?'#EF4444':'rgba(239,68,68,.2)'),segment:seg('#EF4444')},
-        {label:'SALDO',  data:chartM.map(m=>m.s),borderColor:'#60A5FA',borderWidth:2,tension:.3,fill:false,borderDash:[3,2],
-         pointRadius:chartM.map(pr),pointBackgroundColor:chartM.map(m=>visSet.has(m.id)?'#60A5FA':'rgba(96,165,250,.2)'),segment:seg('#60A5FA')},
+        {label:'RECEITA',data:chartM.map(m=>m.r),borderColor:'#22C55E',borderWidth:2.5,tension:.3,fill:false,borderDash:[],...mk('#22C55E')},
+        {label:'CONTAS', data:chartM.map(m=>m.c),borderColor:'#EF4444',borderWidth:2,  tension:.3,fill:false,borderDash:[5,3],...mk('#EF4444')},
+        {label:'SALDO',  data:chartM.map(m=>m.s),borderColor:'#60A5FA',borderWidth:2,  tension:.3,fill:false,borderDash:[3,2],...mk('#60A5FA')},
       ]
     },
     options:{responsive:true,maintainAspectRatio:false,plugins:{legend,tooltip:{...tooltip,callbacks:{label:c=>` ${c.dataset.label}: ${fmt(c.raw)}`}}},scales:{x:{grid,ticks:{...tick,maxRotation:45,minRotation:0,autoSkip:false,font:{family:'Montserrat',size:9}}},y:{grid,ticks:{...tick,callback:v=>fmtK(v)}}}}
@@ -649,26 +640,25 @@ function buildInvChart(visible,detM){
   const chartM=getChartMonths();
   const visSet=new Set(visible.map(m=>m.id));
   const idxs=chartM.map(m=>M.indexOf(m));
-  const pr=(m)=>visSet.has(m.id)?(m===detM?7:4):2;
-  const seg=(base)=>({
-    borderColor:ctx=>{
-      const a=visSet.has(chartM[ctx.p0DataIndex]?.id),b=visSet.has(chartM[ctx.p1DataIndex]?.id);
-      return (a||b)?base:'rgba('+hexRgb(base)+',.15)';
-    },
-    borderWidth:ctx=>{
-      const a=visSet.has(chartM[ctx.p0DataIndex]?.id),b=visSet.has(chartM[ctx.p1DataIndex]?.id);
-      return (a&&b)?2.5:1;
-    }
+  const mk=(c)=>({
+    pointRadius:      chartM.map(m=>visSet.has(m.id)?9:3),
+    pointBackgroundColor: chartM.map(m=>visSet.has(m.id)?'#fff':c),
+    pointBorderColor: c,
+    pointBorderWidth: chartM.map(m=>visSet.has(m.id)?3:0),
+    pointHoverRadius: 11,
   });
   invChart=new Chart(document.getElementById('invChart'),{
     type:'line',
     data:{
       labels:chartM.map(m=>m.lb),
       datasets:[
-        {label:'PATRIMÔNIO',data:idxs.map(i=>cumInv[i]),borderColor:'#F97316',borderWidth:2,tension:.3,fill:false,
-         pointRadius:chartM.map(pr),pointBackgroundColor:chartM.map(m=>visSet.has(m.id)?'#F97316':'rgba(249,115,22,.2)'),segment:seg('#F97316')},
-        {label:'APORTE',   data:chartM.map(m=>m.iv),borderColor:'rgba(249,115,22,.45)',borderWidth:1.5,tension:.3,fill:false,borderDash:[4,3],
-         pointRadius:chartM.map(m=>visSet.has(m.id)?3:1),pointBackgroundColor:chartM.map(m=>visSet.has(m.id)?'rgba(249,115,22,.5)':'rgba(249,115,22,.1)')},
+        {label:'PATRIMÔNIO',data:idxs.map(i=>cumInv[i]),borderColor:'#F97316',borderWidth:2.5,tension:.3,fill:false,...mk('#F97316')},
+        {label:'APORTE',    data:chartM.map(m=>m.iv),   borderColor:'rgba(249,115,22,.5)',borderWidth:1.5,tension:.3,fill:false,borderDash:[4,3],
+         pointRadius:chartM.map(m=>visSet.has(m.id)?5:2),
+         pointBackgroundColor:chartM.map(m=>visSet.has(m.id)?'#fff':'rgba(249,115,22,.4)'),
+         pointBorderColor:'rgba(249,115,22,.8)',
+         pointBorderWidth:chartM.map(m=>visSet.has(m.id)?2:0),
+         pointHoverRadius:7},
       ]
     },
     options:{responsive:true,maintainAspectRatio:false,plugins:{legend,tooltip:{...tooltip,callbacks:{label:c=>` ${c.dataset.label}: ${fmt(c.raw)}`}}},scales:{x:{grid,ticks:{...tick,maxRotation:45,minRotation:0,autoSkip:false,font:{family:'Montserrat',size:9}}},y:{grid,ticks:{...tick,callback:v=>fmtK(v)}}}}
