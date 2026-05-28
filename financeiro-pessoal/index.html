@@ -120,32 +120,27 @@ body{
 .ms-list::-webkit-scrollbar-thumb{background:#2a3a50;border-radius:2px;}
 
 /* ── MAIN ── */
-.main{padding:20px 24px;max-width:1440px;margin:0 auto;}
+.main{padding:20px 24px;}
 
-/* ── KPI GRID ── */
-.kpi-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:14px;}
-.kpi{
-  background:rgba(20,27,38,.55);border:1px solid rgba(255,255,255,.07);border-radius:8px;
-  padding:14px 16px;position:relative;overflow:hidden;
-  backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);
-  box-shadow:0 2px 12px rgba(0,0,0,.25);
-}
-.kpi::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;}
-.kpi.g::before{background:var(--green);}
-.kpi.r::before{background:var(--red);}
-.kpi.b::before{background:var(--blue);}
-.kpi.o::before{background:var(--orange);}
-.kpi-lbl{font-size:10px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;color:var(--text2);margin-bottom:8px;}
-.kpi-val{font-size:24px;font-weight:800;line-height:1;}
-.kpi-val.g{color:var(--green);}
-.kpi-val.r{color:var(--red);}
-.kpi-val.b{color:var(--blue);}
-.kpi-val.o{color:var(--orange);}
-.kpi-sub{font-size:11px;color:var(--text3);margin-top:6px;}
+/* ── HERO ── */
+.hero{padding:4px 0 12px;}
+.hero-label{font-size:10px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;}
+.hero-value{font-size:54px;font-weight:800;color:var(--text);line-height:1;}
+
+/* ── HERO DELTAS ── */
+.hero-deltas{display:flex;gap:24px;margin-top:10px;}
+.hero-delta{font-size:10px;color:var(--text2);}
+.hero-delta b{font-size:14px;font-weight:700;display:block;margin-top:2px;color:var(--text);}
+
+/* ── KPI CARDS ROW ── */
+.kpi-cards-row{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:10px;}
+.kpi-card{background:var(--card);border:1px solid var(--border);border-radius:8px;padding:12px 14px;}
+.kpi-card .card-label{font-size:10px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px;}
+.kpi-card .card-value{font-size:22px;font-weight:800;line-height:1.1;margin-top:2px;}
+.kpi-card .card-sub{font-size:11px;color:var(--text3);margin-top:3px;}
 
 /* ── CARDS / CHARTS ── */
 .row2{display:grid;grid-template-columns:1fr 360px;gap:14px;margin-bottom:14px;}
-.row3{display:grid;grid-template-columns:1fr 290px;gap:14px;margin-bottom:14px;}
 .card{
   background:rgba(20,27,38,.55);border:1px solid rgba(255,255,255,.07);border-radius:8px;
   padding:18px;
@@ -208,15 +203,17 @@ tr:hover td{background:rgba(255,255,255,.02);}
 
 /* ── MOBILE ── */
 @media(max-width:900px){
-  .row2,.row3{grid-template-columns:1fr;}
-  .kpi-grid{grid-template-columns:repeat(2,1fr);}
+  .row2{grid-template-columns:1fr;}
+  .kpi-cards-row{grid-template-columns:repeat(2,1fr);}
 }
 @media(max-width:768px){
   .main{padding:12px 10px;}
   .header{padding:8px 12px 10px;}
   .header-right{flex-direction:column;align-items:flex-end;gap:4px;}
   .header-right .refresh-btn{display:none;}
-  .kpi-val{font-size:19px;}
+  .hero-value{font-size:36px;}
+  .hero-delta b{font-size:12px;}
+  .kpi-card .card-value{font-size:16px;}
 }
 </style>
 </head>
@@ -258,7 +255,6 @@ tr:hover td{background:rgba(255,255,255,.02);}
         <div class="ms-panel"><div class="ms-search"><svg width="12" height="12" viewBox="0 0 12 12"><circle cx="5" cy="5" r="4" stroke="#94A3B8" stroke-width="1.5" fill="none"/><line x1="8.5" y1="8.5" x2="11" y2="11" stroke="#94A3B8" stroke-width="1.5"/></svg><input type="text" placeholder="Digite para pesquisar…"></div><div class="ms-list"></div></div>
       </div>
     </div>
-    <span class="filter-hint">* O painel inicia com a vigência mais recente realizada pré-selecionada. Selecionar Ano e Vigência simultaneamente pode resultar em dados zerados se os filtros forem conflitantes.</span>
   </div>
 </header>
 
@@ -266,31 +262,80 @@ tr:hover td{background:rgba(255,255,255,.02);}
 
 <div class="main">
 
-  <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;">
-    <span class="badge-proj" id="projBadge">PROJETADO</span>
-    <span id="detailLbl" style="font-size:11px;color:var(--text2);"></span>
+  <section class="hero">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px;">
+      <span class="badge-proj" id="projBadge">PROJETADO</span>
+      <span id="detailLbl" style="font-size:11px;color:var(--text2);"></span>
+    </div>
+    <div class="hero-label">Receita Total</div>
+    <div class="hero-value" id="kR">—</div>
+    <div class="hero-deltas">
+      <div class="hero-delta">Receita Média<b id="kR-med">—</b></div>
+      <div class="hero-delta">Receita Acum.<b id="kR-acum">—</b></div>
+      <div class="hero-delta">Receita Projetada<b id="kR-proj">—</b></div>
+    </div>
+  </section>
+
+  <!-- Custos -->
+  <div class="kpi-cards-row">
+    <div class="kpi-card">
+      <div class="card-label">Custos Mês</div>
+      <div class="card-value" id="m-cm" style="color:var(--red)">—</div>
+      <div class="card-sub" id="m-cm-sub"></div>
+    </div>
+    <div class="kpi-card">
+      <div class="card-label">Custo Médio</div>
+      <div class="card-value" id="m-cmed" style="color:var(--red)">—</div>
+    </div>
+    <div class="kpi-card">
+      <div class="card-label">Custo Acum.</div>
+      <div class="card-value" id="m-cacum" style="color:var(--red)">—</div>
+    </div>
+    <div class="kpi-card">
+      <div class="card-label">Custo Projetado</div>
+      <div class="card-value" id="m-cproj" style="color:var(--red)">—</div>
+    </div>
   </div>
 
-  <div class="kpi-grid">
-    <div class="kpi g">
-      <div class="kpi-lbl">Receita Total</div>
-      <div class="kpi-val g" id="kR">—</div>
-      <div class="kpi-sub" id="kRsub"></div>
+  <!-- Investimento -->
+  <div class="kpi-cards-row">
+    <div class="kpi-card">
+      <div class="card-label">Investimento Mês</div>
+      <div class="card-value" id="m-im" style="color:var(--orange)">—</div>
+      <div class="card-sub" id="m-im-sub"></div>
     </div>
-    <div class="kpi r">
-      <div class="kpi-lbl">Total Contas</div>
-      <div class="kpi-val r" id="kC">—</div>
-      <div class="kpi-sub" id="kCsub"></div>
+    <div class="kpi-card">
+      <div class="card-label">Invest. Médio</div>
+      <div class="card-value" id="m-imed" style="color:var(--orange)">—</div>
     </div>
-    <div class="kpi b">
-      <div class="kpi-lbl">Saldo do Mês</div>
-      <div class="kpi-val" id="kS">—</div>
-      <div class="kpi-sub" id="kSsub"></div>
+    <div class="kpi-card">
+      <div class="card-label">Invest. Acum.</div>
+      <div class="card-value" id="m-iacum" style="color:var(--orange)">—</div>
     </div>
-    <div class="kpi o">
-      <div class="kpi-lbl">Investimento</div>
-      <div class="kpi-val o" id="kI">—</div>
-      <div class="kpi-sub" id="kIsub"></div>
+    <div class="kpi-card">
+      <div class="card-label">Invest. Projetado</div>
+      <div class="card-value" id="m-iproj" style="color:var(--orange)">—</div>
+    </div>
+  </div>
+
+  <!-- Saldo -->
+  <div class="kpi-cards-row" style="margin-bottom:20px;">
+    <div class="kpi-card">
+      <div class="card-label">Saldo do Mês</div>
+      <div class="card-value" id="m-sm">—</div>
+      <div class="card-sub" id="m-sm-sub"></div>
+    </div>
+    <div class="kpi-card">
+      <div class="card-label">Saldo Médio</div>
+      <div class="card-value" id="m-smed">—</div>
+    </div>
+    <div class="kpi-card">
+      <div class="card-label">Saldo Acum.</div>
+      <div class="card-value" id="m-sacum">—</div>
+    </div>
+    <div class="kpi-card">
+      <div class="card-label">Projeção de Saldo</div>
+      <div class="card-value" id="m-sproj">—</div>
     </div>
   </div>
 
@@ -317,45 +362,44 @@ tr:hover td{background:rgba(255,255,255,.02);}
     </div>
   </div>
 
-  <div class="row3">
-    <div class="card">
-      <div class="card-hd">
-        Acumulado de Investimentos
-        <small>Patrimônio acumulado com 0,79% a.m. · Aporte mensal</small>
-      </div>
-      <div class="legend-row">
-        <div class="leg"><div class="leg-dot" style="background:var(--orange);border-radius:50%"></div>Patrimônio acumulado</div>
-        <div class="leg"><div class="leg-dot" style="background:rgba(249,115,22,.5);border-radius:50%"></div>Aporte mensal</div>
-      </div>
-      <div class="chart-box" style="height:185px"><canvas id="invChart"></canvas></div>
+  <div class="card" style="margin-bottom:14px;">
+    <div class="card-hd">
+      Acumulado de Investimentos
+      <small>Patrimônio acumulado com 0,79% a.m. · Aporte mensal</small>
     </div>
-    <div class="card">
-      <div class="card-hd">Meta de Patrimônio</div>
-      <div class="inv-stats">
-        <div class="inv-stat">
-          <div class="inv-stat-lbl">Acumulado atual</div>
-          <div class="inv-stat-val o" id="sAcum">—</div>
-        </div>
-        <div class="inv-stat">
-          <div class="inv-stat-lbl" id="sMetaLbl">Projeção —</div>
-          <div class="inv-stat-val g" id="sMeta">—</div>
-        </div>
-        <div class="inv-stat">
-          <div class="inv-stat-lbl">Rend. estimado</div>
-          <div class="inv-stat-val b" id="sRend">—</div>
-        </div>
-        <div class="inv-stat">
-          <div class="inv-stat-lbl">Média mensal</div>
-          <div class="inv-stat-val o" id="sMedia">—</div>
-        </div>
+    <div class="legend-row">
+      <div class="leg"><div class="leg-dot" style="background:var(--orange);border-radius:50%"></div>Patrimônio acumulado</div>
+      <div class="leg"><div class="leg-dot" style="background:rgba(249,115,22,.5);border-radius:50%"></div>Aporte mensal</div>
+    </div>
+    <div class="chart-box" style="height:185px"><canvas id="invChart"></canvas></div>
+  </div>
+
+  <div class="card" style="margin-bottom:14px;">
+    <div class="card-hd">Meta de Patrimônio</div>
+    <div class="inv-stats">
+      <div class="inv-stat">
+        <div class="inv-stat-lbl">Acumulado atual</div>
+        <div class="inv-stat-val o" id="sAcum">—</div>
       </div>
-      <div class="prog-wrap">
-        <div class="prog-bg"><div class="prog-fill" id="progBar" style="width:0%"></div></div>
-        <div class="prog-labels">
-          <span id="progStart">—</span>
-          <span id="progPct" style="font-weight:700;color:var(--orange)">0%</span>
-          <span id="progEnd">—</span>
-        </div>
+      <div class="inv-stat">
+        <div class="inv-stat-lbl" id="sMetaLbl">Projeção —</div>
+        <div class="inv-stat-val g" id="sMeta">—</div>
+      </div>
+      <div class="inv-stat">
+        <div class="inv-stat-lbl">Rend. estimado</div>
+        <div class="inv-stat-val b" id="sRend">—</div>
+      </div>
+      <div class="inv-stat">
+        <div class="inv-stat-lbl">Média mensal</div>
+        <div class="inv-stat-val o" id="sMedia">—</div>
+      </div>
+    </div>
+    <div class="prog-wrap">
+      <div class="prog-bg"><div class="prog-fill" id="progBar" style="width:0%"></div></div>
+      <div class="prog-labels">
+        <span id="progStart">—</span>
+        <span id="progPct" style="font-weight:700;color:var(--orange)">0%</span>
+        <span id="progEnd">—</span>
       </div>
     </div>
   </div>
@@ -517,35 +561,27 @@ document.addEventListener('click',e=>{
     document.querySelectorAll('.ms-panel.open').forEach(p=>p.classList.remove('open'));
 });
 
+// ── MÊS ATUAL ────────────────────────────────────────────────
+const _MPT=['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+const _curLb=_MPT[new Date().getMonth()]+'/'+String(new Date().getFullYear()).slice(-2);
+
 // ── FILTROS ───────────────────────────────────────────────────
 function populateFilters(){
-  // Ano: extrai de "Mai/26" → "2026"
   const anos=[...new Set(M.map(m=>'20'+m.lb.slice(-2)))].sort().reverse();
   buildMsFilter('ms-ano',anos);
-  // Vigência: pré-seleciona último mês realizado
-  const vigs=M.map(m=>m.lb);
   const vigWrap=document.getElementById('ms-vig');
-  vigWrap._sel=new Set();
-  const lastReal=M.filter(m=>!m.proj).slice(-1)[0];
-  if(lastReal) vigWrap._sel.add(lastReal.lb);
-  buildMsFilter('ms-vig',vigs);
+  if(!vigWrap._sel) vigWrap._sel=new Set(); else vigWrap._sel.clear();
+  if(M.find(m=>m.lb===_curLb)) vigWrap._sel.add(_curLb);
+  buildMsFilter('ms-vig',M.map(m=>m.lb));
 }
 function getVisibleMonths(){
-  const anos=getMsValues('ms-ano');
-  const vigs=getMsValues('ms-vig');
-  return M.filter(m=>{
+  const anos=getMsValues('ms-ano'), vigs=getMsValues('ms-vig');
+  const r=M.filter(m=>{
     if(anos.length>0&&!anos.includes('20'+m.lb.slice(-2))) return false;
     if(vigs.length>0&&!vigs.includes(m.lb)) return false;
     return true;
   });
-}
-function getDetailMonth(){
-  const vigs=getMsValues('ms-vig');
-  if(vigs.length>0){
-    const sel=M.filter(m=>vigs.includes(m.lb));
-    if(sel.length>0) return sel[sel.length-1];
-  }
-  return M.filter(m=>!m.proj).slice(-1)[0]||M[M.length-1];
+  return r.length>0?r:M;
 }
 
 // ── CHART OPTS ────────────────────────────────────────────────
@@ -557,9 +593,8 @@ const legend={labels:{color:'#F1F5F9',font:{family:'Montserrat',size:10},boxWidt
 // ── CHART INSTANCES ───────────────────────────────────────────
 let evChart=null, donutChart=null, invChart=null;
 
-function buildEvChart(visible){
+function buildEvChart(visible,detM){
   if(evChart) evChart.destroy();
-  const detM=getDetailMonth();
   evChart=new Chart(document.getElementById('evChart'),{
     type:'line',
     data:{
@@ -574,9 +609,8 @@ function buildEvChart(visible){
   });
 }
 
-function buildInvChart(visible){
+function buildInvChart(visible,detM){
   if(invChart) invChart.destroy();
-  const detM=getDetailMonth();
   const idxs=visible.map(m=>M.indexOf(m));
   invChart=new Chart(document.getElementById('invChart'),{
     type:'line',
@@ -613,62 +647,83 @@ function buildDonut(m){
 
 // ── RENDER ────────────────────────────────────────────────────
 function renderAll(){
-  const visible=getVisibleMonths().length>0?getVisibleMonths():M;
-  const m=getDetailMonth();
-  const idx=M.indexOf(m);
+  const visible=getVisibleMonths();
+  const m0=visible[0]; // mês mais antigo selecionado
 
-  // Badge projetado
-  const pb=document.getElementById('projBadge');
-  pb.style.display=m.proj?'':'none';
-  set('detailLbl',m.lb.toUpperCase());
-  set('clusterLbl',m.lb);
-  set('tblLbl',m.lb);
+  // Badge/label referência
+  document.getElementById('projBadge').style.display=m0.proj?'':'none';
+  set('detailLbl',m0.lb.toUpperCase());
+  set('clusterLbl',m0.lb);
+  set('tblLbl',m0.lb);
+  set('evolutionRangeLbl',`${visible[0].lb} → ${visible[visible.length-1].lb}`);
 
-  // KPIs
-  set('kR',fmt(m.r));
-  document.getElementById('kRsub').textContent=Object.entries(m.ri).filter(([,v])=>v>0).map(([k])=>k).join(' · ');
-  set('kC',fmt(m.c));
-  const paid=paidTotal(m);
-  const pctP=m.c>0?(paid/m.c*100):0;
-  document.getElementById('kCsub').textContent=m.cs?`${pctP.toFixed(0)}% pago · ${(m.c/m.r*100).toFixed(0)}% da receita`:`${(m.c/m.r*100).toFixed(1)}% da receita`;
-  const sel=document.getElementById('kS');
-  sel.textContent=fmt(m.s);
-  sel.className='kpi-val '+(m.s>=0?'b':'r');
-  document.getElementById('kSsub').textContent=`${(m.s/m.r*100).toFixed(1)}% da receita`;
-  set('kI',fmt(m.iv));
-  const ivPaid=!m.cs||m.cs['Investimento']!==false;
-  document.getElementById('kIsub').textContent=ivPaid?'Acumulado real: '+fmt(cumInv[idx]):'⚠ Não pago · Acumulado: '+fmt(cumInv[idx]);
+  // Hero: receita do mês de referência
+  set('kR',fmt(m0.r));
 
-  // Invest stats
-  const rawAcc=M.slice(0,idx+1).reduce((s,x)=>s+x.iv,0);
-  const rend=cumInv[idx]-rawAcc;
-  const media=rawAcc/(idx+1);
-  set('sAcum',fmt(cumInv[idx]));
+  // Cálculos agregados dos meses visíveis
+  const sumR=visible.reduce((s,m)=>s+m.r,0);
+  const sumC=visible.reduce((s,m)=>s+m.c,0);
+  const sumI=visible.reduce((s,m)=>s+m.iv,0);
+  const sumS=visible.reduce((s,m)=>s+m.s,0);
+  const n=visible.length;
+  // Projetados = soma de TODOS os meses (sem filtro)
+  const projR=M.reduce((s,m)=>s+m.r,0);
+  const projC=M.reduce((s,m)=>s+m.c,0);
+  const projI=M.reduce((s,m)=>s+m.iv,0);
+  const projS=M.reduce((s,m)=>s+m.s,0);
+
+  // Hero deltas: receita média, acumulada e projetada
+  set('kR-med',fmt(sumR/n));
+  set('kR-acum',fmt(sumR));
+  set('kR-proj',fmt(projR));
+
+  // Custos
+  set('m-cm',fmt(m0.c));
+  set('m-cm-sub',`${(m0.c/m0.r*100).toFixed(1)}% da receita`);
+  set('m-cmed',fmt(sumC/n));
+  set('m-cacum',fmt(sumC));
+  set('m-cproj',fmt(projC));
+
+  // Investimento
+  set('m-im',fmt(m0.iv));
+  set('m-im-sub',`${(m0.iv/m0.r*100).toFixed(1)}% da receita`);
+  set('m-imed',fmt(sumI/n));
+  set('m-iacum',fmt(sumI));
+  set('m-iproj',fmt(projI));
+
+  // Saldo (cor dinâmica)
+  const cs=v=>{const e=document.getElementById(v[0]);if(e){e.textContent=fmt(v[1]);e.style.color=v[1]>=0?'var(--blue)':'var(--red)';}};
+  cs(['m-sm',m0.s]); cs(['m-smed',sumS/n]); cs(['m-sacum',sumS]); cs(['m-sproj',projS]);
+  set('m-sm-sub',`${(m0.s/m0.r*100).toFixed(1)}% da receita`);
+
+  // Meta de Patrimônio (usa último mês visível como referência acumulada)
+  const lastIdx=M.indexOf(visible[visible.length-1]);
+  const rawAcc=M.slice(0,lastIdx+1).reduce((s,x)=>s+x.iv,0);
+  set('sAcum',fmt(cumInv[lastIdx]));
   set('sMeta',fmt(finalInv));
-  set('sRend',fmt(rend));
-  set('sMedia',fmt(media));
-  const pct=Math.min(100,(cumInv[idx]/finalInv)*100);
+  set('sRend',fmt(cumInv[lastIdx]-rawAcc));
+  set('sMedia',fmt(rawAcc/(lastIdx+1)));
+  const pct=Math.min(100,(cumInv[lastIdx]/finalInv)*100);
   document.getElementById('progBar').style.width=pct+'%';
   document.getElementById('progPct').textContent=pct.toFixed(1)+'%';
   set('sMetaLbl',`Projeção ${M[M.length-1].lb}`);
   set('progStart',M[0].lb);
   set('progEnd',M[M.length-1].lb);
-  set('evolutionRangeLbl',`${visible[0].lb} → ${visible[visible.length-1].lb}`);
 
-  // Tabela
-  const entries=Object.entries(m.ci).sort((a,b)=>b[1]-a[1]);
+  // Tabela (mês de referência)
+  const entries=Object.entries(m0.ci).sort((a,b)=>b[1]-a[1]);
   document.getElementById('tblBody').innerHTML=entries.map(([k,v])=>{
-    const cl=cluster(k),def=CL[cl]||CL['Outros'],pct=((v/m.c)*100).toFixed(1);
-    const isPaid=!m.cs||m.cs[k]===true;
-    const chip=m.cs?(isPaid?'<span class="status-pill paid">Pago</span>':'<span class="status-pill pending">Pendente</span>'):'<span style="color:var(--text3)">—</span>';
-    return `<tr><td>${k}</td><td><span class="tag ${def.cls}">${cl}</span></td><td>${chip}</td><td class="amt">${fmt(v)}</td><td style="text-align:right;color:var(--text3);font-size:11px">${pct}%</td></tr>`;
+    const cl=cluster(k),def=CL[cl]||CL['Outros'],p=((v/m0.c)*100).toFixed(1);
+    const isPaid=!m0.cs||m0.cs[k]===true;
+    const chip=m0.cs?(isPaid?'<span class="status-pill paid">Pago</span>':'<span class="status-pill pending">Pendente</span>'):'<span style="color:var(--text3)">—</span>';
+    return `<tr><td>${k}</td><td><span class="tag ${def.cls}">${cl}</span></td><td>${chip}</td><td class="amt">${fmt(v)}</td><td style="text-align:right;color:var(--text3);font-size:11px">${p}%</td></tr>`;
   }).join('');
-  set('tblTotal',fmt(m.c));
+  set('tblTotal',fmt(m0.c));
 
   // Gráficos
-  buildEvChart(visible);
-  buildInvChart(visible);
-  buildDonut(m);
+  buildEvChart(visible,m0);
+  buildInvChart(visible,m0);
+  buildDonut(m0);
 }
 
 // ── ÚLTIMO ACESSO ─────────────────────────────────────────────
