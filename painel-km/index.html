@@ -425,7 +425,7 @@ async function fetchData() {
 /* ── Multi-select state ── */
 const msState = {};
 
-function buildMsFilter(id, opts, label, displayFn) {
+function buildMsFilter(id, opts, label, displayFn, afterChange) {
   const disp  = displayFn || (v => v);
   const panel = document.getElementById(id + '-panel');
   const btn   = document.getElementById(id + '-btn');
@@ -458,6 +458,7 @@ function buildMsFilter(id, opts, label, displayFn) {
     if(sel === opts.length || sel === 0) { cnt.style.display = 'none'; lbl.textContent = label; }
     else { cnt.textContent = sel; cnt.style.display = ''; lbl.textContent = label; }
     render();
+    if(afterChange) afterChange();
   }
 
   panel.querySelector(`#${id}-all`).addEventListener('change', e => {
@@ -480,15 +481,22 @@ document.addEventListener('click', e => {
 const getSel = id => msState[id] ? [...msState[id]] : [];
 
 /* ── Populate filters ── */
+function repopulateVig() {
+  const selAnos = getSel('ms-ano');
+  const src = selAnos.length ? ALL.filter(r => selAnos.includes(r.ano)) : ALL;
+  const vigs = [...new Set(src.map(r => r.vig))].filter(Boolean).sort(sortVig).reverse();
+  buildMsFilter('ms-vig', vigs, 'Vigência', vigLabel);
+  render();
+}
+
 function populateFilters() {
   const anos  = [...new Set(ALL.map(r => r.ano))].filter(Boolean).sort().reverse();
-  const vigs  = [...new Set(ALL.map(r => r.vig))].filter(Boolean).sort(sortVig).reverse();
   const unds  = [...new Set(ALL.map(r => r.und))].filter(Boolean).sort();
   const projs = [...new Set(ALL.map(r => r.proj))].filter(Boolean).sort();
-  buildMsFilter('ms-ano',  anos,  'Ano');
-  buildMsFilter('ms-vig',  vigs,  'Vigência', vigLabel);
+  buildMsFilter('ms-ano',  anos,  'Ano', null, repopulateVig);
   buildMsFilter('ms-und',  unds,  'Unidade');
   buildMsFilter('ms-proj', projs, 'Projeto');
+  repopulateVig();
 }
 
 /* ── Filtered rows ── */
@@ -505,13 +513,17 @@ function getFiltered() {
   );
 }
 
-// Filtra por tudo exceto vigência — usado nos gráficos temporais para mostrar contexto completo
+// Filtra por tudo exceto vigência — quando vigência está filtrada, deriva o ano dela
 function getChartRows() {
   const anos  = getSel('ms-ano');
+  const vigs  = getSel('ms-vig');
   const unds  = getSel('ms-und');
   const projs = getSel('ms-proj');
+  // Se há filtro de vigência, usa os anos das vigências selecionadas (ignora filtro de ano)
+  const vigAnos = vigs.length ? [...new Set(vigs.map(v => v.split('/')[1]))] : [];
+  const efectiveAnos = vigAnos.length ? vigAnos : anos;
   return ALL.filter(r =>
-    (!anos.length  || anos.includes(r.ano))  &&
+    (!efectiveAnos.length || efectiveAnos.includes(r.ano)) &&
     (!unds.length  || unds.includes(r.und))  &&
     (!projs.length || projs.includes(r.proj))
   );
