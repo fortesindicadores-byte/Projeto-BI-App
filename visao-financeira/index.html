@@ -224,7 +224,7 @@ table.dre tr.total td.imp-cell{font-size:14px;}
 .theme-btn{background:rgba(249,115,22,.15);border:1px solid rgba(249,115,22,.3);border-radius:4px;padding:5px 7px;cursor:pointer;color:var(--orange);display:flex;align-items:center;}
 .theme-btn:hover{background:rgba(249,115,22,.32);}
 body.light-mode .main{background:#F0F0F0;--text:#1a1a1a;--text2:#444444;--text3:#666666;}
-body.light-mode .kpi-card,body.light-mode .chart-card,body.light-mode .tbl-section{background:rgba(255,255,255,.70)!important;border-color:rgba(0,0,0,.10)!important;--text:#1a1a1a;--text2:#444444;--text3:#555555;}
+body.light-mode .kpi-card,body.light-mode .chart-card,body.light-mode .tbl-section{background:rgba(255,255,255,.70)!important;border-color:rgba(0,0,0,.22)!important;--text:#1a1a1a;--text2:#444444;--text3:#555555;}
 
 /* ── MOBILE RESPONSIVE ── */
 @media(max-width:768px){
@@ -941,11 +941,13 @@ function renderCharts(f){
   const mkBc=(data,c)=>data.map(v=>v!=null?c:'transparent');
   const dsReal=(data,label)=>({type:'line',label,data,borderColor:'#F97316',borderWidth:3,tension:.3,fill:false,borderDash:[],pointRadius:mkR(data),pointBackgroundColor:mkBg(data,'#F97316'),pointBorderColor:mkBc(data,'#F97316'),pointBorderWidth:mkBw(data)});
   const dsRem=(data,label)=>({type:'line',label,data,borderColor:'#38BDF8',borderWidth:2,tension:.3,fill:false,borderDash:[5,3],pointRadius:mkR(data),pointBackgroundColor:mkBg(data,'#38BDF8'),pointBorderColor:mkBc(data,'#38BDF8'),pointBorderWidth:mkBw(data)});
-  const dsOrc=(data,label)=>({type:'line',label,data,borderColor:'#F1F5F9',borderWidth:2,tension:.3,fill:false,borderDash:[5,3],pointRadius:mkR(data),pointBackgroundColor:mkBg(data,'#F1F5F9'),pointBorderColor:mkBc(data,'#F1F5F9'),pointBorderWidth:mkBw(data)});
-  const grid={color:'rgba(255,255,255,.06)'};
-  const tick={color:'#94A3B8',font:{family:'Montserrat',size:11}};
+  const orcC=isLight?'#999999':'#F1F5F9';
+  const dsOrc=(data,label)=>({type:'line',label,data,borderColor:orcC,borderWidth:2,tension:.3,fill:false,borderDash:[5,3],pointRadius:mkR(data),pointBackgroundColor:mkBg(data,orcC),pointBorderColor:mkBc(data,orcC),pointBorderWidth:mkBw(data)});
+  const isLight=document.body.classList.contains('light-mode');
+  const grid={color:isLight?'rgba(0,0,0,.08)':'rgba(255,255,255,.06)'};
+  const tick={color:isLight?'#444444':'#94A3B8',font:{family:'Montserrat',size:11}};
   const tooltip={backgroundColor:'#141B26',titleColor:'#F97316',bodyColor:'#F1F5F9',borderColor:'#1E2D40',borderWidth:1,titleFont:{family:'Montserrat'},bodyFont:{family:'Montserrat'}};
-  const legend={labels:{color:'#F1F5F9',font:{family:'Montserrat',size:10},boxWidth:14}};
+  const legend={labels:{color:isLight?'#1a1a1a':'#F1F5F9',font:{family:'Montserrat',size:10},boxWidth:14}};
   if(chReceita) chReceita.destroy();
   chReceita=new Chart(document.getElementById('ch-receita'),{type:'line',data:{labels:lbls,datasets:[dsReal(dReal,'REALIZADO'),dsRem(dRem,'REMUNERADO'),dsOrc(dOrc,'ORÇADO')]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend,tooltip},scales:{x:{grid,ticks:tick},y:{grid,ticks:{...tick,callback:v=>fmt(v)}}}}});
   if(chAV) chAV.destroy();
@@ -1097,7 +1099,7 @@ window.addEventListener('resize',()=>{
 });
 const _sun=`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>`;
 const _moon=`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>`;
-function applyTheme(t){document.body.classList.toggle('light-mode',t==='light');localStorage.setItem('bi_theme',t);const b=document.getElementById('themeBtn');if(b)b.innerHTML=t==='light'?_moon:_sun;}
+function applyTheme(t){document.body.classList.toggle('light-mode',t==='light');localStorage.setItem('bi_theme',t);const b=document.getElementById('themeBtn');if(b)b.innerHTML=t==='light'?_moon:_sun;if(typeof lastF!=='undefined'&&lastF)renderCharts(lastF);}
 (function(){const t=localStorage.getItem('bi_theme')||'dark';applyTheme(t);document.getElementById('themeBtn').addEventListener('click',()=>applyTheme(document.body.classList.contains('light-mode')?'dark':'light'));})();
 </script>
 </body>
