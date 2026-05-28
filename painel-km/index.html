@@ -680,14 +680,14 @@ function renderCharts(F) {
   // Meses fixos jan-dez para Evolução e Impacto
   const MONTHS = ['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
   const mData  = {};
-  for(let i = 1; i <= 12; i++) mData[i] = {rem:0, real:0, imp:0, cnt:0};
+  for(let i = 1; i <= 12; i++) mData[i] = {rem:0, real:0, rskmSum:0, cnt:0};
   chartRows.forEach(r => {
     const m = +r.vig.split('/')[0];
     if(m >= 1 && m <= 12) {
-      mData[m].rem  += r.rem;
-      mData[m].real += r.real;
-      mData[m].imp  += (r.real - r.rem) * r.rskm;
-      mData[m].cnt  += 1;
+      mData[m].rem     += r.rem;
+      mData[m].real    += r.real;
+      mData[m].rskmSum += r.rskm;
+      mData[m].cnt     += 1;
     }
   });
 
@@ -742,7 +742,12 @@ function renderCharts(F) {
   });
 
   /* ── 2. Impacto Financeiro (barras laranjas, eixo fixo jan-dez) ── */
-  const impData = MONTHS.map((_, i) => mData[i+1].cnt > 0 ? mData[i+1].imp : null);
+  // Impacto = Δ total × R$/km médio (não soma de por-linha)
+  const impData = MONTHS.map((_, i) => {
+    const m = i + 1;
+    if(mData[m].cnt === 0) return null;
+    return (mData[m].real - mData[m].rem) * (mData[m].rskmSum / mData[m].cnt);
+  });
   const impBg   = MONTHS.map((_, i) => {
     const m = i + 1;
     if(mData[m].cnt === 0) return 'transparent';
@@ -775,7 +780,8 @@ function renderCharts(F) {
     }
   });
 
-  /* ── 3. Km/Frota Ativa (linha branca) ── */
+  /* ── 3. Km/Frota Ativa (linha branca, eixo mês/ano) ── */
+  const xTick = {...tick, callback: function(v){ return vigLabelShort(this.getLabelForValue(v)); }};
   const frotaMap = {};
   chartRows.forEach(r => {
     if(!frotaMap[r.vig]) frotaMap[r.vig] = {sum:0, cnt:0};
