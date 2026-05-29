@@ -465,12 +465,12 @@ body.light-mode .kpi-card,body.light-mode .chart-card,body.light-mode .tbl-secti
   <div class="charts-row">
     <div class="chart-card">
       <div class="chart-title">Custo Nominal Mensal (BRL)</div>
-      <div class="chart-leg"><span><i class="leg-solid" style="background:#F97316"></i>Realizado</span><span><i class="leg-dash" style="border-color:#38BDF8"></i>Remunerado</span><span><i class="leg-dash" style="border-color:#F1F5F9"></i>Orçado</span></div>
+      <div class="chart-leg"><span><i class="leg-solid" style="background:#3BB33B"></i><i class="leg-solid" style="background:#FF6666;width:8px"></i>Realizado</span><span><i class="leg-dash" style="border-color:#F1F5F9"></i>Remunerado</span><span><i class="leg-dash" style="border-color:#F97316"></i>Orçado</span></div>
       <div class="chart-wrap"><canvas id="ch-receita"></canvas></div>
     </div>
     <div class="chart-card">
       <div class="chart-title">AV Custo Mensal (%)</div>
-      <div class="chart-leg"><span><i class="leg-solid" style="background:#F97316"></i>AV Realizado</span><span><i class="leg-dash" style="border-color:#38BDF8"></i>AV Remunerado</span><span><i class="leg-dash" style="border-color:#F1F5F9"></i>AV Orçado</span></div>
+      <div class="chart-leg"><span><i class="leg-solid" style="background:#3BB33B"></i><i class="leg-solid" style="background:#FF6666;width:8px"></i>Realizado</span><span><i class="leg-dash" style="border-color:#F1F5F9"></i>AV Remunerado</span><span><i class="leg-dash" style="border-color:#F97316"></i>AV Orçado</span></div>
       <div class="chart-wrap"><canvas id="ch-av"></canvas></div>
     </div>
   </div>
@@ -958,10 +958,13 @@ function renderCharts(f){
   const mkBg=(data,c)=>data.map((v,i)=>v!=null?(hlIdxs.includes(i)?'#fff':c):'transparent');
   const mkBw=(data)=>data.map((v,i)=>v!=null?(hlIdxs.includes(i)?2:0):0);
   const mkBc=(data,c)=>data.map(v=>v!=null?c:'transparent');
-  const dsReal=(data,label)=>({type:'bar',label,data,backgroundColor:'rgba(249,115,22,.55)',borderColor:'#F97316',borderWidth:1,borderRadius:3,order:2});
-  const dsRem=(data,label)=>({type:'line',label,data,borderColor:'#38BDF8',borderWidth:2,tension:.3,fill:false,borderDash:[5,3],pointRadius:mkR(data),pointBackgroundColor:mkBg(data,'#38BDF8'),pointBorderColor:mkBc(data,'#38BDF8'),pointBorderWidth:mkBw(data),order:1});
-  const orcC=isLight?'#999999':'#F1F5F9';
-  const dsOrc=(data,label)=>({type:'line',label,data,borderColor:orcC,borderWidth:2,tension:.3,fill:false,borderDash:[5,3],pointRadius:mkR(data),pointBackgroundColor:mkBg(data,orcC),pointBorderColor:mkBc(data,orcC),pointBorderWidth:mkBw(data),order:1});
+  function dsReal(data,label,dorcRef){
+    var bg=data.map(function(v,i){if(v==null)return 'transparent';var o=dorcRef&&dorcRef[i]!=null?dorcRef[i]:null;return(o==null||v>o)?'rgba(255,102,102,.65)':'rgba(59,179,59,.65)';});
+    var bc=data.map(function(v,i){if(v==null)return 'transparent';var o=dorcRef&&dorcRef[i]!=null?dorcRef[i]:null;return(o==null||v>o)?'#FF6666':'#3BB33B';});
+    return {type:'bar',label:label,data:data,backgroundColor:bg,borderColor:bc,borderWidth:1,borderRadius:3,order:2};
+  }
+  const dsRem=(data,label)=>({type:'line',label,data,borderColor:'#F1F5F9',borderWidth:2,tension:.3,fill:false,borderDash:[5,3],pointRadius:mkR(data),pointBackgroundColor:mkBg(data,'#F1F5F9'),pointBorderColor:mkBc(data,'#F1F5F9'),pointBorderWidth:mkBw(data),order:1});
+  const dsOrc=(data,label)=>({type:'line',label,data,borderColor:'#F97316',borderWidth:2,tension:.3,fill:false,borderDash:[5,3],pointRadius:mkR(data),pointBackgroundColor:mkBg(data,'#F97316'),pointBorderColor:mkBc(data,'#F97316'),pointBorderWidth:mkBw(data),order:1});
   const grid={color:isLight?'rgba(0,0,0,.08)':'rgba(255,255,255,.06)'};
   const tick={color:isLight?'#444444':'#94A3B8',font:{family:'Montserrat',size:11}};
   const tooltip={backgroundColor:'#141B26',titleColor:'#F97316',bodyColor:'#F1F5F9',borderColor:'#1E2D40',borderWidth:1,titleFont:{family:'Montserrat'},bodyFont:{family:'Montserrat'}};
@@ -983,9 +986,9 @@ function renderCharts(f){
   var cbFmt = function(v){ return fmt(v); };
   var cbPct = function(v){ return v!=null ? v.toFixed(1)+'%' : ''; };
   if(chReceita) chReceita.destroy();
-  chReceita=new Chart(document.getElementById('ch-receita'),{type:'line',data:{labels:lbls,datasets:[dsReal(dReal,'REALIZADO'),dsRem(dRem,'REMUNERADO'),dsOrc(dOrc,'ORÇADO')]},plugins:[mkLabelPlugin(cbFmt,hlIdxs)],options:{responsive:true,maintainAspectRatio:false,layout:{padding:{top:28}},plugins:{legend:{display:false},tooltip},scales:{x:{grid,ticks:tick},y:{grid,ticks:{...tick,callback:cbFmt}}}}});
+  chReceita=new Chart(document.getElementById('ch-receita'),{type:'line',data:{labels:lbls,datasets:[dsReal(dReal,'REALIZADO',dOrc),dsRem(dRem,'REMUNERADO'),dsOrc(dOrc,'ORÇADO')]},plugins:[mkLabelPlugin(cbFmt,hlIdxs)],options:{responsive:true,maintainAspectRatio:false,layout:{padding:{top:28}},plugins:{legend:{display:false},tooltip},scales:{x:{grid,ticks:tick},y:{grid,ticks:{...tick,callback:cbFmt}}}}});
   if(chAV) chAV.destroy();
-  chAV=new Chart(document.getElementById('ch-av'),{type:'line',data:{labels:lbls,datasets:[dsReal(dAvReal,'AV REALIZADO'),dsRem(dAvRem,'AV REMUNERADO'),dsOrc(dAvOrc,'AV ORÇADO')]},plugins:[mkLabelPlugin(cbPct,hlIdxs)],options:{responsive:true,maintainAspectRatio:false,layout:{padding:{top:28}},plugins:{legend:{display:false},tooltip},scales:{x:{grid,ticks:tick},y:{grid,ticks:{...tick,callback:cbPct}}}}});
+  chAV=new Chart(document.getElementById('ch-av'),{type:'line',data:{labels:lbls,datasets:[dsReal(dAvReal,'AV REALIZADO',dAvOrc),dsRem(dAvRem,'AV REMUNERADO'),dsOrc(dAvOrc,'AV ORÇADO')]},plugins:[mkLabelPlugin(cbPct,hlIdxs)],options:{responsive:true,maintainAspectRatio:false,layout:{padding:{top:28}},plugins:{legend:{display:false},tooltip},scales:{x:{grid,ticks:tick},y:{grid,ticks:{...tick,callback:cbPct}}}}});
 }
 
 // ═══════════════════════════════════
