@@ -36,6 +36,12 @@ body{background:radial-gradient(ellipse at 15% 20%,rgba(249,115,22,.07) 0%,trans
 .pass-wrap input{padding-right:40px;}
 .eye-btn{position:absolute;right:12px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:var(--text3);display:flex;align-items:center;padding:2px;transition:color .2s;}
 .eye-btn:hover{color:var(--text2);}
+.forgot-wrap{text-align:right;margin-top:-6px;margin-bottom:6px;}
+.forgot-link{background:none;border:none;color:var(--text3);font-family:'Montserrat',sans-serif;font-size:10px;cursor:pointer;padding:0;transition:color .2s;letter-spacing:.3px;}
+.forgot-link:hover{color:var(--orange);}
+.back-link{display:block;margin-top:14px;background:none;border:none;color:var(--text3);font-family:'Montserrat',sans-serif;font-size:10px;cursor:pointer;padding:0;text-align:center;width:100%;transition:color .2s;}
+.back-link:hover{color:var(--text2);}
+.form-hint{font-size:11px;color:var(--text2);margin-bottom:16px;line-height:1.55;}
 .auth-btn{width:100%;background:var(--orange);border:none;border-radius:7px;padding:13px;font-family:'Montserrat',sans-serif;font-size:12px;font-weight:800;color:#fff;cursor:pointer;text-transform:uppercase;letter-spacing:.7px;margin-top:6px;transition:opacity .2s,transform .1s;box-shadow:0 4px 16px rgba(249,115,22,.3);}
 .auth-btn:hover{opacity:.88;}
 .auth-btn:active{transform:scale(.98);}
@@ -125,7 +131,23 @@ body{background:radial-gradient(ellipse at 15% 20%,rgba(249,115,22,.07) 0%,trans
     <div id="form-login">
       <div class="field"><label>E-mail</label><input type="email" id="login-email" placeholder="seu@email.com" autocomplete="email"></div>
       <div class="field"><label>Senha</label><div class="pass-wrap"><input type="password" id="login-pass" placeholder="••••••••" autocomplete="current-password"><button type="button" class="eye-btn" onclick="togglePass('login-pass',this)" tabindex="-1"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button></div></div>
+      <div class="forgot-wrap"><button type="button" class="forgot-link" onclick="showForgot()">Esqueceu sua senha?</button></div>
       <button class="auth-btn" id="btn-login" onclick="doLogin()">Entrar</button>
+    </div>
+
+    <!-- Forgot Password -->
+    <div id="form-forgot" style="display:none;">
+      <p class="form-hint">Informe seu e-mail e enviaremos um link para redefinir sua senha.</p>
+      <div class="field"><label>E-mail</label><input type="email" id="forgot-email" placeholder="seu@email.com" autocomplete="email"></div>
+      <button class="auth-btn" id="btn-forgot" onclick="doForgotPassword()">Enviar link</button>
+      <button type="button" class="back-link" onclick="showLogin()">← Voltar ao login</button>
+    </div>
+
+    <!-- New Password (recovery) -->
+    <div id="form-recovery" style="display:none;">
+      <p class="form-hint">Defina sua nova senha.</p>
+      <div class="field"><label>Nova senha</label><div class="pass-wrap"><input type="password" id="new-pass" placeholder="mínimo 6 caracteres" autocomplete="new-password"><button type="button" class="eye-btn" onclick="togglePass('new-pass',this)" tabindex="-1"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button></div></div>
+      <button class="auth-btn" id="btn-recovery" onclick="doUpdatePassword()">Salvar nova senha</button>
     </div>
 
     <!-- Register -->
@@ -370,6 +392,14 @@ async function init() {
 sb.auth.onAuthStateChange((event, session) => {
   if (event === 'SIGNED_IN' && session) showHub(session.user);
   if (event === 'SIGNED_OUT') showAuth();
+  if (event === 'PASSWORD_RECOVERY') {
+    document.getElementById('loading').style.display = 'none';
+    document.getElementById('auth-screen').style.display = 'flex';
+    document.getElementById('form-login').style.display = 'none';
+    document.getElementById('form-forgot').style.display = 'none';
+    document.getElementById('form-recovery').style.display = '';
+    setMsg('', '');
+  }
 });
 
 function switchTab(tab) {
@@ -415,6 +445,46 @@ async function doRegister() {
 
 async function doLogout() {
   await sb.auth.signOut();
+}
+
+function showForgot() {
+  const email = document.getElementById('login-email').value.trim();
+  if (email) document.getElementById('forgot-email').value = email;
+  document.getElementById('form-login').style.display = 'none';
+  document.getElementById('form-forgot').style.display = '';
+  setMsg('', '');
+}
+
+function showLogin() {
+  document.getElementById('form-forgot').style.display = 'none';
+  document.getElementById('form-recovery').style.display = 'none';
+  document.getElementById('form-login').style.display = '';
+  setMsg('', '');
+}
+
+async function doForgotPassword() {
+  const email = document.getElementById('forgot-email').value.trim();
+  if (!email) { setMsg('Informe o e-mail.', 'error'); return; }
+  const btn = document.getElementById('btn-forgot');
+  btn.disabled = true; btn.textContent = 'Enviando…';
+  const { error } = await sb.auth.resetPasswordForEmail(email, {
+    redirectTo: window.location.href.split('#')[0]
+  });
+  btn.disabled = false; btn.textContent = 'Enviar link';
+  if (error) { setMsg(error.message, 'error'); return; }
+  setMsg('Link enviado! Verifique seu e-mail.', 'success');
+}
+
+async function doUpdatePassword() {
+  const pass = document.getElementById('new-pass').value;
+  if (pass.length < 6) { setMsg('Senha deve ter pelo menos 6 caracteres.', 'error'); return; }
+  const btn = document.getElementById('btn-recovery');
+  btn.disabled = true; btn.textContent = 'Salvando…';
+  const { error } = await sb.auth.updateUser({ password: pass });
+  btn.disabled = false; btn.textContent = 'Salvar nova senha';
+  if (error) { setMsg(error.message, 'error'); return; }
+  setMsg('Senha atualizada! Faça login para continuar.', 'success');
+  setTimeout(() => { sb.auth.signOut(); showLogin(); }, 2000);
 }
 
 const _eyeOn=`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>`;
