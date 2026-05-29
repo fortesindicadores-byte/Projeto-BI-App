@@ -132,6 +132,10 @@ body.light-mode .tbl-section td{color:var(--text);}
 .chart-sub{font-size:12px;color:var(--text2);margin-bottom:16px;}
 .chart-wrap{position:relative;height:220px;}
 .chart-wrap-tall{position:relative;height:280px;}
+.chart-leg{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:12px;}
+.chart-leg span{display:flex;align-items:center;gap:5px;font-size:10px;color:var(--text2);}
+.chart-leg .leg-bar{display:inline-block;width:5px;height:11px;border-radius:2px 2px 0 0;vertical-align:middle;margin-right:1px;}
+.chart-leg .leg-dash{display:inline-block;width:18px;height:0;border-top:2px dashed;vertical-align:middle;margin-right:1px;}
 
 /* ── Table ── */
 .tbl-section{
@@ -283,7 +287,11 @@ th.num{text-align:right;}
   <div class="charts-grid">
     <div class="chart-card">
       <div class="chart-title">Evolução KM</div>
-      <div class="chart-sub">Realizado (laranja) vs Remunerado (branco) · por vigência</div>
+      <div class="chart-sub">Realizado vs Remunerado · por vigência</div>
+      <div class="chart-leg">
+        <span><i class="leg-bar" style="background:#3BB33B"></i><i class="leg-bar" style="background:#FF6666;height:8px"></i>Realizado</span>
+        <span><i class="leg-dash" style="border-color:#F1F5F9"></i>Remunerado</span>
+      </div>
       <div class="chart-wrap"><canvas id="chart-evolucao"></canvas></div>
     </div>
     <div class="chart-card">
@@ -763,9 +771,23 @@ function renderCharts(F) {
     pointHoverRadius: 8,
   });
 
-  /* ── 1. Evolução KM (duas linhas, eixo fixo jan-dez) ── */
-  const remLine  = MONTHS.map((_, i) => mData[i+1].cnt > 0 ? mData[i+1].rem  : null);
-  const realLine = MONTHS.map((_, i) => mData[i+1].cnt > 0 ? mData[i+1].real : null);
+  /* ── 1. Evolução KM (barras realizado + linha remunerado, eixo fixo jan-dez) ── */
+  const remLine  = MONTHS.map(function(_, i) { return mData[i+1].cnt > 0 ? mData[i+1].rem  : null; });
+  const realLine = MONTHS.map(function(_, i) { return mData[i+1].cnt > 0 ? mData[i+1].real : null; });
+
+  var hasFocusEvo = hiMonths.size > 0;
+  var realBarBg = MONTHS.map(function(_, i) {
+    var m = i + 1;
+    if(mData[m].cnt === 0) return 'transparent';
+    var red = mData[m].real > mData[m].rem;
+    var a = hasFocusEvo ? (hiMonths.has(m) ? '.85' : '.2') : '.65';
+    return red ? 'rgba(255,102,102,' + a + ')' : 'rgba(59,179,59,' + a + ')';
+  });
+  var realBarBc = MONTHS.map(function(_, i) {
+    var m = i + 1;
+    if(mData[m].cnt === 0) return 'transparent';
+    return mData[m].real > mData[m].rem ? '#FF6666' : '#3BB33B';
+  });
 
   chEvo = new Chart(document.getElementById('chart-evolucao').getContext('2d'), {
     type:'line',
@@ -773,14 +795,13 @@ function renderCharts(F) {
       labels: MONTHS,
       datasets:[
         {
-          label:'REALIZADO', data:realLine,
-          borderColor:'#F97316', borderWidth:3, tension:.3, fill:false,
-          ...mkPts('#F97316','#fff')
+          type:'bar', label:'REALIZADO', data:realLine,
+          backgroundColor:realBarBg, borderColor:realBarBc, borderWidth:1, borderRadius:3, order:2
         },
         {
-          label:'REMUNERADO', data:remLine,
+          type:'line', label:'REMUNERADO', data:remLine,
           borderColor:orcC, borderWidth:2, tension:.3, fill:false, borderDash:[5,3],
-          ...mkPts(orcC,'#F97316')
+          order:1, ...mkPts(orcC,'#F97316')
         }
       ]
     },
@@ -788,18 +809,23 @@ function renderCharts(F) {
       responsive:true, maintainAspectRatio:false,
       layout:{padding:{top:30}},
       plugins:{
-        legend:{labels:{color:isLight?'#1a1a1a':'#F1F5F9',font:{family:'Montserrat',size:isMobile?9:12},boxWidth:14}},
+        legend:{display:false},
         tooltip,
         datalabels:{
-          display: ctx => ctx.datasetIndex === 0 && ctx.dataset.data[ctx.dataIndex] !== null,
-          anchor:'end', align:'top', color:'#F97316',
+          display: function(ctx) {
+            if(ctx.datasetIndex !== 0) return false;
+            var m = ctx.dataIndex + 1;
+            if(mData[m].cnt === 0) return false;
+            return !hasFocusEvo || hiMonths.has(m);
+          },
+          anchor:'end', align:'top', color:'#F1F5F9',
           font:{family:'Montserrat',size:isMobile?8:11,weight:'700'},
-          formatter: v => fmt(v)
+          formatter: function(v) { return fmt(v); }
         }
       },
       scales:{
         x:{grid, ticks:tick},
-        y:{display:false}
+        y:{display:false, beginAtZero:false}
       }
     }
   });
