@@ -748,26 +748,34 @@ function renderCharts(F) {
     pointHoverRadius: 8,
   });
 
-  /* ── 1. Evolução KM (área laranja, eixo fixo jan-dez) ── */
+  /* ── 1. Evolução KM (duas linhas, eixo fixo jan-dez) ── */
+  const remLine  = MONTHS.map((_, i) => mData[i+1].cnt > 0 ? mData[i+1].rem  : null);
   const realLine = MONTHS.map((_, i) => mData[i+1].cnt > 0 ? mData[i+1].real : null);
 
   chEvo = new Chart(document.getElementById('chart-evolucao').getContext('2d'), {
     type:'line',
     data:{
       labels: MONTHS,
-      datasets:[{
-        label:'REALIZADO', data:realLine,
-        borderColor:'#F97316', borderWidth:3, tension:.3,
-        fill:'origin', backgroundColor:'rgba(249,115,22,0.12)',
-        ...mkPts('#F97316','#fff')
-      }]
+      datasets:[
+        {
+          label:'REALIZADO', data:realLine,
+          borderColor:'#F97316', borderWidth:3, tension:.3, fill:false,
+          ...mkPts('#F97316','#fff')
+        },
+        {
+          label:'REMUNERADO', data:remLine,
+          borderColor:orcC, borderWidth:2, tension:.3, fill:false, borderDash:[5,3],
+          ...mkPts(orcC,'#F97316')
+        }
+      ]
     },
     options:{
       responsive:true, maintainAspectRatio:false,
       plugins:{
-        legend:{display:false}, tooltip,
+        legend:{labels:{color:isLight?'#1a1a1a':'#F1F5F9',font:{family:'Montserrat',size:10},boxWidth:14}},
+        tooltip,
         datalabels:{
-          display: ctx => ctx.dataset.data[ctx.dataIndex] !== null,
+          display: ctx => ctx.datasetIndex === 0 && ctx.dataset.data[ctx.dataIndex] !== null,
           anchor:'end', align:'top', color:'#F97316',
           font:{family:'Montserrat',size:9,weight:'700'},
           formatter: v => fmt(v)
