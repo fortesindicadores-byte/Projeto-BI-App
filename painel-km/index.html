@@ -116,9 +116,10 @@ body.light-mode .tbl-section td{color:var(--text);}
 .hero-info-item{display:flex;align-items:baseline;gap:6px;}
 .hero-info-label{font-size:12px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.5px;}
 .hero-info-val{font-size:24px;font-weight:800;color:var(--text2);line-height:1;}
-.hero-deltas{display:flex;gap:24px;flex-wrap:wrap;}
+.hero-deltas{display:flex;gap:24px;flex-wrap:wrap;align-items:center;}
 .hero-delta{font-size:12px;color:var(--text2);}
 .hero-delta b{font-size:16px;font-weight:700;display:block;margin-top:2px;}
+.hero-sep{width:1px;background:rgba(255,255,255,.2);height:36px;margin:0 4px;align-self:center;}
 
 /* ── Charts ── */
 .charts-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px;}
@@ -268,18 +269,22 @@ th.num{text-align:right;}
     <div class="hero-value" id="hero-val">—</div>
     <div class="hero-info-row">
       <span class="hero-info-item">
-        <span class="hero-info-label">REM:</span>
-        <span class="hero-info-val" id="hero-rem">—</span>
+        <span class="hero-info-label">KM/FROTA ATIVA</span>
+        <span class="hero-info-val" id="hero-kmfrota" style="color:var(--text);">—</span>
+      </span>
+      <span class="hero-info-item">
+        <span class="hero-info-label">KM/VIAGEM</span>
+        <span class="hero-info-val" id="hero-kmviagem" style="color:var(--text);">—</span>
       </span>
     </div>
     <div class="hero-deltas">
       <div class="hero-delta"><span>Δ Rem</span><b id="d-rem-abs">—</b></div>
       <div class="hero-delta"><span>Δ Rem %</span><b id="d-rem-pct">—</b></div>
       <div class="hero-delta"><span>Impacto</span><b id="d-imp">—</b></div>
-      <div class="hero-delta"><span>YTD %</span><b id="d-ytd-pct">—</b></div>
-      <div class="hero-delta"><span>YoY %</span><b id="d-yoy">—</b></div>
-      <div class="hero-delta"><span>Km/Frota Ativa</span><b id="hero-kmfrota" style="color:var(--text);font-weight:800;">—</b></div>
-      <div class="hero-delta"><span>Km/Viagem</span><b id="hero-kmviagem" style="color:var(--text);font-weight:800;">—</b></div>
+      <div class="hero-sep"></div>
+      <div class="hero-delta"><span>Δ YTD</span><b id="d-ytd-abs">—</b></div>
+      <div class="hero-delta"><span>Δ YTD %</span><b id="d-ytd-pct">—</b></div>
+      <div class="hero-delta"><span>Impacto YTD</span><b id="d-ytd-imp">—</b></div>
     </div>
   </div>
 
@@ -576,7 +581,7 @@ function render() {
   const F = getFiltered();
 
   if(!F.length) {
-    ['hero-val','hero-rem','d-rem-abs','d-rem-pct','d-imp','d-ytd-pct','d-yoy','hero-kmfrota','hero-kmviagem'].forEach(id => set(id, '—'));
+    ['hero-val','hero-kmfrota','hero-kmviagem','d-rem-abs','d-rem-pct','d-imp','d-ytd-abs','d-ytd-pct','d-ytd-imp'].forEach(id => set(id, '—'));
     const body = document.getElementById('tbl-body');
     if(body) body.innerHTML = `<tr><td colspan="9" style="text-align:center;color:var(--text2);padding:24px 8px;">Sem dados para os filtros selecionados</td></tr>`;
     const foot = document.getElementById('tbl-foot');
@@ -599,22 +604,26 @@ function render() {
   const ytdRem      = YTDrows.reduce((s, r) => s + r.rem,  0);
   const ytdDelta    = ytdReal - ytdRem;
   const ytdDeltaPct = ytdRem ? (ytdDelta / ytdRem) * 100 : 0;
+  const ytdImp      = YTDrows.reduce((s, r) => s + r.imp, 0);
 
   /* Hero */
   set('hero-val', fmt(totReal));
-  set('hero-rem', fmt(totRem));
+  set('hero-kmfrota', avgKmFrota ? fmt(avgKmFrota) : '—');
+  set('hero-kmviagem', avgKmViagem ? fmt(avgKmViagem) : '—');
 
   const bad    = totDelta > 0;
   const dAbsEl = document.getElementById('d-rem-abs');
   const dPctEl = document.getElementById('d-rem-pct');
   const dImpEl = document.getElementById('d-imp');
-  const dYtdEl = document.getElementById('d-ytd-pct');
-  if(dAbsEl) { dAbsEl.textContent = (totDelta >= 0 ? '+' : '') + fmt(totDelta); dAbsEl.className = bad ? 'cr' : 'cg'; }
-  if(dPctEl) { dPctEl.textContent = pctInt(totDeltaPct); dPctEl.className = bad ? 'cr' : 'cg'; }
-  if(dImpEl) { dImpEl.textContent = (totImp >= 0 ? '+' : '') + fmt(totImp); dImpEl.className = totImp > 0 ? 'cr' : 'cg'; }
-  if(dYtdEl) { dYtdEl.textContent = pctInt(ytdDeltaPct); dYtdEl.className = ytdDeltaPct > 0 ? 'cr' : 'cg'; }
-  set('hero-kmfrota', avgKmFrota ? fmt(avgKmFrota) : '—');
-  set('hero-kmviagem', avgKmViagem ? fmt(avgKmViagem) : '—');
+  const dYtdAbsEl = document.getElementById('d-ytd-abs');
+  const dYtdPctEl = document.getElementById('d-ytd-pct');
+  const dYtdImpEl = document.getElementById('d-ytd-imp');
+  if(dAbsEl)    { dAbsEl.textContent    = (totDelta >= 0 ? '+' : '') + fmt(totDelta);   dAbsEl.className    = bad ? 'cr' : 'cg'; }
+  if(dPctEl)    { dPctEl.textContent    = pctInt(totDeltaPct);                          dPctEl.className    = bad ? 'cr' : 'cg'; }
+  if(dImpEl)    { dImpEl.textContent    = (totImp >= 0 ? '+' : '') + fmt(totImp);       dImpEl.className    = totImp > 0 ? 'cr' : 'cg'; }
+  if(dYtdAbsEl) { dYtdAbsEl.textContent = (ytdDelta >= 0 ? '+' : '') + fmt(ytdDelta);  dYtdAbsEl.className = ytdDelta > 0 ? 'cr' : 'cg'; }
+  if(dYtdPctEl) { dYtdPctEl.textContent = pctInt(ytdDeltaPct);                         dYtdPctEl.className = ytdDeltaPct > 0 ? 'cr' : 'cg'; }
+  if(dYtdImpEl) { dYtdImpEl.textContent = (ytdImp >= 0 ? '+' : '') + fmt(ytdImp);      dYtdImpEl.className = ytdImp > 0 ? 'cr' : 'cg'; }
 
   /* YoY — funciona com ou sem filtro de ano */
   const anos  = getSel('ms-ano');
