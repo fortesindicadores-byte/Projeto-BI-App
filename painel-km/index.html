@@ -708,7 +708,8 @@ function renderCharts(F) {
     titleFont:{family:'Montserrat'},bodyFont:{family:'Montserrat'}
   };
   const dlColor = isLight ? '#333333' : '#F1F5F9';
-  const orcC    = isLight ? '#999999' : '#F1F5F9'; // linha branca/cinza para Remunerado
+  const orcC    = isLight ? '#999999' : '#F1F5F9';
+  const orcFill = isLight ? 'rgba(153,153,153,0.10)' : 'rgba(241,245,249,0.07)';
 
   // Gráficos temporais usam todas as vigências do período (sem filtro de vigência)
   const chartRows = getChartRows();
@@ -747,35 +748,27 @@ function renderCharts(F) {
     pointHoverRadius: 8,
   });
 
-  /* ── 1. Evolução KM (linha, eixo fixo jan-dez) ── */
-  const remLine  = MONTHS.map((_, i) => mData[i+1].cnt > 0 ? mData[i+1].rem  : null);
+  /* ── 1. Evolução KM (área laranja, eixo fixo jan-dez) ── */
   const realLine = MONTHS.map((_, i) => mData[i+1].cnt > 0 ? mData[i+1].real : null);
 
   chEvo = new Chart(document.getElementById('chart-evolucao').getContext('2d'), {
     type:'line',
     data:{
       labels: MONTHS,
-      datasets:[
-        {
-          label:'REALIZADO', data:realLine,
-          borderColor:'#F97316', borderWidth:3, tension:.3, fill:false,
-          ...mkPts('#F97316','#fff')
-        },
-        {
-          label:'REMUNERADO', data:remLine,
-          borderColor:orcC, borderWidth:2, tension:.3, fill:false, borderDash:[5,3],
-          ...mkPts(orcC,'#F97316')
-        }
-      ]
+      datasets:[{
+        label:'REALIZADO', data:realLine,
+        borderColor:'#F97316', borderWidth:3, tension:.3,
+        fill:'origin', backgroundColor:'rgba(249,115,22,0.12)',
+        ...mkPts('#F97316','#fff')
+      }]
     },
     options:{
       responsive:true, maintainAspectRatio:false,
       plugins:{
-        legend:{labels:{color:isLight?'#1a1a1a':'#F1F5F9',font:{family:'Montserrat',size:10},boxWidth:14}},
-        tooltip,
+        legend:{display:false}, tooltip,
         datalabels:{
           display: ctx => ctx.dataset.data[ctx.dataIndex] !== null,
-          anchor:'end', align:'top', color:dlColor,
+          anchor:'end', align:'top', color:'#F97316',
           font:{family:'Montserrat',size:9,weight:'700'},
           formatter: v => fmt(v)
         }
@@ -837,7 +830,8 @@ function renderCharts(F) {
       labels: MONTHS,
       datasets:[{
         label:'KM/FROTA ATIVA', data:kmFrotaLine,
-        borderColor:orcC, borderWidth:2, tension:.3, fill:false,
+        borderColor:orcC, borderWidth:2, tension:.3,
+        fill:'origin', backgroundColor:orcFill,
         ...mkPts(orcC,'#F97316')
       }]
     },
@@ -847,7 +841,7 @@ function renderCharts(F) {
         legend:{display:false}, tooltip,
         datalabels:{
           display: ctx => ctx.dataset.data[ctx.dataIndex] !== null,
-          anchor:'end', align:'top', color:dlColor,
+          anchor:'end', align:'top', color:orcC,
           font:{family:'Montserrat',size:9,weight:'700'},
           formatter: v => fmt(v)
         }
@@ -872,8 +866,9 @@ function renderCharts(F) {
       labels: MONTHS,
       datasets:[{
         label:'KM/VIAGEM', data:kmViagemLine,
-        borderColor:'#38BDF8', borderWidth:2, tension:.3, fill:false,
-        ...mkPts('#38BDF8','#F97316')
+        borderColor:orcC, borderWidth:2, tension:.3,
+        fill:'origin', backgroundColor:orcFill,
+        ...mkPts(orcC,'#F97316')
       }]
     },
     options:{
@@ -882,7 +877,7 @@ function renderCharts(F) {
         legend:{display:false}, tooltip,
         datalabels:{
           display: ctx => ctx.dataset.data[ctx.dataIndex] !== null,
-          anchor:'end', align:'top', color:dlColor,
+          anchor:'end', align:'top', color:orcC,
           font:{family:'Montserrat',size:9,weight:'700'},
           formatter: v => fmt(v)
         }
