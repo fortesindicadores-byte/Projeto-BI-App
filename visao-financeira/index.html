@@ -6,6 +6,7 @@
 <title>Visão Financeira — DRE Frota</title>
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0"></script>
 <style>
 :root {
   --bg:      #0C1017;
@@ -541,6 +542,7 @@ body.light-mode .kpi-card,body.light-mode .chart-card,body.light-mode .tbl-secti
 </main>
 
 <script>
+Chart.register(ChartDataLabels);
 // ═══════════════════════════════════
 // CONFIG
 // ═══════════════════════════════════
@@ -961,10 +963,11 @@ function renderCharts(f){
   const tick={color:isLight?'#444444':'#94A3B8',font:{family:'Montserrat',size:11}};
   const tooltip={backgroundColor:'#141B26',titleColor:'#F97316',bodyColor:'#F1F5F9',borderColor:'#1E2D40',borderWidth:1,titleFont:{family:'Montserrat'},bodyFont:{family:'Montserrat'}};
   const legend={labels:{color:isLight?'#1a1a1a':'#F1F5F9',font:{family:'Montserrat',size:10},boxWidth:14}};
+  const dlReal={display:ctx=>ctx.datasetIndex===0&&ctx.dataset.data[ctx.dataIndex]!=null,anchor:'end',align:'top',color:'#F97316',font:{family:'Montserrat',size:9,weight:'700'}};
   if(chReceita) chReceita.destroy();
-  chReceita=new Chart(document.getElementById('ch-receita'),{type:'line',data:{labels:lbls,datasets:[dsReal(dReal,'REALIZADO'),dsRem(dRem,'REMUNERADO'),dsOrc(dOrc,'ORÇADO')]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend,tooltip},scales:{x:{grid,ticks:tick},y:{grid,ticks:{...tick,callback:v=>fmt(v)}}}}});
+  chReceita=new Chart(document.getElementById('ch-receita'),{type:'line',data:{labels:lbls,datasets:[dsReal(dReal,'REALIZADO'),dsRem(dRem,'REMUNERADO'),dsOrc(dOrc,'ORÇADO')]},options:{responsive:true,maintainAspectRatio:false,layout:{padding:{top:28}},plugins:{legend,tooltip,datalabels:{...dlReal,formatter:v=>fmt(v)}},scales:{x:{grid,ticks:tick},y:{grid,ticks:{...tick,callback:v=>fmt(v)}}}}});
   if(chAV) chAV.destroy();
-  chAV=new Chart(document.getElementById('ch-av'),{type:'line',data:{labels:lbls,datasets:[dsReal(dAvReal,'AV REALIZADO'),dsRem(dAvRem,'AV REMUNERADO'),dsOrc(dAvOrc,'AV ORÇADO')]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend,tooltip},scales:{x:{grid,ticks:tick},y:{grid,ticks:{...tick,callback:v=>v!=null?v.toFixed(1)+'%':''}}}}});
+  chAV=new Chart(document.getElementById('ch-av'),{type:'line',data:{labels:lbls,datasets:[dsReal(dAvReal,'AV REALIZADO'),dsRem(dAvRem,'AV REMUNERADO'),dsOrc(dAvOrc,'AV ORÇADO')]},options:{responsive:true,maintainAspectRatio:false,layout:{padding:{top:28}},plugins:{legend,tooltip,datalabels:{...dlReal,formatter:v=>v!=null?v.toFixed(1)+'%':''}},scales:{x:{grid,ticks:tick},y:{grid,ticks:{...tick,callback:v=>v!=null?v.toFixed(1)+'%':''}}}}}});
 }
 
 // ═══════════════════════════════════
