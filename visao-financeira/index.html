@@ -462,17 +462,30 @@ body.light-mode .kpi-card,body.light-mode .chart-card,body.light-mode .tbl-secti
     </div>
   </div>
 
-  <!-- GRÁFICOS -->
+  <!-- GRÁFICOS — linha 1: vs Remunerado -->
   <div class="charts-row">
     <div class="chart-card">
       <div class="chart-title">Custo Nominal Mensal (BRL)</div>
-      <div class="chart-leg"><span><i class="leg-bar" style="background:#3BB33B"></i><i class="leg-bar" style="background:#FF6666;height:8px"></i>Realizado</span><span><i class="leg-dash" style="border-color:#F1F5F9"></i>Remunerado</span><span><i class="leg-dash" style="border-color:#7DD3FC"></i>Orçado</span></div>
+      <div class="chart-leg"><span><i class="leg-bar" style="background:#3BB33B"></i><i class="leg-bar" style="background:#FF6666;height:8px"></i>Realizado</span><span><i class="leg-dash" style="border-color:#F1F5F9"></i>Remunerado</span></div>
       <div class="chart-wrap"><canvas id="ch-receita"></canvas></div>
     </div>
     <div class="chart-card">
       <div class="chart-title">AV Custo Mensal (%)</div>
-      <div class="chart-leg"><span><i class="leg-bar" style="background:#3BB33B"></i><i class="leg-bar" style="background:#FF6666;height:8px"></i>Realizado</span><span><i class="leg-dash" style="border-color:#F1F5F9"></i>AV Remunerado</span><span><i class="leg-dash" style="border-color:#7DD3FC"></i>AV Orçado</span></div>
+      <div class="chart-leg"><span><i class="leg-bar" style="background:#3BB33B"></i><i class="leg-bar" style="background:#FF6666;height:8px"></i>Realizado</span><span><i class="leg-dash" style="border-color:#F1F5F9"></i>AV Remunerado</span></div>
       <div class="chart-wrap"><canvas id="ch-av"></canvas></div>
+    </div>
+  </div>
+  <!-- GRÁFICOS — linha 2: vs Orçado -->
+  <div class="charts-row" style="margin-top:0;">
+    <div class="chart-card">
+      <div class="chart-title">Custo Nominal Mensal (BRL)</div>
+      <div class="chart-leg"><span><i class="leg-bar" style="background:#3BB33B"></i><i class="leg-bar" style="background:#FF6666;height:8px"></i>Realizado</span><span><i class="leg-dash" style="border-color:#7DD3FC"></i>Orçado</span></div>
+      <div class="chart-wrap"><canvas id="ch-receita-orc"></canvas></div>
+    </div>
+    <div class="chart-card">
+      <div class="chart-title">AV Custo Mensal (%)</div>
+      <div class="chart-leg"><span><i class="leg-bar" style="background:#3BB33B"></i><i class="leg-bar" style="background:#FF6666;height:8px"></i>Realizado</span><span><i class="leg-dash" style="border-color:#7DD3FC"></i>AV Orçado</span></div>
+      <div class="chart-wrap"><canvas id="ch-av-orc"></canvas></div>
     </div>
   </div>
 
@@ -607,7 +620,7 @@ const colI = (el,bad) => { if(el) el.style.color = bad ? 'var(--red)' : 'var(--g
 // ═══════════════════════════════════
 // ESTADO
 // ═══════════════════════════════════
-let allRows=[], vigs=[], chReceita=null, chAV=null, lastF=null;
+let allRows=[], vigs=[], chReceita=null, chAV=null, chReceitaOrc=null, chAVOrc=null, lastF=null;
 
 // ═══════════════════════════════════
 // MULTI-SELECT  (estado em Set, busca persistente)
@@ -988,10 +1001,17 @@ function renderCharts(f){
   }
   var cbFmt = function(v){ return fmt(v); };
   var cbPct = function(v){ return v!=null ? v.toFixed(1)+'%' : ''; };
+  var scBrl={x:{grid,ticks:tick},y:{beginAtZero:false,grid,ticks:{...tickY,callback:cbFmt}}};
+  var scAv={x:{grid,ticks:tick},y:{beginAtZero:false,grid,ticks:{...tickY,callback:cbPct}}};
+  var chartOpts=function(sc){return {responsive:true,maintainAspectRatio:false,layout:{padding:{top:28}},plugins:{legend:{display:false},tooltip},scales:sc};};
   if(chReceita) chReceita.destroy();
-  chReceita=new Chart(document.getElementById('ch-receita'),{type:'line',data:{labels:lbls,datasets:[dsReal(dReal,'REALIZADO',dOrc),dsRem(dRem,'REMUNERADO'),dsOrc(dOrc,'ORÇADO')]},plugins:[mkLabelPlugin(cbFmt,hlIdxs)],options:{responsive:true,maintainAspectRatio:false,layout:{padding:{top:28}},plugins:{legend:{display:false},tooltip},scales:{x:{grid,ticks:tick},y:{beginAtZero:false,grid,ticks:{...tickY,callback:cbFmt}}}}});
+  chReceita=new Chart(document.getElementById('ch-receita'),{type:'line',data:{labels:lbls,datasets:[dsReal(dReal,'REALIZADO',dRem),dsRem(dRem,'REMUNERADO')]},plugins:[mkLabelPlugin(cbFmt,hlIdxs)],options:chartOpts(scBrl)});
   if(chAV) chAV.destroy();
-  chAV=new Chart(document.getElementById('ch-av'),{type:'line',data:{labels:lbls,datasets:[dsReal(dAvReal,'AV REALIZADO',dAvOrc),dsRem(dAvRem,'AV REMUNERADO'),dsOrc(dAvOrc,'AV ORÇADO')]},plugins:[mkLabelPlugin(cbPct,hlIdxs)],options:{responsive:true,maintainAspectRatio:false,layout:{padding:{top:28}},plugins:{legend:{display:false},tooltip},scales:{x:{grid,ticks:tick},y:{beginAtZero:false,grid,ticks:{...tickY,callback:cbPct}}}}});
+  chAV=new Chart(document.getElementById('ch-av'),{type:'line',data:{labels:lbls,datasets:[dsReal(dAvReal,'AV REALIZADO',dAvRem),dsRem(dAvRem,'AV REMUNERADO')]},plugins:[mkLabelPlugin(cbPct,hlIdxs)],options:chartOpts(scAv)});
+  if(chReceitaOrc) chReceitaOrc.destroy();
+  chReceitaOrc=new Chart(document.getElementById('ch-receita-orc'),{type:'line',data:{labels:lbls,datasets:[dsReal(dReal,'REALIZADO',dOrc),dsOrc(dOrc,'ORÇADO')]},plugins:[mkLabelPlugin(cbFmt,hlIdxs)],options:chartOpts(scBrl)});
+  if(chAVOrc) chAVOrc.destroy();
+  chAVOrc=new Chart(document.getElementById('ch-av-orc'),{type:'line',data:{labels:lbls,datasets:[dsReal(dAvReal,'AV REALIZADO',dAvOrc),dsOrc(dAvOrc,'AV ORÇADO')]},plugins:[mkLabelPlugin(cbPct,hlIdxs)],options:chartOpts(scAv)});
 }
 
 // ═══════════════════════════════════
