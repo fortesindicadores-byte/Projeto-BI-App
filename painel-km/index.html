@@ -831,14 +831,22 @@ function renderCharts(F) {
   });
 
   /* ── 2. Impacto Financeiro (barras laranjas, eixo fixo jan-dez) ── */
-  const impData = MONTHS.map((_, i) => {
-    const m = i + 1;
+  const impData = MONTHS.map(function(_, i) {
+    var m = i + 1;
     return mData[m].cnt > 0 ? mData[m].impSum : null;
   });
-  const impBg   = MONTHS.map((_, i) => {
-    const m = i + 1;
+  var impBg = MONTHS.map(function(_, i) {
+    var m = i + 1;
     if(mData[m].cnt === 0) return 'transparent';
-    return (!hasVigFilter || hiMonths.has(m)) ? '#F97316' : 'rgba(249,115,22,.25)';
+    var pos = mData[m].impSum > 0;
+    var hi = !hasVigFilter || hiMonths.has(m);
+    if(pos) return hi ? 'rgba(255,102,102,.85)' : 'rgba(255,102,102,.2)';
+    return hi ? 'rgba(56,189,248,.85)' : 'rgba(56,189,248,.2)';
+  });
+  var impBc = MONTHS.map(function(_, i) {
+    var m = i + 1;
+    if(mData[m].cnt === 0) return 'transparent';
+    return mData[m].impSum > 0 ? '#FF6666' : '#38BDF8';
   });
 
   chImp = new Chart(document.getElementById('chart-impacto').getContext('2d'), {
@@ -847,7 +855,7 @@ function renderCharts(F) {
       labels: MONTHS,
       datasets:[{
         label:'IMPACTO R$', data:impData,
-        backgroundColor: impBg, borderColor:'#F97316', borderWidth:1, borderRadius:3
+        backgroundColor: impBg, borderColor:impBc, borderWidth:1, borderRadius:3
       }]
     },
     options:{
@@ -856,9 +864,14 @@ function renderCharts(F) {
       plugins:{
         legend:{display:false}, tooltip,
         datalabels:{
-          display:true, anchor:'end', align:'top', color:dlColor,
+          display:true, anchor:'end', align:'top',
+          color: function(ctx) {
+            var m = ctx.dataIndex + 1;
+            if(mData[m].cnt === 0) return dlColor;
+            return mData[m].impSum > 0 ? '#FF6666' : '#38BDF8';
+          },
           font:{family:'Montserrat',size:isMobile?8:11,weight:'700'},
-          formatter: v => v !== null ? fmt(v) : ''
+          formatter: function(v) { return v !== null ? fmt(v) : ''; }
         }
       },
       scales:{
