@@ -1,0 +1,498 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Gestão em Movimento · BI Hub</title>
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+:root{--bg:#0C1017;--card:#141B26;--border:#1E2D40;--orange:#F97316;--blue:#38BDF8;--text:#F1F5F9;--text2:#94A3B8;--text3:#475569;--green:#3BB33B;--red:#FF6666;}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+body{background:radial-gradient(ellipse at 15% 20%,rgba(249,115,22,.07) 0%,transparent 50%),radial-gradient(ellipse at 85% 80%,rgba(56,189,248,.05) 0%,transparent 50%),var(--bg);color:var(--text);font-family:'Montserrat',-apple-system,sans-serif;min-height:100vh;}
+
+/* ── Loading ── */
+#loading{position:fixed;inset:0;background:var(--bg);display:flex;align-items:center;justify-content:center;z-index:999;}
+.spinner{width:32px;height:32px;border:3px solid rgba(249,115,22,.2);border-top-color:var(--orange);border-radius:50%;animation:spin .7s linear infinite;}
+@keyframes spin{to{transform:rotate(360deg);}}
+
+/* ── Auth Screen ── */
+.auth-screen{display:none;align-items:center;justify-content:center;min-height:100vh;padding:20px;}
+.auth-card{background:rgba(20,27,38,.85);border:1px solid rgba(255,255,255,.08);border-radius:16px;padding:44px 40px;width:100%;max-width:400px;backdrop-filter:blur(24px);box-shadow:0 24px 64px rgba(0,0,0,.55);}
+.auth-logo{text-align:center;margin-bottom:36px;}
+.auth-logo-mark{width:48px;height:48px;background:rgba(249,115,22,.15);border:1px solid rgba(249,115,22,.3);border-radius:12px;display:flex;align-items:center;justify-content:center;margin:0 auto 14px;}
+.auth-logo-mark svg{width:24px;height:24px;color:var(--orange);}
+.auth-logo h1{font-size:20px;font-weight:800;color:var(--text);letter-spacing:.3px;}
+.auth-logo p{font-size:10px;color:var(--text2);margin-top:4px;text-transform:uppercase;letter-spacing:1.2px;}
+.auth-tabs{display:flex;gap:0;margin-bottom:28px;background:rgba(0,0,0,.35);border-radius:7px;padding:3px;}
+.auth-tab{flex:1;padding:8px;font-family:'Montserrat',sans-serif;font-size:10px;font-weight:800;border:none;border-radius:5px;cursor:pointer;background:transparent;color:var(--text2);text-transform:uppercase;letter-spacing:.7px;transition:all .2s;}
+.auth-tab.active{background:var(--orange);color:#fff;box-shadow:0 2px 8px rgba(249,115,22,.3);}
+.field{margin-bottom:14px;}
+.field label{display:block;font-size:9px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:.7px;margin-bottom:6px;}
+.field input{width:100%;background:rgba(0,0,0,.45);border:1px solid rgba(255,255,255,.09);border-radius:7px;padding:11px 14px;font-family:'Montserrat',sans-serif;font-size:13px;color:var(--text);outline:none;transition:border-color .2s;}
+.field input:focus{border-color:rgba(249,115,22,.6);}
+.field input::placeholder{color:var(--text3);}
+.pass-wrap{position:relative;}
+.pass-wrap input{padding-right:40px;}
+.eye-btn{position:absolute;right:12px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:var(--text3);display:flex;align-items:center;padding:2px;transition:color .2s;}
+.eye-btn:hover{color:var(--text2);}
+.forgot-wrap{text-align:right;margin-top:-6px;margin-bottom:6px;}
+.forgot-link{background:none;border:none;color:var(--text3);font-family:'Montserrat',sans-serif;font-size:10px;cursor:pointer;padding:0;transition:color .2s;letter-spacing:.3px;}
+.forgot-link:hover{color:var(--orange);}
+.back-link{display:block;margin-top:14px;background:none;border:none;color:var(--text3);font-family:'Montserrat',sans-serif;font-size:10px;cursor:pointer;padding:0;text-align:center;width:100%;transition:color .2s;}
+.back-link:hover{color:var(--text2);}
+.form-hint{font-size:11px;color:var(--text2);margin-bottom:16px;line-height:1.55;}
+.auth-btn{width:100%;background:var(--orange);border:none;border-radius:7px;padding:13px;font-family:'Montserrat',sans-serif;font-size:12px;font-weight:800;color:#fff;cursor:pointer;text-transform:uppercase;letter-spacing:.7px;margin-top:6px;transition:opacity .2s,transform .1s;box-shadow:0 4px 16px rgba(249,115,22,.3);}
+.auth-btn:hover{opacity:.88;}
+.auth-btn:active{transform:scale(.98);}
+.auth-btn:disabled{opacity:.35;cursor:not-allowed;transform:none;}
+.auth-msg{font-size:11px;margin-top:14px;text-align:center;min-height:16px;line-height:1.4;}
+.auth-msg.error{color:var(--red);}
+.auth-msg.success{color:var(--green);}
+
+/* ── Hub Screen ── */
+.hub-screen{display:none;}
+.hub-header{background:rgba(12,16,23,.82);border-bottom:1px solid rgba(255,255,255,.06);padding:12px 32px;display:flex;align-items:center;gap:16px;position:sticky;top:0;z-index:100;backdrop-filter:blur(24px);box-shadow:0 2px 16px rgba(0,0,0,.3);}
+.hub-logo h1{font-size:15px;font-weight:800;color:var(--orange);letter-spacing:.3px;}
+.hub-logo p{font-size:9px;color:var(--text2);margin-top:2px;text-transform:uppercase;letter-spacing:.8px;}
+.hub-header-right{margin-left:auto;display:flex;align-items:center;gap:12px;}
+.hub-user{font-size:11px;color:var(--text2);}
+.hub-user b{color:var(--text);font-weight:600;}
+.logout-btn{background:transparent;border:1px solid rgba(255,255,255,.1);border-radius:5px;padding:5px 12px;font-family:'Montserrat',sans-serif;font-size:9px;font-weight:700;color:var(--text3);cursor:pointer;text-transform:uppercase;letter-spacing:.5px;transition:all .2s;}
+.logout-btn:hover{border-color:var(--red);color:var(--red);}
+
+/* ── Hub Main ── */
+.hub-main{padding:36px 32px;max-width:1440px;margin:0 auto;}
+.hub-welcome{margin-bottom:36px;}
+.hub-welcome h2{font-size:28px;font-weight:800;color:var(--text);}
+.hub-welcome p{font-size:12px;color:var(--text2);margin-top:5px;}
+
+.category{margin-bottom:40px;}
+.category-title{font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:1.8px;margin-bottom:16px;padding-bottom:10px;border-bottom:1px solid rgba(255,255,255,.05);}
+
+.cards-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:14px;}
+
+.dash-card{background:rgba(20,27,38,.55);border:1px solid rgba(255,255,255,.07);border-radius:12px;padding:22px;backdrop-filter:blur(16px);box-shadow:0 2px 16px rgba(0,0,0,.2);display:flex;flex-direction:column;gap:12px;transition:border-color .25s,transform .2s,box-shadow .25s;}
+.dash-card.active:hover{border-color:rgba(249,115,22,.4);transform:translateY(-3px);box-shadow:0 8px 32px rgba(0,0,0,.35);}
+.dash-card.inactive{opacity:.4;cursor:not-allowed;}
+
+.card-top{display:flex;align-items:flex-start;justify-content:space-between;gap:8px;}
+.card-icon{width:38px;height:38px;border-radius:10px;background:rgba(249,115,22,.1);border:1px solid rgba(249,115,22,.15);display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+.card-icon svg{width:18px;height:18px;stroke:var(--orange);}
+
+.badge{font-size:8px;font-weight:800;text-transform:uppercase;letter-spacing:.6px;padding:3px 8px;border-radius:10px;white-space:nowrap;}
+.badge.on{background:rgba(59,179,59,.12);color:var(--green);border:1px solid rgba(59,179,59,.22);}
+.badge.off{background:rgba(255,255,255,.04);color:var(--text3);border:1px solid rgba(255,255,255,.07);}
+
+.card-title{font-size:14px;font-weight:800;color:var(--text);line-height:1.25;}
+.card-desc{font-size:11px;color:var(--text2);line-height:1.55;flex:1;}
+
+.card-link{display:inline-flex;align-items:center;gap:6px;background:rgba(249,115,22,.12);border:1px solid rgba(249,115,22,.25);border-radius:6px;padding:8px 14px;font-family:'Montserrat',sans-serif;font-size:10px;font-weight:800;color:var(--orange);text-decoration:none;text-transform:uppercase;letter-spacing:.6px;transition:background .2s;margin-top:auto;width:fit-content;}
+.card-link:hover{background:rgba(249,115,22,.25);}
+.card-link svg{width:11px;height:11px;stroke:var(--orange);}
+.card-soon{display:inline-flex;align-items:center;font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.6px;margin-top:auto;padding:8px 0;}
+
+/* ── Mobile ── */
+@media(max-width:768px){
+  .hub-main{padding:20px 16px;}
+  .hub-header{padding:10px 16px;}
+  .hub-logo h1{font-size:13px;}
+  .hub-welcome h2{font-size:22px;}
+  .cards-grid{grid-template-columns:repeat(2,1fr);}
+  .hub-user span:first-child{display:none;}
+}
+@media(max-width:480px){
+  .cards-grid{grid-template-columns:1fr;}
+  .auth-card{padding:32px 24px;}
+}
+</style>
+</head>
+<body>
+
+<!-- Loading -->
+<div id="loading"><div class="spinner"></div></div>
+
+<!-- ── Auth Screen ── -->
+<div class="auth-screen" id="auth-screen">
+  <div class="auth-card">
+    <div class="auth-logo">
+      <div class="auth-logo-mark">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+      </div>
+      <h1>GESTÃO EM MOVIMENTO</h1>
+      <p>Business Intelligence · Frota</p>
+    </div>
+    <div class="auth-tabs">
+      <button class="auth-tab active" id="tab-login" onclick="switchTab('login')">Entrar</button>
+      <button class="auth-tab" id="tab-register" onclick="switchTab('register')">Criar conta</button>
+    </div>
+
+    <!-- Login -->
+    <div id="form-login">
+      <div class="field"><label>E-mail</label><input type="email" id="login-email" placeholder="seu@email.com" autocomplete="email"></div>
+      <div class="field"><label>Senha</label><div class="pass-wrap"><input type="password" id="login-pass" placeholder="••••••••" autocomplete="current-password"><button type="button" class="eye-btn" onclick="togglePass('login-pass',this)" tabindex="-1"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button></div></div>
+      <div class="forgot-wrap"><button type="button" class="forgot-link" onclick="showForgot()">Esqueceu sua senha?</button></div>
+      <button class="auth-btn" id="btn-login" onclick="doLogin()">Entrar</button>
+    </div>
+
+    <!-- Forgot Password -->
+    <div id="form-forgot" style="display:none;">
+      <p class="form-hint">Informe seu e-mail e enviaremos um link para redefinir sua senha.</p>
+      <div class="field"><label>E-mail</label><input type="email" id="forgot-email" placeholder="seu@email.com" autocomplete="email"></div>
+      <button class="auth-btn" id="btn-forgot" onclick="doForgotPassword()">Enviar link</button>
+      <button type="button" class="back-link" onclick="showLogin()">← Voltar ao login</button>
+    </div>
+
+    <!-- New Password (recovery) -->
+    <div id="form-recovery" style="display:none;">
+      <p class="form-hint">Defina sua nova senha.</p>
+      <div class="field"><label>Nova senha</label><div class="pass-wrap"><input type="password" id="new-pass" placeholder="mínimo 6 caracteres" autocomplete="new-password"><button type="button" class="eye-btn" onclick="togglePass('new-pass',this)" tabindex="-1"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button></div></div>
+      <button class="auth-btn" id="btn-recovery" onclick="doUpdatePassword()">Salvar nova senha</button>
+    </div>
+
+    <!-- Register -->
+    <div id="form-register" style="display:none;">
+      <div class="field"><label>Nome</label><input type="text" id="reg-name" placeholder="Seu nome completo"></div>
+      <div class="field"><label>E-mail</label><input type="email" id="reg-email" placeholder="seu@email.com" autocomplete="email"></div>
+      <div class="field"><label>Senha</label><div class="pass-wrap"><input type="password" id="reg-pass" placeholder="mínimo 6 caracteres" autocomplete="new-password"><button type="button" class="eye-btn" onclick="togglePass('reg-pass',this)" tabindex="-1"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button></div></div>
+      <button class="auth-btn" id="btn-register" onclick="doRegister()">Criar conta</button>
+    </div>
+
+    <div class="auth-msg" id="auth-msg"></div>
+  </div>
+</div>
+
+<!-- ── Hub Screen ── -->
+<div class="hub-screen" id="hub-screen">
+  <header class="hub-header">
+    <div class="hub-logo">
+      <h1>GESTÃO EM MOVIMENTO</h1>
+      <p>Business Intelligence · Frota</p>
+    </div>
+    <div class="hub-header-right">
+      <span class="hub-user">Olá, <b id="hub-username">—</b></span>
+      <button class="logout-btn" onclick="doLogout()">Sair</button>
+    </div>
+  </header>
+
+  <main class="hub-main">
+    <div class="hub-welcome">
+      <h2>Painéis de BI</h2>
+      <p>Selecione um painel para visualizar os indicadores da frota.</p>
+    </div>
+
+    <!-- Financeiro -->
+    <div class="category">
+      <div class="category-title">Financeiro</div>
+      <div class="cards-grid">
+
+        <div class="dash-card active">
+          <div class="card-top">
+            <div class="card-icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg></div>
+            <span class="badge on">Ativo</span>
+          </div>
+          <div class="card-title">Visão Financeira</div>
+          <div class="card-desc">DRE Consolidado — custos, receita líquida, AV% e desvios vs remunerado e orçado.</div>
+          <a class="card-link" href="visao-financeira/">Abrir <svg viewBox="0 0 24 24" fill="none" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg></a>
+        </div>
+
+        <div class="dash-card active">
+          <div class="card-top">
+            <div class="card-icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></div>
+            <span class="badge on">Ativo</span>
+          </div>
+          <div class="card-title">Painel KM</div>
+          <div class="card-desc">Dispersão de quilometragem — realizado vs remunerado, impacto financeiro e eficiência.</div>
+          <a class="card-link" href="painel-km/">Abrir <svg viewBox="0 0 24 24" fill="none" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg></a>
+        </div>
+
+        <div class="dash-card inactive">
+          <div class="card-top">
+            <div class="card-icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg></div>
+            <span class="badge off">Em breve</span>
+          </div>
+          <div class="card-title">R$ por KM</div>
+          <div class="card-desc">Custo por quilômetro rodado — eficiência financeira por unidade e projeto.</div>
+          <span class="card-soon">Em desenvolvimento</span>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- Operacional -->
+    <div class="category">
+      <div class="category-title">Operacional</div>
+      <div class="cards-grid">
+
+        <div class="dash-card inactive">
+          <div class="card-top">
+            <div class="card-icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="3" width="15" height="13" rx="2"/><path d="M16 8h4l3 3v5h-7V8z"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg></div>
+            <span class="badge off">Em breve</span>
+          </div>
+          <div class="card-title">Ativação de Frota</div>
+          <div class="card-desc">Indicadores de eficiência no processo de ativação de veículos e contratos.</div>
+          <span class="card-soon">Em desenvolvimento</span>
+        </div>
+
+        <div class="dash-card inactive">
+          <div class="card-top">
+            <div class="card-icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg></div>
+            <span class="badge off">Em breve</span>
+          </div>
+          <div class="card-title">Disponibilidade</div>
+          <div class="card-desc">Taxa de disponibilidade da frota — manutenção, ociosidade e uptime por veículo.</div>
+          <span class="card-soon">Em desenvolvimento</span>
+        </div>
+
+        <div class="dash-card active">
+          <div class="card-top">
+            <div class="card-icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 22V8l9-6 9 6v14H3z"/><path d="M9 22V12h6v10"/></svg></div>
+            <span class="badge on">Ativo</span>
+          </div>
+          <div class="card-title">Combustível</div>
+          <div class="card-desc">Dispersão e análise hierárquica do consumo de combustível da frota.</div>
+          <a class="card-link" href="combustivel/arvore-combustivel/">Abrir <svg viewBox="0 0 24 24" fill="none" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg></a>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- Processos -->
+    <div class="category">
+      <div class="category-title">Processos</div>
+      <div class="cards-grid">
+
+        <div class="dash-card inactive">
+          <div class="card-top">
+            <div class="card-icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg></div>
+            <span class="badge off">Em breve</span>
+          </div>
+          <div class="card-title">Gerot</div>
+          <div class="card-desc">Gestão rotineira de operações — acompanhamento de processos e indicadores operacionais.</div>
+          <span class="card-soon">Em desenvolvimento</span>
+        </div>
+
+        <div class="dash-card inactive">
+          <div class="card-top">
+            <div class="card-icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><clipPath id="c"><rect width="24" height="24"/></clipPath><g clip-path="url(#c)"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></g></svg></div>
+            <span class="badge off">Em breve</span>
+          </div>
+          <div class="card-title">Auditorias</div>
+          <div class="card-desc">Registro e acompanhamento de auditorias operacionais da frota.</div>
+          <span class="card-soon">Em desenvolvimento</span>
+        </div>
+
+        <div class="dash-card inactive">
+          <div class="card-top">
+            <div class="card-icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg></div>
+            <span class="badge off">Em breve</span>
+          </div>
+          <div class="card-title">FCA</div>
+          <div class="card-desc">Fato, Causa e Ação — gestão de ocorrências e planos de melhoria contínua.</div>
+          <span class="card-soon">Em desenvolvimento</span>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- Resultados -->
+    <div class="category">
+      <div class="category-title">Resultados</div>
+      <div class="cards-grid">
+
+        <div class="dash-card inactive">
+          <div class="card-top">
+            <div class="card-icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg></div>
+            <span class="badge off">Em breve</span>
+          </div>
+          <div class="card-title">Programa de Reconhecimento</div>
+          <div class="card-desc">Acompanhamento do programa de reconhecimento de equipes e colaboradores.</div>
+          <span class="card-soon">Em desenvolvimento</span>
+        </div>
+
+        <div class="dash-card inactive">
+          <div class="card-top">
+            <div class="card-icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg></div>
+            <span class="badge off">Em breve</span>
+          </div>
+          <div class="card-title">Aderência ao FCA</div>
+          <div class="card-desc">Monitoramento da aderência aos planos de ação e taxa de execução das melhorias.</div>
+          <span class="card-soon">Em desenvolvimento</span>
+        </div>
+
+        <div class="dash-card inactive">
+          <div class="card-top">
+            <div class="card-icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 20V10M12 20V4M6 20v-6"/></svg></div>
+            <span class="badge off">Em breve</span>
+          </div>
+          <div class="card-title">Painel de Metas</div>
+          <div class="card-desc">Acompanhamento de metas corporativas e indicadores de desempenho.</div>
+          <span class="card-soon">Em desenvolvimento</span>
+        </div>
+
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<footer id="global-footer" style="position:fixed;bottom:0;width:100%;text-align:center;padding:10px;font-size:9px;color:var(--text3);letter-spacing:.5px;">
+  © 2026 Fortes Indicadores · Todos os direitos reservados
+</footer>
+
+<script>
+const SUPABASE_URL = 'https://lozwipoeacpvplgkrxkq.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_ggKEEebc5zjgQDVsF92Upw_6uoLmKe9';
+const { createClient } = supabase;
+const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
+
+function showHub(user) {
+  document.getElementById('loading').style.display = 'none';
+  document.getElementById('auth-screen').style.display = 'none';
+  document.getElementById('hub-screen').style.display = 'block';
+  const name = user.user_metadata?.name || user.email.split('@')[0];
+  document.getElementById('hub-username').textContent = name;
+}
+
+function showAuth() {
+  document.getElementById('loading').style.display = 'none';
+  document.getElementById('hub-screen').style.display = 'none';
+  document.getElementById('auth-screen').style.display = 'flex';
+}
+
+async function init() {
+  const { data: { session } } = await sb.auth.getSession();
+  if (session) showHub(session.user);
+  else showAuth();
+}
+
+sb.auth.onAuthStateChange((event, session) => {
+  if (event === 'SIGNED_IN' && session) showHub(session.user);
+  if (event === 'SIGNED_OUT') showAuth();
+  if (event === 'PASSWORD_RECOVERY') {
+    document.getElementById('loading').style.display = 'none';
+    document.getElementById('auth-screen').style.display = 'flex';
+    document.getElementById('form-login').style.display = 'none';
+    document.getElementById('form-forgot').style.display = 'none';
+    document.getElementById('form-recovery').style.display = '';
+    setMsg('', '');
+  }
+});
+
+function switchTab(tab) {
+  const isLogin = tab === 'login';
+  document.getElementById('tab-login').classList.toggle('active', isLogin);
+  document.getElementById('tab-register').classList.toggle('active', !isLogin);
+  document.getElementById('form-login').style.display = isLogin ? '' : 'none';
+  document.getElementById('form-register').style.display = isLogin ? 'none' : '';
+  setMsg('', '');
+}
+
+function setMsg(text, type) {
+  const el = document.getElementById('auth-msg');
+  el.textContent = text;
+  el.className = 'auth-msg' + (type ? ' ' + type : '');
+}
+
+async function doLogin() {
+  const email = document.getElementById('login-email').value.trim();
+  const pass  = document.getElementById('login-pass').value;
+  if (!email || !pass) { setMsg('Preencha e-mail e senha.', 'error'); return; }
+  const btn = document.getElementById('btn-login');
+  btn.disabled = true; btn.textContent = 'Entrando…';
+  const { error } = await sb.auth.signInWithPassword({ email, password: pass });
+  btn.disabled = false; btn.textContent = 'Entrar';
+  if (error) setMsg(traduzirErro(error.message), 'error');
+}
+
+async function doRegister() {
+  const name  = document.getElementById('reg-name').value.trim();
+  const email = document.getElementById('reg-email').value.trim();
+  const pass  = document.getElementById('reg-pass').value;
+  if (!name || !email || !pass) { setMsg('Preencha todos os campos.', 'error'); return; }
+  if (pass.length < 6) { setMsg('Senha deve ter pelo menos 6 caracteres.', 'error'); return; }
+  const btn = document.getElementById('btn-register');
+  btn.disabled = true; btn.textContent = 'Criando conta…';
+  const { data, error } = await sb.auth.signUp({ email, password: pass, options: { data: { name } } });
+  btn.disabled = false; btn.textContent = 'Criar conta';
+  if (error) { setMsg(traduzirErro(error.message), 'error'); return; }
+  if (data.session) showHub(data.session.user);
+  else setMsg('Conta criada! Faça login para continuar.', 'success');
+}
+
+async function doLogout() {
+  await sb.auth.signOut();
+}
+
+function showForgot() {
+  const email = document.getElementById('login-email').value.trim();
+  if (email) document.getElementById('forgot-email').value = email;
+  document.getElementById('form-login').style.display = 'none';
+  document.getElementById('form-forgot').style.display = '';
+  setMsg('', '');
+}
+
+function showLogin() {
+  document.getElementById('form-forgot').style.display = 'none';
+  document.getElementById('form-recovery').style.display = 'none';
+  document.getElementById('form-login').style.display = '';
+  setMsg('', '');
+}
+
+async function doForgotPassword() {
+  const email = document.getElementById('forgot-email').value.trim();
+  if (!email) { setMsg('Informe o e-mail.', 'error'); return; }
+  const btn = document.getElementById('btn-forgot');
+  btn.disabled = true; btn.textContent = 'Enviando…';
+  const { error } = await sb.auth.resetPasswordForEmail(email, {
+    redirectTo: window.location.href.split('#')[0]
+  });
+  btn.disabled = false; btn.textContent = 'Enviar link';
+  if (error) { setMsg(traduzirErro(error.message), 'error'); return; }
+  setMsg('Link enviado! Verifique seu e-mail.', 'success');
+}
+
+async function doUpdatePassword() {
+  const pass = document.getElementById('new-pass').value;
+  if (pass.length < 6) { setMsg('Senha deve ter pelo menos 6 caracteres.', 'error'); return; }
+  const btn = document.getElementById('btn-recovery');
+  btn.disabled = true; btn.textContent = 'Salvando…';
+  const { error } = await sb.auth.updateUser({ password: pass });
+  btn.disabled = false; btn.textContent = 'Salvar nova senha';
+  if (error) { setMsg(traduzirErro(error.message), 'error'); return; }
+  setMsg('Senha atualizada! Faça login para continuar.', 'success');
+  setTimeout(() => { sb.auth.signOut(); showLogin(); }, 2000);
+}
+
+function traduzirErro(msg) {
+  if (!msg) return 'Erro desconhecido.';
+  const m = msg.toLowerCase();
+  if (m.includes('invalid login') || m.includes('invalid credentials')) return 'E-mail ou senha incorretos.';
+  if (m.includes('email not confirmed')) return 'Confirme seu e-mail antes de entrar.';
+  if (m.includes('user already registered')) return 'Este e-mail já está cadastrado.';
+  if (m.includes('rate limit') || m.includes('too many')) return 'Muitas tentativas. Aguarde alguns minutos e tente novamente.';
+  if (m.includes('user not found')) return 'E-mail não encontrado.';
+  if (m.includes('weak password') || m.includes('should be at least')) return 'Senha muito fraca. Use pelo menos 6 caracteres.';
+  if (m.includes('network') || m.includes('fetch')) return 'Erro de conexão. Verifique sua internet.';
+  return msg;
+}
+
+const _eyeOn=`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>`;
+const _eyeOff=`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>`;
+function togglePass(id, btn) {
+  const inp = document.getElementById(id);
+  const show = inp.type === 'password';
+  inp.type = show ? 'text' : 'password';
+  btn.innerHTML = show ? _eyeOff : _eyeOn;
+}
+
+document.addEventListener('keydown', e => {
+  if (e.key !== 'Enter') return;
+  const loginVisible = document.getElementById('form-login').style.display !== 'none';
+  if (loginVisible) doLogin(); else doRegister();
+});
+
+init();
+</script>
+</body>
+</html>
