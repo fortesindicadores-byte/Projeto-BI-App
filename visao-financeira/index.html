@@ -916,16 +916,23 @@ function renderAVCards(mes, prev){
 function renderCharts(f){
   let vy, maxM, hlIdxs=[];
   if(!f.vig||f.vig.length===0){
-    const lastVig=vigs.length?vigs[vigs.length-1]:null;
-    if(lastVig && lastVig.getMonth()+1 < 12){
-      // ano atual incompleto → mostra último ano completo disponível
-      const prevY=lastVig.getFullYear()-1;
-      const prevVigs=vigs.filter(d=>d.getFullYear()===prevY);
-      if(prevVigs.length>0){ vy=prevY; maxM=12; }
-      else { vy=lastVig.getFullYear(); maxM=lastVig.getMonth()+1; }
+    if(f.ano&&f.ano.length>0){
+      // ano selecionado explicitamente → usar o maior ano selecionado
+      vy=Math.max(...f.ano.map(Number));
+      const vigsDoAno=vigs.filter(d=>d.getFullYear()===vy);
+      maxM=vigsDoAno.length ? Math.max(...vigsDoAno.map(d=>d.getMonth()+1)) : 12;
     } else {
-      vy=lastVig?lastVig.getFullYear():new Date().getFullYear();
-      maxM=lastVig?12:12;
+      const lastVig=vigs.length?vigs[vigs.length-1]:null;
+      if(lastVig && lastVig.getMonth()+1 < 12){
+        // ano atual incompleto → mostra último ano completo disponível
+        const prevY=lastVig.getFullYear()-1;
+        const prevVigs=vigs.filter(d=>d.getFullYear()===prevY);
+        if(prevVigs.length>0){ vy=prevY; maxM=12; }
+        else { vy=lastVig.getFullYear(); maxM=lastVig.getMonth()+1; }
+      } else {
+        vy=lastVig?lastVig.getFullYear():new Date().getFullYear();
+        maxM=lastVig?12:12;
+      }
     }
   } else {
     const years=f.vig.map(vk=>+vk.split('-')[0]);
