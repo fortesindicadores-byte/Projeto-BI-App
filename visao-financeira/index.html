@@ -961,7 +961,8 @@ function renderCharts(f){
   const tick={color:isLight?'#444444':'#94A3B8',font:{family:'Montserrat',size:11}};
   const tooltip={backgroundColor:'#141B26',titleColor:'#F97316',bodyColor:'#F1F5F9',borderColor:'#1E2D40',borderWidth:1,titleFont:{family:'Montserrat'},bodyFont:{family:'Montserrat'}};
   const legend={labels:{color:isLight?'#1a1a1a':'#F1F5F9',font:{family:'Montserrat',size:10},boxWidth:14}};
-  function mkLabelPlugin(fmtFn){
+  function mkLabelPlugin(fmtFn, hlIdxs){
+    var show = hlIdxs && hlIdxs.length > 0 ? hlIdxs : null;
     return {
       afterDatasetsDraw:function(chart){
         var ds=chart.data.datasets[0],meta=chart.getDatasetMeta(0);
@@ -974,6 +975,7 @@ function renderCharts(f){
         ctx.textBaseline='bottom';
         ds.data.forEach(function(val,i){
           if(val==null)return;
+          if(show && show.indexOf(i)===-1)return;
           var pt=meta.data[i];
           if(!pt)return;
           ctx.fillText(fmtFn(val),pt.x,pt.y-5);
@@ -985,9 +987,9 @@ function renderCharts(f){
   var cbFmt = function(v){ return fmt(v); };
   var cbPct = function(v){ return v!=null ? v.toFixed(1)+'%' : ''; };
   if(chReceita) chReceita.destroy();
-  chReceita=new Chart(document.getElementById('ch-receita'),{type:'line',data:{labels:lbls,datasets:[dsReal(dReal,'REALIZADO'),dsRem(dRem,'REMUNERADO'),dsOrc(dOrc,'ORÇADO')]},plugins:[mkLabelPlugin(cbFmt)],options:{responsive:true,maintainAspectRatio:false,layout:{padding:{top:28}},plugins:{legend,tooltip},scales:{x:{grid,ticks:tick},y:{grid,ticks:{...tick,callback:cbFmt}}}}});
+  chReceita=new Chart(document.getElementById('ch-receita'),{type:'line',data:{labels:lbls,datasets:[dsReal(dReal,'REALIZADO'),dsRem(dRem,'REMUNERADO'),dsOrc(dOrc,'ORÇADO')]},plugins:[mkLabelPlugin(cbFmt,hlIdxs)],options:{responsive:true,maintainAspectRatio:false,layout:{padding:{top:28}},plugins:{legend,tooltip},scales:{x:{grid,ticks:tick},y:{grid,ticks:{...tick,callback:cbFmt}}}}});
   if(chAV) chAV.destroy();
-  chAV=new Chart(document.getElementById('ch-av'),{type:'line',data:{labels:lbls,datasets:[dsReal(dAvReal,'AV REALIZADO'),dsRem(dAvRem,'AV REMUNERADO'),dsOrc(dAvOrc,'AV ORÇADO')]},plugins:[mkLabelPlugin(cbPct)],options:{responsive:true,maintainAspectRatio:false,layout:{padding:{top:28}},plugins:{legend,tooltip},scales:{x:{grid,ticks:tick},y:{grid,ticks:{...tick,callback:cbPct}}}}});
+  chAV=new Chart(document.getElementById('ch-av'),{type:'line',data:{labels:lbls,datasets:[dsReal(dAvReal,'AV REALIZADO'),dsRem(dAvRem,'AV REMUNERADO'),dsOrc(dAvOrc,'AV ORÇADO')]},plugins:[mkLabelPlugin(cbPct,hlIdxs)],options:{responsive:true,maintainAspectRatio:false,layout:{padding:{top:28}},plugins:{legend,tooltip},scales:{x:{grid,ticks:tick},y:{grid,ticks:{...tick,callback:cbPct}}}}});
 }
 
 // ═══════════════════════════════════
