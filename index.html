@@ -425,7 +425,7 @@ async function doLogin() {
   btn.disabled = true; btn.textContent = 'Entrando…';
   const { error } = await sb.auth.signInWithPassword({ email, password: pass });
   btn.disabled = false; btn.textContent = 'Entrar';
-  if (error) setMsg('E-mail ou senha incorretos.', 'error');
+  if (error) setMsg(traduzirErro(error.message), 'error');
 }
 
 async function doRegister() {
@@ -438,7 +438,7 @@ async function doRegister() {
   btn.disabled = true; btn.textContent = 'Criando conta…';
   const { data, error } = await sb.auth.signUp({ email, password: pass, options: { data: { name } } });
   btn.disabled = false; btn.textContent = 'Criar conta';
-  if (error) { setMsg(error.message, 'error'); return; }
+  if (error) { setMsg(traduzirErro(error.message), 'error'); return; }
   if (data.session) showHub(data.session.user);
   else setMsg('Conta criada! Faça login para continuar.', 'success');
 }
@@ -471,7 +471,7 @@ async function doForgotPassword() {
     redirectTo: window.location.href.split('#')[0]
   });
   btn.disabled = false; btn.textContent = 'Enviar link';
-  if (error) { setMsg(error.message, 'error'); return; }
+  if (error) { setMsg(traduzirErro(error.message), 'error'); return; }
   setMsg('Link enviado! Verifique seu e-mail.', 'success');
 }
 
@@ -482,9 +482,22 @@ async function doUpdatePassword() {
   btn.disabled = true; btn.textContent = 'Salvando…';
   const { error } = await sb.auth.updateUser({ password: pass });
   btn.disabled = false; btn.textContent = 'Salvar nova senha';
-  if (error) { setMsg(error.message, 'error'); return; }
+  if (error) { setMsg(traduzirErro(error.message), 'error'); return; }
   setMsg('Senha atualizada! Faça login para continuar.', 'success');
   setTimeout(() => { sb.auth.signOut(); showLogin(); }, 2000);
+}
+
+function traduzirErro(msg) {
+  if (!msg) return 'Erro desconhecido.';
+  const m = msg.toLowerCase();
+  if (m.includes('invalid login') || m.includes('invalid credentials')) return 'E-mail ou senha incorretos.';
+  if (m.includes('email not confirmed')) return 'Confirme seu e-mail antes de entrar.';
+  if (m.includes('user already registered')) return 'Este e-mail já está cadastrado.';
+  if (m.includes('rate limit') || m.includes('too many')) return 'Muitas tentativas. Aguarde alguns minutos e tente novamente.';
+  if (m.includes('user not found')) return 'E-mail não encontrado.';
+  if (m.includes('weak password') || m.includes('should be at least')) return 'Senha muito fraca. Use pelo menos 6 caracteres.';
+  if (m.includes('network') || m.includes('fetch')) return 'Erro de conexão. Verifique sua internet.';
+  return msg;
 }
 
 const _eyeOn=`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>`;
