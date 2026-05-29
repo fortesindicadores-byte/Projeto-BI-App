@@ -6,7 +6,6 @@
 <title>Visão Financeira — DRE Frota</title>
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0"></script>
 <style>
 :root {
   --bg:      #0C1017;
@@ -962,15 +961,31 @@ function renderCharts(f){
   const tick={color:isLight?'#444444':'#94A3B8',font:{family:'Montserrat',size:11}};
   const tooltip={backgroundColor:'#141B26',titleColor:'#F97316',bodyColor:'#F1F5F9',borderColor:'#1E2D40',borderWidth:1,titleFont:{family:'Montserrat'},bodyFont:{family:'Montserrat'}};
   const legend={labels:{color:isLight?'#1a1a1a':'#F1F5F9',font:{family:'Montserrat',size:10},boxWidth:14}};
-  const dlPlugins = window.ChartDataLabels ? [ChartDataLabels] : [];
-  const dlDisplay = function(ctx){ return ctx.datasetIndex===0 && ctx.dataset.data[ctx.dataIndex]!=null; };
-  const dlBase = {anchor:'end',align:'top',color:'#F97316',font:{family:'Montserrat',size:9,weight:'700'}};
-  const dlBrl  = window.ChartDataLabels ? Object.assign({display:dlDisplay,formatter:function(v){return v!=null?fmt(v):'';},},dlBase) : {display:false};
-  const dlPct  = window.ChartDataLabels ? Object.assign({display:dlDisplay,formatter:function(v){return v!=null?v.toFixed(1)+'%':'';},},dlBase) : {display:false};
+  function mkLabelPlugin(fmtFn){
+    return {
+      afterDatasetsDraw:function(chart){
+        var ds=chart.data.datasets[0],meta=chart.getDatasetMeta(0);
+        if(!meta||meta.hidden)return;
+        var ctx=chart.ctx;
+        ctx.save();
+        ctx.font='700 9px Montserrat,sans-serif';
+        ctx.fillStyle='#F97316';
+        ctx.textAlign='center';
+        ctx.textBaseline='bottom';
+        ds.data.forEach(function(val,i){
+          if(val==null)return;
+          var pt=meta.data[i];
+          if(!pt)return;
+          ctx.fillText(fmtFn(val),pt.x,pt.y-5);
+        });
+        ctx.restore();
+      }
+    };
+  }
   if(chReceita) chReceita.destroy();
-  chReceita=new Chart(document.getElementById('ch-receita'),{type:'line',data:{labels:lbls,datasets:[dsReal(dReal,'REALIZADO'),dsRem(dRem,'REMUNERADO'),dsOrc(dOrc,'ORÇADO')]},plugins:dlPlugins,options:{responsive:true,maintainAspectRatio:false,layout:{padding:{top:28}},plugins:{legend,tooltip,datalabels:dlBrl},scales:{x:{grid,ticks:tick},y:{grid,ticks:{...tick,callback:function(v){return fmt(v);}}}}}});
+  chReceita=new Chart(document.getElementById('ch-receita'),{type:'line',data:{labels:lbls,datasets:[dsReal(dReal,'REALIZADO'),dsRem(dRem,'REMUNERADO'),dsOrc(dOrc,'ORÇADO')]},plugins:[mkLabelPlugin(function(v){return fmt(v);})],options:{responsive:true,maintainAspectRatio:false,layout:{padding:{top:28}},plugins:{legend,tooltip},scales:{x:{grid,ticks:tick},y:{grid,ticks:{...tick,callback:v=>fmt(v)}}}}});
   if(chAV) chAV.destroy();
-  chAV=new Chart(document.getElementById('ch-av'),{type:'line',data:{labels:lbls,datasets:[dsReal(dAvReal,'AV REALIZADO'),dsRem(dAvRem,'AV REMUNERADO'),dsOrc(dAvOrc,'AV ORÇADO')]},plugins:dlPlugins,options:{responsive:true,maintainAspectRatio:false,layout:{padding:{top:28}},plugins:{legend,tooltip,datalabels:dlPct},scales:{x:{grid,ticks:tick},y:{grid,ticks:{...tick,callback:function(v){return v!=null?v.toFixed(1)+'%':'';}}}}}}});
+  chAV=new Chart(document.getElementById('ch-av'),{type:'line',data:{labels:lbls,datasets:[dsReal(dAvReal,'AV REALIZADO'),dsRem(dAvRem,'AV REMUNERADO'),dsOrc(dAvOrc,'AV ORÇADO')]},plugins:[mkLabelPlugin(function(v){return v!=null?v.toFixed(1)+'%':'';})],options:{responsive:true,maintainAspectRatio:false,layout:{padding:{top:28}},plugins:{legend,tooltip},scales:{x:{grid,ticks:tick},y:{grid,ticks:{...tick,callback:v=>v!=null?v.toFixed(1)+'%':''}}}}}});
 }
 
 // ═══════════════════════════════════
