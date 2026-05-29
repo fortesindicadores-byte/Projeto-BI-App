@@ -1,26 +1,31 @@
-# Projeto BI App — Guia para o Claude
+# Gestão em Movimento — Guia para o Claude
 
 ## Visão geral
 
-Repositório central de todos os painéis de BI da empresa, em substituição ao Looker Studio.
+Repositório central de todos os painéis de BI da empresa (Fortes Indicadores), em substituição ao Looker Studio.
 Cada painel é um arquivo `index.html` autocontido — sem framework, sem backend, sem build step.
 
-GitHub Pages: `https://fortesindicadores-byte.github.io/Projeto-BI-App/`
+- **Repositório GitHub:** `fortesindicadores-byte/gestao-em-movimento` _(foi renomeado de `Projeto-BI-App`)_
+- **GitHub Pages:** `https://fortesindicadores-byte.github.io/gestao-em-movimento/`
+- **Hub principal:** `index.html` na raiz — contém autenticação Supabase + lista de painéis
+
+> ⚠️ **Git push:** O repositório foi renomeado no GitHub. O proxy local ainda aponta para o nome antigo e rejeita `git push`. **Sempre usar `mcp__github__push_files`** para enviar alterações. Após o push MCP, sincronizar local com: `git fetch origin main && git reset --hard origin/main`
 
 ---
 
 ## Estrutura de pastas
 
 ```
-Projeto-BI-App/
-├── visao-financeira/       → Painel DRE Consolidado (ATIVO) ← referência principal
+gestao-em-movimento/
+├── index.html              → Hub principal + Auth (Supabase) ← ATIVO
+├── visao-financeira/       → Painel DRE Consolidado ← ATIVO, referência de layout
+├── painel-km/              → Painel KM ← ATIVO
 ├── combustivel/
-│   ├── arvore-combustivel/ → Árvore de Combustível (ATIVO)
+│   ├── arvore-combustivel/ → Árvore de Combustível ← ATIVO
 │   ├── eficiencia-kml/     → (vazio)
 │   ├── preco-litro/        → (vazio)
 │   └── consumo-co2/        → (vazio)
-├── financeiro-pessoal/     → Controle Financeiro Renan & Tati (ATIVO)
-├── painel-km/              → (vazio)
+├── financeiro-pessoal/     → Controle Financeiro Renan & Tati ← ATIVO (não aparece no hub)
 ├── eficiencia-ativacao/    → (vazio)
 ├── rs-por-km/              → (vazio)
 ├── disponibilidade/        → (vazio)
@@ -31,6 +36,119 @@ Projeto-BI-App/
 ```
 
 Pastas vazias têm `.gitkeep`. Ao criar um novo painel, substituir por `index.html`.
+
+---
+
+## Hub principal (`index.html`) — Autenticação + Navegação
+
+O `index.html` raiz é o hub central. Tem duas telas:
+- **Auth screen** (`#auth-screen`): login / cadastro / esqueci senha / redefinir senha
+- **Hub screen** (`#hub-screen`): grid de cards com os painéis, organizado por clusters
+
+### Supabase (autenticação)
+```javascript
+const SUPABASE_URL = 'https://lozwipoeacpvplgkrxkq.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_ggKEEebc5zjgQDVsF92Upw_6uoLmKe9';
+// CDN: https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+```
+
+**Configurações no Supabase Dashboard:**
+- Site URL: `https://fortesindicadores-byte.github.io/gestao-em-movimento/`
+- SMTP customizado: Resend (smtp.resend.com:465, user=resend, senha=API key da Resend)
+- Email confirmation: ativado
+
+**Fluxos implementados:**
+1. Login com e-mail + senha (`sb.auth.signInWithPassword`)
+2. Cadastro (`sb.auth.signUp`) — requer confirmação por e-mail
+3. Esqueci senha (`sb.auth.resetPasswordForEmail`) — envia link via Resend
+4. Redefinir senha (`sb.auth.updateUser({ password })`) — ativado pelo evento `PASSWORD_RECOVERY`
+5. Logout (`sb.auth.signOut`)
+
+**Erros traduzidos para PT-BR via `traduzirErro(msg)`:**
+```javascript
+function traduzirErro(msg) {
+  if (!msg) return 'Erro desconhecido.';
+  const m = msg.toLowerCase();
+  if (m.includes('invalid login') || m.includes('invalid credentials')) return 'E-mail ou senha incorretos.';
+  if (m.includes('email not confirmed')) return 'Confirme seu e-mail antes de entrar.';
+  if (m.includes('user already registered')) return 'Este e-mail já está cadastrado.';
+  if (m.includes('rate limit') || m.includes('too many')) return 'Muitas tentativas. Aguarde alguns minutos e tente novamente.';
+  if (m.includes('user not found')) return 'E-mail não encontrado.';
+  if (m.includes('weak password') || m.includes('should be at least')) return 'Senha muito fraca. Use pelo menos 6 caracteres.';
+  if (m.includes('network') || m.includes('fetch')) return 'Erro de conexão. Verifique sua internet.';
+  return msg;
+}
+```
+
+**Eye toggle (mostrar/ocultar senha):**
+```javascript
+function togglePass(id, btn) {
+  const inp = document.getElementById(id);
+  const show = inp.type === 'password';
+  inp.type = show ? 'text' : 'password';
+  btn.innerHTML = show ? _eyeOff : _eyeOn;
+}
+```
+
+**onAuthStateChange — eventos relevantes:**
+```javascript
+sb.auth.onAuthStateChange((event, session) => {
+  if (event === 'SIGNED_IN' && session) showHub(session.user);
+  if (event === 'SIGNED_OUT') showAuth();
+  if (event === 'PASSWORD_RECOVERY') {
+    // mostra form-recovery, esconde form-login e form-forgot
+  }
+});
+```
+
+### Clusters do hub (ordem e conteúdo)
+
+```
+FINANCEIRO
+  ├── Visão Financeira  → /visao-financeira/   (ATIVO)
+  ├── Painel KM         → /painel-km/          (ATIVO)
+  └── R$/KM             → /rs-por-km/          (Em breve)
+
+OPERACIONAL
+  ├── Ativação de Frota → /eficiencia-ativacao/ (Em breve)
+  ├── Disponibilidade   → /disponibilidade/     (Em breve)
+  └── Combustível       → /combustivel/arvore-combustivel/ (ATIVO — terá sub-hub quando múltiplos painéis prontos)
+
+PROCESSOS
+  ├── Gerot             → (Em breve)
+  ├── Auditorias        → /auditorias/          (Em breve)
+  └── FCA               → /fca/                 (Em breve)
+
+RESULTADOS
+  ├── Prog. Reconhecimento → (Em breve)
+  ├── Aderência ao FCA     → (Em breve)
+  └── Painel de Metas      → /painel-metas/     (Em breve)
+```
+
+**Financeiro Pessoal (`/financeiro-pessoal/`) NÃO aparece no hub** — é acesso direto pela URL.
+
+### Layout do hub
+```css
+.hub-main { padding: 36px 32px 80px; margin: 0; }  /* sem max-width, alinhado à esquerda */
+.category-header { display:flex; align-items:center; margin-bottom:16px; gap:0; }
+.category-title { font-size:10px; font-weight:700; color:var(--text3); text-transform:uppercase; letter-spacing:1.8px; white-space:nowrap; padding-right:14px; }
+.category-line { height:1px; background:rgba(255,255,255,.05); flex:0 0 auto; }
+.cards-grid { display:grid; grid-template-columns:repeat(3,minmax(200px,300px)); gap:14px; }
+```
+
+**Linha separadora** tem largura igual ao grid de cards — calculada via JS:
+```javascript
+function syncCategoryLines() {
+  document.querySelectorAll('.category').forEach(cat => {
+    const grid = cat.querySelector('.cards-grid');
+    const line = cat.querySelector('.category-line');
+    if (grid && line) line.style.width = grid.offsetWidth + 'px';
+  });
+}
+window.addEventListener('resize', syncCategoryLines);
+setTimeout(syncCategoryLines, 100);
+```
 
 ---
 
@@ -200,6 +318,8 @@ Fundo semi-transparente escuro, sticky, com blur — **não muda no modo claro**
 .card-imp     { font-size:10px; color:var(--text2); margin-top:4px; }
 ```
 
+**Layout dos painéis — sem max-width:** todos os painéis usam `.main{padding:20px 24px;}` sem `max-width` nem `margin:0 auto`, igual ao `visao-financeira`.
+
 ---
 
 ## 5. Filtros multi-select (flags)
@@ -248,9 +368,6 @@ buildMsFilter('ms-ano', anos);
 ## 6. Atualização automática e botão de refresh
 
 ```javascript
-// Botão de refresh — ícone de setas (SVG inline)
-// Chamar atualizar() ao clicar
-
 async function atualizar() {
   set('status-badge', 'Carregando…');
   try {
@@ -262,7 +379,6 @@ async function atualizar() {
   }
 }
 
-// Init ao carregar
 document.addEventListener('DOMContentLoaded', () => { initAccessLog(); atualizar(); });
 ```
 
@@ -309,21 +425,13 @@ Botão lua/sol no `.header-right`. Header e filtros permanecem sempre escuros.
 
 body.light-mode .main { background:#F0F0F0; --text:#1a1a1a; --text2:#444444; --text3:#666666; }
 
-/* Cards: branco sólido + sombra, sem borda */
 body.light-mode .card,
 body.light-mode .kpi-card { background:#FFFFFF!important; border-color:transparent!important; box-shadow:0 2px 12px rgba(0,0,0,.10)!important; --text:#1a1a1a; --text2:#444444; --text3:#555555; }
 
-/* Para painéis com .chart-card e .tbl-section (visao-financeira): */
 body.light-mode .chart-card,
 body.light-mode .tbl-section { background:#FFFFFF!important; border-color:transparent!important; box-shadow:0 2px 12px rgba(0,0,0,.10)!important; --text:#1a1a1a; --text2:#444444; --text3:#555555; }
 
-/* td sem color explícito herda branco do body — forçar escuro */
 body.light-mode .card td { color:var(--text); }
-```
-
-### HTML (antes do `.refresh-btn`)
-```html
-<button class="theme-btn" id="themeBtn" title="Modo claro/escuro"></button>
 ```
 
 ### JS (ao final do `<script>`)
@@ -335,7 +443,6 @@ function applyTheme(t){
   localStorage.setItem('bi_theme', t);
   const b = document.getElementById('themeBtn');
   if(b) b.innerHTML = t==='light' ? _moon : _sun;
-  // re-renderizar charts com novas cores:
   if(typeof lastF !== 'undefined' && lastF) renderCharts(lastF); // visao-financeira
   // if(M.length) renderAll();                                    // financeiro-pessoal
 }
@@ -364,7 +471,7 @@ const getTick = (sz=10) => ({color: document.body.classList.contains('light-mode
 ### Gráfico de linha (referência)
 ```javascript
 const isLight = document.body.classList.contains('light-mode');
-const orcC  = isLight ? '#999999' : '#F1F5F9'; // linha branca → cinza em light
+const orcC  = isLight ? '#999999' : '#F1F5F9';
 const legend = {labels:{color: isLight?'#1a1a1a':'#F1F5F9', font:{family:'Montserrat',size:10}, boxWidth:14}};
 const tooltip = {backgroundColor:'#141B26', titleColor:'#F97316', bodyColor:'#F1F5F9', borderColor:'#1E2D40', borderWidth:1, titleFont:{family:'Montserrat'}, bodyFont:{family:'Montserrat'}};
 
@@ -383,30 +490,16 @@ pointBackgroundColor: data.map((_, i) => highlighted.includes(i) ? '#fff' : cor)
 pointBorderWidth: data.map((_, i) => highlighted.includes(i) ? 3 : 0),
 pointHoverRadius: 8,
 ```
-- Selecionado: `radius:6`, borda branca espessa
-- Não selecionado: `radius:3`, sem borda
-- Legend built-in do Chart.js: `{display:false}` — usar HTML legend próprio
-
-### Gráfico de barra (cluster/% distribuição)
-```javascript
-{data, backgroundColor:'rgba(239,68,68,.7)', borderColor:'#EF4444', borderWidth:1, borderRadius:3}
-// datalabels:
-color: document.body.classList.contains('light-mode') ? '#333333' : '#F1F5F9'
-```
 
 ---
 
 ## 10. Condicional de cores para custos
 
-**Regra:** custos são valores negativos. Delta positivo = gastou mais que referência = **vermelho**. Delta negativo = gastou menos = **verde**.
-
 ```javascript
 // Para custos (ex: Realizado vs Remunerado):
 const delta = rem - real;   // positivo = gastou mais = ruim
-const bad   = delta > 0;    // true = vermelho
-
-// Classes CSS:
-element.className = bad ? 'cr' : 'cg';  // .cr = vermelho, .cg = verde
+const bad   = delta > 0;
+element.className = bad ? 'cr' : 'cg';
 
 // Para receita (oposto):
 const deltaRec = real - ref;
@@ -414,8 +507,8 @@ const badRec   = deltaRec < 0;  // receita menor que referência = ruim
 ```
 
 ```css
-.cr   { color:var(--red)   !important; font-weight:700; }  /* vermelho — desfavorável */
-.cg   { color:var(--green) !important; font-weight:700; }  /* verde — favorável */
+.cr   { color:var(--red)   !important; font-weight:700; }
+.cg   { color:var(--green) !important; font-weight:700; }
 .bad  { color:var(--red)   !important; }
 .good { color:var(--green) !important; }
 ```
@@ -423,8 +516,6 @@ const badRec   = deltaRec < 0;  // receita menor que referência = ruim
 ---
 
 ## 11. Formatação de números
-
-**Regra universal:** sem `R$`, sem casas decimais, exceto percentuais.
 
 ```javascript
 const numFmt = v => {
@@ -434,28 +525,17 @@ const numFmt = v => {
   if(a >= 1e5) return s + Math.round(a/1e3) + 'k';
   return s + Math.round(a).toLocaleString('pt-BR');
 };
-const fmt    = v => numFmt(v);                         // valor principal
-const pctInt = v => (v >= 0 ? '+' : '') + Math.round(v) + '%';  // Δ% em tabelas
-const pctR   = (a, b) => b ? ((a/b-1)*100).toFixed(1)+'%' : '—'; // % relativo
-const pp     = v => v.toFixed(2) + ' pp';             // pontos percentuais
+const fmt    = v => numFmt(v);
+const pctInt = v => (v >= 0 ? '+' : '') + Math.round(v) + '%';
+const pctR   = (a, b) => b ? ((a/b-1)*100).toFixed(1)+'%' : '—';
+const pp     = v => v.toFixed(2) + ' pp';
 ```
-
-| Valor | Resultado |
-|---|---|
-| 1.234.567.890 | `1 bi` |
-| 26.170.000 | `26 mi` |
-| 464.440 | `464k` |
-| 1.234 | `1.234` |
-| +3,5% | `+4%` (pctInt) |
 
 ---
 
 ## 12. Tabelas — padrão clean
 
-Sem linhas de grade entre linhas, sem background nas células, cabeçalhos brancos, linha total com separador.
-
 ```css
-/* Container */
 .tbl-section {
   background:rgba(20,27,38,.55); border:1px solid rgba(255,255,255,.07); border-radius:8px;
   padding:18px 20px 16px; margin-bottom:16px;
@@ -464,33 +544,27 @@ Sem linhas de grade entre linhas, sem background nas células, cabeçalhos branc
 .tbl-title { font-size:16px; font-weight:800; color:var(--text); margin-bottom:3px; }
 .tbl-sub   { font-size:10px; color:var(--text2); margin-bottom:16px; }
 
-/* Tabela */
 table { width:100%; border-collapse:collapse; font-size:12px; }
 
-/* Cabeçalho — branco, sem background, linha inferior sutil */
 thead th {
   background:transparent; color:var(--text); font-size:11px; font-weight:700;
   padding:8px 8px 12px; border-bottom:1px solid rgba(255,255,255,.10);
   text-transform:uppercase; letter-spacing:.5px; white-space:nowrap;
 }
 
-/* Células — sem grade, sem borda entre linhas */
 td { padding:13px 8px; border:none; color:var(--text); white-space:nowrap; }
 tbody tr:hover { background:rgba(255,255,255,.035); }
 
-/* Linha total — separador superior, fonte maior e bold */
 tr.total td {
   color:var(--text); font-weight:700; font-size:12px;
   border-top:2px solid rgba(255,255,255,.12);
   padding-top:14px; padding-bottom:8px;
 }
 tr.total td.conta { font-weight:800; }
-
-/* Números alinhados à direita */
 td.num { text-align:right; }
 ```
 
-**Mobile — proporcional com vmin:**
+**Mobile:**
 ```css
 @media(max-width:768px){
   table { table-layout:fixed; width:100%; font-size:1.6vmin; }
@@ -507,14 +581,25 @@ td.num { text-align:right; }
 2. Atualizar `<title>`, `.brand h1`, `.brand p`
 3. Definir `SHEET_ID` e `SHEET_TAB` com a aba do Google Sheets
 4. Implementar `fetchData()`, `populateFilters()`, `atualizar()`
-5. Todos os padrões acima (1–12) já estão presentes — adaptar ao contexto do painel
-6. Fazer push para `main` — GitHub Pages publica automaticamente
+5. `.main` sem `max-width` nem `margin:0 auto` — layout full-width igual ao visao-financeira
+6. Fazer push via `mcp__github__push_files` (ver nota no topo sobre git push)
 
-**URL resultante:** `https://fortesindicadores-byte.github.io/Projeto-BI-App/{pasta}/`
+**URL resultante:** `https://fortesindicadores-byte.github.io/gestao-em-movimento/{pasta}/`
 
 ---
 
-## Roadmap futuro
+## Roadmap
 
-- Controle de acesso: login, níveis de usuário, log de sessões via **Supabase**
-- Painéis a criar: Painel Km, Eficiência Km/L, Preço R$/L, Consumo CO², R$ por km, Disponibilidade, Reunião Mensal, Auditorias, FCA, Painel de Metas
+**Painéis ativos:** Visão Financeira, Painel KM, Árvore de Combustível, Financeiro Pessoal (acesso direto)
+
+**A criar:**
+- Eficiência Km/L (`/combustivel/eficiencia-kml/`)
+- Preço R$/L (`/combustivel/preco-litro/`)
+- Consumo CO² (`/combustivel/consumo-co2/`)
+- Sub-hub Combustível (`/combustivel/`) — quando múltiplos painéis prontos
+- R$/KM (`/rs-por-km/`)
+- Ativação de Frota (`/eficiencia-ativacao/`)
+- Disponibilidade (`/disponibilidade/`)
+- Gerot, Auditorias, FCA
+- Programa de Reconhecimento, Aderência ao FCA, Painel de Metas
+- Sub-hubs para clusters com múltiplos painéis
