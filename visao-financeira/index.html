@@ -234,6 +234,15 @@ body.light-mode .main{background:#F0F0F0;--text:#1a1a1a;--text2:#444444;--text3:
 body.light-mode .kpi-card,body.light-mode .chart-card,body.light-mode .tbl-section{background:#EDEEF2!important;border-color:transparent!important;box-shadow:0 1px 6px rgba(0,0,0,.09)!important;--text:#1a1a1a;--text2:#444444;--text3:#555555;}
 body.light-mode .chart-leg span:nth-child(2) .leg-dash{border-color:#3B82F6!important;}
 
+/* ── DRILL TABS ── */
+.drill-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;}
+.drill-tabs{display:flex;gap:4px;}
+.drill-tab{padding:4px 12px;font-family:'Montserrat',sans-serif;font-size:9px;font-weight:800;border:1px solid rgba(255,255,255,.1);border-radius:5px;cursor:pointer;background:transparent;color:var(--text2);text-transform:uppercase;letter-spacing:.6px;transition:all .2s;}
+.drill-tab:hover{border-color:rgba(249,115,22,.4);color:var(--orange);}
+.drill-tab.active{background:rgba(249,115,22,.15);border-color:rgba(249,115,22,.4);color:var(--orange);}
+body.light-mode .drill-tab{border-color:rgba(0,0,0,.15);color:#666;}
+body.light-mode .drill-tab.active{background:rgba(217,94,8,.1);border-color:rgba(217,94,8,.4);color:#D95E08;}
+
 /* ── MOBILE RESPONSIVE ── */
 @media(max-width:768px){
   .main{padding:12px 10px;}
@@ -480,7 +489,14 @@ body.light-mode .chart-leg span:nth-child(2) .leg-dash{border-color:#3B82F6!impo
 
   <!-- TABELA PACOTE FROTA -->
   <div class="tbl-section">
-    <div class="tbl-title">Pacote Frota</div>
+    <div class="drill-header">
+      <div class="tbl-title" id="title-pacote">Pacote Frota</div>
+      <div class="drill-tabs">
+        <button class="drill-tab active" data-view="conta" onclick="setDrillView('conta')">Pacote</button>
+        <button class="drill-tab" data-view="uni"   onclick="setDrillView('uni')">Unidade</button>
+        <button class="drill-tab" data-view="proj"  onclick="setDrillView('proj')">Projeto</button>
+      </div>
+    </div>
     <div class="tbl-sub" id="sub-pacote">—</div>
     <div class="tbl-wrap">
       <table class="dre">
@@ -611,6 +627,15 @@ const colI = (el,bad) => { if(el) el.style.color = bad ? 'var(--red)' : 'var(--g
 // ESTADO
 // ═══════════════════════════════════
 let allRows=[], vigs=[], chReceita=null, chAV=null, chReceitaOrc=null, chAVOrc=null, lastF=null;
+let drillView='conta', _lastPacoteArgs=null;
+
+function setDrillView(v){
+  drillView=v;
+  document.querySelectorAll('.drill-tab').forEach(b=>b.classList.toggle('active',b.dataset.view===v));
+  const titles={conta:'Pacote Frota',uni:'Por Unidade',proj:'Por Projeto'};
+  document.getElementById('title-pacote').textContent=titles[v];
+  if(_lastPacoteArgs) renderPacote(..._lastPacoteArgs);
+}
 
 // ═══════════════════════════════════
 // MULTI-SELECT  (estado em Set, busca persistente)
@@ -1027,29 +1052,45 @@ function getYtdVigs(f){
 }
 
 function renderPacote(rows,allRowsRef,f){
-  const m=agg(rows);
+  _lastPacoteArgs=[rows,allRowsRef,f];
   const ytdVigs=getYtdVigs(f);
-  const ytdM=agg(filterMes(allRowsRef,{...f,vig:ytdVigs}));
-  const sorted=[...CONTAS].sort((a,b)=>{
-    const ma=m[a]||{rem:0,real:0},mb=m[b]||{rem:0,real:0};
-    return (ma.real-ma.rem)-(mb.real-mb.rem);
-  });
+  const ytdRows=filterMes(allRowsRef,{...f,vig:ytdVigs});
   let html='',totR=0,totX=0,totYR=0,totYX=0;
-  sorted.forEach(c=>{
-    const mm=m[c]||{rem:0,real:0};
-    const yy=ytdM[c]||{rem:0,real:0};
-    if(mm.rem===0&&mm.real===0) return; // oculta contas sem dados
+  const rowHtml=(label,mm,yy)=>{
+    if(mm.rem===0&&mm.real===0) return '';
     const dB=mm.rem-mm.real, dP=mm.rem?(dB/Math.abs(mm.rem)*100):null;
-    const ytdB=yy.rem-yy.real;
-    const ytdP=yy.rem?(ytdB/Math.abs(yy.rem)*100):null;
+    const ytdB=yy.rem-yy.real, ytdP=yy.rem?(ytdB/Math.abs(yy.rem)*100):null;
     const bad=dB>0, ytdBad=ytdB>0;
     totR+=mm.rem; totX+=mm.real; totYR+=yy.rem; totYX+=yy.real;
-    html+=`<tr><td class="conta">${c}</td><td class="num">${fmt(mm.rem)}</td><td class="num">${fmt(mm.real)}</td><td class="num ${bad?'cr':'cg'}">${fmt(dB)}</td><td class="num ${bad?'cr-t':'cg-t'}">${pctInt(dP)}</td><td class="num ${ytdBad?'cr':'cg'}">${fmt(ytdB)}</td><td class="num ${ytdBad?'cr-t':'cg-t'}">${pctInt(ytdP)}</td></tr>`;
-  });
+    return `<tr><td class="conta">${label}</td><td class="num">${fmt(mm.rem)}</td><td class="num">${fmt(mm.real)}</td><td class="num ${bad?'cr':'cg'}">${fmt(dB)}</td><td class="num ${bad?'cr-t':'cg-t'}">${pctInt(dP)}</td><td class="num ${ytdBad?'cr':'cg'}">${fmt(ytdB)}</td><td class="num ${ytdBad?'cr-t':'cg-t'}">${pctInt(ytdP)}</td></tr>`;
+  };
+  if(drillView==='conta'){
+    const m=agg(rows), ytdM=agg(ytdRows);
+    const sorted=[...CONTAS].sort((a,b)=>{
+      const ma=m[a]||{rem:0,real:0},mb=m[b]||{rem:0,real:0};
+      return (ma.real-ma.rem)-(mb.real-mb.rem);
+    });
+    sorted.forEach(c=>{ html+=rowHtml(c, m[c]||{rem:0,real:0}, ytdM[c]||{rem:0,real:0}); });
+  } else {
+    const isCost=r=>r[C.cta]!=='Receita Líquida';
+    const getKey=r=>drillView==='uni'?getNv3Suffix(r[C.nv3]):getNv3Prefix(r[C.nv3]);
+    const aggBy=rs=>{
+      const g={};
+      rs.filter(isCost).forEach(r=>{
+        const k=getKey(r)||'—';
+        if(!g[k]) g[k]={rem:0,real:0};
+        g[k].rem+=+r[C.rem]||0; g[k].real+=+r[C.real]||0;
+      });
+      return g;
+    };
+    const m=aggBy(rows), ytdM=aggBy(ytdRows);
+    const sorted=Object.entries(m).sort((a,b)=>(a[1].real-a[1].rem)-(b[1].real-b[1].rem));
+    sorted.forEach(([k,mm])=>{ html+=rowHtml(k, mm, ytdM[k]||{rem:0,real:0}); });
+  }
+  const titles={conta:'Total Pacote Frota',uni:'Total Unidades',proj:'Total Projetos'};
   const tdB=totR-totX,tdP=totR?(tdB/Math.abs(totR)*100):null,bT=tdB>0;
-  const ytdTD=totYR-totYX,ytdBT=ytdTD>0;
-  const ytdTDP=totYR?(ytdTD/Math.abs(totYR)*100):null;
-  html+=`<tr class="total"><td class="conta">Total Pacote Frota</td><td class="num">${fmt(totR)}</td><td class="num">${fmt(totX)}</td><td class="num ${bT?'cr':'cg'}">${fmt(tdB)}</td><td class="num ${bT?'cr-t':'cg-t'}">${pctInt(tdP)}</td><td class="num ${ytdBT?'cr':'cg'}">${fmt(ytdTD)}</td><td class="num ${ytdBT?'cr-t':'cg-t'}">${pctInt(ytdTDP)}</td></tr>`;
+  const ytdTD=totYR-totYX,ytdBT=ytdTD>0,ytdTDP=totYR?(ytdTD/Math.abs(totYR)*100):null;
+  html+=`<tr class="total"><td class="conta">${titles[drillView]}</td><td class="num">${fmt(totR)}</td><td class="num">${fmt(totX)}</td><td class="num ${bT?'cr':'cg'}">${fmt(tdB)}</td><td class="num ${bT?'cr-t':'cg-t'}">${pctInt(tdP)}</td><td class="num ${ytdBT?'cr':'cg'}">${fmt(ytdTD)}</td><td class="num ${ytdBT?'cr-t':'cg-t'}">${pctInt(ytdTDP)}</td></tr>`;
   document.getElementById('body-pacote').innerHTML=html;
 }
 
