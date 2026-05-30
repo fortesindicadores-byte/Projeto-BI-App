@@ -457,7 +457,7 @@ body{background:radial-gradient(ellipse at 15% 20%,rgba(249,115,22,.07) 0%,trans
 const SUPABASE_URL = 'https://lozwipoeacpvplgkrxkq.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_ggKEEebc5zjgQDVsF92Upw_6uoLmKe9';
 const ADMIN_EMAIL  = 'fortesindicadores@gmail.com';
-const RESEND_KEY   = 're_FAjTWMKL_NU8ZLyz7z6wwRJf14fshyxt6';
+const NOTIFY_URL   = `https://${SUPABASE_URL.split('//')[1]}/functions/v1/notify-admin`;
 const CALLMEBOT_KEY = ''; // Preencher após ativar WhatsApp Business
 const ADMIN_PHONE  = '5551995204825';
 const HUB_URL      = 'https://fortesindicadores-byte.github.io/gestao-em-movimento/';
@@ -812,33 +812,11 @@ async function removeUser(idx) {
 // ── Notifications ──────────────────────────────────────────────
 
 async function sendAdminEmail(name, email, phone, approvalToken, rejectionToken) {
-  const approveUrl = approvalToken ? `${HUB_URL}?action=approve&token=${approvalToken}` : HUB_URL;
-  const rejectUrl  = rejectionToken ? `${HUB_URL}?action=reject&token=${rejectionToken}` : null;
   try {
-    await fetch('https://api.resend.com/emails', {
+    await fetch(NOTIFY_URL, {
       method: 'POST',
-      headers: { 'Authorization': `Bearer ${RESEND_KEY}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        from: 'BI Hub <onboarding@resend.dev>',
-        to: ADMIN_EMAIL,
-        subject: `[BI Hub] Novo cadastro aguardando aprovação — ${name}`,
-        html: `<div style="font-family:sans-serif;max-width:500px;margin:0 auto;padding:32px;background:#0C1017;color:#F1F5F9;border-radius:12px;border:1px solid #1E2D40;">
-          <div style="margin-bottom:24px;">
-            <span style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:1px;color:#F97316;">Gestão em Movimento · BI Hub</span>
-          </div>
-          <h2 style="font-size:20px;font-weight:800;color:#F1F5F9;margin-bottom:20px;">Novo usuário aguardando aprovação</h2>
-          <table style="width:100%;border-collapse:collapse;margin-bottom:28px;">
-            <tr><td style="padding:8px 0;color:#94A3B8;font-size:12px;width:90px;">Nome</td><td style="padding:8px 0;color:#F1F5F9;font-size:12px;font-weight:600;">${name}</td></tr>
-            <tr><td style="padding:8px 0;color:#94A3B8;font-size:12px;">E-mail</td><td style="padding:8px 0;color:#F1F5F9;font-size:12px;font-weight:600;">${email}</td></tr>
-            <tr><td style="padding:8px 0;color:#94A3B8;font-size:12px;">Celular</td><td style="padding:8px 0;color:#F1F5F9;font-size:12px;font-weight:600;">${phone || '—'}</td></tr>
-          </table>
-          <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:20px;">
-            <a href="${approveUrl}" style="display:inline-block;background:#3BB33B;color:#fff;padding:13px 28px;border-radius:7px;text-decoration:none;font-weight:800;font-size:13px;letter-spacing:.5px;">✅ Aprovar</a>
-            ${rejectUrl ? `<a href="${rejectUrl}" style="display:inline-block;background:#c0392b;color:#fff;padding:13px 28px;border-radius:7px;text-decoration:none;font-weight:800;font-size:13px;letter-spacing:.5px;">❌ Rejeitar</a>` : ''}
-          </div>
-          <p style="font-size:11px;color:#475569;">Ou acesse o <a href="${HUB_URL}" style="color:#F97316;">painel admin</a> para gerenciar.</p>
-        </div>`
-      })
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${SUPABASE_KEY}` },
+      body: JSON.stringify({ name, email, phone, approvalToken, rejectionToken })
     });
   } catch(e) { console.error('Email admin:', e); }
 }
