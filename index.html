@@ -111,6 +111,8 @@ body{background:radial-gradient(ellipse at 15% 20%,rgba(249,115,22,.07) 0%,trans
 .btn-reject{background:rgba(255,102,102,.1);border:1px solid rgba(255,102,102,.2);border-radius:6px;padding:7px 16px;font-family:'Montserrat',sans-serif;font-size:10px;font-weight:800;color:var(--red);cursor:pointer;text-transform:uppercase;letter-spacing:.5px;transition:all .2s;}
 .btn-reject:hover{background:rgba(255,102,102,.2);}
 .admin-empty{text-align:center;padding:48px 24px;color:var(--text3);font-size:12px;}
+.btn-remove{background:transparent;border:1px solid rgba(255,255,255,.1);border-radius:6px;padding:7px 12px;font-family:'Montserrat',sans-serif;font-size:10px;font-weight:700;color:var(--text3);cursor:pointer;text-transform:uppercase;letter-spacing:.5px;transition:all .2s;}
+.btn-remove:hover{border-color:var(--red);color:var(--red);}
 
 /* Mobile */
 @media(max-width:768px){
@@ -752,10 +754,13 @@ function renderAdminUsers() {
   list.innerHTML = filtered.map((u, i) => {
     const initial = (u.name || u.email)[0].toUpperCase();
     const dt = new Date(u.created_at).toLocaleString('pt-BR', {day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'});
+    const idx = allApprovals.indexOf(u);
     const actions = u.status === 'pending'
-      ? `<button class="btn-reject" onclick="rejectUser(${allApprovals.indexOf(u)})">Rejeitar</button>
-         <button class="btn-approve" id="approve-btn-${u.id}" onclick="approveUser(${allApprovals.indexOf(u)})">Aprovar</button>`
-      : `<span class="badge on">Aprovado</span>`;
+      ? `<button class="btn-remove" onclick="removeUser(${idx})">Remover</button>
+         <button class="btn-reject" onclick="rejectUser(${idx})">Rejeitar</button>
+         <button class="btn-approve" id="approve-btn-${u.id}" onclick="approveUser(${idx})">Aprovar</button>`
+      : `<button class="btn-remove" onclick="removeUser(${idx})">Remover</button>
+         <span class="badge on">Aprovado</span>`;
     return `<div class="user-card">
       <div class="user-avatar">${initial}</div>
       <div class="user-info">
@@ -785,6 +790,14 @@ async function rejectUser(idx) {
   const u = allApprovals[idx];
   if (!confirm(`Rejeitar acesso de ${u.name || u.email}?`)) return;
   await sb.from('user_approvals').update({ status: 'rejected' }).eq('id', u.id);
+  await loadAdminData();
+}
+
+async function removeUser(idx) {
+  const u = allApprovals[idx];
+  if (!confirm(`Remover completamente ${u.name || u.email}?\n\nO usuário terá que se cadastrar novamente.`)) return;
+  const { error } = await sb.rpc('delete_user_by_id', { p_user_id: u.user_id });
+  if (error) { alert('Erro ao remover: ' + error.message); return; }
   await loadAdminData();
 }
 
