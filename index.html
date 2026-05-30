@@ -481,9 +481,17 @@ async function doLogin() {
   if (!email || !pass) { setMsg('Preencha e-mail e senha.', 'error'); return; }
   const btn = document.getElementById('btn-login');
   btn.disabled = true; btn.textContent = 'Entrando…';
-  const { error } = await sb.auth.signInWithPassword({ email, password: pass });
-  btn.disabled = false; btn.textContent = 'Entrar';
-  if (error) setMsg(traduzirErro(error.message), 'error');
+  try {
+    const { error } = await Promise.race([
+      sb.auth.signInWithPassword({ email, password: pass }),
+      new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), 10000))
+    ]);
+    if (error) setMsg(traduzirErro(error.message), 'error');
+  } catch(e) {
+    setMsg(e.message === 'timeout' ? 'Tempo esgotado. Tente novamente.' : traduzirErro(e.message), 'error');
+  } finally {
+    btn.disabled = false; btn.textContent = 'Entrar';
+  }
 }
 
 async function doRegister() {
