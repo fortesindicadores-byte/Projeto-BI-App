@@ -205,6 +205,23 @@ body{background:radial-gradient(ellipse at 15% 20%,rgba(249,115,22,.07) 0%,trans
   </div>
 </div>
 
+<!-- Action Result Screen (approve/reject via link) -->
+<div class="auth-screen" id="action-screen">
+  <div class="auth-card" style="text-align:center;">
+    <div class="auth-logo">
+      <div class="auth-logo-mark">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+      </div>
+      <h1>GESTÃO EM MOVIMENTO</h1>
+      <p>Business Intelligence · Frota</p>
+    </div>
+    <div id="action-icon" style="width:56px;height:56px;border-radius:16px;display:flex;align-items:center;justify-content:center;margin:0 auto 20px;"></div>
+    <h2 id="action-title" style="font-size:17px;font-weight:800;color:var(--text);margin-bottom:10px;"></h2>
+    <p id="action-desc" style="font-size:12px;color:var(--text2);line-height:1.7;margin-bottom:24px;"></p>
+    <button class="auth-btn" id="action-hub-btn" style="margin-top:4px;">Ir ao Hub</button>
+  </div>
+</div>
+
 <!-- Hub Screen -->
 <div class="hub-screen" id="hub-screen">
   <header class="hub-header">
@@ -451,7 +468,7 @@ let isRegistering  = false;
 // ── Screen management ──────────────────────────────────────────
 
 function hideAll() {
-  ['loading','auth-screen','pending-screen','hub-screen','admin-screen']
+  ['loading','auth-screen','pending-screen','action-screen','hub-screen','admin-screen']
     .forEach(id => document.getElementById(id).style.display = 'none');
 }
 
@@ -487,39 +504,93 @@ function showAdmin() {
 
 function goToHub() { showHub(currentUser); }
 
+function showActionResult(success, action, name) {
+  hideAll();
+  const isApprove = action === 'approve';
+  const icon  = document.getElementById('action-icon');
+  const title = document.getElementById('action-title');
+  const desc  = document.getElementById('action-desc');
+  const btn   = document.getElementById('action-hub-btn');
+  if (success) {
+    icon.style.background = isApprove ? 'rgba(59,179,59,.1)' : 'rgba(255,102,102,.1)';
+    icon.style.border     = isApprove ? '1px solid rgba(59,179,59,.2)' : '1px solid rgba(255,102,102,.2)';
+    icon.innerHTML = isApprove
+      ? `<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#3BB33B" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>`
+      : `<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#FF6666" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>`;
+    title.textContent = isApprove ? `${name} aprovado!` : `Acesso de ${name} rejeitado`;
+    desc.textContent  = isApprove
+      ? 'O usuário já pode acessar o portal.'
+      : 'O acesso foi negado com sucesso.';
+  } else {
+    icon.style.background = 'rgba(255,102,102,.1)';
+    icon.style.border     = '1px solid rgba(255,102,102,.2)';
+    icon.innerHTML = `<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#FF6666" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>`;
+    title.textContent = 'Link inválido ou expirado';
+    desc.textContent  = 'Este link já foi usado ou não existe. Acesse o painel admin para gerenciar usuários.';
+  }
+  btn.onclick = () => { window.location.href = HUB_URL; };
+  document.getElementById('action-screen').style.display = 'flex';
+}
+
+async function handleActionToken(action, token) {
+  window.history.replaceState({}, '', window.location.pathname);
+  const fnName = action === 'approve' ? 'approve_by_token' : 'reject_by_token';
+  try {
+    const { data, error } = await sb.rpc(fnName, { p_token: token });
+    if (error || !data || data.status !== 'ok') { showActionResult(false, action, ''); return; }
+    if (action === 'approve') sendUserWhatsApp(data.phone, data.name);
+    showActionResult(true, action, data.name || data.email);
+  } catch(e) {
+    console.error('handleActionToken:', e);
+    showActionResult(false, action, '');
+  }
+}
+
 // ── Approval check ─────────────────────────────────────────────
 
 async function checkApproval(user) {
   if (user.email === ADMIN_EMAIL) { showHub(user); return; }
-
-  const { data } = await sb.from('user_approvals').select('status').eq('user_id', user.id).single();
-
-  if (!data) {
-    await sb.from('user_approvals').upsert(
-      { user_id: user.id, email: user.email,
-        name: user.user_metadata?.name || '',
-        phone: user.user_metadata?.phone || '',
-        status: 'pending' },
-      { onConflict: 'user_id' }
-    );
-    showPending();
-    return;
-  }
-
-  if (data.status === 'approved') showHub(user);
-  else if (data.status === 'pending') showPending();
-  else {
-    setMsg('Seu acesso foi negado. Entre em contato com o administrador.', 'error');
-    await sb.auth.signOut();
+  try {
+    const { data } = await sb.from('user_approvals').select('status').eq('user_id', user.id).single();
+    if (!data) {
+      await sb.from('user_approvals').upsert(
+        { user_id: user.id, email: user.email,
+          name: user.user_metadata?.name || '',
+          phone: user.user_metadata?.phone || '',
+          status: 'pending' },
+        { onConflict: 'user_id' }
+      );
+      showPending();
+      return;
+    }
+    if (data.status === 'approved') showHub(user);
+    else if (data.status === 'pending') showPending();
+    else {
+      setMsg('Seu acesso foi negado. Entre em contato com o administrador.', 'error');
+      await sb.auth.signOut();
+    }
+  } catch(e) {
+    console.error('checkApproval:', e);
+    showAuth();
+    setMsg('Erro ao verificar acesso. Tente novamente.', 'error');
   }
 }
 
 // ── Auth init ──────────────────────────────────────────────────
 
 async function init() {
-  const { data: { session } } = await sb.auth.getSession();
-  if (session) await checkApproval(session.user);
-  else showAuth();
+  try {
+    const params = new URLSearchParams(window.location.search);
+    const action = params.get('action');
+    const token  = params.get('token');
+    if (action && token) { await handleActionToken(action, token); return; }
+    const { data: { session } } = await sb.auth.getSession();
+    if (session) await checkApproval(session.user);
+    else showAuth();
+  } catch(e) {
+    console.error('init:', e);
+    showAuth();
+  }
 }
 
 sb.auth.onAuthStateChange(async (event, session) => {
@@ -585,8 +656,11 @@ async function doRegister() {
       { user_id: data.user.id, email, name, phone, status: 'pending' },
       { onConflict: 'user_id' }
     );
-    sendAdminEmail(name, email, phone);
-    sendAdminWhatsApp(name, email, phone);
+    const { data: tok } = await sb.from('user_approvals')
+      .select('approval_token, rejection_token')
+      .eq('user_id', data.user.id).single();
+    sendAdminEmail(name, email, phone, tok?.approval_token, tok?.rejection_token);
+    sendAdminWhatsApp(name, email, phone, tok?.approval_token, tok?.rejection_token);
   }
   isRegistering = false;
   btn.disabled = false; btn.textContent = 'Criar conta';
@@ -716,7 +790,9 @@ async function rejectUser(idx) {
 
 // ── Notifications ──────────────────────────────────────────────
 
-async function sendAdminEmail(name, email, phone) {
+async function sendAdminEmail(name, email, phone, approvalToken, rejectionToken) {
+  const approveUrl = approvalToken ? `${HUB_URL}?action=approve&token=${approvalToken}` : HUB_URL;
+  const rejectUrl  = rejectionToken ? `${HUB_URL}?action=reject&token=${rejectionToken}` : null;
   try {
     await fetch('https://api.resend.com/emails', {
       method: 'POST',
@@ -735,16 +811,25 @@ async function sendAdminEmail(name, email, phone) {
             <tr><td style="padding:8px 0;color:#94A3B8;font-size:12px;">E-mail</td><td style="padding:8px 0;color:#F1F5F9;font-size:12px;font-weight:600;">${email}</td></tr>
             <tr><td style="padding:8px 0;color:#94A3B8;font-size:12px;">Celular</td><td style="padding:8px 0;color:#F1F5F9;font-size:12px;font-weight:600;">${phone || '—'}</td></tr>
           </table>
-          <a href="${HUB_URL}" style="display:inline-block;background:#F97316;color:#fff;padding:12px 28px;border-radius:7px;text-decoration:none;font-weight:800;font-size:12px;text-transform:uppercase;letter-spacing:.7px;">Acessar painel admin</a>
+          <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:20px;">
+            <a href="${approveUrl}" style="display:inline-block;background:#3BB33B;color:#fff;padding:13px 28px;border-radius:7px;text-decoration:none;font-weight:800;font-size:13px;letter-spacing:.5px;">✅ Aprovar</a>
+            ${rejectUrl ? `<a href="${rejectUrl}" style="display:inline-block;background:#c0392b;color:#fff;padding:13px 28px;border-radius:7px;text-decoration:none;font-weight:800;font-size:13px;letter-spacing:.5px;">❌ Rejeitar</a>` : ''}
+          </div>
+          <p style="font-size:11px;color:#475569;">Ou acesse o <a href="${HUB_URL}" style="color:#F97316;">painel admin</a> para gerenciar.</p>
         </div>`
       })
     });
   } catch(e) { console.error('Email admin:', e); }
 }
 
-async function sendAdminWhatsApp(name, email, phone) {
+async function sendAdminWhatsApp(name, email, phone, approvalToken, rejectionToken) {
   if (!CALLMEBOT_KEY) return;
-  const msg = encodeURIComponent(`[BI Hub] Novo cadastro pendente!\n👤 ${name}\n📧 ${email}\n📱 ${phone || '—'}\n\nAcesse para aprovar: ${HUB_URL}`);
+  const approveUrl = approvalToken ? `${HUB_URL}?action=approve&token=${approvalToken}` : HUB_URL;
+  const rejectUrl  = rejectionToken ? `${HUB_URL}?action=reject&token=${rejectionToken}` : '';
+  const msg = encodeURIComponent(
+    `[BI Hub] Novo cadastro pendente!\n👤 ${name}\n📧 ${email}\n📱 ${phone || '—'}\n\n` +
+    `✅ Aprovar: ${approveUrl}\n❌ Rejeitar: ${rejectUrl}`
+  );
   try {
     await fetch(`https://api.callmebot.com/whatsapp.php?phone=${ADMIN_PHONE}&text=${msg}&apikey=${CALLMEBOT_KEY}`);
   } catch(e) { console.error('WhatsApp admin:', e); }
