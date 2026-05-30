@@ -71,6 +71,15 @@ body.light-mode .tbl-section{background:#EDEEF2!important;border-color:transpare
 body.light-mode .chart-leg span:nth-child(2) .leg-dash{border-color:#1a1a1a!important;}
 body.light-mode .tbl-section td{color:var(--text);}
 
+/* ── Drill Tabs ── */
+.drill-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;}
+.drill-tabs{display:flex;gap:4px;}
+.drill-tab{padding:4px 12px;font-family:'Montserrat',sans-serif;font-size:9px;font-weight:800;border:1px solid rgba(255,255,255,.1);border-radius:5px;cursor:pointer;background:transparent;color:var(--text2);text-transform:uppercase;letter-spacing:.6px;transition:all .2s;}
+.drill-tab:hover{border-color:rgba(249,115,22,.4);color:var(--orange);}
+.drill-tab.active{background:rgba(249,115,22,.15);border-color:rgba(249,115,22,.4);color:var(--orange);}
+body.light-mode .drill-tab{border-color:rgba(0,0,0,.15);color:#666;}
+body.light-mode .drill-tab.active{background:rgba(217,94,8,.1);border-color:rgba(217,94,8,.4);color:#D95E08;}
+
 /* ── Filters ── */
 .header-filters{flex-basis:100%;order:3;margin-top:10px;display:flex;gap:10px;flex-wrap:wrap;align-items:flex-start;}
 .filter-group{display:flex;flex-direction:column;gap:3px;}
@@ -340,7 +349,13 @@ body.light-mode th.sep-imp,body.light-mode td.sep-imp{border-right-color:rgba(0,
 
   <!-- Tabela -->
   <div class="tbl-section">
-    <div class="tbl-title">Dispersão por Unidade</div>
+    <div class="drill-header">
+      <div class="tbl-title" id="title-disp">Dispersão por Unidade</div>
+      <div class="drill-tabs">
+        <button class="drill-tab active" data-view="und" onclick="setDrillKM('und')">Unidade</button>
+        <button class="drill-tab" data-view="proj" onclick="setDrillKM('proj')">Projeto</button>
+      </div>
+    </div>
     <div class="tbl-sub">Ranqueado pelo Δ KM do mês · positivo = realizou mais que o remunerado</div>
     <div style="overflow-x:auto;">
       <table>
@@ -373,6 +388,14 @@ const SHEET_TAB = 'Dispersão de km';
 
 let ALL = [];
 let chEvo = null, chImp = null, chKmFrota = null, chKmViagem = null, chProjKm = null, chProjPct = null;
+let drillKM = 'und', _lastTableArgs = null;
+
+function setDrillKM(v) {
+  drillKM = v;
+  document.querySelectorAll('.drill-tab').forEach(b => b.classList.toggle('active', b.dataset.view === v));
+  document.getElementById('title-disp').textContent = v === 'und' ? 'Dispersão por Unidade' : 'Dispersão por Projeto';
+  if (_lastTableArgs) renderTable(..._lastTableArgs);
+}
 
 /* ── Formatters ── */
 const numFmt = v => {
@@ -647,12 +670,14 @@ function render() {
 }
 
 function renderTable(F, YTD) {
-  const units = [...new Set(F.map(r => r.und))];
+  _lastTableArgs = [F, YTD];
+  const getKey = r => drillKM === 'proj' ? r.proj : r.und;
+  const units = [...new Set(F.map(getKey))].filter(Boolean);
   const sign  = v => v >= 0 ? '+' : '';
 
   const rows = units.map(und => {
-    const m = F.filter(r => r.und === und);
-    const y = YTD.filter(r => r.und === und);
+    const m = F.filter(r => getKey(r) === und);
+    const y = YTD.filter(r => getKey(r) === und);
 
     const rem   = m.reduce((s, r) => s + r.rem, 0);
     const real  = m.reduce((s, r) => s + r.real, 0);
@@ -695,7 +720,7 @@ function renderTable(F, YTD) {
   const tYImp  = rows.reduce((s, u) => s + u.ytdImp, 0);
 
   document.getElementById('tbl-foot').innerHTML = `<tr class="total">
-    <td class="conta">TOTAL</td>
+    <td class="conta">${drillKM === 'proj' ? 'TOTAL PROJETOS' : 'TOTAL UNIDADES'}</td>
     <td class="num">${fmt(tRem)}</td>
     <td class="num">${fmt(tReal)}</td>
     <td class="num ${tDelta>0?'cr':'cg'}">${sign(tDelta)}${fmt(tDelta)}</td>
