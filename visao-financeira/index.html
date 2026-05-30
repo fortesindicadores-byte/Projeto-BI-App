@@ -570,6 +570,7 @@ const PACOTES_MAP = {
 };
 const getPac = r => PACOTES_MAP[r[C.cta]] || '-';
 const getNv3Prefix = v => v ? v.split('-')[0].trim() : v;
+const getNv3Suffix = v => v && v.includes('-') ? v.split('-').slice(1).join('-').trim() : (v||'');
 
 const CONTAS = [
   'Combustíveis','Estorno ICMS','Manutenção de Carrocerias',
@@ -763,7 +764,7 @@ function populateFilters(rows){
   buildMsFilter('ms-ano', anos);
   buildVigMsFilter(vigs);
 
-  const unis=[...new Set(rows.map(r=>r[C.uni]).filter(Boolean))].sort();
+  const unis=[...new Set(rows.map(r=>getNv3Suffix(r[C.nv3])).filter(Boolean))].sort();
   const hasVal = r => Math.abs(+r[C.rem])>0 || Math.abs(+r[C.real])>0;
   const hasCost = r => hasVal(r) && r[C.cta] !== 'Receita Líquida';
   const nv3s=[...new Set(rows.filter(hasCost).map(r=>getNv3Prefix(r[C.nv3])).filter(Boolean))].sort();
@@ -788,7 +789,7 @@ function getF(){
 }
 
 function applyFilters(r, f){
-  if(f.uni.length && !f.uni.includes(r[C.uni]))   return false;
+  if(f.uni.length && !f.uni.includes(getNv3Suffix(r[C.nv3])))   return false;
   // Nível 3 e Pacote: Receita Líquida sempre passa (necessária para AV)
   if(f.nv3.length && !f.nv3.includes(getNv3Prefix(r[C.nv3])))   return false;
   if(f.pac.length && r[C.cta] !== 'Receita Líquida' && !f.pac.includes(getPac(r)))   return false;

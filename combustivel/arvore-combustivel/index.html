@@ -575,6 +575,7 @@ function renderStatic() {
 // FILTROS
 // ═══════════════════════════════════════════════
 const getNv3Prefix = v => v ? v.split('-')[0].trim() : v;
+const getNv3Suffix = v => v && v.includes('-') ? v.split('-').slice(1).join('-').trim() : (v||'');
 function getMsValues(id){ const w=document.getElementById(id); return w&&w._sel?[...w._sel]:[]; }
 function getFilters(){ return { ano:getMsValues('ms-ano'), vigencia:getMsValues('ms-vig'), unidade:getMsValues('ms-uni'), nivel3:getMsValues('ms-nv3') }; }
 function filtrarRows(rows) {
@@ -582,7 +583,7 @@ function filtrarRows(rows) {
   return rows.filter(r =>
     (f.ano.length     ===0 || f.ano.includes(String(r.vigencia).slice(-4)))      &&
     (f.vigencia.length===0 || f.vigencia.includes(String(r.vigencia))) &&
-    (f.unidade.length ===0 || f.unidade.includes(String(r.unidade)))  &&
+    (f.unidade.length ===0 || f.unidade.includes(getNv3Suffix(String(r.nivel3))))  &&
     (f.nivel3.length  ===0 || f.nivel3.includes(getNv3Prefix(String(r.nivel3))))
   );
 }
@@ -734,7 +735,7 @@ async function atualizar() {
       buildMsFilter('ms-ano', anos);
       buildVigMsFilter(json.vigencias);
     }
-    if (json.unidades)  buildMsFilter('ms-uni', json.unidades);
+    if (json.nivel3s)   buildMsFilter('ms-uni', [...new Set(json.nivel3s.map(v=>getNv3Suffix(v)))].filter(Boolean).sort());
     if (json.nivel3s)   buildMsFilter('ms-nv3', [...new Set(json.nivel3s.map(v=>getNv3Prefix(v)))].sort());
 
     const k = calcular(filtrarRows(allRows));
