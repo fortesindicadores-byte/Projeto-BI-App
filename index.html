@@ -587,9 +587,13 @@ async function init() {
     const action = params.get('action');
     const token  = params.get('token');
     if (action && token) { await handleActionToken(action, token); return; }
-    const { data: { session } } = await sb.auth.getSession();
+    const result = await Promise.race([
+      sb.auth.getSession(),
+      new Promise(res => setTimeout(() => res({ data: { session: null } }), 5000))
+    ]);
+    const session = result?.data?.session;
     if (session) await checkApproval(session.user);
-    else showAuth();
+    else { try { await sb.auth.signOut(); } catch(_) {} showAuth(); }
   } catch(e) {
     console.error('init:', e);
     showAuth();
