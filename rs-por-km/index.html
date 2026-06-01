@@ -107,6 +107,9 @@ body{
 .ms-opt:hover{background:rgba(255,255,255,.05);color:var(--text);}
 .ms-opt.all-opt{border-bottom:1px solid #1e2d40;color:var(--text);font-weight:700;}
 .ms-opt input[type=checkbox]{accent-color:var(--orange);cursor:pointer;width:14px;height:14px;flex-shrink:0;}
+.ms-only{margin-left:auto;font-size:8px;color:var(--orange);padding:1px 5px;border-radius:2px;cursor:pointer;white-space:nowrap;flex-shrink:0;opacity:0;transition:opacity .12s;}
+.ms-opt:hover .ms-only{opacity:1;}
+.ms-only:hover{background:rgba(249,115,22,.2);}
 .ms-list::-webkit-scrollbar{width:4px;}
 .ms-list::-webkit-scrollbar-track{background:transparent;}
 .ms-list::-webkit-scrollbar-thumb{background:#2a3a50;border-radius:2px;}
@@ -168,7 +171,7 @@ body{
 .chart-leg .leg-dash{border-top:2px dashed;}
 .chart-leg .leg-sq{display:inline-block;width:10px;height:10px;border:1.5px solid var(--text2);border-radius:1px;vertical-align:middle;margin-right:1px;}
 .leg-rem-dash{border-color:#F1F5F9;}
-body.light-mode .leg-rem-dash{border-color:#475569;}
+body.light-mode .leg-rem-dash{border-color:#000000;}
 .chart-wrap{position:relative;height:230px;}
 
 /* ── TABLES ── */
@@ -496,9 +499,6 @@ body.light-mode .kpi-card,body.light-mode .chart-card,body.light-mode .tbl-secti
 </main>
 
 <script>
-// ═══════════════════════════════════
-// CONFIG
-// ═══════════════════════════════════
 const SHEET_ID  = '1qcTy2ppLCGBKKqZCxCYWCTL9kTAuWfHBMyBfWJOyih8';
 const SHEET_TAB = 'Consolidado DRE';
 const C = { orc:0, rem:1, real:2, kmRem:5, kmReal:6, vig:9, uni:10, nv3:11, cta:12 };
@@ -541,9 +541,6 @@ const CONTAS_ALIAS = {
   'Pneus e Camaras'                      : 'Pneus Novos',
 };
 
-// ═══════════════════════════════════
-// FORMATADORES
-// ═══════════════════════════════════
 const fmtBrl  = v => { const neg=+v<0,a=Math.abs(+v); let s; if(a>=1e9) s=(a/1e9).toFixed(2)+' bi'; else if(a>=1e6) s=(a/1e6).toFixed(2)+' mi'; else if(a>=1e5) s=(a/1e3).toFixed(2)+'k'; else s=Math.round(a).toLocaleString('pt-BR'); return (neg?'-':'')+s; };
 const fmtBrlD = v => (+v>=0?'+':'')+fmtBrl(v);
 const fmtKm   = v => { const neg=+v<0,a=Math.abs(+v); let s; if(a>=1e6) s=(a/1e6).toFixed(2)+' mi'; else if(a>=1e3) s=Math.round(a/1e3)+'k'; else s=Math.round(a).toLocaleString('pt-BR'); return (neg?'-':'')+s; };
@@ -556,15 +553,9 @@ const rsKmCard= v => v==null||!isFinite(v)?'—':'R$ '+rsKm(v)+'/km';
 const set     = (id,val) => { const e=document.getElementById(id); if(e) e.textContent=val; };
 const colI    = (el,bad) => { if(el) el.style.color=bad?'var(--red)':'var(--green)'; };
 
-// ═══════════════════════════════════
-// ESTADO
-// ═══════════════════════════════════
 let allRows=[], vigs=[], chKm=null, chRsKm=null, lastF=null;
 
-// ═══════════════════════════════════
-// MULTI-SELECT
-// ═══════════════════════════════════
-function _buildMs(wrap, renderFn){
+function _buildMs(wrap, renderFn, getAllItemsFn){
   if(!(wrap._sel instanceof Set)) wrap._sel=new Set();
   const sel=wrap._sel;
   const list=wrap.querySelector('.ms-list');
@@ -574,11 +565,27 @@ function _buildMs(wrap, renderFn){
     const box=e.target;
     if(box.classList.contains('ms-all')){
       sel.clear();
-      list.querySelectorAll('input:not(.ms-all)').forEach(b=>b.checked=false);
+    } else if(sel.size===0){
+      if(!box.checked){
+        const all=getAllItemsFn?getAllItemsFn():[];
+        all.forEach(v=>{ if(v!==box.dataset.v) sel.add(v); });
+      }
     } else {
-      box.checked ? sel.add(box.dataset.v) : sel.delete(box.dataset.v);
+      if(box.checked) sel.add(box.dataset.v);
+      else sel.delete(box.dataset.v);
+      if(getAllItemsFn){
+        const all=getAllItemsFn();
+        if(all.length>0&&all.every(v=>sel.has(v))) sel.clear();
+      }
     }
-    syncBadge(wrap); atualizar();
+    render(srch.value); atualizar();
+  });
+  list.addEventListener('click',e=>{
+    const only=e.target.closest('.ms-only');
+    if(!only) return;
+    e.preventDefault(); e.stopPropagation();
+    sel.clear(); sel.add(only.dataset.v);
+    render(srch.value); atualizar();
   });
   srch.addEventListener('input',()=>render(srch.value));
   srch.addEventListener('click',e=>e.stopPropagation());
@@ -590,10 +597,11 @@ function buildMsFilter(id, items){
   _buildMs(wrap,(list,sel,q)=>{
     const f=q.toLowerCase();
     const shown=items.filter(v=>v.toLowerCase().includes(f));
+    const allChk=sel.size===0;
     list.innerHTML=
-      (!q?`<label class="ms-opt all-opt"><input type="checkbox" class="ms-all" ${sel.size===0?'checked':''}> Todos</label>`:'')+
-      shown.map(v=>`<label class="ms-opt"><input type="checkbox" data-v="${v}" ${sel.has(v)?'checked':''}> ${v}</label>`).join('');
-  });
+      (!q?`<label class="ms-opt all-opt"><input type="checkbox" class="ms-all" ${allChk?'checked':''}> Todos</label>`:'')+
+      shown.map(v=>`<label class="ms-opt"><input type="checkbox" data-v="${v}" ${allChk||sel.has(v)?'checked':''}> ${v}<span class="ms-only" data-v="${v}">only</span></label>`).join('');
+  }, ()=>items);
 }
 
 function buildVigMsFilter(vigList){
@@ -665,9 +673,6 @@ document.addEventListener('click',e=>{
     document.querySelectorAll('.ms-panel.open').forEach(p=>p.classList.remove('open'));
 });
 
-// ═══════════════════════════════════
-// FETCH
-// ═══════════════════════════════════
 async function fetchData(){
   const url=`https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:json&sheet=${encodeURIComponent(SHEET_TAB)}`;
   const res=await fetch(url);
@@ -676,26 +681,20 @@ async function fetchData(){
   return json.table.rows.map(r=>r.c.map(c=>c&&c.v!=null?c.v:null));
 }
 
-// ═══════════════════════════════════
-// VIGÊNCIA
-// ═══════════════════════════════════
 function parseVig(v){
   if(!v) return null;
   if(v instanceof Date) return new Date(v.getFullYear(),v.getMonth(),1);
   if(typeof v==='string'){
     const gviz=v.match(/^Date\((\d+),(\d+),\d+\)$/);
     if(gviz) return new Date(+gviz[1],+gviz[2],1);
-    if(v.includes('/')){ const [d,m,y]=v.split('/'); return new Date(+y,+m-1,1); }
+    if(v.includes('/')){ const [d,m,y]=v.split('/'); return new Date(+y,+m-1,1); }
   }
   return null;
 }
 const vigKey   = d => d?`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`:'' ;
 const MESES    = ['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
-const vigLabel = d => d?`${MESES[d.getMonth()]}/${String(d.getFullYear()).slice(2)}`: '';
+const vigLabel = d => d?`${MESES[d.getMonth()]}/${String(d.getFullYear()).slice(2)}`: '';
 
-// ═══════════════════════════════════
-// FILTROS
-// ═══════════════════════════════════
 function populateFilters(rows){
   const vMap=new Map();
   rows.forEach(r=>{ const d=parseVig(r[C.vig]); if(d) vMap.set(vigKey(d),d); });
@@ -744,9 +743,6 @@ function filterMes(rows,f,vigOverride){
   });
 }
 
-// ═══════════════════════════════════
-// AGREGAÇÃO
-// ═══════════════════════════════════
 function agg(rows){
   const m={};
   rows.forEach(r=>{
@@ -782,9 +778,6 @@ function sumCusto(aggMap){
     .reduce((a,[,v])=>({orc:a.orc+v.orc,rem:a.rem+v.rem,real:a.real+v.real}),{orc:0,rem:0,real:0});
 }
 
-// ═══════════════════════════════════
-// RENDER HERO + CARDS
-// ═══════════════════════════════════
 function renderCards(activeRows, prevRows){
   const km  = sumKm(activeRows);
   const kmP = sumKm(prevRows);
@@ -859,9 +852,6 @@ function renderCards(activeRows, prevRows){
   if(eImp){eImp.textContent=imp!=null?fmtBrlD(imp):'—'; colI(eImp,imp>0);}
 }
 
-// ═══════════════════════════════════
-// RENDER GRÁFICOS
-// ═══════════════════════════════════
 function renderCharts(f){
   let vy,maxM,hlIdxs=[];
   if(!f.vig||f.vig.length===0){
@@ -912,7 +902,7 @@ function renderCharts(f){
   const mkBg = (data,c)=>data.map((v,i)=>v!=null?(hlIdxs.includes(i)?'#fff':c):'transparent');
   const mkBw = data=>data.map((v,i)=>v!=null?(hlIdxs.includes(i)?2:0):0);
   const mkBc = (data,c)=>data.map(v=>v!=null?c:'transparent');
-  const remC = isLight?'#475569':'#F1F5F9';
+  const remC = isLight?'#000000':'#F1F5F9';
 
   function dsReal(data,label,refData){
     var hasFocus=hlIdxs&&hlIdxs.length>0;
@@ -960,7 +950,7 @@ function renderCharts(f){
       if(!meta||meta.hidden||!hl||!hl.length) return;
       var ctx=chart.ctx; ctx.save();
       ctx.font='700 11px Montserrat,sans-serif';
-      ctx.fillStyle='#F1F5F9';ctx.textAlign='center';ctx.textBaseline='bottom';
+      ctx.fillStyle=isLight?'#000000':'#F1F5F9';ctx.textAlign='center';ctx.textBaseline='bottom';
       ds.data.forEach(function(val,i){
         if(val==null||hl.indexOf(i)===-1) return;
         var pt=meta.data[i]; if(!pt) return;
@@ -982,9 +972,6 @@ function renderCharts(f){
   chRsKm=new Chart(document.getElementById('ch-rskm'),{type:'line',data:{labels:lbls,datasets:[dsRealRs(dRsReal,'R$/KM REAL',dRsRem),dsRem(dRsRem,'R$/KM REM')]},plugins:[mkLabelPlugin(cbRs,hlIdxs)],options:chartOpts(scRs)});
 }
 
-// ═══════════════════════════════════
-// RENDER R$/KM POR CONTA
-// ═══════════════════════════════════
 function getYtdVigs(f){
   let maxYear,maxMonth;
   if(f.vig&&f.vig.length>0){
@@ -1044,9 +1031,6 @@ function renderRsKmTable(rows,allRowsRef,f){
   document.getElementById('body-rskm').innerHTML=html;
 }
 
-// ═══════════════════════════════════
-// RENDER ANÁLISE
-// ═══════════════════════════════════
 function renderAnalise(rows){
   const ag=agg(rows);
   const km=sumKm(rows);
@@ -1078,9 +1062,6 @@ function renderAnalise(rows){
   document.getElementById('body-analise').innerHTML=html;
 }
 
-// ═══════════════════════════════════
-// ATUALIZAR
-// ═══════════════════════════════════
 function atualizar(){
   const f=getF();
   lastF=f;
@@ -1110,9 +1091,6 @@ function atualizar(){
   set('status-badge',`Atualizado ${now.toLocaleDateString('pt-BR')} ${now.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})}`);
 }
 
-// ═══════════════════════════════════
-// INIT
-// ═══════════════════════════════════
 async function init(){
   try{
     let rows=await fetchData();
