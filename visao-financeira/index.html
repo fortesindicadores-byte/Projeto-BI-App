@@ -615,7 +615,6 @@ let allRows=[], vigs=[], chReceita=null, chAV=null, chReceitaOrc=null, chAVOrc=n
 // MULTI-SELECT  (estado em Set, busca persistente)
 // ═══════════════════════════════════
 function _buildMs(wrap, renderFn){
-  // preserva _sel pré-populado (ex: buildVigMsFilter pré-seleciona o último mês)
   if(!(wrap._sel instanceof Set)) wrap._sel=new Set();
   const sel=wrap._sel;
   const list=wrap.querySelector('.ms-list');
@@ -651,7 +650,6 @@ function buildVigMsFilter(vigList){
   const wrap=document.getElementById('ms-vig'); if(!wrap) return;
   const sel=new Set();
   wrap._sel=sel;
-  // pré-seleciona último mês
   if(vigList.length) sel.add(vigKey(vigList[vigList.length-1]));
   const list=wrap.querySelector('.ms-list');
   const srch=wrap.querySelector('.ms-search input');
@@ -676,7 +674,6 @@ function buildVigMsFilter(vigList){
     } else {
       const vk=box.dataset.v;
       if(box.checked){
-        // Se novo mês é de ano diferente → limpa seleção anterior
         const newY=+vk.split('-')[0];
         if([...sel].some(k=>+k.split('-')[0]!==newY)){
           sel.clear();
@@ -719,7 +716,6 @@ function getMsValues(id){
   return wrap._sel ? [...wrap._sel] : [];
 }
 
-// Fecha ao clicar fora
 document.addEventListener('click',e=>{
   if(!e.target.closest('.ms-wrap'))
     document.querySelectorAll('.ms-panel.open').forEach(p=>p.classList.remove('open'));
@@ -790,10 +786,8 @@ function getF(){
 
 function applyFilters(r, f){
   if(f.uni.length && !f.uni.includes(r[C.uni]))   return false;
-  // Nível 3 e Pacote: Receita Líquida sempre passa (necessária para AV)
   if(f.nv3.length && !f.nv3.includes(getNv3Prefix(r[C.nv3])))   return false;
   if(f.pac.length && r[C.cta] !== 'Receita Líquida' && !f.pac.includes(getPac(r)))   return false;
-  // Conta: Receita Líquida sempre passa (necessária para AV)
   if(f.cta.length && r[C.cta] !== 'Receita Líquida' && !f.cta.includes(r[C.cta])) return false;
   return true;
 }
@@ -824,7 +818,6 @@ function agg(rows){
   rows.forEach(r=>{
     const raw=r[C.cta]||'Outros';
     let c=CONTAS_ALIAS[raw]||raw;
-    // Nomes desconhecidos vão para 'Outros' para não perder dados
     if(c!=='Receita Líquida' && !CONTAS.includes(c)) c='Outros';
     if(!m[c]) m[c]={orc:0,rem:0,real:0};
     m[c].orc  += +(r[C.orc] ||0);
@@ -849,7 +842,6 @@ function renderHeroCards(mes, prev){
   if(eDrem){eDrem.textContent=pct(dRem);colI(eDrem,dRem<0);}
   if(eYoy) {eYoy.textContent =pct(yoy); colI(eYoy, yoy<0); }
 
-  // Cards custo
   const cust = Object.entries(mes).filter(([k])=>k!=='Receita Líquida')
     .reduce((a,[,v])=>({orc:a.orc+v.orc,rem:a.rem+v.rem,real:a.real+v.real}),{orc:0,rem:0,real:0});
   const custP = Object.entries(prev).filter(([k])=>k!=='Receita Líquida')
@@ -919,7 +911,6 @@ function renderCharts(f){
   let vy, maxM, hlIdxs=[];
   if(!f.vig||f.vig.length===0){
     if(f.ano&&f.ano.length>0){
-      // ano selecionado explicitamente → usar o maior ano selecionado
       vy=Math.max(...f.ano.map(Number));
       const vigsDoAno=vigs.filter(d=>d.getFullYear()===vy);
       maxM=vigsDoAno.length ? Math.max(...vigsDoAno.map(d=>d.getMonth()+1)) : 12;
@@ -927,7 +918,6 @@ function renderCharts(f){
     } else {
       const lastVig=vigs.length?vigs[vigs.length-1]:null;
       if(lastVig && lastVig.getMonth()+1 < 12){
-        // ano atual incompleto → mostra último ano completo disponível
         const prevY=lastVig.getFullYear()-1;
         const prevVigs=vigs.filter(d=>d.getFullYear()===prevY);
         if(prevVigs.length>0){ vy=prevY; maxM=12; }
@@ -936,6 +926,7 @@ function renderCharts(f){
         vy=lastVig?lastVig.getFullYear():new Date().getFullYear();
         maxM=lastVig?12:12;
       }
+      hlIdxs=[maxM-1];
     }
   } else {
     const years=f.vig.map(vk=>+vk.split('-')[0]);
@@ -971,7 +962,8 @@ function renderCharts(f){
   const mkBc=(data,c)=>data.map(v=>v!=null?c:'transparent');
   function dsReal(data,label,dorcRef){
     var hasFocus=hlIdxs&&hlIdxs.length>0;
-    var bg=data.map(function(v,i){if(v==null)return 'transparent';var o=dorcRef&&dorcRef[i]!=null?dorcRef[i]:null;var red=(o==null||v>o);var a=hasFocus?(hlIdxs.includes(i)?'.85':'.2'):'.65';return red?'rgba(255,102,102,'+a+')':'rgba(59,179,59,'+a+')';});
+    var bg=data.map(function(v,i){if(v==null)return 'transparent';var o=dorcRef&&dorcRef[i]!=null?dorcRef[i]:null;var red=(o==null||v>o);var a=hasFocus?(hlIdxs.includes(i)?'.85':'.2'):'.65';return red?'rgba(255,102,102,'+a+')':'rgba(59,179,59,'+a+')';
+    });
     var bc=data.map(function(v,i){if(v==null)return 'transparent';var o=dorcRef&&dorcRef[i]!=null?dorcRef[i]:null;return(o==null||v>o)?'#FF6666':'#3BB33B';});
     return {type:'bar',label:label,data:data,backgroundColor:bg,borderColor:bc,borderWidth:1,borderRadius:3,order:2};
   }
@@ -1038,7 +1030,7 @@ function renderPacote(rows,allRowsRef,f){
   sorted.forEach(c=>{
     const mm=m[c]||{rem:0,real:0};
     const yy=ytdM[c]||{rem:0,real:0};
-    if(mm.rem===0&&mm.real===0) return; // oculta contas sem dados
+    if(mm.rem===0&&mm.real===0) return;
     const dB=mm.rem-mm.real, dP=mm.rem?(dB/Math.abs(mm.rem)*100):null;
     const ytdB=yy.rem-yy.real;
     const ytdP=yy.rem?(ytdB/Math.abs(yy.rem)*100):null;
@@ -1069,7 +1061,6 @@ function renderAnalise(rows, bodyId, vsOrc){
     const imp=dPp/100*rlReal;
     return {c,d,ref,avRef,avReal,dBrl,dPct,dPp,dPpP,imp,bBrl:dBrl>0,bPp:dPp<0};
   });
-  // ordena por Impacto asc (mais negativo/pior primeiro); remove contas sem dados
   contaData.sort((a,b)=>a.imp-b.imp);
   const contaVis=contaData.filter(({d,ref})=>d.real!==0||ref!==0);
   const refRl=vsOrc?r.orc:r.rem, dRl=r.real-refRl, dRlP=refRl?(dRl/Math.abs(refRl)*100):null, badRl=dRl<0;
