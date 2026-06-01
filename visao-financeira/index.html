@@ -172,7 +172,9 @@ body{
 .chart-leg .leg-dash{border-top:2px dashed;}
 .chart-leg .leg-sq{display:inline-block;width:10px;height:10px;border:1.5px solid var(--text2);border-radius:1px;vertical-align:middle;margin-right:1px;}
 .leg-orc-dash{border-color:#38BDF8;}
-body.light-mode .leg-orc-dash{border-color:#475569;}
+.leg-rem-dash{border-color:#F1F5F9;}
+body.light-mode .leg-rem-dash{border-color:#000000;}
+body.light-mode .leg-orc-dash{border-color:#1D4ED8;}
 .chart-wrap{position:relative;height:230px;}
 
 /* ── TABLES ── */
@@ -446,12 +448,12 @@ body.light-mode .kpi-card,body.light-mode .chart-card,body.light-mode .tbl-secti
   <div class="charts-row">
     <div class="chart-card">
       <div class="chart-title">Custo Nominal Mensal (BRL)</div>
-      <div class="chart-leg"><span><i class="leg-sq"></i>Realizado</span><span><i class="leg-dash" style="border-color:#F1F5F9"></i>Remunerado</span><span><i class="leg-dash leg-orc-dash"></i>Orçado</span></div>
+      <div class="chart-leg"><span><i class="leg-sq"></i>Realizado</span><span><i class="leg-dash leg-rem-dash"></i>Remunerado</span><span><i class="leg-dash leg-orc-dash"></i>Orçado</span></div>
       <div class="chart-wrap"><canvas id="ch-receita"></canvas></div>
     </div>
     <div class="chart-card">
       <div class="chart-title">AV Custo Mensal (%)</div>
-      <div class="chart-leg"><span><i class="leg-sq"></i>Realizado</span><span><i class="leg-dash" style="border-color:#F1F5F9"></i>AV Remunerado</span><span><i class="leg-dash leg-orc-dash"></i>AV Orçado</span></div>
+      <div class="chart-leg"><span><i class="leg-sq"></i>Realizado</span><span><i class="leg-dash leg-rem-dash"></i>AV Remunerado</span><span><i class="leg-dash leg-orc-dash"></i>AV Orçado</span></div>
       <div class="chart-wrap"><canvas id="ch-av"></canvas></div>
     </div>
   </div>
@@ -647,7 +649,19 @@ function buildVigMsFilter(vigList){
   const srch=wrap.querySelector('.ms-search input');
   const allVigKeys=()=>vigList.map(d=>vigKey(d));
 
-  // Remove listeners antigos trocando o elemento
+  const render=(q='')=>{
+    const f=q.toLowerCase();
+    const shown=vigList.filter(d=>vigLabel(d).toLowerCase().includes(f));
+    const allChk=sel.size===0;
+    list.innerHTML=
+      (!q?`<label class="ms-opt all-opt"><input type="checkbox" class="ms-all" ${allChk?'checked':''}> Todas</label>`:'')+
+      shown.map(d=>{
+        const vk=vigKey(d),vl=vigLabel(d).toUpperCase();
+        return `<label class="ms-opt"><input type="checkbox" data-v="${vk}" ${allChk||sel.has(vk)?'checked':''}> ${vl}<span class="ms-only" data-v="${vk}">only</span></label>`;
+      }).join('');
+    syncBadge(wrap);
+  };
+
   const newList=list.cloneNode(false);
   list.parentNode.replaceChild(newList,list);
   const newSrch=srch.cloneNode(true);
@@ -969,6 +983,7 @@ function renderCharts(f){
     }
   }
   const isLight=document.body.classList.contains('light-mode');
+  const remC=isLight?'#000000':'#F1F5F9';
   const mkR =(data)=>data.map((v,i)=>v!=null?(hlIdxs.includes(i)?6:3):0);
   const mkBg=(data,c)=>data.map((v,i)=>v!=null?(hlIdxs.includes(i)?'#fff':c):'transparent');
   const mkBw=(data)=>data.map((v,i)=>v!=null?(hlIdxs.includes(i)?2:0):0);
@@ -979,8 +994,8 @@ function renderCharts(f){
     var bc=data.map(function(v,i){if(v==null)return 'transparent';var o=dorcRef&&dorcRef[i]!=null?dorcRef[i]:null;return(o==null||v>o)?'#FF6666':'#3BB33B';});
     return {type:'bar',label:label,data:data,backgroundColor:bg,borderColor:bc,borderWidth:1,borderRadius:3,order:2};
   }
-  const dsRem=(data,label)=>({type:'line',label,data,borderColor:'#F1F5F9',borderWidth:3,tension:.3,fill:false,borderDash:[5,3],pointRadius:mkR(data),pointBackgroundColor:mkBg(data,'#F1F5F9'),pointBorderColor:mkBc(data,'#F1F5F9'),pointBorderWidth:mkBw(data),order:1});
-  const orcC=isLight?'#475569':'#38BDF8';
+  const dsRem=(data,label)=>({type:'line',label,data,borderColor:remC,borderWidth:3,tension:.3,fill:false,borderDash:[5,3],pointRadius:mkR(data),pointBackgroundColor:mkBg(data,remC),pointBorderColor:mkBc(data,remC),pointBorderWidth:mkBw(data),order:1});
+  const orcC=isLight?'#1D4ED8':'#38BDF8';
   const dsOrc=(data,label)=>({type:'line',label,data,borderColor:orcC,borderWidth:3,tension:.3,fill:false,borderDash:[5,3],pointRadius:mkR(data),pointBackgroundColor:mkBg(data,orcC),pointBorderColor:mkBc(data,orcC),pointBorderWidth:mkBw(data),order:1});
   const grid={color:isLight?'rgba(0,0,0,.08)':'rgba(255,255,255,.06)'};
   const tick={color:isLight?'#444444':'#94A3B8',font:{family:'Montserrat',size:11}};
@@ -991,7 +1006,7 @@ function renderCharts(f){
       var ds=chart.data.datasets[0],meta=chart.getDatasetMeta(0);
       if(!meta||meta.hidden||!hl||!hl.length)return;
       var ctx=chart.ctx;ctx.save();
-      ctx.font='700 11px Montserrat,sans-serif';ctx.fillStyle='#F1F5F9';
+      ctx.font='700 11px Montserrat,sans-serif';ctx.fillStyle=isLight?'#000000':'#F1F5F9';
       ctx.textAlign='center';ctx.textBaseline='bottom';
       ds.data.forEach(function(val,i){
         if(val==null||hl.indexOf(i)===-1)return;
