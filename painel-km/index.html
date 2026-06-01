@@ -560,12 +560,20 @@ document.addEventListener('click', e => {
 
 const getSel = id => { const w=document.getElementById(id); return w&&w._sel&&w._sel.size>0?[...w._sel]:[]; };
 
+let _vigM1Done=false;
 function repopulateVig() {
   const selAnos = getSel('ms-ano');
   const src = selAnos.length ? ALL.filter(r => selAnos.includes(r.ano)) : ALL;
   const vigs = [...new Set(src.map(r => r.vig))].filter(Boolean).sort(sortVig).reverse();
   const vigWrap=document.getElementById('ms-vig');
-  if(vigWrap) vigWrap._sel=new Set();
+  if(!_vigM1Done){
+    const now=new Date(),m=now.getMonth()===0?12:now.getMonth(),y=now.getMonth()===0?now.getFullYear()-1:now.getFullYear();
+    const m1=String(m).padStart(2,'0')+'/'+y;
+    if(vigWrap) vigWrap._sel=vigs.includes(m1)?new Set([m1]):new Set();
+    _vigM1Done=true;
+  } else {
+    if(vigWrap) vigWrap._sel=new Set();
+  }
   buildMsFilter('ms-vig', vigs, 'Vigência', vigLabel);
   render();
 }
