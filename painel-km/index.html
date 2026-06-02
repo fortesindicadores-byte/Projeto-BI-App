@@ -316,10 +316,10 @@ body.light-mode th.sep-imp,body.light-mode td.sep-imp{border-right-color:rgba(0,
   <!-- Gráficos linha 1: Evolução KM + Impacto Financeiro -->
   <div class="charts-grid">
     <div class="chart-card">
-      <div class="chart-title">Evolução KM</div>
+      <div class="chart-title">Dispersão de KM %</div>
       <div class="chart-leg">
-        <span><i class="leg-sq"></i>Realizado</span>
-        <span><i class="leg-dash" style="border-color:#F1F5F9"></i>Remunerado</span>
+        <span><i class="leg-sq"></i>▲ Rem %</span>
+        <span><i class="leg-dash" style="border-color:#F97316"></i>Meta (5%)</span>
       </div>
       <div class="chart-wrap"><canvas id="chart-evolucao"></canvas></div>
     </div>
@@ -800,6 +800,12 @@ function renderCharts(F) {
 
   const remLine  = MONTHS.map(function(_, i) { return mData[i+1].cnt > 0 ? mData[i+1].rem  : null; });
   const realLine = MONTHS.map(function(_, i) { return mData[i+1].cnt > 0 ? mData[i+1].real : null; });
+  const deltaPctLine = MONTHS.map(function(_, i) {
+    var m = i + 1;
+    if(mData[m].cnt === 0 || mData[m].rem === 0) return null;
+    return (mData[m].real - mData[m].rem) / Math.abs(mData[m].rem) * 100;
+  });
+  const metaLine = MONTHS.map(function(_, i) { return mData[i+1].cnt > 0 ? 5 : null; });
 
   var hasFocusEvo = hiMonths.size > 0;
   var realBarBg = MONTHS.map(function(_, i) {
@@ -821,13 +827,13 @@ function renderCharts(F) {
       labels: MONTHS,
       datasets:[
         {
-          type:'bar', label:'REALIZADO', data:realLine,
+          type:'bar', label:'▲ REM %', data:deltaPctLine,
           backgroundColor:realBarBg, borderColor:realBarBc, borderWidth:1, borderRadius:3, order:2
         },
         {
-          type:'line', label:'REMUNERADO', data:remLine,
-          borderColor:orcC, borderWidth:3, tension:.3, fill:false, borderDash:[5,3],
-          order:1, ...mkPts(orcC,'#fff')
+          type:'line', label:'META 5%', data:metaLine,
+          borderColor:'#F97316', borderWidth:2, tension:0, fill:false, borderDash:[5,3],
+          order:1, pointRadius:0, pointHoverRadius:0
         }
       ]
     },
@@ -846,7 +852,7 @@ function renderCharts(F) {
           },
           anchor:'end', align:'top', color:dlColor,
           font:{family:'Montserrat',size:isMobile?8:11,weight:'700'},
-          formatter: function(v) { return fmt(v); }
+          formatter: function(v) { return v !== null ? (v >= 0 ? '+' : '') + Math.round(v) + '%' : ''; }
         }
       },
       scales:{
