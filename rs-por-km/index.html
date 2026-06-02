@@ -237,9 +237,11 @@ body.light-mode .chart-card,body.light-mode .tbl-section{background:#FFFFFF!impo
 </main>
 
 <script>
-const SHEET_ID  = '1qcTy2ppLCGBKKqZCxCYWCTL9kTAuWfHBMyBfWJOyih8';
-const SHEET_TAB = 'Consolidado DRE';
-const C = {orc:0,rem:1,real:2,kmRem:5,kmReal:6,vig:9,uni:10,nv3:11,cta:12};
+const COST_ID  = '1qcTy2ppLCGBKKqZCxCYWCTL9kTAuWfHBMyBfWJOyih8';
+const COST_TAB = 'Consolidado DRE';
+const KM_ID    = '1wCoRGsvOgmIvfLW4F9Sxr-5AX9Go-aFlRVjrQ_B2ilM';
+const KM_TAB   = 'Dispersão de km';
+const C = {orc:0,rem:1,real:2,vig:9,nv3:11,cta:12};
 
 const getNv3Prefix = v => v ? v.split('-')[0].trim() : v;
 const getUniLabel  = v => { if(!v) return ''; const i=v.indexOf('-'); return i>=0?v.slice(i+1).trim():v.trim(); };
@@ -273,7 +275,7 @@ const rsKmD   = v => v==null||!isFinite(v)?'—':(+v>=0?'+':'')+Number(v).toLoca
 const set     = (id,val) => { const e=document.getElementById(id); if(e) e.textContent=val; };
 const colI    = (el,bad) => { if(el) el.style.color=bad?'var(--red)':'var(--green)'; };
 
-let allRows=[], vigs=[], chRsKm=null, chImp=null, lastF=null, tableDim='conta';
+let allRows=[], allKmRows=[], vigs=[], chRsKm=null, chImp=null, lastF=null, tableDim='conta';
 let _vigM1Done=false, _lastAnoKey='';
 
 // ── MULTI-SELECT ──
@@ -344,11 +346,21 @@ function getMsValues(id){const wrap=document.getElementById(id);if(!wrap)return[
 document.addEventListener('click',e=>{if(!e.target.closest('.ms-wrap'))document.querySelectorAll('.ms-panel.open').forEach(p=>p.classList.remove('open'));});
 
 // ── FETCH ──
-async function fetchData(){
-  const url=`https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:json&sheet=${encodeURIComponent(SHEET_TAB)}`;
+async function fetchSheet(id,tab){
+  const url=`https://docs.google.com/spreadsheets/d/${id}/gviz/tq?tqx=out:json&sheet=${encodeURIComponent(tab)}`;
   const res=await fetch(url),raw=await res.text();
   const json=JSON.parse(raw.replace(/^[\s\S]*?\(/,'').replace(/\);\s*$/,''));
   return json.table.rows.map(r=>r.c.map(c=>c&&c.v!=null?c.v:null));
+}
+function parseKmRow(r){
+  const d=parseVig(r[0]);if(!d)return null;
+  const vk=vigKey(d),yr=String(d.getFullYear());
+  const nv3raw=r[14]!=null?String(r[14]).trim():'';if(!nv3raw)return null;
+  const proj=nv3raw.split('-')[0].trim();
+  const uni=nv3raw.includes('-')?nv3raw.slice(nv3raw.indexOf('-')+1).trim():nv3raw;
+  const kmRem=+(r[32]||0),kmReal=+(r[33]||0);
+  if(kmRem===0&&kmReal===0)return null;
+  return{vk,yr,uni,proj,kmRem,kmReal};
 }
 
 // ── VIGÊNCIA ──
@@ -389,6 +401,16 @@ function applyFilters(r,f){
   if(f.nv3.length&&!f.nv3.includes(getNv3Prefix(r[C.nv3])))return false;
   return true;
 }
+function filterKmRows(kmRows,f,vigOverride){
+  return kmRows.filter(r=>{
+    if(f.ano&&f.ano.length>0&&!f.ano.includes(r.yr))return false;
+    if(vigOverride){if(r.vk!==vigOverride)return false;}
+    else if(f.vig&&f.vig.length>0){if(!f.vig.includes(r.vk))return false;}
+    if(f.uni.length&&!f.uni.includes(r.uni))return false;
+    if(f.nv3.length&&!f.nv3.includes(r.proj))return false;
+    return true;
+  });
+}
 function filterMes(rows,f,vigOverride){
   return rows.filter(r=>{
     const d=parseVig(r[C.vig]);if(!d)return false;
@@ -425,33 +447,15 @@ function agg(rows){
   return m;
 }
 function sumCusto(aggMap){return Object.entries(aggMap).filter(([k])=>k!=='Receita Líquida').reduce((a,[,v])=>({rem:a.rem+v.rem,real:a.real+v.real}),{rem:0,real:0});}
-function sumKm(rows){
-  const seen=new Set();let rem=0,real=0;
-  rows.forEach(r=>{
-    const d=parseVig(r[C.vig]);if(!d)return;
-    const key=`${vigKey(d)}|${r[C.nv3]||''}`;
-    if(!seen.has(key)){seen.add(key);rem+=+(r[C.kmRem]||0);real+=+(r[C.kmReal]||0);}
-  });
-  return{rem,real};
-}
-function sumKmByUni(rows){
-  const seen=new Set(),m={};
-  rows.forEach(r=>{
-    const d=parseVig(r[C.vig]);if(!d)return;
-    const uni=getUniLabel(r[C.nv3]);if(!uni)return;
-    const key=`${uni}|${vigKey(d)}|${r[C.nv3]||''}`;
-    if(!seen.has(key)){seen.add(key);if(!m[uni])m[uni]={rem:0,real:0};m[uni].rem+=+(r[C.kmRem]||0);m[uni].real+=+(r[C.kmReal]||0);}
-  });
+function sumKm(kmRows){return kmRows.reduce((a,r)=>({rem:a.rem+r.kmRem,real:a.real+r.kmReal}),{rem:0,real:0});}
+function sumKmByUni(kmRows){
+  const m={};
+  kmRows.forEach(r=>{if(!m[r.uni])m[r.uni]={rem:0,real:0};m[r.uni].rem+=r.kmRem;m[r.uni].real+=r.kmReal;});
   return m;
 }
-function sumKmByProj(rows){
-  const seen=new Set(),m={};
-  rows.forEach(r=>{
-    const d=parseVig(r[C.vig]);if(!d)return;
-    const proj=getNv3Prefix(r[C.nv3]);if(!proj)return;
-    const key=`${proj}|${vigKey(d)}|${r[C.nv3]||''}`;
-    if(!seen.has(key)){seen.add(key);if(!m[proj])m[proj]={rem:0,real:0};m[proj].rem+=+(r[C.kmRem]||0);m[proj].real+=+(r[C.kmReal]||0);}
-  });
+function sumKmByProj(kmRows){
+  const m={};
+  kmRows.forEach(r=>{if(!m[r.proj])m[r.proj]={rem:0,real:0};m[r.proj].rem+=r.kmRem;m[r.proj].real+=r.kmReal;});
   return m;
 }
 function aggByUni(rows){
@@ -474,8 +478,8 @@ function aggByProj(rows){
 }
 
 // ── HERO ──
-function renderHero(activeRows,ytdRows){
-  const km=sumKm(activeRows),custo=sumCusto(agg(activeRows));
+function renderHero(activeRows,activeKmRows,ytdRows,ytdKmRows){
+  const km=sumKm(activeKmRows),custo=sumCusto(agg(activeRows));
   const rsReal=km.real?custo.real/km.real:null,rsRem=km.rem?custo.rem/km.rem:null;
   const dRs=(rsReal!=null&&rsRem!=null)?rsReal-rsRem:null;
   const dRsP=(dRs!=null&&rsRem&&rsRem!==0)?dRs/Math.abs(rsRem)*100:null;
@@ -488,7 +492,7 @@ function renderHero(activeRows,ytdRows){
   if(eDp){eDp.textContent=pct(dRsP);colI(eDp,dRsP>0);}
   if(eImp){eImp.textContent=imp!=null?fmtBrlD(imp):'—';colI(eImp,imp>0);}
 
-  const kmY=sumKm(ytdRows),custoY=sumCusto(agg(ytdRows));
+  const kmY=sumKm(ytdKmRows),custoY=sumCusto(agg(ytdRows));
   const rsRealY=kmY.real?custoY.real/kmY.real:null,rsRemY=kmY.rem?custoY.rem/kmY.rem:null;
   const dRsY=(rsRealY!=null&&rsRemY!=null)?rsRealY-rsRemY:null;
   const dRsYP=(dRsY!=null&&rsRemY&&rsRemY!==0)?dRsY/Math.abs(rsRemY)*100:null;
@@ -529,7 +533,8 @@ function renderCharts(f){
     if(m<=maxM){
       const key=`${vy}-${String(m).padStart(2,'0')}`;
       const rows=filterMes(allRows,f,key);
-      const km=sumKm(rows),custo=sumCusto(agg(rows));
+      const kmRows=filterKmRows(allKmRows,f,key);
+      const km=sumKm(kmRows),custo=sumCusto(agg(rows));
       const rsR=km.rem?custo.rem/km.rem:null,rsX=km.real?custo.real/km.real:null;
       dRsReal.push(rsX);dRsRem.push(rsR);
       dImp.push((rsX!=null&&rsR!=null)?((rsX-rsR)*km.real):null);
@@ -585,8 +590,8 @@ function renderCharts(f){
 }
 
 // ── TABELA ──
-function renderTable(activeRows,ytdRows){
-  const kmTot=sumKm(activeRows),kmYtd=sumKm(ytdRows);
+function renderTable(activeRows,activeKmRows,ytdRows,ytdKmRows){
+  const kmTot=sumKm(activeKmRows),kmYtd=sumKm(ytdKmRows);
   const custoTot=sumCusto(agg(activeRows)),custoYtd=sumCusto(agg(ytdRows));
   let items=[];
 
@@ -604,7 +609,7 @@ function renderTable(activeRows,ytdRows){
 
   }else if(tableDim==='uni'){
     const cMap=aggByUni(activeRows),cMapY=aggByUni(ytdRows);
-    const kMap=sumKmByUni(activeRows),kMapY=sumKmByUni(ytdRows);
+    const kMap=sumKmByUni(activeKmRows),kMapY=sumKmByUni(ytdKmRows);
     const keys=new Set([...Object.keys(cMap),...Object.keys(kMap)]);
     items=[...keys].map(uni=>{
       const d=cMap[uni]||{rem:0,real:0},k=kMap[uni]||{rem:0,real:0};
@@ -619,7 +624,7 @@ function renderTable(activeRows,ytdRows){
 
   }else{
     const cMap=aggByProj(activeRows),cMapY=aggByProj(ytdRows);
-    const kMap=sumKmByProj(activeRows),kMapY=sumKmByProj(ytdRows);
+    const kMap=sumKmByProj(activeKmRows),kMapY=sumKmByProj(ytdKmRows);
     const keys=new Set([...Object.keys(cMap),...Object.keys(kMap)]);
     items=[...keys].map(proj=>{
       const d=cMap[proj]||{rem:0,real:0},k=kMap[proj]||{rem:0,real:0};
@@ -656,9 +661,11 @@ function setDim(dim){
   if(th)th.textContent=dim==='uni'?'UNIDADE':dim==='proj'?'PROJETO':'CONTA';
   if(lastF){
     const ar=filterMes(allRows,lastF);
+    const akr=filterKmRows(allKmRows,lastF);
     const ytdVigs=getYtdVigs(lastF);
     const yr=filterMes(allRows,{...lastF,vig:ytdVigs});
-    renderTable(ar,yr);
+    const ykr=filterKmRows(allKmRows,{...lastF,vig:ytdVigs});
+    renderTable(ar,akr,yr,ykr);
   }
 }
 
@@ -669,12 +676,14 @@ function atualizar(){
   const f2=getF();
   lastF=f2;
   const activeRows=filterMes(allRows,f2);
+  const activeKmRows=filterKmRows(allKmRows,f2);
   const ytdVigs=getYtdVigs(f2);
   const ytdRows=filterMes(allRows,{...f2,vig:ytdVigs});
+  const ytdKmRows=filterKmRows(allKmRows,{...f2,vig:ytdVigs});
 
-  renderHero(activeRows,ytdRows);
+  renderHero(activeRows,activeKmRows,ytdRows,ytdKmRows);
   renderCharts(f2);
-  renderTable(activeRows,ytdRows);
+  renderTable(activeRows,activeKmRows,ytdRows,ytdKmRows);
 
   let vigLbl;
   if(!f2.vig||f2.vig.length===0)vigLbl='TODAS';
@@ -689,8 +698,10 @@ function atualizar(){
 // ── INIT ──
 async function init(){
   try{
-    allRows=await fetchData();
+    const[rawCost,rawKm]=await Promise.all([fetchSheet(COST_ID,COST_TAB),fetchSheet(KM_ID,KM_TAB)]);
+    allRows=rawCost;
     if(allRows[0]&&typeof allRows[0][C.orc]==='string')allRows.shift();
+    allKmRows=rawKm.map(parseKmRow).filter(Boolean);
     populateFilters(allRows);
     atualizar();
     setInterval(atualizar,30*60*1000);
