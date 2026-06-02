@@ -223,6 +223,12 @@ table.dre tr.total td.imp-cell{font-size:14px;}
 /* col widths */
 .w-conta{width:190px;}.w-num{width:100px;}.w-d{width:96px;}.w-pct{width:64px;}.w-imp{width:110px;}
 
+/* ══ DIM TOGGLE ══ */
+.dim-toggle{display:flex;border:1px solid #2a3a50;border-radius:4px;overflow:hidden;}
+.dim-btn{background:transparent;color:var(--text2);border:none;font-family:'Montserrat',sans-serif;font-size:10px;font-weight:700;padding:5px 12px;cursor:pointer;text-transform:uppercase;letter-spacing:.5px;transition:background .12s,color .12s;}
+.dim-btn.active{background:var(--orange);color:#000;}
+.dim-btn:not(.active):hover{background:rgba(255,255,255,.05);color:var(--text);}
+
 /* ══ REFRESH BUTTON ══ */
 .refresh-btn{
   background:rgba(249,115,22,.15);border:1px solid rgba(249,115,22,.3);
@@ -459,13 +465,20 @@ body.light-mode .kpi-card,body.light-mode .chart-card,body.light-mode .tbl-secti
   </div>
 
   <div class="tbl-section">
-    <div class="tbl-title">Pacote Frota</div>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:3px;">
+      <div class="tbl-title">Pacote Frota</div>
+      <div class="dim-toggle">
+        <button class="dim-btn active" data-dim="conta" onclick="setPacoteDim('conta')">Conta</button>
+        <button class="dim-btn" data-dim="uni" onclick="setPacoteDim('uni')">Unidade</button>
+        <button class="dim-btn" data-dim="proj" onclick="setPacoteDim('proj')">Projeto</button>
+      </div>
+    </div>
     <div class="tbl-sub" id="sub-pacote">—</div>
     <div class="tbl-wrap">
       <table class="dre">
         <thead>
           <tr class="cols">
-            <th class="w-conta">CONTA</th>
+            <th class="w-conta" id="th-pacote-dim">CONTA</th>
             <th class="w-num num">REM</th>
             <th class="w-num num">REAL</th>
             <th class="w-d   num">Δ BRL</th>
@@ -548,6 +561,7 @@ const PACOTES_MAP = {
 };
 const getPac = r => PACOTES_MAP[r[C.cta]] || '-';
 const getNv3Prefix = v => v ? v.split('-')[0].trim() : v;
+const getUniLabel  = v => { if(!v) return ''; const i=v.indexOf('-'); return i>=0 ? v.slice(i+1).trim() : v.trim(); };
 
 const CONTAS = [
   'Combustíveis','Estorno ICMS','Manutenção de Carrocerias',
@@ -585,7 +599,7 @@ const colI = (el,bad) => { if(el) el.style.color = bad ? 'var(--red)' : 'var(--g
 // ═══════════════════════════════════
 // ESTADO
 // ═══════════════════════════════════
-let allRows=[], vigs=[], chReceita=null, chAV=null, lastF=null;
+let allRows=[], vigs=[], chReceita=null, chAV=null, lastF=null, pacoteDim='conta';
 
 // ═══════════════════════════════════
 // MULTI-SELECT
@@ -782,9 +796,9 @@ function populateFilters(rows){
   buildMsFilter('ms-ano', anos);
   buildVigMsFilter(vigs);
 
-  const unis=[...new Set(rows.map(r=>r[C.uni]).filter(Boolean))].sort();
   const hasVal = r => Math.abs(+r[C.rem])>0 || Math.abs(+r[C.real])>0;
   const hasCost = r => hasVal(r) && r[C.cta] !== 'Receita Líquida';
+  const unis=[...new Set(rows.filter(hasCost).map(r=>getUniLabel(r[C.nv3])).filter(Boolean))].sort();
   const nv3s=[...new Set(rows.filter(hasCost).map(r=>getNv3Prefix(r[C.nv3])).filter(Boolean))].sort();
   const pacs=[...new Set(rows.filter(hasVal).map(r=>getPac(r)).filter(v=>v&&v!=='-'))].sort();
   const ctas=[...new Set(rows.filter(r=>hasVal(r)&&r[C.cta]!=='Receita Líquida').map(r=>r[C.cta]).filter(Boolean))].sort();
@@ -815,7 +829,7 @@ function getF(){
 }
 
 function applyFilters(r, f){
-  if(f.uni.length && !f.uni.includes(r[C.uni]))   return false;
+  if(f.uni.length && !f.uni.includes(getUniLabel(r[C.nv3])))   return false;
   if(f.nv3.length && !f.nv3.includes(getNv3Prefix(r[C.nv3])))   return false;
   if(f.pac.length && r[C.cta] !== 'Receita Líquida' && !f.pac.includes(getPac(r)))   return false;
   if(f.cta.length && r[C.cta] !== 'Receita Líquida' && !f.cta.includes(r[C.cta])) return false;
@@ -1047,31 +1061,62 @@ function getYtdVigs(f){
   return out;
 }
 
+function aggByKey(rows, getDimKey){
+  const m={};
+  rows.forEach(r=>{
+    if((r[C.cta]||'')==='Receita Líquida') return;
+    const key=getDimKey(r); if(!key) return;
+    if(!m[key]) m[key]={rem:0,real:0};
+    m[key].rem  += +(r[C.rem] ||0);
+    m[key].real += +(r[C.real]||0);
+  });
+  return m;
+}
+
 function renderPacote(rows,allRowsRef,f){
-  const m=agg(rows);
   const ytdVigs=getYtdVigs(f);
-  const ytdM=agg(filterMes(allRowsRef,{...f,vig:ytdVigs}));
-  const sorted=[...CONTAS].sort((a,b)=>{
-    const ma=m[a]||{rem:0,real:0},mb=m[b]||{rem:0,real:0};
-    return (ma.real-ma.rem)-(mb.real-mb.rem);
-  });
+  const ytdRows=filterMes(allRowsRef,{...f,vig:ytdVigs});
   let html='',totR=0,totX=0,totYR=0,totYX=0;
-  sorted.forEach(c=>{
-    const mm=m[c]||{rem:0,real:0};
-    const yy=ytdM[c]||{rem:0,real:0};
-    if(mm.rem===0&&mm.real===0) return;
-    const dB=mm.rem-mm.real, dP=mm.rem?(dB/Math.abs(mm.rem)*100):null;
-    const ytdB=yy.rem-yy.real;
-    const ytdP=yy.rem?(ytdB/Math.abs(yy.rem)*100):null;
-    const bad=dB>0, ytdBad=ytdB>0;
-    totR+=mm.rem; totX+=mm.real; totYR+=yy.rem; totYX+=yy.real;
-    html+=`<tr><td class="conta">${c}</td><td class="num">${fmt(mm.rem)}</td><td class="num">${fmt(mm.real)}</td><td class="num ${bad?'cr':'cg'}">${fmt(dB)}</td><td class="num ${bad?'cr-t':'cg-t'}">${pctInt(dP)}</td><td class="num ${ytdBad?'cr':'cg'}">${fmt(ytdB)}</td><td class="num ${ytdBad?'cr-t':'cg-t'}">${pctInt(ytdP)}</td></tr>`;
-  });
+
+  if(pacoteDim==='conta'){
+    const m=agg(rows), ytdM=agg(ytdRows);
+    const sorted=[...CONTAS].sort((a,b)=>{ const ma=m[a]||{rem:0,real:0},mb=m[b]||{rem:0,real:0}; return (ma.real-ma.rem)-(mb.real-mb.rem); });
+    sorted.forEach(c=>{
+      const mm=m[c]||{rem:0,real:0}, yy=ytdM[c]||{rem:0,real:0};
+      if(mm.rem===0&&mm.real===0) return;
+      const dB=mm.rem-mm.real, dP=mm.rem?(dB/Math.abs(mm.rem)*100):null;
+      const ytdB=yy.rem-yy.real, ytdP=yy.rem?(ytdB/Math.abs(yy.rem)*100):null;
+      const bad=dB>0, ytdBad=ytdB>0;
+      totR+=mm.rem; totX+=mm.real; totYR+=yy.rem; totYX+=yy.real;
+      html+=`<tr><td class="conta">${c}</td><td class="num">${fmt(mm.rem)}</td><td class="num">${fmt(mm.real)}</td><td class="num ${bad?'cr':'cg'}">${fmt(dB)}</td><td class="num ${bad?'cr-t':'cg-t'}">${pctInt(dP)}</td><td class="num ${ytdBad?'cr':'cg'}">${fmt(ytdB)}</td><td class="num ${ytdBad?'cr-t':'cg-t'}">${pctInt(ytdP)}</td></tr>`;
+    });
+  } else {
+    const getKey=pacoteDim==='uni' ? r=>getUniLabel(r[C.nv3]) : r=>getNv3Prefix(r[C.nv3]);
+    const m=aggByKey(rows,getKey), ytdM=aggByKey(ytdRows,getKey);
+    const keys=Object.keys(m).filter(k=>m[k].rem!==0||m[k].real!==0);
+    keys.sort((a,b)=>{ const ma=m[a],mb=m[b]; return (ma.real-ma.rem)-(mb.real-mb.rem); });
+    keys.forEach(key=>{
+      const mm=m[key], yy=ytdM[key]||{rem:0,real:0};
+      const dB=mm.rem-mm.real, dP=mm.rem?(dB/Math.abs(mm.rem)*100):null;
+      const ytdB=yy.rem-yy.real, ytdP=yy.rem?(ytdB/Math.abs(yy.rem)*100):null;
+      const bad=dB>0, ytdBad=ytdB>0;
+      totR+=mm.rem; totX+=mm.real; totYR+=yy.rem; totYX+=yy.real;
+      html+=`<tr><td class="conta">${key}</td><td class="num">${fmt(mm.rem)}</td><td class="num">${fmt(mm.real)}</td><td class="num ${bad?'cr':'cg'}">${fmt(dB)}</td><td class="num ${bad?'cr-t':'cg-t'}">${pctInt(dP)}</td><td class="num ${ytdBad?'cr':'cg'}">${fmt(ytdB)}</td><td class="num ${ytdBad?'cr-t':'cg-t'}">${pctInt(ytdP)}</td></tr>`;
+    });
+  }
+
   const tdB=totR-totX,tdP=totR?(tdB/Math.abs(totR)*100):null,bT=tdB>0;
-  const ytdTD=totYR-totYX,ytdBT=ytdTD>0;
-  const ytdTDP=totYR?(ytdTD/Math.abs(totYR)*100):null;
+  const ytdTD=totYR-totYX,ytdBT=ytdTD>0,ytdTDP=totYR?(ytdTD/Math.abs(totYR)*100):null;
   html+=`<tr class="total"><td class="conta">Total Pacote Frota</td><td class="num">${fmt(totR)}</td><td class="num">${fmt(totX)}</td><td class="num ${bT?'cr':'cg'}">${fmt(tdB)}</td><td class="num ${bT?'cr-t':'cg-t'}">${pctInt(tdP)}</td><td class="num ${ytdBT?'cr':'cg'}">${fmt(ytdTD)}</td><td class="num ${ytdBT?'cr-t':'cg-t'}">${pctInt(ytdTDP)}</td></tr>`;
   document.getElementById('body-pacote').innerHTML=html;
+}
+
+function setPacoteDim(dim){
+  pacoteDim=dim;
+  document.querySelectorAll('.dim-btn').forEach(b=>b.classList.toggle('active',b.dataset.dim===dim));
+  const th=document.getElementById('th-pacote-dim');
+  if(th) th.textContent=dim==='uni'?'UNIDADE':dim==='proj'?'PROJETO':'CONTA';
+  if(lastF){ const r=filterMes(allRows,lastF); renderPacote(r,allRows,lastF); }
 }
 
 // ═══════════════════════════════════
@@ -1181,4 +1226,3 @@ function applyTheme(t){document.body.classList.toggle('light-mode',t==='light');
 (function(){const t=localStorage.getItem('bi_theme')||'dark';applyTheme(t);document.getElementById('themeBtn').addEventListener('click',()=>applyTheme(document.body.classList.contains('light-mode')?'dark':'light'));})();
 </script>
 </body>
-</html>
