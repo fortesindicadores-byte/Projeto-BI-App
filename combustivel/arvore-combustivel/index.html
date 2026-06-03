@@ -728,12 +728,38 @@ function gvFetch() {
 let allRows = [];
 
 async function atualizar() {
+  const CACHE_KEY='bi_cache_arvore';
   const warn=id('warnBar');
-  set('status-badge','Carregando…');
+
+  let hasCached=false;
+  try{
+    const cached=sessionStorage.getItem(CACHE_KEY);
+    if(cached){
+      const obj=JSON.parse(cached);
+      allRows=obj.rows||[];
+      if(obj.vigencias){
+        const anos=[...new Set(obj.vigencias.map(v=>v.slice(-4)))].sort().reverse();
+        buildMsFilter('ms-ano',anos);
+        buildVigMsFilter(obj.vigencias);
+      }
+      if(obj.nivel3s){
+        buildMsFilter('ms-uni',[...new Set(obj.nivel3s.map(v=>getNv3Suffix(v)))].filter(Boolean).sort());
+        buildMsFilter('ms-nv3',[...new Set(obj.nivel3s.map(v=>getNv3Prefix(v)))].sort());
+      }
+      const k=calcular(filtrarRows(allRows));
+      if(k) renderKPIs(k); else renderStatic();
+      set('status-badge','Atualizando…');
+      hasCached=true;
+      setTimeout(fitAndDraw,60);
+    }
+  }catch(e){ sessionStorage.removeItem(CACHE_KEY); }
+
+  if(!hasCached) set('status-badge','Carregando…');
 
   try {
     const json = await gvFetch();
     allRows = json.rows || [];
+    sessionStorage.setItem(CACHE_KEY,JSON.stringify({rows:allRows,vigencias:json.vigencias,nivel3s:json.nivel3s}));
     if (json.vigencias) {
       const anos=[...new Set(json.vigencias.map(v=>v.slice(-4)))].sort().reverse();
       buildMsFilter('ms-ano', anos);
@@ -751,9 +777,10 @@ async function atualizar() {
 
   } catch(err) {
     console.error(err);
-    renderStatic();
+    if(!hasCached) renderStatic();
     if(warn){ warn.classList.add('show'); id('warnMsg').textContent='⚠ ' + err.message; }
-    set('status-badge','Erro ao carregar dados');
+    if(!hasCached) set('status-badge','Erro ao carregar dados');
+    else set('status-badge','Erro ao atualizar dados');
   }
 
   setTimeout(fitAndDraw, 60);

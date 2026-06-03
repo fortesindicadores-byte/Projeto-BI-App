@@ -719,15 +719,31 @@ function atualizar(){
 
 // ── INIT ──
 async function init(){
+  const CACHE_KEY='bi_cache_rskm';
+  let hasCached=false;
+  try{
+    const cached=sessionStorage.getItem(CACHE_KEY);
+    if(cached){
+      const obj=JSON.parse(cached);
+      allRows=obj.cost;
+      if(allRows[0]&&typeof allRows[0][C.orc]==='string')allRows.shift();
+      allKmRows=obj.km;
+      populateFilters(allRows);
+      atualizar();
+      set('status-badge','Atualizando…');
+      hasCached=true;
+    }
+  }catch(e){ sessionStorage.removeItem(CACHE_KEY); }
   try{
     const[rawCost,rawKm]=await Promise.all([fetchSheet(COST_ID,COST_TAB),fetchSheet(KM_ID,KM_TAB)]);
     allRows=rawCost;
     if(allRows[0]&&typeof allRows[0][C.orc]==='string')allRows.shift();
     allKmRows=rawKm.map(parseKmRow).filter(Boolean);
+    sessionStorage.setItem(CACHE_KEY,JSON.stringify({cost:allRows,km:allKmRows}));
     populateFilters(allRows);
     atualizar();
     setInterval(atualizar,30*60*1000);
-  }catch(e){console.error(e);set('status-badge','Erro ao carregar dados');}
+  }catch(e){console.error(e);if(!hasCached)set('status-badge','Erro ao carregar dados');}
 }
 function initAccessLog(){
   let name=localStorage.getItem('bi_user_name');

@@ -1230,15 +1230,30 @@ function atualizar(){
 // INIT
 // ═══════════════════════════════════
 async function init(){
+  const CACHE_KEY='bi_cache_vf';
+  let hasCached=false;
   try{
-    allRows=await fetchData();
+    const cached=sessionStorage.getItem(CACHE_KEY);
+    if(cached){
+      allRows=JSON.parse(cached);
+      if(allRows[0]&&typeof allRows[0][C.orc]==='string') allRows.shift();
+      populateFilters(allRows);
+      atualizar();
+      set('status-badge','Atualizando…');
+      hasCached=true;
+    }
+  }catch(e){ sessionStorage.removeItem(CACHE_KEY); }
+  try{
+    const rows=await fetchData();
+    allRows=rows;
     if(allRows[0]&&typeof allRows[0][C.orc]==='string') allRows.shift();
+    sessionStorage.setItem(CACHE_KEY,JSON.stringify(allRows));
     populateFilters(allRows);
     atualizar();
     setInterval(atualizar,30*60*1000);
   }catch(e){
     console.error(e);
-    set('status-badge','Erro ao carregar dados');
+    if(!hasCached) set('status-badge','Erro ao carregar dados');
   }
 }
 function initAccessLog(){

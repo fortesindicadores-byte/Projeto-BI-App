@@ -488,6 +488,7 @@ async function fetchData() {
   ALL = (json.table.rows || [])
     .map(parseRow)
     .filter(r => r.vig && (r.rem > 0 || r.real > 0));
+  sessionStorage.setItem('bi_cache_km', JSON.stringify(ALL));
   populateFilters();
   render();
 }
@@ -1035,14 +1036,25 @@ function renderCharts(F) {
 }
 
 async function atualizar() {
-  set('status-badge', 'Carregando…');
+  const CACHE_KEY='bi_cache_km';
+  let hasCached=false;
+  try{
+    const cached=sessionStorage.getItem(CACHE_KEY);
+    if(cached){
+      ALL=JSON.parse(cached);
+      populateFilters();
+      render();
+      set('status-badge','Atualizando…');
+      hasCached=true;
+    }
+  }catch(e){ sessionStorage.removeItem(CACHE_KEY); }
   try {
     await fetchData();
     const now = new Date();
     set('status-badge', `Atualizado ${now.toLocaleDateString('pt-BR')} ${now.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})}`);
   } catch(e) {
     console.error(e);
-    set('status-badge', 'Erro ao carregar dados');
+    if(!hasCached) set('status-badge', 'Erro ao carregar dados');
   }
 }
 
