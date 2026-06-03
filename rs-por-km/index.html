@@ -75,7 +75,6 @@ table.dre td.num{text-align:right;}
 table.dre tr.total td{color:var(--text);font-weight:700;font-size:12px;border-top:2px solid rgba(255,255,255,.12);padding-top:14px;padding-bottom:8px;}
 table.dre tr.total td.conta{font-weight:800;}
 .sep-l{border-left:1px solid rgba(255,255,255,.13);padding-left:18px;}
-.grp-lbl{display:block;font-size:11px;color:var(--text2);font-weight:700;text-transform:uppercase;letter-spacing:.6px;margin-bottom:5px;padding-bottom:5px;border-bottom:1px solid rgba(255,255,255,.10);white-space:nowrap;}
 td.imp-cell{font-size:13px;font-weight:800;padding-left:10px;padding-right:10px;}
 table.dre tr.total td.imp-cell{font-size:14px;}
 .w-conta{width:180px;}.w-num{width:90px;}.w-d{width:86px;}.w-pct{width:60px;}.w-imp{width:100px;}
@@ -103,7 +102,7 @@ body.light-mode .chart-card,body.light-mode .tbl-section{background:#FFFFFF!impo
   .status-badge,.access-badge{font-size:8px;padding:2px 6px;}
   .theme-btn{padding:3px 5px;}.theme-btn svg{width:13px;height:13px;}
   .header-filters{gap:5px;}
-  .filter-group{flex:0 0 calc(50% - 3px);}
+  .filter-group{flex:0 0 calc(33.333% - 4px);}
   .ms-wrap{width:100%;}
   .ms-btn{width:100%;min-width:0;font-size:8px;padding:3px 6px;gap:3px;}
   .ms-btn svg{width:9px;height:9px;}
@@ -112,7 +111,6 @@ body.light-mode .chart-card,body.light-mode .tbl-section{background:#FFFFFF!impo
   table.dre{table-layout:fixed;width:100%;font-size:1.6vmin;}
   table.dre td,table.dre th{padding:4px 2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
   table.dre thead tr.cols th{font-size:1.6vmin;padding:4px 2px;letter-spacing:0;}
-  .grp-lbl{font-size:1.6vmin;letter-spacing:0;margin-bottom:2px;padding-bottom:2px;}
   table.dre tr.total td{font-size:1.6vmin;padding-top:6px;padding-bottom:4px;}
   td.imp-cell,table.dre tr.total td.imp-cell{font-size:1.8vmin;}
   .w-conta{width:28%;}.w-num{width:10%;}.w-d{width:10%;}.w-pct{width:7%;}.w-imp{width:11%;}
@@ -163,6 +161,13 @@ body.light-mode .chart-card,body.light-mode .tbl-section{background:#FFFFFF!impo
       <span class="filter-label">Projeto</span>
       <div class="ms-wrap" id="ms-nv3">
         <button class="ms-btn" onclick="toggleMs('ms-nv3')"><span class="ms-lbl">Projeto</span><span class="ms-cnt"></span><svg width="10" height="6" viewBox="0 0 10 6"><path d="M0 0l5 6 5-6z" fill="#F97316"/></svg></button>
+        <div class="ms-panel"><div class="ms-search"><svg width="12" height="12" viewBox="0 0 12 12"><circle cx="5" cy="5" r="4" stroke="#94A3B8" stroke-width="1.5" fill="none"/><line x1="8.5" y1="8.5" x2="11" y2="11" stroke="#94A3B8" stroke-width="1.5"/></svg><input type="text" placeholder="Pesquisar…"></div><div class="ms-list"></div></div>
+      </div>
+    </div>
+    <div class="filter-group">
+      <span class="filter-label">Conta</span>
+      <div class="ms-wrap" id="ms-cta">
+        <button class="ms-btn" onclick="toggleMs('ms-cta')"><span class="ms-lbl">Conta</span><span class="ms-cnt"></span><svg width="10" height="6" viewBox="0 0 10 6"><path d="M0 0l5 6 5-6z" fill="#F97316"/></svg></button>
         <div class="ms-panel"><div class="ms-search"><svg width="12" height="12" viewBox="0 0 12 12"><circle cx="5" cy="5" r="4" stroke="#94A3B8" stroke-width="1.5" fill="none"/><line x1="8.5" y1="8.5" x2="11" y2="11" stroke="#94A3B8" stroke-width="1.5"/></svg><input type="text" placeholder="Pesquisar…"></div><div class="ms-list"></div></div>
       </div>
     </div>
@@ -219,14 +224,14 @@ body.light-mode .chart-card,body.light-mode .tbl-section{background:#FFFFFF!impo
         <thead>
           <tr class="cols">
             <th class="w-conta" id="th-dim">CONTA</th>
-            <th class="w-num num"><span class="grp-lbl">R$/KM</span>Rem</th>
+            <th class="w-num num">Rem</th>
             <th class="w-num num">Real</th>
-            <th class="w-d   num">Δ R$/km</th>
+            <th class="w-d   num">Δ</th>
             <th class="w-pct num">Δ %</th>
             <th class="w-imp num">Impacto</th>
-            <th class="w-d   num sep-l"><span class="grp-lbl">YTD</span>Δ R$/km</th>
-            <th class="w-pct num">Δ %</th>
-            <th class="w-imp num">Impacto</th>
+            <th class="w-d   num sep-l">Δ YTD</th>
+            <th class="w-pct num">Δ YTD %</th>
+            <th class="w-imp num">Impacto YTD</th>
           </tr>
         </thead>
         <tbody id="body-rskm"></tbody>
@@ -247,11 +252,11 @@ const getNv3Prefix = v => v ? v.split('-')[0].trim() : v;
 const getUniLabel  = v => { if(!v) return ''; const i=v.indexOf('-'); return i>=0?v.slice(i+1).trim():v.trim(); };
 
 const CONTAS = [
-  'Combustíveis','Estorno ICMS','Manutenção de Carrocerias',
+  'Combustíveis','Manutenção de Carrocerias',
   'Contratos de Manutenção Fabricante','Recapagens e Outros Serviços',
-  'IPVA e Licenciamento','Seguros','Materiais e Ferramentas de Oficina',
+  'Seguros','Materiais e Ferramentas de Oficina',
   'Personalização/Padronização','Lavação de Veículos','Arla',
-  'Manutenção de Veículos e Equip.','Pneus Novos','ICMS Crédito Presumido','Outros'
+  'Manutenção de Veículos e Equip.','Pneus Novos','Outros'
 ];
 const CONTAS_ALIAS = {
   'Combustíveis Veiculos e Equipamentos':'Combustíveis',
@@ -265,6 +270,8 @@ const CONTAS_ALIAS = {
   'Consertos e Recapagens de Pneus':'Recapagens e Outros Serviços',
   'Pneus e Camaras':'Pneus Novos',
 };
+const CONTAS_EXCLUIR = new Set(['ICMS Crédito Presumido','IPVA e Licenciamento','Estorno ICMS']);
+const PROJ_EXCLUIR   = new Set(['Apoio']);
 
 const fmtBrl  = v => { const neg=+v<0,a=Math.abs(+v); let s; if(a>=1e9) s=(a/1e9).toFixed(2)+' bi'; else if(a>=1e6) s=(a/1e6).toFixed(2)+' mi'; else if(a>=1e5) s=(a/1e3).toFixed(2)+'k'; else s=Math.round(a).toLocaleString('pt-BR'); return (neg?'-':'')+s; };
 const fmtBrlD = v => (+v>=0?'+':'')+fmtBrl(v);
@@ -357,6 +364,7 @@ function parseKmRow(r){
   const vk=vigKey(d),yr=String(d.getFullYear());
   const nv3raw=r[14]!=null?String(r[14]).trim():'';if(!nv3raw)return null;
   const proj=nv3raw.split('-')[0].trim();
+  if(PROJ_EXCLUIR.has(proj))return null;
   const uni=nv3raw.includes('-')?nv3raw.slice(nv3raw.indexOf('-')+1).trim():nv3raw;
   const kmRem=+(r[31]||0),kmReal=+(r[32]||0);
   if(kmRem===0&&kmReal===0)return null;
@@ -383,10 +391,12 @@ function populateFilters(rows){
   buildMsFilter('ms-ano',anos);
   buildVigMsFilter(vigs);
   const hasCost=r=>Math.abs(+(r[C.rem]||0))>0||Math.abs(+(r[C.real]||0))>0;
-  const unis=[...new Set(rows.filter(hasCost).map(r=>getUniLabel(r[C.nv3])).filter(Boolean))].sort();
-  const nv3s=[...new Set(rows.filter(hasCost).map(r=>getNv3Prefix(r[C.nv3])).filter(Boolean))].sort();
+  const hasProjOk=r=>!PROJ_EXCLUIR.has(getNv3Prefix(r[C.nv3]));
+  const unis=[...new Set(rows.filter(hasCost).filter(hasProjOk).map(r=>getUniLabel(r[C.nv3])).filter(Boolean))].sort();
+  const nv3s=[...new Set(rows.filter(hasCost).filter(hasProjOk).map(r=>getNv3Prefix(r[C.nv3])).filter(Boolean))].sort();
   buildMsFilter('ms-uni',unis);
   buildMsFilter('ms-nv3',nv3s);
+  buildMsFilter('ms-cta',CONTAS.filter(c=>c!=='Outros'));
 }
 function syncVigByAno(anos){
   const key=anos.slice().sort().join(',');
@@ -395,8 +405,9 @@ function syncVigByAno(anos){
   const filteredVigs=anos.length>0?vigs.filter(d=>anos.includes(String(d.getFullYear()))):vigs;
   buildVigMsFilter(filteredVigs);
 }
-function getF(){return{ano:getMsValues('ms-ano'),vig:getMsValues('ms-vig'),uni:getMsValues('ms-uni'),nv3:getMsValues('ms-nv3')};}
+function getF(){return{ano:getMsValues('ms-ano'),vig:getMsValues('ms-vig'),uni:getMsValues('ms-uni'),nv3:getMsValues('ms-nv3'),cta:getMsValues('ms-cta')};}
 function applyFilters(r,f){
+  if(PROJ_EXCLUIR.has(getNv3Prefix(r[C.nv3])))return false;
   if(f.uni.length&&!f.uni.includes(getUniLabel(r[C.nv3])))return false;
   if(f.nv3.length&&!f.nv3.includes(getNv3Prefix(r[C.nv3])))return false;
   return true;
@@ -436,11 +447,13 @@ function getYtdVigs(f){
 }
 
 // ── AGREGAÇÃO ──
-function agg(rows){
+function agg(rows,ctaFilter){
   const m={};
   rows.forEach(r=>{
     const raw=r[C.cta]||'Outros';let c=CONTAS_ALIAS[raw]||raw;
+    if(CONTAS_EXCLUIR.has(c))return;
     if(c!=='Receita Líquida'&&!CONTAS.includes(c))c='Outros';
+    if(ctaFilter&&ctaFilter.length&&!ctaFilter.includes(c))return;
     if(!m[c])m[c]={orc:0,rem:0,real:0};
     m[c].orc+=+(r[C.orc]||0);m[c].rem+=+(r[C.rem]||0);m[c].real+=+(r[C.real]||0);
   });
@@ -458,28 +471,34 @@ function sumKmByProj(kmRows){
   kmRows.forEach(r=>{if(!m[r.proj])m[r.proj]={rem:0,real:0};m[r.proj].rem+=r.kmRem;m[r.proj].real+=r.kmReal;});
   return m;
 }
-function aggByUni(rows){
+function aggByUni(rows,ctaFilter){
   const m={};
   rows.forEach(r=>{
     if((r[C.cta]||'')==='Receita Líquida')return;
+    const raw=r[C.cta]||'';const c=CONTAS_ALIAS[raw]||raw;
+    if(CONTAS_EXCLUIR.has(c))return;
+    if(ctaFilter&&ctaFilter.length&&!ctaFilter.includes(c))return;
     const uni=getUniLabel(r[C.nv3]);if(!uni)return;
     if(!m[uni])m[uni]={rem:0,real:0};m[uni].rem+=+(r[C.rem]||0);m[uni].real+=+(r[C.real]||0);
   });
   return m;
 }
-function aggByProj(rows){
+function aggByProj(rows,ctaFilter){
   const m={};
   rows.forEach(r=>{
     if((r[C.cta]||'')==='Receita Líquida')return;
-    const proj=getNv3Prefix(r[C.nv3]);if(!proj)return;
+    const raw=r[C.cta]||'';const c=CONTAS_ALIAS[raw]||raw;
+    if(CONTAS_EXCLUIR.has(c))return;
+    if(ctaFilter&&ctaFilter.length&&!ctaFilter.includes(c))return;
+    const proj=getNv3Prefix(r[C.nv3]);if(!proj||PROJ_EXCLUIR.has(proj))return;
     if(!m[proj])m[proj]={rem:0,real:0};m[proj].rem+=+(r[C.rem]||0);m[proj].real+=+(r[C.real]||0);
   });
   return m;
 }
 
 // ── HERO ──
-function renderHero(activeRows,activeKmRows,ytdRows,ytdKmRows){
-  const km=sumKm(activeKmRows),custo=sumCusto(agg(activeRows));
+function renderHero(activeRows,activeKmRows,ytdRows,ytdKmRows,ctaFilter){
+  const km=sumKm(activeKmRows),custo=sumCusto(agg(activeRows,ctaFilter));
   const rsReal=km.real?custo.real/km.real:null,rsRem=km.rem?custo.rem/km.rem:null;
   const dRs=(rsReal!=null&&rsRem!=null)?rsRem-rsReal:null;
   const dRsP=(dRs!=null&&rsRem&&rsRem!==0)?dRs/Math.abs(rsRem)*100:null;
@@ -492,7 +511,7 @@ function renderHero(activeRows,activeKmRows,ytdRows,ytdKmRows){
   if(eDp){eDp.textContent=pct(dRsP);colI(eDp,dRsP>0);}
   if(eImp){eImp.textContent=imp!=null?fmtBrlD(imp):'—';colI(eImp,imp>0);}
 
-  const kmY=sumKm(ytdKmRows),custoY=sumCusto(agg(ytdRows));
+  const kmY=sumKm(ytdKmRows),custoY=sumCusto(agg(ytdRows,ctaFilter));
   const rsRealY=kmY.real?custoY.real/kmY.real:null,rsRemY=kmY.rem?custoY.rem/kmY.rem:null;
   const dRsY=(rsRealY!=null&&rsRemY!=null)?rsRemY-rsRealY:null;
   const dRsYP=(dRsY!=null&&rsRemY&&rsRemY!==0)?dRsY/Math.abs(rsRemY)*100:null;
@@ -534,7 +553,7 @@ function renderCharts(f){
       const key=`${vy}-${String(m).padStart(2,'0')}`;
       const rows=filterMes(allRows,f,key);
       const kmRows=filterKmRows(allKmRows,f,key);
-      const km=sumKm(kmRows),custo=sumCusto(agg(rows));
+      const km=sumKm(kmRows),custo=sumCusto(agg(rows,f.cta));
       const rsR=km.rem?custo.rem/km.rem:null,rsX=km.real?custo.real/km.real:null;
       dRsReal.push(rsX!=null?-rsX:null);dRsRem.push(rsR!=null?-rsR:null);
       dImp.push((rsX!=null&&rsR!=null)?((rsR-rsX)*km.real):null);
@@ -590,13 +609,13 @@ function renderCharts(f){
 }
 
 // ── TABELA ──
-function renderTable(activeRows,activeKmRows,ytdRows,ytdKmRows){
+function renderTable(activeRows,activeKmRows,ytdRows,ytdKmRows,ctaFilter){
   const kmTot=sumKm(activeKmRows),kmYtd=sumKm(ytdKmRows);
-  const custoTot=sumCusto(agg(activeRows)),custoYtd=sumCusto(agg(ytdRows));
+  const custoTot=sumCusto(agg(activeRows,ctaFilter)),custoYtd=sumCusto(agg(ytdRows,ctaFilter));
   let items=[];
 
   if(tableDim==='conta'){
-    const ag=agg(activeRows),agY=agg(ytdRows);
+    const ag=agg(activeRows,ctaFilter),agY=agg(ytdRows,ctaFilter);
     items=CONTAS.map(c=>{
       const d=ag[c]||{rem:0,real:0},dy=agY[c]||{rem:0,real:0};
       if(d.rem===0&&d.real===0)return null;
@@ -608,7 +627,7 @@ function renderTable(activeRows,activeKmRows,ytdRows,ytdKmRows){
     }).filter(Boolean);
 
   }else if(tableDim==='uni'){
-    const cMap=aggByUni(activeRows),cMapY=aggByUni(ytdRows);
+    const cMap=aggByUni(activeRows,ctaFilter),cMapY=aggByUni(ytdRows,ctaFilter);
     const kMap=sumKmByUni(activeKmRows),kMapY=sumKmByUni(ytdKmRows);
     const keys=new Set([...Object.keys(cMap),...Object.keys(kMap)]);
     items=[...keys].map(uni=>{
@@ -623,7 +642,7 @@ function renderTable(activeRows,activeKmRows,ytdRows,ytdKmRows){
     }).filter(Boolean);
 
   }else{
-    const cMap=aggByProj(activeRows),cMapY=aggByProj(ytdRows);
+    const cMap=aggByProj(activeRows,ctaFilter),cMapY=aggByProj(ytdRows,ctaFilter);
     const kMap=sumKmByProj(activeKmRows),kMapY=sumKmByProj(ytdKmRows);
     const keys=new Set([...Object.keys(cMap),...Object.keys(kMap)]);
     items=[...keys].map(proj=>{
@@ -642,7 +661,7 @@ function renderTable(activeRows,activeKmRows,ytdRows,ytdKmRows){
   let html='';
   items.forEach(({k,rsR,rsX,dRs,dP,imp,rsRY,rsXY,dRsY,dPY,impY})=>{
     const bad=dRs>0,badY=dRsY>0;
-    html+=`<tr><td class="conta">${k}</td><td class="num">${rsKm(rsR)}</td><td class="num">${rsKm(rsX)}</td><td class="num ${bad?'cr':'cg'}">${rsKmD(dRs)}</td><td class="num ${bad?'cr-t':'cg-t'}">${pctInt(dP)}</td><td class="num imp-cell" style="color:${bad?'var(--red)':'var(--green)'}">${fmtBrlD(imp)}</td><td class="num sep-l">${rsKmD(dRsY)}</td><td class="num ${badY?'cr-t':'cg-t'}">${pctInt(dPY)}</td><td class="num imp-cell" style="color:${badY?'var(--red)':'var(--green)'}">${fmtBrlD(impY)}</td></tr>`;
+    html+=`<tr><td class="conta">${k}</td><td class="num">${rsKm(rsR)}</td><td class="num">${rsKm(rsX)}</td><td class="num ${bad?'cr':'cg'}">${rsKmD(dRs)}</td><td class="num ${bad?'cr-t':'cg-t'}">${pctInt(dP)}</td><td class="num imp-cell" style="color:${bad?'var(--red)':'var(--green)'}">${fmtBrlD(imp)}</td><td class="num sep-l ${badY?'cr':'cg'}">${rsKmD(dRsY)}</td><td class="num ${badY?'cr-t':'cg-t'}">${pctInt(dPY)}</td><td class="num imp-cell" style="color:${badY?'var(--red)':'var(--green)'}">${fmtBrlD(impY)}</td></tr>`;
   });
 
   const totRsR=kmTot.rem?custoTot.rem/kmTot.rem:0,totRsX=kmTot.real?custoTot.real/kmTot.real:0;
@@ -650,7 +669,7 @@ function renderTable(activeRows,activeKmRows,ytdRows,ytdKmRows){
   const totRsRY=kmYtd.rem?custoYtd.rem/kmYtd.rem:0,totRsXY=kmYtd.real?custoYtd.real/kmYtd.real:0;
   const totDRsY=totRsRY-totRsXY,totDPY=totRsRY?totDRsY/Math.abs(totRsRY)*100:null,totImpY=totDRsY*kmYtd.real;
   const bT=totDRs>0,bTY=totDRsY>0;
-  html+=`<tr class="total"><td class="conta">Total</td><td class="num">${rsKm(totRsR)}</td><td class="num">${rsKm(totRsX)}</td><td class="num ${bT?'cr':'cg'}">${rsKmD(totDRs)}</td><td class="num ${bT?'cr-t':'cg-t'}">${pctInt(totDP)}</td><td class="num imp-cell" style="color:${bT?'var(--red)':'var(--green)'}">${fmtBrlD(totImp)}</td><td class="num sep-l">${rsKmD(totDRsY)}</td><td class="num ${bTY?'cr-t':'cg-t'}">${pctInt(totDPY)}</td><td class="num imp-cell" style="color:${bTY?'var(--red)':'var(--green)'}">${fmtBrlD(totImpY)}</td></tr>`;
+  html+=`<tr class="total"><td class="conta">Total</td><td class="num">${rsKm(totRsR)}</td><td class="num">${rsKm(totRsX)}</td><td class="num ${bT?'cr':'cg'}">${rsKmD(totDRs)}</td><td class="num ${bT?'cr-t':'cg-t'}">${pctInt(totDP)}</td><td class="num imp-cell" style="color:${bT?'var(--red)':'var(--green)'}">${fmtBrlD(totImp)}</td><td class="num sep-l ${bTY?'cr':'cg'}">${rsKmD(totDRsY)}</td><td class="num ${bTY?'cr-t':'cg-t'}">${pctInt(totDPY)}</td><td class="num imp-cell" style="color:${bTY?'var(--red)':'var(--green)'}">${fmtBrlD(totImpY)}</td></tr>`;
   document.getElementById('body-rskm').innerHTML=html;
 }
 
@@ -665,7 +684,7 @@ function setDim(dim){
     const ytdVigs=getYtdVigs(lastF);
     const yr=filterMes(allRows,{...lastF,vig:ytdVigs});
     const ykr=filterKmRows(allKmRows,{...lastF,vig:ytdVigs});
-    renderTable(ar,akr,yr,ykr);
+    renderTable(ar,akr,yr,ykr,lastF.cta);
   }
 }
 
@@ -681,9 +700,9 @@ function atualizar(){
   const ytdRows=filterMes(allRows,{...f2,vig:ytdVigs});
   const ytdKmRows=filterKmRows(allKmRows,{...f2,vig:ytdVigs});
 
-  renderHero(activeRows,activeKmRows,ytdRows,ytdKmRows);
+  renderHero(activeRows,activeKmRows,ytdRows,ytdKmRows,f2.cta);
   renderCharts(f2);
-  renderTable(activeRows,activeKmRows,ytdRows,ytdKmRows);
+  renderTable(activeRows,activeKmRows,ytdRows,ytdKmRows,f2.cta);
 
   let vigLbl;
   if(!f2.vig||f2.vig.length===0)vigLbl='TODAS';
