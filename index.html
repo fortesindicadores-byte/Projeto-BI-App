@@ -296,6 +296,7 @@ let currentUser    = null;
 let adminTabActive = 'pending';
 let allApprovals   = [];
 let isRegistering  = false;
+let isApproved     = false;
 let pollingInterval = null;
 
 function generateToken() {
@@ -317,6 +318,7 @@ function hideAll() {
 
 function showHub(user) {
   currentUser = user;
+  isApproved = true;
   stopPolling();
   hideAll();
   document.getElementById('hub-screen').style.display = 'block';
@@ -329,6 +331,7 @@ function showHub(user) {
 }
 
 function showAuth() {
+  isApproved = false;
   stopPolling();
   hideAll();
   document.getElementById('auth-screen').style.display = 'flex';
@@ -392,7 +395,7 @@ async function checkApproval(user) {
     showPending(user);
   } catch(e) {
     console.error('checkApproval:', e);
-    showAuth();
+    if (!isApproved) showAuth();
   }
 }
 
@@ -409,7 +412,7 @@ async function init() {
 }
 
 sb.auth.onAuthStateChange(async (event, session) => {
-  if (event === 'SIGNED_IN' && session && !isRegistering) await checkApproval(session.user);
+  if (event === 'SIGNED_IN' && session && !isRegistering && !isApproved) await checkApproval(session.user);
   if (event === 'SIGNED_OUT' && !isRegistering) showAuth();
   if (event === 'PASSWORD_RECOVERY') {
     hideAll();
