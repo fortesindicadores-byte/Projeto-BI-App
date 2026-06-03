@@ -358,7 +358,7 @@ function parseKmRow(r){
   const nv3raw=r[14]!=null?String(r[14]).trim():'';if(!nv3raw)return null;
   const proj=nv3raw.split('-')[0].trim();
   const uni=nv3raw.includes('-')?nv3raw.slice(nv3raw.indexOf('-')+1).trim():nv3raw;
-  const kmRem=+(r[32]||0),kmReal=+(r[33]||0);
+  const kmRem=+(r[31]||0),kmReal=+(r[32]||0);
   if(kmRem===0&&kmReal===0)return null;
   return{vk,yr,uni,proj,kmRem,kmReal};
 }
@@ -481,7 +481,7 @@ function aggByProj(rows){
 function renderHero(activeRows,activeKmRows,ytdRows,ytdKmRows){
   const km=sumKm(activeKmRows),custo=sumCusto(agg(activeRows));
   const rsReal=km.real?custo.real/km.real:null,rsRem=km.rem?custo.rem/km.rem:null;
-  const dRs=(rsReal!=null&&rsRem!=null)?rsReal-rsRem:null;
+  const dRs=(rsReal!=null&&rsRem!=null)?rsRem-rsReal:null;
   const dRsP=(dRs!=null&&rsRem&&rsRem!==0)?dRs/Math.abs(rsRem)*100:null;
   const imp=(dRs!=null)?dRs*km.real:null;
 
@@ -494,7 +494,7 @@ function renderHero(activeRows,activeKmRows,ytdRows,ytdKmRows){
 
   const kmY=sumKm(ytdKmRows),custoY=sumCusto(agg(ytdRows));
   const rsRealY=kmY.real?custoY.real/kmY.real:null,rsRemY=kmY.rem?custoY.rem/kmY.rem:null;
-  const dRsY=(rsRealY!=null&&rsRemY!=null)?rsRealY-rsRemY:null;
+  const dRsY=(rsRealY!=null&&rsRemY!=null)?rsRemY-rsRealY:null;
   const dRsYP=(dRsY!=null&&rsRemY&&rsRemY!==0)?dRsY/Math.abs(rsRemY)*100:null;
   const impY=(dRsY!=null)?dRsY*kmY.real:null;
   const eYv=document.getElementById('h-ytd-v'),eYp=document.getElementById('h-ytd-p'),eYimp=document.getElementById('h-ytd-imp');
@@ -550,14 +550,14 @@ function renderCharts(f){
 
   function dsRsBar(data,label,refData){
     var hF=hlIdxs&&hlIdxs.length>0;
-    var bg=data.map(function(v,i){if(v==null)return 'transparent';var o=refData&&refData[i]!=null?refData[i]:null;var bad=(o==null||v>o);var a=hF?(hlIdxs.includes(i)?'.85':'.2'):'.65';return bad?'rgba(255,102,102,'+a+')':'rgba(59,179,59,'+a+')';});
-    var bc=data.map(function(v,i){if(v==null)return 'transparent';var o=refData&&refData[i]!=null?refData[i]:null;return(o==null||v>o)?'#FF6666':'#3BB33B';});
+    var bg=data.map(function(v,i){if(v==null)return 'transparent';var o=refData&&refData[i]!=null?refData[i]:null;var bad=(o==null||v<o);var a=hF?(hlIdxs.includes(i)?'.85':'.2'):'.65';return bad?'rgba(255,102,102,'+a+')':'rgba(59,179,59,'+a+')';});
+    var bc=data.map(function(v,i){if(v==null)return 'transparent';var o=refData&&refData[i]!=null?refData[i]:null;return(o==null||v<o)?'#FF6666':'#3BB33B';});
     return{type:'bar',label,data,backgroundColor:bg,borderColor:bc,borderWidth:1,borderRadius:3,order:2};
   }
   function dsImpBar(data,label){
     var hF=hlIdxs&&hlIdxs.length>0;
-    var bg=data.map(function(v,i){if(v==null)return 'transparent';var bad=v>0;var a=hF?(hlIdxs.includes(i)?'.85':'.2'):'.65';return bad?'rgba(255,102,102,'+a+')':'rgba(59,179,59,'+a+')';});
-    var bc=data.map(function(v){if(v==null)return 'transparent';return v>0?'#FF6666':'#3BB33B';});
+    var bg=data.map(function(v,i){if(v==null)return 'transparent';var bad=v<0;var a=hF?(hlIdxs.includes(i)?'.85':'.2'):'.65';return bad?'rgba(255,102,102,'+a+')':'rgba(59,179,59,'+a+')';});
+    var bc=data.map(function(v){if(v==null)return 'transparent';return v<0?'#FF6666':'#3BB33B';});
     return{type:'bar',label,data,backgroundColor:bg,borderColor:bc,borderWidth:1,borderRadius:3,order:1};
   }
   const dsRem=(data,label)=>({type:'line',label,data,borderColor:remC,borderWidth:3,tension:.3,fill:false,borderDash:[5,3],pointRadius:mkR(data),pointBackgroundColor:mkBg(data,remC),pointBorderColor:mkBc(data,remC),pointBorderWidth:mkBw(data),order:1});
@@ -601,9 +601,9 @@ function renderTable(activeRows,activeKmRows,ytdRows,ytdKmRows){
       const d=ag[c]||{rem:0,real:0},dy=agY[c]||{rem:0,real:0};
       if(d.rem===0&&d.real===0)return null;
       const rsR=kmTot.rem?d.rem/kmTot.rem:0,rsX=kmTot.real?d.real/kmTot.real:0;
-      const dRs=rsX-rsR,dP=rsR?dRs/Math.abs(rsR)*100:null,imp=dRs*kmTot.real;
+      const dRs=rsR-rsX,dP=rsR?dRs/Math.abs(rsR)*100:null,imp=dRs*kmTot.real;
       const rsRY=kmYtd.rem?dy.rem/kmYtd.rem:0,rsXY=kmYtd.real?dy.real/kmYtd.real:0;
-      const dRsY=rsXY-rsRY,dPY=rsRY?dRsY/Math.abs(rsRY)*100:null,impY=dRsY*kmYtd.real;
+      const dRsY=rsRY-rsXY,dPY=rsRY?dRsY/Math.abs(rsRY)*100:null,impY=dRsY*kmYtd.real;
       return{k:c,rsR,rsX,dRs,dP,imp,rsRY,rsXY,dRsY,dPY,impY};
     }).filter(Boolean);
 
@@ -615,10 +615,10 @@ function renderTable(activeRows,activeKmRows,ytdRows,ytdKmRows){
       const d=cMap[uni]||{rem:0,real:0},k=kMap[uni]||{rem:0,real:0};
       if(d.rem===0&&d.real===0)return null;
       const rsR=k.rem?d.rem/k.rem:0,rsX=k.real?d.real/k.real:0;
-      const dRs=rsX-rsR,dP=rsR?dRs/Math.abs(rsR)*100:null,imp=dRs*k.real;
+      const dRs=rsR-rsX,dP=rsR?dRs/Math.abs(rsR)*100:null,imp=dRs*k.real;
       const dy=cMapY[uni]||{rem:0,real:0},ky=kMapY[uni]||{rem:0,real:0};
       const rsRY=ky.rem?dy.rem/ky.rem:0,rsXY=ky.real?dy.real/ky.real:0;
-      const dRsY=rsXY-rsRY,dPY=rsRY?dRsY/Math.abs(rsRY)*100:null,impY=dRsY*ky.real;
+      const dRsY=rsRY-rsXY,dPY=rsRY?dRsY/Math.abs(rsRY)*100:null,impY=dRsY*ky.real;
       return{k:uni,rsR,rsX,dRs,dP,imp,rsRY,rsXY,dRsY,dPY,impY};
     }).filter(Boolean);
 
@@ -630,10 +630,10 @@ function renderTable(activeRows,activeKmRows,ytdRows,ytdKmRows){
       const d=cMap[proj]||{rem:0,real:0},k=kMap[proj]||{rem:0,real:0};
       if(d.rem===0&&d.real===0)return null;
       const rsR=k.rem?d.rem/k.rem:0,rsX=k.real?d.real/k.real:0;
-      const dRs=rsX-rsR,dP=rsR?dRs/Math.abs(rsR)*100:null,imp=dRs*k.real;
+      const dRs=rsR-rsX,dP=rsR?dRs/Math.abs(rsR)*100:null,imp=dRs*k.real;
       const dy=cMapY[proj]||{rem:0,real:0},ky=kMapY[proj]||{rem:0,real:0};
       const rsRY=ky.rem?dy.rem/ky.rem:0,rsXY=ky.real?dy.real/ky.real:0;
-      const dRsY=rsXY-rsRY,dPY=rsRY?dRsY/Math.abs(rsRY)*100:null,impY=dRsY*ky.real;
+      const dRsY=rsRY-rsXY,dPY=rsRY?dRsY/Math.abs(rsRY)*100:null,impY=dRsY*ky.real;
       return{k:proj,rsR,rsX,dRs,dP,imp,rsRY,rsXY,dRsY,dPY,impY};
     }).filter(Boolean);
   }
@@ -646,9 +646,9 @@ function renderTable(activeRows,activeKmRows,ytdRows,ytdKmRows){
   });
 
   const totRsR=kmTot.rem?custoTot.rem/kmTot.rem:0,totRsX=kmTot.real?custoTot.real/kmTot.real:0;
-  const totDRs=totRsX-totRsR,totDP=totRsR?totDRs/Math.abs(totRsR)*100:null,totImp=totDRs*kmTot.real;
+  const totDRs=totRsR-totRsX,totDP=totRsR?totDRs/Math.abs(totRsR)*100:null,totImp=totDRs*kmTot.real;
   const totRsRY=kmYtd.rem?custoYtd.rem/kmYtd.rem:0,totRsXY=kmYtd.real?custoYtd.real/kmYtd.real:0;
-  const totDRsY=totRsXY-totRsRY,totDPY=totRsRY?totDRsY/Math.abs(totRsRY)*100:null,totImpY=totDRsY*kmYtd.real;
+  const totDRsY=totRsRY-totRsXY,totDPY=totRsRY?totDRsY/Math.abs(totRsRY)*100:null,totImpY=totDRsY*kmYtd.real;
   const bT=totDRs>0,bTY=totDRsY>0;
   html+=`<tr class="total"><td class="conta">Total</td><td class="num">${rsKm(totRsR)}</td><td class="num">${rsKm(totRsX)}</td><td class="num ${bT?'cr':'cg'}">${rsKmD(totDRs)}</td><td class="num ${bT?'cr-t':'cg-t'}">${pctInt(totDP)}</td><td class="num imp-cell" style="color:${bT?'var(--red)':'var(--green)'}">${fmtBrlD(totImp)}</td><td class="num sep-l">${rsKmD(totDRsY)}</td><td class="num ${bTY?'cr-t':'cg-t'}">${pctInt(totDPY)}</td><td class="num imp-cell" style="color:${bTY?'var(--red)':'var(--green)'}">${fmtBrlD(totImpY)}</td></tr>`;
   document.getElementById('body-rskm').innerHTML=html;
