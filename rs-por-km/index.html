@@ -249,7 +249,7 @@ const KM_TAB   = 'Dispersão de km';
 const C = {orc:0,rem:1,real:2,vig:9,nv3:11,cta:12};
 
 const getNv3Prefix = v => v ? v.split('-')[0].trim() : v;
-const getUniLabel  = v => { if(!v) return ''; const i=v.indexOf('-'); return i>=0?v.slice(i+1).trim():v.trim(); };
+const getUniLabel  = v => { if(!v) return ''; const i=v.indexOf('-'); const s=i>=0?v.slice(i+1).trim():v.trim(); return s.replace(/\s*\(INATIVO\)\s*/i,'').trim(); };
 
 const CONTAS = [
   'Combustíveis','Manutenção de Carrocerias',
@@ -365,7 +365,7 @@ function parseKmRow(r){
   const nv3raw=r[14]!=null?String(r[14]).trim():'';if(!nv3raw)return null;
   const proj=nv3raw.split('-')[0].trim();
   if(PROJ_EXCLUIR.has(proj))return null;
-  const uni=nv3raw.includes('-')?nv3raw.slice(nv3raw.indexOf('-')+1).trim():nv3raw;
+  const uni=(nv3raw.includes('-')?nv3raw.slice(nv3raw.indexOf('-')+1).trim():nv3raw).replace(/\s*\(INATIVO\)\s*/i,'').trim();
   const kmRem=+(r[31]||0),kmReal=+(r[32]||0);
   if(kmRem===0&&kmReal===0)return null;
   return{vk,yr,uni,proj,kmRem,kmReal};
@@ -392,8 +392,8 @@ function populateFilters(rows){
   buildVigMsFilter(vigs);
   const hasCost=r=>Math.abs(+(r[C.rem]||0))>0||Math.abs(+(r[C.real]||0))>0;
   const hasProjOk=r=>!PROJ_EXCLUIR.has(getNv3Prefix(r[C.nv3]));
-  const unis=[...new Set(rows.filter(hasCost).filter(hasProjOk).map(r=>getUniLabel(r[C.nv3])).filter(Boolean))].sort();
-  const nv3s=[...new Set(rows.filter(hasCost).filter(hasProjOk).map(r=>getNv3Prefix(r[C.nv3])).filter(Boolean))].sort();
+  const unis=[...new Set(rows.filter(hasCost).filter(hasProjOk).map(r=>getUniLabel(r[C.nv3])).filter(Boolean).filter(u=>u.toLowerCase()!=='apoio'))].sort();
+  const nv3s=[...new Set(rows.filter(hasCost).filter(hasProjOk).map(r=>getNv3Prefix(r[C.nv3])).filter(Boolean).filter(p=>p.toLowerCase()!=='apoio'))].sort();
   buildMsFilter('ms-uni',unis);
   buildMsFilter('ms-nv3',nv3s);
   buildMsFilter('ms-cta',CONTAS.filter(c=>c!=='Outros'));
