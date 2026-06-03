@@ -319,6 +319,7 @@ function hideAll() {
 function showHub(user) {
   currentUser = user;
   isApproved = true;
+  localStorage.setItem('bi_approved_' + user.id, '1');
   stopPolling();
   hideAll();
   document.getElementById('hub-screen').style.display = 'block';
@@ -379,6 +380,8 @@ function stopPolling() {
 
 async function checkApproval(user) {
   if (user.email === ADMIN_EMAIL) { showHub(user); return; }
+  const cached = localStorage.getItem('bi_approved_' + user.id);
+  if (cached) showHub(user);
   try {
     const result = await Promise.race([
       sb.from('user_approvals').select('status').eq('user_id', user.id).single(),
@@ -386,13 +389,14 @@ async function checkApproval(user) {
     ]);
     const data = result?.data;
     if (data?.status === 'blocked') {
+      localStorage.removeItem('bi_approved_' + user.id);
       setMsg('Seu acesso está bloqueado. Entre em contato com o administrador.', 'error');
       await sb.auth.signOut();
       showAuth();
       return;
     }
     if (data?.status === 'approved') { showHub(user); return; }
-    showPending(user);
+    if (!cached) showPending(user);
   } catch(e) {
     console.error('checkApproval:', e);
     if (!isApproved) showAuth();
@@ -491,6 +495,7 @@ async function doRegister() {
 
 async function doLogout() {
   stopPolling();
+  if (currentUser) localStorage.removeItem('bi_approved_' + currentUser.id);
   await sb.auth.signOut();
 }
 
