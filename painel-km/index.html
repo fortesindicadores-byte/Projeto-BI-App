@@ -1,0 +1,1097 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Painel KM · BI Frota</title>
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0"></script>
+<style>
+:root {
+  --bg:     #0C1017;
+  --card:   #141B26;
+  --card2:  #1A2335;
+  --border: #1E2D40;
+  --orange: #F97316;
+  --blue:   #38BDF8;
+  --text:   #F1F5F9;
+  --text2:  #94A3B8;
+  --text3:  #475569;
+  --green:  #3BB33B;
+  --red:    #FF6666;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+body{
+  background:
+    radial-gradient(ellipse at 10% 25%,rgba(249,115,22,.06) 0%,transparent 50%),
+    radial-gradient(ellipse at 90% 75%,rgba(56,189,248,.05) 0%,transparent 50%),
+    var(--bg);
+  color:var(--text);
+  font-family:'Montserrat',-apple-system,sans-serif;
+  font-size:15px;min-height:100vh;
+}
+
+/* ── Header ── */
+.header{
+  background:rgba(12,16,23,.75);border-bottom:1px solid rgba(255,255,255,.07);
+  padding:10px 24px 12px;display:flex;flex-wrap:wrap;align-items:center;
+  position:sticky;top:0;z-index:100;
+  backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);
+  box-shadow:0 2px 12px rgba(0,0,0,.3);
+}
+.brand{flex:1;order:1;}
+.brand h1{font-size:18px;font-weight:700;color:var(--orange);}
+.brand p{font-size:12px;color:var(--text2);margin-top:2px;}
+.header-right{flex-shrink:0;order:2;display:flex;align-items:center;gap:8px;}
+.status-badge{
+  font-size:9px;color:var(--text);
+  background:rgba(249,115,22,.15);border:1px solid rgba(249,115,22,.3);
+  border-radius:4px;padding:2px 8px;white-space:nowrap;
+}
+.access-badge{
+  font-size:9px;color:var(--text2);
+  background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);
+  border-radius:4px;padding:2px 8px;white-space:nowrap;
+}
+.refresh-btn{
+  background:rgba(249,115,22,.15);border:1px solid rgba(249,115,22,.3);
+  border-radius:4px;padding:4px 8px;cursor:pointer;color:var(--orange);
+  display:flex;align-items:center;
+}
+.refresh-btn:hover{background:rgba(249,115,22,.32);}
+.theme-btn{background:rgba(249,115,22,.15);border:1px solid rgba(249,115,22,.3);border-radius:4px;padding:4px 6px;cursor:pointer;color:var(--orange);display:flex;align-items:center;}
+.theme-btn:hover{background:rgba(249,115,22,.25);}
+.back-btn{background:rgba(249,115,22,.15);border:1px solid rgba(249,115,22,.3);border-radius:4px;padding:4px 8px;display:flex;align-items:center;color:var(--orange);text-decoration:none;}
+.back-btn:hover{background:rgba(249,115,22,.32);}
+
+/* ── Light mode ── */
+body.light-mode .main{background:#F0F0F0;--text:#1a1a1a;--text2:#444444;--text3:#666666;}
+body.light-mode .kpi-card,
+body.light-mode .chart-card,
+body.light-mode .tbl-section{background:#EDEEF2!important;border-color:transparent!important;box-shadow:0 1px 6px rgba(0,0,0,.09)!important;--text:#1a1a1a;--text2:#444444;--text3:#555555;}
+body.light-mode .chart-leg span:nth-child(2) .leg-dash{border-color:#1a1a1a!important;}
+body.light-mode .tbl-section td{color:var(--text);}
+
+/* ── Drill Tabs ── */
+.drill-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;}
+.drill-tabs{display:flex;gap:4px;}
+.drill-tab{padding:4px 12px;font-family:'Montserrat',sans-serif;font-size:9px;font-weight:800;border:1px solid rgba(255,255,255,.1);border-radius:5px;cursor:pointer;background:transparent;color:var(--text2);text-transform:uppercase;letter-spacing:.6px;transition:all .2s;}
+.drill-tab:hover{border-color:rgba(249,115,22,.4);color:var(--orange);}
+.drill-tab.active{background:rgba(249,115,22,.15);border-color:rgba(249,115,22,.4);color:var(--orange);}
+body.light-mode .drill-tab{border-color:rgba(0,0,0,.15);color:#666;}
+body.light-mode .drill-tab.active{background:rgba(217,94,8,.1);border-color:rgba(217,94,8,.4);color:#D95E08;}
+
+/* ── Filters ── */
+.header-filters{flex-basis:100%;order:3;margin-top:10px;display:flex;gap:10px;flex-wrap:wrap;align-items:flex-start;}
+.filter-group{display:flex;flex-direction:column;gap:3px;}
+.filter-label{font-size:11px;color:var(--text2);text-transform:uppercase;letter-spacing:.5px;}
+
+/* ── Multi-select ── */
+.ms-wrap{position:relative;}
+.ms-btn{
+  display:flex;align-items:center;gap:8px;
+  background:#0a0f18;color:var(--text);
+  border:1px solid #2a3a50;border-radius:4px;
+  font-family:'Montserrat',sans-serif;font-size:13px;font-weight:700;
+  padding:6px 12px;cursor:pointer;text-transform:uppercase;
+  letter-spacing:.5px;white-space:nowrap;min-width:110px;
+}
+.ms-btn:hover{border-color:var(--orange);}
+.ms-lbl{flex:1;}
+.ms-cnt{background:var(--orange);color:#000;border-radius:10px;padding:1px 6px;font-size:11px;font-weight:800;display:none;}
+.ms-btn svg{flex-shrink:0;opacity:.8;}
+.ms-panel{
+  display:none;flex-direction:column;
+  position:absolute;top:calc(100% + 4px);left:0;z-index:500;
+  background:#0f1824;border:1px solid #2a3a50;border-radius:4px;
+  min-width:200px;max-height:300px;
+  box-shadow:0 8px 24px rgba(0,0,0,.7);
+}
+.ms-panel.open{display:flex;}
+.ms-opt{
+  display:flex;align-items:center;gap:8px;
+  padding:7px 12px;cursor:pointer;font-size:13px;color:var(--text2);
+}
+.ms-opt:hover{background:rgba(255,255,255,.05);color:var(--text);}
+.ms-opt.all-opt{border-bottom:1px solid #1e2d40;color:var(--text);font-weight:700;}
+.ms-opt input[type=checkbox]{accent-color:var(--orange);cursor:pointer;width:14px;height:14px;flex-shrink:0;}
+.ms-search{padding:7px 10px;border-bottom:1px solid #1e2d40;display:flex;align-items:center;gap:6px;flex-shrink:0;}
+.ms-search svg{opacity:.4;flex-shrink:0;}
+.ms-search input{flex:1;background:transparent;border:none;color:var(--text);font-family:'Montserrat',sans-serif;font-size:12px;outline:none;}
+.ms-search input::placeholder{color:var(--text3);}
+.ms-list{overflow-y:auto;max-height:220px;flex:1;}
+.ms-list::-webkit-scrollbar{width:4px;}
+.ms-list::-webkit-scrollbar-track{background:transparent;}
+.ms-list::-webkit-scrollbar-thumb{background:#2a3a50;border-radius:2px;}
+.ms-only{margin-left:auto;font-size:8px;color:var(--orange);padding:1px 5px;border-radius:2px;cursor:pointer;white-space:nowrap;flex-shrink:0;opacity:0;transition:opacity .12s;}
+.ms-opt:hover .ms-only{opacity:1;}
+.ms-only:hover{background:rgba(249,115,22,.2);}
+
+/* ── Main ── */
+.main{padding:20px 24px;}
+
+/* ── Hero ── */
+.hero{margin-bottom:20px;padding:0 4px;}
+.hero-label{font-size:12px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:1px;}
+.hero-value{font-size:54px;font-weight:800;color:var(--text);line-height:1;margin:4px 0 0;}
+.hero-info-row{display:flex;align-items:baseline;gap:20px;margin:6px 0 10px;flex-wrap:wrap;}
+.hero-info-item{display:flex;flex-direction:column;gap:2px;}
+.hero-info-label{font-size:12px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.5px;}
+.hero-info-val{font-size:24px;font-weight:800;color:var(--text2);line-height:1;}
+.hero-deltas{display:flex;gap:24px;flex-wrap:wrap;align-items:center;}
+.hero-delta{font-size:12px;color:var(--text2);}
+.hero-delta b{font-size:16px;font-weight:700;display:block;margin-top:2px;}
+.hero-sep{width:1px;background:rgba(255,255,255,.2);height:36px;margin:0 4px;align-self:center;}
+
+/* ── Charts ── */
+.charts-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px;}
+.chart-card{
+  background:rgba(20,27,38,.55);border:1px solid rgba(255,255,255,.07);border-radius:8px;
+  padding:18px 20px;
+  backdrop-filter:blur(16px);box-shadow:0 2px 12px rgba(0,0,0,.25);
+}
+.chart-card-full{margin-bottom:16px;}
+.chart-title{font-size:17px;font-weight:800;color:var(--text);margin-bottom:4px;}
+.chart-sub{font-size:12px;color:var(--text2);margin-bottom:16px;}
+.chart-wrap{position:relative;height:220px;}
+.chart-wrap-tall{position:relative;height:280px;}
+.chart-leg{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:12px;}
+.chart-leg span{display:flex;align-items:center;gap:5px;font-size:10px;color:var(--text2);}
+.chart-leg .leg-bar{display:inline-block;width:5px;height:11px;border-radius:2px 2px 0 0;vertical-align:middle;margin-right:1px;}
+.chart-leg .leg-dash{display:inline-block;width:18px;height:0;border-top:2px dashed;vertical-align:middle;margin-right:1px;}
+.chart-leg .leg-sq{display:inline-block;width:10px;height:10px;border:1.5px solid var(--text2);border-radius:1px;vertical-align:middle;margin-right:3px;}
+
+/* ── Table ── */
+.tbl-section{
+  background:rgba(20,27,38,.55);border:1px solid rgba(255,255,255,.07);border-radius:8px;
+  padding:18px 20px 16px;margin-bottom:16px;
+  backdrop-filter:blur(16px);box-shadow:0 2px 12px rgba(0,0,0,.25);
+}
+.tbl-title{font-size:18px;font-weight:800;color:var(--text);margin-bottom:3px;}
+.tbl-sub{font-size:12px;color:var(--text2);margin-bottom:16px;}
+table{width:100%;border-collapse:collapse;font-size:14px;}
+thead th{
+  background:transparent;color:var(--text);font-size:13px;font-weight:700;
+  padding:8px 8px 12px;border-bottom:1px solid rgba(255,255,255,.10);
+  text-transform:uppercase;letter-spacing:.5px;white-space:nowrap;
+}
+td{padding:13px 8px;border:none;color:var(--text);white-space:nowrap;}
+tbody tr:hover{background:rgba(255,255,255,.035);}
+tfoot tr.total td{
+  color:var(--text);font-weight:700;font-size:14px;
+  border-top:2px solid rgba(255,255,255,.12);
+  padding-top:14px;padding-bottom:8px;
+}
+tfoot tr.total td.conta{font-weight:800;}
+td.num{text-align:right;}
+th.num{text-align:right;}
+table td:first-child,table th:first-child{text-align:left;}
+th.sep-imp,td.sep-imp{border-right:2px solid rgba(255,255,255,.15);padding-right:16px;}
+body.light-mode th.sep-imp,body.light-mode td.sep-imp{border-right-color:rgba(0,0,0,.13);}
+
+/* ── Color helpers ── */
+.cr{color:var(--red)!important;font-weight:700;}
+.cg{color:var(--green)!important;font-weight:700;}
+
+/* ── Mobile ── */
+@media(max-width:768px){
+  body{font-size:13px;}
+  .header{padding:8px 12px 10px;}
+  .header-right{gap:4px;}
+  .header-right .refresh-btn{display:none;}
+  .brand h1{font-size:14px;}
+  .brand p{font-size:9px;}
+  .status-badge,.access-badge{font-size:8px;padding:2px 6px;}
+  .theme-btn{padding:3px 5px;}
+  .theme-btn svg{width:13px;height:13px;}
+  .filter-label{font-size:8px;}
+  .header-filters{gap:5px;margin-top:8px;}
+  .filter-group{flex:0 0 calc(50% - 3px);}
+  .ms-wrap{width:100%;}
+  .ms-btn{width:100%;min-width:0;font-size:8px;padding:3px 6px;}
+  .ms-cnt{font-size:8px;}
+  .ms-opt{font-size:9px;}
+  .main{padding:12px;}
+  .hero-label{font-size:9px;}
+  .hero-value{font-size:32px;}
+  .hero-info-val{font-size:16px;}
+  .hero-delta{font-size:9px;}
+  .hero-delta b{font-size:13px;}
+  .chart-title{font-size:11px;}
+  .chart-sub{font-size:8px;}
+  .tbl-title{font-size:14px;}
+  .tbl-sub{font-size:9px;}
+  .charts-grid{grid-template-columns:1fr;}
+  table{table-layout:fixed;width:100%;font-size:1.6vmin;}
+  thead th{font-size:1.6vmin;padding:4px 2px;letter-spacing:0;}
+  tfoot tr.total td{font-size:1.6vmin;padding-top:6px;padding-bottom:4px;}
+}
+</style>
+</head>
+<body>
+
+<header class="header">
+  <div class="brand">
+    <h1>PAINEL KM</h1>
+    <p>Dispersão de Quilometragem · Frota</p>
+  </div>
+  <div class="header-right">
+    <a href="../" class="back-btn" title="Voltar ao Hub"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg></a>
+    <button class="theme-btn" id="themeBtn" title="Modo claro/escuro"></button>
+    <button class="refresh-btn" onclick="atualizar()" title="Atualizar dados">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><polyline points="23 20 23 14 17 14"/><path d="M20.49 9A9 9 0 0 0 5.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 0 1 3.51 15"/></svg>
+    </button>
+    <span class="status-badge" id="status-badge">Carregando…</span>
+    <span class="access-badge" id="access-badge" style="display:none"></span>
+  </div>
+  <div class="header-filters">
+    <div class="filter-group">
+      <span class="filter-label">Ano</span>
+      <div class="ms-wrap" id="ms-ano">
+        <button class="ms-btn" id="ms-ano-btn" onclick="toggleMs('ms-ano')">
+          <span class="ms-lbl">Ano</span><span class="ms-cnt" id="ms-ano-cnt"></span>
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+        </button>
+        <div class="ms-panel" id="ms-ano-panel"><div class="ms-search"><svg width="12" height="12" viewBox="0 0 12 12"><circle cx="5" cy="5" r="4" stroke="#94A3B8" stroke-width="1.5" fill="none"/><line x1="8.5" y1="8.5" x2="11" y2="11" stroke="#94A3B8" stroke-width="1.5"/></svg><input type="text" placeholder="Digite para pesquisar…"></div><div class="ms-list"></div></div>
+      </div>
+    </div>
+    <div class="filter-group">
+      <span class="filter-label">Vigência</span>
+      <div class="ms-wrap" id="ms-vig">
+        <button class="ms-btn" id="ms-vig-btn" onclick="toggleMs('ms-vig')">
+          <span class="ms-lbl">Vigência</span><span class="ms-cnt" id="ms-vig-cnt"></span>
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+        </button>
+        <div class="ms-panel" id="ms-vig-panel"><div class="ms-search"><svg width="12" height="12" viewBox="0 0 12 12"><circle cx="5" cy="5" r="4" stroke="#94A3B8" stroke-width="1.5" fill="none"/><line x1="8.5" y1="8.5" x2="11" y2="11" stroke="#94A3B8" stroke-width="1.5"/></svg><input type="text" placeholder="Digite para pesquisar…"></div><div class="ms-list"></div></div>
+      </div>
+    </div>
+    <div class="filter-group">
+      <span class="filter-label">Unidade</span>
+      <div class="ms-wrap" id="ms-und">
+        <button class="ms-btn" id="ms-und-btn" onclick="toggleMs('ms-und')">
+          <span class="ms-lbl">Unidade</span><span class="ms-cnt" id="ms-und-cnt"></span>
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+        </button>
+        <div class="ms-panel" id="ms-und-panel"><div class="ms-search"><svg width="12" height="12" viewBox="0 0 12 12"><circle cx="5" cy="5" r="4" stroke="#94A3B8" stroke-width="1.5" fill="none"/><line x1="8.5" y1="8.5" x2="11" y2="11" stroke="#94A3B8" stroke-width="1.5"/></svg><input type="text" placeholder="Digite para pesquisar…"></div><div class="ms-list"></div></div>
+      </div>
+    </div>
+    <div class="filter-group">
+      <span class="filter-label">Projeto</span>
+      <div class="ms-wrap" id="ms-proj">
+        <button class="ms-btn" id="ms-proj-btn" onclick="toggleMs('ms-proj')">
+          <span class="ms-lbl">Projeto</span><span class="ms-cnt" id="ms-proj-cnt"></span>
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+        </button>
+        <div class="ms-panel" id="ms-proj-panel"><div class="ms-search"><svg width="12" height="12" viewBox="0 0 12 12"><circle cx="5" cy="5" r="4" stroke="#94A3B8" stroke-width="1.5" fill="none"/><line x1="8.5" y1="8.5" x2="11" y2="11" stroke="#94A3B8" stroke-width="1.5"/></svg><input type="text" placeholder="Digite para pesquisar…"></div><div class="ms-list"></div></div>
+      </div>
+    </div>
+  </div>
+</header>
+
+<div class="main">
+
+  <!-- Hero -->
+  <div class="hero">
+    <div class="hero-label">KM REALIZADO</div>
+    <div class="hero-value" id="hero-val">—</div>
+    <div class="hero-info-row">
+      <span class="hero-info-item">
+        <span class="hero-info-label">KM/FROTA ATIVA</span>
+        <span class="hero-info-val" id="hero-kmfrota" style="color:var(--text);">—</span>
+      </span>
+      <span class="hero-info-item">
+        <span class="hero-info-label">KM/VIAGEM</span>
+        <span class="hero-info-val" id="hero-kmviagem" style="color:var(--text);">—</span>
+      </span>
+    </div>
+    <div class="hero-deltas">
+      <div class="hero-delta"><span>Δ Rem</span><b id="d-rem-abs">—</b></div>
+      <div class="hero-delta"><span>Δ Rem %</span><b id="d-rem-pct">—</b></div>
+      <div class="hero-delta"><span>Impacto</span><b id="d-imp">—</b></div>
+      <div class="hero-sep"></div>
+      <div class="hero-delta"><span>Δ YTD</span><b id="d-ytd-abs">—</b></div>
+      <div class="hero-delta"><span>Δ YTD %</span><b id="d-ytd-pct">—</b></div>
+      <div class="hero-delta"><span>Impacto YTD</span><b id="d-ytd-imp">—</b></div>
+    </div>
+  </div>
+
+  <!-- Gráficos linha 1: Evolução KM + Impacto Financeiro -->
+  <div class="charts-grid">
+    <div class="chart-card">
+      <div class="chart-title">Dispersão de KM %</div>
+      <div class="chart-leg">
+        <span><i class="leg-sq"></i>▲ Rem %</span>
+        <span><i class="leg-dash"></i>Meta (5%)</span>
+      </div>
+      <div class="chart-wrap"><canvas id="chart-evolucao"></canvas></div>
+    </div>
+    <div class="chart-card">
+      <div class="chart-title">Impacto Financeiro</div>
+      <div class="chart-sub">Impacto financeiro acumulado (BRL) · por vigência</div>
+      <div class="chart-wrap"><canvas id="chart-impacto"></canvas></div>
+    </div>
+  </div>
+
+  <!-- Gráfico linha 2: Km/Frota Ativa + Km/Viagem -->
+  <div class="charts-grid" style="margin-bottom:16px;">
+    <div class="chart-card">
+      <div class="chart-title">Km / Frota Ativa</div>
+      <div class="chart-sub">Média por mês · período filtrado</div>
+      <div class="chart-wrap"><canvas id="chart-kmfrota"></canvas></div>
+    </div>
+    <div class="chart-card">
+      <div class="chart-title">Km / Viagem</div>
+      <div class="chart-sub">Km realizado ÷ viagens · por mês</div>
+      <div class="chart-wrap"><canvas id="chart-kmviagem"></canvas></div>
+    </div>
+  </div>
+
+  <!-- Gráficos linha 3: Δ KM e Δ% por Projeto -->
+  <div class="charts-grid">
+    <div class="chart-card">
+      <div class="chart-title">Δ KM por Projeto</div>
+      <div class="chart-sub">Ranqueado pelo desvio absoluto · período filtrado</div>
+      <div class="chart-wrap-tall"><canvas id="chart-proj-km"></canvas></div>
+    </div>
+    <div class="chart-card">
+      <div class="chart-title">Δ % por Projeto</div>
+      <div class="chart-sub">Ranqueado pelo desvio percentual · período filtrado</div>
+      <div class="chart-wrap-tall"><canvas id="chart-proj-pct"></canvas></div>
+    </div>
+  </div>
+
+  <!-- Tabela -->
+  <div class="tbl-section">
+    <div class="drill-header">
+      <div class="tbl-title" id="title-disp">Dispersão por Unidade</div>
+      <div class="drill-tabs">
+        <button class="drill-tab active" data-view="und" onclick="setDrillKM('und')">Unidade</button>
+        <button class="drill-tab" data-view="proj" onclick="setDrillKM('proj')">Projeto</button>
+      </div>
+    </div>
+    <div class="tbl-sub">Ranqueado pelo Δ KM do mês · positivo = realizou mais que o remunerado</div>
+    <div style="overflow-x:auto;">
+      <table>
+        <thead>
+          <tr>
+            <th>Unidade</th>
+            <th class="num">Rem</th>
+            <th class="num">Real</th>
+            <th class="num">Δ</th>
+            <th class="num">Δ %</th>
+            <th class="num sep-imp">Impacto (R$)</th>
+            <th class="num">Δ YTD</th>
+            <th class="num">Δ YTD %</th>
+            <th class="num">Impacto YTD</th>
+          </tr>
+        </thead>
+        <tbody id="tbl-body"></tbody>
+        <tfoot id="tbl-foot"></tfoot>
+      </table>
+    </div>
+  </div>
+
+</div><!-- /main -->
+
+<script>
+Chart.register(ChartDataLabels);
+
+const SHEET_ID  = '1wCoRGsvOgmIvfLW4F9Sxr-5AX9Go-aFlRVjrQ_B2ilM';
+const SHEET_TAB = 'Dispersão de km';
+
+let ALL = [];
+let chEvo = null, chImp = null, chKmFrota = null, chKmViagem = null, chProjKm = null, chProjPct = null;
+let drillKM = 'und', _lastTableArgs = null;
+
+function setDrillKM(v) {
+  drillKM = v;
+  document.querySelectorAll('.drill-tab').forEach(b => b.classList.toggle('active', b.dataset.view === v));
+  document.getElementById('title-disp').textContent = v === 'und' ? 'Dispersão por Unidade' : 'Dispersão por Projeto';
+  if (_lastTableArgs) renderTable(..._lastTableArgs);
+}
+
+/* ── Formatters ── */
+const numFmt = v => {
+  const a = Math.abs(v), s = v < 0 ? '-' : '';
+  if(a >= 1e9) return s + (a/1e9).toFixed(2) + ' bi';
+  if(a >= 1e6) return s + (a/1e6).toFixed(2) + ' mi';
+  if(a >= 1e5) return s + (a/1e3).toFixed(2) + 'k';
+  return s + Math.round(a).toLocaleString('pt-BR');
+};
+const fmt    = v => numFmt(v);
+const pctInt = v => (v >= 0 ? '+' : '') + v.toFixed(1) + '%';
+const set    = (id, v) => { const e = document.getElementById(id); if(e) e.textContent = v; };
+
+/* ── Vigência helpers ── */
+const MESES = ['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
+
+function parseVigCell(cell) {
+  if(!cell || cell.v === null || cell.v === undefined) return '';
+  const s = String(cell.v);
+  if(s.startsWith('Date(')) {
+    const m = s.match(/Date\((\d+),(\d+)/);
+    if(m) return String(+m[2] + 1).padStart(2,'0') + '/' + m[1];
+  }
+  if(cell.f) return String(cell.f).trim();
+  return s.trim();
+}
+
+function vigToDate(vig) {
+  if(!vig) return new Date(0);
+  const p = String(vig).split('/');
+  if(p.length === 2) return new Date(+p[1], +p[0] - 1, 1);
+  return new Date(0);
+}
+const sortVig = (a, b) => vigToDate(a) - vigToDate(b);
+
+function vigLabel(vig) {
+  const p = String(vig).split('/');
+  if(p.length === 2 && !isNaN(+p[0]) && !isNaN(+p[1])) {
+    return (MESES[+p[0] - 1] || p[0]) + '/' + p[1];
+  }
+  return vig;
+}
+function vigLabelShort(vig) {
+  const p = String(vig).split('/');
+  if(p.length === 2 && !isNaN(+p[0]) && !isNaN(+p[1])) {
+    return (MESES[+p[0] - 1] || p[0]) + '/' + p[1].slice(-2);
+  }
+  return vig;
+}
+
+function parseRow(row) {
+  const v = i => (row.c && row.c[i] && row.c[i].v !== null && row.c[i].v !== undefined) ? row.c[i].v : 0;
+  const s = i => (row.c && row.c[i] && row.c[i].v) ? String(row.c[i].v).trim() : '';
+
+  const vig = row.c ? parseVigCell(row.c[0]) : '';
+  const ano = vig ? vig.split('/')[1] : s(1);
+
+  return {
+    vig,
+    ano,
+    kmFrota: parseFloat(v(5))  || 0,
+    und:     (s(14)||'').includes('-') ? s(14).split('-').slice(1).join('-').trim() : s(13),
+    proj:    (s(14) || '').split('-')[0].trim(),
+    rem:     parseFloat(v(31)) || 0,
+    real:    parseFloat(v(32)) || 0,
+    viagens: parseFloat(v(22)) || 0,
+    imp:     parseFloat(v(36)) || 0
+  };
+}
+
+async function fetchData() {
+  const url = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:json&sheet=${encodeURIComponent(SHEET_TAB)}&t=${Date.now()}`;
+  const res  = await fetch(url);
+  const text = await res.text();
+  const json = JSON.parse(text.match(/google\.visualization\.Query\.setResponse\(([\s\S]*)\)/)[1]);
+  ALL = (json.table.rows || [])
+    .map(parseRow)
+    .filter(r => r.vig && (r.rem > 0 || r.real > 0));
+  sessionStorage.setItem('bi_cache_km', JSON.stringify(ALL));
+  populateFilters();
+  render();
+}
+
+function syncBadge(wrap){
+  const cnt=wrap.querySelector('.ms-cnt');
+  if(!cnt) return;
+  const n=wrap._sel?wrap._sel.size:0;
+  cnt.textContent=n; cnt.style.display=n?'':'none';
+}
+
+function _buildMs(wrap, renderFn, getAllItemsFn, onChange){
+  if(!(wrap._sel instanceof Set)) wrap._sel=new Set();
+  const sel=wrap._sel;
+  const list=wrap.querySelector('.ms-list');
+  const srch=wrap.querySelector('.ms-search input');
+  const renderList=(q='')=>{ renderFn(list,sel,q); syncBadge(wrap); };
+  list.addEventListener('change',e=>{
+    const box=e.target;
+    if(box.classList.contains('ms-all')){
+      sel.clear();
+    } else if(sel.size===0){
+      if(!box.checked){
+        const all=getAllItemsFn?getAllItemsFn():[];
+        all.forEach(v=>{ if(v!==box.dataset.v) sel.add(v); });
+      }
+    } else {
+      if(box.checked) sel.add(box.dataset.v);
+      else sel.delete(box.dataset.v);
+      if(getAllItemsFn){
+        const all=getAllItemsFn();
+        if(all.length>0&&all.every(v=>sel.has(v))) sel.clear();
+      }
+    }
+    renderList(srch.value); if(onChange) onChange();
+  });
+  list.addEventListener('click',e=>{
+    const only=e.target.closest('.ms-only');
+    if(!only) return;
+    e.preventDefault(); e.stopPropagation();
+    sel.clear(); sel.add(only.dataset.v);
+    renderList(srch.value); if(onChange) onChange();
+  });
+  srch.addEventListener('input',()=>renderList(srch.value));
+  srch.addEventListener('click',e=>e.stopPropagation());
+  renderList();
+}
+
+function buildMsFilter(id, items, label, displayFn, afterChange){
+  const wrap=document.getElementById(id); if(!wrap) return;
+  const disp=displayFn||(v=>v);
+  _buildMs(wrap,(list,sel,q)=>{
+    const f=q.toLowerCase();
+    const shown=items.filter(v=>String(disp(v)).toLowerCase().includes(f));
+    const allChk=sel.size===0;
+    list.innerHTML=
+      (!q?`<label class="ms-opt all-opt"><input type="checkbox" class="ms-all" ${allChk?'checked':''}> Todos (${items.length})</label>`:'')+
+      shown.map(v=>`<label class="ms-opt"><input type="checkbox" data-v="${v}" ${allChk||sel.has(v)?'checked':''}> ${disp(v)}<span class="ms-only" data-v="${v}">only</span></label>`).join('');
+  }, ()=>items, afterChange||render);
+}
+
+function toggleMs(id) {
+  const wrap=document.getElementById(id);
+  if(!wrap) return;
+  const panel=wrap.querySelector('.ms-panel');
+  const isOpen=panel.classList.contains('open');
+  document.querySelectorAll('.ms-panel.open').forEach(p=>p.classList.remove('open'));
+  if(!isOpen) panel.classList.add('open');
+}
+document.addEventListener('click', e => {
+  if(!e.target.closest('.ms-wrap')) document.querySelectorAll('.ms-panel.open').forEach(p => p.classList.remove('open'));
+});
+
+const getSel = id => { const w=document.getElementById(id); return w&&w._sel&&w._sel.size>0?[...w._sel]:[]; };
+
+let _vigM1Done=false;
+function repopulateVig() {
+  const selAnos = getSel('ms-ano');
+  const src = selAnos.length ? ALL.filter(r => selAnos.includes(r.ano)) : ALL;
+  const vigs = [...new Set(src.map(r => r.vig))].filter(Boolean).sort(sortVig).reverse();
+  const vigWrap=document.getElementById('ms-vig');
+  if(!_vigM1Done){
+    const now=new Date(),m=now.getMonth()===0?12:now.getMonth(),y=now.getMonth()===0?now.getFullYear()-1:now.getFullYear();
+    const m1=String(m).padStart(2,'0')+'/'+y;
+    if(vigWrap) vigWrap._sel=new Set([vigs.includes(m1)?m1:vigs[0]].filter(Boolean));
+    _vigM1Done=true;
+  } else {
+    if(vigWrap) vigWrap._sel=new Set();
+  }
+  buildMsFilter('ms-vig', vigs, 'Vigência', vigLabel);
+  render();
+}
+
+function populateFilters() {
+  const anos  = [...new Set(ALL.map(r => r.ano))].filter(Boolean).sort().reverse();
+  const unds  = [...new Set(ALL.map(r => r.und))].filter(Boolean).sort();
+  const projs = [...new Set(ALL.map(r => r.proj))].filter(Boolean).sort();
+  buildMsFilter('ms-ano',  anos,  'Ano', null, repopulateVig);
+  buildMsFilter('ms-und',  unds,  'Unidade');
+  buildMsFilter('ms-proj', projs, 'Projeto');
+  repopulateVig();
+}
+
+function getFiltered() {
+  const anos  = getSel('ms-ano');
+  const vigs  = getSel('ms-vig');
+  const unds  = getSel('ms-und');
+  const projs = getSel('ms-proj');
+  return ALL.filter(r =>
+    (!anos.length  || anos.includes(r.ano))  &&
+    (!vigs.length  || vigs.includes(r.vig))  &&
+    (!unds.length  || unds.includes(r.und))  &&
+    (!projs.length || projs.includes(r.proj))
+  );
+}
+
+function getChartRows() {
+  const anos  = getSel('ms-ano');
+  const vigs  = getSel('ms-vig');
+  const unds  = getSel('ms-und');
+  const projs = getSel('ms-proj');
+  const vigAnos = vigs.length ? [...new Set(vigs.map(v => v.split('/')[1]))] : [];
+  const efectiveAnos = vigAnos.length ? vigAnos : anos;
+  return ALL.filter(r =>
+    (!efectiveAnos.length || efectiveAnos.includes(r.ano)) &&
+    (!unds.length  || unds.includes(r.und))  &&
+    (!projs.length || projs.includes(r.proj))
+  );
+}
+
+function getYTDRows(F) {
+  if(!F.length) return [];
+  const years      = new Set(F.map(r => r.ano));
+  const unds       = new Set(F.map(r => r.und));
+  const projs      = new Set(F.map(r => r.proj));
+  const latestDate = new Date(Math.max(...F.map(r => vigToDate(r.vig).getTime())));
+  return ALL.filter(r =>
+    years.has(r.ano) && unds.has(r.und) && projs.has(r.proj) &&
+    vigToDate(r.vig) <= latestDate
+  );
+}
+
+function render() {
+  const F = getFiltered();
+
+  if(!F.length) {
+    ['hero-val','hero-kmfrota','hero-kmviagem','d-rem-abs','d-rem-pct','d-imp','d-ytd-abs','d-ytd-pct','d-ytd-imp'].forEach(id => set(id, '—'));
+    const body = document.getElementById('tbl-body');
+    if(body) body.innerHTML = `<tr><td colspan="9" style="text-align:center;color:var(--text2);padding:24px 8px;">Sem dados para os filtros selecionados</td></tr>`;
+    const foot = document.getElementById('tbl-foot');
+    if(foot) foot.innerHTML = '';
+    renderCharts([]);
+    return;
+  }
+
+  const totRem      = F.reduce((s, r) => s + r.rem,     0);
+  const totReal     = F.reduce((s, r) => s + r.real,    0);
+  const totDelta    = totReal - totRem;
+  const totDeltaPct = totRem ? (totDelta / totRem) * 100 : 0;
+  const totImp      = F.reduce((s, r) => s + r.imp,     0);
+  const avgKmFrota  = F.length ? F.reduce((s, r) => s + r.kmFrota, 0) / F.length : 0;
+  const totViagens  = F.reduce((s, r) => s + r.viagens, 0);
+  const avgKmViagem = totViagens ? totReal / totViagens : 0;
+
+  const YTDrows     = getYTDRows(F);
+  const ytdReal     = YTDrows.reduce((s, r) => s + r.real, 0);
+  const ytdRem      = YTDrows.reduce((s, r) => s + r.rem,  0);
+  const ytdDelta    = ytdReal - ytdRem;
+  const ytdDeltaPct = ytdRem ? (ytdDelta / ytdRem) * 100 : 0;
+  const ytdImp      = YTDrows.reduce((s, r) => s + r.imp, 0);
+
+  set('hero-val', fmt(totReal));
+  set('hero-kmfrota', avgKmFrota ? fmt(avgKmFrota) : '—');
+  set('hero-kmviagem', avgKmViagem ? fmt(avgKmViagem) : '—');
+
+  const bad    = totDelta > 0;
+  const dAbsEl = document.getElementById('d-rem-abs');
+  const dPctEl = document.getElementById('d-rem-pct');
+  const dImpEl = document.getElementById('d-imp');
+  const dYtdAbsEl = document.getElementById('d-ytd-abs');
+  const dYtdPctEl = document.getElementById('d-ytd-pct');
+  const dYtdImpEl = document.getElementById('d-ytd-imp');
+  if(dAbsEl)    { dAbsEl.textContent    = (totDelta >= 0 ? '+' : '') + fmt(totDelta);   dAbsEl.className    = bad ? 'cr' : 'cg'; }
+  if(dPctEl)    { dPctEl.textContent    = pctInt(totDeltaPct);                          dPctEl.className    = bad ? 'cr' : 'cg'; }
+  if(dImpEl)    { dImpEl.textContent    = (totImp >= 0 ? '+' : '') + fmt(totImp);       dImpEl.className    = totImp > 0 ? 'cr' : 'cg'; }
+  if(dYtdAbsEl) { dYtdAbsEl.textContent = (ytdDelta >= 0 ? '+' : '') + fmt(ytdDelta);  dYtdAbsEl.className = ytdDelta > 0 ? 'cr' : 'cg'; }
+  if(dYtdPctEl) { dYtdPctEl.textContent = pctInt(ytdDeltaPct);                         dYtdPctEl.className = ytdDeltaPct > 0 ? 'cr' : 'cg'; }
+  if(dYtdImpEl) { dYtdImpEl.textContent = (ytdImp >= 0 ? '+' : '') + fmt(ytdImp);      dYtdImpEl.className = ytdImp > 0 ? 'cr' : 'cg'; }
+
+  renderTable(F, YTDrows);
+  renderCharts(F);
+}
+
+function renderTable(F, YTD) {
+  _lastTableArgs = [F, YTD];
+  const getKey = r => drillKM === 'proj' ? r.proj : r.und;
+  const units = [...new Set(F.map(getKey))].filter(Boolean);
+  const sign  = v => v >= 0 ? '+' : '';
+
+  const rows = units.map(und => {
+    const m = F.filter(r => getKey(r) === und);
+    const y = YTD.filter(r => getKey(r) === und);
+
+    const rem   = m.reduce((s, r) => s + r.rem, 0);
+    const real  = m.reduce((s, r) => s + r.real, 0);
+    const delta = real - rem;
+    const deltaPct = rem ? (delta / rem) * 100 : 0;
+    const imp = m.reduce((s, r) => s + r.imp, 0);
+
+    const ytdRem      = y.reduce((s, r) => s + r.rem,  0);
+    const ytdReal     = y.reduce((s, r) => s + r.real, 0);
+    const ytdDelta    = ytdReal - ytdRem;
+    const ytdDeltaPct = ytdRem ? (ytdDelta / ytdRem) * 100 : 0;
+    const ytdImp      = y.reduce((s, r) => s + r.imp, 0);
+
+    return { und, rem, real, delta, deltaPct, imp, ytdRem, ytdReal, ytdDelta, ytdDeltaPct, ytdImp };
+  });
+
+  rows.sort((a, b) => b.delta - a.delta);
+
+  document.getElementById('tbl-body').innerHTML = rows.map(u => `<tr>
+    <td>${u.und}</td>
+    <td class="num">${fmt(u.rem)}</td>
+    <td class="num">${fmt(u.real)}</td>
+    <td class="num ${u.delta>0?'cr':'cg'}">${sign(u.delta)}${fmt(u.delta)}</td>
+    <td class="num ${u.deltaPct>0?'cr':'cg'}">${pctInt(u.deltaPct)}</td>
+    <td class="num sep-imp ${u.imp>0?'cr':'cg'}">${sign(u.imp)}${fmt(u.imp)}</td>
+    <td class="num ${u.ytdDelta>0?'cr':'cg'}">${sign(u.ytdDelta)}${fmt(u.ytdDelta)}</td>
+    <td class="num ${u.ytdDeltaPct>0?'cr':'cg'}">${pctInt(u.ytdDeltaPct)}</td>
+    <td class="num ${u.ytdImp>0?'cr':'cg'}">${sign(u.ytdImp)}${fmt(u.ytdImp)}</td>
+  </tr>`).join('');
+
+  const tRem  = rows.reduce((s, u) => s + u.rem, 0);
+  const tReal = rows.reduce((s, u) => s + u.real, 0);
+  const tDelta = tReal - tRem;
+  const tDPct  = tRem ? (tDelta / tRem) * 100 : 0;
+  const tImp   = rows.reduce((s, u) => s + u.imp, 0);
+  const tYRem  = rows.reduce((s, u) => s + u.ytdRem, 0);
+  const tYReal = rows.reduce((s, u) => s + u.ytdReal, 0);
+  const tYD    = tYReal - tYRem;
+  const tYDPct = tYRem ? (tYD / tYRem) * 100 : 0;
+  const tYImp  = rows.reduce((s, u) => s + u.ytdImp, 0);
+
+  document.getElementById('tbl-foot').innerHTML = `<tr class="total">
+    <td class="conta">${drillKM === 'proj' ? 'TOTAL PROJETOS' : 'TOTAL UNIDADES'}</td>
+    <td class="num">${fmt(tRem)}</td>
+    <td class="num">${fmt(tReal)}</td>
+    <td class="num ${tDelta>0?'cr':'cg'}">${sign(tDelta)}${fmt(tDelta)}</td>
+    <td class="num ${tDPct>0?'cr':'cg'}">${pctInt(tDPct)}</td>
+    <td class="num sep-imp ${tImp>0?'cr':'cg'}">${sign(tImp)}${fmt(tImp)}</td>
+    <td class="num ${tYD>0?'cr':'cg'}">${sign(tYD)}${fmt(tYD)}</td>
+    <td class="num ${tYDPct>0?'cr':'cg'}">${pctInt(tYDPct)}</td>
+    <td class="num ${tYImp>0?'cr':'cg'}">${sign(tYImp)}${fmt(tYImp)}</td>
+  </tr>`;
+}
+
+function renderCharts(F) {
+  if(chEvo)      { chEvo.destroy();      chEvo      = null; }
+  if(chImp)      { chImp.destroy();      chImp      = null; }
+  if(chKmFrota)  { chKmFrota.destroy();  chKmFrota  = null; }
+  if(chKmViagem) { chKmViagem.destroy(); chKmViagem = null; }
+  if(chProjKm)   { chProjKm.destroy();   chProjKm   = null; }
+  if(chProjPct)  { chProjPct.destroy();  chProjPct  = null; }
+  if(!F.length) return;
+
+  const isLight  = document.body.classList.contains('light-mode');
+  const isMobile = window.innerWidth < 768;
+  const grid     = {display:false};
+  const tick     = {color: isLight ? '#444444' : '#94A3B8', font:{family:'Montserrat', size: isMobile ? 9 : 12}};
+  const tickY    = {color: isLight ? '#444444' : '#94A3B8', font:{family:'Montserrat', size: isMobile ? 8 : 10}};
+  const tooltip = {
+    backgroundColor:'#141B26',titleColor:'#F97316',bodyColor:'#F1F5F9',
+    borderColor:'#1E2D40',borderWidth:1,
+    titleFont:{family:'Montserrat'},bodyFont:{family:'Montserrat'}
+  };
+  const dlColor = isLight ? '#333333' : '#F1F5F9';
+  const orcC    = isLight ? '#1a1a1a' : '#F1F5F9';
+  const orcFill = isLight ? 'rgba(0,0,0,0.06)' : 'rgba(241,245,249,0.07)';
+
+  const chartRows = getChartRows();
+  const selVigs   = getSel('ms-vig');
+  const allVigs   = [...new Set(chartRows.map(r => r.vig))];
+  const hasVigFilter = selVigs.length > 0 && selVigs.length < allVigs.length;
+
+  const MONTHS = ['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
+  const mData  = {};
+  for(let i = 1; i <= 12; i++) mData[i] = {rem:0, real:0, impSum:0, kmFrotaSum:0, viagensSum:0, cnt:0};
+  chartRows.forEach(r => {
+    const m = +r.vig.split('/')[0];
+    if(m >= 1 && m <= 12) {
+      mData[m].rem        += r.rem;
+      mData[m].real       += r.real;
+      mData[m].impSum     += r.imp;
+      mData[m].kmFrotaSum += r.kmFrota;
+      mData[m].viagensSum += r.viagens;
+      mData[m].cnt        += 1;
+    }
+  });
+
+  const hiMonths = hasVigFilter ? new Set(selVigs.map(v => +v.split('/')[0])) : new Set();
+
+  const mkPts = (baseColor, hiColor) => ({
+    pointRadius:          MONTHS.map((_, i) => {
+      const m = i + 1;
+      if(mData[m].cnt === 0) return 0;
+      return hiMonths.has(m) ? 6 : 3;
+    }),
+    pointBackgroundColor: MONTHS.map((_, i) => hiMonths.has(i+1) ? hiColor : baseColor),
+    pointBorderColor:     baseColor,
+    pointBorderWidth:     MONTHS.map((_, i) => hiMonths.has(i+1) ? 2 : 0),
+    pointHoverRadius: 8,
+  });
+
+  const remLine  = MONTHS.map(function(_, i) { return mData[i+1].cnt > 0 ? mData[i+1].rem  : null; });
+  const realLine = MONTHS.map(function(_, i) { return mData[i+1].cnt > 0 ? mData[i+1].real : null; });
+  const deltaPctLine = MONTHS.map(function(_, i) {
+    var m = i + 1;
+    if(mData[m].cnt === 0 || mData[m].rem === 0) return null;
+    return (mData[m].real - mData[m].rem) / Math.abs(mData[m].rem) * 100;
+  });
+  const metaLine = MONTHS.map(function(_, i) { return mData[i+1].cnt > 0 ? 5 : null; });
+
+  var hasFocusEvo = hiMonths.size > 0;
+  var realBarBg = MONTHS.map(function(_, i) {
+    var m = i + 1;
+    if(mData[m].cnt === 0) return 'transparent';
+    var red = mData[m].real > mData[m].rem;
+    var a = hasFocusEvo ? (hiMonths.has(m) ? '.85' : '.2') : '.65';
+    return red ? 'rgba(255,102,102,' + a + ')' : 'rgba(59,179,59,' + a + ')';
+  });
+  var realBarBc = MONTHS.map(function(_, i) {
+    var m = i + 1;
+    if(mData[m].cnt === 0) return 'transparent';
+    return mData[m].real > mData[m].rem ? '#FF6666' : '#3BB33B';
+  });
+
+  chEvo = new Chart(document.getElementById('chart-evolucao').getContext('2d'), {
+    type:'line',
+    data:{
+      labels: MONTHS,
+      datasets:[
+        {
+          type:'bar', label:'▲ REM %', data:deltaPctLine,
+          backgroundColor:realBarBg, borderColor:realBarBc, borderWidth:1, borderRadius:3, order:2
+        },
+        {
+          type:'line', label:'META 5%', data:metaLine,
+          borderColor:orcC, borderWidth:2, tension:0, fill:false, borderDash:[5,3],
+          order:1,
+          ...mkPts(orcC, orcC)
+        }
+      ]
+    },
+    options:{
+      responsive:true, maintainAspectRatio:false,
+      layout:{padding:{top:30}},
+      plugins:{
+        legend:{display:false},
+        tooltip,
+        datalabels:{
+          display: function(ctx) {
+            if(ctx.datasetIndex !== 0) return false;
+            var m = ctx.dataIndex + 1;
+            if(mData[m].cnt === 0) return false;
+            return !hasFocusEvo || hiMonths.has(m);
+          },
+          anchor:'end', align:'top', color:dlColor,
+          font:{family:'Montserrat',size:isMobile?8:11,weight:'700'},
+          formatter: function(v) { return v !== null ? (v >= 0 ? '+' : '') + v.toFixed(1) + '%' : ''; }
+        }
+      },
+      scales:{
+        x:{grid, ticks:tick},
+        y:{display:false, beginAtZero:true}
+      }
+    }
+  });
+
+  const impData = MONTHS.map(function(_, i) {
+    var m = i + 1;
+    return mData[m].cnt > 0 ? mData[m].impSum : null;
+  });
+  var impBg = MONTHS.map(function(_, i) {
+    var m = i + 1;
+    if(mData[m].cnt === 0) return 'transparent';
+    var pos = mData[m].impSum > 0;
+    var hi = !hasVigFilter || hiMonths.has(m);
+    if(pos) return hi ? 'rgba(255,102,102,.85)' : 'rgba(255,102,102,.2)';
+    return hi ? 'rgba(59,179,59,.85)' : 'rgba(59,179,59,.2)';
+  });
+  var impBc = MONTHS.map(function(_, i) {
+    var m = i + 1;
+    if(mData[m].cnt === 0) return 'transparent';
+    return mData[m].impSum > 0 ? '#FF6666' : '#3BB33B';
+  });
+
+  chImp = new Chart(document.getElementById('chart-impacto').getContext('2d'), {
+    type:'bar',
+    data:{
+      labels: MONTHS,
+      datasets:[{
+        label:'IMPACTO R$', data:impData,
+        backgroundColor: impBg, borderColor:impBc, borderWidth:1, borderRadius:3
+      }]
+    },
+    options:{
+      responsive:true, maintainAspectRatio:false,
+      layout:{padding:{top:35}},
+      plugins:{
+        legend:{display:false}, tooltip,
+        datalabels:{
+          display:true, anchor:'end', align:'top',
+          color: dlColor,
+          font:{family:'Montserrat',size:isMobile?8:11,weight:'700'},
+          formatter: function(v) { return v !== null ? fmt(v) : ''; }
+        }
+      },
+      scales:{
+        x:{grid, ticks:tick},
+        y:{display:false}
+      }
+    }
+  });
+
+  const kmFrotaLine = MONTHS.map((_, i) => {
+    const m = i + 1;
+    return mData[m].cnt > 0 ? mData[m].kmFrotaSum / mData[m].cnt : null;
+  });
+
+  chKmFrota = new Chart(document.getElementById('chart-kmfrota').getContext('2d'), {
+    type:'line',
+    data:{
+      labels: MONTHS,
+      datasets:[{
+        label:'KM/FROTA ATIVA', data:kmFrotaLine,
+        borderColor:orcC, borderWidth:2, tension:.3,
+        fill:'origin', backgroundColor:orcFill,
+        ...mkPts(orcC, orcC)
+      }]
+    },
+    options:{
+      responsive:true, maintainAspectRatio:false,
+      layout:{padding:{top:30}},
+      plugins:{
+        legend:{display:false}, tooltip,
+        datalabels:{
+          display: ctx => ctx.dataset.data[ctx.dataIndex] !== null,
+          anchor:'end', align:'top', color:orcC,
+          font:{family:'Montserrat',size:isMobile?8:11,weight:'700'},
+          formatter: v => fmt(v)
+        }
+      },
+      scales:{
+        x:{grid, ticks:tick},
+        y:{display:false}
+      }
+    }
+  });
+
+  const kmViagemLine = MONTHS.map((_, i) => {
+    const m = i + 1;
+    if(mData[m].cnt === 0 || mData[m].viagensSum === 0) return null;
+    return mData[m].real / mData[m].viagensSum;
+  });
+
+  chKmViagem = new Chart(document.getElementById('chart-kmviagem').getContext('2d'), {
+    type:'line',
+    data:{
+      labels: MONTHS,
+      datasets:[{
+        label:'KM/VIAGEM', data:kmViagemLine,
+        borderColor:orcC, borderWidth:2, tension:.3,
+        fill:'origin', backgroundColor:orcFill,
+        ...mkPts(orcC, orcC)
+      }]
+    },
+    options:{
+      responsive:true, maintainAspectRatio:false,
+      layout:{padding:{top:30}},
+      plugins:{
+        legend:{display:false}, tooltip,
+        datalabels:{
+          display: ctx => ctx.dataset.data[ctx.dataIndex] !== null,
+          anchor:'end', align:'top', color:orcC,
+          font:{family:'Montserrat',size:isMobile?8:11,weight:'700'},
+          formatter: v => fmt(v)
+        }
+      },
+      scales:{
+        x:{grid, ticks:tick},
+        y:{display:false}
+      }
+    }
+  });
+
+  const projMap = {};
+  F.forEach(r => {
+    if(!projMap[r.proj]) projMap[r.proj] = {rem:0, real:0};
+    projMap[r.proj].rem  += r.rem;
+    projMap[r.proj].real += r.real;
+  });
+
+  const projs = Object.keys(projMap).map(p => ({
+    proj: p,
+    delta: projMap[p].real - projMap[p].rem,
+    pct:   projMap[p].rem ? ((projMap[p].real - projMap[p].rem) / projMap[p].rem) * 100 : 0
+  }));
+
+  const projByKm  = [...projs].sort((a, b) => b.delta - a.delta);
+  const projByPct = [...projs].sort((a, b) => b.pct   - a.pct);
+
+  const mkVertBar = (data, valKey, fmtFn) => ({
+    type:'bar',
+    data:{
+      labels: data.map(p => p.proj),
+      datasets:[{
+        data: data.map(p => p[valKey]),
+        backgroundColor: data.map(p => p[valKey] > 0 ? 'rgba(255,102,102,.7)' : 'rgba(59,179,59,.7)'),
+        borderColor:     data.map(p => p[valKey] > 0 ? '#FF6666' : '#3BB33B'),
+        borderWidth:1, borderRadius:3
+      }]
+    },
+    options:{
+      responsive:true, maintainAspectRatio:false,
+      layout:{padding:{top:35}},
+      plugins:{
+        legend:{display:false}, tooltip,
+        datalabels:{
+          display:true, anchor:'end', align:'top', color:dlColor,
+          font:{family:'Montserrat',size:isMobile?8:11,weight:'700'},
+          formatter: v => (v >= 0 ? '+' : '') + fmtFn(v)
+        }
+      },
+      scales:{
+        x:{grid:{display:false}, ticks:{...tick, font:{family:'Montserrat',size:isMobile?8:11}}},
+        y:{display:false}
+      }
+    }
+  });
+
+  chProjKm  = new Chart(document.getElementById('chart-proj-km').getContext('2d'),
+    mkVertBar(projByKm,  'delta', v => fmt(Math.abs(v))));
+  chProjPct = new Chart(document.getElementById('chart-proj-pct').getContext('2d'),
+    mkVertBar(projByPct, 'pct',   v => Math.round(Math.abs(v)) + '%'));
+}
+
+async function atualizar() {
+  const CACHE_KEY='bi_cache_km';
+  let hasCached=false;
+  try{
+    const cached=sessionStorage.getItem(CACHE_KEY);
+    if(cached){
+      ALL=JSON.parse(cached);
+      populateFilters();
+      render();
+      set('status-badge','Atualizando…');
+      hasCached=true;
+    }
+  }catch(e){ sessionStorage.removeItem(CACHE_KEY); }
+  try {
+    await fetchData();
+    const now = new Date();
+    set('status-badge', `Atualizado ${now.toLocaleDateString('pt-BR')} ${now.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})}`);
+  } catch(e) {
+    console.error(e);
+    if(!hasCached) set('status-badge', 'Erro ao carregar dados');
+  }
+}
+
+function initAccessLog() {
+  let name = localStorage.getItem('bi_user_name');
+  if(!name) { name = prompt('Qual é o seu nome?') || 'Desconhecido'; localStorage.setItem('bi_user_name', name); }
+  const lastRaw = localStorage.getItem('bi_last_access');
+  if(lastRaw) {
+    const d = new Date(lastRaw);
+    const lastUser = localStorage.getItem('bi_last_user') || name;
+    const badge = document.getElementById('access-badge');
+    if(badge) {
+      badge.textContent = `Último acesso: ${d.toLocaleDateString('pt-BR')} ${d.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})} · ${lastUser}`;
+      badge.style.display = '';
+    }
+  }
+  localStorage.setItem('bi_last_access', new Date().toISOString());
+  localStorage.setItem('bi_last_user', name);
+}
+
+const _sun  = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>`;
+const _moon = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>`;
+
+function applyTheme(t) {
+  document.body.classList.toggle('light-mode', t === 'light');
+  localStorage.setItem('bi_theme', t);
+  const b = document.getElementById('themeBtn');
+  if(b) b.innerHTML = t === 'light' ? _moon : _sun;
+  if(ALL.length) render();
+}
+(function(){
+  const t = localStorage.getItem('bi_theme') || 'dark';
+  applyTheme(t);
+  document.getElementById('themeBtn').addEventListener('click',
+    () => applyTheme(document.body.classList.contains('light-mode') ? 'dark' : 'light'));
+})();
+
+document.addEventListener('DOMContentLoaded', () => { initAccessLog(); atualizar(); setInterval(atualizar, 30 * 60 * 1000); });
+</script></body>
+</html>
