@@ -885,31 +885,41 @@ function renderCharts(F) {
     };
   }
 
-  /* Chart 1: Dispersão de Ativação (bars=real, line=ativo) */
+  /* Chart 1: Dispersão de Ativação (bars=real, line=ativo, meta95, meta90) */
   const realBars  = MESES.map((_, i) => mData[i+1].cnt > 0 ? mData[i+1].real  : null);
   const ativoBars = MESES.map((_, i) => mData[i+1].cnt > 0 ? mData[i+1].ativo : null);
+  const meta95    = MESES.map((_, i) => mData[i+1].cnt > 0 ? mData[i+1].ativo * 0.95 : null);
+  const meta90    = MESES.map((_, i) => mData[i+1].cnt > 0 ? mData[i+1].ativo * 0.90 : null);
+
+  // first index with data (for label placement)
+  const firstIdx  = MESES.findIndex((_, i) => mData[i+1].cnt > 0);
 
   const realBarBg = MESES.map((_, i) => {
     const m = i + 1;
     if(mData[m].cnt === 0) return 'transparent';
-    const good = mData[m].real >= mData[m].ativo;
-    const hi   = !hasVigFilter || hiMonths.has(m);
-    return good ? `rgba(59,179,59,${hi?'.75':'.2'})` : `rgba(255,102,102,${hi?'.75':'.2'})`;
+    const pct = mData[m].ativo > 0 ? mData[m].real / mData[m].ativo * 100 : 0;
+    const hi  = !hasVigFilter || hiMonths.has(m);
+    if(pct >= 95) return `rgba(59,179,59,${hi?'.75':'.2'})`;
+    if(pct >= 90) return `rgba(250,204,21,${hi?'.75':'.2'})`;
+    return `rgba(255,102,102,${hi?'.75':'.2'})`;
   });
   const realBarBc = MESES.map((_, i) => {
     const m = i + 1;
     if(mData[m].cnt === 0) return 'transparent';
-    return mData[m].real >= mData[m].ativo ? '#3BB33B' : '#FF6666';
+    const pct = mData[m].ativo > 0 ? mData[m].real / mData[m].ativo * 100 : 0;
+    if(pct >= 95) return '#3BB33B';
+    if(pct >= 90) return '#FACC15';
+    return '#FF6666';
   });
 
-  const mkPts = () => ({
+  const mkPts = (color) => ({
     pointRadius: MESES.map((_, i) => {
       const m = i + 1;
       if(mData[m].cnt === 0) return 0;
       return hiMonths.has(m) ? 6 : 3;
     }),
-    pointBackgroundColor: MESES.map((_, i) => hiMonths.has(i+1) ? '#fff' : lineC),
-    pointBorderColor: lineC,
+    pointBackgroundColor: MESES.map((_, i) => hiMonths.has(i+1) ? '#fff' : (color||lineC)),
+    pointBorderColor: color||lineC,
     pointBorderWidth: MESES.map((_, i) => hiMonths.has(i+1) ? 2 : 0),
     pointHoverRadius: 8,
   });
@@ -921,12 +931,22 @@ function renderCharts(F) {
       datasets: [
         {
           type:'bar', label:'Real', data: realBars,
-          backgroundColor: realBarBg, borderColor: realBarBc, borderWidth:1, borderRadius:3, order:2
+          backgroundColor: realBarBg, borderColor: realBarBc, borderWidth:1, borderRadius:3, order:4
         },
         {
           type:'line', label:'Ativa', data: ativoBars,
           borderColor: lineC, borderWidth:2, tension:.3, fill:false, borderDash:[5,3],
-          order:1, ...mkPts()
+          order:1, ...mkPts(lineC)
+        },
+        {
+          type:'line', label:'95%', data: meta95,
+          borderColor: '#3BB33B', borderWidth:1.5, tension:.3, fill:false, borderDash:[4,3],
+          pointRadius:0, pointHoverRadius:0, order:2
+        },
+        {
+          type:'line', label:'90%', data: meta90,
+          borderColor: '#FACC15', borderWidth:1.5, tension:.3, fill:false, borderDash:[4,3],
+          pointRadius:0, pointHoverRadius:0, order:3
         }
       ]
     },
@@ -937,14 +957,35 @@ function renderCharts(F) {
         legend:{display:false}, tooltip,
         datalabels:{
           display: ctx => {
-            if(ctx.datasetIndex !== 0) return false;
-            const m = ctx.dataIndex + 1;
-            if(mData[m].cnt === 0) return false;
-            return !hasVigFilter || hiMonths.has(m);
+            // bar labels: show on highlighted months
+            if(ctx.datasetIndex === 0) {
+              const m = ctx.dataIndex + 1;
+              if(mData[m].cnt === 0) return false;
+              return !hasVigFilter || hiMonths.has(m);
+            }
+            // meta line labels: show only at first data point
+            if(ctx.datasetIndex === 2 || ctx.datasetIndex === 3) {
+              return ctx.dataIndex === firstIdx;
+            }
+            return false;
           },
-          anchor:'end', align:'start', color: dlColor,
-          font:{family:'Montserrat',size:isMobile?8:11,weight:'700'},
-          formatter: v => v !== null ? numFmt(v) : ''
+          anchor: ctx => ctx.datasetIndex === 0 ? 'end' : 'center',
+          align:  ctx => {
+            if(ctx.datasetIndex === 0) return 'start';
+            if(ctx.datasetIndex === 2) return 'top';
+            return 'bottom';
+          },
+          color: ctx => {
+            if(ctx.datasetIndex === 2) return '#3BB33B';
+            if(ctx.datasetIndex === 3) return '#FACC15';
+            return dlColor;
+          },
+          font:{family:'Montserrat',size:isMobile?8:10,weight:'700'},
+          formatter: (v, ctx) => {
+            if(ctx.datasetIndex === 2) return '95%';
+            if(ctx.datasetIndex === 3) return '90%';
+            return v !== null ? numFmt(v) : '';
+          }
         }
       },
       scales:{
