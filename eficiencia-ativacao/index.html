@@ -339,12 +339,12 @@ body.light-mode th.sep-col,body.light-mode td.sep-col{border-right-color:rgba(0,
     <div class="chart-card">
       <div class="chart-title">Ativação por Projeto</div>
       <div class="chart-sub">Ativação % · período filtrado</div>
-      <div class="chart-wrap-tall"><canvas id="chart-proj"></canvas></div>
+      <div class="chart-wrap"><canvas id="chart-proj"></canvas></div>
     </div>
     <div class="chart-card">
       <div class="chart-title">Ativação por Unidade</div>
       <div class="chart-sub">Ativação % · período filtrado</div>
-      <div class="chart-wrap-tall"><canvas id="chart-und"></canvas></div>
+      <div class="chart-wrap"><canvas id="chart-und"></canvas></div>
     </div>
   </div>
 
@@ -996,32 +996,54 @@ function renderCharts(F) {
     .map(([p, d]) => ({ proj:p, pct: d.ativo ? (d.real/d.ativo)*100 : 0 }))
     .sort((a,b) => b.pct - a.pct);
 
+  const ref95proj = projData.map(() => 95);
+  const ref90proj = projData.map(() => 90);
+  const projPts = n => ({ pointRadius: Array(n).fill(3), pointBackgroundColor: Array(n).fill(lineC), pointBorderColor: lineC, pointBorderWidth: 0, pointHoverRadius: 6 });
+
   chProj = new Chart(document.getElementById('chart-proj').getContext('2d'), {
     type:'bar',
     data:{
       labels: projData.map(p => p.proj),
-      datasets:[{
-        data: projData.map(p => p.pct),
-        backgroundColor: projData.map(p => atvcColor(p.pct, '.75')),
-        borderColor:     projData.map(p => atvcColorSolid(p.pct)),
-        borderWidth:1, borderRadius:3
-      }]
+      datasets:[
+        {
+          type:'bar', data: projData.map(p => p.pct),
+          backgroundColor: projData.map(p => atvcColor(p.pct, '.75')),
+          borderColor:     projData.map(p => atvcColorSolid(p.pct)),
+          borderWidth:1, borderRadius:3, order:3
+        },
+        {
+          type:'line', label:'95%', data: ref95proj,
+          borderColor: lineC, borderWidth:2, tension:0, fill:false, borderDash:[5,3],
+          ...projPts(projData.length), order:1
+        },
+        {
+          type:'line', label:'90%', data: ref90proj,
+          borderColor: lineC, borderWidth:2, tension:0, fill:false, borderDash:[5,3],
+          ...projPts(projData.length), order:2
+        }
+      ]
     },
     options:{
-      indexAxis:'y',
       responsive:true, maintainAspectRatio:false,
-      layout:{padding:{right:60}},
+      layout:{padding:{top:30}},
       plugins:{
         legend:{display:false}, tooltip,
         datalabels:{
-          display:true, anchor:'end', align:'right', color: dlColor,
+          display: ctx => ctx.datasetIndex === 0,
+          anchor:'end', align:'top', color: dlColor,
           font:{family:'Montserrat',size:isMobile?8:11,weight:'700'},
           formatter: v => pctFmt0(v)
         }
       },
       scales:{
-        x:{display:false, beginAtZero:true},
-        y:{grid:{display:false}, ticks:tickY}
+        x:{grid:{display:false}, ticks:tick},
+        y:(()=>{
+          const vals = projData.map(p => p.pct);
+          const minV = vals.length ? Math.min(...vals, 90) : 0;
+          const maxV = vals.length ? Math.max(...vals, 95) : 100;
+          const pad  = (maxV - minV) * 0.35;
+          return {display:false, min: Math.max(0, minV - pad), max: maxV + pad};
+        })()
       }
     }
   });
@@ -1122,32 +1144,54 @@ function renderCharts(F) {
     .map(([u, d]) => ({ und:u, pct: d.ativo ? (d.real/d.ativo)*100 : 0 }))
     .sort((a,b) => b.pct - a.pct);
 
+  const ref95und = undData.map(() => 95);
+  const ref90und = undData.map(() => 90);
+  const undPts = n => ({ pointRadius: Array(n).fill(3), pointBackgroundColor: Array(n).fill(lineC), pointBorderColor: lineC, pointBorderWidth: 0, pointHoverRadius: 6 });
+
   chUnd = new Chart(document.getElementById('chart-und').getContext('2d'), {
     type:'bar',
     data:{
       labels: undData.map(u => u.und),
-      datasets:[{
-        data: undData.map(u => u.pct),
-        backgroundColor: undData.map(u => atvcColor(u.pct, '.75')),
-        borderColor:     undData.map(u => atvcColorSolid(u.pct)),
-        borderWidth:1, borderRadius:3
-      }]
+      datasets:[
+        {
+          type:'bar', data: undData.map(u => u.pct),
+          backgroundColor: undData.map(u => atvcColor(u.pct, '.75')),
+          borderColor:     undData.map(u => atvcColorSolid(u.pct)),
+          borderWidth:1, borderRadius:3, order:3
+        },
+        {
+          type:'line', label:'95%', data: ref95und,
+          borderColor: lineC, borderWidth:2, tension:0, fill:false, borderDash:[5,3],
+          ...undPts(undData.length), order:1
+        },
+        {
+          type:'line', label:'90%', data: ref90und,
+          borderColor: lineC, borderWidth:2, tension:0, fill:false, borderDash:[5,3],
+          ...undPts(undData.length), order:2
+        }
+      ]
     },
     options:{
-      indexAxis:'y',
       responsive:true, maintainAspectRatio:false,
-      layout:{padding:{right:60}},
+      layout:{padding:{top:30}},
       plugins:{
         legend:{display:false}, tooltip,
         datalabels:{
-          display:true, anchor:'end', align:'right', color: dlColor,
+          display: ctx => ctx.datasetIndex === 0,
+          anchor:'end', align:'top', color: dlColor,
           font:{family:'Montserrat',size:isMobile?8:11,weight:'700'},
           formatter: v => pctFmt0(v)
         }
       },
       scales:{
-        x:{display:false, beginAtZero:true},
-        y:{grid:{display:false}, ticks:tickY}
+        x:{grid:{display:false}, ticks:tick},
+        y:(()=>{
+          const vals = undData.map(u => u.pct);
+          const minV = vals.length ? Math.min(...vals, 90) : 0;
+          const maxV = vals.length ? Math.max(...vals, 95) : 100;
+          const pad  = (maxV - minV) * 0.35;
+          return {display:false, min: Math.max(0, minV - pad), max: maxV + pad};
+        })()
       }
     }
   });
