@@ -936,12 +936,20 @@ function renderCharts(F) {
         {
           type:'line', label:'95%', data: meta95,
           borderColor: lineC, borderWidth:2, tension:.3, fill:false, borderDash:[5,3],
-          pointRadius:0, pointHoverRadius:0, order:1
+          pointRadius: MESES.map((_, i) => mData[i+1].cnt > 0 ? (hiMonths.has(i+1) ? 6 : 3) : 0),
+          pointBackgroundColor: MESES.map((_, i) => hiMonths.has(i+1) ? '#fff' : lineC),
+          pointBorderColor: lineC,
+          pointBorderWidth: MESES.map((_, i) => hiMonths.has(i+1) ? 2 : 0),
+          pointHoverRadius:8, order:1
         },
         {
           type:'line', label:'90%', data: meta90,
           borderColor: lineC, borderWidth:2, tension:.3, fill:false, borderDash:[5,3],
-          pointRadius:0, pointHoverRadius:0, order:2
+          pointRadius: MESES.map((_, i) => mData[i+1].cnt > 0 ? (hiMonths.has(i+1) ? 6 : 3) : 0),
+          pointBackgroundColor: MESES.map((_, i) => hiMonths.has(i+1) ? '#fff' : lineC),
+          pointBorderColor: lineC,
+          pointBorderWidth: MESES.map((_, i) => hiMonths.has(i+1) ? 2 : 0),
+          pointHoverRadius:8, order:2
         }
       ]
     },
@@ -964,7 +972,13 @@ function renderCharts(F) {
       },
       scales:{
         x:{grid:{display:false}, ticks:tick},
-        y:{display:false, beginAtZero:true}
+        y:(()=>{
+          const vals = [...realBars, ...meta90].filter(v => v !== null);
+          const minV = vals.length ? Math.min(...vals) : 0;
+          const maxV = vals.length ? Math.max(...realBars.filter(v=>v!==null), ...meta95.filter(v=>v!==null)) : 100;
+          const pad  = (maxV - minV) * 0.25;
+          return {display:false, min: Math.max(0, minV - pad), max: maxV + pad};
+        })()
       }
     }
   });
