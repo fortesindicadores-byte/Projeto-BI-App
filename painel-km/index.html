@@ -489,7 +489,18 @@ async function fetchData() {
     .map(parseRow)
     .filter(r => r.vig && (r.rem > 0 || r.real > 0));
   sessionStorage.setItem('bi_cache_km', JSON.stringify(ALL));
+  const savedVig = getSel('ms-vig');
   populateFilters();
+  if (savedVig.length > 0) {
+    const vigWrap = document.getElementById('ms-vig');
+    if (vigWrap) {
+      vigWrap._sel = new Set(savedVig);
+      const selAnos = getSel('ms-ano');
+      const src = selAnos.length ? ALL.filter(r => selAnos.includes(r.ano)) : ALL;
+      const vigs = [...new Set(src.map(r => r.vig))].filter(Boolean).sort(sortVig).reverse();
+      buildMsFilter('ms-vig', vigs, 'Vigência', vigLabel);
+    }
+  }
   render();
 }
 

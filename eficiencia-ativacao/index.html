@@ -491,7 +491,18 @@ async function fetchData() {
     .map(parseRow)
     .filter(r => r.vig && (r.rem > 0 || r.real_km > 0));
   sessionStorage.setItem(CACHE_KEY, JSON.stringify(ALL));
+  const savedVig = getSel('ms-vig');
   populateFilters();
+  if (savedVig.length > 0) {
+    const vigWrap = document.getElementById('ms-vig');
+    if (vigWrap) {
+      vigWrap._sel = new Set(savedVig);
+      const selAnos = getSel('ms-ano');
+      const src = selAnos.length ? ALL.filter(r => selAnos.includes(r.ano)) : ALL;
+      const vigs = [...new Set(src.map(r => r.vig))].filter(Boolean).sort(sortVig).reverse();
+      buildMsFilter('ms-vig', vigs, 'Vigência', vigLabel);
+    }
+  }
   render();
 }
 
@@ -503,67 +514,57 @@ function syncBadge(wrap) {
   cnt.textContent = n; cnt.style.display = n ? '' : 'none';
 }
 
-function _buildMs(wrap, renderFn, getAllItemsFn, onChange) {
-  if(!(wrap._sel instanceof Set)) wrap._sel = new Set();
-  const sel = wrap._sel;
-  const list = wrap.querySelector('.ms-list');
-  const srch = wrap.querySelector('.ms-search input');
-  const renderList = (q='') => { renderFn(list, sel, q); syncBadge(wrap); };
-  list.addEventListener('change', e => {
-    const box = e.target;
-    if(!box.type || box.type !== 'checkbox') return;
-    if(box.dataset.all) {
-      if(box.checked) sel.clear(); else { getAllItemsFn().forEach(v => sel.add(v)); }
-    } else {
-      if(box.checked) sel.delete(box.value); else sel.add(box.value);
-    }
-    renderList(srch ? srch.value : '');
-    if(onChange) onChange();
-  });
-  list.addEventListener('click', e => {
-    if(e.target.classList.contains('ms-only')) {
-      const v = e.target.dataset.val;
+function _buildMs(wrap, renderFn, getAllItemsFn, onChange){
+  if(!(wrap._sel instanceof Set)) wrap._sel=new Set();
+  const sel=wrap._sel;
+  const list=wrap.querySelector('.ms-list');
+  const srch=wrap.querySelector('.ms-search input');
+  const renderList=(q='')=>{ renderFn(list,sel,q); syncBadge(wrap); };
+  list.addEventListener('change',e=>{
+    const box=e.target;
+    if(box.classList.contains('ms-all')){
       sel.clear();
-      getAllItemsFn().filter(x => x !== v).forEach(x => sel.add(x));
-      renderList(srch ? srch.value : '');
-      if(onChange) onChange();
+    } else if(sel.size===0){
+      if(!box.checked){
+        const all=getAllItemsFn?getAllItemsFn():[];
+        all.forEach(v=>{ if(v!==box.dataset.v) sel.add(v); });
+      }
+    } else {
+      if(box.checked) sel.add(box.dataset.v);
+      else sel.delete(box.dataset.v);
+      if(getAllItemsFn){
+        const all=getAllItemsFn();
+        if(all.length>0&&all.every(v=>sel.has(v))) sel.clear();
+      }
     }
+    renderList(srch.value); if(onChange) onChange();
   });
-  if(srch) srch.addEventListener('input', () => renderList(srch.value));
+  list.addEventListener('click',e=>{
+    const only=e.target.closest('.ms-only');
+    if(!only) return;
+    e.preventDefault(); e.stopPropagation();
+    sel.clear(); sel.add(only.dataset.v);
+    renderList(srch.value); if(onChange) onChange();
+  });
+  srch.addEventListener('input',()=>renderList(srch.value));
+  srch.addEventListener('click',e=>e.stopPropagation());
   renderList();
 }
 
-function _renderMsList(list, items, sel, q, labelFn) {
-  const filt = q ? items.filter(v => (labelFn ? labelFn(v) : v).toLowerCase().includes(q.toLowerCase())) : items;
-  const allChecked = sel.size === 0;
-  list.innerHTML =
-    `<label class="ms-opt all-opt"><input type="checkbox" data-all="1" ${allChecked?'checked':''}> Todos</label>` +
-    filt.map(v => {
-      const lbl = labelFn ? labelFn(v) : v;
-      const checked = !sel.has(v);
-      return `<label class="ms-opt"><input type="checkbox" value="${v}" ${checked?'checked':''}> ${lbl}<span class="ms-only" data-val="${v}">só</span></label>`;
-    }).join('');
+function buildMsFilter(id, items, label, displayFn, afterChange){
+  const wrap=document.getElementById(id); if(!wrap) return;
+  const disp=displayFn||(v=>v);
+  _buildMs(wrap,(list,sel,q)=>{
+    const f=q.toLowerCase();
+    const shown=items.filter(v=>String(disp(v)).toLowerCase().includes(f));
+    const allChk=sel.size===0;
+    list.innerHTML=
+      (!q?`<label class="ms-opt all-opt"><input type="checkbox" class="ms-all" ${allChk?'checked':''}> Todos (${items.length})</label>`:'')+
+      shown.map(v=>`<label class="ms-opt"><input type="checkbox" data-v="${v}" ${allChk||sel.has(v)?'checked':''}> ${disp(v)}<span class="ms-only" data-v="${v}">only</span></label>`).join('');
+  }, ()=>items, afterChange||render);
 }
 
-function buildMsFilter(id, items, label, labelFn, onChange) {
-  const wrap = document.getElementById(id);
-  if(!wrap) return;
-  if(!wrap._items) wrap._items = [];
-  wrap._items = items;
-  const btn = wrap.querySelector('.ms-btn .ms-lbl');
-  if(btn && label) btn.textContent = label;
-  _buildMs(wrap,
-    (list, sel, q) => _renderMsList(list, items, sel, q, labelFn),
-    () => items,
-    onChange || render
-  );
-}
-
-function getSel(id) {
-  const wrap = document.getElementById(id);
-  if(!wrap || !wrap._sel || wrap._sel.size === 0) return [];
-  return [...wrap._sel];
-}
+const getSel = id => { const w=document.getElementById(id); return w&&w._sel&&w._sel.size>0?[...w._sel]:[]; };
 
 function toggleMs(id) {
   const panel = document.getElementById(id + '-panel');
@@ -576,11 +577,22 @@ document.addEventListener('click', e => {
   if(!e.target.closest('.ms-wrap')) document.querySelectorAll('.ms-panel.open').forEach(p => p.classList.remove('open'));
 });
 
+let _vigM1Done=false;
 function repopulateVig() {
-  const anos = getSel('ms-ano');
-  const rows = anos.length ? ALL.filter(r => !anos.includes(r.ano)) : ALL;
-  const vigs = [...new Set(rows.map(r => r.vig))].filter(Boolean).sort(sortVig).reverse();
+  const selAnos = getSel('ms-ano');
+  const src = selAnos.length ? ALL.filter(r => selAnos.includes(r.ano)) : ALL;
+  const vigs = [...new Set(src.map(r => r.vig))].filter(Boolean).sort(sortVig).reverse();
+  const vigWrap=document.getElementById('ms-vig');
+  if(!_vigM1Done){
+    const now=new Date(),m=now.getMonth()===0?12:now.getMonth(),y=now.getMonth()===0?now.getFullYear()-1:now.getFullYear();
+    const m1=String(m).padStart(2,'0')+'/'+y;
+    if(vigWrap) vigWrap._sel=new Set([vigs.includes(m1)?m1:vigs[0]].filter(Boolean));
+    _vigM1Done=true;
+  } else {
+    if(vigWrap) vigWrap._sel=new Set();
+  }
   buildMsFilter('ms-vig', vigs, 'Vigência', vigLabel);
+  render();
 }
 
 function populateFilters() {
@@ -600,10 +612,10 @@ function getFiltered() {
   const unds  = getSel('ms-und');
   const projs = getSel('ms-proj');
   return ALL.filter(r =>
-    (!anos.length  || !anos.includes(r.ano))  &&
-    (!vigs.length  || !vigs.includes(r.vig))  &&
-    (!unds.length  || !unds.includes(r.und))  &&
-    (!projs.length || !projs.includes(r.proj))
+    (!anos.length  || anos.includes(r.ano))  &&
+    (!vigs.length  || vigs.includes(r.vig))  &&
+    (!unds.length  || unds.includes(r.und))  &&
+    (!projs.length || projs.includes(r.proj))
   );
 }
 
