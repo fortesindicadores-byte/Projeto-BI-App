@@ -1043,19 +1043,30 @@ function renderCharts(F) {
     pointHoverRadius: 8,
   });
 
+  const atvcBarBg = MESES.map((_, i) => {
+    const v = atvcLine[i];
+    if(v === null) return 'transparent';
+    const hi = !hasVigFilter || hiMonths.has(i+1);
+    if(v >= 95) return `rgba(59,179,59,${hi?'.75':'.2'})`;
+    if(v >= 90) return `rgba(250,204,21,${hi?'.75':'.2'})`;
+    return `rgba(255,102,102,${hi?'.75':'.2'})`;
+  });
+  const atvcBarBc = atvcLine.map(v => {
+    if(v === null) return 'transparent';
+    if(v >= 95) return '#3BB33B';
+    if(v >= 90) return '#FACC15';
+    return '#FF6666';
+  });
+
   chAtvcMes = new Chart(document.getElementById('chart-atvc-mes').getContext('2d'), {
-    type:'line',
+    type:'bar',
     data:{
       labels: MESES,
       datasets:[
         {
-          label:'Ativação %', data: atvcLine,
-          borderColor:'#F97316', borderWidth:3, tension:.3, fill:false,
-          pointRadius: MESES.map((_, i) => atvcLine[i] !== null ? (hiMonths.has(i+1) ? 6 : 4) : 0),
-          pointBackgroundColor: atvcLineBg,
-          pointBorderColor: atvcLineBg,
-          pointHoverRadius:8,
-          order:1
+          type:'bar', label:'Ativação %', data: atvcLine,
+          backgroundColor: atvcBarBg, borderColor: atvcBarBc, borderWidth:1, borderRadius:3,
+          order:4
         },
         {
           label:'95%', data: ref95pct,
@@ -1080,7 +1091,7 @@ function renderCharts(F) {
             const m = ctx.dataIndex + 1;
             return mData[m].cnt > 0 && (!hasVigFilter || hiMonths.has(m));
           },
-          anchor:'end', align:'top', color: dlColor,
+          anchor:'end', align:'start', color: dlColor,
           font:{family:'Montserrat',size:isMobile?8:11,weight:'700'},
           formatter: v => v !== null ? pctFmt0(v) : ''
         }
