@@ -934,19 +934,14 @@ function renderCharts(F) {
           backgroundColor: realBarBg, borderColor: realBarBc, borderWidth:1, borderRadius:3, order:4
         },
         {
-          type:'line', label:'Ativa', data: ativoBars,
-          borderColor: lineC, borderWidth:2, tension:.3, fill:false, borderDash:[5,3],
-          order:1, ...mkPts(lineC)
-        },
-        {
           type:'line', label:'95%', data: meta95,
-          borderColor: '#3BB33B', borderWidth:1.5, tension:.3, fill:false, borderDash:[4,3],
-          pointRadius:0, pointHoverRadius:0, order:2
+          borderColor: lineC, borderWidth:2, tension:.3, fill:false, borderDash:[5,3],
+          pointRadius:0, pointHoverRadius:0, order:1
         },
         {
           type:'line', label:'90%', data: meta90,
-          borderColor: '#FACC15', borderWidth:1.5, tension:.3, fill:false, borderDash:[4,3],
-          pointRadius:0, pointHoverRadius:0, order:3
+          borderColor: lineC, borderWidth:2, tension:.3, fill:false, borderDash:[5,3],
+          pointRadius:0, pointHoverRadius:0, order:2
         }
       ]
     },
@@ -957,35 +952,14 @@ function renderCharts(F) {
         legend:{display:false}, tooltip,
         datalabels:{
           display: ctx => {
-            // bar labels: show on highlighted months
-            if(ctx.datasetIndex === 0) {
-              const m = ctx.dataIndex + 1;
-              if(mData[m].cnt === 0) return false;
-              return !hasVigFilter || hiMonths.has(m);
-            }
-            // meta line labels: show only at first data point
-            if(ctx.datasetIndex === 2 || ctx.datasetIndex === 3) {
-              return ctx.dataIndex === firstIdx;
-            }
-            return false;
+            if(ctx.datasetIndex !== 0) return false;
+            const m = ctx.dataIndex + 1;
+            if(mData[m].cnt === 0) return false;
+            return !hasVigFilter || hiMonths.has(m);
           },
-          anchor: ctx => ctx.datasetIndex === 0 ? 'end' : 'center',
-          align:  ctx => {
-            if(ctx.datasetIndex === 0) return 'start';
-            if(ctx.datasetIndex === 2) return 'top';
-            return 'bottom';
-          },
-          color: ctx => {
-            if(ctx.datasetIndex === 2) return '#3BB33B';
-            if(ctx.datasetIndex === 3) return '#FACC15';
-            return dlColor;
-          },
-          font:{family:'Montserrat',size:isMobile?8:10,weight:'700'},
-          formatter: (v, ctx) => {
-            if(ctx.datasetIndex === 2) return '95%';
-            if(ctx.datasetIndex === 3) return '90%';
-            return v !== null ? numFmt(v) : '';
-          }
+          anchor:'end', align:'start', color: dlColor,
+          font:{family:'Montserrat',size:isMobile?8:11,weight:'700'},
+          formatter: v => v !== null ? numFmt(v) : ''
         }
       },
       scales:{
