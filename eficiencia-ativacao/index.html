@@ -1030,8 +1030,18 @@ function renderCharts(F) {
     if(mData[m].cnt === 0 || mData[m].ativo === 0) return null;
     return (mData[m].real / mData[m].ativo) * 100;
   });
-  const ref100 = MESES.map((_, i) => mData[i+1].cnt > 0 ? 100 : null);
+  const ref95pct  = MESES.map((_, i) => mData[i+1].cnt > 0 ? 95 : null);
+  const ref90pct  = MESES.map((_, i) => mData[i+1].cnt > 0 ? 90 : null);
   const atvcLineBg = atvcLine.map(v => v === null ? 'transparent' : atvcColorSolid(v));
+  const atvcFirstIdx = atvcLine.findIndex(v => v !== null);
+
+  const mkMetaPts = () => ({
+    pointRadius: MESES.map((_, i) => atvcLine[i] !== null ? (hiMonths.has(i+1) ? 6 : 3) : 0),
+    pointBackgroundColor: MESES.map((_, i) => hiMonths.has(i+1) ? '#fff' : lineC),
+    pointBorderColor: lineC,
+    pointBorderWidth: MESES.map((_, i) => hiMonths.has(i+1) ? 2 : 0),
+    pointHoverRadius: 8,
+  });
 
   chAtvcMes = new Chart(document.getElementById('chart-atvc-mes').getContext('2d'), {
     type:'line',
@@ -1048,11 +1058,14 @@ function renderCharts(F) {
           order:1
         },
         {
-          label:'100%', data: ref100,
-          borderColor: lineC, borderWidth:1.5, tension:0, fill:false, borderDash:[4,3],
-          pointRadius:0, pointHoverRadius:0,
-          datalabels:{display:false},
-          order:2
+          label:'95%', data: ref95pct,
+          borderColor: lineC, borderWidth:2, tension:0, fill:false, borderDash:[5,3],
+          ...mkMetaPts(), order:2
+        },
+        {
+          label:'90%', data: ref90pct,
+          borderColor: lineC, borderWidth:2, tension:0, fill:false, borderDash:[5,3],
+          ...mkMetaPts(), order:3
         }
       ]
     },
@@ -1074,7 +1087,13 @@ function renderCharts(F) {
       },
       scales:{
         x:{grid:{display:false}, ticks:tick},
-        y:{display:false}
+        y:(()=>{
+          const vals = atvcLine.filter(v => v !== null);
+          const minV = vals.length ? Math.min(...vals, 90) : 0;
+          const maxV = vals.length ? Math.max(...vals, 95) : 100;
+          const pad  = (maxV - minV) * 0.4;
+          return {display:false, min: Math.max(0, minV - pad), max: maxV + pad};
+        })()
       }
     }
   });
