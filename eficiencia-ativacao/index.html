@@ -466,9 +466,11 @@ function parseRow(row) {
 
   const frota_ativa = parseFloat(v(21)) || 0;
   const viagens     = parseFloat(v(22)) || 0;
+  const rem         = parseFloat(v(31)) || 0;
+  const real_km     = parseFloat(v(32)) || 0;
 
   let frota_real = 0;
-  if(vig && (frota_ativa > 0 || viagens > 0)) {
+  if(vig && viagens > 0) {
     const parts = vig.split('/');
     if(parts.length === 2) {
       const du = diasUteis(+parts[1], +parts[0]);
@@ -476,7 +478,7 @@ function parseRow(row) {
     }
   }
 
-  return { vig, ano, und, proj, isEmp, frota_ativa, viagens, frota_real };
+  return { vig, ano, und, proj, isEmp, frota_ativa, viagens, frota_real, rem, real_km };
 }
 
 /* ── Fetch ── */
@@ -487,7 +489,7 @@ async function fetchData() {
   const json = JSON.parse(text.match(/google\.visualization\.Query\.setResponse\(([\s\S]*)\)/)[1]);
   ALL = (json.table.rows || [])
     .map(parseRow)
-    .filter(r => r.vig && (r.frota_ativa > 0 || r.viagens > 0));
+    .filter(r => r.vig && (r.rem > 0 || r.real_km > 0));
   sessionStorage.setItem(CACHE_KEY, JSON.stringify(ALL));
   populateFilters();
   render();
