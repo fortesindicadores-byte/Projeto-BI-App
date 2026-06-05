@@ -619,6 +619,20 @@ function getFiltered() {
   );
 }
 
+function getChartRows() {
+  const anos  = getSel('ms-ano');
+  const vigs  = getSel('ms-vig');
+  const unds  = getSel('ms-und');
+  const projs = getSel('ms-proj');
+  const vigAnos = vigs.length ? [...new Set(vigs.map(v => v.split('/')[1]))] : [];
+  const effectiveAnos = vigAnos.length ? vigAnos : anos;
+  return ALL.filter(r =>
+    (!effectiveAnos.length || effectiveAnos.includes(r.ano)) &&
+    (!unds.length  || unds.includes(r.und))  &&
+    (!projs.length || projs.includes(r.proj))
+  );
+}
+
 function getYTDRows(F) {
   if(!F.length) return [];
   const years      = new Set(F.map(r => r.ano));
@@ -844,14 +858,16 @@ function renderCharts(F) {
   };
   const lineC = isLight ? '#1a1a1a' : '#94A3B8';
 
+  const chartRows    = getChartRows();
   const selVigs      = getSel('ms-vig');
-  const hasVigFilter = selVigs.length > 0;
+  const allVigs      = [...new Set(chartRows.map(r => r.vig))];
+  const hasVigFilter = selVigs.length > 0 && selVigs.length < allVigs.length;
   const hiMonths     = hasVigFilter ? new Set(selVigs.map(v => +v.split('/')[0])) : new Set();
 
   /* monthly aggregates — average across years for the same calendar month */
   const mVigs = {};
   for(let i = 1; i <= 12; i++) mVigs[i] = {real:0, ativo:0, vigs:new Set()};
-  F.forEach(r => {
+  chartRows.forEach(r => {
     const m = +r.vig.split('/')[0];
     if(m >= 1 && m <= 12) {
       mVigs[m].real  += r.frota_real;
