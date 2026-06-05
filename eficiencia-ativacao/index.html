@@ -368,10 +368,10 @@ body.light-mode th.sep-col,body.light-mode td.sep-col{border-right-color:rgba(0,
             <th class="num">Ativo</th>
             <th class="num">Real</th>
             <th class="num">Δ</th>
-            <th class="num">Δ %</th>
+            <th class="num">Atv%</th>
             <th class="num sep-col">YoY %</th>
             <th class="num">Δ YTD</th>
-            <th class="num">Δ YTD %</th>
+            <th class="num">Atv% YTD</th>
             <th class="num">YTD YoY %</th>
           </tr>
         </thead>
@@ -790,18 +790,18 @@ function renderTable(F, YTD, YoY, YoYYTD) {
     const real  = avgMonthly(m, 'frota_real');
     const ativo = avgMonthly(m, 'frota_ativa');
     const delta    = real - ativo;
-    const deltaPct = ativo ? (delta / ativo) * 100 : 0;
+    const atvcPct  = ativo ? (real / ativo) * 100 : 0;
     const yoyReal  = avgMonthly(yy, 'frota_real');
     const yoyPct   = yoyReal ? ((real - yoyReal) / yoyReal) * 100 : null;
 
     const ytdReal  = avgMonthly(y, 'frota_real');
     const ytdAtivo = avgMonthly(y, 'frota_ativa');
     const ytdDelta = ytdReal - ytdAtivo;
-    const ytdDeltaPct = ytdAtivo ? (ytdDelta / ytdAtivo) * 100 : 0;
+    const ytdAtvcPct = ytdAtivo ? (ytdReal / ytdAtivo) * 100 : 0;
     const yoyYTDReal = avgMonthly(yyYTD, 'frota_real');
     const yoyYTDPct  = yoyYTDReal ? ((ytdReal - yoyYTDReal) / yoyYTDReal) * 100 : null;
 
-    return { key, ativo, real, delta, deltaPct, yoyPct, ytdDelta, ytdDeltaPct, yoyYTDPct };
+    return { key, ativo, real, delta, atvcPct, yoyPct, ytdDelta, ytdAtvcPct, yoyYTDPct };
   });
 
   rows.sort((a, b) => b.delta - a.delta);
@@ -813,31 +813,31 @@ function renderTable(F, YTD, YoY, YoYYTD) {
     <td>${u.key}</td>
     <td class="num">${numFmt(u.ativo)}</td>
     <td class="num">${numFmt(u.real)}</td>
-    <td class="num ${u.delta < 0 ? 'cr' : 'cg'}">${sign(u.delta)}${numFmt(u.delta)}</td>
-    <td class="num ${u.deltaPct < 0 ? 'cr' : 'cg'}">${pctFmt(u.deltaPct)}</td>
+    <td class="num ${atvcClass(u.atvcPct)}">${sign(u.delta)}${numFmt(u.delta)}</td>
+    <td class="num ${atvcClass(u.atvcPct)}">${pctFmt0(u.atvcPct)}</td>
     <td class="num sep-col">${yoyCell(u.yoyPct)}</td>
-    <td class="num ${u.ytdDelta < 0 ? 'cr' : 'cg'}">${sign(u.ytdDelta)}${numFmt(u.ytdDelta)}</td>
-    <td class="num ${u.ytdDeltaPct < 0 ? 'cr' : 'cg'}">${pctFmt(u.ytdDeltaPct)}</td>
+    <td class="num ${atvcClass(u.ytdAtvcPct)}">${sign(u.ytdDelta)}${numFmt(u.ytdDelta)}</td>
+    <td class="num ${atvcClass(u.ytdAtvcPct)}">${pctFmt0(u.ytdAtvcPct)}</td>
     <td class="num">${yoyCell(u.yoyYTDPct)}</td>
   </tr>`).join('');
 
   const tAtivo = rows.reduce((s, u) => s + u.ativo, 0) / (rows.length || 1);
   const tReal  = rows.reduce((s, u) => s + u.real,  0) / (rows.length || 1);
   const tDelta = tReal - tAtivo;
-  const tDPct  = tAtivo ? (tDelta / tAtivo) * 100 : 0;
-  const tYoY   = null;
+  const tAtvcPct  = tAtivo ? (tReal / tAtivo) * 100 : 0;
   const tYtdD  = rows.reduce((s, u) => s + u.ytdDelta, 0) / (rows.length || 1);
-  const tYtdPct = tAtivo ? (tYtdD / tAtivo) * 100 : 0;
+  const tYtdAtivo = rows.reduce((s, u) => s + (u.ytdAtvcPct > 0 ? u.ativo : 0), 0) / (rows.length || 1);
+  const tYtdAtvcPct = tAtivo ? ((tAtivo + tYtdD) / tAtivo) * 100 : 0;
 
   document.getElementById('tbl-foot').innerHTML = `<tr class="total">
     <td class="conta">${drillMode === 'proj' ? 'TOTAL PROJETOS' : 'TOTAL UNIDADES'}</td>
     <td class="num">${numFmt(tAtivo)}</td>
     <td class="num">${numFmt(tReal)}</td>
-    <td class="num ${tDelta < 0 ? 'cr' : 'cg'}">${sign(tDelta)}${numFmt(tDelta)}</td>
-    <td class="num ${tDPct < 0 ? 'cr' : 'cg'}">${pctFmt(tDPct)}</td>
+    <td class="num ${atvcClass(tAtvcPct)}">${sign(tDelta)}${numFmt(tDelta)}</td>
+    <td class="num ${atvcClass(tAtvcPct)}">${pctFmt0(tAtvcPct)}</td>
     <td class="num sep-col">—</td>
-    <td class="num ${tYtdD < 0 ? 'cr' : 'cg'}">${sign(tYtdD)}${numFmt(tYtdD)}</td>
-    <td class="num ${tYtdPct < 0 ? 'cr' : 'cg'}">${pctFmt(tYtdPct)}</td>
+    <td class="num ${atvcClass(tYtdAtvcPct)}">${sign(tYtdD)}${numFmt(tYtdD)}</td>
+    <td class="num ${atvcClass(tYtdAtvcPct)}">${pctFmt0(tYtdAtvcPct)}</td>
     <td class="num">—</td>
   </tr>`;
 }
