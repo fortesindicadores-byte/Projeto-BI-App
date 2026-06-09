@@ -63,6 +63,8 @@ body{
 .ms-opt:hover{background:rgba(255,255,255,.05);color:var(--text);}
 .ms-opt.all-opt{border-bottom:1px solid #1e2d40;color:var(--text);font-weight:700;}
 .ms-opt input[type=checkbox]{accent-color:var(--orange);cursor:pointer;width:14px;height:14px;flex-shrink:0;}
+.ms-only{display:none;font-size:9px;font-weight:700;color:var(--orange);padding:2px 6px;border:1px solid rgba(249,115,22,.4);border-radius:3px;white-space:nowrap;cursor:pointer;letter-spacing:.3px;}
+.ms-opt:hover .ms-only{display:inline-block;}
 
 /* ── Main ── */
 .main{padding:20px 24px;}
@@ -472,9 +474,20 @@ function splitCSVLine(line) {
 }
 
 /* ── Filtros ── */
+function vigLabel(vig) {
+  const MESES = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+  const parts = vig.split('/');
+  let m, y;
+  if (parts[0].length === 4) { y = parts[0]; m = parts[1]; }
+  else { m = parts[0]; y = parts[1]; }
+  return (MESES[parseInt(m,10)-1] || vig) + '/' + y;
+}
+
 function populateFilters() {
   const vigs = [...new Set(RAW.map(r => r.vig))].sort((a,b) => {
-    const [ma,ya] = a.split('/'); const [mb,yb] = b.split('/');
+    const pa = a.split('/'), pb = b.split('/');
+    const [ya,ma] = pa[0].length===4 ? [pa[0],pa[1]] : [pa[1],pa[0]];
+    const [yb,mb] = pb[0].length===4 ? [pb[0],pb[1]] : [pb[1],pb[0]];
     return (+yb*12 + +mb) - (+ya*12 + +ma);
   });
   buildMsFilter('vig', vigs);
@@ -484,8 +497,17 @@ function populateFilters() {
 
 function buildMsFilter(key, opts) {
   const list = document.getElementById(`ms-${key}-list`);
-  list.innerHTML = `<div class="ms-opt all-opt" onclick="toggleAll('${key}')"><input type="checkbox" id="chk-${key}-all"> <label style="cursor:pointer" for="chk-${key}-all">Todas</label></div>` +
-    opts.map(o => `<div class="ms-opt" onclick="toggleOpt('${key}','${o}')"><input type="checkbox" id="chk-${key}-${o}" value="${o}"> <label style="cursor:pointer" for="chk-${key}-${o}">${o}</label></div>`).join('');
+  list.innerHTML =
+    `<div class="ms-opt all-opt" onclick="toggleAll('${key}')"><input type="checkbox" id="chk-${key}-all"> <label style="cursor:pointer" for="chk-${key}-all">Todas</label></div>` +
+    opts.map(o => {
+      const lbl = key === 'vig' ? vigLabel(o) : o;
+      const safe = o.replace(/\//g,'_');
+      return `<div class="ms-opt" onclick="toggleOpt('${key}','${o}')">
+        <input type="checkbox" id="chk-${key}-${safe}" value="${o}">
+        <label style="cursor:pointer;flex:1" for="chk-${key}-${safe}">${lbl}</label>
+        <span class="ms-only" onclick="event.stopPropagation();onlyOpt('${key}','${o}')">Apenas</span>
+      </div>`;
+    }).join('');
 }
 
 function toggleAll(key) {
@@ -502,6 +524,11 @@ function toggleOpt(key, val) {
   setSelArr(key, cur); updateMsBtn(key); renderAll();
 }
 
+function onlyOpt(key, val) {
+  setSelArr(key, [val]);
+  updateMsBtn(key); renderAll();
+}
+
 function getSelArr(key) { return key==='vig'?selVig:[]; }
 function setSelArr(key,v){ if(key==='vig') selVig=v; }
 function getOpts(key) {
@@ -515,10 +542,10 @@ function updateMsBtn(key) {
   const all = sel.length === 0 || sel.length === opts.length;
   const lbl = document.getElementById(`ms-${key}-lbl`);
   const cnt = document.getElementById(`ms-${key}-cnt`);
-  lbl.textContent = all ? 'Todas' : (sel.length===1 ? sel[0] : `${sel.length} selecionadas`);
+  const dispLbl = all ? 'Todas' : (sel.length===1 ? vigLabel(sel[0]) : `${sel.length} selecionadas`);
+  lbl.textContent = dispLbl;
   cnt.style.display = (!all && sel.length>0) ? '' : 'none';
   cnt.textContent = sel.length;
-  // sync checkboxes
   const list = document.getElementById(`ms-${key}-list`);
   list.querySelectorAll('.ms-opt:not(.all-opt) input').forEach(inp => {
     inp.checked = sel.includes(inp.value) || all;
@@ -560,7 +587,7 @@ function renderHero(data) {
   const pts = data.filter(r=>r.pont!=null).map(r=>r.pont);
   const avg = pts.length ? (pts.reduce((a,b)=>a+b,0)/pts.length) : null;
   document.getElementById('hero-score').textContent = avg != null ? avg.toFixed(2) : '—';
-  const period = selVig.length===0 ? 'Todos os períodos' : (selVig.length===1 ? selVig[0] : `${selVig.length} períodos`);
+  const period = selVig.length===0 ? 'Todos os períodos' : (selVig.length===1 ? vigLabel(selVig[0]) : `${selVig.length} períodos`);
   document.getElementById('hero-period').textContent = period;
   document.getElementById('podio-period').textContent = period;
   document.getElementById('ranking-sub').textContent = period;
