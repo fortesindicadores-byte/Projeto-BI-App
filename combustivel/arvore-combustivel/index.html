@@ -594,7 +594,7 @@ function filtrarRows(rows) {
     (f.nivel3.length  ===0 || f.nivel3.includes(getNv3Prefix(String(r.nivel3))))
   );
 }
-function _buildMs(wrap, renderFn){
+function _buildMs(wrap, renderFn, getAllItemsFn){
   if(!(wrap._sel instanceof Set)) wrap._sel=new Set();
   const sel=wrap._sel;
   const list=wrap.querySelector('.ms-list');
@@ -607,8 +607,12 @@ function _buildMs(wrap, renderFn){
       list.querySelectorAll('input:not(.ms-all)').forEach(b=>b.checked=false);
     } else {
       box.checked ? sel.add(box.dataset.v) : sel.delete(box.dataset.v);
+      if(getAllItemsFn){
+        const all=getAllItemsFn();
+        if(all.length>0&&all.every(v=>sel.has(v))) sel.clear();
+      }
     }
-    syncBadge(wrap); onFilterChange();
+    render(srch.value); onFilterChange();
   });
   list.addEventListener('click',e=>{
     const only=e.target.closest('.ms-only');
@@ -626,10 +630,11 @@ function buildMsFilter(id, items){
   _buildMs(wrap,(list,sel,q)=>{
     const f=q.toLowerCase();
     const shown=items.filter(v=>v.toLowerCase().includes(f));
+    const allChk=sel.size===0;
     list.innerHTML=
-      (!q?`<label class="ms-opt all-opt"><input type="checkbox" class="ms-all" ${sel.size===0?'checked':''}> Todos</label>`:'')+
-      shown.map(v=>`<label class="ms-opt"><input type="checkbox" data-v="${v}" ${sel.has(v)?'checked':''}> ${v}<span class="ms-only" data-v="${v}">only</span></label>`).join('');
-  });
+      (!q?`<label class="ms-opt all-opt"><input type="checkbox" class="ms-all" ${allChk?'checked':''}> Todos</label>`:'')+
+      shown.map(v=>`<label class="ms-opt"><input type="checkbox" data-v="${v}" ${allChk||sel.has(v)?'checked':''}> ${v}<span class="ms-only" data-v="${v}">only</span></label>`).join('');
+  }, ()=>items);
 }
 function buildVigMsFilter(items){
   const wrap=document.getElementById('ms-vig'); if(!wrap) return;
