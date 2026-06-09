@@ -107,6 +107,9 @@ body.light-mode .kpi-card .card-label{background:#141B26;color:#F1F5F9!important
 .ms-opt:hover{background:rgba(255,255,255,.05);color:var(--text);}
 .ms-opt.all-opt{border-bottom:1px solid #1e2d40;color:var(--text);font-weight:700;}
 .ms-opt input[type=checkbox]{accent-color:var(--orange);cursor:pointer;width:14px;height:14px;flex-shrink:0;}
+.ms-only{margin-left:auto;font-size:8px;color:var(--orange);padding:1px 5px;border-radius:2px;cursor:pointer;white-space:nowrap;flex-shrink:0;opacity:0;transition:opacity .12s;}
+.ms-opt:hover .ms-only{opacity:1;}
+.ms-only:hover{background:rgba(249,115,22,.2);}
 .ms-list::-webkit-scrollbar{width:4px;}
 .ms-list::-webkit-scrollbar-track{background:transparent;}
 .ms-list::-webkit-scrollbar-thumb{background:#2a3a50;border-radius:2px;}
@@ -607,6 +610,13 @@ function _buildMs(wrap, renderFn){
     }
     syncBadge(wrap); onFilterChange();
   });
+  list.addEventListener('click',e=>{
+    const only=e.target.closest('.ms-only');
+    if(!only) return;
+    e.preventDefault(); e.stopPropagation();
+    sel.clear(); sel.add(only.dataset.v);
+    render(srch.value); onFilterChange();
+  });
   srch.addEventListener('input',()=>render(srch.value));
   srch.addEventListener('click',e=>e.stopPropagation());
   render();
@@ -618,7 +628,7 @@ function buildMsFilter(id, items){
     const shown=items.filter(v=>v.toLowerCase().includes(f));
     list.innerHTML=
       (!q?`<label class="ms-opt all-opt"><input type="checkbox" class="ms-all" ${sel.size===0?'checked':''}> Todos</label>`:'')+
-      shown.map(v=>`<label class="ms-opt"><input type="checkbox" data-v="${v}" ${sel.has(v)?'checked':''}> ${v}</label>`).join('');
+      shown.map(v=>`<label class="ms-opt"><input type="checkbox" data-v="${v}" ${sel.has(v)?'checked':''}> ${v}<span class="ms-only" data-v="${v}">only</span></label>`).join('');
   });
 }
 function buildVigMsFilter(items){
