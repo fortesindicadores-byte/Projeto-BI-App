@@ -1,0 +1,794 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Frota de Elite · BI Frota</title>
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0"></script>
+<style>
+:root{
+  --bg:#0C1017;--card:#141B26;--card2:#1A2335;--border:#1E2D40;
+  --orange:#F97316;--blue:#38BDF8;--text:#F1F5F9;--text2:#94A3B8;--text3:#475569;
+  --green:#3BB33B;--red:#FF6666;--yellow:#FACC15;
+  --gold:#F59E0B;--gold2:#D97706;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+body{
+  background:
+    radial-gradient(ellipse at 10% 25%,rgba(249,115,22,.06) 0%,transparent 50%),
+    radial-gradient(ellipse at 90% 75%,rgba(56,189,248,.05) 0%,transparent 50%),
+    var(--bg);
+  color:var(--text);font-family:'Montserrat',-apple-system,sans-serif;font-size:13px;min-height:100vh;
+}
+
+/* ── Header ── */
+.header{
+  background:rgba(12,16,23,.75);border-bottom:1px solid rgba(255,255,255,.07);
+  padding:10px 24px 12px;display:flex;flex-wrap:wrap;align-items:center;
+  position:sticky;top:0;z-index:100;
+  backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);
+  box-shadow:0 2px 12px rgba(0,0,0,.3);
+}
+.brand{flex:1;order:1;}
+.brand h1{font-size:16px;font-weight:700;color:var(--orange);}
+.brand p{font-size:10px;color:var(--text2);margin-top:2px;}
+.header-right{flex-shrink:0;order:2;display:flex;align-items:center;gap:8px;}
+.status-badge{font-size:9px;color:var(--text);background:rgba(249,115,22,.15);border:1px solid rgba(249,115,22,.3);border-radius:4px;padding:2px 8px;white-space:nowrap;}
+.access-badge{font-size:9px;color:var(--text2);background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);border-radius:4px;padding:2px 8px;white-space:nowrap;}
+.refresh-btn{background:rgba(249,115,22,.15);border:1px solid rgba(249,115,22,.3);border-radius:4px;padding:4px 8px;cursor:pointer;color:var(--orange);display:flex;align-items:center;}
+.refresh-btn:hover{background:rgba(249,115,22,.32);}
+.theme-btn{background:rgba(249,115,22,.15);border:1px solid rgba(249,115,22,.3);border-radius:4px;padding:4px 6px;cursor:pointer;color:var(--orange);display:flex;align-items:center;}
+.theme-btn:hover{background:rgba(249,115,22,.25);}
+.back-btn{background:rgba(249,115,22,.15);border:1px solid rgba(249,115,22,.3);border-radius:4px;padding:4px 8px;display:flex;align-items:center;color:var(--orange);text-decoration:none;}
+.back-btn:hover{background:rgba(249,115,22,.32);}
+
+/* ── Filters ── */
+.header-filters{flex-basis:100%;order:3;margin-top:10px;display:flex;gap:10px;flex-wrap:wrap;align-items:flex-start;}
+.filter-group{display:flex;flex-direction:column;gap:3px;}
+.filter-label{font-size:9px;color:var(--text2);text-transform:uppercase;letter-spacing:.5px;}
+.ms-wrap{position:relative;}
+.ms-btn{display:flex;align-items:center;gap:8px;background:#0a0f18;color:var(--text);border:1px solid #2a3a50;border-radius:4px;font-family:'Montserrat',sans-serif;font-size:11px;font-weight:700;padding:6px 12px;cursor:pointer;text-transform:uppercase;letter-spacing:.5px;white-space:nowrap;min-width:140px;}
+.ms-btn:hover{border-color:var(--orange);}
+.ms-lbl{flex:1;}
+.ms-cnt{background:var(--orange);color:#000;border-radius:10px;padding:1px 6px;font-size:9px;font-weight:800;display:none;}
+.ms-btn svg{flex-shrink:0;opacity:.8;}
+.ms-panel{display:none;flex-direction:column;position:absolute;top:calc(100% + 4px);left:0;z-index:500;background:#0f1824;border:1px solid #2a3a50;border-radius:4px;min-width:200px;max-height:300px;box-shadow:0 8px 24px rgba(0,0,0,.7);}
+.ms-panel.open{display:flex;}
+.ms-list{overflow-y:auto;max-height:260px;}
+.ms-list::-webkit-scrollbar{width:4px;}
+.ms-list::-webkit-scrollbar-thumb{background:#2a3a50;border-radius:2px;}
+.ms-opt{display:flex;align-items:center;gap:8px;padding:7px 12px;cursor:pointer;font-size:11px;color:var(--text2);}
+.ms-opt:hover{background:rgba(255,255,255,.05);color:var(--text);}
+.ms-opt.all-opt{border-bottom:1px solid #1e2d40;color:var(--text);font-weight:700;}
+.ms-opt input[type=checkbox]{accent-color:var(--orange);cursor:pointer;width:14px;height:14px;flex-shrink:0;}
+
+/* ── Main ── */
+.main{padding:20px 24px;}
+
+/* ── Hero ── */
+.hero{margin-bottom:20px;padding:0 4px;display:flex;align-items:flex-end;gap:32px;flex-wrap:wrap;}
+.hero-main{}
+.hero-label{font-size:10px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:1px;}
+.hero-value{font-size:52px;font-weight:800;color:var(--text);line-height:1;margin:4px 0 0;}
+.hero-sub{font-size:11px;color:var(--text3);margin-top:4px;}
+.hero-badge{display:inline-flex;align-items:center;gap:6px;background:rgba(245,158,11,.12);border:1px solid rgba(245,158,11,.3);border-radius:6px;padding:6px 14px;font-size:11px;font-weight:700;color:var(--gold);margin-top:12px;}
+.hero-badge svg{width:14px;height:14px;}
+
+/* ── Pódio ── */
+.podio-section{margin-bottom:20px;}
+.podio-title-row{display:flex;align-items:center;gap:12px;margin-bottom:20px;}
+.podio-title{font-size:16px;font-weight:800;color:var(--text);}
+.podio-sub{font-size:11px;color:var(--text2);}
+.podio-wrap{display:flex;align-items:flex-end;justify-content:center;gap:0;position:relative;padding:0 20px;}
+
+/* Pedestal base */
+.podio-slot{display:flex;flex-direction:column;align-items:center;position:relative;}
+.podio-slot.primeiro{order:2;z-index:3;}
+.podio-slot.segundo{order:1;z-index:2;}
+.podio-slot.terceiro{order:3;z-index:1;}
+
+.avatar-wrap{position:relative;margin-bottom:-10px;z-index:2;}
+.avatar-img{height:160px;width:auto;object-fit:contain;filter:drop-shadow(0 8px 20px rgba(0,0,0,.6));transition:transform .2s;}
+.podio-slot.segundo .avatar-img,.podio-slot.terceiro .avatar-img{height:130px;}
+.avatar-wrap:hover .avatar-img{transform:translateY(-6px);}
+
+.crown{position:absolute;top:-14px;left:50%;transform:translateX(-50%);font-size:22px;z-index:3;}
+
+.pedestal{position:relative;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;padding-bottom:14px;cursor:default;}
+.podio-slot.primeiro .pedestal{width:180px;height:110px;background:linear-gradient(180deg,#c4911a 0%,#8a6010 100%);border-radius:6px 6px 0 0;box-shadow:0 -4px 24px rgba(196,145,26,.35);}
+.podio-slot.segundo .pedestal{width:155px;height:80px;background:linear-gradient(180deg,#6b7280 0%,#374151 100%);border-radius:6px 6px 0 0;box-shadow:0 -2px 12px rgba(107,114,128,.2);}
+.podio-slot.terceiro .pedestal{width:155px;height:62px;background:linear-gradient(180deg,#92400e 0%,#5a2a07 100%);border-radius:6px 6px 0 0;box-shadow:0 -2px 12px rgba(146,64,14,.2);}
+
+.pedestal-place{font-size:11px;font-weight:800;color:rgba(255,255,255,.6);text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;}
+.podio-slot.primeiro .pedestal-place{color:rgba(255,255,255,.75);}
+.pedestal-name{font-size:13px;font-weight:800;color:#fff;text-align:center;line-height:1.2;}
+.podio-slot.primeiro .pedestal-name{font-size:15px;}
+.pedestal-unit{font-size:9px;font-weight:600;color:rgba(255,255,255,.65);text-align:center;margin-top:3px;text-transform:uppercase;letter-spacing:.5px;}
+.pedestal-score{font-size:11px;font-weight:800;color:rgba(255,255,255,.85);margin-top:5px;}
+.podio-slot.primeiro .pedestal-score{font-size:13px;color:#fff;}
+
+.podio-floor{height:6px;background:rgba(255,255,255,.06);border-radius:0 0 4px 4px;width:100%;}
+
+/* ── Ranking table ── */
+.tbl-section{background:rgba(20,27,38,.55);border:1px solid rgba(255,255,255,.07);border-radius:8px;padding:18px 20px 16px;margin-bottom:16px;backdrop-filter:blur(16px);box-shadow:0 2px 12px rgba(0,0,0,.25);}
+.tbl-title{font-size:16px;font-weight:800;color:var(--text);margin-bottom:3px;}
+.tbl-sub{font-size:10px;color:var(--text2);margin-bottom:16px;}
+.tbl-notes{font-size:9px;color:var(--text3);margin-top:12px;line-height:1.6;font-style:italic;}
+table{width:100%;border-collapse:collapse;font-size:12px;}
+thead th{background:transparent;color:var(--text);font-size:11px;font-weight:700;padding:8px 8px 12px;border-bottom:1px solid rgba(255,255,255,.10);text-transform:uppercase;letter-spacing:.5px;white-space:nowrap;}
+td{padding:11px 8px;border:none;color:var(--text);white-space:nowrap;}
+tbody tr:hover{background:rgba(255,255,255,.035);}
+td.num,th.num{text-align:right;}
+table td:first-child,table th:first-child{text-align:left;}
+.rank-num{font-size:11px;font-weight:700;color:var(--text3);width:28px;}
+.rank-1 .rank-num{color:var(--gold);}
+.rank-2 .rank-num{color:#9CA3AF;}
+.rank-3 .rank-num{color:#92400E;}
+.score-pill{display:inline-block;padding:3px 10px;border-radius:12px;font-size:11px;font-weight:800;min-width:46px;text-align:center;}
+.score-green{background:rgba(59,179,59,.18);color:#4ADE80;border:1px solid rgba(59,179,59,.35);}
+.score-yellow{background:rgba(250,204,21,.18);color:#FACC15;border:1px solid rgba(250,204,21,.35);}
+.score-red{background:rgba(255,102,102,.18);color:#FF6666;border:1px solid rgba(255,102,102,.35);}
+.ind-pct{font-size:11px;font-weight:600;}
+.ind-green{color:var(--green);}
+.ind-yellow{color:var(--yellow);}
+.ind-red{color:var(--red);}
+.ind-dash{color:var(--text3);}
+.medal-icon{font-size:14px;}
+
+/* peso-box */
+.peso-box{background:rgba(20,27,38,.55);border:1px solid rgba(249,115,22,.2);border-radius:8px;padding:14px 20px;margin-bottom:16px;backdrop-filter:blur(16px);}
+.peso-title{font-size:12px;font-weight:800;color:var(--orange);margin-bottom:10px;text-transform:uppercase;letter-spacing:.5px;}
+.peso-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:4px 20px;}
+.peso-item{font-size:11px;color:var(--text2);display:flex;justify-content:space-between;padding:2px 0;}
+.peso-item b{color:var(--text);font-weight:700;}
+
+/* ── Chart ── */
+.chart-card{background:rgba(20,27,38,.55);border:1px solid rgba(255,255,255,.07);border-radius:8px;padding:18px 20px;margin-bottom:16px;backdrop-filter:blur(16px);box-shadow:0 2px 12px rgba(0,0,0,.25);}
+.chart-header{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:4px;flex-wrap:wrap;gap:8px;}
+.chart-title{font-size:16px;font-weight:800;color:var(--text);}
+.chart-sub{font-size:10px;color:var(--text2);margin-bottom:16px;}
+.chart-wrap{position:relative;height:240px;}
+.ind-selector{display:flex;gap:6px;flex-wrap:wrap;}
+.ind-btn{padding:4px 10px;font-family:'Montserrat',sans-serif;font-size:9px;font-weight:800;border:1px solid rgba(255,255,255,.1);border-radius:4px;cursor:pointer;background:transparent;color:var(--text2);text-transform:uppercase;letter-spacing:.5px;transition:all .2s;}
+.ind-btn:hover{border-color:rgba(249,115,22,.4);color:var(--orange);}
+.ind-btn.active{background:rgba(249,115,22,.15);border-color:rgba(249,115,22,.4);color:var(--orange);}
+
+/* ── Light mode ── */
+body.light-mode .main{background:#F0F0F0;--text:#1a1a1a;--text2:#444444;--text3:#666666;}
+body.light-mode .kpi-card,body.light-mode .chart-card,body.light-mode .tbl-section,body.light-mode .peso-box{background:#EDEEF2!important;border-color:transparent!important;box-shadow:0 1px 6px rgba(0,0,0,.09)!important;--text:#1a1a1a;--text2:#444444;--text3:#555555;}
+body.light-mode td{color:var(--text);}
+body.light-mode .score-green{background:rgba(22,163,74,.15);color:#16a34a;border-color:rgba(22,163,74,.3);}
+body.light-mode .score-yellow{background:rgba(180,83,9,.12);color:#b45309;border-color:rgba(180,83,9,.25);}
+body.light-mode .score-red{background:rgba(220,38,38,.12);color:#dc2626;border-color:rgba(220,38,38,.25);}
+body.light-mode .ind-btn{border-color:rgba(0,0,0,.15);color:#666;}
+body.light-mode .ind-btn.active{background:rgba(217,94,8,.1);border-color:rgba(217,94,8,.4);color:#D95E08;}
+body.light-mode .podio-slot.primeiro .pedestal{box-shadow:0 -4px 24px rgba(196,145,26,.25);}
+
+/* ── Mobile ── */
+@media(max-width:768px){
+  .header{padding:8px 12px 10px;}
+  .header-right{gap:4px;}
+  .header-right .refresh-btn{display:none;}
+  .brand h1{font-size:14px;}
+  .status-badge,.access-badge{font-size:8px;padding:2px 6px;}
+  .theme-btn{padding:3px 5px;}
+  .theme-btn svg{width:13px;height:13px;}
+  .header-filters{gap:5px;margin-top:8px;}
+  .filter-group{flex:0 0 calc(50% - 3px);}
+  .ms-wrap{width:100%;}
+  .ms-btn{width:100%;min-width:0;font-size:8px;padding:3px 6px;}
+  .main{padding:12px;}
+  .hero-value{font-size:36px;}
+  .podio-wrap{gap:0;padding:0;}
+  .avatar-img{height:100px;}
+  .podio-slot.segundo .avatar-img,.podio-slot.terceiro .avatar-img{height:82px;}
+  .podio-slot.primeiro .pedestal{width:130px;height:82px;}
+  .podio-slot.segundo .pedestal,.podio-slot.terceiro .pedestal{width:110px;height:60px;}
+  .pedestal-name{font-size:10px;}
+  .podio-slot.primeiro .pedestal-name{font-size:11px;}
+  .pedestal-unit{font-size:7px;}
+  table{table-layout:fixed;width:100%;font-size:1.6vmin;}
+  thead th{font-size:1.6vmin;padding:4px 2px;letter-spacing:0;}
+  .chart-wrap{height:180px;}
+  .ind-selector{gap:4px;}
+  .ind-btn{font-size:7px;padding:3px 6px;}
+}
+</style>
+</head>
+<body>
+
+<header class="header">
+  <div class="brand">
+    <h1>FROTA DE ELITE</h1>
+    <p>Programa de Reconhecimento · Frota</p>
+  </div>
+  <div class="header-right">
+    <a href="../" class="back-btn" title="Voltar ao Hub">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+    </a>
+    <button class="theme-btn" id="themeBtn" title="Modo claro/escuro"></button>
+    <button class="refresh-btn" onclick="atualizar()" title="Atualizar dados">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><polyline points="23 20 23 14 17 14"/><path d="M20.49 9A9 9 0 0 0 5.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 0 1 3.51 15"/></svg>
+    </button>
+    <span class="status-badge" id="status-badge">Carregando…</span>
+    <span class="access-badge" id="access-badge" style="display:none"></span>
+  </div>
+  <div class="header-filters">
+    <div class="filter-group">
+      <span class="filter-label">Vigência</span>
+      <div class="ms-wrap" id="ms-vig-wrap">
+        <button class="ms-btn" id="ms-vig-btn" onclick="toggleMs('vig')">
+          <span class="ms-lbl" id="ms-vig-lbl">Todas</span>
+          <span class="ms-cnt" id="ms-vig-cnt"></span>
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+        </button>
+        <div class="ms-panel" id="ms-vig-panel">
+          <div class="ms-list" id="ms-vig-list"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</header>
+
+<main class="main">
+
+  <!-- HERO -->
+  <div class="hero">
+    <div class="hero-main">
+      <div class="hero-label">Pontuação Total Média</div>
+      <div class="hero-value" id="hero-score">—</div>
+      <div class="hero-sub" id="hero-period">—</div>
+    </div>
+    <div>
+      <div class="hero-badge">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+        PRÊMIO FROTA DE ELITE 2026
+      </div>
+    </div>
+  </div>
+
+  <!-- PÓDIO -->
+  <div class="tbl-section podio-section" style="margin-bottom:16px;">
+    <div class="podio-title-row">
+      <div class="podio-title">🏆 Pódio do Período</div>
+      <div class="podio-sub" id="podio-period">—</div>
+    </div>
+    <div class="podio-wrap" id="podio-wrap">
+      <!-- renderizado via JS -->
+    </div>
+  </div>
+
+  <!-- RANKING -->
+  <div class="tbl-section">
+    <div class="tbl-title">Ranking Geral</div>
+    <div class="tbl-sub" id="ranking-sub">—</div>
+    <div style="overflow-x:auto;">
+      <table id="ranking-table">
+        <thead>
+          <tr>
+            <th style="width:32px;">#</th>
+            <th>Unidade</th>
+            <th class="num">Disp.</th>
+            <th class="num">Prev.</th>
+            <th class="num">Combust.</th>
+            <th class="num">Pneus</th>
+            <th class="num">Check T1/T2</th>
+            <th class="num">Check WH</th>
+            <th class="num">Conform.</th>
+            <th class="num">S.Test Veíc.</th>
+            <th class="num">S.Test Emp.</th>
+            <th class="num">CIVF</th>
+            <th class="num">SLA Man.</th>
+            <th class="num">Pontuação</th>
+          </tr>
+        </thead>
+        <tbody id="ranking-tbody"></tbody>
+      </table>
+    </div>
+    <div class="tbl-notes">
+      * O % é o Atingimento dos indicadores em relação às metas do Gerot corporativo. Ele gera uma pontuação de acordo com a distribuição de pesos abaixo.<br>
+      * Caso a unidade não possua um dos indicadores, os pesos são redistribuídos proporcionalmente.
+    </div>
+  </div>
+
+  <!-- PESOS -->
+  <div class="peso-box">
+    <div class="peso-title">Distribuição dos Pesos</div>
+    <div class="peso-grid">
+      <div class="peso-item"><span>Disponibilidade</span><b>20%</b></div>
+      <div class="peso-item"><span>Conformidade</span><b>5%</b></div>
+      <div class="peso-item"><span>Preventivas</span><b>15%</b></div>
+      <div class="peso-item"><span>Stress Test – Veíc.</span><b>5%</b></div>
+      <div class="peso-item"><span>Combustível</span><b>10%</b></div>
+      <div class="peso-item"><span>Stress Test – Emp.</span><b>5%</b></div>
+      <div class="peso-item"><span>Pneus</span><b>10%</b></div>
+      <div class="peso-item"><span>SLA Man.</span><b>5%</b></div>
+      <div class="peso-item"><span>Checklist (T1/T2 e WS)</span><b>10%</b></div>
+      <div class="peso-item"><span>CIVF</span><b>5%</b></div>
+    </div>
+  </div>
+
+  <!-- GRÁFICO TEMPORAL -->
+  <div class="chart-card">
+    <div class="chart-header">
+      <div>
+        <div class="chart-title">Evolução Temporal</div>
+        <div class="chart-sub">Pontuação média mensal · Meta 85%</div>
+      </div>
+      <div class="ind-selector" id="ind-selector">
+        <!-- botões gerados via JS -->
+      </div>
+    </div>
+    <div class="chart-wrap"><canvas id="chartTemporal"></canvas></div>
+  </div>
+
+</main>
+
+<footer style="text-align:center;padding:20px;font-size:9px;color:var(--text3);letter-spacing:.5px;">© 2026 Fortes Indicadores · Todos os direitos reservados</footer>
+
+<script>
+Chart.register(ChartDataLabels);
+
+/* ── Configuração Google Sheets ── */
+const SHEET_ID  = '1xGl1Xrk2sPS9zWghEuecFMNBHwmeLiZ02U-QpO8cDPY';
+const SHEET_TAB = 'Consolidado ICs';
+
+/* ── Avatares por unidade ── */
+const AVATARES = {
+  'CDI MACACU':        'avatares/marina.png',
+  'CDD PELOTAS':       'avatares/ritcher.png',
+  'CDD RONDONOPOLIS':  'avatares/kleiton.png',
+  'CDD NOVA FRIBURGO': 'avatares/lucas.png',
+  'CDD RIO DE JANEIRO':'avatares/michel.png',
+  'CDD FLORIANOPOLIS': 'avatares/rodrigo.png',
+  'CDD CUIABA':        'avatares/joao.png',
+  'CDD GUARULHOS':     'avatares/rafael.png',
+  'CDD CAMBORIU':      'avatares/bruno.png',
+  'PIRAI EMPURRADA':   'avatares/jean.png',
+  'MACACU EMPURRADA':  'avatares/erick.png',
+  'CUIABA EMPURRADA':  'avatares/aldo.png',
+  'CUIABA':            'avatares/silverio.png',
+};
+
+const NOMES = {
+  'CDI MACACU':        'Marina',
+  'CDD PELOTAS':       'Ritcher',
+  'CDD RONDONOPOLIS':  'Kleiton',
+  'CDD NOVA FRIBURGO': 'Lucas',
+  'CDD RIO DE JANEIRO':'Michel',
+  'CDD FLORIANOPOLIS': 'Rodrigo',
+  'CDD CUIABA':        'João',
+  'CDD GUARULHOS':     'Rafael',
+  'CDD CAMBORIU':      'Bruno',
+  'PIRAI EMPURRADA':   'Jean',
+  'MACACU EMPURRADA':  'Erick',
+  'CUIABA EMPURRADA':  'Aldo',
+  'CUIABA':            'Silvério',
+};
+
+/* ── Indicadores e colunas ── */
+const COLS = {
+  vig:      0,
+  unidade:  1,
+  disp:     2,
+  prev:     3,
+  comb:     4,
+  pneus:    5,
+  checkT:   6,
+  checkWH:  7,
+  conf:     8,
+  stVeic:   9,
+  stEmp:    10,
+  civf:     11,
+  sla:      12,
+  pontuacao:13,
+};
+
+const IND_LABELS = {
+  pontuacao: 'Pontuação',
+  disp:      'Disponib.',
+  prev:      'Preventivas',
+  comb:      'Combustível',
+  pneus:     'Pneus',
+  checkT:    'Check T1/T2',
+  conf:      'Conformidade',
+  stVeic:    'Stress Veíc.',
+  stEmp:     'Stress Emp.',
+  civf:      'CIVF',
+  sla:       'SLA Man.',
+};
+
+/* ── Estado ── */
+let RAW = [];
+let selVig = [];
+let chartTemporal = null;
+let activeInd = 'pontuacao';
+
+/* ── Fetch ── */
+async function fetchData() {
+  const url = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(SHEET_TAB)}`;
+  const r = await fetch(url);
+  const csv = await r.text();
+  RAW = parseCSV(csv);
+  populateFilters();
+  renderAll();
+}
+
+function parseCSV(text) {
+  const lines = text.trim().split('\n');
+  const rows = [];
+  for (let i = 1; i < lines.length; i++) {
+    const cols = splitCSVLine(lines[i]);
+    if (cols.length < 14) continue;
+    const vig  = cols[COLS.vig]?.trim().replace(/"/g,'') || '';
+    const unit = cols[COLS.unidade]?.trim().replace(/"/g,'').toUpperCase() || '';
+    if (!vig || !unit) continue;
+    const parse = (v) => {
+      const s = v?.toString().replace(/"/g,'').replace('%','').replace(',','.').trim();
+      if (!s || s === '-' || s === '' || s === 'null') return null;
+      return parseFloat(s);
+    };
+    rows.push({
+      vig, unit,
+      disp:  parse(cols[COLS.disp]),
+      prev:  parse(cols[COLS.prev]),
+      comb:  parse(cols[COLS.comb]),
+      pneus: parse(cols[COLS.pneus]),
+      checkT:parse(cols[COLS.checkT]),
+      checkWH:parse(cols[COLS.checkWH]),
+      conf:  parse(cols[COLS.conf]),
+      stVeic:parse(cols[COLS.stVeic]),
+      stEmp: parse(cols[COLS.stEmp]),
+      civf:  parse(cols[COLS.civf]),
+      sla:   parse(cols[COLS.sla]),
+      pont:  parse(cols[COLS.pontuacao]),
+    });
+  }
+  return rows;
+}
+
+function splitCSVLine(line) {
+  const result = [];
+  let cur = '', inQ = false;
+  for (let i = 0; i < line.length; i++) {
+    const c = line[i];
+    if (c === '"') { inQ = !inQ; continue; }
+    if (c === ',' && !inQ) { result.push(cur); cur = ''; continue; }
+    cur += c;
+  }
+  result.push(cur);
+  return result;
+}
+
+/* ── Filtros ── */
+function populateFilters() {
+  const vigs = [...new Set(RAW.map(r => r.vig))].sort((a,b) => {
+    const [ma,ya] = a.split('/'); const [mb,yb] = b.split('/');
+    return (+yb*12 + +mb) - (+ya*12 + +ma);
+  });
+  buildMsFilter('vig', vigs);
+  if (selVig.length === 0 && vigs.length > 0) selVig = [vigs[0]];
+  updateMsBtn('vig');
+}
+
+function buildMsFilter(key, opts) {
+  const list = document.getElementById(`ms-${key}-list`);
+  list.innerHTML = `<div class="ms-opt all-opt" onclick="toggleAll('${key}')"><input type="checkbox" id="chk-${key}-all"> <label style="cursor:pointer" for="chk-${key}-all">Todas</label></div>` +
+    opts.map(o => `<div class="ms-opt" onclick="toggleOpt('${key}','${o}')"><input type="checkbox" id="chk-${key}-${o}" value="${o}"> <label style="cursor:pointer" for="chk-${key}-${o}">${o}</label></div>`).join('');
+}
+
+function toggleAll(key) {
+  const cur = getSelArr(key);
+  const opts = getOpts(key);
+  setSelArr(key, cur.length === opts.length ? [] : [...opts]);
+  updateMsBtn(key); renderAll();
+}
+
+function toggleOpt(key, val) {
+  const cur = getSelArr(key);
+  const idx = cur.indexOf(val);
+  if (idx >= 0) cur.splice(idx,1); else cur.push(val);
+  setSelArr(key, cur); updateMsBtn(key); renderAll();
+}
+
+function getSelArr(key) { return key==='vig'?selVig:[]; }
+function setSelArr(key,v){ if(key==='vig') selVig=v; }
+function getOpts(key) {
+  const list = document.getElementById(`ms-${key}-list`);
+  return [...list.querySelectorAll('.ms-opt:not(.all-opt) input')].map(i=>i.value);
+}
+
+function updateMsBtn(key) {
+  const sel = getSelArr(key);
+  const opts = getOpts(key);
+  const all = sel.length === 0 || sel.length === opts.length;
+  const lbl = document.getElementById(`ms-${key}-lbl`);
+  const cnt = document.getElementById(`ms-${key}-cnt`);
+  lbl.textContent = all ? 'Todas' : (sel.length===1 ? sel[0] : `${sel.length} selecionadas`);
+  cnt.style.display = (!all && sel.length>0) ? '' : 'none';
+  cnt.textContent = sel.length;
+  // sync checkboxes
+  const list = document.getElementById(`ms-${key}-list`);
+  list.querySelectorAll('.ms-opt:not(.all-opt) input').forEach(inp => {
+    inp.checked = sel.includes(inp.value) || all;
+  });
+  const allChk = document.getElementById(`chk-${key}-all`);
+  if (allChk) allChk.checked = all;
+}
+
+function toggleMs(key) {
+  const panel = document.getElementById(`ms-${key}-panel`);
+  panel.classList.toggle('open');
+}
+
+document.addEventListener('click', e => {
+  ['vig'].forEach(key => {
+    const wrap = document.getElementById(`ms-${key}-wrap`);
+    if (wrap && !wrap.contains(e.target)) {
+      document.getElementById(`ms-${key}-panel`)?.classList.remove('open');
+    }
+  });
+});
+
+/* ── Filtragem ── */
+function getFiltered() {
+  return RAW.filter(r => selVig.length===0 || selVig.includes(r.vig));
+}
+
+/* ── Render All ── */
+function renderAll() {
+  const data = getFiltered();
+  renderHero(data);
+  renderRanking(data);
+  renderPodio(data);
+  renderChart();
+}
+
+/* ── Hero ── */
+function renderHero(data) {
+  const pts = data.filter(r=>r.pont!=null).map(r=>r.pont);
+  const avg = pts.length ? (pts.reduce((a,b)=>a+b,0)/pts.length) : null;
+  document.getElementById('hero-score').textContent = avg != null ? avg.toFixed(2) : '—';
+  const period = selVig.length===0 ? 'Todos os períodos' : (selVig.length===1 ? selVig[0] : `${selVig.length} períodos`);
+  document.getElementById('hero-period').textContent = period;
+  document.getElementById('podio-period').textContent = period;
+  document.getElementById('ranking-sub').textContent = period;
+}
+
+/* ── Ranking por unidade (média se multi-vig) ── */
+function getRankingData(data) {
+  const byUnit = {};
+  data.forEach(r => {
+    if (!byUnit[r.unit]) byUnit[r.unit] = {unit:r.unit, rows:[]};
+    byUnit[r.unit].rows.push(r);
+  });
+  const result = Object.values(byUnit).map(({unit, rows}) => {
+    const avg = (field) => {
+      const vals = rows.map(r=>r[field]).filter(v=>v!=null);
+      return vals.length ? vals.reduce((a,b)=>a+b,0)/vals.length : null;
+    };
+    return {
+      unit,
+      disp: avg('disp'), prev: avg('prev'), comb: avg('comb'), pneus: avg('pneus'),
+      checkT: avg('checkT'), checkWH: avg('checkWH'), conf: avg('conf'),
+      stVeic: avg('stVeic'), stEmp: avg('stEmp'), civf: avg('civf'), sla: avg('sla'),
+      pont: avg('pont'),
+    };
+  });
+  result.sort((a,b) => (b.pont||0) - (a.pont||0));
+  return result;
+}
+
+/* ── Ranking table ── */
+function renderRanking(data) {
+  const rows = getRankingData(data);
+  const tbody = document.getElementById('ranking-tbody');
+  const medals = ['🥇','🥈','🥉'];
+  tbody.innerHTML = rows.map((r, i) => {
+    const rank = i+1;
+    const sc = scorePill(r.pont);
+    const p = (v,invert=false) => v==null ? '<span class="ind-dash">—</span>' : `<span class="${indClass(v,invert)}">${v.toFixed(0)}%</span>`;
+    return `<tr class="rank-${rank<=3?rank:'x'}">
+      <td class="rank-num">${rank<=3?medals[i]:rank}</td>
+      <td style="font-weight:600">${r.unit}</td>
+      <td class="num">${p(r.disp)}</td>
+      <td class="num">${p(r.prev)}</td>
+      <td class="num">${p(r.comb,true)}</td>
+      <td class="num">${p(r.pneus)}</td>
+      <td class="num">${p(r.checkT)}</td>
+      <td class="num">${p(r.checkWH)}</td>
+      <td class="num">${p(r.conf)}</td>
+      <td class="num">${p(r.stVeic)}</td>
+      <td class="num">${p(r.stEmp)}</td>
+      <td class="num">${p(r.civf)}</td>
+      <td class="num">${p(r.sla)}</td>
+      <td class="num">${sc}</td>
+    </tr>`;
+  }).join('');
+}
+
+function indClass(v, invert=false) {
+  if (v==null) return 'ind-dash';
+  const good = invert ? v<=100 : v>=85;
+  const ok   = invert ? v<=110 : v>=75;
+  if (good) return 'ind-green';
+  if (ok)   return 'ind-yellow';
+  return 'ind-red';
+}
+
+function scorePill(v) {
+  if (v==null) return '<span class="ind-dash">—</span>';
+  const cls = v>=85 ? 'score-green' : v>=75 ? 'score-yellow' : 'score-red';
+  return `<span class="score-pill ${cls}">${v.toFixed(1)}</span>`;
+}
+
+/* ── Pódio ── */
+function renderPodio(data) {
+  const rows = getRankingData(data);
+  const wrap = document.getElementById('podio-wrap');
+  if (rows.length < 1) { wrap.innerHTML = '<p style="color:var(--text3);padding:20px;">Sem dados para o período.</p>'; return; }
+
+  const top3 = rows.slice(0,3);
+  const crowns = ['👑','🥈','🥉'];
+  const places = ['1º LUGAR','2º LUGAR','3º LUGAR'];
+  const classes = ['primeiro','segundo','terceiro'];
+
+  // ordem visual: 2º | 1º | 3º
+  const order = top3.length >= 3 ? [top3[1],top3[0],top3[2]] : top3.length===2 ? [top3[1],top3[0]] : [top3[0]];
+  const orderClass = top3.length>=3 ? ['segundo','primeiro','terceiro'] : top3.length===2 ? ['segundo','primeiro'] : ['primeiro'];
+  const orderCrowns= top3.length>=3 ? [crowns[1],crowns[0],crowns[2]] : top3.length===2 ? [crowns[1],crowns[0]] : [crowns[0]];
+  const orderPlaces= top3.length>=3 ? [places[1],places[0],places[2]] : top3.length===2 ? [places[1],places[0]] : [places[0]];
+
+  wrap.innerHTML = order.map((r, i) => {
+    const cl   = orderClass[i];
+    const unit = r.unit;
+    const nome = NOMES[unit] || unit;
+    const avatar = AVATARES[unit] || '';
+    const sc   = r.pont!=null ? r.pont.toFixed(1) : '—';
+    return `
+    <div class="podio-slot ${cl}">
+      <div class="avatar-wrap">
+        <div class="crown">${orderCrowns[i]}</div>
+        ${avatar ? `<img class="avatar-img" src="${avatar}" alt="${nome}" onerror="this.style.display='none'">` : `<div style="height:140px;display:flex;align-items:center;justify-content:center;font-size:40px;">${orderCrowns[i]}</div>`}
+      </div>
+      <div class="pedestal">
+        <div class="pedestal-place">${orderPlaces[i]}</div>
+        <div class="pedestal-name">${nome}</div>
+        <div class="pedestal-unit">${unit}</div>
+        <div class="pedestal-score">${sc} pts</div>
+      </div>
+      <div class="podio-floor"></div>
+    </div>`;
+  }).join('');
+}
+
+/* ── Gráfico Temporal ── */
+function buildIndSelector() {
+  const sel = document.getElementById('ind-selector');
+  sel.innerHTML = Object.entries(IND_LABELS).map(([k,v]) =>
+    `<button class="ind-btn${k===activeInd?' active':''}" onclick="setActiveInd('${k}')">${v}</button>`
+  ).join('');
+}
+
+function setActiveInd(ind) {
+  activeInd = ind;
+  buildIndSelector();
+  renderChart();
+}
+
+function renderChart() {
+  const isLight = document.body.classList.contains('light-mode');
+  const gridC   = isLight ? 'rgba(0,0,0,.08)' : 'rgba(255,255,255,.06)';
+  const tickC   = isLight ? '#444' : '#94A3B8';
+  const tooltip = {backgroundColor:'#141B26',titleColor:'#F97316',bodyColor:'#F1F5F9',borderColor:'#1E2D40',borderWidth:1,titleFont:{family:'Montserrat'},bodyFont:{family:'Montserrat'}};
+
+  // agrupar por vigência (meses no eixo X)
+  const allVigs = [...new Set(RAW.map(r=>r.vig))].sort((a,b)=>{
+    const [ma,ya]=a.split('/'); const [mb,yb]=b.split('/');
+    return (+ya*12 + +ma) - (+yb*12 + +mb);
+  });
+
+  const field = activeInd === 'pontuacao' ? 'pont' : activeInd;
+
+  const avgByVig = allVigs.map(v => {
+    const vals = RAW.filter(r=>r.vig===v).map(r=>r[field]).filter(x=>x!=null);
+    return vals.length ? vals.reduce((a,b)=>a+b,0)/vals.length : null;
+  });
+
+  const metaLine = allVigs.map(()=>85);
+
+  const ctx = document.getElementById('chartTemporal').getContext('2d');
+  if (chartTemporal) chartTemporal.destroy();
+  chartTemporal = new Chart(ctx, {
+    type:'line',
+    data:{
+      labels: allVigs,
+      datasets:[
+        {
+          label: IND_LABELS[activeInd] || activeInd,
+          data: avgByVig,
+          borderColor:'#F97316',borderWidth:3,tension:.3,fill:false,
+          pointRadius:5,pointBackgroundColor:'#F97316',pointHoverRadius:7,
+          datalabels:{display:true,color:'#F97316',font:{family:'Montserrat',size:10,weight:'700'},formatter:v=>v!=null?v.toFixed(1):'',anchor:'top',align:'top',offset:4},
+        },
+        {
+          label:'Meta (85%)',
+          data: metaLine,
+          borderColor:'rgba(250,204,21,.6)',borderWidth:2,borderDash:[6,4],tension:0,fill:false,
+          pointRadius:0,
+          datalabels:{display:false},
+        },
+      ],
+    },
+    options:{
+      responsive:true,maintainAspectRatio:false,
+      plugins:{
+        legend:{labels:{color:isLight?'#1a1a1a':'#F1F5F9',font:{family:'Montserrat',size:10},boxWidth:14}},
+        tooltip,
+        datalabels:{display:false},
+      },
+      scales:{
+        x:{grid:{color:gridC},ticks:{color:tickC,font:{family:'Montserrat',size:10}}},
+        y:{
+          grid:{color:gridC},
+          ticks:{color:tickC,font:{family:'Montserrat',size:10},callback:v=>v+'%'},
+          min:0,max:110,
+        },
+      },
+    },
+  });
+}
+
+/* ── Atualizar ── */
+async function atualizar() {
+  set('status-badge','Carregando…');
+  try {
+    await fetchData();
+    const now = new Date();
+    set('status-badge',`Atualizado ${now.toLocaleDateString('pt-BR')} ${now.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})}`);
+  } catch(e) {
+    set('status-badge','Erro ao carregar dados');
+  }
+}
+
+function set(id,v){ const el=document.getElementById(id); if(el) el.textContent=v; }
+
+/* ── Último acesso ── */
+function initAccessLog() {
+  let name = localStorage.getItem('bi_user_name');
+  if (!name) { name = prompt('Qual é o seu nome?')||'Desconhecido'; localStorage.setItem('bi_user_name',name); }
+  const lastRaw = localStorage.getItem('bi_last_access');
+  if (lastRaw) {
+    const d = new Date(lastRaw);
+    const lastUser = localStorage.getItem('bi_last_user')||name;
+    const badge = document.getElementById('access-badge');
+    if (badge) { badge.textContent=`Último acesso: ${d.toLocaleDateString('pt-BR')} ${d.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})} · ${lastUser}`; badge.style.display=''; }
+  }
+  localStorage.setItem('bi_last_access',new Date().toISOString());
+  localStorage.setItem('bi_last_user',name);
+}
+
+/* ── Tema ── */
+const _sun=`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>`;
+const _moon=`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>`;
+function applyTheme(t){
+  document.body.classList.toggle('light-mode',t==='light');
+  localStorage.setItem('bi_theme',t);
+  const b=document.getElementById('themeBtn');
+  if(b) b.innerHTML=t==='light'?_moon:_sun;
+  if(RAW.length) renderChart();
+}
+(function(){
+  const t=localStorage.getItem('bi_theme')||'dark';
+  applyTheme(t);
+  document.getElementById('themeBtn').addEventListener('click',
+    ()=>applyTheme(document.body.classList.contains('light-mode')?'dark':'light'));
+})();
+
+buildIndSelector();
+document.addEventListener('DOMContentLoaded',()=>{ initAccessLog(); atualizar(); });
+</script>
+</body>
+</html>
