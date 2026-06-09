@@ -193,6 +193,9 @@ body.light-mode .ind-btn{border-color:rgba(0,0,0,.15);color:#666;}
 body.light-mode .ind-btn.active{background:rgba(217,94,8,.1);border-color:rgba(217,94,8,.4);color:#D95E08;}
 body.light-mode .podio-slot.primeiro .pedestal{box-shadow:0 -4px 24px rgba(196,145,26,.25);}
 
+/* ── Toggle indicadores (só mobile) ── */
+.tbl-ind-toggle{display:none;}
+
 /* ── Mobile ── */
 @media(max-width:768px){
   .header{padding:8px 12px 10px;}
@@ -207,20 +210,56 @@ body.light-mode .podio-slot.primeiro .pedestal{box-shadow:0 -4px 24px rgba(196,1
   .ms-wrap{width:100%;}
   .ms-btn{width:100%;min-width:0;font-size:8px;padding:3px 6px;}
   .main{padding:12px;}
+
+  /* Hero */
   .hero-value{font-size:36px;}
-  .podio-wrap{gap:0;padding:0;}
-  .avatar-img{height:100px;}
-  .podio-slot.segundo .avatar-img,.podio-slot.terceiro .avatar-img{height:82px;}
-  .podio-slot.primeiro .pedestal{width:130px;height:82px;}
-  .podio-slot.segundo .pedestal,.podio-slot.terceiro .pedestal{width:110px;height:60px;}
-  .pedestal-name{font-size:10px;}
-  .podio-slot.primeiro .pedestal-name{font-size:11px;}
-  .pedestal-unit{font-size:7px;}
-  table{table-layout:fixed;width:100%;font-size:1.6vmin;}
-  thead th{font-size:1.6vmin;padding:4px 2px;letter-spacing:0;}
-  .chart-wrap{height:180px;}
-  .ind-selector{gap:4px;}
+
+  /* Pesos + Chart: empilhar verticalmente */
+  .pesos-chart-row{flex-direction:column;}
+  .peso-box{flex:none;width:100%;}
+  .chart-wrap{height:220px;}
+  .ind-selector{gap:3px;justify-content:flex-start;}
   .ind-btn{font-size:7px;padding:3px 6px;}
+
+  /* Pódio */
+  .podio-section{padding:24px 12px 0;}
+  .podio-title{font-size:22px;}
+  .podio-sub{font-size:11px;}
+  .podio-wrap{gap:0;justify-content:center;}
+  .avatar-img{width:110px;height:130px;}
+  .podio-slot.segundo .avatar-img,.podio-slot.terceiro .avatar-img{width:90px;height:108px;}
+  .pedestal{width:110px;padding:10px 6px 12px;}
+  .podio-slot.segundo .pedestal,.podio-slot.terceiro .pedestal{width:90px;}
+  .podio-slot.primeiro .pedestal{min-height:80px;}
+  .podio-slot.segundo .pedestal,.podio-slot.terceiro .pedestal{min-height:60px;}
+  .pedestal-place{font-size:9px;}
+  .pedestal-name{font-size:10px;}
+  .podio-slot.primeiro .pedestal-name{font-size:12px;}
+  .pedestal-unit{font-size:7px;}
+  .pedestal-score{font-size:10px;}
+  .podio-slot.primeiro .pedestal-score{font-size:12px;}
+
+  /* Ranking: ocultar colunas de indicadores por padrão */
+  .ind-col{display:none;}
+  table{width:100%;font-size:13px;}
+  thead th{font-size:12px;padding:8px 6px 10px;}
+  td{padding:10px 6px;font-size:13px;}
+
+  /* Botão toggle indicadores */
+  .tbl-ind-toggle{
+    display:inline-flex;align-items:center;gap:6px;
+    margin-bottom:10px;
+    background:rgba(249,115,22,.12);border:1px solid rgba(249,115,22,.3);
+    border-radius:4px;padding:5px 12px;
+    font-family:'Montserrat',sans-serif;font-size:10px;font-weight:700;
+    color:var(--orange);cursor:pointer;text-transform:uppercase;letter-spacing:.5px;
+  }
+
+  /* Quando expandido: mostrar colunas e permitir scroll horizontal */
+  .tbl-expanded .ind-col{display:table-cell;}
+  .tbl-expanded table{font-size:10px;}
+  .tbl-expanded thead th{font-size:10px;padding:6px 4px;}
+  .tbl-expanded td{padding:8px 4px;font-size:10px;}
 }
 </style>
 </head>
@@ -274,23 +313,24 @@ body.light-mode .podio-slot.primeiro .pedestal{box-shadow:0 -4px 24px rgba(196,1
   <div class="tbl-section">
     <div class="tbl-title">Ranking Geral</div>
     <div class="tbl-sub" id="ranking-sub">—</div>
+    <button class="tbl-ind-toggle" id="tbl-ind-toggle" onclick="toggleIndCols()">+ Ver indicadores</button>
     <div style="overflow-x:auto;">
       <table id="ranking-table">
         <thead>
           <tr>
             <th style="width:32px;">#</th>
             <th style="text-align:left;">Unidade</th>
-            <th class="num">Disp.</th>
-            <th class="num">Prev.</th>
-            <th class="num">Combust.</th>
-            <th class="num">Pneus</th>
-            <th class="num">Check T1/T2</th>
-            <th class="num">Check WH</th>
-            <th class="num">Conform.</th>
-            <th class="num">S.Test Veíc.</th>
-            <th class="num">S.Test Emp.</th>
-            <th class="num">CIVF</th>
-            <th class="num">SLA Man.</th>
+            <th class="num ind-col">Disp.</th>
+            <th class="num ind-col">Prev.</th>
+            <th class="num ind-col">Combust.</th>
+            <th class="num ind-col">Pneus</th>
+            <th class="num ind-col">Check T1/T2</th>
+            <th class="num ind-col">Check WH</th>
+            <th class="num ind-col">Conform.</th>
+            <th class="num ind-col">S.Test Veíc.</th>
+            <th class="num ind-col">S.Test Emp.</th>
+            <th class="num ind-col">CIVF</th>
+            <th class="num ind-col">SLA Man.</th>
             <th class="num">Pontuação</th>
           </tr>
         </thead>
@@ -642,20 +682,29 @@ function renderRanking(data) {
     return `<tr class="rank-${rank<=3?rank:'x'}">
       <td class="rank-num">${rank<=3?medals[i]:rank}</td>
       <td style="font-weight:600">${r.unit}</td>
-      <td class="num">${p(r.disp)}</td>
-      <td class="num">${p(r.prev)}</td>
-      <td class="num">${p(r.comb,true)}</td>
-      <td class="num">${p(r.pneus)}</td>
-      <td class="num">${p(r.checkT)}</td>
-      <td class="num">${p(r.checkWH)}</td>
-      <td class="num">${p(r.conf)}</td>
-      <td class="num">${p(r.stVeic)}</td>
-      <td class="num">${p(r.stEmp)}</td>
-      <td class="num">${p(r.civf)}</td>
-      <td class="num">${p(r.sla)}</td>
+      <td class="num ind-col">${p(r.disp)}</td>
+      <td class="num ind-col">${p(r.prev)}</td>
+      <td class="num ind-col">${p(r.comb,true)}</td>
+      <td class="num ind-col">${p(r.pneus)}</td>
+      <td class="num ind-col">${p(r.checkT)}</td>
+      <td class="num ind-col">${p(r.checkWH)}</td>
+      <td class="num ind-col">${p(r.conf)}</td>
+      <td class="num ind-col">${p(r.stVeic)}</td>
+      <td class="num ind-col">${p(r.stEmp)}</td>
+      <td class="num ind-col">${p(r.civf)}</td>
+      <td class="num ind-col">${p(r.sla)}</td>
       <td class="num">${sc}</td>
     </tr>`;
   }).join('');
+}
+
+let indColsVisible = false;
+function toggleIndCols() {
+  indColsVisible = !indColsVisible;
+  const wrap = document.querySelector('.tbl-section');
+  wrap.classList.toggle('tbl-expanded', indColsVisible);
+  const btn = document.getElementById('tbl-ind-toggle');
+  if (btn) btn.textContent = indColsVisible ? '− Ocultar indicadores' : '+ Ver indicadores';
 }
 
 function indClass(v) {
