@@ -692,8 +692,11 @@ function getFieldAvg(rows, key) {
 
 function vigToLabel(vig) {
   const meses = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
-  const [m, y] = vig.split('/');
-  return meses[parseInt(m,10)-1] + '/' + String(y).slice(2);
+  const parts = vig.split('/');
+  let m, y;
+  if (parts[0].length === 4) { y = parts[0]; m = parts[1]; }  // YYYY/MM/DD
+  else { m = parts[0]; y = parts[1]; }                         // MM/YYYY
+  return (meses[parseInt(m,10)-1] || vig) + '/' + String(y).slice(2);
 }
 
 function renderChart() {
@@ -742,8 +745,7 @@ function renderChart() {
 
   const meta85  = allVigs.map(()=>85);
   const meta98  = allVigs.map(()=>98);
-  const metaColor85 = isLight ? 'rgba(0,0,0,.5)' : 'rgba(255,255,255,.65)';
-  const metaColor98 = isLight ? 'rgba(22,163,74,.7)' : 'rgba(59,179,59,.7)';
+  const metaColor = isLight ? 'rgba(0,0,0,.55)' : 'rgba(255,255,255,.65)';
 
   const ctx = document.getElementById('chartTemporal').getContext('2d');
   if (chartTemporal) chartTemporal.destroy();
@@ -772,13 +774,11 @@ function renderChart() {
           label:'Meta 85%',
           data: meta85,
           type:'line',
-          borderColor: metaColor85,
+          borderColor: metaColor,
           borderWidth:1.5,
           borderDash:[6,4],
           tension:0,fill:false,
-          pointRadius:3,
-          pointBackgroundColor: metaColor85,
-          pointBorderWidth:0,
+          pointRadius:0,
           order:1,
           datalabels:{display:false},
         },
@@ -786,13 +786,11 @@ function renderChart() {
           label:'Meta 98%',
           data: meta98,
           type:'line',
-          borderColor: metaColor98,
+          borderColor: metaColor,
           borderWidth:1.5,
-          borderDash:[4,3],
+          borderDash:[2,3],
           tension:0,fill:false,
-          pointRadius:3,
-          pointBackgroundColor: metaColor98,
-          pointBorderWidth:0,
+          pointRadius:0,
           order:2,
           datalabels:{display:false},
         },
