@@ -429,13 +429,22 @@ function parseInd(rawRow, cols){
     else if(n.includes('observ')) r.obs=v;
     else if(n.includes('data')&&n.includes('parada')) r.dataParada=v;
     else if(n.includes('previsao')||n.includes('retorno')) r.prevRetorno=v;
-    else if(n.includes('dias')&&n.includes('prazo')) r.diasPrazo=v;
     else if(n==='status') r.status=v;
-    else if(n.includes('dias')&&n.includes('indisp')) r.diasIndisp=+v||0;
+    else if(n.includes('dias')&&(n.includes('parado')||n.includes('indisp'))) r.diasIndisp=+v||0;
   });
+  // Dias Prazo = Previsão Retorno − data do relatório (negativo = vencido)
+  const pPrev=parseBR(r.prevRetorno), pRel=parseBR(r.dataRel);
+  if(pPrev&&pRel) r.diasPrazo=Math.round((pPrev-pRel)/864e5);
   r.uniMap  = mapUni(r.unidade||'');
   r.projMap = mapProj(r.projeto||'');
   return r;
+}
+function parseBR(v){
+  if(!v) return null;
+  const p=String(v).split('/');
+  if(p.length<3) return null;
+  const d=new Date(+p[2],+p[1]-1,+p[0]);
+  return isNaN(d)?null:d;
 }
 
 // ── Aggregate ──
@@ -578,7 +587,12 @@ function renderCharts(rows){
       const [mm,yy]=vig.split('/');
       if(+yy===yr) vals[+mm-1]=dispPct(g.ativos,g.indisp);
     });
-    const datasets=[{type:'bar',label:'Disp. %',data:vals,backgroundColor:mkBar(vals),borderColor:mkBorder(vals),borderWidth:1,borderRadius:3,order:1},...metaLines(12,vals)];
+    const fv=getF().vig;
+    const hi=i=>!fv.length||fv.includes(String(i+1).padStart(2,'0')+'/'+yr);
+    const bg=vals.map((v,i)=>v==null?'transparent':dispColor(v)+(hi(i)?'CC':'33'));
+    const bc=vals.map((v,i)=>v==null?'transparent':dispColor(v)+(hi(i)?'':'55'));
+    const datasets=[{type:'bar',label:'Disp. %',data:vals,backgroundColor:bg,borderColor:bc,borderWidth:1,borderRadius:3,order:1,
+      datalabels:{display:ctx=>vals[ctx.dataIndex]!=null&&hi(ctx.dataIndex)}},...metaLines(12,vals)];
     if(chVig) chVig.destroy();
     chVig=new Chart($('ch-vig'),{type:'bar',data:{labels,datasets},options:opts(vals)});
   }
@@ -625,7 +639,7 @@ function renderIndTable(){
 
   function badge(s){
     const sl=String(s||'').toLowerCase();
-    if(sl.includes('vencida'))   return `<span class="badge badge-vencida"><span class="badge-dot"></span>Vencida</span>`;
+    if(sl.includes('vencida')||sl.includes('atrasad')) return `<span class="badge badge-vencida"><span class="badge-dot"></span>Atrasado</span>`;
     if(sl.includes('no prazo'))  return `<span class="badge badge-prazo"><span class="badge-dot"></span>No prazo</span>`;
     return `<span class="badge badge-sem"><span class="badge-dot"></span>Sem Prazo</span>`;
   }
