@@ -307,7 +307,7 @@ body.light-mode table.dre tbody tr{border-bottom:1px solid rgba(0,0,0,.06);}
   <div class="header-right">
     <a href="../" class="back-btn" title="Voltar ao Hub"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg></a>
     <button class="theme-btn" id="themeBtn" title="Modo claro/escuro"></button>
-    <button class="refresh-btn" onclick="atualizar()" title="Atualizar dados">
+    <button class="refresh-btn" onclick="recarregar()" title="Atualizar dados">
       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
         <polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/>
         <path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/>
@@ -1233,32 +1233,47 @@ function atualizar(){
 // ═══════════════════════════════════
 // INIT
 // ═══════════════════════════════════
-async function init(){
-  const CACHE_KEY='bi_cache_vf';
-  let hasCached=false;
+const CACHE_KEY='bi_cache_vf_v2';
+const CACHE_TTL=60*60*1000; // 1 hora
+
+function loadCache(){
   try{
-    const cached=sessionStorage.getItem(CACHE_KEY);
-    if(cached){
-      allRows=JSON.parse(cached);
-      if(allRows[0]&&typeof allRows[0][C.orc]==='string') allRows.shift();
-      populateFilters(allRows);
-      atualizar();
-      set('status-badge','Atualizando…');
-      hasCached=true;
-    }
-  }catch(e){ sessionStorage.removeItem(CACHE_KEY); }
+    const c=JSON.parse(localStorage.getItem(CACHE_KEY));
+    if(c&&c.rows&&c.t) return c;
+  }catch(e){ localStorage.removeItem(CACHE_KEY); }
+  return null;
+}
+function useRows(rows){
+  allRows=rows;
+  if(allRows[0]&&typeof allRows[0][C.orc]==='string') allRows.shift();
+  populateFilters(allRows);
+  atualizar();
+}
+async function recarregar(){
+  set('status-badge','Carregando…');
   try{
     const rows=await fetchData();
-    allRows=rows;
-    if(allRows[0]&&typeof allRows[0][C.orc]==='string') allRows.shift();
-    sessionStorage.setItem(CACHE_KEY,JSON.stringify(allRows));
-    populateFilters(allRows);
-    atualizar();
-    setInterval(atualizar,30*60*1000);
+    try{ localStorage.setItem(CACHE_KEY,JSON.stringify({t:Date.now(),rows})); }catch(e){}
+    useRows(rows);
   }catch(e){
     console.error(e);
-    if(!hasCached) set('status-badge','Erro ao carregar dados');
+    set('status-badge','Erro ao carregar dados');
   }
+}
+async function init(){
+  const c=loadCache();
+  if(c){
+    useRows(c.rows);
+    if(Date.now()-c.t<CACHE_TTL){
+      const d=new Date(c.t);
+      set('status-badge',`Atualizado ${d.toLocaleDateString('pt-BR')} ${d.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})} (cache)`);
+    }else{
+      await recarregar();
+    }
+  }else{
+    await recarregar();
+  }
+  setInterval(recarregar,CACHE_TTL);
 }
 function initAccessLog(){
   let name=localStorage.getItem('bi_user_name');

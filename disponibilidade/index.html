@@ -750,13 +750,11 @@ function toggleMs(id_){
 document.addEventListener('click',e=>{ if(!e.target.closest('.ms-wrap')) document.querySelectorAll('.ms-panel.open').forEach(p=>p.classList.remove('open')); });
 function onFilterChange(){ renderAll(); }
 
-// ── Fetch ──
-async function atualizar(){
-  set('status-badge','Carregando…');
-  const warn=$('warnBar');
-  try{
-    const [rD,rI]=await Promise.all([gvFetch(TAB_DISP),gvFetch(TAB_IND)]);
+// ── Fetch (cache de 1h; botão Atualizar força busca) ──
+const CACHE_KEY='bi_cache_disp';
+const CACHE_TTL=60*60*1000;
 
+function processData(rD,rI,fromCacheTime){
     dispRows=rD.rows.map(r=>parseDisp(r,rD.cols)).filter(r=>r.data);
     indCols=rI.cols;
     indRows=rI.rows.map(r=>parseInd(r,rI.cols));
@@ -780,14 +778,31 @@ async function atualizar(){
     renderIndTable();
     renderAll();
 
-    const now=new Date();
-    set('status-badge',`Atualizado ${now.toLocaleDateString('pt-BR')} ${now.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})}`);
+    const d=fromCacheTime?new Date(fromCacheTime):new Date();
+    set('status-badge',`Atualizado ${d.toLocaleDateString('pt-BR')} ${d.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})}${fromCacheTime?' (cache)':''}`);
+}
+
+async function atualizar(){
+  set('status-badge','Carregando…');
+  const warn=$('warnBar');
+  try{
+    const [rD,rI]=await Promise.all([gvFetch(TAB_DISP),gvFetch(TAB_IND)]);
+    try{ localStorage.setItem(CACHE_KEY,JSON.stringify({t:Date.now(),rD,rI})); }catch(e){}
+    processData(rD,rI);
     if(warn) warn.classList.remove('show');
   }catch(err){
     console.error(err);
     set('status-badge','Erro ao carregar');
     if(warn){ warn.classList.add('show'); const wm=$('warnMsg'); if(wm) wm.textContent='⚠ '+err.message; }
   }
+}
+
+function initData(){
+  try{
+    const c=JSON.parse(localStorage.getItem(CACHE_KEY));
+    if(c&&c.rD&&c.rI&&Date.now()-c.t<CACHE_TTL){ processData(c.rD,c.rI,c.t); return; }
+  }catch(e){ localStorage.removeItem(CACHE_KEY); }
+  atualizar();
 }
 
 // ── Access log ──
@@ -819,8 +834,8 @@ function applyTheme(t){
   $('themeBtn').addEventListener('click',()=>applyTheme(document.body.classList.contains('light-mode')?'dark':'light'));
 })();
 
-window.addEventListener('load',()=>{ initAccessLog(); atualizar(); });
-setInterval(atualizar,30*60*1000);
+window.addEventListener('load',()=>{ initAccessLog(); initData(); });
+setInterval(atualizar,CACHE_TTL);
 </script>
 </body>
 </html>
