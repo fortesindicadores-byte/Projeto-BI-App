@@ -393,7 +393,8 @@ Chart.register(ChartDataLabels);
 
 const SHEET_ID  = '1wCoRGsvOgmIvfLW4F9Sxr-5AX9Go-aFlRVjrQ_B2ilM';
 const SHEET_TAB = 'Dispersão de km';
-const CACHE_KEY = 'bi_cache_ativacao';
+const CACHE_KEY = 'bi_cache_ativacao_v2';
+const CACHE_TTL = 60*60*1000; // 1 hora
 
 let ALL = [];
 let chDisp = null, chProj = null, chAtvcMes = null, chUnd = null;
@@ -497,7 +498,7 @@ async function fetchData() {
   ALL = (json.table.rows || [])
     .map(parseRow)
     .filter(r => r.vig && (r.rem > 0 || r.real_km > 0));
-  sessionStorage.setItem(CACHE_KEY, JSON.stringify(ALL));
+  try{ localStorage.setItem(CACHE_KEY, JSON.stringify({t:Date.now(),rows:ALL})); }catch(e){}
   const savedVig = getSel('ms-vig');
   populateFilters();
   if (savedVig.length > 0) {
@@ -1193,25 +1194,30 @@ function initAccessLog() {
 
 /* ── Atualizar ── */
 async function atualizar() {
-  let hasCached = false;
-  try {
-    const cached = sessionStorage.getItem(CACHE_KEY);
-    if(cached) {
-      ALL = JSON.parse(cached);
-      populateFilters();
-      render();
-      set('status-badge', 'Atualizando…');
-      hasCached = true;
-    }
-  } catch(e) { sessionStorage.removeItem(CACHE_KEY); }
+  set('status-badge', 'Carregando…');
   try {
     await fetchData();
     const now = new Date();
     set('status-badge', `Atualizado ${now.toLocaleDateString('pt-BR')} ${now.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})}`);
   } catch(e) {
     console.error(e);
-    if(!hasCached) set('status-badge', 'Erro ao carregar dados');
+    set('status-badge', 'Erro ao carregar dados');
   }
+}
+
+function initData() {
+  try {
+    const c = JSON.parse(localStorage.getItem(CACHE_KEY));
+    if(c && c.rows && Date.now()-c.t < CACHE_TTL) {
+      ALL = c.rows;
+      populateFilters();
+      render();
+      const d = new Date(c.t);
+      set('status-badge', `Atualizado ${d.toLocaleDateString('pt-BR')} ${d.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})} (cache)`);
+      return;
+    }
+  } catch(e) { localStorage.removeItem(CACHE_KEY); }
+  atualizar();
 }
 
 /* ── Theme ── */
@@ -1233,8 +1239,8 @@ function applyTheme(t) {
 
 document.addEventListener('DOMContentLoaded', () => {
   initAccessLog();
-  atualizar();
-  setInterval(atualizar, 30 * 60 * 1000);
+  initData();
+  setInterval(atualizar, CACHE_TTL);
 });
 </script>
 </body>

@@ -132,7 +132,7 @@ body.light-mode table.dre tbody tr{border-bottom:1px solid rgba(0,0,0,.06);}
   <div class="header-right">
     <a href="../" class="back-btn" title="Voltar ao Hub"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg></a>
     <button class="theme-btn" id="themeBtn" title="Modo claro/escuro"></button>
-    <button class="refresh-btn" onclick="atualizar()" title="Atualizar dados">
+    <button class="refresh-btn" onclick="recarregar()" title="Atualizar dados">
       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
         <polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/>
         <path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/>
@@ -721,32 +721,38 @@ function atualizar(){
 }
 
 // ── INIT ──
-async function init(){
-  const CACHE_KEY='bi_cache_rskm';
-  let hasCached=false;
-  try{
-    const cached=sessionStorage.getItem(CACHE_KEY);
-    if(cached){
-      const obj=JSON.parse(cached);
-      allRows=obj.cost;
-      if(allRows[0]&&typeof allRows[0][C.orc]==='string')allRows.shift();
-      allKmRows=obj.km;
-      populateFilters(allRows);
-      atualizar();
-      set('status-badge','Atualizando…');
-      hasCached=true;
-    }
-  }catch(e){ sessionStorage.removeItem(CACHE_KEY); }
+const CACHE_KEY='bi_cache_rskm_v2';
+const CACHE_TTL=60*60*1000; // 1 hora
+
+function useData(cost,km){
+  allRows=cost;
+  if(allRows[0]&&typeof allRows[0][C.orc]==='string')allRows.shift();
+  allKmRows=km;
+  populateFilters(allRows);
+  atualizar();
+}
+async function recarregar(){
+  set('status-badge','Carregando…');
   try{
     const[rawCost,rawKm]=await Promise.all([fetchSheet(COST_ID,COST_TAB),fetchSheet(KM_ID,KM_TAB)]);
-    allRows=rawCost;
-    if(allRows[0]&&typeof allRows[0][C.orc]==='string')allRows.shift();
-    allKmRows=rawKm.map(parseKmRow).filter(Boolean);
-    sessionStorage.setItem(CACHE_KEY,JSON.stringify({cost:allRows,km:allKmRows}));
-    populateFilters(allRows);
-    atualizar();
-    setInterval(atualizar,30*60*1000);
-  }catch(e){console.error(e);if(!hasCached)set('status-badge','Erro ao carregar dados');}
+    const km=rawKm.map(parseKmRow).filter(Boolean);
+    try{ localStorage.setItem(CACHE_KEY,JSON.stringify({t:Date.now(),cost:rawCost,km})); }catch(e){}
+    useData(rawCost,km);
+  }catch(e){console.error(e);set('status-badge','Erro ao carregar dados');}
+}
+async function init(){
+  try{
+    const c=JSON.parse(localStorage.getItem(CACHE_KEY));
+    if(c&&c.cost&&c.km&&Date.now()-c.t<CACHE_TTL){
+      useData(c.cost,c.km);
+      const d=new Date(c.t);
+      set('status-badge',`Atualizado ${d.toLocaleDateString('pt-BR')} ${d.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})} (cache)`);
+      setInterval(recarregar,CACHE_TTL);
+      return;
+    }
+  }catch(e){ localStorage.removeItem(CACHE_KEY); }
+  await recarregar();
+  setInterval(recarregar,CACHE_TTL);
 }
 function initAccessLog(){
   let name=localStorage.getItem('bi_user_name');

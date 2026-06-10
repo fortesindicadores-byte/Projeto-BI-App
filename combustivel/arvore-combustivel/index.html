@@ -741,63 +741,50 @@ function gvFetch() {
 
 let allRows = [];
 
+const CACHE_KEY='bi_cache_arvore_v2';
+const CACHE_TTL=60*60*1000; // 1 hora
+
+function useJson(json,fromCacheTime){
+  allRows = json.rows || [];
+  if (json.vigencias) {
+    const anos=[...new Set(json.vigencias.map(v=>v.slice(-4)))].sort().reverse();
+    buildMsFilter('ms-ano', anos);
+    buildVigMsFilter(json.vigencias);
+  }
+  if (json.nivel3s)   buildMsFilter('ms-uni', [...new Set(json.nivel3s.map(v=>getNv3Suffix(v)))].filter(Boolean).sort());
+  if (json.nivel3s)   buildMsFilter('ms-nv3', [...new Set(json.nivel3s.map(v=>getNv3Prefix(v)))].sort());
+
+  const k = calcular(filtrarRows(allRows));
+  if (k) renderKPIs(k); else renderStatic();
+
+  const d=fromCacheTime?new Date(fromCacheTime):new Date();
+  set('status-badge',`Atualizado ${d.toLocaleDateString('pt-BR')} ${d.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})}${fromCacheTime?' (cache)':''}`);
+  setTimeout(fitAndDraw, 60);
+}
+
 async function atualizar() {
-  const CACHE_KEY='bi_cache_arvore';
   const warn=id('warnBar');
-
-  let hasCached=false;
-  try{
-    const cached=sessionStorage.getItem(CACHE_KEY);
-    if(cached){
-      const obj=JSON.parse(cached);
-      allRows=obj.rows||[];
-      if(obj.vigencias){
-        const anos=[...new Set(obj.vigencias.map(v=>v.slice(-4)))].sort().reverse();
-        buildMsFilter('ms-ano',anos);
-        buildVigMsFilter(obj.vigencias);
-      }
-      if(obj.nivel3s){
-        buildMsFilter('ms-uni',[...new Set(obj.nivel3s.map(v=>getNv3Suffix(v)))].filter(Boolean).sort());
-        buildMsFilter('ms-nv3',[...new Set(obj.nivel3s.map(v=>getNv3Prefix(v)))].sort());
-      }
-      const k=calcular(filtrarRows(allRows));
-      if(k) renderKPIs(k); else renderStatic();
-      set('status-badge','Atualizando…');
-      hasCached=true;
-      setTimeout(fitAndDraw,60);
-    }
-  }catch(e){ sessionStorage.removeItem(CACHE_KEY); }
-
-  if(!hasCached) set('status-badge','Carregando…');
-
+  set('status-badge','Carregando…');
   try {
     const json = await gvFetch();
-    allRows = json.rows || [];
-    sessionStorage.setItem(CACHE_KEY,JSON.stringify({rows:allRows,vigencias:json.vigencias,nivel3s:json.nivel3s}));
-    if (json.vigencias) {
-      const anos=[...new Set(json.vigencias.map(v=>v.slice(-4)))].sort().reverse();
-      buildMsFilter('ms-ano', anos);
-      buildVigMsFilter(json.vigencias);
-    }
-    if (json.nivel3s)   buildMsFilter('ms-uni', [...new Set(json.nivel3s.map(v=>getNv3Suffix(v)))].filter(Boolean).sort());
-    if (json.nivel3s)   buildMsFilter('ms-nv3', [...new Set(json.nivel3s.map(v=>getNv3Prefix(v)))].sort());
-
-    const k = calcular(filtrarRows(allRows));
-    if (k) renderKPIs(k); else renderStatic();
-
-    const now=new Date();
-    set('status-badge',`Atualizado ${now.toLocaleDateString('pt-BR')} ${now.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})}`);
+    try{ localStorage.setItem(CACHE_KEY,JSON.stringify({t:Date.now(),json:{rows:json.rows,vigencias:json.vigencias,nivel3s:json.nivel3s}})); }catch(e){}
+    useJson(json);
     if(warn) warn.classList.remove('show');
-
   } catch(err) {
     console.error(err);
-    if(!hasCached) renderStatic();
+    renderStatic();
     if(warn){ warn.classList.add('show'); id('warnMsg').textContent='⚠ ' + err.message; }
-    if(!hasCached) set('status-badge','Erro ao carregar dados');
-    else set('status-badge','Erro ao atualizar dados');
+    set('status-badge','Erro ao carregar dados');
+    setTimeout(fitAndDraw, 60);
   }
+}
 
-  setTimeout(fitAndDraw, 60);
+function initData(){
+  try{
+    const c=JSON.parse(localStorage.getItem(CACHE_KEY));
+    if(c&&c.json&&Date.now()-c.t<CACHE_TTL){ useJson(c.json,c.t); return; }
+  }catch(e){ localStorage.removeItem(CACHE_KEY); }
+  atualizar();
 }
 
 function initAccessLog(){
@@ -873,9 +860,9 @@ const id  = s => document.getElementById(s);
 const q   = s => document.getElementById(s);
 const set = (s,v) => { const e=id(s); if(e) e.textContent=v; };
 
-window.addEventListener('load', ()=>{ initAccessLog(); atualizar(); });
+window.addEventListener('load', ()=>{ initAccessLog(); initData(); });
 // Auto-refresh a cada 30 minutos
-setInterval(atualizar, 30 * 60 * 1000);
+setInterval(atualizar, CACHE_TTL);
 // Ajusta zoom da árvore para caber na largura disponível
 function fitTree() {
   const wrap = id('treeWrap');

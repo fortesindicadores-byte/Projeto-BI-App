@@ -490,7 +490,7 @@ async function fetchData() {
   ALL = (json.table.rows || [])
     .map(parseRow)
     .filter(r => r.vig && (r.rem > 0 || r.real > 0));
-  sessionStorage.setItem('bi_cache_km', JSON.stringify(ALL));
+  try{ localStorage.setItem('bi_cache_km_v2', JSON.stringify({t:Date.now(),rows:ALL})); }catch(e){}
   const savedVig = getSel('ms-vig');
   populateFilters();
   if (savedVig.length > 0) {
@@ -1048,27 +1048,34 @@ function renderCharts(F) {
     mkVertBar(projByPct, 'pct',   v => Math.round(Math.abs(v)) + '%'));
 }
 
+const CACHE_KEY='bi_cache_km_v2';
+const CACHE_TTL=60*60*1000; // 1 hora
+
 async function atualizar() {
-  const CACHE_KEY='bi_cache_km';
-  let hasCached=false;
-  try{
-    const cached=sessionStorage.getItem(CACHE_KEY);
-    if(cached){
-      ALL=JSON.parse(cached);
-      populateFilters();
-      render();
-      set('status-badge','Atualizando…');
-      hasCached=true;
-    }
-  }catch(e){ sessionStorage.removeItem(CACHE_KEY); }
+  set('status-badge','Carregando…');
   try {
     await fetchData();
     const now = new Date();
     set('status-badge', `Atualizado ${now.toLocaleDateString('pt-BR')} ${now.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})}`);
   } catch(e) {
     console.error(e);
-    if(!hasCached) set('status-badge', 'Erro ao carregar dados');
+    set('status-badge', 'Erro ao carregar dados');
   }
+}
+
+function initData(){
+  try{
+    const c=JSON.parse(localStorage.getItem(CACHE_KEY));
+    if(c&&c.rows&&Date.now()-c.t<CACHE_TTL){
+      ALL=c.rows;
+      populateFilters();
+      render();
+      const d=new Date(c.t);
+      set('status-badge',`Atualizado ${d.toLocaleDateString('pt-BR')} ${d.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})} (cache)`);
+      return;
+    }
+  }catch(e){ localStorage.removeItem(CACHE_KEY); }
+  atualizar();
 }
 
 function initAccessLog() {
@@ -1105,6 +1112,6 @@ function applyTheme(t) {
     () => applyTheme(document.body.classList.contains('light-mode') ? 'dark' : 'light'));
 })();
 
-document.addEventListener('DOMContentLoaded', () => { initAccessLog(); atualizar(); setInterval(atualizar, 30 * 60 * 1000); });
+document.addEventListener('DOMContentLoaded', () => { initAccessLog(); initData(); setInterval(atualizar, CACHE_TTL); });
 </script></body>
 </html>
