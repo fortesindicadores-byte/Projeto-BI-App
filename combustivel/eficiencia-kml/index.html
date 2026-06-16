@@ -432,7 +432,7 @@ function populateFilters(rows){
   const unis=[...new Set(rows.map(r=>getUni(r)).filter(Boolean))].sort();
   const projs=[...new Set(rows.map(r=>getProj(r)).filter(Boolean))].sort();
   const modelos=[...new Set(rows.map(r=>r[CL.modelo]?String(r[CL.modelo]).trim():'').filter(Boolean))].sort();
-  const tipos=[...new Set(rows.map(r=>r[CL.tipoVei]?String(r[CL.tipoVei]).trim():'').filter(Boolean))].sort();
+  const tipos=[...new Set(rows.map(r=>r[CL.tipoVei]?abbrTipo(r[CL.tipoVei]):'').filter(Boolean))].sort();
   const ativos=[...new Set(rows.map(r=>r[CL.ativo]?String(r[CL.ativo]).trim():'').filter(Boolean))].sort();
   buildMsFilter('ms-uni',unis);
   buildMsFilter('ms-proj',projs);
@@ -454,7 +454,7 @@ function applyRow(r,f,vigOverride){
   if(f.uni.length&&!f.uni.includes(getUni(r)))return false;
   if(f.proj.length&&!f.proj.includes(getProj(r)))return false;
   if(f.modelo.length&&!(r[CL.modelo]&&f.modelo.includes(String(r[CL.modelo]).trim())))return false;
-  if(f.tipo.length&&!(r[CL.tipoVei]&&f.tipo.includes(String(r[CL.tipoVei]).trim())))return false;
+  if(f.tipo.length&&!(r[CL.tipoVei]&&f.tipo.includes(abbrTipo(r[CL.tipoVei]))))return false;
   if(f.ativo.length&&!(r[CL.ativo]&&f.ativo.includes(String(r[CL.ativo]).trim())))return false;
   return true;
 }
@@ -648,9 +648,20 @@ function renderTable(active,ytd){
 }
 
 // ── TABELA VEÍCULO ──
-// De-para p/ abreviar tipo de veículo (reduz largura da coluna)
-const TIPO_ABBR={'CAVALO MECANICO':'CAVALO MEC.','CAVALO MECÂNICO':'CAVALO MEC.','CAMINHAO TRUCK':'TRUCK','CAMINHÃO TRUCK':'TRUCK','CAMINHAO TOCO':'TOCO','CAMINHÃO TOCO':'TOCO','CAMINHAO 3/4':'3/4','CAMINHÃO 3/4':'3/4','UTILITARIO':'UTILITÁRIO'};
-const abbrTipo=t=>{if(!t)return'—';const u=String(t).trim().toUpperCase();return TIPO_ABBR[u]||t;};
+// De-para p/ abreviar tipo de veículo (chaves normalizadas: maiúsculas, sem acento)
+const TIPO_ABBR={
+  'CAMINHONETE FURGAO':'VAN',
+  'CAMINHAO BAU ROLL UP 6 PALLETS':'VUC',
+  'CAMINHAO BAU ROLL UP 8 PALLETS':'TOCO',
+  'CAMINHAO BAU ROLL UP 10 PALLETS':'TRUCK',
+  'CAMINHAO BAU SIDER PLATAFORMA HIDRAULICA 16 PALLETS':'SIDER 16 P',
+  'CAMINHAO BAU SIDER PLATAFORMA HIDRAULICA 14 PALLETS':'SIDER 18 P',
+  'CAVALO MECANICO':'CAVALO',
+  'SEMIREBOQUE SIDER':'SEMIRREBOQUE',
+  'FROTA LEVE ALUGADA':'FROTA LEVE',
+};
+const normTipo=s=>String(s).toUpperCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/\s+/g,' ').trim();
+const abbrTipo=t=>{if(!t)return'—';const k=normTipo(t);return TIPO_ABBR[k]||String(t).trim();};
 const placaKey=r=>r[CL.placa]?String(r[CL.placa]).trim():'';
 function renderVeiTable(active,ytd){
   // Agrega YTD por placa (soma do veículo na janela YTD)
