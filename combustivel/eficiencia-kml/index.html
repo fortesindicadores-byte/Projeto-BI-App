@@ -250,6 +250,9 @@ body.light-mode .chart-card,body.light-mode .tbl-section{background:#FFFFFF!impo
           <th class="num sortable" onclick="sortVei('delta')">Δ <span id="sort-delta"></span></th>
           <th class="num sortable" onclick="sortVei('pct')">Δ % <span id="sort-pct"></span></th>
           <th class="num sortable" onclick="sortVei('imp')">IMPACTO <span id="sort-imp"></span></th>
+          <th class="num sortable sep-l" onclick="sortVei('deltaY')">Δ YTD <span id="sort-deltaY"></span></th>
+          <th class="num sortable" onclick="sortVei('pctY')">Δ YTD % <span id="sort-pctY"></span></th>
+          <th class="num sortable" onclick="sortVei('impY')">IMPACTO YTD <span id="sort-impY"></span></th>
         </tr></thead>
         <tbody id="body-vei"></tbody>
       </table>
@@ -640,34 +643,44 @@ function renderTable(active,ytd){
 }
 
 // ── TABELA VEÍCULO ──
-function renderVeiTable(active){
+// De-para p/ abreviar tipo de veículo (reduz largura da coluna)
+const TIPO_ABBR={'CAVALO MECANICO':'CAVALO MEC.','CAVALO MECÂNICO':'CAVALO MEC.','CAMINHAO TRUCK':'TRUCK','CAMINHÃO TRUCK':'TRUCK','CAMINHAO TOCO':'TOCO','CAMINHÃO TOCO':'TOCO','CAMINHAO 3/4':'3/4','CAMINHÃO 3/4':'3/4','UTILITARIO':'UTILITÁRIO'};
+const abbrTipo=t=>{if(!t)return'—';const u=String(t).trim().toUpperCase();return TIPO_ABBR[u]||t;};
+const placaKey=r=>r[CL.placa]?String(r[CL.placa]).trim():'';
+function renderVeiTable(active,ytd){
+  // Agrega YTD por placa (soma do veículo na janela YTD)
+  const ytdByPlaca=Object.fromEntries(aggByKey(ytd||[],placaKey).map(({k,agg})=>[k,agg]));
   veiCache=active.map(r=>{
     const rem=+(r[CL.rem]||0),remM=+(r[CL.remM]||0),real=+(r[CL.real]||0);
     const km=+(r[CL.kmRod]||0),rsL=+(r[CL.rsLReal]||0);
     const delta=real-rem,deltaP=rem?delta/Math.abs(rem)*100:null;
     const litrosSaved=km>0&&rem>0&&real>0?km/rem-km/real:null;
     const imp=litrosSaved!=null?litrosSaved*rsL:null;
+    const placa=r[CL.placa]?String(r[CL.placa]).trim():'—';
+    const yagg=ytdByPlaca[placa];
+    let deltaY=null,deltaPY=null,impY=null;
+    if(yagg){const{remAvg:ry,realWt:rly}=yagg;deltaY=(ry!=null&&rly!=null)?rly-ry:null;deltaPY=(deltaY!=null&&ry)?deltaY/Math.abs(ry)*100:null;impY=calcImpacto(yagg);}
     return{
       uni:getUni(r)||'—',proj:getProj(r)||'—',
       modelo:r[CL.modelo]?String(r[CL.modelo]).trim():'—',
-      tipo:r[CL.tipoVei]?String(r[CL.tipoVei]).trim():'—',
-      placa:r[CL.placa]?String(r[CL.placa]).trim():'—',
-      km,remM,rem,real,delta,deltaP,imp
+      tipo:abbrTipo(r[CL.tipoVei]),
+      placa,
+      km,remM,rem,real,delta,deltaP,imp,deltaY,deltaPY,impY
     };
   }).filter(x=>x.km>0||x.real>0);
   renderVeiSorted();
 }
 function renderVeiSorted(){
-  const sortFns={uni:(a,b)=>a.uni.localeCompare(b.uni),proj:(a,b)=>a.proj.localeCompare(b.proj),modelo:(a,b)=>a.modelo.localeCompare(b.modelo),tipo:(a,b)=>a.tipo.localeCompare(b.tipo),km:(a,b)=>a.km-b.km,remM:(a,b)=>a.remM-b.remM,rem:(a,b)=>a.rem-b.rem,real:(a,b)=>a.real-b.real,delta:(a,b)=>a.delta-b.delta,pct:(a,b)=>a.deltaP-b.deltaP,imp:(a,b)=>(a.imp||0)-(b.imp||0)};
+  const sortFns={uni:(a,b)=>a.uni.localeCompare(b.uni),proj:(a,b)=>a.proj.localeCompare(b.proj),modelo:(a,b)=>a.modelo.localeCompare(b.modelo),tipo:(a,b)=>a.tipo.localeCompare(b.tipo),km:(a,b)=>a.km-b.km,remM:(a,b)=>a.remM-b.remM,rem:(a,b)=>a.rem-b.rem,real:(a,b)=>a.real-b.real,delta:(a,b)=>a.delta-b.delta,pct:(a,b)=>a.deltaP-b.deltaP,imp:(a,b)=>(a.imp||0)-(b.imp||0),deltaY:(a,b)=>(a.deltaY||0)-(b.deltaY||0),pctY:(a,b)=>(a.deltaPY||0)-(b.deltaPY||0),impY:(a,b)=>(a.impY||0)-(b.impY||0)};
   const arr=[...veiCache].sort((a,b)=>{const r=(sortFns[veiSort.col]||sortFns.imp)(a,b);return veiSort.asc?r:-r;});
   document.querySelectorAll('[id^=sort-]').forEach(e=>e.textContent='');
   const sortEl=document.getElementById('sort-'+veiSort.col);if(sortEl)sortEl.textContent=veiSort.asc?' ▲':' ▼';
   let html='';
-  arr.forEach(({uni,proj,modelo,tipo,placa,km,remM,rem,real,delta,deltaP,imp})=>{
-    const bad=delta<0;
-    html+=`<tr><td class="conta">${uni}</td><td>${proj}</td><td>${modelo}</td><td>${tipo}</td><td>${placa}</td><td class="num">${fmtKm(km)}</td><td class="num">${kml(remM)}</td><td class="num">${kml(rem)}</td><td class="num">${kml(real)}</td><td class="num ${bad?'cr':'cg'}">${kmlD(delta)}</td><td class="num ${bad?'cr-t':'cg-t'}">${pctInt(deltaP)}</td><td class="num imp-cell" style="color:${imp<0?'var(--red)':'var(--green)'}">${imp!=null?fmtBrlD(imp):'—'}</td></tr>`;
+  arr.forEach(({uni,proj,modelo,tipo,placa,km,remM,rem,real,delta,deltaP,imp,deltaY,deltaPY,impY})=>{
+    const bad=delta<0,badY=deltaY!=null&&deltaY<0;
+    html+=`<tr><td class="conta">${uni}</td><td>${proj}</td><td>${modelo}</td><td>${tipo}</td><td>${placa}</td><td class="num">${fmtKm(km)}</td><td class="num">${kml(remM)}</td><td class="num">${kml(rem)}</td><td class="num">${kml(real)}</td><td class="num ${bad?'cr':'cg'}">${kmlD(delta)}</td><td class="num ${bad?'cr-t':'cg-t'}">${pctInt(deltaP)}</td><td class="num imp-cell" style="color:${imp<0?'var(--red)':'var(--green)'}">${imp!=null?fmtBrlD(imp):'—'}</td><td class="num sep-l ${badY?'cr':'cg'}">${deltaY!=null?kmlD(deltaY):'—'}</td><td class="num ${badY?'cr-t':'cg-t'}">${deltaPY!=null?pctInt(deltaPY):'—'}</td><td class="num imp-cell" style="color:${impY<0?'var(--red)':'var(--green)'}">${impY!=null?fmtBrlD(impY):'—'}</td></tr>`;
   });
-  document.getElementById('body-vei').innerHTML=html||'<tr><td colspan="12" style="text-align:center;padding:20px;color:var(--text3)">Sem dados</td></tr>';
+  document.getElementById('body-vei').innerHTML=html||'<tr><td colspan="15" style="text-align:center;padding:20px;color:var(--text3)">Sem dados</td></tr>';
 }
 function sortVei(col){
   if(veiSort.col===col)veiSort.asc=!veiSort.asc;else{veiSort.col=col;veiSort.asc=col==='imp'?false:true;}
@@ -690,7 +703,7 @@ function atualizar(){
   renderHero(active,ytd);
   renderCharts(f2);
   renderTable(active,ytd);
-  renderVeiTable(active);
+  renderVeiTable(active,ytd);
 
   let vigLbl;
   if(!f2.vig||f2.vig.length===0)vigLbl='TODAS';
