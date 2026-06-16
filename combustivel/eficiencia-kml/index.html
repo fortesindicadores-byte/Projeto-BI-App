@@ -567,7 +567,11 @@ function renderCharts(f){
     }};
   }
 
-  const scKml={x:{grid,ticks:tick},y:{beginAtZero:false,grid,ticks:{...tickY,callback:v=>kml(v)}}};
+  // Escala Y dinâmica: padding maior embaixo p/ dar corpo às barras, mantendo a linha visível
+  const _kvals=[...dReal,...dRem].filter(v=>v!=null&&isFinite(v));
+  let yKmlMin,yKmlMax;
+  if(_kvals.length){const lo=Math.min(..._kvals),hi=Math.max(..._kvals),rng=(hi-lo)||hi*0.1||1;yKmlMin=Math.max(0,lo-rng*0.45);yKmlMax=hi+rng*0.18;}
+  const scKml={x:{grid,ticks:tick},y:{beginAtZero:false,min:yKmlMin,max:yKmlMax,grid,ticks:{...tickY,callback:v=>kml(v)}}};
   const opts={responsive:true,maintainAspectRatio:false,layout:{padding:{top:28}},plugins:{legend:{display:false},tooltip},scales:scKml};
 
   if(chKml)chKml.destroy();
@@ -575,14 +579,14 @@ function renderCharts(f){
 
   // Impacto por Projeto
   const activeRows=filterRows(allRows,f);
-  const projItems=aggByKey(activeRows,r=>getProj(r)).map(({k,agg})=>({k,imp:calcImpacto(agg)||0})).filter(x=>x.imp!==0).sort((a,b)=>a.imp-b.imp);
+  const projItems=aggByKey(activeRows,r=>getProj(r)).map(({k,agg})=>({k,imp:calcImpacto(agg)||0})).filter(x=>x.imp!==0).sort((a,b)=>b.imp-a.imp);
   const projLbls=projItems.map(x=>x.k);
   const projData=projItems.map(x=>x.imp);
   const projBg=projData.map(v=>v>=0?'rgba(59,179,59,.75)':'rgba(255,102,102,.75)');
   const projBc=projData.map(v=>v>=0?'#3BB33B':'#FF6666');
 
-  const scProj={x:{beginAtZero:true,grid,ticks:{...tickY,callback:v=>fmtBrl(v)}},y:{grid:{display:false},ticks:tick}};
-  const optsProj={responsive:true,maintainAspectRatio:false,indexAxis:'y',layout:{padding:{right:60,top:4}},plugins:{legend:{display:false},tooltip:{...tooltip,callbacks:{label:ctx=>fmtBrlD(ctx.raw)}}},scales:scProj};
+  const scProj={x:{grid:{display:false},ticks:tick},y:{beginAtZero:true,grid,ticks:{...tickY,callback:v=>fmtBrl(v)}}};
+  const optsProj={responsive:true,maintainAspectRatio:false,layout:{padding:{top:24}},plugins:{legend:{display:false},tooltip:{...tooltip,callbacks:{label:ctx=>fmtBrlD(ctx.raw)}}},scales:scProj};
 
   if(chProj)chProj.destroy();
   chProj=new Chart(document.getElementById('ch-proj'),{type:'bar',data:{labels:projLbls,datasets:[{label:'IMPACTO',data:projData,backgroundColor:projBg,borderColor:projBc,borderWidth:1,borderRadius:3}]},options:optsProj});
