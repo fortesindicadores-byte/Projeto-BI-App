@@ -388,14 +388,25 @@ function toggleMs(id){
 function getMsValues(id){const wrap=document.getElementById(id);if(!wrap)return[];return wrap._sel?[...wrap._sel]:[];}
 document.addEventListener('click',e=>{if(!e.target.closest('.ms-wrap'))document.querySelectorAll('.ms-panel.open').forEach(p=>p.classList.remove('open'));});
 
-// ── FETCH ──
-async function fetchSheet(id,tab){
-  const url=`https://docs.google.com/spreadsheets/d/${id}/gviz/tq?tqx=out:json&sheet=${encodeURIComponent(tab)}`;
-  const res=await fetch(url),raw=await res.text();
-  const json=JSON.parse(raw.replace(/^[\s\S]*?\(/,'').replace(/\);\s*$/,''));
-  const cols=json.table.cols.map(c=>(c.label||'').trim());
-  const rows=json.table.rows.map(r=>r.c.map(c=>c&&c.v!=null?c.v:null));
-  return{cols,rows};
+// ── FETCH (JSONP — sem CORS) ──
+function fetchSheet(id,tab){
+  return new Promise((resolve,reject)=>{
+    const fn='_gvKml'+Math.floor(Math.random()*1e9);
+    const s=document.createElement('script');
+    const cleanup=()=>{try{delete window[fn];s.remove();}catch(e){}};
+    window[fn]=resp=>{
+      cleanup();
+      try{
+        if(resp.status!=='ok')throw new Error(resp.errors?.[0]?.message||'Erro gviz');
+        const cols=resp.table.cols.map(c=>(c.label||c.id||'').trim());
+        const rows=resp.table.rows.map(r=>(r.c||[]).map(c=>c&&c.v!=null?c.v:null));
+        resolve({cols,rows});
+      }catch(e){reject(e);}
+    };
+    s.onerror=()=>{cleanup();reject(new Error('Sem acesso à planilha'));};
+    s.src=`https://docs.google.com/spreadsheets/d/${id}/gviz/tq?sheet=${encodeURIComponent(tab)}&tqx=out:json;responseHandler:${fn}`;
+    document.head.appendChild(s);
+  });
 }
 
 // ── FILTROS ──
