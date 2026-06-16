@@ -287,8 +287,11 @@ function detectCols(cols) {
   };
 }
 
-const getUni  = r => { if(CL.uni>=0&&r[CL.uni])return String(r[CL.uni]).trim(); if(CL.nv3>=0&&r[CL.nv3]){const v=String(r[CL.nv3]),i=v.indexOf('-');return(i>=0?v.slice(0,i):v).trim();} return ''; };
-const getProj = r => { const v=r[CL.proj];return v?String(v).trim():''; };
+// Campo combinado "PROJETO - UNIDADE" (ex.: "EMPURRADA - PIR")
+// Projeto = antes do "-"  |  Unidade = depois do "-"
+const _splitPU = r => { const v=r[CL.proj]?String(r[CL.proj]):''; const i=v.indexOf('-'); return i>=0?[v.slice(0,i).trim(),v.slice(i+1).trim()]:[v.trim(),'']; };
+const getProj = r => _splitPU(r)[0];
+const getUni  = r => _splitPU(r)[1];
 
 // ── VIGÊNCIA ──
 const MMAP = {jan:0,fev:1,mar:2,abr:3,mai:4,jun:5,jul:6,ago:7,set:8,out:9,nov:10,dez:11};
@@ -360,14 +363,14 @@ function buildVigMsFilter(vigList){
     _vigM1Done=true;
   }
   const lst=wrap.querySelector('.ms-list'),src=wrap.querySelector('.ms-search input');
-  const rerender=(q='')=>{
-    const f=q.toLowerCase(),shown=vigList.filter(d=>vigLabelFull(d).toLowerCase().includes(f)),allChk=sel.size===0;
-    lst.innerHTML=(!q?`<label class="ms-opt all-opt"><input type="checkbox" class="ms-all" ${allChk?'checked':''}> Todas</label>`:'')+shown.map(d=>{const vk=vigKey(d),vl=vigLabelFull(d).toUpperCase();return`<label class="ms-opt"><input type="checkbox" data-v="${vk}" ${allChk||sel.has(vk)?'checked':''}> ${vl}<span class="ms-only" data-v="${vk}">only</span></label>`;}).join('');
-    syncBadge(wrap);
-  };
   const newLst=lst.cloneNode(false);lst.parentNode.replaceChild(newLst,lst);
   const newSrc=src.cloneNode(true);src.parentNode.replaceChild(newSrc,src);
   const l2=wrap.querySelector('.ms-list'),s2=wrap.querySelector('.ms-search input');
+  const rerender=(q='')=>{
+    const f=q.toLowerCase(),shown=vigList.filter(d=>vigLabelFull(d).toLowerCase().includes(f)),allChk=sel.size===0;
+    l2.innerHTML=(!q?`<label class="ms-opt all-opt"><input type="checkbox" class="ms-all" ${allChk?'checked':''}> Todas</label>`:'')+shown.map(d=>{const vk=vigKey(d),vl=vigLabelFull(d).toUpperCase();return`<label class="ms-opt"><input type="checkbox" data-v="${vk}" ${allChk||sel.has(vk)?'checked':''}> ${vl}<span class="ms-only" data-v="${vk}">only</span></label>`;}).join('');
+    syncBadge(wrap);
+  };
   l2.addEventListener('change',e=>{
     const box=e.target;
     if(box.classList.contains('ms-all')){sel.clear();}
