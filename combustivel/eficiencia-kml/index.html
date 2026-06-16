@@ -266,7 +266,8 @@ const KML_TAB = 'Km/L';
 let CL = {vig:0,rem:4,remM:5,real:6,rsLReal:9,ativo:11,proj:14,uni:-1,placa:15,modelo:16,tipoVei:17,kmRod:22,litros:23};
 
 function detectCols(cols) {
-  const fi = (tests) => { for(let i=0;i<cols.length;i++){const lc=cols[i].toLowerCase();if(tests.some(t=>lc.includes(t)))return i;}return -1; };
+  const fi    = (tests)          => { for(let i=0;i<cols.length;i++){const lc=cols[i].toLowerCase();if(tests.some(t=>lc.includes(t)))return i;}return -1; };
+  const fiNot = (tests,notTests) => { for(let i=0;i<cols.length;i++){const lc=cols[i].toLowerCase();if(tests.some(t=>lc.includes(t))&&notTests.every(t=>!lc.includes(t)))return i;}return -1; };
   const fb = (idx,def) => idx>=0?idx:def;
   CL = {
     vig:    fb(fi(['vigência','vigencia']),0),
@@ -279,7 +280,7 @@ function detectCols(cols) {
     uni:    fi(['unidade']),
     nv3:    fi(['nv3','nível 3','nivel 3']),
     placa:  fb(fi(['placa']),15),
-    modelo: fb(fi(['modelo']),16),
+    modelo: fb(fiNot(['modelo'],['rem','km/l','km /l']),19),
     tipoVei:fb(fi(['tipo vei','tipo_vei']),17),
     kmRod:  fb(fi(['km rodado','km_rodado','kmrodado']),22),
     litros: fb(fi(['litro','qtd total','qtd_total','qtd litro']),23),
@@ -404,7 +405,7 @@ function fetchSheet(id,tab){
       }catch(e){reject(e);}
     };
     s.onerror=()=>{cleanup();reject(new Error('Sem acesso à planilha'));};
-    s.src=`https://docs.google.com/spreadsheets/d/${id}/gviz/tq?gid=0&tqx=out:json;responseHandler:${fn}`;
+    s.src=`https://docs.google.com/spreadsheets/d/${id}/gviz/tq?sheet=${encodeURIComponent(tab)}&tqx=out:json;responseHandler:${fn}`;
     document.head.appendChild(s);
   });
 }
