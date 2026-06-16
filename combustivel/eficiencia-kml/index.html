@@ -588,8 +588,19 @@ function renderCharts(f){
   const scProj={x:{grid:{display:false},ticks:tick},y:{beginAtZero:true,grid,ticks:{...tickY,callback:v=>fmtBrl(v)}}};
   const optsProj={responsive:true,maintainAspectRatio:false,layout:{padding:{top:24}},plugins:{legend:{display:false},tooltip:{...tooltip,callbacks:{label:ctx=>fmtBrlD(ctx.raw)}}},scales:scProj};
 
+  // Rótulo de dados: valor em cima/embaixo de cada coluna
+  const projLabelPlugin={afterDatasetsDraw:function(chart){
+    const meta=chart.getDatasetMeta(0);if(!meta)return;
+    const ctx=chart.ctx;ctx.save();ctx.font='700 10px Montserrat,sans-serif';ctx.textAlign='center';
+    meta.data.forEach(function(bar,i){const v=projData[i];if(v==null)return;
+      ctx.fillStyle=v>=0?'#3BB33B':'#FF6666';
+      if(v>=0){ctx.textBaseline='bottom';ctx.fillText(fmtBrlD(v),bar.x,bar.y-4);}
+      else{ctx.textBaseline='top';ctx.fillText(fmtBrlD(v),bar.x,bar.y+4);}
+    });ctx.restore();
+  }};
+
   if(chProj)chProj.destroy();
-  chProj=new Chart(document.getElementById('ch-proj'),{type:'bar',data:{labels:projLbls,datasets:[{label:'IMPACTO',data:projData,backgroundColor:projBg,borderColor:projBc,borderWidth:1,borderRadius:3}]},options:optsProj});
+  chProj=new Chart(document.getElementById('ch-proj'),{type:'bar',data:{labels:projLbls,datasets:[{label:'IMPACTO',data:projData,backgroundColor:projBg,borderColor:projBc,borderWidth:1,borderRadius:3}]},plugins:[projLabelPlugin],options:optsProj});
 }
 
 // ── TABELA RESUMO ──
