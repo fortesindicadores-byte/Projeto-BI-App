@@ -106,7 +106,7 @@ body.light-mode tbody tr+tr td{border-top-color:rgba(0,0,0,.05);}
 const SRC={
   ics:'https://docs.google.com/spreadsheets/d/1xGl1Xrk2sPS9zWghEuecFMNBHwmeLiZ02U-QpO8cDPY/gviz/tq?sheet='+encodeURIComponent('Consolidado ICs'),
   dre:'https://docs.google.com/spreadsheets/d/1qcTy2ppLCGBKKqZCxCYWCTL9kTAuWfHBMyBfWJOyih8/gviz/tq?sheet='+encodeURIComponent('Consolidado DRE'),
-  kml:'https://docs.google.com/spreadsheets/d/1ZZdvG_RK5cTBLdPl3TWCbNeqw-Y4fTYwWsQV4w-e__A/gviz/tq',
+  rsl:'https://docs.google.com/spreadsheets/d/1ZZdvG_RK5cTBLdPl3TWCbNeqw-Y4fTYwWsQV4w-e__A/gviz/tq?sheet='+encodeURIComponent('R$/L'),
   kmlEf:'https://docs.google.com/spreadsheets/d/1ZZdvG_RK5cTBLdPl3TWCbNeqw-Y4fTYwWsQV4w-e__A/gviz/tq?sheet='+encodeURIComponent('Km/L'),
   km:'https://docs.google.com/spreadsheets/d/1wCoRGsvOgmIvfLW4F9Sxr-5AX9Go-aFlRVjrQ_B2ilM/gviz/tq?sheet='+encodeURIComponent('Dispersão de km'),
   dpo:'https://docs.google.com/spreadsheets/d/1oW3mss0pXVI6gaDU2z5cDAKvW40LWHCQXpanqSvb12o/gviz/tq?sheet=DPO',
@@ -132,10 +132,13 @@ function band(v){return v==null?'':v>=90?'g':v>=80?'y':v>=70?'o':'r';}
 function sumAtt(rows,perKeys){let rem=0,real=0,has=false;rows.forEach(o=>{if(perKeys.has(o.vk)){rem+=o.rem;real+=o.real;has=true;}});return has&&rem?real/rem*100:null;}
 // R$/km atingimento = (custoReal/kmReal) / (custoRem/kmRem)
 function rkmAtt(perKeys){let cr=0,cR=0,kr=0,kR=0;(XPANEL.dre||[]).forEach(o=>{if(perKeys.has(o.vk)){cr+=o.rem;cR+=o.real;}});(XPANEL.km||[]).forEach(o=>{if(perKeys.has(o.vk)){kr+=o.rem;kR+=o.real;}});if(!kR||!kr||!cr)return null;const rem=cr/kr;return rem?(cR/kR)/rem*100:null;}
-// R$/L atingimento = (totalRS/litros) / (R$/L rem ponderado)
-function rlAtt(perKeys){let lit=0,tot=0,remxl=0;(XPANEL.kml||[]).forEach(o=>{if(perKeys.has(o.vk)){lit+=o.lit;tot+=o.tot;remxl+=o.remxl;}});if(!lit)return null;const rem=remxl/lit;return rem?(tot/lit)/rem*100:null;}
+// normalização p/ casar Projeto/Combustível entre as abas (igual ao painel Preço/L)
+function NK(s){return String(s==null?'':s).normalize('NFD').replace(/[̀-ͯ]/g,'').toUpperCase().replace(/\s+/g,' ').trim();}
+function NF(s){let x=String(s==null?'':s);const i=x.indexOf(':');if(i>=0)x=x.slice(i+1);return NK(x);}
+// R$/L (igual painel Preço/L): real = ΣtotalRS/Σlitros; rem = Σ(precoOperadora×litros)/Σlitros (lookup aba R$/L por proj+vig+comb)
+function rlAtt(perKeys){let lit=0,tot=0,remxl=0,litrem=0;(XPANEL.kmlEf||[]).forEach(o=>{if(perKeys.has(o.vk)){lit+=o.lit;if(o.tot>0)tot+=o.tot;if(o.rp!=null&&o.rp>0){remxl+=o.rp*o.lit;litrem+=o.lit;}}});if(!lit||!litrem)return null;const rem=remxl/litrem;return rem?(tot/lit)/rem*100:null;}
 // Km/L (aba Km/L do painel): real = Σkm/Σlitros; rem = média simples do "Rem Médio" (col4) — igual ao painel
-function kmlAtt(perKeys){let km=0,lit=0,rs=0,cnt=0;(XPANEL.kmlEf||[]).forEach(o=>{if(perKeys.has(o.vk)){km+=o.km;lit+=o.lit;if(o.rem>0){rs+=o.rem;cnt++;}}});if(!lit||!cnt)return null;const rem=rs/cnt;return rem?(km/lit)/rem*100:null;}
+function kmlAtt(perKeys){let km=0,lit=0,rs=0,cnt=0;(XPANEL.kmlEf||[]).forEach(o=>{if(perKeys.has(o.vk)){km+=o.km;lit+=o.lit;if(o.remKmL>0){rs+=o.remKmL;cnt++;}}});if(!lit||!cnt)return null;const rem=rs/cnt;return rem?(km/lit)/rem*100:null;}
 // FCA separado: % no prazo e % concluída (acumulado até o mês selecionado)
 function fcaSplit(recs,year,monthIdx){const sel=recs.filter(r=>Math.floor(r.k/100)===year&&(r.k%100)<=monthIdx);if(!sel.length)return{prazo:null,concl:null};const tt=sel.length;return{prazo:sel.filter(r=>!r.venc).length/tt*100,concl:sel.filter(r=>r.concl==='C').length/tt*100};}
 const barLabels={id:'bl',afterDatasetsDraw(c){const ds=c.data.datasets[0],m=c.getDatasetMeta(0),ctx=c.ctx;ctx.save();ctx.font='700 11px Montserrat';ctx.fillStyle=document.body.classList.contains('light-mode')?'#1a1a1a':'#F1F5F9';ctx.textAlign='center';ctx.textBaseline='bottom';m.data.forEach((b,i)=>{const v=ds.data[i];if(v==null)return;if(ds._on&&!ds._on[i])return;ctx.fillText(n1(v),b.x,b.y-4);});ctx.restore();}};
@@ -199,7 +202,7 @@ function atualizar(){
     {lbl:'CIVF',                 val:cap(icAvg(10))},
     {lbl:'Atingimento KM',       val:XPANEL.km?inv(sumAtt(XPANEL.km,perKeys)):null, meta:'Real / Remunerado'},
     {lbl:'R$/km',                val:(XPANEL.dre&&XPANEL.km)?inv(rkmAtt(perKeys)):null, meta:'Real / Remunerado'},
-    {lbl:'R$/L',                 val:XPANEL.kml?inv(rlAtt(perKeys)):null, meta:'Real / Remunerado'},
+    {lbl:'R$/L',                 val:XPANEL.kmlEf?inv(rlAtt(perKeys)):null, meta:'Real / Remunerado'},
     {lbl:'FCA Prazo',            val:cap(fcaS.prazo), meta:'nível empresa'},
     {lbl:'FCA Conclusão',        val:cap(fcaS.concl), meta:'nível empresa'}
   ];
@@ -244,12 +247,16 @@ function wr(k,v){try{localStorage.setItem('sc_'+k,JSON.stringify(v));}catch(e){}
 function applyData(d){
   const selV=getMsValues('ms-vig'),selU=getMsValues('ms-uni'); // preserva seleção ao revalidar
   XPANEL={};
-  const {ics:icRows,dre:dreR,km:kmR,dpo:dpoR,fca:fcaR,kml:kmlR,kmlEf:kmlEfR}=d;
+  const {ics:icRows,dre:dreR,km:kmR,dpo:dpoR,fca:fcaR,rsl:rslR,kmlEf:kmlEfR}=d;
   // Custos = custo da FROTA → EXCLUI a linha "Receita Líquida" (ela só baliza o AV)
   if(dreR)try{XPANEL.dre=dreR.filter(r=>parseD(r[9])&&String(r[12]||'').trim()!=='Receita Líquida').map(r=>({vk:vigKeyN(parseD(r[9])),rem:r[1]!=null?+r[1]:0,real:r[2]!=null?+r[2]:0}));}catch(e){}
   if(kmR)try{XPANEL.km=kmR.filter(r=>parseD(r[0])).map(r=>({vk:vigKeyN(parseD(r[0])),rem:r[31]!=null?+r[31]:0,real:r[32]!=null?+r[32]:0}));}catch(e){}
-  if(kmlR)try{XPANEL.kml=kmlR.filter(r=>parseD(r[0])).map(r=>{const lit=r[23]!=null?+r[23]:0;return{vk:vigKeyN(parseD(r[0])),lit,tot:r[25]!=null?+r[25]:0,remxl:(r[8]!=null?+r[8]:0)*lit};});}catch(e){}
-  if(kmlEfR)try{XPANEL.kmlEf=kmlEfR.filter(r=>parseD(r[0])).map(r=>({vk:vigKeyN(parseD(r[0])),km:r[22]!=null?+r[22]:0,lit:r[23]!=null?+r[23]:0,rem:r[4]!=null?+r[4]:0}));}catch(e){}
+  // R$/L: lookup do preço remunerado (aba R$/L) por Projeto|Vigência|Combustível — proj=0, vig=3, preco=22, comb=23
+  const L1={},L2={};
+  if(rslR)rslR.forEach(r=>{const p=NK(r[0]),dt=parseD(r[3]);if(!p||!dt)return;const ym=vigKeyN(dt),f=NF(r[23]),v=r[22]!=null?+r[22]:0;if(!(v>0))return;const k1=p+'|'+ym+'|'+f,k2=p+'|'+ym;(L1[k1]=L1[k1]||{s:0,n:0}).s+=v;L1[k1].n++;(L2[k2]=L2[k2]||{s:0,n:0}).s+=v;L2[k2].n++;});
+  const remPrice=(p,ym,f)=>{let e=L1[p+'|'+ym+'|'+f];if(!e)e=L2[p+'|'+ym];return e&&e.n>0?e.s/e.n:null;};
+  // aba Km/L (consumo): km=22, lit=23, remKmL=4, totalRS=25, proj=14, comb=20 → guarda rp (preço rem) por linha
+  if(kmlEfR)try{XPANEL.kmlEf=kmlEfR.filter(r=>parseD(r[0])).map(r=>{const vk=vigKeyN(parseD(r[0]));return{vk,km:r[22]!=null?+r[22]:0,lit:r[23]!=null?+r[23]:0,remKmL:r[4]!=null?+r[4]:0,tot:r[25]!=null?+r[25]:0,rp:remPrice(NK(r[14]),vk,NF(r[20]))};});}catch(e){}
   if(dpoR)try{XPANEL.dpo=compDPO(dpoR);}catch(e){}
   if(fcaR)try{XPANEL.fca=compFCA(fcaR);}catch(e){}
   ICS=(icRows||[]).filter(r=>r[0]&&r[1]&&parseD(r[0])).map(r=>{const vigD=parseD(r[0]);return{vigD,unidade:String(r[1]).trim(),ic:IC.map(dd=>r[dd.c]!=null?+r[dd.c]:null),pont:r[13]!=null?+r[13]:null};});
@@ -266,14 +273,14 @@ function applyData(d){
 }
 
 async function carregar(){
-  const cached=rd('data');
+  const cached=rd('data2');
   if(cached){try{applyData(cached);document.getElementById('status').textContent='Atualizando…';}catch(e){}}
   else document.getElementById('status').textContent='Carregando…';
   try{
     const icRows=await gviz(SRC.ics);
-    const [dreR,kmR,dpoR,fcaR,kmlR,kmlEfR]=await Promise.all([gviz(SRC.dre).catch(()=>null),gviz(SRC.km).catch(()=>null),gviz(SRC.dpo).catch(()=>null),gviz(SRC.fca).catch(()=>null),gviz(SRC.kml).catch(()=>null),gviz(SRC.kmlEf).catch(()=>null)]);
-    const d={ics:icRows,dre:dreR,km:kmR,dpo:dpoR,fca:fcaR,kml:kmlR,kmlEf:kmlEfR};
-    wr('data',d);
+    const [dreR,kmR,dpoR,fcaR,rslR,kmlEfR]=await Promise.all([gviz(SRC.dre).catch(()=>null),gviz(SRC.km).catch(()=>null),gviz(SRC.dpo).catch(()=>null),gviz(SRC.fca).catch(()=>null),gviz(SRC.rsl).catch(()=>null),gviz(SRC.kmlEf).catch(()=>null)]);
+    const d={ics:icRows,dre:dreR,km:kmR,dpo:dpoR,fca:fcaR,rsl:rslR,kmlEf:kmlEfR};
+    wr('data2',d);
     applyData(d);
     const now=new Date();document.getElementById('status').textContent=`${now.toLocaleDateString('pt-BR')} ${now.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})}`;
   }catch(e){console.error(e);if(!cached)document.getElementById('status').textContent='Erro ao carregar';}
