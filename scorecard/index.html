@@ -96,7 +96,7 @@ body.light-mode tbody tr+tr td{border-top-color:rgba(0,0,0,.05);}
   <section class="hero">
     <div><div class="hero-label">Pontuação Geral · Frota</div><div class="hero-value" id="h-pont">—</div><div class="hero-sub" id="h-sub"></div></div>
   </section>
-  <div class="legend"><span><i style="background:#3BB33B"></i>≥ 95% — Saudável</span><span><i style="background:#EAB308"></i>85–95% — Regular</span><span><i style="background:#F97316"></i>75–85% — Atenção</span><span><i style="background:#FF6666"></i>&lt; 75% — Crítico</span></div>
+  <div class="legend"><span><i style="background:#3BB33B"></i>≥ 90% — Saudável</span><span><i style="background:#EAB308"></i>80–90% — Regular</span><span><i style="background:#F97316"></i>70–80% — Atenção</span><span><i style="background:#FF6666"></i>&lt; 70% — Crítico</span></div>
   <h2 class="sec-title">Indicadores Principais</h2>
   <div class="cards" id="cards"><div class="loading">Carregando…</div></div>
   <div class="chart-card"><div class="chart-head"><h2>Pontuação Geral · Mensal</h2><div class="chart-sub" id="ch-sub"></div></div><div class="chart-wrap"><canvas id="ch-temp"></canvas></div></div>
@@ -127,8 +127,8 @@ function vigLbl(d){return d?MESES[d.getMonth()]+'/'+String(d.getFullYear()).slic
 function pct1(v){return v==null||!isFinite(v)?'—':v.toFixed(1)+'%';}
 function n1(v){return v==null||!isFinite(v)?'—':Number(v).toLocaleString('pt-BR',{minimumFractionDigits:1,maximumFractionDigits:1});}
 // farol p/ indicadores "maior = melhor" (%): ≥85 verde, ≥70 ambar, <70 vermelho
-// faixas: ≥95 Saudável(verde) · ≥85 Regular(amarelo) · ≥75 Atenção(laranja) · <75 Crítico(vermelho)
-function band(v){return v==null?'':v>=95?'g':v>=85?'y':v>=75?'o':'r';}
+// faixas: ≥90 Saudável(verde) · ≥80 Regular(amarelo) · ≥70 Atenção(laranja) · <70 Crítico(vermelho)
+function band(v){return v==null?'':v>=90?'g':v>=80?'y':v>=70?'o':'r';}
 function sumAtt(rows,perKeys){let rem=0,real=0,has=false;rows.forEach(o=>{if(perKeys.has(o.vk)){rem+=o.rem;real+=o.real;has=true;}});return has&&rem?real/rem*100:null;}
 // R$/km atingimento = (custoReal/kmReal) / (custoRem/kmRem)
 function rkmAtt(perKeys){let cr=0,cR=0,kr=0,kR=0;(XPANEL.dre||[]).forEach(o=>{if(perKeys.has(o.vk)){cr+=o.rem;cR+=o.real;}});(XPANEL.km||[]).forEach(o=>{if(perKeys.has(o.vk)){kr+=o.rem;kR+=o.real;}});if(!kR||!kr||!cr)return null;const rem=cr/kr;return rem?(cR/kR)/rem*100:null;}
@@ -237,32 +237,46 @@ function chartTemporal(selD){
   ]},plugins:[barLabels],options:{responsive:true,maintainAspectRatio:false,layout:{padding:{top:22}},plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>c.dataset.type==='line'?'Adequado 85':n1(c.raw)+' pts'}}},scales:{x:{grid,ticks:tick},y:{min:yMin,max:yMax,grid,ticks:{...tick}}}}});
 }
 
+// ── Cache local (stale-while-revalidate) ──
+function rd(k){try{return JSON.parse(localStorage.getItem('sc_'+k));}catch(e){return null;}}
+function wr(k,v){try{localStorage.setItem('sc_'+k,JSON.stringify(v));}catch(e){}}
+
+function applyData(d){
+  const selV=getMsValues('ms-vig'),selU=getMsValues('ms-uni'); // preserva seleção ao revalidar
+  XPANEL={};
+  const {ics:icRows,dre:dreR,km:kmR,dpo:dpoR,fca:fcaR,kml:kmlR,kmlEf:kmlEfR}=d;
+  // Custos = custo da FROTA → EXCLUI a linha "Receita Líquida" (ela só baliza o AV)
+  if(dreR)try{XPANEL.dre=dreR.filter(r=>parseD(r[9])&&String(r[12]||'').trim()!=='Receita Líquida').map(r=>({vk:vigKeyN(parseD(r[9])),rem:r[1]!=null?+r[1]:0,real:r[2]!=null?+r[2]:0}));}catch(e){}
+  if(kmR)try{XPANEL.km=kmR.filter(r=>parseD(r[0])).map(r=>({vk:vigKeyN(parseD(r[0])),rem:r[31]!=null?+r[31]:0,real:r[32]!=null?+r[32]:0}));}catch(e){}
+  if(kmlR)try{XPANEL.kml=kmlR.filter(r=>parseD(r[0])).map(r=>{const lit=r[23]!=null?+r[23]:0;return{vk:vigKeyN(parseD(r[0])),lit,tot:r[25]!=null?+r[25]:0,remxl:(r[8]!=null?+r[8]:0)*lit};});}catch(e){}
+  if(kmlEfR)try{XPANEL.kmlEf=kmlEfR.filter(r=>parseD(r[0])).map(r=>({vk:vigKeyN(parseD(r[0])),km:r[22]!=null?+r[22]:0,lit:r[23]!=null?+r[23]:0,rem:r[4]!=null?+r[4]:0}));}catch(e){}
+  if(dpoR)try{XPANEL.dpo=compDPO(dpoR);}catch(e){}
+  if(fcaR)try{XPANEL.fca=compFCA(fcaR);}catch(e){}
+  ICS=(icRows||[]).filter(r=>r[0]&&r[1]&&parseD(r[0])).map(r=>{const vigD=parseD(r[0]);return{vigD,unidade:String(r[1]).trim(),ic:IC.map(dd=>r[dd.c]!=null?+r[dd.c]:null),pont:r[13]!=null?+r[13]:null};});
+  const vm=new Map();ICS.forEach(o=>vm.set(vigKeyN(o.vigD),o.vigD));
+  VIGS=[...vm.values()].sort((a,b)=>vigKeyN(a)-vigKeyN(b));
+  const vigItems=VIGS.map(dd=>vigLbl(dd));
+  const vw=document.getElementById('ms-vig');
+  if(selV.length){vw._sel=new Set(selV.filter(v=>vigItems.includes(v)));}
+  else{const comDados=vigItems.filter(v=>ICS.some(o=>vigLbl(o.vigD)===v&&o.pont!=null));const base=comDados.length?comDados:vigItems;if(base.length)vw._sel=new Set([base[base.length-1]]);}
+  if(selU.length)document.getElementById('ms-uni')._sel=new Set(selU);
+  buildMsFilter('ms-vig',vigItems);
+  buildMsFilter('ms-uni',[...new Set(ICS.map(o=>o.unidade))].sort());
+  atualizar();
+}
+
 async function carregar(){
-  document.getElementById('status').textContent='Carregando…';
+  const cached=rd('data');
+  if(cached){try{applyData(cached);document.getElementById('status').textContent='Atualizando…';}catch(e){}}
+  else document.getElementById('status').textContent='Carregando…';
   try{
     const icRows=await gviz(SRC.ics);
-    // cross-painel: best-effort (não bloqueia se falhar)
     const [dreR,kmR,dpoR,fcaR,kmlR,kmlEfR]=await Promise.all([gviz(SRC.dre).catch(()=>null),gviz(SRC.km).catch(()=>null),gviz(SRC.dpo).catch(()=>null),gviz(SRC.fca).catch(()=>null),gviz(SRC.kml).catch(()=>null),gviz(SRC.kmlEf).catch(()=>null)]);
-    XPANEL={};
-    if(dreR)try{XPANEL.dre=dreR.filter(r=>parseD(r[9])).map(r=>({vk:vigKeyN(parseD(r[9])),rem:r[1]!=null?+r[1]:0,real:r[2]!=null?+r[2]:0}));}catch(e){}
-    if(kmR)try{XPANEL.km=kmR.filter(r=>parseD(r[0])).map(r=>({vk:vigKeyN(parseD(r[0])),rem:r[31]!=null?+r[31]:0,real:r[32]!=null?+r[32]:0}));}catch(e){}
-    if(kmlR)try{XPANEL.kml=kmlR.filter(r=>parseD(r[0])).map(r=>{const lit=r[23]!=null?+r[23]:0;return{vk:vigKeyN(parseD(r[0])),lit,tot:r[25]!=null?+r[25]:0,remxl:(r[8]!=null?+r[8]:0)*lit};});}catch(e){}
-    if(kmlEfR)try{XPANEL.kmlEf=kmlEfR.filter(r=>parseD(r[0])).map(r=>({vk:vigKeyN(parseD(r[0])),km:r[22]!=null?+r[22]:0,lit:r[23]!=null?+r[23]:0,rem:r[4]!=null?+r[4]:0}));}catch(e){}
-    if(dpoR)try{XPANEL.dpo=compDPO(dpoR);}catch(e){}
-    if(fcaR)try{XPANEL.fca=compFCA(fcaR);}catch(e){}
-    ICS=icRows.filter(r=>r[0]&&r[1]&&parseD(r[0])).map(r=>{const vigD=parseD(r[0]);return{vigD,unidade:String(r[1]).trim(),ic:IC.map(d=>r[d.c]!=null?+r[d.c]:null),pont:r[13]!=null?+r[13]:null};});
-    const vm=new Map();ICS.forEach(o=>vm.set(vigKeyN(o.vigD),o.vigD));
-    VIGS=[...vm.values()].sort((a,b)=>vigKeyN(a)-vigKeyN(b));
-    const vigItems=VIGS.map(d=>vigLbl(d));
-    // auto: última vigência COM dados (pontuação preenchida)
-    const comDados=vigItems.filter(v=>ICS.some(o=>vigLbl(o.vigD)===v&&o.pont!=null));
-    const base=comDados.length?comDados:vigItems;
-    const vw=document.getElementById('ms-vig');if(base.length)vw._sel=new Set([base[base.length-1]]);
-    buildMsFilter('ms-vig',vigItems);
-    buildMsFilter('ms-uni',[...new Set(ICS.map(o=>o.unidade))].sort());
-    atualizar();
+    const d={ics:icRows,dre:dreR,km:kmR,dpo:dpoR,fca:fcaR,kml:kmlR,kmlEf:kmlEfR};
+    wr('data',d);
+    applyData(d);
     const now=new Date();document.getElementById('status').textContent=`${now.toLocaleDateString('pt-BR')} ${now.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})}`;
-  }catch(e){console.error(e);document.getElementById('status').textContent='Erro ao carregar';}
+  }catch(e){console.error(e);if(!cached)document.getElementById('status').textContent='Erro ao carregar';}
 }
 
 const _sun=`<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>`;
