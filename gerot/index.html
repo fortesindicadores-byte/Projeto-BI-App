@@ -84,7 +84,7 @@ const SHEET_ID='1xGl1Xrk2sPS9zWghEuecFMNBHwmeLiZ02U-QpO8cDPY';
 const GID='0';
 const MESES=['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
 const FILTROS=['unidade','bloco','vig','tipo'];
-let ALL=[];
+let ALL=[],VIGS=[];
 
 function parseD(v){if(!v)return null;const m=String(v).match(/^Date\((\d+),(\d+),(\d+)/);if(m)return new Date(+m[1],+m[2],+m[3]);return null;}
 function vigKeyN(d){return d?d.getFullYear()*100+d.getMonth():0;}
@@ -115,44 +115,33 @@ function passa(o){return FILTROS.every(f=>{const sel=getMsValues('ms-'+f);return
 
 function fetchTab(){return new Promise((res,rej)=>{const fn='_gvGer'+Math.floor(Math.random()*1e9);const s=document.createElement('script');const clr=()=>{try{delete window[fn];s.remove();}catch(e){}};window[fn]=r=>{clr();try{if(r.status!=='ok')throw 0;res(r.table.rows.map(x=>(x.c||[]).map(c=>c?c.v:null)));}catch(e){rej(e);}};s.onerror=()=>{clr();rej(0);};s.src=`https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?gid=${GID}&tqx=out:json;responseHandler:${fn}`;document.head.appendChild(s);});}
 
+function avg(arr){const v=arr.filter(x=>x!=null&&isFinite(x));return v.length?v.reduce((a,b)=>a+b,0)/v.length:null;}
+function atgCell(p){if(p==null)return '<span style="color:var(--text3)">-</span>';const c=heat(p);return `<span class="atg" style="background:${c.bg};color:${c.fg}">${Math.round(p*100)}%</span>`;}
 function atualizar(){
   if(!ALL.length)return;
-  const f=ALL.filter(passa);
-  // vigências (colunas) e linhas (bloco/kpi/un) preservando ordem
-  const vigSel=getMsValues('ms-vig');
-  const vigMap=new Map();f.forEach(o=>{if(o.vigD)vigMap.set(vigKeyN(o.vigD),o.vigD);});
-  const vigs=[...vigMap.values()].sort((a,b)=>vigKeyN(a)-vigKeyN(b));
-  // linhas únicas
+  const tbl=document.getElementById('tbl');
+  // filtros: unidade/bloco/tipo filtram linhas; vigência seleciona o mês (padrão: último)
+  const f=ALL.filter(o=>['unidade','bloco','tipo'].every(fl=>{const sel=getMsValues('ms-'+fl);return sel.length===0||sel.includes(String(o[fl]));}));
+  const selVig=getMsValues('ms-vig');
+  const cands=(selVig.length?VIGS.filter(d=>selVig.includes(vigCol(d))):VIGS.slice());
+  const selD=cands.length?cands.sort((a,b)=>vigKeyN(b)-vigKeyN(a))[0]:(VIGS[VIGS.length-1]||null);
+  if(!selD){tbl.innerHTML='<div class="loading">Sem dados</div>';return;}
+  const ytd=VIGS.filter(d=>d.getFullYear()===selD.getFullYear()&&d.getMonth()<=selD.getMonth());
   const rowKey=o=>o.bloco+'||'+o.kpi+'||'+o.un;
-  const rowsOrder=[],rowsSeen=new Set();
-  f.forEach(o=>{const k=rowKey(o);if(!rowsSeen.has(k)){rowsSeen.add(k);rowsOrder.push({bloco:o.bloco,kpi:o.kpi,un:o.un,key:k});}});
-  // agregação: média por (linha, vig)
-  const agg={};
-  f.forEach(o=>{const k=rowKey(o)+'@@'+vigKeyN(o.vigD);if(!agg[k])agg[k]={m:0,r:0,a:0,nm:0,nr:0,na:0};const A=agg[k];if(o.meta!=null){A.m+=o.meta;A.nm++;}if(o.real!=null){A.r+=o.real;A.nr++;}if(o.atg!=null){A.a+=o.atg;A.na++;}});
-
-  let html='<table><thead><tr class="vig"><th class="lft" colspan="3"></th>';
-  vigs.forEach((d,i)=>{html+=`<th colspan="3" class="${i>0?'sep-l':''}">${vigCol(d)}</th>`;});
-  html+='</tr><tr class="cols"><th class="lft">Bloco</th><th class="lft">KPI</th><th>Un.</th>';
-  vigs.forEach((d,i)=>{html+=`<th class="${i>0?'sep-l':''}">Meta</th><th>Real</th><th>% de Ating.</th>`;});
-  html+='</tr></thead><tbody>';
-
-  let lastBloco=null;
-  rowsOrder.forEach(row=>{
-    const newB=row.bloco!==lastBloco;lastBloco=row.bloco;
-    const dec=(row.un||'').trim()==='%'?2:2;
-    html+=`<tr class="${newB?'bloco-start':''}"><td class="bloco">${newB?row.bloco:''}</td><td class="kpi">${row.kpi}</td><td class="un">${row.un||''}</td>`;
-    vigs.forEach((d,i)=>{
-      const A=agg[row.key+'@@'+vigKeyN(d)];
-      const meta=A&&A.nm?A.m/A.nm:null, real=A&&A.nr?A.r/A.nr:null, atg=A&&A.na?A.a/A.na:null;
-      const sep=i>0?'sep-l':'';
-      const c=heat(atg);
-      const atgCell=atg==null?'<span style="color:var(--text3)">-</span>':`<span class="atg" style="background:${c.bg};color:${c.fg}">${Math.round(atg*100)}%</span>`;
-      html+=`<td class="${sep}">${num(meta,2)}</td><td>${num(real,2)}</td><td>${atgCell}</td>`;
-    });
-    html+='</tr>';
+  const order=[],seen=new Set();f.forEach(o=>{const k=rowKey(o);if(!seen.has(k)){seen.add(k);order.push({bloco:o.bloco,kpi:o.kpi,un:o.un,key:k});}});
+  let html='<table><thead><tr class="vig"><th class="lft" colspan="3"></th><th colspan="3">'+vigCol(selD)+'</th><th colspan="1" class="sep-l">YTD</th></tr>'+
+    '<tr class="cols"><th class="lft">Bloco</th><th class="lft">KPI</th><th>Un.</th><th>Meta</th><th>Real</th><th>% de Ating.</th><th class="sep-l">% Ating. YTD</th></tr></thead><tbody>';
+  let lastB=null;
+  order.forEach(row=>{
+    const nb=row.bloco!==lastB;lastB=row.bloco;
+    const mr=f.filter(o=>rowKey(o)===row.key&&vigKeyN(o.vigD)===vigKeyN(selD));
+    const meta=avg(mr.map(o=>o.meta)),real=avg(mr.map(o=>o.real)),atg=avg(mr.map(o=>o.atg));
+    const yr=f.filter(o=>rowKey(o)===row.key&&ytd.some(d=>vigKeyN(d)===vigKeyN(o.vigD)));
+    const atgY=avg(yr.map(o=>o.atg));
+    html+=`<tr class="${nb?'bloco-start':''}"><td class="bloco">${nb?row.bloco:''}</td><td class="kpi">${row.kpi}</td><td class="un">${row.un||''}</td><td>${num(meta,2)}</td><td>${num(real,2)}</td><td>${atgCell(atg)}</td><td class="sep-l">${atgCell(atgY)}</td></tr>`;
   });
   html+='</tbody></table>';
-  document.getElementById('tbl').innerHTML=rowsOrder.length?html:'<div class="loading">Sem dados com os filtros</div>';
+  tbl.innerHTML=order.length?html:'<div class="loading">Sem dados com os filtros</div>';
 }
 
 async function carregar(){
@@ -160,10 +149,12 @@ async function carregar(){
   try{
     const rows=await fetchTab();
     ALL=rows.slice(1).filter(r=>r[1]&&r[4]).map(r=>{const vigD=parseD(r[3]);return{bloco:String(r[1]||'').trim(),unidade:String(r[2]||'').trim(),vigD,vig:vigCol(vigD),kpi:String(r[4]||'').trim(),un:String(r[5]||'').trim(),meta:r[6]!=null?+r[6]:null,real:r[7]!=null?+r[7]:null,atg:r[8]!=null?+r[8]:null,tipo:/^IC/i.test(String(r[4]))?'IC':/^IV/i.test(String(r[4]))?'IV':''};});
+    const vm=new Map();ALL.forEach(o=>{if(o.vigD)vm.set(vigKeyN(o.vigD),o.vigD);});VIGS=[...vm.values()].sort((a,b)=>vigKeyN(a)-vigKeyN(b));
     const uniq=k=>[...new Set(ALL.map(o=>o[k]).filter(v=>v!==''&&v!=null))];
     buildMsFilter('ms-unidade',uniq('unidade').sort());
     buildMsFilter('ms-bloco',uniq('bloco'));
     const vigItems=[...new Set(ALL.filter(o=>o.vigD).map(o=>o.vig))].sort((a,b)=>{const pa=ALL.find(o=>o.vig===a).vigD,pb=ALL.find(o=>o.vig===b).vigD;return vigKeyN(pa)-vigKeyN(pb);});
+    const vw=document.getElementById('ms-vig');if(vigItems.length)vw._sel=new Set([vigItems[vigItems.length-1]]); // auto último mês
     buildMsFilter('ms-vig',vigItems);
     buildMsFilter('ms-tipo',['IC','IV']);
     atualizar();

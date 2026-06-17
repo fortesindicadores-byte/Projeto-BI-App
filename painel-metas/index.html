@@ -166,27 +166,29 @@ function atualizar(){
   chartMensal();chartIndicador();renderTable();
 }
 function renderTable(){
-  // colunas = todas as vigências presentes; linhas = indicadores
+  const tbl=document.getElementById('tbl');
+  const selVig=getMsValues('ms-vig');
+  const cands=selVig.length?VIGS.filter(d=>selVig.includes(vigLbl(d))):VIGS.slice();
+  const selD=cands.length?cands.sort((a,b)=>vigKeyN(b)-vigKeyN(a))[0]:(VIGS[VIGS.length-1]||null);
+  if(!selD){tbl.innerHTML='<div class="loading">Sem dados</div>';return;}
+  const ytd=VIGS.filter(d=>d.getFullYear()===selD.getFullYear()&&d.getMonth()<=selD.getMonth());
   const indOrder=[],seen=new Set();ALL.forEach(o=>{if(!seen.has(o.indicador)){seen.add(o.indicador);indOrder.push(o);}});
-  let html='<table><thead><tr class="vig"><th class="lft" colspan="5"></th>';
-  VIGS.forEach((d,i)=>{html+=`<th colspan="4" class="${i>0?'sep-l':''}">${vigColLbl(d)}</th>`;});
-  html+='</tr><tr class="cols"><th class="lft">Indicador</th><th>Peso</th><th class="lft">Descrição</th><th class="lft">Regra de Atingimento</th><th>Un.</th>';
-  VIGS.forEach((d,i)=>{html+=`<th class="${i>0?'sep-l':''}">Meta</th><th>Real</th><th>Ating.</th><th>Pontos</th>`;});
-  html+='</tr></thead><tbody>';
+  const atgColor=v=>v==null?'var(--text3)':(v>=100?'var(--green)':'var(--red)');
+  let html='<table><thead><tr class="vig"><th class="lft" colspan="5"></th><th colspan="4">'+vigColLbl(selD)+'</th><th colspan="2" class="sep-l">YTD</th></tr>'+
+    '<tr class="cols"><th class="lft">Indicador</th><th>Peso</th><th class="lft">Descrição</th><th class="lft">Regra de Atingimento</th><th>Un.</th><th>Meta</th><th>Real</th><th>Ating.</th><th>Pontos</th><th class="sep-l">Ating. YTD</th><th>Pontos YTD</th></tr></thead><tbody>';
   indOrder.forEach(base=>{
     const ind=base.indicador;
+    const cur=ALL.find(x=>x.indicador===ind&&vigKeyN(x.vigD)===vigKeyN(selD));
+    const yr=ALL.filter(x=>x.indicador===ind&&ytd.some(d=>vigKeyN(d)===vigKeyN(x.vigD)));
+    const atgY=yr.length?yr.reduce((s,o)=>s+(o.atg||0),0)/yr.length:null;
+    const ptsY=yr.length?yr.reduce((s,o)=>s+(o.pontos||0),0)/yr.length:null;
     html+=`<tr><td class="lft ind">${ind}</td><td>${n1(base.peso)}</td><td class="lft desc">${(base.desc||'').replace(/\n/g,'<br>')}</td><td class="lft regra">${(base.regra||'').replace(/\n/g,'<br>')}</td><td class="un">${base.un||''}</td>`;
-    VIGS.forEach((d,i)=>{
-      const o=ALL.find(x=>x.indicador===ind&&vigKeyN(x.vigD)===vigKeyN(d));
-      const sep=i>0?'sep-l':'';
-      if(!o){html+=`<td class="${sep}">-</td><td>-</td><td>-</td><td>-</td>`;return;}
-      const atgCor=o.atg>=100?'var(--green)':'var(--red)';
-      html+=`<td class="${sep}">${n1(o.meta)}</td><td>${n1(o.real)}</td><td style="color:${atgCor};font-weight:700">${pctI(o.atg)}</td><td><span class="pts">${n1(o.pontos)}</span></td>`;
-    });
+    if(cur){html+=`<td>${n1(cur.meta)}</td><td>${n1(cur.real)}</td><td style="color:${atgColor(cur.atg)};font-weight:700">${pctI(cur.atg)}</td><td><span class="pts">${n1(cur.pontos)}</span></td>`;}else{html+='<td>-</td><td>-</td><td>-</td><td>-</td>';}
+    html+=`<td class="sep-l" style="color:${atgColor(atgY)};font-weight:700">${pctI(atgY)}</td><td><span class="pts">${n1(ptsY)}</span></td>`;
     html+='</tr>';
   });
   html+='</tbody></table>';
-  document.getElementById('tbl').innerHTML=indOrder.length?html:'<div class="loading">Sem dados</div>';
+  tbl.innerHTML=indOrder.length?html:'<div class="loading">Sem dados</div>';
 }
 
 async function carregar(){
