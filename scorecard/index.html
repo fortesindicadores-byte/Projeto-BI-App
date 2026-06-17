@@ -52,17 +52,16 @@ body{background:radial-gradient(ellipse at 10% 25%,rgba(249,115,22,.06) 0%,trans
 .tbl-head{padding:0 12px 10px;}.tbl-head h2{font-size:15px;font-weight:800;color:var(--text);}.tbl-sub{font-size:10px;color:var(--text2);text-transform:uppercase;letter-spacing:.5px;margin-top:2px;}
 .tbl-wrap{overflow-x:auto;}
 table{width:100%;border-collapse:collapse;font-size:12px;min-width:1100px;}
-thead th{background:var(--card);font-size:9.5px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:.4px;padding:9px 6px;white-space:nowrap;text-align:center;}
+thead th{background:var(--card);font-size:9.5px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:.4px;padding:9px 8px;white-space:nowrap;text-align:right;border-bottom:1px solid rgba(255,255,255,.12);}
 thead th.lft{text-align:left;padding-left:12px;}
-thead th.cols{border-bottom:1px solid rgba(255,255,255,.12);}
-tbody td{padding:7px 6px;text-align:center;white-space:nowrap;color:var(--text);}
+tbody td{padding:8px 8px;text-align:right;white-space:nowrap;color:var(--text);}
 tbody td.lft{text-align:left;padding-left:12px;}
 tbody td.rank{font-weight:800;color:var(--text2);width:34px;}
 tbody td.uni{font-weight:700;min-width:170px;}
-tbody tr+tr td{border-top:1px solid rgba(255,255,255,.04);}
+.scol{border-left:1px solid rgba(255,255,255,.13);padding-left:14px;}
+tbody tr+tr td{border-top:1px solid rgba(255,255,255,.025);}
 tbody tr:hover td{background:rgba(255,255,255,.03);}
-.cell{display:inline-block;min-width:50px;padding:4px 6px;border-radius:4px;font-weight:700;}
-.pont{font-weight:800;font-size:13px;}
+body.light-mode .scol{border-left-color:rgba(0,0,0,.12);}
 .loading{text-align:center;color:var(--text3);padding:40px;}
 body.light-mode .main{background:#F0F0F0;--text:#1a1a1a;--text2:#444444;--text3:#666666;color:var(--text);}
 body.light-mode .kpi,body.light-mode .tbl-section{background:rgba(128,128,128,.14)!important;border-color:transparent!important;box-shadow:none!important;--text:#1a1a1a;--text2:#444444;--text3:#555555;}
@@ -151,7 +150,7 @@ function atualizar(){
   const perKeys=new Set(cands.map(vigKeyN));
   const rows=ICS.filter(o=>perKeys.has(vigKeyN(o.vigD))&&(selUni.length===0||selUni.includes(o.unidade)));
   const periodo=cands.length<=1?vigLbl(selD).toUpperCase():`${vigLbl(cands[0]).toUpperCase()} – ${vigLbl(selD).toUpperCase()} · MÉDIA`;
-  document.getElementById('tbl-sub').textContent=periodo;
+  document.getElementById('tbl-sub').textContent=periodo+' · ranqueado pela NOTA (média dos indicadores) · Pontuação = score do Programa';
 
   // ── Hero: Pontuação geral (média das linhas filtradas) ──
   const pts=rows.map(o=>o.pont).filter(v=>v!=null);
@@ -182,14 +181,16 @@ function atualizar(){
   const data=unis.map(u=>{
     const ur=rows.filter(o=>o.unidade===u);
     const ic=IC.map((d,i)=>{const vs=ur.map(o=>o.ic[i]).filter(v=>v!=null);return vs.length?vs.reduce((a,b)=>a+b,0)/vs.length*100:null;});
-    const pv=ur.map(o=>o.pont).filter(v=>v!=null);const pont=pv.length?pv.reduce((a,b)=>a+b,0)/pv.length:null;
-    return {u,ic,pont};
-  }).sort((a,b)=>(b.pont==null?-1:b.pont)-(a.pont==null?-1:a.pont));
-  let html='<table><thead><tr class="cols"><th class="lft">#</th><th class="lft">Unidade</th>'+IC.map(d=>`<th>${d.l}</th>`).join('')+'<th>Pontuação</th></tr></thead><tbody>';
+    const icv=ic.filter(v=>v!=null).map(v=>Math.min(100,v));const nota=icv.length?icv.reduce((a,b)=>a+b,0)/icv.length:null; // Nota Scorecard = média dos indicadores (limitados a 100%)
+    const pv=ur.map(o=>o.pont).filter(v=>v!=null);const pont=pv.length?pv.reduce((a,b)=>a+b,0)/pv.length:null; // Pontuação = score do Programa
+    return {u,ic,pont,nota};
+  }).sort((a,b)=>(b.nota==null?-1:b.nota)-(a.nota==null?-1:a.nota)); // ranking pela Nota do Scorecard
+  let html='<table><thead><tr class="cols"><th class="lft">#</th><th class="lft">Unidade</th>'+IC.map(d=>`<th>${d.l}</th>`).join('')+'<th class="scol">Pontuação</th><th>Nota</th></tr></thead><tbody>';
   data.forEach((r,idx)=>{
-    html+=`<tr><td class="rank">${idx+1}º</td><td class="lft uni">${r.u}</td>`;
-    r.ic.forEach(v=>{const cl=band(v);html+=`<td><span class="cell" style="background:${cellBg(cl)};color:${cellFg(cl)}">${v==null?'—':Math.round(v)+'%'}</span></td>`;});
-    const cp=band(r.pont);html+=`<td><span class="cell pont" style="background:${cellBg(cp)};color:${cellFg(cp)}">${r.pont==null?'—':n1(r.pont)}</span></td></tr>`;
+    html+=`<tr><td class="lft rank">${idx+1}º</td><td class="lft uni">${r.u}</td>`;
+    r.ic.forEach(v=>{html+=`<td style="color:${cellFg(band(v))};font-weight:700">${v==null?'—':Math.round(v)+'%'}</td>`;});
+    html+=`<td class="scol" style="color:${cellFg(band(r.pont))};font-weight:700">${r.pont==null?'—':n1(r.pont)}</td>`;
+    html+=`<td style="color:${cellFg(band(r.nota))};font-weight:800">${r.nota==null?'—':n1(r.nota)}</td></tr>`;
   });
   html+='</tbody></table>';
   document.getElementById('tbl').innerHTML=data.length?html:'<div class="loading">Sem dados com os filtros</div>';
