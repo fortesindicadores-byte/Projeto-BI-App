@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Painel de Metas</title>
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+:root{--bg:#0C1017;--card:#141B26;--border:#1E2D40;--orange:#F97316;--blue:#38BDF8;--text:#F1F5F9;--text2:#94A3B8;--text3:#475569;--green:#3BB33B;--red:#FF6666;--amber:#F4A100;}
+*{margin:0;padding:0;box-sizing:border-box;}
+body{background:radial-gradient(ellipse at 10% 25%,rgba(249,115,22,.06) 0%,transparent 50%),radial-gradient(ellipse at 90% 75%,rgba(56,189,248,.05) 0%,transparent 50%),var(--bg);color:var(--text);font-family:'Montserrat',-apple-system,sans-serif;font-size:13px;min-height:100vh;}
+.header{background:rgba(12,16,23,.75);border-bottom:1px solid rgba(255,255,255,.07);padding:10px 24px 12px;display:flex;flex-wrap:wrap;align-items:center;position:sticky;top:0;z-index:100;backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);box-shadow:0 2px 12px rgba(0,0,0,.3);}
+.brand{flex:1;order:1;}.brand h1{font-size:17px;font-weight:800;color:var(--orange);}.brand p{font-size:10px;color:#94A3B8;margin-top:2px;font-style:italic;}
+.header-right{flex-shrink:0;order:2;display:flex;align-items:center;gap:8px;}
+.status-badge{font-size:9px;color:#F1F5F9;background:rgba(249,115,22,.15);border:1px solid rgba(249,115,22,.3);border-radius:4px;padding:2px 8px;white-space:nowrap;}
+.btn{background:rgba(249,115,22,.15);border:1px solid rgba(249,115,22,.3);border-radius:4px;padding:4px 8px;cursor:pointer;color:var(--orange);display:flex;align-items:center;text-decoration:none;}
+.btn:hover{background:rgba(249,115,22,.32);}
+.header-filters{flex-basis:100%;order:3;margin-top:10px;display:flex;gap:10px;flex-wrap:wrap;align-items:flex-start;}
+.filter-group{display:flex;flex-direction:column;gap:3px;}
+.filter-label{font-size:9px;color:var(--text2);text-transform:uppercase;letter-spacing:.5px;}
+.ms-wrap{position:relative;}
+.ms-btn{display:flex;align-items:center;gap:8px;background:#0a0f18;color:var(--text);border:1px solid #2a3a50;border-radius:4px;font-family:'Montserrat',sans-serif;font-size:11px;font-weight:700;padding:6px 12px;cursor:pointer;text-transform:uppercase;letter-spacing:.5px;white-space:nowrap;min-width:120px;}
+.ms-btn:hover{border-color:var(--orange);}
+.ms-lbl{flex:1;}.ms-cnt{background:var(--orange);color:#000;border-radius:10px;padding:1px 6px;font-size:9px;font-weight:800;display:none;}
+.ms-panel{display:none;flex-direction:column;position:absolute;top:calc(100% + 4px);left:0;z-index:500;background:#0f1824;border:1px solid #2a3a50;border-radius:4px;min-width:200px;max-height:300px;box-shadow:0 8px 24px rgba(0,0,0,.7);}
+.ms-panel.open{display:flex;}
+.ms-search{padding:7px 10px;border-bottom:1px solid #1e2d40;display:flex;align-items:center;gap:6px;flex-shrink:0;}
+.ms-search input{flex:1;background:transparent;border:none;color:var(--text);font-family:'Montserrat',sans-serif;font-size:11px;outline:none;}
+.ms-list{overflow-y:auto;flex:1;}
+.ms-opt{display:flex;align-items:center;gap:8px;padding:7px 12px;cursor:pointer;font-size:11px;color:var(--text2);text-transform:uppercase;letter-spacing:.3px;}
+.ms-opt:hover{background:rgba(255,255,255,.05);color:var(--text);}
+.ms-opt.all-opt{border-bottom:1px solid #1e2d40;color:var(--text);font-weight:700;}
+.ms-opt input[type=checkbox]{accent-color:var(--orange);cursor:pointer;width:14px;height:14px;flex-shrink:0;}
+.ms-only{margin-left:auto;font-size:8px;color:var(--orange);padding:1px 5px;border-radius:2px;cursor:pointer;opacity:0;transition:opacity .12s;flex-shrink:0;}
+.ms-opt:hover .ms-only{opacity:1;}.ms-only:hover{background:rgba(249,115,22,.2);}
+.main{padding:20px 24px;}
+.hero{margin-bottom:18px;padding:2px;}
+.hero-label{font-size:11px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:1px;}
+.hero-value{font-size:56px;font-weight:800;line-height:1;margin-top:4px;}
+.hero-sub{font-size:13px;color:var(--text2);margin-top:8px;}
+.charts-row{display:grid;grid-template-columns:1.4fr 1fr;gap:16px;margin-bottom:18px;}
+.card{background:rgba(20,27,38,.55);border:1px solid rgba(255,255,255,.07);border-radius:8px;padding:18px 20px;backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);box-shadow:0 2px 12px rgba(0,0,0,.25);}
+.chart-title{font-size:14px;font-weight:800;color:var(--text);text-transform:uppercase;letter-spacing:.5px;margin-bottom:12px;}
+.chart-wrap{position:relative;height:250px;}
+.tbl-section{background:rgba(20,27,38,.55);border:1px solid rgba(255,255,255,.07);border-radius:8px;padding:8px 4px 12px;backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);box-shadow:0 2px 12px rgba(0,0,0,.25);}
+.tbl-wrap{overflow-x:auto;}
+table{width:100%;border-collapse:collapse;font-size:12px;min-width:1000px;}
+thead th{font-size:10px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:.5px;padding:8px 10px;white-space:nowrap;text-align:right;}
+thead th.lft{text-align:left;}
+thead tr.vig th{text-align:center;color:var(--orange);border-bottom:1px solid rgba(249,115,22,.3);}
+thead tr.cols th{border-bottom:1px solid rgba(255,255,255,.12);}
+.sep-l{border-left:1px solid rgba(255,255,255,.13);}
+tbody td{padding:10px;border-bottom:1px solid rgba(255,255,255,.05);white-space:nowrap;text-align:right;color:var(--text);vertical-align:top;}
+tbody td.lft{text-align:left;}
+tbody td.ind{font-weight:700;min-width:150px;white-space:normal;}
+tbody td.desc,tbody td.regra{color:var(--text2);font-size:11px;white-space:normal;min-width:200px;line-height:1.4;}
+.pts{background:#0a0f18;border-radius:4px;padding:4px 10px;font-weight:800;display:inline-block;min-width:42px;text-align:center;}
+.loading{text-align:center;color:var(--text3);padding:40px;}
+body.light-mode .main{background:#F0F0F0;--text:#1a1a1a;--text2:#444444;--text3:#666666;}
+body.light-mode .card,body.light-mode .tbl-section{background:rgba(128,128,128,.14)!important;border:none!important;box-shadow:none!important;--text:#1a1a1a;--text2:#444444;--text3:#555555;}
+body.light-mode tbody td{border-bottom-color:rgba(0,0,0,.06);}
+body.light-mode .pts{background:#1a1a1a;color:#fff;}
+@media(max-width:900px){.charts-row{grid-template-columns:1fr;}.main{padding:12px;}.hero-value{font-size:42px;}}
+</style>
+</head>
+<body>
+<header class="header">
+  <div class="brand"><h1>Painel de Metas</h1><p>DRE Frota — Visão Geral</p></div>
+  <div class="header-right">
+    <a href="../" class="btn" title="Voltar ao Hub"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg></a>
+    <button class="btn" id="themeBtn" title="Modo claro/escuro"></button>
+    <button class="btn" onclick="carregar()" title="Atualizar"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/></svg></button>
+    <span class="status-badge" id="status">Carregando…</span>
+  </div>
+  <div class="header-filters">
+    <div class="filter-group"><span class="filter-label">Vigência</span><div class="ms-wrap" id="ms-vig"><button class="ms-btn" onclick="toggleMs('ms-vig')"><span class="ms-lbl">Vigência</span><span class="ms-cnt"></span><svg width="10" height="6" viewBox="0 0 10 6"><path d="M0 0l5 6 5-6z" fill="#F97316"/></svg></button><div class="ms-panel"><div class="ms-search"><svg width="12" height="12" viewBox="0 0 12 12"><circle cx="5" cy="5" r="4" stroke="#94A3B8" stroke-width="1.5" fill="none"/><line x1="8.5" y1="8.5" x2="11" y2="11" stroke="#94A3B8" stroke-width="1.5"/></svg><input type="text" placeholder="Pesquisar…"></div><div class="ms-list"></div></div></div></div>
+  </div>
+</header>
+
+<main class="main">
+  <section class="hero">
+    <div class="hero-label">Pontuação Total</div>
+    <div class="hero-value" id="h-total">—</div>
+    <div class="hero-sub" id="h-sub"></div>
+  </section>
+  <div class="charts-row">
+    <div class="card"><div class="chart-title">Pontuação · Mensal</div><div class="chart-wrap"><canvas id="ch-mensal"></canvas></div></div>
+    <div class="card"><div class="chart-title">Pontuação por Indicador</div><div class="chart-wrap"><canvas id="ch-ind"></canvas></div></div>
+  </div>
+  <div class="tbl-section"><div class="tbl-wrap"><div id="tbl"><div class="loading">Carregando…</div></div></div></div>
+</main>
+
+<script>
+const SHEET_ID='1oW3mss0pXVI6gaDU2z5cDAKvW40LWHCQXpanqSvb12o';
+const GID='199351909';
+const MESES=['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
+const META_PONTOS=80;
+let ALL=[],VIGS=[],chM=null,chI=null;
+
+function parseD(v){if(!v)return null;const m=String(v).match(/^Date\((\d+),(\d+),(\d+)/);if(m)return new Date(+m[1],+m[2],+m[3]);return null;}
+function vigKeyN(d){return d?d.getFullYear()*100+d.getMonth():0;}
+function vigLbl(d){return d?MESES[d.getMonth()]+'/'+String(d.getFullYear()).slice(2):'';}
+function vigColLbl(d){return d?MESES[d.getMonth()]+'. de '+d.getFullYear():'';}
+function n1(v){return v==null||!isFinite(v)?'-':Number(v).toLocaleString('pt-BR',{minimumFractionDigits:1,maximumFractionDigits:1});}
+function pctI(v){return v==null||!isFinite(v)?'-':Math.round(v)+'%';}
+
+// ── MULTI-SELECT ──
+function _buildMs(wrap,renderFn,getAllFn){if(!(wrap._sel instanceof Set))wrap._sel=new Set();const sel=wrap._sel,list=wrap.querySelector('.ms-list'),srch=wrap.querySelector('.ms-search input');const render=(q='')=>{renderFn(list,sel,q);syncBadge(wrap);};list.addEventListener('change',e=>{const box=e.target;if(box.classList.contains('ms-all')){sel.clear();}else if(sel.size===0){if(!box.checked){const all=getAllFn?getAllFn():[];all.forEach(v=>{if(v!==box.dataset.v)sel.add(v);});}}else{if(box.checked)sel.add(box.dataset.v);else sel.delete(box.dataset.v);if(getAllFn){const all=getAllFn();if(all.length>0&&all.every(v=>sel.has(v)))sel.clear();}}render(srch.value);atualizar();});list.addEventListener('click',e=>{const only=e.target.closest('.ms-only');if(!only)return;e.preventDefault();e.stopPropagation();sel.clear();sel.add(only.dataset.v);render(srch.value);atualizar();});srch.addEventListener('input',()=>render(srch.value));srch.addEventListener('click',e=>e.stopPropagation());render();}
+function buildMsFilter(id,items){const wrap=document.getElementById(id);if(!wrap)return;_buildMs(wrap,(list,sel,q)=>{const f=q.toLowerCase(),shown=items.filter(v=>String(v).toLowerCase().includes(f)),allChk=sel.size===0;list.innerHTML=(!q?`<label class="ms-opt all-opt"><input type="checkbox" class="ms-all" ${allChk?'checked':''}> Todas</label>`:'')+shown.map(v=>{const ve=String(v).replace(/"/g,'&quot;');return `<label class="ms-opt"><input type="checkbox" data-v="${ve}" ${allChk||sel.has(v)?'checked':''}> ${v}<span class="ms-only" data-v="${ve}">only</span></label>`;}).join('');},()=>items);}
+function syncBadge(wrap){const cnt=wrap.querySelector('.ms-cnt'),n=wrap._sel?wrap._sel.size:0;if(cnt){cnt.textContent=n;cnt.style.display=n?'':'none';}}
+function toggleMs(id){document.querySelectorAll('.ms-panel.open').forEach(p=>{if(p.closest('.ms-wrap').id!==id)p.classList.remove('open');});const panel=document.querySelector(`#${id} .ms-panel`);panel.classList.toggle('open');if(panel.classList.contains('open')){const inp=panel.querySelector('input[type=text]');if(inp)setTimeout(()=>inp.focus(),50);}}
+function getMsValues(id){const wrap=document.getElementById(id);if(!wrap)return[];return wrap._sel?[...wrap._sel]:[];}
+document.addEventListener('click',e=>{if(!e.target.closest('.ms-wrap'))document.querySelectorAll('.ms-panel.open').forEach(p=>p.classList.remove('open'));});
+
+function fetchTab(){return new Promise((res,rej)=>{const fn='_gvMeta'+Math.floor(Math.random()*1e9);const s=document.createElement('script');const clr=()=>{try{delete window[fn];s.remove();}catch(e){}};window[fn]=r=>{clr();try{if(r.status!=='ok')throw 0;res(r.table.rows.map(x=>(x.c||[]).map(c=>c?c.v:null)));}catch(e){rej(e);}};s.onerror=()=>{clr();rej(0);};s.src=`https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?gid=${GID}&tqx=out:json;responseHandler:${fn}`;document.head.appendChild(s);});}
+
+const barLabels={id:'bl',afterDatasetsDraw(c){const ds=c.data.datasets[0],m=c.getDatasetMeta(0),ctx=c.ctx;ctx.save();ctx.font='700 11px Montserrat';ctx.fillStyle=document.body.classList.contains('light-mode')?'#1a1a1a':'#F1F5F9';ctx.textAlign='center';ctx.textBaseline='bottom';m.data.forEach((b,i)=>{const v=ds.data[i];if(v==null)return;if(ds._on&&!ds._on[i])return;ctx.fillText(n1(v),b.x,b.y-4);});ctx.restore();}};
+
+function chartMensal(){
+  const isLight=document.body.classList.contains('light-mode');
+  const selVig=getMsValues('ms-vig');
+  const labels=VIGS.map(d=>vigLbl(d));
+  const data=VIGS.map(d=>{const rows=ALL.filter(o=>vigKeyN(o.vigD)===vigKeyN(d));return rows.length?rows.reduce((s,o)=>s+(o.pontos||0),0):null;});
+  const on=VIGS.map(d=>selVig.length===0||selVig.includes(vigLbl(d)));
+  const hasFocus=selVig.length>0;
+  const bg=data.map((v,i)=>{if(v==null)return 'transparent';const a=hasFocus?(on[i]?.85:.2):.65;return v>=META_PONTOS?`rgba(59,179,59,${a})`:`rgba(255,102,102,${a})`;});
+  const bc=data.map(v=>v==null?'transparent':(v>=META_PONTOS?'#3BB33B':'#FF6666'));
+  const metaLine=VIGS.map(()=>META_PONTOS);
+  const remC=isLight?'#000':'#F1F5F9';
+  const grid={color:isLight?'rgba(0,0,0,.08)':'rgba(255,255,255,.06)'};
+  const tick={color:isLight?'#444':'#94A3B8',font:{family:'Montserrat',size:11}};
+  if(chM)chM.destroy();
+  chM=new Chart(document.getElementById('ch-mensal'),{data:{labels,datasets:[
+    {type:'bar',data,backgroundColor:bg,borderColor:bc,borderWidth:1,_on:hasFocus?on:VIGS.map(()=>true),borderRadius:3,maxBarThickness:46,order:2},
+    {type:'line',label:'Meta 80%',data:metaLine,borderColor:remC,borderWidth:2,borderDash:[6,4],tension:0,fill:false,pointRadius:4,pointBackgroundColor:remC,order:1}
+  ]},plugins:[barLabels],options:{responsive:true,maintainAspectRatio:false,layout:{padding:{top:22}},plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>c.dataset.type==='line'?'Meta '+META_PONTOS:n1(c.raw)+' pts'}}},scales:{x:{grid:{display:false},ticks:tick},y:{min:0,max:100,grid,ticks:{...tick}}}}});
+}
+function chartIndicador(){
+  const isLight=document.body.classList.contains('light-mode');
+  const selVig=getMsValues('ms-vig');
+  const vigs=selVig.length?VIGS.filter(d=>selVig.includes(vigLbl(d))):[VIGS[VIGS.length-1]].filter(Boolean);
+  // agrega pontos por indicador nas vigências selecionadas (média se >1)
+  const indOrder=[],seen=new Set();
+  ALL.forEach(o=>{if(!seen.has(o.indicador)){seen.add(o.indicador);indOrder.push(o.indicador);}});
+  const items=indOrder.map(ind=>{const rs=ALL.filter(o=>o.indicador===ind&&vigs.some(d=>vigKeyN(d)===vigKeyN(o.vigD)));const pts=rs.length?rs.reduce((s,o)=>s+(o.pontos||0),0)/ (selVig.length>1?vigs.length:1):0;const peso=rs.length?rs[0].peso:0;return{ind,pts,peso};}).filter(x=>x.peso>0);
+  const labels=items.map(x=>x.ind);
+  const data=items.map(x=>+x.pts.toFixed(1));
+  const bg=items.map(x=>{const r=x.peso?x.pts/x.peso:0;const c=r>=1?'#3BB33B':r>0?'#F4A100':'#FF6666';return c;});
+  const grid={color:isLight?'rgba(0,0,0,.08)':'rgba(255,255,255,.06)'};
+  const tick={color:isLight?'#444':'#94A3B8',font:{family:'Montserrat',size:9}};
+  if(chI)chI.destroy();
+  chI=new Chart(document.getElementById('ch-ind'),{type:'bar',data:{labels,datasets:[{data,backgroundColor:bg,borderRadius:3,maxBarThickness:54}]},plugins:[barLabels],options:{responsive:true,maintainAspectRatio:false,layout:{padding:{top:22}},plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>n1(c.raw)+' pts'}}},scales:{x:{grid:{display:false},ticks:{...tick,callback:function(v){const l=this.getLabelForValue(v);return l.length>16?l.slice(0,15)+'…':l;}}},y:{beginAtZero:true,grid,ticks:tick}}}});
+}
+
+function atualizar(){
+  if(!ALL.length)return;
+  const selVig=getMsValues('ms-vig');
+  const vigs=selVig.length?VIGS.filter(d=>selVig.includes(vigLbl(d))):VIGS;
+  const sel=ALL.filter(o=>vigs.some(d=>vigKeyN(d)===vigKeyN(o.vigD)));
+  const total=sel.reduce((s,o)=>s+(o.pontos||0),0)/(selVig.length>1?vigs.length:1);
+  const eT=document.getElementById('h-total');eT.textContent=n1(total);eT.style.color=total>=META_PONTOS?'var(--green)':total>=70?'var(--amber)':'var(--red)';
+  const lbl=selVig.length?selVig.join(', '):'todas as vigências';
+  document.getElementById('h-sub').textContent=`de 100 pontos · meta ${META_PONTOS} · ${lbl}`;
+  chartMensal();chartIndicador();renderTable();
+}
+function renderTable(){
+  // colunas = todas as vigências presentes; linhas = indicadores
+  const indOrder=[],seen=new Set();ALL.forEach(o=>{if(!seen.has(o.indicador)){seen.add(o.indicador);indOrder.push(o);}});
+  let html='<table><thead><tr class="vig"><th class="lft" colspan="5"></th>';
+  VIGS.forEach((d,i)=>{html+=`<th colspan="4" class="${i>0?'sep-l':''}">${vigColLbl(d)}</th>`;});
+  html+='</tr><tr class="cols"><th class="lft">Indicador</th><th>Peso</th><th class="lft">Descrição</th><th class="lft">Regra de Atingimento</th><th>Un.</th>';
+  VIGS.forEach((d,i)=>{html+=`<th class="${i>0?'sep-l':''}">Meta</th><th>Real</th><th>Ating.</th><th>Pontos</th>`;});
+  html+='</tr></thead><tbody>';
+  indOrder.forEach(base=>{
+    const ind=base.indicador;
+    html+=`<tr><td class="lft ind">${ind}</td><td>${n1(base.peso)}</td><td class="lft desc">${(base.desc||'').replace(/\n/g,'<br>')}</td><td class="lft regra">${(base.regra||'').replace(/\n/g,'<br>')}</td><td class="un">${base.un||''}</td>`;
+    VIGS.forEach((d,i)=>{
+      const o=ALL.find(x=>x.indicador===ind&&vigKeyN(x.vigD)===vigKeyN(d));
+      const sep=i>0?'sep-l':'';
+      if(!o){html+=`<td class="${sep}">-</td><td>-</td><td>-</td><td>-</td>`;return;}
+      const atgCor=o.atg>=100?'var(--green)':'var(--red)';
+      html+=`<td class="${sep}">${n1(o.meta)}</td><td>${n1(o.real)}</td><td style="color:${atgCor};font-weight:700">${pctI(o.atg)}</td><td><span class="pts">${n1(o.pontos)}</span></td>`;
+    });
+    html+='</tr>';
+  });
+  html+='</tbody></table>';
+  document.getElementById('tbl').innerHTML=indOrder.length?html:'<div class="loading">Sem dados</div>';
+}
+
+async function carregar(){
+  document.getElementById('status').textContent='Carregando…';
+  try{
+    const rows=await fetchTab();
+    ALL=rows.slice(1).filter(r=>r[1]&&r[0]).map(r=>{const vigD=parseD(r[0]);return{vigD,vig:vigLbl(vigD),indicador:String(r[1]||'').trim(),peso:r[2]!=null?+r[2]:0,desc:String(r[3]||''),regra:String(r[4]||''),un:String(r[5]||'').trim(),meta:r[6]!=null?+r[6]:null,real:r[7]!=null?+r[7]:null,atg:r[8]!=null?+r[8]:null,pontos:r[9]!=null?+r[9]:0};});
+    const vm=new Map();ALL.forEach(o=>{if(o.vigD)vm.set(vigKeyN(o.vigD),o.vigD);});
+    VIGS=[...vm.values()].sort((a,b)=>vigKeyN(a)-vigKeyN(b));
+    const vigItems=VIGS.map(d=>vigLbl(d));
+    const vw=document.getElementById('ms-vig');if(vigItems.length)vw._sel=new Set([vigItems[vigItems.length-1]]); // auto último mês
+    buildMsFilter('ms-vig',vigItems);
+    atualizar();
+    const now=new Date();document.getElementById('status').textContent=`${now.toLocaleDateString('pt-BR')} ${now.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})}`;
+  }catch(e){console.error(e);document.getElementById('status').textContent='Erro ao carregar';}
+}
+
+const _sun=`<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>`;
+const _moon=`<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>`;
+function applyTheme(t){document.body.classList.toggle('light-mode',t==='light');localStorage.setItem('bi_theme',t);const b=document.getElementById('themeBtn');if(b)b.innerHTML=t==='light'?_moon:_sun;if(ALL.length)atualizar();}
+(function(){const t=localStorage.getItem('bi_theme')||'dark';document.body.classList.toggle('light-mode',t==='light');document.getElementById('themeBtn').innerHTML=t==='light'?_moon:_sun;document.getElementById('themeBtn').addEventListener('click',()=>applyTheme(document.body.classList.contains('light-mode')?'dark':'light'));})();
+
+carregar();
+</script>
+</body>
+</html>
