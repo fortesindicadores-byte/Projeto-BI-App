@@ -213,8 +213,13 @@ function temporal(canvasId,ref,getPct){
   const bc=data.map(v=>v==null?'transparent':band(v));
   const grid={color:isLight?'rgba(0,0,0,.08)':'rgba(255,255,255,.06)'};
   const tick={color:isLight?'#444':'#94A3B8',font:{family:'Montserrat',size:11}};
+  // eixo Y adaptável (múltiplos de 10) — não fica sempre travado em 0
+  const vals=data.filter(v=>v!=null);
+  const dMin=vals.length?Math.min(...vals):0,dMax=vals.length?Math.max(...vals):100;
+  const yMin=Math.max(0,Math.floor((dMin-8)/10)*10);
+  const yMax=Math.min(100,Math.max(yMin+20,Math.ceil((dMax+6)/10)*10));
   if(ref.c)ref.c.destroy();
-  ref.c=new Chart(document.getElementById(canvasId),{type:'bar',data:{labels,datasets:[{data,backgroundColor:bg,borderColor:bc,borderWidth:1,_on:hasFocus?on:VIGS.map(()=>true),borderRadius:3,maxBarThickness:46}]},plugins:[barLabels],options:{responsive:true,maintainAspectRatio:false,layout:{padding:{top:22}},plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>Math.round(c.raw)+'%'}}},scales:{x:{grid,ticks:tick},y:{min:0,max:100,grid,ticks:{...tick,callback:v=>v+'%'}}}}});
+  ref.c=new Chart(document.getElementById(canvasId),{type:'bar',data:{labels,datasets:[{data,backgroundColor:bg,borderColor:bc,borderWidth:1,_on:hasFocus?on:VIGS.map(()=>true),borderRadius:3,maxBarThickness:46}]},plugins:[barLabels],options:{responsive:true,maintainAspectRatio:false,layout:{padding:{top:22}},plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>Math.round(c.raw)+'%'}}},scales:{x:{grid,ticks:tick},y:{min:yMin,max:yMax,grid,ticks:{...tick,callback:v=>v+'%'}}}}});
 }
 
 // ── Atualizar (chamado pelos filtros) ──
