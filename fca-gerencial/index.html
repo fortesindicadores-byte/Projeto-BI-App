@@ -150,7 +150,16 @@ const SHEET_ID='1oW3mss0pXVI6gaDU2z5cDAKvW40LWHCQXpanqSvb12o';
 const GID='216663799';
 const MESES=['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
 const FILTROS=['unidade','origem','vig','projeto','sprazo','status'];
-let ALL=[],VIGS=[],tableDim='unidade',tblSort='total',chPrazo=null,chConcl=null;
+let ALL=[],VIGS=[],tableDim='unidade',tblSort='total',chPrazo=null,chConcl=null,BASE_FIRST=null,PRESENT=[];
+// janela do gráfico: 12 meses a partir do 1º mês COM dados; meses selecionados fora da janela também entram
+function buildVigs(){
+  if(!BASE_FIRST){VIGS=[];return;}
+  const base=[],keys=new Set();
+  for(let i=0;i<12;i++){const d=new Date(BASE_FIRST.getFullYear(),BASE_FIRST.getMonth()+i,1);base.push(d);keys.add(vigKeyN(d));}
+  const sel=getMsValues('ms-vig');
+  if(sel.length)PRESENT.forEach(d=>{if(sel.includes(vigLbl(d))&&!keys.has(vigKeyN(d))){base.push(d);keys.add(vigKeyN(d));}});
+  VIGS=base.sort((a,b)=>vigKeyN(a)-vigKeyN(b));
+}
 
 function parseD(v){if(!v)return null;const m=String(v).match(/^Date\((\d+),(\d+),(\d+)/);if(m)return new Date(+m[1],+m[2],+m[3]);return null;}
 function vigLbl(d){return d?MESES[d.getMonth()]+'/'+String(d.getFullYear()).slice(2):'';}
@@ -225,6 +234,7 @@ function temporal(canvasId,ref,getPct){
 // ── Atualizar (chamado pelos filtros) ──
 function atualizar(){
   if(!ALL.length)return;
+  buildVigs(); // janela 12m a partir do 1º dado + meses selecionados fora
   const f=ALL.filter(o=>passa(o));
   const g=metrics(f);
   const eT=document.getElementById('h-total');eT.textContent=pct(g.total);eT.style.color=band(g.total);
@@ -257,16 +267,16 @@ async function carregar(){
     const rows=await fetchTab();
     const normU=u=>String(u||'').trim().replace(/\s*\([^)]*\)\s*$/,'').trim();
     ALL=rows.slice(1).filter(r=>r[0]).map(r=>{const vigD=parseD(r[1]),prazoD=parseD(r[7]);const o={origem:String(r[0]||'').trim(),vigD,vig:vigLbl(vigD),unidade:normU(r[2]),projeto:String(r[3]||'').trim(),prazoD,status:String(r[8]||'').trim()};o.concl=categConcl(o.status);o.sprazo=statusPrazo(o);return o;});
-    // últimos 12 meses (terminando no mês mais recente com dados)
+    // 12 meses a partir do 1º mês com dados (preenche conforme entram dados)
     const vm=new Map();ALL.forEach(o=>{if(o.vigD)vm.set(vigKeyN(o.vigD),o.vigD);});
-    const present=[...vm.values()].sort((a,b)=>vigKeyN(a)-vigKeyN(b));
-    const last=present[present.length-1]||new Date();
-    VIGS=[];for(let i=11;i>=0;i--)VIGS.push(new Date(last.getFullYear(),last.getMonth()-i,1)); // últimos 12 meses
+    PRESENT=[...vm.values()].sort((a,b)=>vigKeyN(a)-vigKeyN(b));
+    BASE_FIRST=PRESENT[0]||new Date();
+    buildVigs();
     // filtros (sem auto-seleção)
     const uniq=k=>[...new Set(ALL.map(o=>o[k]).filter(v=>v!==''&&v!=null))].sort();
     buildMsFilter('ms-unidade',uniq('unidade'));
     buildMsFilter('ms-origem',uniq('origem'));
-    const vigItems=present.map(d=>vigLbl(d));
+    const vigItems=PRESENT.map(d=>vigLbl(d));
     const vw=document.getElementById('ms-vig');if(vigItems.length)vw._sel=new Set([vigItems[vigItems.length-1]]); // auto último mês (padrão)
     buildMsFilter('ms-vig',vigItems);
     buildMsFilter('ms-projeto',uniq('projeto'));
