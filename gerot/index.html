@@ -128,11 +128,13 @@ function atualizar(){
   // filtros: unidade/bloco/tipo filtram linhas; vigência seleciona o mês (padrão: último)
   const f=ALL.filter(o=>['unidade','bloco','tipo'].every(fl=>{const sel=getMsValues('ms-'+fl);return sel.length===0||sel.includes(String(o[fl]));}));
   const selVig=getMsValues('ms-vig');
-  const cands=(selVig.length?VIGS.filter(d=>selVig.includes(vigCol(d))):VIGS.slice());
-  const selD=cands.length?cands.sort((a,b)=>vigKeyN(b)-vigKeyN(a))[0]:(VIGS[VIGS.length-1]||null);
+  // período = todas as vigências selecionadas (a coluna do período é a MÉDIA delas); YTD ancorado na mais recente
+  const perDates=(selVig.length?VIGS.filter(d=>selVig.includes(vigCol(d))):VIGS.slice()).sort((a,b)=>vigKeyN(a)-vigKeyN(b));
+  const selD=perDates.length?perDates[perDates.length-1]:(VIGS[VIGS.length-1]||null);
   if(!selD){tbl.innerHTML='<div class="loading">Sem dados</div>';return;}
+  const perKeys=new Set(perDates.map(vigKeyN));
   const ytd=VIGS.filter(d=>d.getFullYear()===selD.getFullYear()&&d.getMonth()<=selD.getMonth());
-  const subEl=document.getElementById('tbl-sub');if(subEl)subEl.textContent=vigCol(selD);
+  const subEl=document.getElementById('tbl-sub');if(subEl)subEl.textContent=perDates.length<=1?vigCol(selD):`${vigCol(perDates[0])} – ${vigCol(selD)} · média de ${perDates.length} vigências`;
   const rowKey=o=>o.bloco+'||'+o.kpi+'||'+o.un;
   const order=[],seen=new Set();f.forEach(o=>{const k=rowKey(o);if(!seen.has(k)){seen.add(k);order.push({bloco:o.bloco,kpi:o.kpi,un:o.un,tipo:o.tipo,key:k});}});
   // agrupa por bloco mantendo a ordem (célula do bloco mesclada via rowspan)
@@ -141,7 +143,7 @@ function atualizar(){
   let html='<table><thead><tr class="cols"><th class="lft">Bloco</th><th class="lft">KPI</th><th>Un.</th><th>Meta</th><th>Real</th><th>% de Ating.</th><th class="sep-l">% Ating. YTD</th></tr></thead><tbody>';
   blocks.forEach(b=>{
     b.rows.forEach((row,i)=>{
-      const mr=f.filter(o=>rowKey(o)===row.key&&vigKeyN(o.vigD)===vigKeyN(selD));
+      const mr=f.filter(o=>rowKey(o)===row.key&&perKeys.has(vigKeyN(o.vigD)));
       const meta=avg(mr.map(o=>o.meta)),real=avg(mr.map(o=>o.real)),atg=avg(mr.map(o=>o.atg));
       const yr=f.filter(o=>rowKey(o)===row.key&&ytd.some(d=>vigKeyN(d)===vigKeyN(o.vigD)));
       const atgY=avg(yr.map(o=>o.atg));
