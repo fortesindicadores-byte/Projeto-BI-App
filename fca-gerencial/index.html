@@ -208,11 +208,13 @@ function temporal(canvasId,ref,getPct){
   const data=VIGS.map(d=>getPct(metrics(ALL.filter(o=>passa(o,'vig')&&o.vig===vigLbl(d)))));
   const selVig=getMsValues('ms-vig');
   const on=VIGS.map(d=>selVig.length===0||selVig.includes(vigLbl(d)));
-  const colors=data.map((v,i)=>bandRgba(v,on[i]?.9:.2));
-  const grid={color:isLight?'rgba(0,0,0,.07)':'rgba(255,255,255,.06)'};
-  const tick={color:isLight?'#444':'#94A3B8',font:{family:'Montserrat',size:10}};
+  const hasFocus=selVig.length>0;
+  const bg=data.map((v,i)=>v==null?'transparent':bandRgba(v,hasFocus?(on[i]?.85:.2):.65));
+  const bc=data.map(v=>v==null?'transparent':band(v));
+  const grid={color:isLight?'rgba(0,0,0,.08)':'rgba(255,255,255,.06)'};
+  const tick={color:isLight?'#444':'#94A3B8',font:{family:'Montserrat',size:11}};
   if(ref.c)ref.c.destroy();
-  ref.c=new Chart(document.getElementById(canvasId),{type:'bar',data:{labels,datasets:[{data,backgroundColor:colors,_on:on,borderRadius:4,maxBarThickness:46}]},plugins:[barLabels],options:{responsive:true,maintainAspectRatio:false,layout:{padding:{top:22}},plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>Math.round(c.raw)+'%'}}},scales:{x:{grid:{display:false},ticks:tick},y:{min:0,max:100,grid,ticks:{...tick,callback:v=>v+'%'}}}}});
+  ref.c=new Chart(document.getElementById(canvasId),{type:'bar',data:{labels,datasets:[{data,backgroundColor:bg,borderColor:bc,borderWidth:1,_on:hasFocus?on:VIGS.map(()=>true),borderRadius:3,maxBarThickness:46}]},plugins:[barLabels],options:{responsive:true,maintainAspectRatio:false,layout:{padding:{top:22}},plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>Math.round(c.raw)+'%'}}},scales:{x:{grid,ticks:tick},y:{min:0,max:100,grid,ticks:{...tick,callback:v=>v+'%'}}}}});
 }
 
 // ── Atualizar (chamado pelos filtros) ──
