@@ -60,6 +60,11 @@ body.light-mode::after{background:linear-gradient(180deg,rgba(240,240,240,.85) 0
 .green-note{margin-top:14px;font-size:11px;color:var(--text2);line-height:1.55;max-width:760px;background:rgba(16,185,129,.08);border:1px solid rgba(16,185,129,.25);border-radius:8px;padding:11px 14px;}
 .green-note b{color:#34D399;font-weight:700;}
 .green-note .gn-tag{display:inline-block;font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:.6px;color:#0C1017;background:#34D399;border-radius:4px;padding:2px 8px;margin-right:8px;}
+.saldo-floresta{display:inline-flex;align-items:center;gap:14px;margin-top:14px;background:linear-gradient(135deg,rgba(16,185,129,.16),rgba(16,185,129,.04));border:1px solid rgba(16,185,129,.4);border-radius:10px;padding:11px 18px;}
+.saldo-floresta .sf-ic{font-size:26px;line-height:1;}
+.saldo-floresta .sf-lbl{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.7px;color:var(--text2);}
+.saldo-floresta .sf-num{font-size:24px;font-weight:800;line-height:1.1;}
+.saldo-floresta .sf-desc{font-size:10px;color:var(--text2);max-width:300px;line-height:1.45;border-left:1px solid rgba(255,255,255,.12);padding-left:14px;}
 .charts-row{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:24px;}
 .chart-card{background:rgba(20,27,38,.55);border:1px solid rgba(255,255,255,.07);border-radius:8px;padding:18px 18px 14px;backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);box-shadow:0 2px 12px rgba(0,0,0,.25);}
 .chart-title{font-size:15px;font-weight:800;color:var(--text);text-transform:uppercase;letter-spacing:.5px;}
@@ -212,6 +217,7 @@ body.light-mode .chart-card,body.light-mode .tbl-section{background:#FFFFFF!impo
         <div class="hero-delta">Δ YTD<b id="h-ytd-v">—</b></div>
         <div class="hero-delta">Δ YTD %<b id="h-ytd-p">—</b></div>
       </div>
+      <div class="saldo-floresta" id="saldo-floresta" style="display:none"></div>
       <div class="green-note" id="green-note"></div>
     </div>
   </section>
@@ -547,6 +553,23 @@ function renderHero(active,ytd){
   const eYv=document.getElementById('h-ytd-v'),eYp=document.getElementById('h-ytd-p');
   if(eYv){eYv.textContent=deltaY!=null?tonD(deltaY):'—';colI(eYv,deltaY>0);}
   if(eYp){eYp.textContent=pct(deltaYP);colI(eYp,deltaYP>0);}
+
+  // Saldo Floresta (YTD): 1 árvore por tonelada acima/abaixo da meta remunerada
+  const sf=document.getElementById('saldo-floresta');
+  if(sf){
+    if(deltaY==null){sf.style.display='none';}
+    else{
+      sf.style.display='inline-flex';
+      const arvY=Math.round(Math.abs(deltaY)); // 1 árvore / tonelada do Δ
+      const devendo=deltaY>0;
+      const cor=devendo?'var(--red)':'#34D399';
+      const estado=devendo?'a plantar (acima da meta)':'à frente da meta (crédito)';
+      sf.innerHTML=`<span class="sf-ic">🌳</span>`+
+        `<div><div class="sf-lbl">Saldo Floresta · YTD</div>`+
+        `<div class="sf-num" style="color:${cor}">${arvY.toLocaleString('pt-BR')} árvores</div></div>`+
+        `<div class="sf-desc">${estado} · 1 árvore por tonelada de CO² acima do remunerado · Programa Iniciativa Verde</div>`;
+    }
+  }
 
   // Selo ambiental: equivalência ilustrativa da emissão realizada em árvores
   const gn=document.getElementById('green-note');
