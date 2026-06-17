@@ -51,6 +51,10 @@ tbody td.bloco{text-align:left;font-weight:700;color:var(--text);vertical-align:
 tbody td.kpi{text-align:left;color:var(--text);min-width:240px;white-space:normal;}
 tbody td.un{text-align:center;color:var(--text2);}
 tbody tr.bloco-start td{border-top:1px solid rgba(255,255,255,.14);}
+tbody td.bloco{vertical-align:middle;border-right:1px solid rgba(255,255,255,.08);}
+tbody tr.ic-row td{background:rgba(255,255,255,.05);}
+body.light-mode tbody td.bloco{border-right-color:rgba(0,0,0,.08);}
+body.light-mode tbody tr.ic-row td{background:rgba(0,0,0,.045);}
 .atg{font-weight:800;color:#0C1017;border-radius:4px;padding:3px 8px;display:inline-block;min-width:46px;text-align:center;}
 .loading{text-align:center;color:var(--text3);padding:40px;}
 body.light-mode .main{background:#F0F0F0;--text:#1a1a1a;--text2:#444444;--text3:#666666;color:var(--text);}body.light-mode .hero-sep{background:rgba(0,0,0,.18)!important;color:rgba(0,0,0,.2)!important;}
@@ -130,16 +134,22 @@ function atualizar(){
   const ytd=VIGS.filter(d=>d.getFullYear()===selD.getFullYear()&&d.getMonth()<=selD.getMonth());
   const subEl=document.getElementById('tbl-sub');if(subEl)subEl.textContent=vigCol(selD);
   const rowKey=o=>o.bloco+'||'+o.kpi+'||'+o.un;
-  const order=[],seen=new Set();f.forEach(o=>{const k=rowKey(o);if(!seen.has(k)){seen.add(k);order.push({bloco:o.bloco,kpi:o.kpi,un:o.un,key:k});}});
+  const order=[],seen=new Set();f.forEach(o=>{const k=rowKey(o);if(!seen.has(k)){seen.add(k);order.push({bloco:o.bloco,kpi:o.kpi,un:o.un,tipo:o.tipo,key:k});}});
+  // agrupa por bloco mantendo a ordem (célula do bloco mesclada via rowspan)
+  const blocks=[];const bmap=new Map();
+  order.forEach(r=>{if(!bmap.has(r.bloco)){const arr=[];bmap.set(r.bloco,arr);blocks.push({bloco:r.bloco,rows:arr});}bmap.get(r.bloco).push(r);});
   let html='<table><thead><tr class="cols"><th class="lft">Bloco</th><th class="lft">KPI</th><th>Un.</th><th>Meta</th><th>Real</th><th>% de Ating.</th><th class="sep-l">% Ating. YTD</th></tr></thead><tbody>';
-  let lastB=null;
-  order.forEach(row=>{
-    const nb=row.bloco!==lastB;lastB=row.bloco;
-    const mr=f.filter(o=>rowKey(o)===row.key&&vigKeyN(o.vigD)===vigKeyN(selD));
-    const meta=avg(mr.map(o=>o.meta)),real=avg(mr.map(o=>o.real)),atg=avg(mr.map(o=>o.atg));
-    const yr=f.filter(o=>rowKey(o)===row.key&&ytd.some(d=>vigKeyN(d)===vigKeyN(o.vigD)));
-    const atgY=avg(yr.map(o=>o.atg));
-    html+=`<tr class="${nb?'bloco-start':''}"><td class="bloco">${nb?row.bloco:''}</td><td class="kpi">${row.kpi}</td><td class="un">${row.un||''}</td><td>${num(meta,2)}</td><td>${num(real,2)}</td><td>${atgCell(atg)}</td><td class="sep-l">${atgCell(atgY)}</td></tr>`;
+  blocks.forEach(b=>{
+    b.rows.forEach((row,i)=>{
+      const mr=f.filter(o=>rowKey(o)===row.key&&vigKeyN(o.vigD)===vigKeyN(selD));
+      const meta=avg(mr.map(o=>o.meta)),real=avg(mr.map(o=>o.real)),atg=avg(mr.map(o=>o.atg));
+      const yr=f.filter(o=>rowKey(o)===row.key&&ytd.some(d=>vigKeyN(d)===vigKeyN(o.vigD)));
+      const atgY=avg(yr.map(o=>o.atg));
+      const cls=[i===0?'bloco-start':'',row.tipo==='IC'?'ic-row':''].filter(Boolean).join(' ');
+      html+=`<tr class="${cls}">`;
+      if(i===0)html+=`<td class="bloco" rowspan="${b.rows.length}">${b.bloco}</td>`;
+      html+=`<td class="kpi">${row.kpi}</td><td class="un">${row.un||''}</td><td>${num(meta,2)}</td><td>${num(real,2)}</td><td>${atgCell(atg)}</td><td class="sep-l">${atgCell(atgY)}</td></tr>`;
+    });
   });
   html+='</tbody></table>';
   tbl.innerHTML=order.length?html:'<div class="loading">Sem dados com os filtros</div>';
