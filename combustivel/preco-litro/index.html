@@ -486,13 +486,15 @@ function getYtdVigs(f){
 
 // ── AGREGAÇÃO ──
 function aggRows(rows){
-  let sumLitros=0,sumRSxL=0,sumRem=0,cnt=0;
+  let sumLitros=0,sumTotalRS=0,sumRemxL=0;
   rows.forEach(r=>{
-    const lit=+(r[CL.litros]||0),realP=+(r[CL.real]||0),rem=+(r[CL.rem]||0);
-    sumLitros+=lit;if(realP>0)sumRSxL+=realP*lit;if(rem>0){sumRem+=rem;cnt++;}
+    const lit=+(r[CL.litros]||0),tot=+(r[CL.totalRS]||0),rem=+(r[CL.rem]||0);
+    sumLitros+=lit;
+    if(tot>0)sumTotalRS+=tot;            // TOTAS R$ (valor total abastecido)
+    if(rem>0)sumRemxL+=rem*lit;          // R$/L Rem × litros (para ponderar)
   });
-  const remAvg=cnt>0?sumRem/cnt:null;                 // R$/L Rem = média simples
-  const realWt=sumLitros>0?sumRSxL/sumLitros:null;    // R$/L Real = Σ(R$/L Real × Litros) / ΣLitros (ponderado por litros)
+  const remAvg=sumLitros>0?sumRemxL/sumLitros:null;   // R$/L Rem ponderado pela participação dos litros
+  const realWt=sumLitros>0?sumTotalRS/sumLitros:null; // R$/L Real = TOTAS R$ / Litros (média ponderada)
   return{remAvg,realWt,sumLitros};
 }
 function calcImpacto(agg){
