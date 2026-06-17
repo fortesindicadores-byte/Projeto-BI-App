@@ -194,22 +194,27 @@ function atualizar(){
 function renderTable(){
   const tbl=document.getElementById('tbl');
   const selVig=getMsValues('ms-vig');
-  const cands=selVig.length?VIGS.filter(d=>selVig.includes(vigLbl(d))):VIGS.slice();
-  const selD=cands.length?cands.sort((a,b)=>vigKeyN(b)-vigKeyN(a))[0]:(VIGS[VIGS.length-1]||null);
+  // período = vigências selecionadas (coluna Ating./Pontos = MÉDIA delas, igual ao YTD); YTD ancorado na mais recente
+  const perDates=(selVig.length?VIGS.filter(d=>selVig.includes(vigLbl(d))):VIGS.slice()).sort((a,b)=>vigKeyN(a)-vigKeyN(b));
+  const selD=perDates.length?perDates[perDates.length-1]:(VIGS[VIGS.length-1]||null);
   if(!selD){tbl.innerHTML='<div class="loading">Sem dados</div>';return;}
+  const perKeys=new Set(perDates.map(vigKeyN));
   const ytd=VIGS.filter(d=>d.getFullYear()===selD.getFullYear()&&d.getMonth()<=selD.getMonth());
+  const avgNN=a=>{const f=a.filter(v=>v!=null);return f.length?f.reduce((s,v)=>s+v,0)/f.length:null;};
   const indOrder=[],seen=new Set();ALL.forEach(o=>{if(!seen.has(o.indicador)){seen.add(o.indicador);indOrder.push(o);}});
   const atgColor=v=>v==null?'var(--text3)':(v>=100?'var(--green)':'var(--red)');
-  const subEl=document.getElementById('tbl-sub');if(subEl)subEl.textContent=vigLbl(selD).toUpperCase();
+  const subEl=document.getElementById('tbl-sub');if(subEl)subEl.textContent=perDates.length<=1?vigLbl(selD).toUpperCase():`${vigLbl(perDates[0]).toUpperCase()} – ${vigLbl(selD).toUpperCase()} · MÉDIA`;
   let html='<table><thead><tr class="cols"><th class="lft">Indicador</th><th>Peso</th><th class="lft">Descrição</th><th class="lft">Regra de Atingimento</th><th>Un.</th><th>Meta</th><th>Real</th><th>Ating.</th><th>Pontos</th><th class="sep-l">Ating. YTD</th><th>Pontos YTD</th></tr></thead><tbody>';
   indOrder.forEach(base=>{
     const ind=base.indicador;
-    const cur=ALL.find(x=>x.indicador===ind&&vigKeyN(x.vigD)===vigKeyN(selD));
+    const per=ALL.filter(x=>x.indicador===ind&&perKeys.has(vigKeyN(x.vigD)));
+    const pMeta=avgNN(per.map(o=>o.meta)),pReal=avgNN(per.map(o=>o.real)),pAtg=avgNN(per.map(o=>o.atg));
+    const pPts=per.length?per.reduce((s,o)=>s+(o.pontos||0),0)/per.length:null;
     const yr=ALL.filter(x=>x.indicador===ind&&ytd.some(d=>vigKeyN(d)===vigKeyN(x.vigD)));
-    const yrA=yr.filter(o=>o.atg!=null);const atgY=yrA.length?yrA.reduce((s,o)=>s+o.atg,0)/yrA.length:null;
+    const atgY=avgNN(yr.map(o=>o.atg));
     const ptsY=yr.length?yr.reduce((s,o)=>s+(o.pontos||0),0)/yr.length:null;
     html+=`<tr><td class="lft ind">${ind}</td><td>${n1(base.peso)}</td><td class="lft desc">${(base.desc||'').replace(/\n/g,'<br>')}</td><td class="lft regra">${(base.regra||'').replace(/\n/g,'<br>')}</td><td class="un">${base.un||''}</td>`;
-    if(cur){html+=`<td>${n1(cur.meta)}</td><td>${n1(cur.real)}</td><td style="color:${atgColor(cur.atg)};font-weight:700">${pctI(cur.atg)}</td><td><span class="pts">${n1(cur.pontos)}</span></td>`;}else{html+='<td>-</td><td>-</td><td>-</td><td>-</td>';}
+    if(per.length){html+=`<td>${n1(pMeta)}</td><td>${n1(pReal)}</td><td style="color:${atgColor(pAtg)};font-weight:700">${pctI(pAtg)}</td><td><span class="pts">${n1(pPts)}</span></td>`;}else{html+='<td>-</td><td>-</td><td>-</td><td>-</td>';}
     html+=`<td class="sep-l" style="color:${atgColor(atgY)};font-weight:700">${pctI(atgY)}</td><td><span class="pts">${n1(ptsY)}</span></td>`;
     html+='</tr>';
   });
