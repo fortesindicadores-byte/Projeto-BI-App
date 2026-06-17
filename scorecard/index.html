@@ -99,6 +99,7 @@ body.light-mode tbody tr+tr td{border-top-color:rgba(0,0,0,.05);}
 <script>
 const SRC={
   ics:'https://docs.google.com/spreadsheets/d/1xGl1Xrk2sPS9zWghEuecFMNBHwmeLiZ02U-QpO8cDPY/gviz/tq?sheet='+encodeURIComponent('Consolidado ICs'),
+  dre:'https://docs.google.com/spreadsheets/d/1qcTy2ppLCGBKKqZCxCYWCTL9kTAuWfHBMyBfWJOyih8/gviz/tq?sheet='+encodeURIComponent('Consolidado DRE'),
   km:'https://docs.google.com/spreadsheets/d/1wCoRGsvOgmIvfLW4F9Sxr-5AX9Go-aFlRVjrQ_B2ilM/gviz/tq?sheet='+encodeURIComponent('Dispersão de km'),
   dpo:'https://docs.google.com/spreadsheets/d/1oW3mss0pXVI6gaDU2z5cDAKvW40LWHCQXpanqSvb12o/gviz/tq?sheet=DPO',
   fca:'https://docs.google.com/spreadsheets/d/1oW3mss0pXVI6gaDU2z5cDAKvW40LWHCQXpanqSvb12o/gviz/tq?gid=216663799'
@@ -119,6 +120,9 @@ function pct1(v){return v==null||!isFinite(v)?'—':v.toFixed(1)+'%';}
 function n1(v){return v==null||!isFinite(v)?'—':Number(v).toLocaleString('pt-BR',{minimumFractionDigits:1,maximumFractionDigits:1});}
 // farol p/ indicadores "maior = melhor" (%): ≥85 verde, ≥70 ambar, <70 vermelho
 function band(v){return v==null?'':v>=85?'g':v>=70?'a':'r';}
+// farol "menor = melhor" (atingimento vs remunerado: ≤100% gastou/rodou dentro = bom)
+function bandLow(v){return v==null?'':v<=100?'g':v<=103?'a':'r';}
+function sumAtt(rows,perKeys){let rem=0,real=0,has=false;rows.forEach(o=>{if(perKeys.has(o.vk)){rem+=o.rem;real+=o.real;has=true;}});return has&&rem?real/rem*100:null;}
 function cellBg(cls){return cls==='g'?'rgba(59,179,59,.20)':cls==='a'?'rgba(244,161,0,.20)':cls==='r'?'rgba(255,102,102,.18)':'transparent';}
 function cellFg(cls){return cls==='g'?'#3BB33B':cls==='a'?'#F4A100':cls==='r'?'#FF6666':'var(--text3)';}
 
@@ -161,15 +165,15 @@ function atualizar(){
   let cards=IC.map((d,i)=>({lbl:d.l,val:avgIC(i),fmt:'pct'}));
   // cross-painel (nível empresa, ignora filtro de unidade pois usam outra nomenclatura)
   const yr=selD.getFullYear(),mi=selD.getMonth();
-  if(XPANEL.fca){const v=fcaAderAte(XPANEL.fca,yr,mi);cards.push({lbl:'Aderência FCA',val:v,fmt:'pct',xp:1});}
-  if(XPANEL.disp){const v=XPANEL.disp[vigKeyN(selD)];cards.push({lbl:'Dispersão de km (YTD)',val:v,fmt:'pctlow',xp:1});}
-  if(XPANEL.dpo){const v=XPANEL.dpo.frac*100;cards.push({lbl:'DPO/VPO Sustentável',val:v,fmt:'pct',xp:1,meta:XPANEL.dpo.sem?XPANEL.dpo.sem+' · '+XPANEL.dpo.below+'/'+XPANEL.dpo.tot+' abaixo N3':''});}
+  // Atingimento Financeiro e KM = Real/Remunerado (≤100% = melhor), nível empresa
+  if(XPANEL.dre){cards.push({lbl:'Atingimento Financeiro',val:sumAtt(XPANEL.dre,perKeys),low:1,xp:1,meta:'Real / Remunerado'});}
+  if(XPANEL.km){cards.push({lbl:'Atingimento KM',val:sumAtt(XPANEL.km,perKeys),low:1,xp:1,meta:'Real / Remunerado'});}
+  if(XPANEL.fca){cards.push({lbl:'Aderência FCA',val:fcaAderAte(XPANEL.fca,yr,mi),xp:1,meta:'nível empresa'});}
+  if(XPANEL.dpo){cards.push({lbl:'DPO/VPO Sustentável',val:XPANEL.dpo.frac*100,xp:1,meta:XPANEL.dpo.sem?XPANEL.dpo.sem+' · '+XPANEL.dpo.below+'/'+XPANEL.dpo.tot+' abaixo N3':'nível empresa'});}
   const cardsHtml=cards.map(c=>{
-    let cls,disp;
-    if(c.fmt==='pctlow'){ // menor melhor (dispersão, meta 5%)
-      disp=c.val==null?'—':c.val.toFixed(1)+'%';cls=c.val==null?'':(c.val<=5?'g':c.val<=6?'a':'r');
-    }else{disp=c.val==null?'—':Math.round(c.val)+'%';cls=band(c.val);}
-    return `<div class="kpi ${cls}"><div class="kpi-lbl">${c.lbl}${c.xp?' ·':''}</div><div class="kpi-val ${cls}">${disp}</div>${c.meta?`<div class="kpi-meta">${c.meta}</div>`:(c.xp?'<div class="kpi-meta">nível empresa</div>':'')}</div>`;
+    const cls=c.low?bandLow(c.val):band(c.val);
+    const disp=c.val==null?'—':(c.low?c.val.toFixed(1):Math.round(c.val))+'%';
+    return `<div class="kpi ${cls}"><div class="kpi-lbl">${c.lbl}</div><div class="kpi-val ${cls}">${disp}</div>${c.meta?`<div class="kpi-meta">${c.meta}</div>`:''}</div>`;
   }).join('');
   document.getElementById('cards').innerHTML=cardsHtml||'<div class="loading">Sem dados</div>';
 
@@ -196,9 +200,10 @@ async function carregar(){
   try{
     const icRows=await gviz(SRC.ics);
     // cross-painel: best-effort (não bloqueia se falhar)
-    const [kmR,dpoR,fcaR]=await Promise.all([gviz(SRC.km).catch(()=>null),gviz(SRC.dpo).catch(()=>null),gviz(SRC.fca).catch(()=>null)]);
+    const [dreR,kmR,dpoR,fcaR]=await Promise.all([gviz(SRC.dre).catch(()=>null),gviz(SRC.km).catch(()=>null),gviz(SRC.dpo).catch(()=>null),gviz(SRC.fca).catch(()=>null)]);
     XPANEL={};
-    if(kmR)try{XPANEL.disp=compDisp(kmR);}catch(e){}
+    if(dreR)try{XPANEL.dre=dreR.filter(r=>parseD(r[9])).map(r=>({vk:vigKeyN(parseD(r[9])),rem:r[1]!=null?+r[1]:0,real:r[2]!=null?+r[2]:0}));}catch(e){}
+    if(kmR)try{XPANEL.km=kmR.filter(r=>parseD(r[0])).map(r=>({vk:vigKeyN(parseD(r[0])),rem:r[31]!=null?+r[31]:0,real:r[32]!=null?+r[32]:0}));}catch(e){}
     if(dpoR)try{XPANEL.dpo=compDPO(dpoR);}catch(e){}
     if(fcaR)try{XPANEL.fca=compFCA(fcaR);}catch(e){}
     ICS=icRows.filter(r=>r[0]&&r[1]&&parseD(r[0])).map(r=>{const vigD=parseD(r[0]);return{vigD,unidade:String(r[1]).trim(),ic:IC.map(d=>r[d.c]!=null?+r[d.c]:null),pont:r[13]!=null?+r[13]:null};});
