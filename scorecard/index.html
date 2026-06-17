@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Scorecard</title>
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <style>
 :root{--bg:#0C1017;--card:#141B26;--border:#1E2D40;--orange:#F97316;--blue:#38BDF8;--text:#F1F5F9;--text2:#94A3B8;--text3:#475569;--green:#3BB33B;--red:#FF6666;--amber:#F4A100;}
 *{margin:0;padding:0;box-sizing:border-box;}
@@ -49,6 +50,11 @@ body{background:radial-gradient(ellipse at 10% 25%,rgba(249,115,22,.06) 0%,trans
 .kpi-val.g{color:var(--green);}.kpi-val.a{color:var(--amber);}.kpi-val.r{color:var(--red);}
 .kpi-meta{font-size:9px;color:var(--text3);margin-top:2px;}
 .tbl-section{background:rgba(20,27,38,.55);border:1px solid rgba(255,255,255,.07);border-radius:8px;padding:14px 4px 12px;backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);box-shadow:0 2px 12px rgba(0,0,0,.25);}
+.chart-card{background:rgba(20,27,38,.55);border:1px solid rgba(255,255,255,.07);border-radius:8px;padding:16px 18px;backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);box-shadow:0 2px 12px rgba(0,0,0,.25);}
+.chart-head h2{font-size:15px;font-weight:800;color:var(--text);}
+.chart-sub{font-size:10px;color:var(--text2);text-transform:uppercase;letter-spacing:.5px;margin-top:2px;margin-bottom:8px;}
+.chart-wrap{position:relative;height:300px;}
+body.light-mode .chart-card{background:rgba(128,128,128,.14)!important;border-color:transparent!important;box-shadow:none!important;--text:#1a1a1a;--text2:#444444;}
 .tbl-head{padding:0 12px 10px;}.tbl-head h2{font-size:15px;font-weight:800;color:var(--text);}.tbl-sub{font-size:10px;color:var(--text2);text-transform:uppercase;letter-spacing:.5px;margin-top:2px;}
 .tbl-wrap{overflow-x:auto;}
 table{width:100%;border-collapse:collapse;font-size:12px;min-width:1100px;}
@@ -92,13 +98,14 @@ body.light-mode tbody tr+tr td{border-top-color:rgba(0,0,0,.05);}
   <div class="legend"><span><i style="background:var(--green)"></i>≥ 85% — Adequado</span><span><i style="background:var(--amber)"></i>70–85% — Atenção</span><span><i style="background:var(--red)"></i>&lt; 70% — Crítico</span></div>
   <h2 class="sec-title">Indicadores Principais</h2>
   <div class="cards" id="cards"><div class="loading">Carregando…</div></div>
-  <div class="tbl-section"><div class="tbl-head"><h2>Ranking de Unidades</h2><div class="tbl-sub" id="tbl-sub"></div></div><div class="tbl-wrap"><div id="tbl"><div class="loading">Carregando…</div></div></div></div>
+  <div class="chart-card"><div class="chart-head"><h2>Pontuação Geral · Mensal</h2><div class="chart-sub" id="ch-sub"></div></div><div class="chart-wrap"><canvas id="ch-temp"></canvas></div></div>
 </main>
 
 <script>
 const SRC={
   ics:'https://docs.google.com/spreadsheets/d/1xGl1Xrk2sPS9zWghEuecFMNBHwmeLiZ02U-QpO8cDPY/gviz/tq?sheet='+encodeURIComponent('Consolidado ICs'),
   dre:'https://docs.google.com/spreadsheets/d/1qcTy2ppLCGBKKqZCxCYWCTL9kTAuWfHBMyBfWJOyih8/gviz/tq?sheet='+encodeURIComponent('Consolidado DRE'),
+  kml:'https://docs.google.com/spreadsheets/d/1ZZdvG_RK5cTBLdPl3TWCbNeqw-Y4fTYwWsQV4w-e__A/gviz/tq',
   km:'https://docs.google.com/spreadsheets/d/1wCoRGsvOgmIvfLW4F9Sxr-5AX9Go-aFlRVjrQ_B2ilM/gviz/tq?sheet='+encodeURIComponent('Dispersão de km'),
   dpo:'https://docs.google.com/spreadsheets/d/1oW3mss0pXVI6gaDU2z5cDAKvW40LWHCQXpanqSvb12o/gviz/tq?sheet=DPO',
   fca:'https://docs.google.com/spreadsheets/d/1oW3mss0pXVI6gaDU2z5cDAKvW40LWHCQXpanqSvb12o/gviz/tq?gid=216663799'
@@ -110,7 +117,7 @@ const IC=[
   {c:6,l:'Checklist T1/T2'},{c:7,l:'Checklist Apoio'},{c:8,l:'Conformidade Frota'},
   {c:9,l:'Stress Test Cam.'},{c:10,l:'Stress Test Emp.'},{c:11,l:'SLA Atendimento'},{c:12,l:'Aderência Conf.'}
 ];
-let ICS=[],VIGS=[],XPANEL={};
+let ICS=[],VIGS=[],XPANEL={},chT=null;
 
 function parseD(v){if(v==null)return null;const m=String(v).match(/Date\((\d+),(\d+),(\d+)/);return m?new Date(+m[1],+m[2],+m[3]):null;}
 function vigKeyN(d){return d?d.getFullYear()*100+d.getMonth():0;}
@@ -122,6 +129,11 @@ function band(v){return v==null?'':v>=85?'g':v>=70?'a':'r';}
 // farol "menor = melhor" (atingimento vs remunerado: ≤100% gastou/rodou dentro = bom)
 function bandLow(v){return v==null?'':v<=100?'g':v<=103?'a':'r';}
 function sumAtt(rows,perKeys){let rem=0,real=0,has=false;rows.forEach(o=>{if(perKeys.has(o.vk)){rem+=o.rem;real+=o.real;has=true;}});return has&&rem?real/rem*100:null;}
+// R$/km atingimento = (custoReal/kmReal) / (custoRem/kmRem)
+function rkmAtt(perKeys){let cr=0,cR=0,kr=0,kR=0;(XPANEL.dre||[]).forEach(o=>{if(perKeys.has(o.vk)){cr+=o.rem;cR+=o.real;}});(XPANEL.km||[]).forEach(o=>{if(perKeys.has(o.vk)){kr+=o.rem;kR+=o.real;}});if(!kR||!kr||!cr)return null;const rem=cr/kr;return rem?(cR/kR)/rem*100:null;}
+// R$/L atingimento = (totalRS/litros) / (R$/L rem ponderado)
+function rlAtt(perKeys){let lit=0,tot=0,remxl=0;(XPANEL.kml||[]).forEach(o=>{if(perKeys.has(o.vk)){lit+=o.lit;tot+=o.tot;remxl+=o.remxl;}});if(!lit)return null;const rem=remxl/lit;return rem?(tot/lit)/rem*100:null;}
+const barLabels={id:'bl',afterDatasetsDraw(c){const ds=c.data.datasets[0],m=c.getDatasetMeta(0),ctx=c.ctx;ctx.save();ctx.font='700 11px Montserrat';ctx.fillStyle=document.body.classList.contains('light-mode')?'#1a1a1a':'#F1F5F9';ctx.textAlign='center';ctx.textBaseline='bottom';m.data.forEach((b,i)=>{const v=ds.data[i];if(v==null)return;if(ds._on&&!ds._on[i])return;ctx.fillText(n1(v),b.x,b.y-4);});ctx.restore();}};
 function cellBg(cls){return cls==='g'?'rgba(59,179,59,.20)':cls==='a'?'rgba(244,161,0,.20)':cls==='r'?'rgba(255,102,102,.18)':'transparent';}
 function cellFg(cls){return cls==='g'?'#3BB33B':cls==='a'?'#F4A100':cls==='r'?'#FF6666':'var(--text3)';}
 
@@ -151,7 +163,6 @@ function atualizar(){
   const perKeys=new Set(cands.map(vigKeyN));
   const rows=ICS.filter(o=>perKeys.has(vigKeyN(o.vigD))&&(selUni.length===0||selUni.includes(o.unidade)));
   const periodo=cands.length<=1?vigLbl(selD).toUpperCase():`${vigLbl(cands[0]).toUpperCase()} – ${vigLbl(selD).toUpperCase()} · MÉDIA`;
-  document.getElementById('tbl-sub').textContent=periodo+' · ranqueado pela NOTA (média dos indicadores) · Pontuação = score do Programa';
 
   // ── Hero: Pontuação geral (média das linhas filtradas) ──
   const pts=rows.map(o=>o.pont).filter(v=>v!=null);
@@ -168,6 +179,8 @@ function atualizar(){
   // Atingimento Financeiro e KM = Real/Remunerado (≤100% = melhor), nível empresa
   if(XPANEL.dre){cards.push({lbl:'Atingimento Financeiro',val:sumAtt(XPANEL.dre,perKeys),low:1,xp:1,meta:'Real / Remunerado'});}
   if(XPANEL.km){cards.push({lbl:'Atingimento KM',val:sumAtt(XPANEL.km,perKeys),low:1,xp:1,meta:'Real / Remunerado'});}
+  if(XPANEL.dre&&XPANEL.km){cards.push({lbl:'Atingimento R$/km',val:rkmAtt(perKeys),low:1,xp:1,meta:'Real / Remunerado'});}
+  if(XPANEL.kml){cards.push({lbl:'Atingimento R$/L',val:rlAtt(perKeys),low:1,xp:1,meta:'Real / Remunerado'});}
   if(XPANEL.fca){cards.push({lbl:'Aderência FCA',val:fcaAderAte(XPANEL.fca,yr,mi),xp:1,meta:'nível empresa'});}
   if(XPANEL.dpo){cards.push({lbl:'DPO/VPO Sustentável',val:XPANEL.dpo.pct,xp:1,meta:XPANEL.dpo.sem?XPANEL.dpo.sem+' · '+XPANEL.dpo.ok+'/'+XPANEL.dpo.tot+' ≥ N3':'nível empresa'});}
   const cardsHtml=cards.map(c=>{
@@ -177,24 +190,29 @@ function atualizar(){
   }).join('');
   document.getElementById('cards').innerHTML=cardsHtml||'<div class="loading">Sem dados</div>';
 
-  // ── Ranking de unidades (média no período por unidade) ──
-  const unis=[...new Set(rows.map(o=>o.unidade))];
-  const data=unis.map(u=>{
-    const ur=rows.filter(o=>o.unidade===u);
-    const ic=IC.map((d,i)=>{const vs=ur.map(o=>o.ic[i]).filter(v=>v!=null);return vs.length?vs.reduce((a,b)=>a+b,0)/vs.length*100:null;});
-    const icv=ic.filter(v=>v!=null).map(v=>Math.min(100,v));const nota=icv.length?icv.reduce((a,b)=>a+b,0)/icv.length:null; // Nota Scorecard = média dos indicadores (limitados a 100%)
-    const pv=ur.map(o=>o.pont).filter(v=>v!=null);const pont=pv.length?pv.reduce((a,b)=>a+b,0)/pv.length:null; // Pontuação = score do Programa
-    return {u,ic,pont,nota};
-  }).sort((a,b)=>(b.nota==null?-1:b.nota)-(a.nota==null?-1:a.nota)); // ranking pela Nota do Scorecard
-  let html='<table><thead><tr class="cols"><th class="lft">#</th><th class="lft">Unidade</th>'+IC.map(d=>`<th>${d.l}</th>`).join('')+'<th class="scol">Pontuação</th><th>Nota</th></tr></thead><tbody>';
-  data.forEach((r,idx)=>{
-    html+=`<tr><td class="lft rank">${idx+1}º</td><td class="lft uni">${r.u}</td>`;
-    r.ic.forEach(v=>{html+=`<td style="color:${cellFg(band(v))};font-weight:700">${v==null?'—':Math.round(v)+'%'}</td>`;});
-    html+=`<td class="scol" style="color:${cellFg(band(r.pont))};font-weight:700">${r.pont==null?'—':n1(r.pont)}</td>`;
-    html+=`<td style="color:${cellFg(band(r.nota))};font-weight:800">${r.nota==null?'—':n1(r.nota)}</td></tr>`;
-  });
-  html+='</tbody></table>';
-  document.getElementById('tbl').innerHTML=data.length?html:'<div class="loading">Sem dados com os filtros</div>';
+  // ── Gráfico temporal (Pontuação Geral mensal, jan→dez) ──
+  document.getElementById('ch-sub').textContent='Pontuação média da frota · '+periodo;
+  chartTemporal(selD);
+}
+
+function chartTemporal(selD){
+  if(typeof Chart==='undefined'||!selD)return;
+  const isLight=document.body.classList.contains('light-mode');
+  const selUni=getMsValues('ms-uni'),selVig=getMsValues('ms-vig');
+  const yr=selD.getFullYear();
+  const labels=[],data=[],on=[];
+  for(let m=0;m<12;m++){const lbl=MESES[m]+'/'+String(yr).slice(2);labels.push(lbl);const vk=yr*100+m;const rs=ICS.filter(o=>vigKeyN(o.vigD)===vk&&(selUni.length===0||selUni.includes(o.unidade)));const pv=rs.map(o=>o.pont).filter(v=>v!=null);data.push(pv.length?pv.reduce((a,b)=>a+b,0)/pv.length:null);on.push(selVig.length===0||selVig.includes(lbl));}
+  const hasFocus=selVig.length>0;
+  const bg=data.map((v,i)=>{if(v==null)return 'transparent';const a=hasFocus?(on[i]?.9:.22):.8;const cl=band(v);const rgb=cl==='g'?'59,179,59':cl==='a'?'244,161,0':'255,102,102';return `rgba(${rgb},${a})`;});
+  const bc=data.map(v=>v==null?'transparent':cellFg(band(v)));
+  const refC=isLight?'#000':'#F1F5F9';
+  const grid={color:isLight?'rgba(0,0,0,.08)':'rgba(255,255,255,.06)'};
+  const tick={color:isLight?'#444':'#94A3B8',font:{family:'Montserrat',size:11}};
+  if(chT)chT.destroy();
+  chT=new Chart(document.getElementById('ch-temp'),{data:{labels,datasets:[
+    {type:'bar',data,backgroundColor:bg,borderColor:bc,borderWidth:1,_on:hasFocus?on:labels.map(()=>true),borderRadius:3,maxBarThickness:42,order:2},
+    {type:'line',label:'Adequado 85',data:labels.map(()=>85),borderColor:refC,borderWidth:2,borderDash:[6,4],pointRadius:0,tension:0,order:1}
+  ]},plugins:[barLabels],options:{responsive:true,maintainAspectRatio:false,layout:{padding:{top:22}},plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>c.dataset.type==='line'?'Adequado 85':n1(c.raw)+' pts'}}},scales:{x:{grid,ticks:tick},y:{min:0,max:100,grid,ticks:{...tick}}}}});
 }
 
 async function carregar(){
@@ -202,10 +220,11 @@ async function carregar(){
   try{
     const icRows=await gviz(SRC.ics);
     // cross-painel: best-effort (não bloqueia se falhar)
-    const [dreR,kmR,dpoR,fcaR]=await Promise.all([gviz(SRC.dre).catch(()=>null),gviz(SRC.km).catch(()=>null),gviz(SRC.dpo).catch(()=>null),gviz(SRC.fca).catch(()=>null)]);
+    const [dreR,kmR,dpoR,fcaR,kmlR]=await Promise.all([gviz(SRC.dre).catch(()=>null),gviz(SRC.km).catch(()=>null),gviz(SRC.dpo).catch(()=>null),gviz(SRC.fca).catch(()=>null),gviz(SRC.kml).catch(()=>null)]);
     XPANEL={};
     if(dreR)try{XPANEL.dre=dreR.filter(r=>parseD(r[9])).map(r=>({vk:vigKeyN(parseD(r[9])),rem:r[1]!=null?+r[1]:0,real:r[2]!=null?+r[2]:0}));}catch(e){}
     if(kmR)try{XPANEL.km=kmR.filter(r=>parseD(r[0])).map(r=>({vk:vigKeyN(parseD(r[0])),rem:r[31]!=null?+r[31]:0,real:r[32]!=null?+r[32]:0}));}catch(e){}
+    if(kmlR)try{XPANEL.kml=kmlR.filter(r=>parseD(r[0])).map(r=>{const lit=r[23]!=null?+r[23]:0;return{vk:vigKeyN(parseD(r[0])),lit,tot:r[25]!=null?+r[25]:0,remxl:(r[8]!=null?+r[8]:0)*lit};});}catch(e){}
     if(dpoR)try{XPANEL.dpo=compDPO(dpoR);}catch(e){}
     if(fcaR)try{XPANEL.fca=compFCA(fcaR);}catch(e){}
     ICS=icRows.filter(r=>r[0]&&r[1]&&parseD(r[0])).map(r=>{const vigD=parseD(r[0]);return{vigD,unidade:String(r[1]).trim(),ic:IC.map(d=>r[d.c]!=null?+r[d.c]:null),pont:r[13]!=null?+r[13]:null};});
