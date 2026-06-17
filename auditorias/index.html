@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Auditorias</title>
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#0C1017;--card:#141B26;--border:#1E2D40;--orange:#F97316;--text:#F1F5F9;--text2:#94A3B8;--text3:#475569;}
+*{margin:0;padding:0;box-sizing:border-box;}
+body{background:radial-gradient(ellipse at 10% 25%,rgba(249,115,22,.06) 0%,transparent 50%),radial-gradient(ellipse at 90% 75%,rgba(56,189,248,.05) 0%,transparent 50%),var(--bg);color:var(--text);font-family:'Montserrat',-apple-system,sans-serif;font-size:13px;min-height:100vh;}
+.header{background:rgba(12,16,23,.75);border-bottom:1px solid rgba(255,255,255,.07);padding:12px 24px;display:flex;align-items:center;gap:12px;position:sticky;top:0;z-index:100;backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);box-shadow:0 2px 12px rgba(0,0,0,.3);}
+.brand h1{font-size:17px;font-weight:800;color:var(--orange);}
+.brand p{font-size:10px;color:var(--text2);margin-top:2px;}
+.header-right{margin-left:auto;display:flex;align-items:center;gap:8px;}
+.status-badge{font-size:9px;color:var(--text);background:rgba(249,115,22,.15);border:1px solid rgba(249,115,22,.3);border-radius:4px;padding:3px 9px;white-space:nowrap;}
+.btn{background:rgba(249,115,22,.15);border:1px solid rgba(249,115,22,.3);border-radius:5px;padding:5px 9px;cursor:pointer;color:var(--orange);display:flex;align-items:center;text-decoration:none;}
+.btn:hover{background:rgba(249,115,22,.32);}
+.main{padding:24px;}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:20px;max-width:1200px;margin:0 auto;}
+.tbl-card{background:rgba(20,27,38,.55);border:1px solid rgba(255,255,255,.07);border-radius:10px;padding:18px 20px 20px;backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);box-shadow:0 2px 12px rgba(0,0,0,.25);}
+.tbl-card h2{font-size:15px;font-weight:800;color:var(--text);text-transform:uppercase;letter-spacing:.6px;margin-bottom:14px;}
+table{width:100%;border-collapse:separate;border-spacing:4px;}
+th{font-size:10px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:.5px;padding:6px 4px;text-align:center;}
+th.uni{text-align:left;}
+td{text-align:center;font-size:11px;font-weight:700;padding:8px 6px;border-radius:5px;white-space:nowrap;}
+td.uni{text-align:left;color:var(--text);font-weight:600;background:rgba(255,255,255,.04);padding-left:10px;}
+td.empty{background:rgba(255,255,255,.03);color:var(--text3);}
+.legend{display:flex;flex-wrap:wrap;gap:10px;margin-top:14px;}
+.legend span{display:flex;align-items:center;gap:5px;font-size:9px;color:var(--text2);}
+.legend i{width:12px;height:12px;border-radius:3px;display:inline-block;}
+.loading{text-align:center;color:var(--text3);padding:30px;font-size:12px;}
+@media(max-width:820px){.grid{grid-template-columns:1fr;}.main{padding:14px;}}
+</style>
+</head>
+<body>
+<header class="header">
+  <div class="brand">
+    <h1>Auditorias</h1>
+    <p>Consolidado Geral — Demarco &amp; DPO</p>
+  </div>
+  <div class="header-right">
+    <a href="../" class="btn" title="Voltar ao Hub"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg></a>
+    <button class="btn" onclick="carregar()" title="Atualizar"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/></svg></button>
+    <span class="status-badge" id="status">Carregando…</span>
+  </div>
+</header>
+
+<main class="main">
+  <div class="grid">
+    <div class="tbl-card"><h2>Demarco</h2><div id="tbl-demarco"><div class="loading">Carregando…</div></div><div class="legend" id="leg-demarco"></div></div>
+    <div class="tbl-card"><h2>DPO</h2><div id="tbl-dpo"><div class="loading">Carregando…</div></div><div class="legend" id="leg-dpo"></div></div>
+  </div>
+</main>
+
+<script>
+const SHEET_ID='1oW3mss0pXVI6gaDU2z5cDAKvW40LWHCQXpanqSvb12o';
+
+// Mapas de cor por nível — fiéis às planilhas (esquemas diferentes por aba)
+const CORES={
+  Demarco:{
+    'Nível 1':{bg:'#1565C0',fg:'#fff'},
+    'Nível 2':{bg:'#90B8DE',fg:'#0C1017'},
+    'Nível 3':{bg:'#DCE9F5',fg:'#0C1017'},
+    'Nível 4':{bg:'#EA4335',fg:'#fff'},
+    'Nível 5':{bg:'#F4A100',fg:'#0C1017'},
+  },
+  DPO:{
+    'Nível 0':{bg:'#1A1A1A',fg:'#fff'},
+    'Nível 1':{bg:'#B0B0B0',fg:'#0C1017'},
+    'Nível 2':{bg:'#F4A100',fg:'#0C1017'},
+    'Nível 3':{bg:'#5FA84F',fg:'#fff'},
+    'Nível 4':{bg:'#6FA8DC',fg:'#0C1017'},
+  }
+};
+
+function fetchTab(tab){
+  return new Promise((resolve,reject)=>{
+    const fn='_gvAud'+Math.floor(Math.random()*1e9);
+    const s=document.createElement('script');
+    const cleanup=()=>{try{delete window[fn];s.remove();}catch(e){}};
+    window[fn]=resp=>{cleanup();try{
+      if(resp.status!=='ok')throw new Error(resp.errors?.[0]?.message||'erro');
+      const rows=resp.table.rows.map(r=>(r.c||[]).map(c=>c&&c.v!=null?String(c.v).trim():''));
+      resolve(rows);
+    }catch(e){reject(e);}};
+    s.onerror=()=>{cleanup();reject(new Error('sem acesso'));};
+    s.src=`https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?sheet=${encodeURIComponent(tab)}&tqx=out:json;responseHandler:${fn}`;
+    document.head.appendChild(s);
+  });
+}
+
+function render(tab,rows,elId,legId){
+  if(!rows.length){document.getElementById(elId).innerHTML='<div class="loading">Sem dados</div>';return;}
+  const head=rows[0];                 // UNIDADE | 1H25 | 2H25 | 1H26 | 2H26
+  const body=rows.slice(1).filter(r=>r[0]);
+  const mapa=CORES[tab]||{};
+  let html='<table><thead><tr>';
+  head.forEach((h,i)=>{html+=`<th class="${i===0?'uni':''}">${h||''}</th>`;});
+  html+='</tr></thead><tbody>';
+  body.forEach(r=>{
+    html+='<tr>';
+    r.forEach((v,i)=>{
+      if(i===0){html+=`<td class="uni">${v}</td>`;return;}
+      const c=mapa[v];
+      if(c)html+=`<td style="background:${c.bg};color:${c.fg}">${v}</td>`;
+      else html+=`<td class="empty">${v||'—'}</td>`;
+    });
+    html+='</tr>';
+  });
+  html+='</tbody></table>';
+  document.getElementById(elId).innerHTML=html;
+  // legenda
+  let leg='';
+  Object.keys(mapa).forEach(k=>{leg+=`<span><i style="background:${mapa[k].bg}"></i>${k}</span>`;});
+  document.getElementById(legId).innerHTML=leg;
+}
+
+async function carregar(){
+  document.getElementById('status').textContent='Carregando…';
+  try{
+    const [dem,dpo]=await Promise.all([fetchTab('Demarco'),fetchTab('DPO')]);
+    render('Demarco',dem,'tbl-demarco','leg-demarco');
+    render('DPO',dpo,'tbl-dpo','leg-dpo');
+    const now=new Date();
+    document.getElementById('status').textContent=`Atualizado ${now.toLocaleDateString('pt-BR')} ${now.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})}`;
+  }catch(e){console.error(e);document.getElementById('status').textContent='Erro ao carregar';}
+}
+carregar();
+</script>
+</body>
+</html>
