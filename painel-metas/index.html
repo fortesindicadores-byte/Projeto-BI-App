@@ -58,7 +58,7 @@ tbody td.ind{font-weight:700;min-width:150px;white-space:normal;}
 tbody td.desc,tbody td.regra{color:var(--text2);font-size:11px;white-space:normal;min-width:200px;line-height:1.4;}
 .pts{background:#0a0f18;border-radius:4px;padding:4px 10px;font-weight:800;display:inline-block;min-width:42px;text-align:center;}
 .loading{text-align:center;color:var(--text3);padding:40px;}
-body.light-mode .main{background:#F0F0F0;--text:#1a1a1a;--text2:#444444;--text3:#666666;color:var(--text);}
+body.light-mode .main{background:#F0F0F0;--text:#1a1a1a;--text2:#444444;--text3:#666666;color:var(--text);}body.light-mode .hero-sep{background:rgba(0,0,0,.18)!important;color:rgba(0,0,0,.2)!important;}
 body.light-mode .card,body.light-mode .tbl-section{background:rgba(128,128,128,.14)!important;border:none!important;box-shadow:none!important;--text:#1a1a1a;--text2:#444444;--text3:#555555;}
 body.light-mode tbody td{border-bottom-color:rgba(0,0,0,.06);}
 body.light-mode .pts{background:#1a1a1a;color:#fff;}
@@ -136,7 +136,9 @@ function compDisp(rows){const mo={};rows.forEach(r=>{const d=parseD(r[0]);if(!d)
 function compDPO(rows){const hdr=rows[0]||[];let li=-1;for(let i=hdr.length-1;i>=1;i--){if(rows.slice(1).some(r=>/Nível/i.test(String(r[i]||'')))){li=i;break;}}if(li<0)return{frac:0,below:null,sem:null};let below=0;rows.slice(1).forEach(r=>{const m=String(r[li]||'').match(/Nível\s*(\d+)/i);if(m&&+m[1]<3)below++;});return{frac:below===0?1:below===1?.5:0,below,sem:String(hdr[li]||'')};}
 // FCA: registros (vigKeyN, concluída, vencida); aderência = (%NoPrazo + %Concluída)/2
 function compFCArecs(rows){const today=new Date();today.setHours(0,0,0,0);const recs=[];rows.forEach(r=>{const d=parseD(r[1]);if(!d)return;const st=String(r[8]||'');const prazo=parseD(r[7]);const concl=/conclu/i.test(st)?'C':/andamento/i.test(st)?'A':'N';const venc=concl==='C'?false:(prazo&&prazo<today);recs.push({k:vigKeyN(d),concl,venc});});return recs;}
-function fcaAderAteMesAnterior(recs,year,monthIdx){const sel=recs.filter(r=>Math.floor(r.k/100)===year&&(r.k%100)<monthIdx);if(!sel.length)return null;const tt=sel.length,noP=sel.filter(r=>!r.venc).length,cc=sel.filter(r=>r.concl==='C').length;return((noP/tt*100)+(cc/tt*100))/2;}
+// Aderência = % no prazo (dentro do prazo, concluída ou não = 1; vencida = 0), acumulado de jan até M-2.
+// M-2 porque as ações de M e M-1 ainda são recentes demais para julgar. Jan e fev ficam sem dado (sem M-2 válido).
+function fcaAderM2(recs,year,monthIdx){const sel=recs.filter(r=>Math.floor(r.k/100)===year&&(r.k%100)<monthIdx-1);if(!sel.length)return null;const tt=sel.length,noP=sel.filter(r=>!r.venc).length;return noP/tt*100;}
 
 const barLabels={id:'bl',afterDatasetsDraw(c){const ds=c.data.datasets[0],m=c.getDatasetMeta(0),ctx=c.ctx;ctx.save();ctx.font='700 11px Montserrat';ctx.fillStyle=document.body.classList.contains('light-mode')?'#1a1a1a':'#F1F5F9';ctx.textAlign='center';ctx.textBaseline='bottom';m.data.forEach((b,i)=>{const v=ds.data[i];if(v==null)return;if(ds._on&&!ds._on[i])return;ctx.fillText(n1(v),b.x,b.y-4);});ctx.restore();}};
 
@@ -244,7 +246,7 @@ async function carregar(){
         o.atg=meta?o.real/meta*100:o.real;
         o.pontos=dpo.frac*peso;
       }else if(tipo==='fca'){          // maior = melhor · conta só até M-1
-        o.real=fcaAderAteMesAnterior(fcaRecs,yr,mIdx);
+        o.real=fcaAderM2(fcaRecs,yr,mIdx);
         o.atg=(o.real!=null&&meta)?o.real/meta*100:null;
         o.pontos=bandHigher(o.atg)*peso;
       } // 'custo' e 'other' mantêm o que veio da planilha
