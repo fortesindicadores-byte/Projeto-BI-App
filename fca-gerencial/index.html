@@ -41,6 +41,13 @@ body{background:radial-gradient(ellipse at 10% 25%,rgba(249,115,22,.06) 0%,trans
 .hero-leg{display:flex;gap:26px;margin-top:18px;flex-wrap:wrap;}
 .hero-leg span{display:flex;align-items:center;gap:7px;font-size:12px;color:var(--text);font-weight:600;}
 .hero-leg i{width:13px;height:13px;border-radius:3px;display:inline-block;}
+.kpi-row{display:grid;grid-template-columns:repeat(6,1fr);gap:12px;margin-bottom:20px;}
+.kpi{background:rgba(20,27,38,.55);border:1px solid rgba(255,255,255,.07);border-radius:8px;padding:12px 14px;backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);box-shadow:0 2px 12px rgba(0,0,0,.25);}
+.kpi-lbl{display:flex;align-items:center;gap:7px;font-size:10px;font-weight:700;color:var(--text);text-transform:uppercase;letter-spacing:.5px;}
+.kpi-lbl .fdot{width:11px;height:11px;border-radius:50%;flex-shrink:0;box-shadow:0 0 6px currentColor;}
+.kpi-val{font-size:26px;font-weight:800;margin-top:6px;}
+@media(max-width:900px){.kpi-row{grid-template-columns:repeat(3,1fr);}}
+@media(max-width:520px){.kpi-row{grid-template-columns:repeat(2,1fr);}}
 .charts-row{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:18px;}
 .chart-title{font-size:14px;font-weight:800;color:var(--text);text-transform:uppercase;letter-spacing:.5px;margin-bottom:12px;}
 .chart-wrap{position:relative;height:240px;}
@@ -89,6 +96,15 @@ body.light-mode .card,body.light-mode .tbl-card{background:rgba(128,128,128,.14)
       <span><i style="background:var(--amber)"></i>≥ 70% e &lt; 85% — Atenção</span>
       <span><i style="background:var(--green)"></i>≥ 85% — Adequado</span>
     </div>
+  </section>
+
+  <section class="kpi-row">
+    <div class="kpi"><div class="kpi-lbl"><span class="fdot" style="background:#94A3B8;color:#94A3B8"></span>Total de Ações</div><div class="kpi-val" id="k-tt">—</div></div>
+    <div class="kpi"><div class="kpi-lbl"><span class="fdot" style="background:#3BB33B;color:#3BB33B"></span>Concluídas</div><div class="kpi-val" id="k-concl">—</div></div>
+    <div class="kpi"><div class="kpi-lbl"><span class="fdot" style="background:#F4A100;color:#F4A100"></span>Em Andamento</div><div class="kpi-val" id="k-andam">—</div></div>
+    <div class="kpi"><div class="kpi-lbl"><span class="fdot" style="background:#FF5252;color:#FF5252"></span>Não Iniciadas</div><div class="kpi-val" id="k-nini">—</div></div>
+    <div class="kpi"><div class="kpi-lbl"><span class="fdot" style="background:#3BB33B;color:#3BB33B"></span>No Prazo</div><div class="kpi-val" id="k-nop">—</div></div>
+    <div class="kpi"><div class="kpi-lbl"><span class="fdot" style="background:#FF5252;color:#FF5252"></span>Fora do Prazo</div><div class="kpi-val" id="k-venc">—</div></div>
   </section>
 
   <div class="charts-row">
@@ -167,7 +183,7 @@ function temporal(canvasId,chartRef,getPct){
   const grid={color:isLight?'rgba(0,0,0,.07)':'rgba(255,255,255,.06)'};
   const tick={color:isLight?'#444':'#94A3B8',font:{family:'Montserrat',size:10}};
   if(chartRef.c)chartRef.c.destroy();
-  chartRef.c=new Chart(document.getElementById(canvasId),{type:'bar',data:{labels,datasets:[{data,backgroundColor:colors,borderRadius:4,maxBarThickness:46}]},plugins:[targetLines,barLabels],options:{responsive:true,maintainAspectRatio:false,layout:{padding:{top:22}},plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>Math.round(c.raw)+'%'}}},scales:{x:{grid:{display:false},ticks:tick},y:{min:0,max:100,grid,ticks:{...tick,callback:v=>v+'%'}}}}});
+  chartRef.c=new Chart(document.getElementById(canvasId),{type:'bar',data:{labels,datasets:[{data,backgroundColor:colors,borderRadius:4,maxBarThickness:46}]},plugins:[barLabels],options:{responsive:true,maintainAspectRatio:false,layout:{padding:{top:22}},plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>Math.round(c.raw)+'%'}}},scales:{x:{grid:{display:false},ticks:tick},y:{min:0,max:100,grid,ticks:{...tick,callback:v=>v+'%'}}}}});
 }
 
 // ── Tabela ──
@@ -178,6 +194,8 @@ function render(){
   const eT=document.getElementById('h-total');eT.textContent=pct(g.total);eT.style.color=band(g.total);
   const eP=document.getElementById('h-prazo');eP.textContent=pct(g.pPrazo);eP.style.color=band(g.pPrazo);
   const eC=document.getElementById('h-concl');eC.textContent=pct(g.pConcl);eC.style.color=band(g.pConcl);
+  const setK=(id,v)=>{const e=document.getElementById(id);if(e)e.textContent=v.toLocaleString('pt-BR');};
+  setK('k-tt',g.tt);setK('k-concl',g.concl);setK('k-andam',g.andam);setK('k-nini',g.nini);setK('k-nop',g.noP);setK('k-venc',g.venc);
   temporal('ch-prazo',{get c(){return chPrazo;},set c(v){chPrazo=v;}},m=>m.pPrazo);
   temporal('ch-concl',{get c(){return chConcl;},set c(v){chConcl=v;}},m=>m.pConcl);
   renderTable(f);
