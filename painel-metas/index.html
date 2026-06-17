@@ -139,11 +139,11 @@ function chartMensal(){
 function chartIndicador(){
   const isLight=document.body.classList.contains('light-mode');
   const selVig=getMsValues('ms-vig');
-  const vigs=selVig.length?VIGS.filter(d=>selVig.includes(vigLbl(d))):[VIGS[VIGS.length-1]].filter(Boolean);
-  // agrega pontos por indicador nas vigências selecionadas (média se >1)
+  const vigs=selVig.length?VIGS.filter(d=>selVig.includes(vigLbl(d))):VIGS;
+  // MÉDIA dos pontos por indicador nas vigências selecionadas
   const indOrder=[],seen=new Set();
   ALL.forEach(o=>{if(!seen.has(o.indicador)){seen.add(o.indicador);indOrder.push(o.indicador);}});
-  const items=indOrder.map(ind=>{const rs=ALL.filter(o=>o.indicador===ind&&vigs.some(d=>vigKeyN(d)===vigKeyN(o.vigD)));const pts=rs.length?rs.reduce((s,o)=>s+(o.pontos||0),0)/ (selVig.length>1?vigs.length:1):0;const peso=rs.length?rs[0].peso:0;return{ind,pts,peso};}).filter(x=>x.peso>0);
+  const items=indOrder.map(ind=>{const rs=ALL.filter(o=>o.indicador===ind&&vigs.some(d=>vigKeyN(d)===vigKeyN(o.vigD)));const pts=rs.length?rs.reduce((s,o)=>s+(o.pontos||0),0)/rs.length:0;const peso=rs.length?rs[0].peso:(ALL.find(o=>o.indicador===ind)?.peso||0);return{ind,pts,peso};}).filter(x=>x.peso>0);
   const labels=items.map(x=>x.ind);
   const data=items.map(x=>+x.pts.toFixed(1));
   const bg=items.map(x=>{const r=x.peso?x.pts/x.peso:0;const c=r>=1?'#3BB33B':r>0?'#F4A100':'#FF6666';return c;});
@@ -157,8 +157,9 @@ function atualizar(){
   if(!ALL.length)return;
   const selVig=getMsValues('ms-vig');
   const vigs=selVig.length?VIGS.filter(d=>selVig.includes(vigLbl(d))):VIGS;
-  const sel=ALL.filter(o=>vigs.some(d=>vigKeyN(d)===vigKeyN(o.vigD)));
-  const total=sel.reduce((s,o)=>s+(o.pontos||0),0)/(selVig.length>1?vigs.length:1);
+  // Pontuação = MÉDIA das pontuações mensais (cada mês = soma dos pontos dos indicadores)
+  const monthScores=vigs.map(d=>ALL.filter(o=>vigKeyN(o.vigD)===vigKeyN(d)).reduce((s,o)=>s+(o.pontos||0),0));
+  const total=monthScores.length?monthScores.reduce((a,b)=>a+b,0)/monthScores.length:null;
   const eT=document.getElementById('h-total');eT.textContent=n1(total);eT.style.color=total>=META_PONTOS?'var(--green)':total>=70?'var(--amber)':'var(--red)';
   const lbl=selVig.length?selVig.join(', '):'todas as vigências';
   document.getElementById('h-sub').textContent=`de 100 pontos · meta ${META_PONTOS} · ${lbl}`;
