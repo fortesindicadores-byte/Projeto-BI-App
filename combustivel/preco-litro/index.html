@@ -494,7 +494,10 @@ function buildRemLookup(cols,rows){
   const fi=(tests)=>{for(let i=0;i<cols.length;i++){const lc=(cols[i]||'').toLowerCase();if(tests.some(t=>lc.includes(t)))return i;}return -1;};
   const fb=(idx,def)=>idx>=0?idx:def;
   const cProj=fb(fi(['unidade benner']),0);
-  const cVig =fb(fi(['vigência data','vigencia data']),3);
+  // Há DUAS colunas "Vigência Data" (C=texto, D=data). Detectar a que tem data de verdade (Date(...)).
+  let cVig=-1;
+  for(let i=0;i<cols.length;i++){const lc=(cols[i]||'').toLowerCase();if((lc.includes('vigência')||lc.includes('vigencia'))){const sv=rows.find(r=>r[i]!=null)?.[i];if(parseVig(sv)){cVig=i;break;}}}
+  if(cVig<0)cVig=3;
   const cPreco=fb(fi(['precooperadora','preco operadora']),22);
   const cFuel=fb(fi(['tipocombustivel','combustivel','combustível']),23);
   const L1=new Map(),L2=new Map();   // L1: proj|ym|fuel   L2: proj|ym (fallback)
