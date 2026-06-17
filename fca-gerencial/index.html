@@ -201,14 +201,14 @@ function metrics(rows){
 }
 
 // ── Gráfico temporal ──
-const barLabels={id:'bl',afterDatasetsDraw(c){const ds=c.data.datasets[0],m=c.getDatasetMeta(0),ctx=c.ctx;ctx.save();ctx.font='700 11px Montserrat';ctx.textAlign='center';ctx.textBaseline='bottom';m.data.forEach((b,i)=>{const v=ds.data[i];if(v==null)return;const on=!ds._on||ds._on[i];ctx.fillStyle=on?(document.body.classList.contains('light-mode')?'#1a1a1a':'#F1F5F9'):'rgba(140,140,140,.55)';ctx.fillText(Math.round(v)+'%',b.x,b.y-4);});ctx.restore();}};
+const barLabels={id:'bl',afterDatasetsDraw(c){const ds=c.data.datasets[0],m=c.getDatasetMeta(0),ctx=c.ctx;ctx.save();ctx.font='700 11px Montserrat';ctx.textAlign='center';ctx.textBaseline='bottom';ctx.fillStyle=document.body.classList.contains('light-mode')?'#1a1a1a':'#F1F5F9';m.data.forEach((b,i)=>{const v=ds.data[i];if(v==null)return;if(ds._on&&!ds._on[i])return;ctx.fillText(Math.round(v)+'%',b.x,b.y-4);});ctx.restore();}};
 function temporal(canvasId,ref,getPct){
   const isLight=document.body.classList.contains('light-mode');
   const labels=VIGS.map(d=>MESES[d.getMonth()]+'/'+String(d.getFullYear()).slice(2));
   const data=VIGS.map(d=>getPct(metrics(ALL.filter(o=>passa(o,'vig')&&o.vig===vigLbl(d)))));
   const selVig=getMsValues('ms-vig');
   const on=VIGS.map(d=>selVig.length===0||selVig.includes(vigLbl(d)));
-  const colors=data.map((v,i)=>bandRgba(v,on[i]?1:.18));
+  const colors=data.map((v,i)=>bandRgba(v,on[i]?.9:.2));
   const grid={color:isLight?'rgba(0,0,0,.07)':'rgba(255,255,255,.06)'};
   const tick={color:isLight?'#444':'#94A3B8',font:{family:'Montserrat',size:10}};
   if(ref.c)ref.c.destroy();
@@ -253,7 +253,8 @@ async function carregar(){
     // últimos 12 meses (terminando no mês mais recente com dados)
     const vm=new Map();ALL.forEach(o=>{if(o.vigD)vm.set(vigKeyN(o.vigD),o.vigD);});
     const present=[...vm.values()].sort((a,b)=>vigKeyN(a)-vigKeyN(b));
-    VIGS=present;  // só os meses que existem na base (sem padding vazio)
+    const last=present[present.length-1]||new Date();
+    VIGS=[];for(let i=11;i>=0;i--)VIGS.push(new Date(last.getFullYear(),last.getMonth()-i,1)); // últimos 12 meses
     // filtros (sem auto-seleção)
     const uniq=k=>[...new Set(ALL.map(o=>o[k]).filter(v=>v!==''&&v!=null))].sort();
     buildMsFilter('ms-unidade',uniq('unidade'));
