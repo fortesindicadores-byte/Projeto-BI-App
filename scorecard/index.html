@@ -42,7 +42,8 @@ body{background:radial-gradient(ellipse at 10% 25%,rgba(249,115,22,.06) 0%,trans
 .legend{display:flex;gap:14px;align-items:center;font-size:10px;color:var(--text2);margin-bottom:14px;flex-wrap:wrap;}
 .legend i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:5px;vertical-align:middle;}
 .sec-title{font-size:13px;font-weight:800;text-transform:uppercase;letter-spacing:.5px;color:var(--text);margin:0 0 12px;}
-.cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;margin-bottom:26px;}
+.cards{display:grid;grid-template-columns:repeat(9,minmax(0,1fr));gap:10px;margin-bottom:26px;}
+@media(max-width:1100px){.cards{grid-template-columns:repeat(6,1fr);}}
 .kpi{background:rgba(20,27,38,.55);border:1px solid rgba(255,255,255,.07);border-radius:8px;padding:12px 14px;backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);box-shadow:0 2px 12px rgba(0,0,0,.25);border-left:3px solid var(--text3);}
 .kpi.g{border-left-color:var(--green);}.kpi.a{border-left-color:var(--amber);}.kpi.r{border-left-color:var(--red);}
 .kpi-lbl{font-size:9.5px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:.4px;line-height:1.3;min-height:25px;}
@@ -106,6 +107,7 @@ const SRC={
   ics:'https://docs.google.com/spreadsheets/d/1xGl1Xrk2sPS9zWghEuecFMNBHwmeLiZ02U-QpO8cDPY/gviz/tq?sheet='+encodeURIComponent('Consolidado ICs'),
   dre:'https://docs.google.com/spreadsheets/d/1qcTy2ppLCGBKKqZCxCYWCTL9kTAuWfHBMyBfWJOyih8/gviz/tq?sheet='+encodeURIComponent('Consolidado DRE'),
   kml:'https://docs.google.com/spreadsheets/d/1ZZdvG_RK5cTBLdPl3TWCbNeqw-Y4fTYwWsQV4w-e__A/gviz/tq',
+  kmlEf:'https://docs.google.com/spreadsheets/d/1ZZdvG_RK5cTBLdPl3TWCbNeqw-Y4fTYwWsQV4w-e__A/gviz/tq?sheet='+encodeURIComponent('Km/L'),
   km:'https://docs.google.com/spreadsheets/d/1wCoRGsvOgmIvfLW4F9Sxr-5AX9Go-aFlRVjrQ_B2ilM/gviz/tq?sheet='+encodeURIComponent('Dispersão de km'),
   dpo:'https://docs.google.com/spreadsheets/d/1oW3mss0pXVI6gaDU2z5cDAKvW40LWHCQXpanqSvb12o/gviz/tq?sheet=DPO',
   fca:'https://docs.google.com/spreadsheets/d/1oW3mss0pXVI6gaDU2z5cDAKvW40LWHCQXpanqSvb12o/gviz/tq?gid=216663799'
@@ -133,6 +135,10 @@ function sumAtt(rows,perKeys){let rem=0,real=0,has=false;rows.forEach(o=>{if(per
 function rkmAtt(perKeys){let cr=0,cR=0,kr=0,kR=0;(XPANEL.dre||[]).forEach(o=>{if(perKeys.has(o.vk)){cr+=o.rem;cR+=o.real;}});(XPANEL.km||[]).forEach(o=>{if(perKeys.has(o.vk)){kr+=o.rem;kR+=o.real;}});if(!kR||!kr||!cr)return null;const rem=cr/kr;return rem?(cR/kR)/rem*100:null;}
 // R$/L atingimento = (totalRS/litros) / (R$/L rem ponderado)
 function rlAtt(perKeys){let lit=0,tot=0,remxl=0;(XPANEL.kml||[]).forEach(o=>{if(perKeys.has(o.vk)){lit+=o.lit;tot+=o.tot;remxl+=o.remxl;}});if(!lit)return null;const rem=remxl/lit;return rem?(tot/lit)/rem*100:null;}
+// Km/L (aba Km/L do painel): real = Σkm/Σlitros; rem = média simples do "Rem Médio" (col4) — igual ao painel
+function kmlAtt(perKeys){let km=0,lit=0,rs=0,cnt=0;(XPANEL.kmlEf||[]).forEach(o=>{if(perKeys.has(o.vk)){km+=o.km;lit+=o.lit;if(o.rem>0){rs+=o.rem;cnt++;}}});if(!lit||!cnt)return null;const rem=rs/cnt;return rem?(km/lit)/rem*100:null;}
+// FCA separado: % no prazo e % concluída (acumulado até o mês selecionado)
+function fcaSplit(recs,year,monthIdx){const sel=recs.filter(r=>Math.floor(r.k/100)===year&&(r.k%100)<=monthIdx);if(!sel.length)return{prazo:null,concl:null};const tt=sel.length;return{prazo:sel.filter(r=>!r.venc).length/tt*100,concl:sel.filter(r=>r.concl==='C').length/tt*100};}
 const barLabels={id:'bl',afterDatasetsDraw(c){const ds=c.data.datasets[0],m=c.getDatasetMeta(0),ctx=c.ctx;ctx.save();ctx.font='700 11px Montserrat';ctx.fillStyle=document.body.classList.contains('light-mode')?'#1a1a1a':'#F1F5F9';ctx.textAlign='center';ctx.textBaseline='bottom';m.data.forEach((b,i)=>{const v=ds.data[i];if(v==null)return;if(ds._on&&!ds._on[i])return;ctx.fillText(n1(v),b.x,b.y-4);});ctx.restore();}};
 function cellBg(cls){return cls==='g'?'rgba(59,179,59,.20)':cls==='a'?'rgba(244,161,0,.20)':cls==='r'?'rgba(255,102,102,.18)':'transparent';}
 function cellFg(cls){return cls==='g'?'#3BB33B':cls==='a'?'#F4A100':cls==='r'?'#FF6666':'var(--text3)';}
@@ -171,24 +177,37 @@ function atualizar(){
   const cP=band(pontGeral);eP.style.color=cellFg(cP);
   document.getElementById('h-sub').textContent=`de 100 pontos · ${selUni.length?selUni.length+' unidade(s)':rows.length?[...new Set(rows.map(o=>o.unidade))].length+' unidades':'—'} · ${periodo}`;
 
-  // ── Cards: média por IC (×100) + cross-painel ──
-  const avgIC=ci=>{const vs=rows.map(o=>o.ic[ci]).filter(v=>v!=null);return vs.length?vs.reduce((a,b)=>a+b,0)/vs.length*100:null;};
-  let cards=IC.map((d,i)=>({lbl:d.l,val:avgIC(i),fmt:'pct'}));
-  // cross-painel (nível empresa, ignora filtro de unidade pois usam outra nomenclatura)
+  // ── Cards: atingimento 0–100% (100% = bom). Custos/dispersão invertem (menos = melhor). ──
   const yr=selD.getFullYear(),mi=selD.getMonth();
-  // Atingimento Financeiro e KM = Real/Remunerado (≤100% = melhor), nível empresa
-  if(XPANEL.dre){cards.push({lbl:'Atingimento Financeiro',val:sumAtt(XPANEL.dre,perKeys),low:1,xp:1,meta:'Real / Remunerado'});}
-  if(XPANEL.km){cards.push({lbl:'Atingimento KM',val:sumAtt(XPANEL.km,perKeys),low:1,xp:1,meta:'Real / Remunerado'});}
-  if(XPANEL.dre&&XPANEL.km){cards.push({lbl:'Atingimento R$/km',val:rkmAtt(perKeys),low:1,xp:1,meta:'Real / Remunerado'});}
-  if(XPANEL.kml){cards.push({lbl:'Atingimento R$/L',val:rlAtt(perKeys),low:1,xp:1,meta:'Real / Remunerado'});}
-  if(XPANEL.fca){cards.push({lbl:'Aderência FCA',val:fcaAderAte(XPANEL.fca,yr,mi),xp:1,meta:'nível empresa'});}
-  if(XPANEL.dpo){cards.push({lbl:'DPO/VPO Sustentável',val:XPANEL.dpo.pct,xp:1,meta:XPANEL.dpo.sem?XPANEL.dpo.sem+' · '+XPANEL.dpo.ok+'/'+XPANEL.dpo.tot+' ≥ N3':'nível empresa'});}
-  const cardsHtml=cards.map(c=>{
-    const cls=c.low?bandLow(c.val):band(c.val);
-    const disp=c.val==null?'—':(c.low?c.val.toFixed(1):Math.round(c.val))+'%';
+  const cap=v=>v==null?null:Math.min(100,Math.max(0,v));
+  const inv=ratio=>(ratio==null||!ratio)?null:cap(10000/ratio); // lower-better: inverte (rem/real) e capa
+  const icAvg=i=>{const vs=rows.map(o=>o.ic[i]).filter(v=>v!=null);return vs.length?vs.reduce((a,b)=>a+b,0)/vs.length*100:null;};
+  const fcaS=XPANEL.fca?fcaSplit(XPANEL.fca,yr,mi):{prazo:null,concl:null};
+  const dpoMeta=XPANEL.dpo&&XPANEL.dpo.sem?XPANEL.dpo.sem+' · '+XPANEL.dpo.ok+'/'+XPANEL.dpo.tot+' ≥ N3':'nível empresa';
+  const cards=[
+    {lbl:'Custos Frota',         val:XPANEL.dre?inv(sumAtt(XPANEL.dre,perKeys)):null, meta:'Real / Remunerado'},
+    {lbl:'Disponibilidade',      val:cap(icAvg(0))},
+    {lbl:'DPO/VPO Sustentável',  val:XPANEL.dpo?cap(XPANEL.dpo.pct):null, meta:dpoMeta},
+    {lbl:'Preventivas',          val:cap(icAvg(1))},
+    {lbl:'Consumo Km/L',         val:XPANEL.kmlEf?cap(kmlAtt(perKeys)):null, meta:'Real / Remunerado'},
+    {lbl:'Aferições',            val:cap(icAvg(3))},
+    {lbl:'Checklist T1/T2',      val:cap(icAvg(4))},
+    {lbl:'Checklist Apoio',      val:cap(icAvg(5))},
+    {lbl:'Conformidade Frota',   val:cap(icAvg(6))},
+    {lbl:'Stress Test Cam.',     val:cap(icAvg(7))},
+    {lbl:'Stress Test Emp.',     val:cap(icAvg(8))},
+    {lbl:'SLA Atendimento',      val:cap(icAvg(9))},
+    {lbl:'CIVF',                 val:cap(icAvg(10))},
+    {lbl:'Atingimento KM',       val:XPANEL.km?inv(sumAtt(XPANEL.km,perKeys)):null, meta:'Real / Remunerado'},
+    {lbl:'R$/km',                val:(XPANEL.dre&&XPANEL.km)?inv(rkmAtt(perKeys)):null, meta:'Real / Remunerado'},
+    {lbl:'R$/L',                 val:XPANEL.kml?inv(rlAtt(perKeys)):null, meta:'Real / Remunerado'},
+    {lbl:'FCA Prazo',            val:cap(fcaS.prazo), meta:'nível empresa'},
+    {lbl:'FCA Conclusão',        val:cap(fcaS.concl), meta:'nível empresa'}
+  ];
+  document.getElementById('cards').innerHTML=cards.map(c=>{
+    const cls=band(c.val);const disp=c.val==null?'—':Math.round(c.val)+'%';
     return `<div class="kpi ${cls}"><div class="kpi-lbl">${c.lbl}</div><div class="kpi-val ${cls}">${disp}</div>${c.meta?`<div class="kpi-meta">${c.meta}</div>`:''}</div>`;
-  }).join('');
-  document.getElementById('cards').innerHTML=cardsHtml||'<div class="loading">Sem dados</div>';
+  }).join('')||'<div class="loading">Sem dados</div>';
 
   // ── Gráfico temporal (Pontuação Geral mensal, jan→dez) ──
   document.getElementById('ch-sub').textContent='Pontuação média da frota · '+periodo;
@@ -220,11 +239,12 @@ async function carregar(){
   try{
     const icRows=await gviz(SRC.ics);
     // cross-painel: best-effort (não bloqueia se falhar)
-    const [dreR,kmR,dpoR,fcaR,kmlR]=await Promise.all([gviz(SRC.dre).catch(()=>null),gviz(SRC.km).catch(()=>null),gviz(SRC.dpo).catch(()=>null),gviz(SRC.fca).catch(()=>null),gviz(SRC.kml).catch(()=>null)]);
+    const [dreR,kmR,dpoR,fcaR,kmlR,kmlEfR]=await Promise.all([gviz(SRC.dre).catch(()=>null),gviz(SRC.km).catch(()=>null),gviz(SRC.dpo).catch(()=>null),gviz(SRC.fca).catch(()=>null),gviz(SRC.kml).catch(()=>null),gviz(SRC.kmlEf).catch(()=>null)]);
     XPANEL={};
     if(dreR)try{XPANEL.dre=dreR.filter(r=>parseD(r[9])).map(r=>({vk:vigKeyN(parseD(r[9])),rem:r[1]!=null?+r[1]:0,real:r[2]!=null?+r[2]:0}));}catch(e){}
     if(kmR)try{XPANEL.km=kmR.filter(r=>parseD(r[0])).map(r=>({vk:vigKeyN(parseD(r[0])),rem:r[31]!=null?+r[31]:0,real:r[32]!=null?+r[32]:0}));}catch(e){}
     if(kmlR)try{XPANEL.kml=kmlR.filter(r=>parseD(r[0])).map(r=>{const lit=r[23]!=null?+r[23]:0;return{vk:vigKeyN(parseD(r[0])),lit,tot:r[25]!=null?+r[25]:0,remxl:(r[8]!=null?+r[8]:0)*lit};});}catch(e){}
+    if(kmlEfR)try{XPANEL.kmlEf=kmlEfR.filter(r=>parseD(r[0])).map(r=>({vk:vigKeyN(parseD(r[0])),km:r[22]!=null?+r[22]:0,lit:r[23]!=null?+r[23]:0,rem:r[4]!=null?+r[4]:0}));}catch(e){}
     if(dpoR)try{XPANEL.dpo=compDPO(dpoR);}catch(e){}
     if(fcaR)try{XPANEL.fca=compFCA(fcaR);}catch(e){}
     ICS=icRows.filter(r=>r[0]&&r[1]&&parseD(r[0])).map(r=>{const vigD=parseD(r[0]);return{vigD,unidade:String(r[1]).trim(),ic:IC.map(d=>r[d.c]!=null?+r[d.c]:null),pont:r[13]!=null?+r[13]:null};});
