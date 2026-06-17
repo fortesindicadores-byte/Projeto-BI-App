@@ -155,7 +155,10 @@ async function carregar(){
     buildMsFilter('ms-unidade',uniq('unidade').sort());
     buildMsFilter('ms-bloco',uniq('bloco'));
     const vigItems=[...new Set(ALL.filter(o=>o.vigD).map(o=>o.vig))].sort((a,b)=>{const pa=ALL.find(o=>o.vig===a).vigD,pb=ALL.find(o=>o.vig===b).vigD;return vigKeyN(pa)-vigKeyN(pb);});
-    const vw=document.getElementById('ms-vig');if(vigItems.length)vw._sel=new Set([vigItems[vigItems.length-1]]); // auto último mês
+    // auto: última vigência COM DADOS (real/ating preenchidos), não a última do calendário
+    const comDados=vigItems.filter(v=>ALL.some(o=>o.vig===v&&(o.real!=null||o.atg!=null)));
+    const base=comDados.length?comDados:vigItems;
+    const vw=document.getElementById('ms-vig');if(base.length)vw._sel=new Set([base[base.length-1]]);
     buildMsFilter('ms-vig',vigItems);
     buildMsFilter('ms-tipo',['IC','IV']);
     atualizar();
