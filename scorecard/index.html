@@ -226,11 +226,15 @@ function chartTemporal(selD){
   const refC=isLight?'#000':'#F1F5F9';
   const grid={color:isLight?'rgba(0,0,0,.08)':'rgba(255,255,255,.06)'};
   const tick={color:isLight?'#444':'#94A3B8',font:{family:'Montserrat',size:11}};
+  // eixo Y adaptável (inclui a linha 85), não fixo em 0
+  const vals=data.filter(v=>v!=null).concat([85]);
+  const dMin=vals.length?Math.min(...vals):0,dMax=vals.length?Math.max(...vals):100;
+  const yMin=Math.max(0,Math.floor((dMin-6)/5)*5),yMax=Math.min(100,Math.max(yMin+15,Math.ceil((dMax+4)/5)*5));
   if(chT)chT.destroy();
   chT=new Chart(document.getElementById('ch-temp'),{data:{labels,datasets:[
     {type:'bar',data,backgroundColor:bg,borderColor:bc,borderWidth:1,_on:hasFocus?on:labels.map(()=>true),borderRadius:3,maxBarThickness:42,order:2},
     {type:'line',label:'Adequado 85',data:labels.map(()=>85),borderColor:refC,borderWidth:2,borderDash:[6,4],pointRadius:0,tension:0,order:1}
-  ]},plugins:[barLabels],options:{responsive:true,maintainAspectRatio:false,layout:{padding:{top:22}},plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>c.dataset.type==='line'?'Adequado 85':n1(c.raw)+' pts'}}},scales:{x:{grid,ticks:tick},y:{min:0,max:100,grid,ticks:{...tick}}}}});
+  ]},plugins:[barLabels],options:{responsive:true,maintainAspectRatio:false,layout:{padding:{top:22}},plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>c.dataset.type==='line'?'Adequado 85':n1(c.raw)+' pts'}}},scales:{x:{grid,ticks:tick},y:{min:yMin,max:yMax,grid,ticks:{...tick}}}}});
 }
 
 async function carregar(){
