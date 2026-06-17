@@ -43,7 +43,8 @@ body{background:radial-gradient(ellipse at 10% 25%,rgba(249,115,22,.06) 0%,trans
 .card{background:rgba(20,27,38,.55);border:1px solid rgba(255,255,255,.07);border-radius:8px;padding:18px 20px;backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);box-shadow:0 2px 12px rgba(0,0,0,.25);}
 .chart-title{font-size:14px;font-weight:800;color:var(--text);text-transform:uppercase;letter-spacing:.5px;margin-bottom:12px;}
 .chart-wrap{position:relative;height:250px;}
-.tbl-section{background:rgba(20,27,38,.55);border:1px solid rgba(255,255,255,.07);border-radius:8px;padding:8px 4px 12px;backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);box-shadow:0 2px 12px rgba(0,0,0,.25);}
+.tbl-section{background:rgba(20,27,38,.55);border:1px solid rgba(255,255,255,.07);border-radius:8px;padding:14px 8px 12px;backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);box-shadow:0 2px 12px rgba(0,0,0,.25);}
+.tbl-head{padding:0 8px 10px;}.tbl-head h2{font-size:15px;font-weight:800;}.tbl-sub{font-size:10px;color:var(--text2);text-transform:uppercase;letter-spacing:.5px;margin-top:2px;}
 .tbl-wrap{overflow-x:auto;}
 table{width:100%;border-collapse:collapse;font-size:12px;min-width:1000px;}
 thead th{font-size:10px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:.5px;padding:8px 10px;white-space:nowrap;text-align:right;}
@@ -88,7 +89,7 @@ body.light-mode .pts{background:#1a1a1a;color:#fff;}
     <div class="card"><div class="chart-title">Pontuação · Mensal</div><div class="chart-wrap"><canvas id="ch-mensal"></canvas></div></div>
     <div class="card"><div class="chart-title">Pontuação por Indicador</div><div class="chart-wrap"><canvas id="ch-ind"></canvas></div></div>
   </div>
-  <div class="tbl-section"><div class="tbl-wrap"><div id="tbl"><div class="loading">Carregando…</div></div></div></div>
+  <div class="tbl-section"><div class="tbl-head"><h2>Indicadores</h2><div class="tbl-sub" id="tbl-sub"></div></div><div class="tbl-wrap"><div id="tbl"><div class="loading">Carregando…</div></div></div></div>
 </main>
 
 <script>
@@ -134,7 +135,7 @@ function chartMensal(){
   chM=new Chart(document.getElementById('ch-mensal'),{data:{labels,datasets:[
     {type:'bar',data,backgroundColor:bg,borderColor:bc,borderWidth:1,_on:hasFocus?on:VIGS.map(()=>true),borderRadius:3,maxBarThickness:46,order:2},
     {type:'line',label:'Meta 80%',data:metaLine,borderColor:remC,borderWidth:2,borderDash:[6,4],tension:0,fill:false,pointRadius:4,pointBackgroundColor:remC,order:1}
-  ]},plugins:[barLabels],options:{responsive:true,maintainAspectRatio:false,layout:{padding:{top:22}},plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>c.dataset.type==='line'?'Meta '+META_PONTOS:n1(c.raw)+' pts'}}},scales:{x:{grid:{display:false},ticks:tick},y:{min:0,max:100,grid,ticks:{...tick}}}}});
+  ]},plugins:[barLabels],options:{responsive:true,maintainAspectRatio:false,layout:{padding:{top:22}},plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>c.dataset.type==='line'?'Meta '+META_PONTOS:n1(c.raw)+' pts'}}},scales:{x:{grid,ticks:tick},y:{min:0,max:100,grid,ticks:{...tick}}}}});
 }
 function chartIndicador(){
   const isLight=document.body.classList.contains('light-mode');
@@ -146,11 +147,12 @@ function chartIndicador(){
   const items=indOrder.map(ind=>{const rs=ALL.filter(o=>o.indicador===ind&&vigs.some(d=>vigKeyN(d)===vigKeyN(o.vigD)));const pts=rs.length?rs.reduce((s,o)=>s+(o.pontos||0),0)/rs.length:0;const peso=rs.length?rs[0].peso:(ALL.find(o=>o.indicador===ind)?.peso||0);return{ind,pts,peso};}).filter(x=>x.peso>0);
   const labels=items.map(x=>x.ind);
   const data=items.map(x=>+x.pts.toFixed(1));
-  const bg=items.map(x=>{const r=x.peso?x.pts/x.peso:0;const c=r>=1?'#3BB33B':r>0?'#F4A100':'#FF6666';return c;});
+  const bg=items.map(x=>{const r=x.peso?x.pts/x.peso:0;const a=.85;return r>=1?`rgba(59,179,59,${a})`:r>0?`rgba(244,161,0,${a})`:`rgba(255,102,102,${a})`;});
+  const bc=items.map(x=>{const r=x.peso?x.pts/x.peso:0;return r>=1?'#3BB33B':r>0?'#F4A100':'#FF6666';});
   const grid={color:isLight?'rgba(0,0,0,.08)':'rgba(255,255,255,.06)'};
   const tick={color:isLight?'#444':'#94A3B8',font:{family:'Montserrat',size:9}};
   if(chI)chI.destroy();
-  chI=new Chart(document.getElementById('ch-ind'),{type:'bar',data:{labels,datasets:[{data,backgroundColor:bg,borderRadius:3,maxBarThickness:54}]},plugins:[barLabels],options:{responsive:true,maintainAspectRatio:false,layout:{padding:{top:22}},plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>n1(c.raw)+' pts'}}},scales:{x:{grid:{display:false},ticks:{...tick,callback:function(v){const l=this.getLabelForValue(v);return l.length>16?l.slice(0,15)+'…':l;}}},y:{beginAtZero:true,grid,ticks:tick}}}});
+  chI=new Chart(document.getElementById('ch-ind'),{type:'bar',data:{labels,datasets:[{data,backgroundColor:bg,borderColor:bc,borderWidth:1,borderRadius:3,maxBarThickness:54}]},plugins:[barLabels],options:{responsive:true,maintainAspectRatio:false,layout:{padding:{top:22}},plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>n1(c.raw)+' pts'}}},scales:{x:{grid,ticks:{...tick,callback:function(v){const l=this.getLabelForValue(v);return l.length>16?l.slice(0,15)+'…':l;}}},y:{beginAtZero:true,grid,ticks:tick}}}});
 }
 
 function atualizar(){
@@ -174,8 +176,8 @@ function renderTable(){
   const ytd=VIGS.filter(d=>d.getFullYear()===selD.getFullYear()&&d.getMonth()<=selD.getMonth());
   const indOrder=[],seen=new Set();ALL.forEach(o=>{if(!seen.has(o.indicador)){seen.add(o.indicador);indOrder.push(o);}});
   const atgColor=v=>v==null?'var(--text3)':(v>=100?'var(--green)':'var(--red)');
-  let html='<table><thead><tr class="vig"><th class="lft" colspan="5"></th><th colspan="4">'+vigColLbl(selD)+'</th><th colspan="2" class="sep-l">YTD</th></tr>'+
-    '<tr class="cols"><th class="lft">Indicador</th><th>Peso</th><th class="lft">Descrição</th><th class="lft">Regra de Atingimento</th><th>Un.</th><th>Meta</th><th>Real</th><th>Ating.</th><th>Pontos</th><th class="sep-l">Ating. YTD</th><th>Pontos YTD</th></tr></thead><tbody>';
+  const subEl=document.getElementById('tbl-sub');if(subEl)subEl.textContent=vigLbl(selD).toUpperCase();
+  let html='<table><thead><tr class="cols"><th class="lft">Indicador</th><th>Peso</th><th class="lft">Descrição</th><th class="lft">Regra de Atingimento</th><th>Un.</th><th>Meta</th><th>Real</th><th>Ating.</th><th>Pontos</th><th class="sep-l">Ating. YTD</th><th>Pontos YTD</th></tr></thead><tbody>';
   indOrder.forEach(base=>{
     const ind=base.indicador;
     const cur=ALL.find(x=>x.indicador===ind&&vigKeyN(x.vigD)===vigKeyN(selD));
