@@ -214,7 +214,7 @@ function renderTable(){
   const ytd=VIGS.filter(d=>d.getFullYear()===selD.getFullYear()&&d.getMonth()<=selD.getMonth());
   const avgNN=a=>{const f=a.filter(v=>v!=null);return f.length?f.reduce((s,v)=>s+v,0)/f.length:null;};
   const indOrder=[],seen=new Set();ALL.forEach(o=>{if(!seen.has(o.indicador)){seen.add(o.indicador);indOrder.push(o);}});
-  const atgColor=v=>v==null?'var(--text3)':(v>=100?'var(--green)':'var(--red)');
+  const atgColor=(pts,peso)=>{if(pts==null||!peso)return 'var(--text3)';const f=pts/peso;return f>=1?'var(--green)':f>0?'var(--amber)':'var(--red)';};
   const subEl=document.getElementById('tbl-sub');if(subEl)subEl.textContent=perDates.length<=1?vigLbl(selD).toUpperCase():`${vigLbl(perDates[0]).toUpperCase()} – ${vigLbl(selD).toUpperCase()} · MÉDIA`;
   let html='<table><thead><tr class="cols"><th class="lft">Indicador</th><th>Peso</th><th class="lft">Descrição</th><th class="lft">Regra de Atingimento</th><th>Un.</th><th>Meta</th><th>Real</th><th>Ating.</th><th>Pontos</th><th class="sep-l">Ating. YTD</th><th>Pontos YTD</th></tr></thead><tbody>';
   indOrder.forEach(base=>{
@@ -226,8 +226,8 @@ function renderTable(){
     const atgY=avgNN(yr.map(o=>o.atg));
     const ptsY=yr.length?yr.reduce((s,o)=>s+(o.pontos||0),0)/yr.length:null;
     html+=`<tr><td class="lft ind">${ind}</td><td>${n1(base.peso)}</td><td class="lft desc">${(base.desc||'').replace(/\n/g,'<br>')}</td><td class="lft regra">${(base.regra||'').replace(/\n/g,'<br>')}</td><td class="un">${base.un||''}</td>`;
-    if(per.length){html+=`<td>${n1(pMeta)}</td><td>${n1(pReal)}</td><td style="color:${atgColor(pAtg)};font-weight:700">${pctI(pAtg)}</td><td><span class="pts">${n1(pPts)}</span></td>`;}else{html+='<td>-</td><td>-</td><td>-</td><td>-</td>';}
-    html+=`<td class="sep-l" style="color:${atgColor(atgY)};font-weight:700">${pctI(atgY)}</td><td><span class="pts">${n1(ptsY)}</span></td>`;
+    if(per.length){html+=`<td>${n1(pMeta)}</td><td>${n1(pReal)}</td><td style="color:${atgColor(pPts,base.peso)};font-weight:700">${pctI(pAtg)}</td><td><span class="pts">${n1(pPts)}</span></td>`;}else{html+='<td>-</td><td>-</td><td>-</td><td>-</td>';}
+    html+=`<td class="sep-l" style="color:${atgColor(ptsY,base.peso)};font-weight:700">${pctI(atgY)}</td><td><span class="pts">${n1(ptsY)}</span></td>`;
     html+='</tr>';
   });
   html+='</tbody></table>';
@@ -266,7 +266,10 @@ async function carregar(){
         o.real=fcaAderM2(fcaRecs,yr,mIdx);
         o.atg=(o.real!=null&&meta)?o.real/meta*100:null;
         o.pontos=bandHigher(o.atg)*peso;
-      } // 'custo' e 'other' mantêm o que veio da planilha
+      }else if(tipo==='custo'){         // menor = melhor · AV Real vs AV Remunerado (negativo); >100% da meta = gastou mais = pior
+        o.atg=(o.real!=null&&meta)?o.real/meta*100:o.atg;
+        o.pontos=bandLowerRatio(o.atg)*peso;
+      } // 'other' mantém o que veio da planilha
       return o;
     });
     const vm=new Map();ALL.forEach(o=>{if(o.vigD)vm.set(vigKeyN(o.vigD),o.vigD);});
