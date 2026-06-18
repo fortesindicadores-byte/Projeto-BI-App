@@ -24,13 +24,13 @@ body{background:radial-gradient(ellipse at 10% 25%,rgba(249,115,22,.06) 0%,trans
 .grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;}
 .tbl-section{background:rgba(20,27,38,.55);border:1px solid rgba(255,255,255,.07);border-radius:8px;padding:18px 20px 16px;backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);box-shadow:0 2px 12px rgba(0,0,0,.25);}
 .tbl-title{font-size:16px;font-weight:800;color:var(--text);margin-bottom:14px;}
-table{width:100%;border-collapse:separate;border-spacing:5px;table-layout:fixed;}
-th:first-child,td:first-child{width:24%;}
-th{font-size:10px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:.5px;padding:6px 4px;text-align:center;}
-th.uni{text-align:left;}
-td{text-align:center;font-size:11px;font-weight:700;padding:10px 6px;border-radius:5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-td.uni{text-align:left;color:var(--text);font-weight:600;background:rgba(255,255,255,.05);padding-left:10px;}
-td.empty{background:rgba(255,255,255,.03);color:var(--text3);}
+table{width:100%;border-collapse:collapse;table-layout:fixed;border-radius:8px;overflow:hidden;}
+th:first-child,td:first-child{width:26%;}
+thead th{background:#0C1017;color:#fff;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;padding:10px 8px;text-align:center;border:1px solid rgba(255,255,255,.08);}
+thead th.uni{text-align:left;}
+td{text-align:center;font-size:11px;font-weight:700;padding:11px 6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;border:1px solid rgba(255,255,255,.12);}
+td.uni{text-align:left;color:var(--text);font-weight:700;background:rgba(255,255,255,.04);padding-left:12px;}
+td.empty{background:rgba(255,255,255,.04);color:var(--text3);}
 .legend{display:flex;flex-wrap:wrap;gap:10px;margin-top:14px;}
 .legend span{display:flex;align-items:center;gap:5px;font-size:9px;color:var(--text2);}
 .legend i{width:12px;height:12px;border-radius:3px;display:inline-block;}
@@ -38,7 +38,8 @@ td.empty{background:rgba(255,255,255,.03);color:var(--text3);}
 /* MODO CLARO — só conteúdo e cards (header continua escuro) */
 body.light-mode .main{background:#F0F0F0;--text:#1a1a1a;--text2:#444444;--text3:#666666;color:var(--text);--red:#ff0000;--green:#0E8C0E;}body.light-mode .hero-sep{background:rgba(0,0,0,.18)!important;color:rgba(0,0,0,.2)!important;}
 body.light-mode .tbl-section{background:rgba(128,128,128,.14)!important;border:none!important;box-shadow:none!important;--text:#1a1a1a;--text2:#444444;--text3:#555555;}
-body.light-mode td.uni{background:rgba(0,0,0,.05);}
+body.light-mode td{border-color:rgba(0,0,0,.14);}
+body.light-mode td.uni{background:rgba(0,0,0,.04);}
 body.light-mode td.empty{background:rgba(0,0,0,.04);color:#999;}
 @media(max-width:820px){.grid{grid-template-columns:1fr;}.main{padding:14px;}.header{padding:8px 12px 10px;}}
 </style>
@@ -71,19 +72,19 @@ const SHEET_ID='1oW3mss0pXVI6gaDU2z5cDAKvW40LWHCQXpanqSvb12o';
 
 // Mapas de cor por nível — fiéis às planilhas (esquemas diferentes por aba)
 const CORES={
-  Demarco:{
-    'Nível 1':{bg:'#1565C0',fg:'#fff'},
-    'Nível 2':{bg:'#90B8DE',fg:'#0C1017'},
-    'Nível 3':{bg:'#DCE9F5',fg:'#0C1017'},
-    'Nível 4':{bg:'#EA4335',fg:'#fff'},
-    'Nível 5':{bg:'#F4A100',fg:'#0C1017'},
+  Demarco:{                              // escala INVERTIDA: Nível 1 = melhor, Nível 5 = pior
+    'Nível 1':{bg:'#1565C0',fg:'#fff'},   // azul (melhor)
+    'Nível 2':{bg:'#3BB33B',fg:'#fff'},   // verde
+    'Nível 3':{bg:'#F4C20D',fg:'#0C1017'},// amarelo
+    'Nível 4':{bg:'#EA4335',fg:'#fff'},   // vermelho
+    'Nível 5':{bg:'#9B1C1C',fg:'#fff'},   // vermelho escuro (pior)
   },
-  DPO:{
-    'Nível 0':{bg:'#1A1A1A',fg:'#fff'},
-    'Nível 1':{bg:'#B0B0B0',fg:'#0C1017'},
-    'Nível 2':{bg:'#F4A100',fg:'#0C1017'},
-    'Nível 3':{bg:'#5FA84F',fg:'#fff'},
-    'Nível 4':{bg:'#6FA8DC',fg:'#0C1017'},
+  DPO:{                                   // Nível 0 = pior, Nível 4 = excepcional
+    'Nível 0':{bg:'#404040',fg:'#fff'},   // cinza escuro (neutro/pior)
+    'Nível 1':{bg:'#C8C8C8',fg:'#0C1017'},// cinza claro (neutro)
+    'Nível 2':{bg:'#F4A100',fg:'#0C1017'},// âmbar
+    'Nível 3':{bg:'#5FA84F',fg:'#fff'},   // verde (fortaleza)
+    'Nível 4':{bg:'#6FA8DC',fg:'#0C1017'},// azul (excepcional)
   }
 };
 
@@ -108,12 +109,15 @@ function render(tab,rows,elId,legId){
   const head=rows[0];                 // UNIDADE | 1H25 | 2H25 | 1H26 | 2H26
   const body=rows.slice(1).filter(r=>r[0]);
   const mapa=CORES[tab]||{};
+  // mantém a coluna UNIDADE + só os períodos que têm ao menos um dado
+  const keep=head.map((_,i)=>i).filter(i=>i===0||body.some(r=>{const v=(r[i]||'').trim();return v&&v!=='—';}));
   let html='<table><thead><tr>';
-  head.forEach((h,i)=>{html+=`<th class="${i===0?'uni':''}">${h||''}</th>`;});
+  keep.forEach(i=>{html+=`<th class="${i===0?'uni':''}">${head[i]||''}</th>`;});
   html+='</tr></thead><tbody>';
   body.forEach(r=>{
     html+='<tr>';
-    r.forEach((v,i)=>{
+    keep.forEach(i=>{
+      const v=r[i]||'';
       if(i===0){html+=`<td class="uni">${v}</td>`;return;}
       const c=mapa[v];
       if(c)html+=`<td style="background:${c.bg};color:${c.fg}">${v}</td>`;
