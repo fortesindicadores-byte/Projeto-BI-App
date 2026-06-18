@@ -29,6 +29,9 @@ body{background:radial-gradient(ellipse at 10% 25%,rgba(249,115,22,.06) 0%,trans
 .ms-opt:hover{background:rgba(255,255,255,.05);color:var(--text);}
 .ms-opt.all{border-bottom:1px solid #1e2d40;color:var(--text);font-weight:700;}
 .ms-opt input{accent-color:var(--orange);cursor:pointer;width:14px;height:14px;flex-shrink:0;}
+.ms-only{margin-left:auto;font-size:8px;color:var(--orange);padding:1px 5px;border-radius:2px;cursor:pointer;white-space:nowrap;flex-shrink:0;opacity:0;transition:opacity .12s;text-transform:uppercase;}
+.ms-opt:hover .ms-only{opacity:1;}
+.ms-only:hover{background:rgba(249,115,22,.2);}
 .main{padding:18px 24px;}
 .tbl-section{background:rgba(20,27,38,.55);border:1px solid rgba(255,255,255,.07);border-radius:8px;padding:8px 12px 12px;backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);box-shadow:0 2px 12px rgba(0,0,0,.25);}
 .tbl-wrap{overflow-x:auto;}
@@ -72,11 +75,33 @@ const SHEET_ID='1oW3mss0pXVI6gaDU2z5cDAKvW40LWHCQXpanqSvb12o';
 const GID='216663799';
 const MESES=['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
 
+// Mapeamento conta → pacote (mesmo da Visão Financeira)
+const PACOTES_MAP={
+  'Combustíveis Veiculos e Equipamentos':'Combustíveis','Combustíveis':'Combustíveis',
+  'Estorno de ICMS não Aproveitado':'Combustíveis','Fluídos (Arla)':'Combustíveis',
+  'Arla':'Combustíveis','ICMS Crédito Presumido':'Combustíveis',
+  'Manutenção de Veículos e Equipamentos':'Manutenções','Manutenção de Veículos e Equip.':'Manutenções',
+  'Materiais e Ferramentas de Oficina':'Manutenções','Lavação de Veículos':'Manutenções',
+  'Manutenção de Carrocerias':'Manutenções','Personalização/Padronização de Veículos':'Manutenções',
+  'Personalização/Padronização':'Manutenções','Personalização e Padronização de Veículos':'Manutenções',
+  'Contratos de Manutenção Fabricante':'Manutenções','Consertos e Recapagens de Pneus':'Pneus',
+  'Pneus e Camaras':'Pneus','Recapagens e Outros Serviços':'Pneus','Pneus Novos':'Pneus',
+  'IPVA e Licenciamento de Veículos':'Seguros e licenças','IPVA e Licenciamento':'Seguros e licenças',
+  'Seguro de Veículos e Equipamentos':'Seguros e licenças','Seguros':'Seguros e licenças',
+};
+function getPacote(conta){
+  if(PACOTES_MAP[conta])return PACOTES_MAP[conta];
+  if(/^I[VC]\s*:/i.test(conta))return 'Indicadores';
+  return 'Outros';
+}
+
 const FILTROS=[
   {id:'unidade',label:'Unidade'},
   {id:'origem',label:'Origem'},
   {id:'vig',label:'Vigência'},
   {id:'projeto',label:'Projeto'},
+  {id:'pacote',label:'Pacote'},
+  {id:'conta',label:'Conta'},
   {id:'sprazo',label:'Status Prazo'},
   {id:'status',label:'Status'},
 ];
@@ -120,7 +145,7 @@ function buildFilters(){
     g.innerHTML=`<span class="filter-label">${f.label}</span>
       <div class="ms-wrap" id="ms-${f.id}">
         <button class="ms-btn" type="button"><span class="ms-lbl">${f.label}</span><span class="ms-cnt"></span><svg width="10" height="6" viewBox="0 0 10 6"><path d="M0 0l5 6 5-6z" fill="#F97316"/></svg></button>
-        <div class="ms-panel"><label class="ms-opt all"><input type="checkbox" class="all-chk" checked> Todos</label>${vals.map(v=>`<label class="ms-opt"><input type="checkbox" data-v="${String(v).replace(/"/g,'&quot;')}" checked> ${v}</label>`).join('')}</div>
+        <div class="ms-panel"><label class="ms-opt all"><input type="checkbox" class="all-chk" checked> Todos</label>${vals.map(v=>{const dv=String(v).replace(/"/g,'&quot;');return `<label class="ms-opt"><input type="checkbox" data-v="${dv}" checked> ${v}<span class="ms-only" data-v="${dv}">só</span></label>`;}).join('')}</div>
       </div>`;
     cont.appendChild(g);
     const wrap=g.querySelector('.ms-wrap'),panel=wrap.querySelector('.ms-panel');
@@ -129,6 +154,7 @@ function buildFilters(){
     const allChk=panel.querySelector('.all-chk'),opts=[...panel.querySelectorAll('input[data-v]')];
     allChk.addEventListener('change',()=>{opts.forEach(o=>o.checked=allChk.checked);updateSel(f.id,panel);});
     opts.forEach(o=>o.addEventListener('change',()=>{allChk.checked=opts.every(x=>x.checked);updateSel(f.id,panel);}));
+    panel.querySelectorAll('.ms-only').forEach(only=>only.addEventListener('click',e=>{e.preventDefault();e.stopPropagation();opts.forEach(o=>o.checked=(o.dataset.v===only.dataset.v));allChk.checked=false;updateSel(f.id,panel);}));
   });
 }
 function updateSel(id,panel){
@@ -184,7 +210,8 @@ async function carregar(){
     const rows=await fetchTab();
     ALL=rows.slice(1).filter(r=>r[0]).map(r=>{
       const vigD=parseD(r[1]),prazoD=parseD(r[7]);
-      const o={origem:String(r[0]||'').trim(),vigD,vig:vigLbl(vigD),unidade:String(r[2]||'').trim(),projeto:String(r[3]||'').trim(),fato:r[4]||'',causa:r[5]||'',acao:r[6]||'',prazoD,status:String(r[8]||'').trim()};
+      const conta=(String(r[4]||'').split('\n')[0]||'').trim();
+      const o={origem:String(r[0]||'').trim(),vigD,vig:vigLbl(vigD),unidade:String(r[2]||'').trim(),projeto:String(r[3]||'').trim(),conta,pacote:getPacote(conta),fato:r[4]||'',causa:r[5]||'',acao:r[6]||'',prazoD,status:String(r[8]||'').trim()};
       o.sprazo=statusPrazo(o);
       return o;
     });
