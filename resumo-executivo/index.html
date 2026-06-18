@@ -34,6 +34,10 @@ body{background:radial-gradient(ellipse at 10% 25%,rgba(249,115,22,.06) 0%,trans
 .ms-only{margin-left:auto;font-size:8px;color:var(--orange);padding:1px 5px;border-radius:2px;cursor:pointer;opacity:0;transition:opacity .12s;flex-shrink:0;}
 .ms-opt:hover .ms-only{opacity:1;}.ms-only:hover{background:rgba(249,115,22,.2);}
 .main{padding:20px 24px;}
+.hero{margin-bottom:18px;padding:2px;}
+.hero .lbl{font-size:11px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:1px;}
+.hero .val{font-size:48px;font-weight:800;line-height:1;margin-top:3px;}
+.hero .sub{font-size:12px;color:var(--text2);margin-top:5px;}
 .quad{display:grid;grid-template-columns:1fr 1fr;gap:16px;}
 .box{background:rgba(20,27,38,.55);border:1px solid rgba(255,255,255,.07);border-radius:10px;padding:0 0 14px;backdrop-filter:blur(16px);box-shadow:0 2px 12px rgba(0,0,0,.25);overflow:hidden;display:flex;flex-direction:column;}
 .box h2{font-size:13px;font-weight:800;text-transform:uppercase;letter-spacing:.5px;padding:11px 18px;display:flex;align-items:center;gap:8px;}
@@ -74,6 +78,7 @@ body.light-mode .box{background:rgba(128,128,128,.14)!important;border-color:tra
 </header>
 
 <main class="main">
+  <div class="hero" id="hero"></div>
   <div class="quad" id="quad"><div class="loading">Carregando…</div></div>
   <div class="foot" id="foot"></div>
 </main>
@@ -147,6 +152,7 @@ function applyData(d){
   atualizar();
 }
 
+function band(v){return v==null?'':v>=90?'g':v>=80?'y':v>=70?'o':'r';}
 const cap=v=>v==null?null:Math.min(100,Math.max(0,v));
 function avg(a){const f=a.filter(v=>v!=null);return f.length?f.reduce((x,y)=>x+y,0)/f.length:null;}
 function sumAtt(rows,pk){let rem=0,real=0,h=false;(rows||[]).forEach(o=>{if(pk.has(o.vk)){rem+=o.rem;real+=o.real;h=true;}});return h&&rem?(real/rem-1)*100:null;} // desvio % real vs rem
@@ -224,6 +230,9 @@ function atualizar(){
   const nextHl=hl(next.length?`<b>Prioridade:</b> `+next[0].replace(/<\/?b>/g,''):'');
 
   const lbl=cands.length>1?vigLbl(cands[0]).toUpperCase()+'–'+vigLbl(selD).toUpperCase()+' · média':vigLbl(selD).toUpperCase();
+  // Pontuação Geral da Frota = média da pontuação (todos os indicadores) das unidades no período
+  const pg=avg(uScore.map(x=>x.p));const FARC={g:'#3BB33B',y:'#EAB308',o:'#F97316',r:'#FF6666'};
+  document.getElementById('hero').innerHTML=`<div class="lbl">Pontuação Geral da Frota</div><div class="val" style="color:${FARC[band(pg)]||'var(--text)'}">${n1(pg)}</div><div class="sub">pontuação geral de todos os indicadores · ${lbl}</div>`;
   const li=(arr,mk)=>arr.length?arr.map(t=>`<li><span class="mk">${mk}</span><span>${t}</span></li>`).join(''):'<div class="empty">Nada relevante neste período.</div>';
   document.getElementById('quad').innerHTML=
     `<div class="box pos"><h2>▲ Pontos Positivos</h2><ul>${li(pos,'+')}${posHl}</ul></div>`+
