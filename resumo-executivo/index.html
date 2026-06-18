@@ -187,6 +187,18 @@ function atualizar(){
   if(fall>=2)at.push(`<b>Pontuação da frota em queda</b> há ${fall} meses`);
   // unidades em queda
   unis.forEach(u=>{const s=ytd.map(d2=>avg(ICS.filter(o=>o.unidade===u&&o.vk===vigKeyN(d2)).map(o=>o.pont)));let f=0;for(let i=s.length-1;i>0;i--){if(s[i]!=null&&s[i-1]!=null&&s[i]<s[i-1]-0.5)f++;else break;}if(f>=3)at.push(`<b>${u.replace('CDD ','').replace('CDI ','')}:</b> pontuação caindo há ${f} meses`);});
+  // indicadores em nível REGULAR (80–90) — nem positivo nem negativo
+  comp.forEach(c=>{if(c.v!=null&&c.v>=80&&c.v<90)at.push(`<b>${c.l}:</b> ${r0(c.v)}% — nível regular, acompanhar`);});
+  // unidades em nível regular/atenção (70–90)
+  const reg=uScore.filter(x=>x.p>=70&&x.p<90);
+  if(reg.length)at.push(`<b>${reg.length} unidade(s) em nível regular:</b> ${reg.sort((a,b)=>a.p-b.p).map(x=>x.u.replace('CDD ','').replace('CDI ','')+' ('+n1(x.p)+')').join(', ')}`);
+  // quedas recentes mês a mês (IC da frota caiu >2pp vs mês anterior, mas ainda ≥80)
+  const prevD=ytd.length>1?ytd[ytd.length-2]:null;
+  if(prevD){const pr=ICS.filter(o=>o.vk===vigKeyN(prevD)),cu=ICS.filter(o=>o.vk===vigKeyN(selD));IC.forEach((d,i)=>{const cv=cap(avg(cu.map(o=>o.ic[i]))),pv=cap(avg(pr.map(o=>o.ic[i])));if(cv!=null&&pv!=null&&cv>=80&&cv<pv-2)at.push(`<b>${d.l}</b> caiu de ${r0(pv)}% para ${r0(cv)}% vs ${vigLbl(prevD)}`);});}
+  // DPO no limite (exatamente Nível 3)
+  if(XP.dpo){const lim=XP.dpo.ok.filter(x=>x.lv===3);if(lim.length)at.push(`<b>DPO/VPO no limite</b> (Nível 3): ${lim.map(x=>x.code).join(', ')} — risco de cair`);}
+  // FCA: andamento alto sem concluir
+  if(XP.fca){const sel=XP.fca.filter(r=>Math.floor(r.k/100)===yr&&(r.k%100)<=mi);if(sel.length){const and=sel.filter(r=>r.concl==='A').length/sel.length*100;if(and>=40)at.push(`<b>FCA:</b> ${r0(and)}% das ações em andamento — monitorar para não vencer`);}}
   if(!at.length&&weak.length)at.push(`Acompanhar de perto: ${weak.map(w=>w.l).join(' e ')} abaixo do esperado.`);
   // ── PRÓXIMOS PASSOS (ações sugeridas a partir dos negativos) ──
   if(weak.some(w=>/Disponib|Prevent/.test(w.l)))next.push(`<b>Manutenção:</b> plano de ação nas unidades com baixa disponibilidade/preventivas`);
