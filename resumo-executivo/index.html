@@ -91,6 +91,7 @@ const SRC={
   rsl:'https://docs.google.com/spreadsheets/d/1ZZdvG_RK5cTBLdPl3TWCbNeqw-Y4fTYwWsQV4w-e__A/gviz/tq?sheet='+encodeURIComponent('R$/L'),
   kmlEf:'https://docs.google.com/spreadsheets/d/1ZZdvG_RK5cTBLdPl3TWCbNeqw-Y4fTYwWsQV4w-e__A/gviz/tq?sheet='+encodeURIComponent('Km/L'),
   dpo:'https://docs.google.com/spreadsheets/d/1oW3mss0pXVI6gaDU2z5cDAKvW40LWHCQXpanqSvb12o/gviz/tq?sheet=DPO',
+  demarco:'https://docs.google.com/spreadsheets/d/1oW3mss0pXVI6gaDU2z5cDAKvW40LWHCQXpanqSvb12o/gviz/tq?sheet=Demarco',
   fca:'https://docs.google.com/spreadsheets/d/1oW3mss0pXVI6gaDU2z5cDAKvW40LWHCQXpanqSvb12o/gviz/tq?gid=216663799'
 };
 const MESES=['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
@@ -119,13 +120,17 @@ function rd(k){try{return JSON.parse(localStorage.getItem('re_'+k));}catch(e){re
 function wr(k,v){try{localStorage.setItem('re_'+k,JSON.stringify(v));}catch(e){}}
 
 function compDPO(rows){const hdr=rows[0]||[];let li=-1;for(let i=hdr.length-1;i>=1;i--){if(rows.slice(1).some(r=>/Nível/i.test(String(r[i]||'')))){li=i;break;}}const out={ok:[],bad:[],sem:'',tot:0};if(li<0)return out;out.sem=String(hdr[li]||'');const seen={};rows.slice(1).forEach(r=>{const code=String(r[0]||'').trim();const m=String(r[li]||'').match(/Nível\s*(\d+)/i);if(!code||!m)return;const lv=+m[1];out.tot++;(lv>=3?out.ok:out.bad).push({code,lv});});return out;}
+// Demarco: ESCALA INVERTIDA — Nível 1 = top (melhor); evolução = nível diminuiu vs semestre anterior
+function compDemarco(rows){const hdr=rows[0]||[];let li=-1;for(let i=hdr.length-1;i>=1;i--){if(rows.slice(1).some(r=>/Nível/i.test(String(r[i]||'')))){li=i;break;}}const out={top:[],bad:[],improved:[],worsened:[],sem:''};if(li<0)return out;out.sem=String(hdr[li]||'');const pj=li-1;rows.slice(1).forEach(r=>{const code=String(r[0]||'').trim();const m=String(r[li]||'').match(/Nível\s*(\d+)/i);if(!code||!m)return;const lv=+m[1];const pm=pj>=1?String(r[pj]||'').match(/Nível\s*(\d+)/i):null;const prev=pm?+pm[1]:null;if(lv===1)out.top.push(code);if(lv>=4)out.bad.push({code,lv});if(prev!=null&&lv<prev)out.improved.push({code,prev,lv});if(prev!=null&&lv>prev)out.worsened.push({code,prev,lv});});return out;}
+// conta DRE → pacote
+const PAC={'Combustíveis Veiculos e Equipamentos':'Combustível','Combustíveis':'Combustível','Fluídos (Arla)':'Combustível','Arla':'Combustível','Estorno de ICMS não Aproveitado':'Combustível','ICMS Crédito Presumido':'Combustível','Manutenção de Veículos e Equipamentos':'Manutenção','Materiais e Ferramentas de Oficina':'Manutenção','Lavação de Veículos':'Manutenção','Manutenção de Carrocerias':'Manutenção','Personalização/Padronização de Veículos':'Manutenção','Personalização e Padronização de Veículos':'Manutenção','Contratos de Manutenção Fabricante':'Manutenção','Consertos e Recapagens de Pneus':'Pneus','Pneus e Camaras':'Pneus','Recapagens e Outros Serviços':'Pneus','Pneus Novos':'Pneus','IPVA e Licenciamento de Veículos':'Seguros e licenças','Seguro de Veículos e Equipamentos':'Seguros e licenças'};
 function compFCA(rows){const today=new Date();today.setHours(0,0,0,0);const recs=[];rows.forEach(r=>{const d=parseD(r[1]);if(!d)return;const st=String(r[8]||'');const prazo=parseD(r[7]);const concl=/conclu/i.test(st)?'C':/andamento/i.test(st)?'A':'N';const venc=concl==='C'?false:(prazo&&prazo<today);recs.push({k:vigKeyN(d),concl,venc});});return recs;}
 
 function carregar(){
-  const c=rd('data');
+  const c=rd('data2');
   if(c){try{applyData(c);document.getElementById('status').textContent='Atualizando…';}catch(e){}}else document.getElementById('status').textContent='Carregando…';
-  Promise.all([gviz(SRC.ics),gviz(SRC.dre).catch(()=>null),gviz(SRC.km).catch(()=>null),gviz(SRC.rsl).catch(()=>null),gviz(SRC.kmlEf).catch(()=>null),gviz(SRC.dpo).catch(()=>null),gviz(SRC.fca).catch(()=>null)]).then(a=>{
-    const d={ics:a[0],dre:a[1],km:a[2],rsl:a[3],kmlEf:a[4],dpo:a[5],fca:a[6]};wr('data',d);applyData(d);
+  Promise.all([gviz(SRC.ics),gviz(SRC.dre).catch(()=>null),gviz(SRC.km).catch(()=>null),gviz(SRC.rsl).catch(()=>null),gviz(SRC.kmlEf).catch(()=>null),gviz(SRC.dpo).catch(()=>null),gviz(SRC.fca).catch(()=>null),gviz(SRC.demarco).catch(()=>null)]).then(a=>{
+    const d={ics:a[0],dre:a[1],km:a[2],rsl:a[3],kmlEf:a[4],dpo:a[5],fca:a[6],demarco:a[7]};wr('data2',d);applyData(d);
     const now=new Date();document.getElementById('status').textContent=`${now.toLocaleDateString('pt-BR')} ${now.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})}`;
   }).catch(e=>{console.error(e);if(!c)document.getElementById('status').textContent='Erro ao carregar';});
 }
@@ -133,7 +138,8 @@ function carregar(){
 function applyData(d){
   const selV=getMsValues('ms-vig');
   XP={};
-  if(d.dre)try{XP.dre=d.dre.filter(r=>parseD(r[9])&&String(r[12]||'').trim()!=='Receita Líquida').map(r=>({vk:vigKeyN(parseD(r[9])),rem:+r[1]||0,real:+r[2]||0}));}catch(e){}
+  if(d.dre)try{XP.dre=d.dre.filter(r=>parseD(r[9])&&String(r[12]||'').trim()!=='Receita Líquida').map(r=>({vk:vigKeyN(parseD(r[9])),rem:+r[1]||0,real:+r[2]||0,cta:String(r[12]||'').trim()}));}catch(e){}
+  if(d.demarco)try{XP.dmc=compDemarco(d.demarco);}catch(e){}
   if(d.km)try{XP.km=d.km.filter(r=>parseD(r[0])).map(r=>({vk:vigKeyN(parseD(r[0])),rem:+r[31]||0,real:+r[32]||0}));}catch(e){}
   // R$/L: lookup preço remunerado
   const L1={},L2={};
@@ -187,6 +193,11 @@ function atualizar(){
   // ── DPO ──
   const dpoN4=XP.dpo?XP.dpo.ok.filter(x=>x.lv>=4):[];
   if(XP.dpo){const n3=XP.dpo.ok.filter(x=>x.lv===3);if(dpoN4.length)pos.push(`<b>DPO/VPO Nível ${Math.max(...dpoN4.map(x=>x.lv))} — raríssimo na América Latina:</b> ${dpoN4.map(x=>x.code).join(', ')}`);if(n3.length)pos.push(`<b>DPO/VPO sustentável (Nível 3):</b> ${n3.map(x=>x.code).join(', ')}`);if(XP.dpo.bad.length)neg.push(`<b>DPO/VPO não sustentável:</b> ${XP.dpo.bad.map(x=>x.code+' (N'+x.lv+')').join(', ')} — ${XP.dpo.sem}`);}
+  // ── Demarco (Nível 1 = top, escala invertida) ──
+  if(XP.dmc){if(XP.dmc.top.length)pos.push(`<b>Demarco Nível 1 (top):</b> ${XP.dmc.top.join(', ')}`);if(XP.dmc.improved.length)pos.push(`<b>Demarco — evolução:</b> ${XP.dmc.improved.map(x=>x.code+' (N'+x.prev+'→N'+x.lv+')').join(', ')}`);if(XP.dmc.bad.length)neg.push(`<b>Demarco — pior nível:</b> ${XP.dmc.bad.map(x=>x.code+' (N'+x.lv+')').join(', ')}`);if(XP.dmc.worsened.length)at.push(`<b>Demarco — piora:</b> ${XP.dmc.worsened.map(x=>x.code+' (N'+x.prev+'→N'+x.lv+')').join(', ')}`);}
+  // ── pacotes de custo (desvio real vs remunerado) ──
+  const pacAgg={};(XP.dre||[]).forEach(o=>{if(!pk.has(o.vk))return;const p=PAC[o.cta]||'Outros';(pacAgg[p]=pacAgg[p]||{rem:0,real:0});pacAgg[p].rem+=o.rem;pacAgg[p].real+=o.real;});
+  ['Manutenção','Combustível','Pneus','Seguros e licenças'].forEach(p=>{const v=pacAgg[p];if(!v||!v.rem)return;const dev=(v.real/v.rem-1)*100;if(dev>3)neg.push(`<b>Custo ${p}:</b> ${dev.toFixed(1)}% acima do remunerado`);else if(dev<-3)pos.push(`<b>Custo ${p}:</b> ${Math.abs(dev).toFixed(1)}% abaixo do remunerado`);});
   // ── FCA (acumulado no ano até a vigência) ──
   if(XP.fca){const sel=XP.fca.filter(r=>Math.floor(r.k/100)===yr&&(r.k%100)<=mi);if(sel.length){const tt=sel.length,concl=sel.filter(r=>r.concl==='C').length/tt*100,prazo=sel.filter(r=>!r.venc).length/tt*100;if(concl>=85)pos.push(`<b>FCA:</b> ${r0(concl)}% das ações concluídas`);else neg.push(`<b>FCA:</b> só ${r0(concl)}% das ações concluídas (${tt} ações)`);if(prazo<70)at.push(`<b>FCA:</b> ${r0(100-prazo)}% das ações vencidas — repactuar prazos`);}}
   // ── unidades saudáveis / críticas ──
