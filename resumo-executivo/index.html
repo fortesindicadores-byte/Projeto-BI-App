@@ -46,7 +46,11 @@ body{background:radial-gradient(ellipse at 10% 25%,rgba(249,115,22,.06) 0%,trans
 .box li .mk{flex-shrink:0;font-weight:800;opacity:.8;}
 .box.pos li .mk{color:#3BB33B;}.box.neg li .mk{color:#FF6666;}.box.at li .mk{color:#EAB308;}.box.next li .mk{color:#38BDF8;}
 .box li b{font-weight:700;}
-.box li.hl{background:rgba(56,189,248,.12);border:1px solid rgba(56,189,248,.3);border-radius:6px;padding:7px 10px;margin-top:2px;}
+.box li.hl{border:1px solid;border-radius:6px;padding:7px 10px;margin-top:4px;font-weight:600;}
+.box.pos li.hl{background:rgba(59,179,59,.15);border-color:rgba(59,179,59,.4);}
+.box.neg li.hl{background:rgba(255,102,102,.13);border-color:rgba(255,102,102,.4);}
+.box.at li.hl{background:rgba(234,179,8,.15);border-color:rgba(234,179,8,.4);}
+.box.next li.hl{background:rgba(56,189,248,.13);border-color:rgba(56,189,248,.4);}
 .empty{padding:6px 18px;color:var(--text3);font-size:11.5px;font-style:italic;}
 .foot{margin-top:14px;font-size:10px;color:var(--text3);font-style:italic;text-align:center;}
 .loading{text-align:center;color:var(--text3);padding:50px;}
@@ -86,7 +90,7 @@ const SRC={
 };
 const MESES=['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
 const DEPARA={'CDD CAMBORIU':'BLC','CDD CUIABA':'CBA','CUIABA EMPURRADA':'CBA','CUIABA':'CBA','CDD FLORIANOPOLIS':'FLP','CDD GUARULHOS':'GRL','CDD NOVA FRIBURGO':'NFR','CDD PELOTAS':'PEL','CDD RIO DE JANEIRO':'CGR','CDD RONDONOPOLIS':'RON','CDI MACACU':'MCC','MACACU EMPURRADA':'MCC','PIRAI EMPURRADA':'PIR'};
-const IC=[{c:2,l:'Disponibilidade'},{c:3,l:'Preventivas'},{c:4,l:'Consumo Km/L'},{c:5,l:'Aferições'},{c:6,l:'Checklist T1/T2'},{c:7,l:'Checklist Apoio'},{c:8,l:'Conformidade'},{c:9,l:'Stress Test Cam.'},{c:10,l:'Stress Test Emp.'},{c:11,l:'SLA'},{c:12,l:'CIVF'}];
+const IC=[{c:2,l:'Disponibilidade'},{c:3,l:'Preventivas',good:95},{c:4,l:'Consumo Km/L'},{c:5,l:'Aferições'},{c:6,l:'Checklist T1/T2'},{c:7,l:'Checklist Apoio'},{c:8,l:'Conformidade'},{c:9,l:'Stress Test Cam.'},{c:10,l:'Stress Test Emp.'},{c:11,l:'SLA'},{c:12,l:'CIVF'}];
 let ICS=[],VIGS=[],XP={};
 
 function parseD(v){if(v==null)return null;const m=String(v).match(/Date\((\d+),(\d+),(\d+)/);return m?new Date(+m[1],+m[2],+m[3]):null;}
@@ -130,7 +134,7 @@ function applyData(d){
   const L1={},L2={};
   if(d.rsl)d.rsl.forEach(r=>{const p=NK(r[0]),dt=parseD(r[3]);if(!p||!dt)return;const ym=vigKeyN(dt),f=NF(r[23]),v=+r[22]||0;if(!(v>0))return;(L1[p+'|'+ym+'|'+f]=L1[p+'|'+ym+'|'+f]||{s:0,n:0}).s+=v;L1[p+'|'+ym+'|'+f].n++;(L2[p+'|'+ym]=L2[p+'|'+ym]||{s:0,n:0}).s+=v;L2[p+'|'+ym].n++;});
   const remP=(p,ym,f)=>{let e=L1[p+'|'+ym+'|'+f]||L2[p+'|'+ym];return e&&e.n>0?e.s/e.n:null;};
-  if(d.kmlEf)try{XP.kmlEf=d.kmlEf.filter(r=>parseD(r[0])).map(r=>{const vk=vigKeyN(parseD(r[0]));return{vk,lit:+r[23]||0,tot:+r[25]||0,rp:remP(NK(r[14]),vk,NF(r[20]))};});}catch(e){}
+  if(d.kmlEf)try{XP.kmlEf=d.kmlEf.filter(r=>parseD(r[0])).map(r=>{const vk=vigKeyN(parseD(r[0]));return{vk,lit:+r[23]||0,tot:+r[25]||0,km:+r[22]||0,remKmL:+r[4]||0,rp:remP(NK(r[14]),vk,NF(r[20]))};});}catch(e){}
   if(d.dpo)try{XP.dpo=compDPO(d.dpo);}catch(e){}
   if(d.fca)try{XP.fca=compFCA(d.fca);}catch(e){}
   ICS=d.ics.filter(r=>r[0]&&r[1]&&parseD(r[0])).map(r=>{const vigD=parseD(r[0]);return{vigD,vk:vigKeyN(vigD),unidade:String(r[1]).trim(),ic:IC.map(x=>r[x.c]!=null?+r[x.c]*100:null),pont:r[13]!=null?+r[13]:null};});
@@ -147,6 +151,7 @@ const cap=v=>v==null?null:Math.min(100,Math.max(0,v));
 function avg(a){const f=a.filter(v=>v!=null);return f.length?f.reduce((x,y)=>x+y,0)/f.length:null;}
 function sumAtt(rows,pk){let rem=0,real=0,h=false;(rows||[]).forEach(o=>{if(pk.has(o.vk)){rem+=o.rem;real+=o.real;h=true;}});return h&&rem?(real/rem-1)*100:null;} // desvio % real vs rem
 function rlDev(pk){let lit=0,tot=0,remxl=0,litrem=0;(XP.kmlEf||[]).forEach(o=>{if(pk.has(o.vk)){lit+=o.lit;if(o.tot>0)tot+=o.tot;if(o.rp>0){remxl+=o.rp*o.lit;litrem+=o.lit;}}});if(!lit||!litrem)return null;return ((tot/lit)/(remxl/litrem)-1)*100;}
+function kmlAtt(pk){let km=0,lit=0,rs=0,cnt=0;(XP.kmlEf||[]).forEach(o=>{if(pk.has(o.vk)){km+=o.km;lit+=o.lit;if(o.remKmL>0){rs+=o.remKmL;cnt++;}}});if(!lit||!cnt)return null;return (km/lit)/(rs/cnt)*100;}
 function rkmDev(pk){let cr=0,cR=0,kr=0,kR=0;(XP.dre||[]).forEach(o=>{if(pk.has(o.vk)){cr+=o.rem;cR+=o.real;}});(XP.km||[]).forEach(o=>{if(pk.has(o.vk)){kr+=o.rem;kR+=o.real;}});if(!kR||!kr||!cr)return null;return ((cR/kR)/(cr/kr)-1)*100;}
 
 function atualizar(){
@@ -159,12 +164,14 @@ function atualizar(){
   const rows=ICS.filter(o=>pk.has(o.vk));
   const pos=[],neg=[],at=[],next=[];
   // ── ICs nível empresa (média) ──
-  const comp=IC.map((d,i)=>({l:d.l,v:cap(avg(rows.map(o=>o.ic[i])))}));
-  comp.forEach(c=>{if(c.v==null)return;if(c.v>=90)pos.push(`<b>${c.l}:</b> ${r0(c.v)}%`);else if(c.v<80)neg.push(`<b>${c.l}:</b> ${r0(c.v)}%`+(c.v<70?' (crítico)':''));});
+  const comp=IC.map((d,i)=>({l:d.l,good:d.good||90,v:cap(avg(rows.map(o=>o.ic[i])))}));
+  // Consumo Km/L vem do painel de combustível (real km/l ÷ remunerado), não do Consolidado ICs
+  const kix=IC.findIndex(x=>x.l==='Consumo Km/L');if(kix>=0){const kv=kmlAtt(pk);if(kv!=null)comp[kix].v=cap(kv);}
+  comp.forEach(c=>{if(c.v==null)return;if(c.v>=c.good)pos.push(`<b>${c.l}:</b> ${r0(c.v)}%`);else if(c.v<80)neg.push(`<b>${c.l}:</b> ${r0(c.v)}%`+(c.v<70?' (crítico)':''));});
   // ── piores unidades nos 2 ICs mais fracos ──
   const unis=[...new Set(rows.map(o=>o.unidade))];
   const weak=comp.filter(c=>c.v!=null&&c.v<85).sort((a,b)=>a.v-b.v).slice(0,2);
-  weak.forEach(w=>{const i=IC.findIndex(x=>x.l===w.l);const arr=unis.map(u=>({u,v:cap(avg(rows.filter(o=>o.unidade===u).map(o=>o.ic[i])))})).filter(x=>x.v!=null).sort((a,b)=>a.v-b.v).slice(0,3);if(arr.length)neg.push(`<b>${w.l} — piores:</b> `+arr.map(x=>`${x.u.replace('CDD ','').replace('CDI ','')} ${r0(x.v)}%`).join(', '));});
+  weak.forEach(w=>{if(w.l==='Consumo Km/L')return;const i=IC.findIndex(x=>x.l===w.l);const arr=unis.map(u=>({u,v:cap(avg(rows.filter(o=>o.unidade===u).map(o=>o.ic[i])))})).filter(x=>x.v!=null).sort((a,b)=>a.v-b.v).slice(0,3);if(arr.length)neg.push(`<b>${w.l} — piores:</b> `+arr.map(x=>`${x.u.replace('CDD ','').replace('CDI ','')} ${r0(x.v)}%`).join(', '));});
   // ── financeiro / dispersão (desvio real vs remunerado) ──
   const cD=sumAtt(XP.dre,pk),kD=sumAtt(XP.km,pk),rk=rkmDev(pk),rl=rlDev(pk);
   if(cD!=null){(cD<=0?pos:neg).push(`<b>Custos da frota:</b> ${cD<=0?Math.abs(cD).toFixed(1)+'% abaixo':cD.toFixed(1)+'% acima'} do remunerado`);}
@@ -188,13 +195,13 @@ function atualizar(){
   // unidades em queda
   unis.forEach(u=>{const s=ytd.map(d2=>avg(ICS.filter(o=>o.unidade===u&&o.vk===vigKeyN(d2)).map(o=>o.pont)));let f=0;for(let i=s.length-1;i>0;i--){if(s[i]!=null&&s[i-1]!=null&&s[i]<s[i-1]-0.5)f++;else break;}if(f>=3)at.push(`<b>${u.replace('CDD ','').replace('CDI ','')}:</b> pontuação caindo há ${f} meses`);});
   // indicadores em nível REGULAR (80–90) — nem positivo nem negativo
-  comp.forEach(c=>{if(c.v!=null&&c.v>=80&&c.v<90)at.push(`<b>${c.l}:</b> ${r0(c.v)}% — nível regular, acompanhar`);});
+  comp.forEach(c=>{if(c.v!=null&&c.v>=80&&c.v<c.good)at.push(`<b>${c.l}:</b> ${r0(c.v)}% — nível regular, acompanhar`);});
   // unidades em nível regular/atenção (70–90)
   const reg=uScore.filter(x=>x.p>=70&&x.p<90);
   if(reg.length)at.push(`<b>${reg.length} unidade(s) em nível regular:</b> ${reg.sort((a,b)=>a.p-b.p).map(x=>x.u.replace('CDD ','').replace('CDI ','')+' ('+n1(x.p)+')').join(', ')}`);
   // quedas recentes mês a mês (IC da frota caiu >2pp vs mês anterior, mas ainda ≥80)
-  const prevD=ytd.length>1?ytd[ytd.length-2]:null;
-  if(prevD){const pr=ICS.filter(o=>o.vk===vigKeyN(prevD)),cu=ICS.filter(o=>o.vk===vigKeyN(selD));IC.forEach((d,i)=>{const cv=cap(avg(cu.map(o=>o.ic[i]))),pv=cap(avg(pr.map(o=>o.ic[i])));if(cv!=null&&pv!=null&&cv>=80&&cv<pv-2)at.push(`<b>${d.l}</b> caiu de ${r0(pv)}% para ${r0(cv)}% vs ${vigLbl(prevD)}`);});}
+  const prevD=ytd.length>1?ytd[ytd.length-2]:null;let maxDrop=null;
+  if(prevD){const pr=ICS.filter(o=>o.vk===vigKeyN(prevD)),cu=ICS.filter(o=>o.vk===vigKeyN(selD));IC.forEach((d,i)=>{const cv=cap(avg(cu.map(o=>o.ic[i]))),pv=cap(avg(pr.map(o=>o.ic[i])));if(cv!=null&&pv!=null&&cv>=80&&cv<pv-2){at.push(`<b>${d.l}</b> caiu de ${r0(pv)}% para ${r0(cv)}% vs ${vigLbl(prevD)}`);if(!maxDrop||(pv-cv)>maxDrop.drop)maxDrop={l:d.l,pv,cv,drop:pv-cv};}});}
   // DPO no limite (exatamente Nível 3)
   if(XP.dpo){const lim=XP.dpo.ok.filter(x=>x.lv===3);if(lim.length)at.push(`<b>DPO/VPO no limite</b> (Nível 3): ${lim.map(x=>x.code).join(', ')} — risco de cair`);}
   // FCA: andamento alto sem concluir
@@ -207,17 +214,22 @@ function atualizar(){
   if(XP.fca){const sel=XP.fca.filter(r=>Math.floor(r.k/100)===yr&&(r.k%100)<=mi);if(sel.length){const concl=sel.filter(r=>r.concl==='C').length/sel.length*100;if(concl<70)next.push(`<b>FCA:</b> acelerar conclusão das ações (${r0(concl)}% concluídas)`);}}
   if(XP.dpo&&XP.dpo.bad.length)next.push(`<b>Auditoria:</b> recuperar pilar DPO/VPO em ${XP.dpo.bad.map(x=>x.code).join(', ')}`);
   if(crit.length)next.push(`<b>Acompanhamento:</b> reunião focada nas unidades críticas (${crit.map(x=>x.u.replace('CDD ','').replace('CDI ','')).join(', ')})`);
-  // melhor mês (destaque)
-  let best=null;VIGS.forEach(d=>{const p=pontByVig(d);if(p!=null&&(!best||p>best.p))best={d,p};});
-  const bestHl=best?`<li class="hl"><span class="mk">★</span><span><b>Melhor mês de pontuação:</b> ${vigLbl(best.d)} (${n1(best.p)} pts)</span></li>`:'';
+  // ── destaques (1 por quadrante, na cor do quadrante) ──
+  let best=null,worst=null;VIGS.forEach(d=>{const p=pontByVig(d);if(p!=null){if(!best||p>best.p)best={d,p};if(!worst||p<worst.p)worst={d,p};}});
+  const worstU=uScore.slice().sort((a,b)=>a.p-b.p)[0];
+  const hl=t=>t?`<li class="hl"><span class="mk">★</span><span>${t}</span></li>`:'';
+  const posHl=hl(best?`<b>Melhor mês de pontuação:</b> ${vigLbl(best.d)} (${n1(best.p)} pts)`:'');
+  const negHl=hl(worstU?`<b>Unidade mais crítica:</b> ${worstU.u.replace('CDD ','').replace('CDI ','')} (${n1(worstU.p)} pts)`:'');
+  const atHl=hl(maxDrop?`<b>Maior queda recente:</b> ${maxDrop.l} ${r0(maxDrop.pv)}%→${r0(maxDrop.cv)}% vs ${vigLbl(prevD)}`:(best&&worst&&vigKeyN(worst.d)!==vigKeyN(best.d)?`<b>Pior mês de pontuação:</b> ${vigLbl(worst.d)} (${n1(worst.p)} pts)`:''));
+  const nextHl=hl(next.length?`<b>Prioridade:</b> `+next[0].replace(/<\/?b>/g,''):'');
 
   const lbl=cands.length>1?vigLbl(cands[0]).toUpperCase()+'–'+vigLbl(selD).toUpperCase()+' · média':vigLbl(selD).toUpperCase();
   const li=(arr,mk)=>arr.length?arr.map(t=>`<li><span class="mk">${mk}</span><span>${t}</span></li>`).join(''):'<div class="empty">Nada relevante neste período.</div>';
   document.getElementById('quad').innerHTML=
-    `<div class="box pos"><h2>▲ Pontos Positivos</h2><ul>${li(pos,'+')}${bestHl}</ul></div>`+
-    `<div class="box neg"><h2>▼ Pontos Negativos</h2><ul>${li(neg,'−')}</ul></div>`+
-    `<div class="box at"><h2>! Pontos de Atenção</h2><ul>${li(at,'!')}</ul></div>`+
-    `<div class="box next"><h2>⇒ Próximos Passos</h2><ul>${li(next,'⇒')}</ul></div>`;
+    `<div class="box pos"><h2>▲ Pontos Positivos</h2><ul>${li(pos,'+')}${posHl}</ul></div>`+
+    `<div class="box neg"><h2>▼ Pontos Negativos</h2><ul>${li(neg,'−')}${negHl}</ul></div>`+
+    `<div class="box at"><h2>! Pontos de Atenção</h2><ul>${li(at,'!')}${atHl}</ul></div>`+
+    `<div class="box next"><h2>⇒ Próximos Passos</h2><ul>${li(next,'⇒')}${nextHl}</ul></div>`;
   document.getElementById('foot').textContent=`Vigência ${lbl} · gerado automaticamente dos indicadores (ICs, Custos, Dispersão, R$/km, R$/L, DPO/VPO, FCA)`;
 }
 
