@@ -132,6 +132,8 @@ function n1(v){return v==null||!isFinite(v)?'—':Number(v).toLocaleString('pt-B
 function band(v){return v==null?'':v>=90?'g':v>=80?'y':v>=70?'o':'r';}
 // banda rígida p/ indicadores "Real/Remunerado" (100% = na meta): ≥100 Saudável · ≥98 Regular · ≥95 Atenção · <95 Crítico
 function bandCost(v){return v==null?'':v>=100?'g':v>=98?'y':v>=95?'o':'r';}
+// banda com limiar "bom" por indicador (default 90); Preventivas usa 95
+function bandG(v,good){good=good||90;return v==null?'':v>=good?'g':v>=good-10?'y':v>=good-20?'o':'r';}
 function sumAtt(rows,perKeys){let rem=0,real=0,has=false;rows.forEach(o=>{if(perKeys.has(o.vk)){rem+=o.rem;real+=o.real;has=true;}});return has&&rem?real/rem*100:null;}
 // R$/km atingimento = (custoReal/kmReal) / (custoRem/kmRem)
 function rkmAtt(perKeys){let cr=0,cR=0,kr=0,kR=0;(XPANEL.dre||[]).forEach(o=>{if(perKeys.has(o.vk)){cr+=o.rem;cR+=o.real;}});(XPANEL.km||[]).forEach(o=>{if(perKeys.has(o.vk)){kr+=o.rem;kR+=o.real;}});if(!kR||!kr||!cr)return null;const rem=cr/kr;return rem?(cR/kR)/rem*100:null;}
@@ -193,7 +195,7 @@ function atualizar(){
     {lbl:'Custos Frota',         val:XPANEL.dre?inv(sumAtt(XPANEL.dre,perKeys)):null, meta:'Real / Remunerado'},
     {lbl:'Disponibilidade',      val:cap(icAvg(0))},
     {lbl:'DPO/VPO Sustentável',  val:XPANEL.dpo?cap(XPANEL.dpo.pct):null, meta:dpoMeta},
-    {lbl:'Preventivas',          val:cap(icAvg(1))},
+    {lbl:'Preventivas',          val:cap(icAvg(1)), good:95},
     {lbl:'Consumo Km/L',         val:XPANEL.kmlEf?cap(kmlAtt(perKeys)):null, meta:'Real / Remunerado'},
     {lbl:'Aferições',            val:cap(icAvg(3))},
     {lbl:'Checklist T1/T2',      val:cap(icAvg(4))},
@@ -210,7 +212,7 @@ function atualizar(){
     {lbl:'FCA Conclusão',        val:cap(fcaS.concl), meta:'nível empresa'}
   ];
   document.getElementById('cards').innerHTML=cards.map(c=>{
-    const cls=c.meta==='Real / Remunerado'?bandCost(c.val):band(c.val);const disp=c.val==null?'—':Math.round(c.val)+'%';
+    const cls=c.meta==='Real / Remunerado'?bandCost(c.val):bandG(c.val,c.good);const disp=c.val==null?'—':Math.round(c.val)+'%';
     return `<div class="kpi ${cls}"><div class="kpi-lbl">${c.lbl}</div><div class="kpi-val ${cls}">${disp}</div>${c.meta?`<div class="kpi-meta">${c.meta}</div>`:''}</div>`;
   }).join('')||'<div class="loading">Sem dados</div>';
 
