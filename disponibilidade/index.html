@@ -655,9 +655,19 @@ function renderMiniTbl(tbodyId, grouped){
 
 // ── Render tabela indisponibilidade ──
 function renderIndTable(){
-  const dates=[...new Set(indRows.map(r=>r.dataRel).filter(Boolean))].sort();
+  const f=getF();
+  const vigOf=d=>{const p=String(d||'').split('/');return p.length>=3?p[1]+'/'+p[2]:'';};
+  const nk=s=>String(s||'').toUpperCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/\s+/g,' ').trim();
+  const fTipo=f.tipo.map(nk); // tipo vem de planilha diferente — comparar normalizado
+  const base=indRows.filter(r=>
+    (!f.tipo.length||fTipo.includes(nk(r.tipo)))&&
+    (!f.uni.length ||f.uni.includes(r.uniMap))&&
+    (!f.proj.length||f.proj.includes(r.projMap))&&
+    (!f.vig.length ||f.vig.includes(vigOf(r.dataRel)))
+  );
+  const dates=[...new Set(base.map(r=>r.dataRel).filter(Boolean))].sort();
   const lastDate=dates[dates.length-1];
-  const rows=indRows.filter(r=>r.dataRel===lastDate).sort((a,b)=>(b.diasIndisp||0)-(a.diasIndisp||0));
+  const rows=base.filter(r=>r.dataRel===lastDate).sort((a,b)=>(b.diasIndisp||0)-(a.diasIndisp||0));
 
   const sub=$('tbl-sub');
   if(sub) sub.innerHTML=`Último dia: <b>${fmtDate(lastDate)||'—'}</b> &nbsp;·&nbsp; ${rows.length} registros`;
@@ -704,6 +714,7 @@ function renderAll(){
   const f=filtrar(dispRows);
   renderHero(f);
   renderCharts(f);
+  renderIndTable();
 }
 
 // ── Multi-select ──
