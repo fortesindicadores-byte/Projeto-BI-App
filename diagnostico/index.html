@@ -146,27 +146,30 @@ function carregar(){
 function fallStreak(series){let s=0;for(let i=series.length-1;i>0;i--){if(series[i]!=null&&series[i-1]!=null&&series[i]<series[i-1]-0.5)s++;else break;}return s;}
 
 // ── MOTOR DE DIAGNÓSTICO por unidade ──
-function diagnose(uni,selD){
-  const yr=selD.getFullYear(),mi=selD.getMonth(),vk=vigKeyN(selD);
+function diagnose(uni,selD,perKeys){
+  const yr=selD.getFullYear(),mi=selD.getMonth();
   const code=DEPARA[uni]||'';
   const ytd=VIGS.filter(d=>d.getFullYear()===yr&&d.getMonth()<=mi);
-  const cur=ICS.find(o=>o.unidade===uni&&o.vk===vk);
-  if(!cur)return null;
+  // valores = MÉDIA das vigências selecionadas (1 mês = aquele mês)
+  const sel=ICS.filter(o=>o.unidade===uni&&perKeys.has(o.vk));
+  if(!sel.length)return null;
+  const avgOf=arr=>{const f=arr.filter(v=>v!=null);return f.length?f.reduce((a,b)=>a+b,0)/f.length:null;};
+  const icCur=IC.map((d,i)=>avgOf(sel.map(o=>o.ic[i])));
   // séries por IC (jan→selD) p/ tendência
   const serie=i=>ytd.map(d=>{const o=ICS.find(x=>x.unidade===uni&&x.vk===vigKeyN(d));return o?o.ic[i]:null;});
-  const pont=cur.pont;
+  const pont=avgOf(sel.map(o=>o.pont));
   const forcas=[],alertas=[];
   const cap=v=>v==null?null:Math.min(100,v);
   // por IC
   IC.forEach((d,i)=>{
-    const v=cap(cur.ic[i]);if(v==null)return;
+    const v=cap(icCur[i]);if(v==null)return;
     const st=fallStreak(serie(i));
     if(v<70)alertas.push({sev:'r',msg:`<b>${d.l}</b> crítico (${Math.round(v)}%)`});
     else if(v<80&&st>=2)alertas.push({sev:'o',msg:`<b>${d.l}</b> em queda há ${st} meses (${Math.round(v)}%)`});
     else if(v>=95)forcas.push({sev:'g',msg:`<b>${d.l}</b> em alto nível (${Math.round(v)}%)`});
   });
   // cruzamentos
-  const get=l=>{const i=IC.findIndex(x=>x.l===l);return i<0?null:cap(cur.ic[i]);};
+  const get=l=>{const i=IC.findIndex(x=>x.l===l);return i<0?null:cap(icCur[i]);};
   const disp=get('Disponibilidade'),prev=get('Preventivas'),kml=get('Km/L'),sla=get('SLA');
   if(disp!=null&&prev!=null&&disp<85&&prev<85)alertas.push({sev:'r',msg:`<b>Manutenção comprometida</b> — disponibilidade e preventivas baixas (frota/oficina)`});
   if(kml!=null&&kml<80&&disp!=null&&disp<85)alertas.push({sev:'o',msg:`<b>Eficiência operacional ruim</b> — Km/L e disponibilidade abaixo do esperado`});
@@ -179,7 +182,7 @@ function diagnose(uni,selD){
   const pst=fallStreak(pontSerie);
   if(pst>=3)alertas.push({sev:'o',msg:`<b>Tendência de queda geral</b> — pontuação caindo há ${pst} meses`});
   // chips dos ICs (com tendência)
-  const chips=IC.map((d,i)=>{const v=cap(cur.ic[i]);if(v==null)return null;const st=fallStreak(serie(i));return{l:d.l,v:Math.round(v),cls:band(v),tr:st>=2?'▼':''};}).filter(Boolean);
+  const chips=IC.map((d,i)=>{const v=cap(icCur[i]);if(v==null)return null;const st=fallStreak(serie(i));return{l:d.l,v:Math.round(v),cls:band(v),tr:st>=2?'▼':''};}).filter(Boolean);
   return {uni,code,pont,cls:band(pont),forcas,alertas,chips};
 }
 
@@ -189,9 +192,10 @@ function atualizar(){
   const cands=(selVig.length?VIGS.filter(d=>selVig.includes(vigLbl(d))):VIGS.slice()).sort((a,b)=>vigKeyN(a)-vigKeyN(b));
   const selD=cands.length?cands[cands.length-1]:(VIGS[VIGS.length-1]||null);
   if(!selD)return;
+  const perKeys=new Set(cands.map(vigKeyN)); // vigências selecionadas → indicadores = MÉDIA delas
   let unis=[...new Set(ICS.map(o=>o.unidade))];
   if(selUni.length)unis=unis.filter(u=>selUni.includes(u));
-  const diags=unis.map(u=>diagnose(u,selD)).filter(Boolean).sort((a,b)=>(a.pont==null?999:a.pont)-(b.pont==null?999:b.pont)); // piores primeiro
+  const diags=unis.map(u=>diagnose(u,selD,perKeys)).filter(Boolean).sort((a,b)=>(a.pont==null?999:a.pont)-(b.pont==null?999:b.pont)); // piores primeiro
   // resumo
   const cnt={g:0,y:0,o:0,r:0};diags.forEach(d=>cnt[d.cls]++);
   document.getElementById('resumo').innerHTML=
@@ -199,7 +203,7 @@ function atualizar(){
     `<div class="rz"><div class="rz-lbl"><i style="background:#EAB308"></i>Regulares</div><div class="rz-val" style="color:#EAB308">${cnt.y}</div></div>`+
     `<div class="rz"><div class="rz-lbl"><i style="background:#F97316"></i>Atenção</div><div class="rz-val" style="color:#F97316">${cnt.o}</div></div>`+
     `<div class="rz"><div class="rz-lbl"><i style="background:#FF6666"></i>Críticas</div><div class="rz-val" style="color:#FF6666">${cnt.r}</div></div>`+
-    `<div class="rz"><div class="rz-lbl">Vigência</div><div class="rz-val" style="font-size:20px;padding-top:8px">${vigLbl(selD).toUpperCase()}</div></div>`;
+    `<div class="rz"><div class="rz-lbl">${cands.length>1?'Período · média':'Vigência'}</div><div class="rz-val" style="font-size:18px;padding-top:9px">${cands.length>1?vigLbl(cands[0]).toUpperCase()+'–'+vigLbl(selD).toUpperCase():vigLbl(selD).toUpperCase()}</div></div>`;
   // cards
   const ICO={r:'⛔',o:'⚠️',y:'•',g:'✓'};
   document.getElementById('grid').innerHTML=diags.map(d=>{
