@@ -96,7 +96,8 @@ body.light-mode tbody tr+tr td{border-top-color:rgba(0,0,0,.05);}
   <section class="hero">
     <div><div class="hero-label">Pontuação Geral · Frota</div><div class="hero-value" id="h-pont">—</div><div class="hero-sub" id="h-sub"></div></div>
   </section>
-  <div class="legend"><span><i style="background:#3BB33B"></i>≥ 90% — Saudável</span><span><i style="background:#EAB308"></i>80–90% — Regular</span><span><i style="background:#F97316"></i>70–80% — Atenção</span><span><i style="background:#FF6666"></i>&lt; 70% — Crítico</span></div>
+  <div class="legend"><span style="font-weight:700;color:var(--text)">Indicadores:</span><span><i style="background:#3BB33B"></i>≥ 90% — Saudável</span><span><i style="background:#EAB308"></i>80–90% — Regular</span><span><i style="background:#F97316"></i>70–80% — Atenção</span><span><i style="background:#FF6666"></i>&lt; 70% — Crítico</span></div>
+  <div class="legend"><span style="font-weight:700;color:var(--text)">Real / Remunerado:</span><span><i style="background:#3BB33B"></i>≥ 100% — Saudável</span><span><i style="background:#EAB308"></i>98–100% — Regular</span><span><i style="background:#F97316"></i>95–98% — Atenção</span><span><i style="background:#FF6666"></i>&lt; 95% — Crítico</span></div>
   <h2 class="sec-title">Indicadores Principais</h2>
   <div class="cards" id="cards"><div class="loading">Carregando…</div></div>
   <div class="chart-card"><div class="chart-head"><h2>Pontuação Geral · Mensal</h2><div class="chart-sub" id="ch-sub"></div></div><div class="chart-wrap"><canvas id="ch-temp"></canvas></div></div>
@@ -129,6 +130,8 @@ function n1(v){return v==null||!isFinite(v)?'—':Number(v).toLocaleString('pt-B
 // farol p/ indicadores "maior = melhor" (%): ≥85 verde, ≥70 ambar, <70 vermelho
 // faixas: ≥90 Saudável(verde) · ≥80 Regular(amarelo) · ≥70 Atenção(laranja) · <70 Crítico(vermelho)
 function band(v){return v==null?'':v>=90?'g':v>=80?'y':v>=70?'o':'r';}
+// banda rígida p/ indicadores "Real/Remunerado" (100% = na meta): ≥100 Saudável · ≥98 Regular · ≥95 Atenção · <95 Crítico
+function bandCost(v){return v==null?'':v>=100?'g':v>=98?'y':v>=95?'o':'r';}
 function sumAtt(rows,perKeys){let rem=0,real=0,has=false;rows.forEach(o=>{if(perKeys.has(o.vk)){rem+=o.rem;real+=o.real;has=true;}});return has&&rem?real/rem*100:null;}
 // R$/km atingimento = (custoReal/kmReal) / (custoRem/kmRem)
 function rkmAtt(perKeys){let cr=0,cR=0,kr=0,kR=0;(XPANEL.dre||[]).forEach(o=>{if(perKeys.has(o.vk)){cr+=o.rem;cR+=o.real;}});(XPANEL.km||[]).forEach(o=>{if(perKeys.has(o.vk)){kr+=o.rem;kR+=o.real;}});if(!kR||!kr||!cr)return null;const rem=cr/kr;return rem?(cR/kR)/rem*100:null;}
@@ -207,7 +210,7 @@ function atualizar(){
     {lbl:'FCA Conclusão',        val:cap(fcaS.concl), meta:'nível empresa'}
   ];
   document.getElementById('cards').innerHTML=cards.map(c=>{
-    const cls=band(c.val);const disp=c.val==null?'—':Math.round(c.val)+'%';
+    const cls=c.meta==='Real / Remunerado'?bandCost(c.val):band(c.val);const disp=c.val==null?'—':Math.round(c.val)+'%';
     return `<div class="kpi ${cls}"><div class="kpi-lbl">${c.lbl}</div><div class="kpi-val ${cls}">${disp}</div>${c.meta?`<div class="kpi-meta">${c.meta}</div>`:''}</div>`;
   }).join('')||'<div class="loading">Sem dados</div>';
 
