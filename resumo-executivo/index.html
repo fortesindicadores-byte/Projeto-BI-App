@@ -199,7 +199,7 @@ function atualizar(){
   const pacAgg={};(XP.dre||[]).forEach(o=>{if(!pk.has(o.vk))return;const p=PAC[o.cta]||'Outros';(pacAgg[p]=pacAgg[p]||{rem:0,real:0});pacAgg[p].rem+=o.rem;pacAgg[p].real+=o.real;});
   ['Manutenção','Combustível','Pneus'].forEach(p=>{const v=pacAgg[p];if(!v||!v.rem)return;const dev=(v.real/v.rem-1)*100;if(dev>3)neg.push(`<b>Custo ${p}:</b> ${dev.toFixed(1)}% acima do remunerado`);else if(dev<-3)pos.push(`<b>Custo ${p}:</b> ${Math.abs(dev).toFixed(1)}% abaixo do remunerado`);});
   // ── FCA (acumulado no ano até a vigência) ──
-  if(XP.fca){const sel=XP.fca.filter(r=>Math.floor(r.k/100)===yr&&(r.k%100)<=mi);if(sel.length){const tt=sel.length,concl=sel.filter(r=>r.concl==='C').length/tt*100,prazo=sel.filter(r=>!r.venc).length/tt*100;if(concl>=85)pos.push(`<b>FCA:</b> ${r0(concl)}% das ações concluídas`);else neg.push(`<b>FCA:</b> só ${r0(concl)}% das ações concluídas (${tt} ações)`);if(prazo<70)at.push(`<b>FCA:</b> ${r0(100-prazo)}% das ações vencidas — repactuar prazos`);}}
+  if(XP.fca){const sel=XP.fca.filter(r=>Math.floor(r.k/100)===yr&&(r.k%100)<=mi);if(sel.length){const tt=sel.length,consol=sel.reduce((s,r)=>s+(r.concl==='C'?100:r.concl==='A'?50:0),0)/tt,prazo=sel.filter(r=>!r.venc).length/tt*100;if(consol>=85)pos.push(`<b>FCA:</b> consolidação de ${r0(consol)}% das ações`);else neg.push(`<b>FCA:</b> consolidação de só ${r0(consol)}% (${tt} ações)`);if(prazo<70)at.push(`<b>FCA:</b> ${r0(100-prazo)}% das ações vencidas — repactuar prazos`);}}
   // ── unidades saudáveis / críticas ──
   const uScore=unis.map(u=>({u,p:avg(rows.filter(o=>o.unidade===u).map(o=>o.pont))})).filter(x=>x.p!=null);
   const saud=uScore.filter(x=>x.p>=90),crit=uScore.filter(x=>x.p<70);

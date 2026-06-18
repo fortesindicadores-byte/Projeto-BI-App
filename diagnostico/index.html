@@ -177,7 +177,7 @@ function diagnose(uni,selD,perKeys){
   // DPO
   if(code&&DPO[code]){const lv=DPO[code].lv;if(lv<3)alertas.push({sev:'r',msg:`<b>Pilar DPO/VPO não sustentável</b> (Nível ${lv} · ${DPO[code].sem})`});else if(lv>=4)dpoN4=lv;else forcas.push({sev:'g',msg:`<b>DPO/VPO sustentável</b> (Nível ${lv} — fortaleza)`});}
   // FCA (acumulado até a vigência, por código)
-  if(code){const sel=FCAREC.filter(r=>r.code===code&&Math.floor(r.k/100)===yr&&(r.k%100)<=mi);if(sel.length){const tt=sel.length,concl=sel.filter(r=>r.concl==='C').length/tt*100,prazo=sel.filter(r=>!r.venc).length/tt*100;if(concl<50)alertas.push({sev:'o',msg:`<b>FCA: baixa conclusão</b> de ações (${Math.round(concl)}% · ${tt} ações)`});if(prazo<70)alertas.push({sev:'r',msg:`<b>FCA: ações vencidas</b> (${Math.round(prazo)}% no prazo)`});if(concl>=85&&prazo>=85)forcas.push({sev:'g',msg:`<b>FCA em dia</b> (${Math.round(concl)}% concluídas)`});}}
+  if(code){const sel=FCAREC.filter(r=>r.code===code&&Math.floor(r.k/100)===yr&&(r.k%100)<=mi);if(sel.length){const tt=sel.length,consol=sel.reduce((s,r)=>s+(r.concl==='C'?100:r.concl==='A'?50:0),0)/tt,prazo=sel.filter(r=>!r.venc).length/tt*100;if(consol<50)alertas.push({sev:'r',msg:`<b>FCA: consolidação baixa</b> (${Math.round(consol)}% · ${tt} ações)`});else if(consol<85)alertas.push({sev:'o',msg:`<b>FCA: consolidação parcial</b> (${Math.round(consol)}% · ${tt} ações)`});else forcas.push({sev:'g',msg:`<b>FCA consolidado</b> (${Math.round(consol)}%)`});if(prazo<70)alertas.push({sev:'r',msg:`<b>FCA: ${Math.round(100-prazo)}% das ações vencidas</b> — repactuar prazos`});}}
   // pontuação geral / tendência
   const pontSerie=ytd.map(d=>{const o=ICS.find(x=>x.unidade===uni&&x.vk===vigKeyN(d));return o?o.pont:null;});
   const pst=fallStreak(pontSerie);
