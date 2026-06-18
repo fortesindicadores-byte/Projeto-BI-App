@@ -48,6 +48,7 @@ body{background:radial-gradient(ellipse at 10% 25%,rgba(249,115,22,.06) 0%,trans
 .uc-score{font-size:26px;font-weight:800;line-height:1;text-align:right;}
 .uc-score small{font-size:9px;color:var(--text2);font-weight:600;display:block;text-transform:uppercase;letter-spacing:.5px;}
 .uc-score.g{color:#3BB33B;}.uc-score.y{color:#EAB308;}.uc-score.o{color:#F97316;}.uc-score.r{color:#FF6666;}
+.uc .n4{background:rgba(59,179,59,.18);border:1px solid rgba(59,179,59,.45);color:#3BB33B;font-weight:800;font-size:11px;border-radius:6px;padding:6px 10px;margin:8px 0 2px;}
 .diag{margin-top:10px;display:flex;flex-direction:column;gap:5px;}
 .dg{display:flex;gap:7px;align-items:flex-start;font-size:11.5px;line-height:1.35;}
 .dg .ic{flex-shrink:0;margin-top:1px;}
@@ -158,7 +159,7 @@ function diagnose(uni,selD,perKeys){
   // séries por IC (jan→selD) p/ tendência
   const serie=i=>ytd.map(d=>{const o=ICS.find(x=>x.unidade===uni&&x.vk===vigKeyN(d));return o?o.ic[i]:null;});
   const pont=avgOf(sel.map(o=>o.pont));
-  const forcas=[],alertas=[];
+  const forcas=[],alertas=[];let dpoN4=null;
   const cap=v=>v==null?null:Math.min(100,v);
   // por IC
   IC.forEach((d,i)=>{
@@ -174,7 +175,7 @@ function diagnose(uni,selD,perKeys){
   if(disp!=null&&prev!=null&&disp<85&&prev<85)alertas.push({sev:'r',msg:`<b>Manutenção comprometida</b> — disponibilidade e preventivas baixas (frota/oficina)`});
   if(kml!=null&&kml<80&&disp!=null&&disp<85)alertas.push({sev:'o',msg:`<b>Eficiência operacional ruim</b> — Km/L e disponibilidade abaixo do esperado`});
   // DPO
-  if(code&&DPO[code]){const lv=DPO[code].lv;if(lv<3)alertas.push({sev:'r',msg:`<b>Pilar DPO/VPO não sustentável</b> (Nível ${lv} · ${DPO[code].sem})`});else forcas.push({sev:'g',msg:`<b>DPO/VPO sustentável</b> (Nível ${lv})`});}
+  if(code&&DPO[code]){const lv=DPO[code].lv;if(lv<3)alertas.push({sev:'r',msg:`<b>Pilar DPO/VPO não sustentável</b> (Nível ${lv} · ${DPO[code].sem})`});else if(lv>=4)dpoN4=lv;else forcas.push({sev:'g',msg:`<b>DPO/VPO sustentável</b> (Nível ${lv} — fortaleza)`});}
   // FCA (acumulado até a vigência, por código)
   if(code){const sel=FCAREC.filter(r=>r.code===code&&Math.floor(r.k/100)===yr&&(r.k%100)<=mi);if(sel.length){const tt=sel.length,concl=sel.filter(r=>r.concl==='C').length/tt*100,prazo=sel.filter(r=>!r.venc).length/tt*100;if(concl<50)alertas.push({sev:'o',msg:`<b>FCA: baixa conclusão</b> de ações (${Math.round(concl)}% · ${tt} ações)`});if(prazo<70)alertas.push({sev:'r',msg:`<b>FCA: ações vencidas</b> (${Math.round(prazo)}% no prazo)`});if(concl>=85&&prazo>=85)forcas.push({sev:'g',msg:`<b>FCA em dia</b> (${Math.round(concl)}% concluídas)`});}}
   // pontuação geral / tendência
@@ -183,7 +184,7 @@ function diagnose(uni,selD,perKeys){
   if(pst>=3)alertas.push({sev:'o',msg:`<b>Tendência de queda geral</b> — pontuação caindo há ${pst} meses`});
   // chips dos ICs (com tendência)
   const chips=IC.map((d,i)=>{const v=cap(icCur[i]);if(v==null)return null;const st=fallStreak(serie(i));return{l:d.l,v:Math.round(v),cls:band(v),tr:st>=2?'▼':''};}).filter(Boolean);
-  return {uni,code,pont,cls:band(pont),forcas,alertas,chips};
+  return {uni,code,pont,cls:band(pont),forcas,alertas,chips,dpoN4};
 }
 
 function atualizar(){
@@ -211,7 +212,8 @@ function atualizar(){
     const fo=d.forcas.length?`<div class="dg-sec">Forças</div>`+d.forcas.slice(0,4).map(a=>`<div class="dg fo"><span class="ic">${ICO[a.sev]}</span><span>${a.msg}</span></div>`).join(''):'';
     const semDiag=(!d.alertas.length&&!d.forcas.length)?`<div class="dg fo" style="margin-top:8px">Sem alertas relevantes neste mês.</div>`:'';
     const chips=`<div class="dg-sec" style="margin:12px 0 4px">Todos os ICs</div><div class="chips" style="margin-top:0">`+d.chips.map(c=>`<span class="chip ${c.cls}" title="${c.l}">${c.l.length>10?c.l.slice(0,9)+'…':c.l} ${c.v}%<span class="tr">${c.tr}</span></span>`).join('')+`</div>`;
-    return `<div class="uc ${d.cls}"><div class="uc-top"><div><div class="uc-name">${d.uni}</div><div class="uc-code">${d.code||'—'}</div></div><div class="uc-score ${d.cls}">${n1(d.pont)}<small>Pontuação</small></div></div><div class="diag">${al}${fo}${semDiag}</div>${chips}</div>`;
+    const n4=d.dpoN4?`<div class="n4">★ DPO/VPO Nível ${d.dpoN4} — raríssimo na América Latina</div>`:'';
+    return `<div class="uc ${d.cls}"><div class="uc-top"><div><div class="uc-name">${d.uni}</div><div class="uc-code">${d.code||'—'}</div></div><div class="uc-score ${d.cls}">${n1(d.pont)}<small>Pontuação</small></div></div>${n4}<div class="diag">${al}${fo}${semDiag}</div>${chips}</div>`;
   }).join('')||'<div class="loading">Sem dados</div>';
 }
 
