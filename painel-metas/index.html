@@ -39,7 +39,7 @@ body{background:radial-gradient(ellipse at 10% 25%,rgba(249,115,22,.06) 0%,trans
 .hero-label{font-size:11px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:1px;}
 .hero-value{font-size:56px;font-weight:800;line-height:1;margin-top:4px;}
 .hero-sub{font-size:13px;color:var(--text2);margin-top:8px;}
-.charts-row{display:grid;grid-template-columns:1.4fr 1fr;gap:16px;margin-bottom:18px;}
+.charts-row{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:18px;}
 .card{background:rgba(20,27,38,.55);border:1px solid rgba(255,255,255,.07);border-radius:8px;padding:18px 20px;backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);box-shadow:0 2px 12px rgba(0,0,0,.25);}
 .chart-title{font-size:14px;font-weight:800;color:var(--text);text-transform:uppercase;letter-spacing:.5px;margin-bottom:12px;}
 .chart-wrap{position:relative;height:250px;}
@@ -115,6 +115,15 @@ function parseD(v){if(!v)return null;const m=String(v).match(/^Date\((\d+),(\d+)
 function vigKeyN(d){return d?d.getFullYear()*100+d.getMonth():0;}
 function vigLbl(d){return d?MESES[d.getMonth()]+'/'+String(d.getFullYear()).slice(2):'';}
 function vigColLbl(d){return d?MESES[d.getMonth()]+'. de '+d.getFullYear():'';}
+// Eixo X padrão: do 1º mês com dado até DEZEMBRO do último ano
+function fullYearVigs(){
+  if(!VIGS.length)return [];
+  const sorted=[...VIGS].sort((a,b)=>vigKeyN(a)-vigKeyN(b));
+  const first=sorted[0],endYear=sorted[sorted.length-1].getFullYear();
+  const out=[];let y=first.getFullYear(),m=first.getMonth();
+  while(y<endYear||(y===endYear&&m<=11)){out.push(new Date(y,m,1));m++;if(m>11){m=0;y++;}}
+  return out;
+}
 function n1(v){return v==null||!isFinite(v)?'-':Number(v).toLocaleString('pt-BR',{minimumFractionDigits:1,maximumFractionDigits:1});}
 function pctI(v){return v==null||!isFinite(v)?'-':Math.round(v)+'%';}
 
@@ -147,19 +156,20 @@ const barLabels={id:'bl',afterDatasetsDraw(c){const ds=c.data.datasets[0],m=c.ge
 function chartMensal(){
   const isLight=document.body.classList.contains('light-mode');
   const selVig=getMsValues('ms-vig');
-  const labels=VIGS.map(d=>vigLbl(d));
-  const data=VIGS.map(d=>{const rows=ALL.filter(o=>vigKeyN(o.vigD)===vigKeyN(d));return rows.length?rows.reduce((s,o)=>s+(o.pontos||0),0):null;});
-  const on=VIGS.map(d=>selVig.length===0||selVig.includes(vigLbl(d)));
+  const XV=fullYearVigs();
+  const labels=XV.map(d=>vigLbl(d));
+  const data=XV.map(d=>{const rows=ALL.filter(o=>vigKeyN(o.vigD)===vigKeyN(d));return rows.length?rows.reduce((s,o)=>s+(o.pontos||0),0):null;});
+  const on=XV.map(d=>selVig.length===0||selVig.includes(vigLbl(d)));
   const hasFocus=selVig.length>0;
   const bg=data.map((v,i)=>{if(v==null)return 'transparent';const a=hasFocus?(on[i]?.85:.2):.65;return v>=META_PONTOS?`rgba(59,179,59,${a})`:`rgba(255,102,102,${a})`;});
   const bc=data.map(v=>v==null?'transparent':(v>=META_PONTOS?'#3BB33B':'#FF6666'));
-  const metaLine=VIGS.map(()=>META_PONTOS);
+  const metaLine=XV.map(()=>META_PONTOS);
   const remC=isLight?'#000':'#F1F5F9';
   const grid={color:isLight?'rgba(0,0,0,.08)':'rgba(255,255,255,.06)'};
   const tick={color:isLight?'#444':'#94A3B8',font:{family:'Montserrat',size:11}};
   if(chM)chM.destroy();
   chM=new Chart(document.getElementById('ch-mensal'),{data:{labels,datasets:[
-    {type:'bar',data,backgroundColor:bg,borderColor:bc,borderWidth:1,_on:hasFocus?on:VIGS.map(()=>true),borderRadius:3,maxBarThickness:46,order:2},
+    {type:'bar',data,backgroundColor:bg,borderColor:bc,borderWidth:1,_on:hasFocus?on:XV.map(()=>true),borderRadius:3,maxBarThickness:46,order:2},
     {type:'line',label:'Meta 80%',data:metaLine,borderColor:remC,borderWidth:2,borderDash:[6,4],tension:0,fill:false,pointRadius:4,pointBackgroundColor:remC,order:1}
   ]},plugins:[barLabels],options:{responsive:true,maintainAspectRatio:false,layout:{padding:{top:22}},plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>c.dataset.type==='line'?'Meta '+META_PONTOS:n1(c.raw)+' pts'}}},scales:{x:{grid,ticks:tick},y:{min:0,max:100,grid,ticks:{...tick}}}}});
 }
