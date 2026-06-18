@@ -825,17 +825,20 @@ function renderCharts(F) {
   const metaLine = MONTHS.map(function(_, i) { return mData[i+1].cnt > 0 ? 5 : null; });
 
   var hasFocusEvo = hiMonths.size > 0;
+  // cor pela META de 5%: ≤5% verde, >5% vermelho (só neste gráfico de Dispersão)
   var realBarBg = MONTHS.map(function(_, i) {
     var m = i + 1;
-    if(mData[m].cnt === 0) return 'transparent';
-    var red = mData[m].real > mData[m].rem;
+    if(mData[m].cnt === 0 || mData[m].rem === 0) return 'transparent';
+    var dp = (mData[m].real - mData[m].rem) / Math.abs(mData[m].rem) * 100;
+    var red = dp > 5;
     var a = hasFocusEvo ? (hiMonths.has(m) ? '.85' : '.2') : '.65';
     return red ? 'rgba(255,102,102,' + a + ')' : 'rgba(59,179,59,' + a + ')';
   });
   var realBarBc = MONTHS.map(function(_, i) {
     var m = i + 1;
-    if(mData[m].cnt === 0) return 'transparent';
-    return mData[m].real > mData[m].rem ? '#FF6666' : '#3BB33B';
+    if(mData[m].cnt === 0 || mData[m].rem === 0) return 'transparent';
+    var dp = (mData[m].real - mData[m].rem) / Math.abs(mData[m].rem) * 100;
+    return dp > 5 ? '#FF6666' : '#3BB33B';
   });
 
   chEvo = new Chart(document.getElementById('chart-evolucao').getContext('2d'), {
