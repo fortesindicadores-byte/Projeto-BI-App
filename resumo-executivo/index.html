@@ -185,7 +185,8 @@ function atualizar(){
   if(rk!=null&&rk>2)neg.push(`<b>R$/km:</b> ${rk.toFixed(1)}% acima do remunerado`);
   if(rl!=null){(rl<=0?pos:neg).push(`<b>Combustível (R$/L):</b> ${rl<=0?Math.abs(rl).toFixed(1)+'% abaixo':rl.toFixed(1)+'% acima'} do remunerado`);}
   // ── DPO ──
-  if(XP.dpo){if(XP.dpo.ok.length)pos.push(`<b>DPO/VPO sustentável:</b> ${XP.dpo.ok.map(x=>x.code+' (N'+x.lv+')').join(', ')}`);if(XP.dpo.bad.length)neg.push(`<b>DPO/VPO não sustentável:</b> ${XP.dpo.bad.map(x=>x.code+' (N'+x.lv+')').join(', ')} — ${XP.dpo.sem}`);}
+  const dpoN4=XP.dpo?XP.dpo.ok.filter(x=>x.lv>=4):[];
+  if(XP.dpo){const n3=XP.dpo.ok.filter(x=>x.lv===3);if(dpoN4.length)pos.push(`<b>DPO/VPO Nível ${Math.max(...dpoN4.map(x=>x.lv))} — raríssimo na América Latina:</b> ${dpoN4.map(x=>x.code).join(', ')}`);if(n3.length)pos.push(`<b>DPO/VPO sustentável (Nível 3):</b> ${n3.map(x=>x.code).join(', ')}`);if(XP.dpo.bad.length)neg.push(`<b>DPO/VPO não sustentável:</b> ${XP.dpo.bad.map(x=>x.code+' (N'+x.lv+')').join(', ')} — ${XP.dpo.sem}`);}
   // ── FCA (acumulado no ano até a vigência) ──
   if(XP.fca){const sel=XP.fca.filter(r=>Math.floor(r.k/100)===yr&&(r.k%100)<=mi);if(sel.length){const tt=sel.length,concl=sel.filter(r=>r.concl==='C').length/tt*100,prazo=sel.filter(r=>!r.venc).length/tt*100;if(concl>=85)pos.push(`<b>FCA:</b> ${r0(concl)}% das ações concluídas`);else neg.push(`<b>FCA:</b> só ${r0(concl)}% das ações concluídas (${tt} ações)`);if(prazo<70)at.push(`<b>FCA:</b> ${r0(100-prazo)}% das ações vencidas — repactuar prazos`);}}
   // ── unidades saudáveis / críticas ──
@@ -208,8 +209,6 @@ function atualizar(){
   // quedas recentes mês a mês (IC da frota caiu >2pp vs mês anterior, mas ainda ≥80)
   const prevD=ytd.length>1?ytd[ytd.length-2]:null;let maxDrop=null;
   if(prevD){const pr=ICS.filter(o=>o.vk===vigKeyN(prevD)),cu=ICS.filter(o=>o.vk===vigKeyN(selD));IC.forEach((d,i)=>{const cv=cap(avg(cu.map(o=>o.ic[i]))),pv=cap(avg(pr.map(o=>o.ic[i])));if(cv!=null&&pv!=null&&cv>=80&&cv<pv-2){at.push(`<b>${d.l}</b> caiu de ${r0(pv)}% para ${r0(cv)}% vs ${vigLbl(prevD)}`);if(!maxDrop||(pv-cv)>maxDrop.drop)maxDrop={l:d.l,pv,cv,drop:pv-cv};}});}
-  // DPO no limite (exatamente Nível 3)
-  if(XP.dpo){const lim=XP.dpo.ok.filter(x=>x.lv===3);if(lim.length)at.push(`<b>DPO/VPO no limite</b> (Nível 3): ${lim.map(x=>x.code).join(', ')} — risco de cair`);}
   // FCA: andamento alto sem concluir
   if(XP.fca){const sel=XP.fca.filter(r=>Math.floor(r.k/100)===yr&&(r.k%100)<=mi);if(sel.length){const and=sel.filter(r=>r.concl==='A').length/sel.length*100;if(and>=40)at.push(`<b>FCA:</b> ${r0(and)}% das ações em andamento — monitorar para não vencer`);}}
   if(!at.length&&weak.length)at.push(`Acompanhar de perto: ${weak.map(w=>w.l).join(' e ')} abaixo do esperado.`);
@@ -224,7 +223,7 @@ function atualizar(){
   let best=null,worst=null;VIGS.forEach(d=>{const p=pontByVig(d);if(p!=null){if(!best||p>best.p)best={d,p};if(!worst||p<worst.p)worst={d,p};}});
   const worstU=uScore.slice().sort((a,b)=>a.p-b.p)[0];
   const hl=t=>t?`<li class="hl"><span class="mk">★</span><span>${t}</span></li>`:'';
-  const posHl=hl(best?`<b>Melhor mês de pontuação:</b> ${vigLbl(best.d)} (${n1(best.p)} pts)`:'');
+  const posHl=hl(dpoN4.length?`<b>Nível 4 em DPO/VPO:</b> ${dpoN4.map(x=>x.code).join(', ')} — conquista raríssima na América Latina`:(best?`<b>Melhor mês de pontuação:</b> ${vigLbl(best.d)} (${n1(best.p)} pts)`:''));
   const negHl=hl(worstU?`<b>Unidade mais crítica:</b> ${worstU.u.replace('CDD ','').replace('CDI ','')} (${n1(worstU.p)} pts)`:'');
   const atHl=hl(maxDrop?`<b>Maior queda recente:</b> ${maxDrop.l} ${r0(maxDrop.pv)}%→${r0(maxDrop.cv)}% vs ${vigLbl(prevD)}`:(best&&worst&&vigKeyN(worst.d)!==vigKeyN(best.d)?`<b>Pior mês de pontuação:</b> ${vigLbl(worst.d)} (${n1(worst.p)} pts)`:''));
   const nextHl=hl(next.length?`<b>Prioridade:</b> `+next[0].replace(/<\/?b>/g,''):'');
