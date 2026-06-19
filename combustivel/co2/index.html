@@ -277,7 +277,6 @@ body.light-mode .green-note,body.light-mode .green-note b{color:#1a1a1a;}
         <div class="hero-delta">Δ YTD<b id="h-ytd-v">—</b></div>
         <div class="hero-delta">Δ YTD %<b id="h-ytd-p">—</b></div>
       </div>
-      <div class="saldo-floresta" id="saldo-floresta" style="display:none"></div>
       <div class="green-note" id="green-note"></div>
       <div class="esg-block" id="esg-block" style="display:none"></div>
     </div>
@@ -596,25 +595,27 @@ function aggByKey(rows,keyFn){
 }
 
 // ── COMPENSAÇÃO DE CARBONO / SELO ESG ──
-const PRECO_CREDITO=50;   // R$/ton CO² — mercado voluntário (referência média)
-const TETO_CREDITO=5000;  // R$/ano destinados à compensação
+const PRECO_CREDITO=50;    // R$/ton CO² — mercado voluntário (referência média)
+const TETO_CREDITO=10000;  // R$/ano destinados à compensação (teto)
+// Métrica: 1 crédito = 1 t CO². Compramos N créditos/ano dentro do teto → "1 crédito a cada X t emitidas".
 function renderESG(real){
   const el=document.getElementById('esg-block');if(!el)return;
   if(real==null||!isFinite(real)||real<=0){el.style.display='none';return;}
   el.style.display='flex';
-  const tonComp=Math.min(real,TETO_CREDITO/PRECO_CREDITO);
-  const pctComp=Math.min(100,tonComp/real*100);
-  const custo100=real*PRECO_CREDITO;
+  const creditos=Math.min(real,TETO_CREDITO/PRECO_CREDITO);  // ≤ 200 créditos/ano e nunca mais que a emissão
+  const invest=creditos*PRECO_CREDITO;
+  const ratio=creditos>0?real/creditos:null;                // toneladas emitidas por crédito comprado
+  const ratioTxt=ratio==null?'—':(ratio<=1?'1 : 1':'1 : '+Math.round(ratio));
   const brl=v=>'R$ '+Math.round(v).toLocaleString('pt-BR');
   el.innerHTML=
     `<div class="esg-seal"><div class="seal-badge"><svg viewBox="0 0 24 24"><path d="M11 20A7 7 0 0 1 9.8 6.1C15.5 5 17 4.48 19 2c1 2 2 4.18 2 8 0 5.5-4.78 10-10 10z"/><path d="M2 21c0-3 1.85-5.36 5.08-6"/></svg></div>`+
       `<div class="seal-txt"><div class="st-1">FROTA SUSTENTÁVEL</div><div class="st-2">Programa ESG · Carbono</div>`+
-      `<div class="st-3">${Math.round(pctComp)}% das emissões compensadas com crédito de carbono certificado</div></div></div>`+
+      `<div class="st-3">${ton(creditos)} créditos de carbono certificados/ano · 1 a cada ${ratio==null?'—':Math.round(ratio)} t emitidas</div></div></div>`+
     `<div class="esg-cards">`+
       `<div class="esg-card"><span class="ec-lbl">Emissão</span><span class="ec-val">${ton(real)} t</span><span class="ec-sub">CO² realizado · período</span></div>`+
-      `<div class="esg-card"><span class="ec-lbl">Compensação</span><span class="ec-val">${ton(tonComp)} t</span><span class="ec-sub">teto R$ 5.000/ano · ~R$ 50/t</span></div>`+
-      `<div class="esg-card"><span class="ec-lbl">% Compensado</span><span class="ec-val">${Math.round(pctComp)}%</span><div class="esg-bar"><i style="width:${Math.round(pctComp)}%"></i></div></div>`+
-      `<div class="esg-card"><span class="ec-lbl">Custo p/ 100%</span><span class="ec-val">${brl(custo100)}</span><span class="ec-sub">${ton(real)} t × R$ 50/t</span></div>`+
+      `<div class="esg-card"><span class="ec-lbl">Créditos / ano</span><span class="ec-val">${ton(creditos)}</span><span class="ec-sub">1 crédito = 1 t · teto R$ 10.000</span></div>`+
+      `<div class="esg-card"><span class="ec-lbl">Proporção</span><span class="ec-val">${ratioTxt}</span><span class="ec-sub">1 crédito a cada ${ratio==null?'—':Math.round(ratio)} t emitidas</span></div>`+
+      `<div class="esg-card"><span class="ec-lbl">Investimento / ano</span><span class="ec-val">${brl(invest)}</span><span class="ec-sub">${ton(creditos)} créditos × R$ 50/t</span></div>`+
     `</div>`;
 }
 
