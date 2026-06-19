@@ -67,6 +67,24 @@ body.light-mode::after{background:linear-gradient(180deg,rgba(240,240,240,.85) 0
 .saldo-floresta .sf-lbl{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.7px;color:var(--text2);}
 .saldo-floresta .sf-num{font-size:24px;font-weight:800;line-height:1.1;}
 .saldo-floresta .sf-desc{font-size:10px;color:var(--text2);max-width:300px;line-height:1.45;border-left:1px solid rgba(255,255,255,.12);padding-left:14px;}
+/* ── Selo ESG + Compensação de carbono ── */
+.esg-block{margin-top:16px;display:flex;flex-wrap:wrap;gap:14px;align-items:stretch;}
+.esg-seal{display:flex;align-items:center;gap:14px;background:linear-gradient(135deg,rgba(16,185,129,.18),rgba(16,185,129,.03));border:1px solid rgba(16,185,129,.45);border-radius:12px;padding:14px 20px;}
+.seal-badge{width:58px;height:58px;flex-shrink:0;border-radius:50%;background:radial-gradient(circle at 35% 30%,#34D399,#0E8C5A);display:flex;align-items:center;justify-content:center;box-shadow:0 4px 14px rgba(16,185,129,.4);}
+.seal-badge svg{width:30px;height:30px;stroke:#06231A;fill:none;stroke-width:2;}
+.seal-txt .st-1{font-size:14px;font-weight:800;color:#34D399;letter-spacing:.3px;}
+.seal-txt .st-2{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.9px;color:var(--text2);margin-top:1px;}
+.seal-txt .st-3{font-size:11px;color:var(--text);margin-top:7px;font-weight:600;max-width:230px;line-height:1.4;}
+.esg-cards{display:grid;grid-template-columns:repeat(4,minmax(118px,1fr));gap:10px;flex:1;min-width:280px;}
+.esg-card{background:rgba(20,27,38,.55);border:1px solid rgba(16,185,129,.22);border-radius:10px;padding:12px 15px;display:flex;flex-direction:column;}
+.ec-lbl{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text2);}
+.ec-val{font-size:21px;font-weight:800;color:var(--text);line-height:1.1;margin-top:5px;}
+.ec-sub{font-size:9px;color:var(--text3);margin-top:4px;line-height:1.35;}
+.esg-bar{margin-top:8px;height:6px;border-radius:3px;background:rgba(255,255,255,.08);overflow:hidden;}
+.esg-bar i{display:block;height:100%;background:linear-gradient(90deg,#34D399,#10B981);border-radius:3px;}
+body.light-mode .esg-card{background:rgba(128,128,128,.12)!important;border-color:rgba(16,185,129,.3);}
+body.light-mode .esg-bar{background:rgba(0,0,0,.08);}
+body.light-mode .seal-txt .st-1{color:#0E8C5A;}
 .charts-row{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:24px;}
 .chart-card{background:rgba(20,27,38,.55);border:1px solid rgba(255,255,255,.07);border-radius:8px;padding:18px 18px 14px;backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);box-shadow:0 2px 12px rgba(0,0,0,.25);}
 .chart-title{font-size:15px;font-weight:800;color:var(--text);text-transform:uppercase;letter-spacing:.5px;}
@@ -146,6 +164,12 @@ body.light-mode .green-note,body.light-mode .green-note b{color:#1a1a1a;}
   .saldo-floresta{display:flex;flex-wrap:wrap;gap:10px;padding:10px 14px;}
   .saldo-floresta .sf-num{font-size:20px;}
   .saldo-floresta .sf-desc{max-width:none;border-left:none;padding-left:0;flex-basis:100%;}
+  /* ESG: empilha e cards 2 por linha */
+  .esg-block{flex-direction:column;gap:10px;}
+  .esg-seal{padding:12px 14px;}
+  .seal-txt .st-3{max-width:none;}
+  .esg-cards{grid-template-columns:repeat(2,1fr);min-width:0;}
+  .ec-val{font-size:18px;}
   /* Gráficos empilhados 1 coluna */
   .charts-row{grid-template-columns:1fr;gap:12px;margin-bottom:14px;}
   .chart-card{padding:14px 12px 12px;}
@@ -255,6 +279,7 @@ body.light-mode .green-note,body.light-mode .green-note b{color:#1a1a1a;}
       </div>
       <div class="saldo-floresta" id="saldo-floresta" style="display:none"></div>
       <div class="green-note" id="green-note"></div>
+      <div class="esg-block" id="esg-block" style="display:none"></div>
     </div>
   </section>
 
@@ -570,6 +595,29 @@ function aggByKey(rows,keyFn){
   return Object.entries(m).map(([k,v])=>({k,agg:aggRows(v.rows)}));
 }
 
+// ── COMPENSAÇÃO DE CARBONO / SELO ESG ──
+const PRECO_CREDITO=50;   // R$/ton CO² — mercado voluntário (referência média)
+const TETO_CREDITO=5000;  // R$/ano destinados à compensação
+function renderESG(real){
+  const el=document.getElementById('esg-block');if(!el)return;
+  if(real==null||!isFinite(real)||real<=0){el.style.display='none';return;}
+  el.style.display='flex';
+  const tonComp=Math.min(real,TETO_CREDITO/PRECO_CREDITO);
+  const pctComp=Math.min(100,tonComp/real*100);
+  const custo100=real*PRECO_CREDITO;
+  const brl=v=>'R$ '+Math.round(v).toLocaleString('pt-BR');
+  el.innerHTML=
+    `<div class="esg-seal"><div class="seal-badge"><svg viewBox="0 0 24 24"><path d="M11 20A7 7 0 0 1 9.8 6.1C15.5 5 17 4.48 19 2c1 2 2 4.18 2 8 0 5.5-4.78 10-10 10z"/><path d="M2 21c0-3 1.85-5.36 5.08-6"/></svg></div>`+
+      `<div class="seal-txt"><div class="st-1">FROTA SUSTENTÁVEL</div><div class="st-2">Programa ESG · Carbono</div>`+
+      `<div class="st-3">${Math.round(pctComp)}% das emissões compensadas com crédito de carbono certificado</div></div></div>`+
+    `<div class="esg-cards">`+
+      `<div class="esg-card"><span class="ec-lbl">Emissão</span><span class="ec-val">${ton(real)} t</span><span class="ec-sub">CO² realizado · período</span></div>`+
+      `<div class="esg-card"><span class="ec-lbl">Compensação</span><span class="ec-val">${ton(tonComp)} t</span><span class="ec-sub">teto R$ 5.000/ano · ~R$ 50/t</span></div>`+
+      `<div class="esg-card"><span class="ec-lbl">% Compensado</span><span class="ec-val">${Math.round(pctComp)}%</span><div class="esg-bar"><i style="width:${Math.round(pctComp)}%"></i></div></div>`+
+      `<div class="esg-card"><span class="ec-lbl">Custo p/ 100%</span><span class="ec-val">${brl(custo100)}</span><span class="ec-sub">${ton(real)} t × R$ 50/t</span></div>`+
+    `</div>`;
+}
+
 // ── HERO ──
 function renderHero(active,ytd){
   const a=aggRows(active),ay=aggRows(ytd);
@@ -579,6 +627,7 @@ function renderHero(active,ytd){
 
   set('h-real',real!=null?ton(real):'—');
   set('h-rem',rem!=null?ton(rem):'—');
+  renderESG(real);
   const eDv=document.getElementById('h-drem-v'),eDp=document.getElementById('h-drem-p');
   if(eDv){eDv.textContent=delta!=null?tonD(delta):'—';colI(eDv,delta>0);}
   if(eDp){eDp.textContent=pct(deltaP);colI(eDp,deltaP>0);}
