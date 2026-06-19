@@ -65,6 +65,48 @@ body.light-mode thead th{background:#F0F0F0;}
 body.light-mode tbody td{border-bottom-color:rgba(0,0,0,.06);}
 body.light-mode .pts{background:#1a1a1a;color:#fff;}
 @media(max-width:900px){.charts-row{grid-template-columns:1fr;}.main{padding:12px;}.hero-value{font-size:42px;}}
+/* ── Toggle indicadores (só mobile) ── */
+.tbl-ind-toggle{display:none;}
+/* ── Mobile ── */
+@media(max-width:768px){
+  .header{padding:8px 12px 10px;}
+  .header-right{gap:4px;}
+  .brand h1{font-size:14px;}
+  .brand p{font-size:9px;}
+  .status-badge{font-size:8px;padding:2px 6px;}
+  .btn{padding:3px 6px;}
+  .btn svg{width:13px;height:13px;}
+  .header-filters{gap:5px;margin-top:8px;}
+  .filter-group{flex:0 0 100%;}
+  .ms-wrap{width:100%;}
+  .ms-btn{width:100%;min-width:0;}
+  .main{padding:12px;}
+  /* Hero */
+  .hero{margin-bottom:14px;}
+  .hero-value{font-size:36px;}
+  .hero-sub{font-size:11px;}
+  /* Gráficos: empilhar 1 coluna */
+  .charts-row{grid-template-columns:1fr;gap:12px;}
+  .chart-wrap{height:220px;}
+  /* Tabela Indicadores: ocultar colunas secundárias por padrão */
+  .sec-col{display:none;}
+  table{min-width:0;}
+  /* Botão toggle */
+  .tbl-ind-toggle{
+    display:inline-flex;align-items:center;gap:6px;
+    margin:0 8px 10px;
+    background:rgba(249,115,22,.12);border:1px solid rgba(249,115,22,.3);
+    border-radius:4px;padding:5px 12px;
+    font-family:'Montserrat',sans-serif;font-size:10px;font-weight:700;
+    color:var(--orange);cursor:pointer;text-transform:uppercase;letter-spacing:.5px;
+  }
+  /* Quando expandido: mostrar colunas e permitir scroll horizontal */
+  .tbl-expanded .sec-col{display:table-cell;}
+  .tbl-expanded table{min-width:1000px;font-size:10px;}
+  .tbl-expanded thead th{font-size:9px;padding:6px 4px;}
+  .tbl-expanded tbody td{padding:8px 4px;font-size:10px;}
+  .tbl-expanded tbody td.desc,.tbl-expanded tbody td.regra{font-size:9px;min-width:140px;}
+}
 </style>
 </head>
 <body>
@@ -91,7 +133,7 @@ body.light-mode .pts{background:#1a1a1a;color:#fff;}
     <div class="card"><div class="chart-title">Pontuação · Mensal</div><div class="chart-wrap"><canvas id="ch-mensal"></canvas></div></div>
     <div class="card"><div class="chart-title">Pontuação por Indicador</div><div class="chart-wrap"><canvas id="ch-ind"></canvas></div></div>
   </div>
-  <div class="tbl-section"><div class="tbl-head"><h2>Indicadores</h2><div class="tbl-sub" id="tbl-sub"></div></div><div class="tbl-wrap"><div id="tbl"><div class="loading">Carregando…</div></div></div></div>
+  <div class="tbl-section"><div class="tbl-head"><h2>Indicadores</h2><div class="tbl-sub" id="tbl-sub"></div></div><button class="tbl-ind-toggle" id="tbl-ind-toggle" onclick="toggleIndCols()">+ Ver detalhes</button><div class="tbl-wrap"><div id="tbl"><div class="loading">Carregando…</div></div></div></div>
 </main>
 
 <script>
@@ -216,7 +258,7 @@ function renderTable(){
   const indOrder=[],seen=new Set();ALL.forEach(o=>{if(!seen.has(o.indicador)){seen.add(o.indicador);indOrder.push(o);}});
   const atgColor=(pts,peso)=>{if(pts==null||!peso)return 'var(--text3)';const f=pts/peso;return f>=1?'var(--green)':f>0?'var(--amber)':'var(--red)';};
   const subEl=document.getElementById('tbl-sub');if(subEl)subEl.textContent=perDates.length<=1?vigLbl(selD).toUpperCase():`${vigLbl(perDates[0]).toUpperCase()} – ${vigLbl(selD).toUpperCase()} · MÉDIA`;
-  let html='<table><thead><tr class="cols"><th class="lft">Indicador</th><th>Peso</th><th class="lft">Descrição</th><th class="lft">Regra de Atingimento</th><th>Un.</th><th>Meta</th><th>Real</th><th>Ating.</th><th>Pontos</th><th class="sep-l">Ating. YTD</th><th>Pontos YTD</th></tr></thead><tbody>';
+  let html='<table><thead><tr class="cols"><th class="lft">Indicador</th><th class="sec-col">Peso</th><th class="lft sec-col">Descrição</th><th class="lft sec-col">Regra de Atingimento</th><th class="sec-col">Un.</th><th class="sec-col">Meta</th><th>Real</th><th>Ating.</th><th>Pontos</th><th class="sep-l sec-col">Ating. YTD</th><th class="sec-col">Pontos YTD</th></tr></thead><tbody>';
   indOrder.forEach(base=>{
     const ind=base.indicador;
     const per=ALL.filter(x=>x.indicador===ind&&perKeys.has(vigKeyN(x.vigD)));
@@ -225,9 +267,9 @@ function renderTable(){
     const yr=ALL.filter(x=>x.indicador===ind&&ytd.some(d=>vigKeyN(d)===vigKeyN(x.vigD)));
     const atgY=avgNN(yr.map(o=>o.atg));
     const ptsY=yr.length?yr.reduce((s,o)=>s+(o.pontos||0),0)/yr.length:null;
-    html+=`<tr><td class="lft ind">${ind}</td><td>${n1(base.peso)}</td><td class="lft desc">${(base.desc||'').replace(/\n/g,'<br>')}</td><td class="lft regra">${(base.regra||'').replace(/\n/g,'<br>')}</td><td class="un">${base.un||''}</td>`;
-    if(per.length){html+=`<td>${n1(pMeta)}</td><td>${n1(pReal)}</td><td style="color:${atgColor(pPts,base.peso)};font-weight:700">${pctI(pAtg)}</td><td><span class="pts">${n1(pPts)}</span></td>`;}else{html+='<td>-</td><td>-</td><td>-</td><td>-</td>';}
-    html+=`<td class="sep-l" style="color:${atgColor(ptsY,base.peso)};font-weight:700">${pctI(atgY)}</td><td><span class="pts">${n1(ptsY)}</span></td>`;
+    html+=`<tr><td class="lft ind">${ind}</td><td class="sec-col">${n1(base.peso)}</td><td class="lft desc sec-col">${(base.desc||'').replace(/\n/g,'<br>')}</td><td class="lft regra sec-col">${(base.regra||'').replace(/\n/g,'<br>')}</td><td class="un sec-col">${base.un||''}</td>`;
+    if(per.length){html+=`<td class="sec-col">${n1(pMeta)}</td><td>${n1(pReal)}</td><td style="color:${atgColor(pPts,base.peso)};font-weight:700">${pctI(pAtg)}</td><td><span class="pts">${n1(pPts)}</span></td>`;}else{html+='<td class="sec-col">-</td><td>-</td><td>-</td><td>-</td>';}
+    html+=`<td class="sep-l sec-col" style="color:${atgColor(ptsY,base.peso)};font-weight:700">${pctI(atgY)}</td><td class="sec-col"><span class="pts">${n1(ptsY)}</span></td>`;
     html+='</tr>';
   });
   html+='</tbody></table>';
@@ -286,6 +328,16 @@ const _sun=`<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="
 const _moon=`<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>`;
 function applyTheme(t){document.body.classList.toggle('light-mode',t==='light');localStorage.setItem('bi_theme',t);const b=document.getElementById('themeBtn');if(b)b.innerHTML=t==='light'?_moon:_sun;if(ALL.length)atualizar();}
 (function(){const t=localStorage.getItem('bi_theme')||'dark';document.body.classList.toggle('light-mode',t==='light');document.getElementById('themeBtn').innerHTML=t==='light'?_moon:_sun;document.getElementById('themeBtn').addEventListener('click',()=>applyTheme(document.body.classList.contains('light-mode')?'dark':'light'));})();
+
+// ── Toggle colunas detalhadas (efeito só mobile) ──
+let indColsVisible=false;
+function toggleIndCols(){
+  indColsVisible=!indColsVisible;
+  const wrap=document.querySelector('.tbl-section');
+  if(wrap)wrap.classList.toggle('tbl-expanded',indColsVisible);
+  const btn=document.getElementById('tbl-ind-toggle');
+  if(btn)btn.textContent=indColsVisible?'− Ocultar detalhes':'+ Ver detalhes';
+}
 
 carregar();
 </script>

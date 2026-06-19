@@ -74,7 +74,68 @@ body.light-mode .main{background:#F0F0F0;--text:#1a1a1a;--text2:#444444;--text3:
 body.light-mode .kpi,body.light-mode .tbl-section{background:rgba(128,128,128,.14)!important;border-color:transparent!important;box-shadow:none!important;--text:#1a1a1a;--text2:#444444;--text3:#555555;}
 body.light-mode thead th{background:#F0F0F0;}
 body.light-mode tbody tr+tr td{border-top-color:rgba(0,0,0,.05);}
-@media(max-width:768px){.main{padding:12px;}.hero-value{font-size:42px;}.cards{grid-template-columns:repeat(2,1fr);}}
+/* ── Toggle detalhes tabela (só mobile) ── */
+.tbl-ind-toggle{display:none;}
+@media(max-width:768px){
+  /* Header compacto */
+  .header{padding:8px 12px 10px;}
+  .brand h1{font-size:14px;}
+  .brand p{font-size:9px;}
+  .header-right{gap:4px;}
+  .status-badge{font-size:8px;padding:2px 6px;}
+  .btn{padding:3px 5px;}
+  .btn svg{width:13px;height:13px;}
+
+  /* Filtros full-width, ~2 por linha */
+  .header-filters{gap:6px;margin-top:8px;}
+  .filter-group{flex:0 0 calc(50% - 3px);}
+  .ms-wrap{width:100%;}
+  .ms-btn{width:100%;min-width:0;font-size:9px;padding:5px 8px;}
+  .ms-panel{min-width:0;width:100%;}
+
+  .main{padding:12px;}
+  .hero-value{font-size:42px;}
+
+  /* Cards: 2 colunas, fonte menor p/ não cortar */
+  .cards{grid-template-columns:repeat(2,1fr);gap:8px;}
+  .kpi{padding:10px 11px;}
+  .kpi-lbl{font-size:9px;min-height:22px;}
+  .kpi-val{font-size:20px;margin-top:4px;}
+  .kpi-meta{font-size:8px;}
+
+  /* Gráfico: largura total, altura reduzida */
+  .chart-card{padding:12px 12px;}
+  .chart-head h2{font-size:14px;}
+  .chart-wrap{height:220px;}
+
+  /* Tabela larga por unidade: scroll horizontal + fontes menores;
+     colunas secundárias ocultas por padrão (mostradas ao expandir) */
+  .tbl-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch;}
+  table{font-size:11px;}
+  thead th{font-size:9px;padding:7px 6px;}
+  tbody td{padding:7px 6px;font-size:11px;}
+  tbody td.uni{min-width:120px;}
+  .ind-col{display:none;}
+
+  .tbl-ind-toggle{
+    display:inline-flex;align-items:center;gap:6px;margin:0 12px 10px;
+    background:rgba(249,115,22,.12);border:1px solid rgba(249,115,22,.3);
+    border-radius:4px;padding:5px 12px;
+    font-family:'Montserrat',sans-serif;font-size:10px;font-weight:700;
+    color:var(--orange);cursor:pointer;text-transform:uppercase;letter-spacing:.5px;
+  }
+  .tbl-expanded .ind-col{display:table-cell;}
+  .tbl-expanded table{font-size:10px;}
+  .tbl-expanded thead th{font-size:9px;padding:6px 4px;}
+  .tbl-expanded tbody td{padding:6px 4px;font-size:10px;}
+}
+@media(max-width:480px){
+  .header-filters{gap:5px;}
+  .ms-btn{font-size:8px;padding:4px 6px;}
+  .kpi-val{font-size:18px;}
+  .kpi-lbl{font-size:8.5px;}
+  .hero-value{font-size:36px;}
+}
 </style>
 </head>
 <body>
@@ -309,6 +370,16 @@ const _sun=`<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="
 const _moon=`<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>`;
 function applyTheme(t){document.body.classList.toggle('light-mode',t==='light');localStorage.setItem('bi_theme',t);const b=document.getElementById('themeBtn');if(b)b.innerHTML=t==='light'?_moon:_sun;if(ICS.length)atualizar();}
 (function(){const t=localStorage.getItem('bi_theme')||'dark';document.body.classList.toggle('light-mode',t==='light');document.getElementById('themeBtn').innerHTML=t==='light'?_moon:_sun;document.getElementById('themeBtn').addEventListener('click',()=>applyTheme(document.body.classList.contains('light-mode')?'dark':'light'));})();
+
+// ── Toggle "Ver detalhes" da tabela larga (só mobile; aditivo, no-op se não houver tabela) ──
+let _tblColsVis=false;
+function toggleIndCols(){
+  _tblColsVis=!_tblColsVis;
+  const wrap=document.querySelector('.tbl-section');
+  if(wrap)wrap.classList.toggle('tbl-expanded',_tblColsVis);
+  const btn=document.getElementById('tbl-ind-toggle');
+  if(btn)btn.textContent=_tblColsVis?'− Ocultar detalhes':'+ Ver detalhes';
+}
 
 carregar();
 </script>

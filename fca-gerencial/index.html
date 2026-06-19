@@ -76,13 +76,75 @@ table.dre tbody td:first-child{text-align:left;font-weight:600;}
 table.dre tbody tr:hover{background:rgba(255,255,255,.03);}
 .pctcell{font-weight:800;color:#0C1017;border-radius:4px;padding:4px 8px;text-align:center;display:inline-block;min-width:48px;}
 .loading{text-align:center;color:var(--text3);padding:40px;}
+.tbl-mob-toggle{display:none;}
 /* MODO CLARO — só conteúdo e cards (header escuro), cards brancos */
 body.light-mode .main{background:#F0F0F0;--text:#1a1a1a;--text2:#444444;--text3:#666666;color:var(--text);--red:#ff0000;--green:#0E8C0E;}body.light-mode .hero-sep{background:rgba(0,0,0,.18)!important;color:rgba(0,0,0,.2)!important;}
 body.light-mode .card,body.light-mode .tbl-section,body.light-mode .kpi{background:rgba(128,128,128,.14)!important;border:none!important;box-shadow:none!important;--text:#1a1a1a;--text2:#444444;--text3:#555555;}
 body.light-mode table.dre thead th{background:#F0F0F0;border-bottom-color:rgba(0,0,0,.10);}
 body.light-mode table.dre tbody td{border-bottom-color:rgba(0,0,0,.035);}
 @media(max-width:900px){.charts-row{grid-template-columns:1fr;}.kpi-row{grid-template-columns:repeat(3,1fr);}.hero-value{font-size:42px;}.main{padding:12px;}}
-@media(max-width:520px){.kpi-row{grid-template-columns:repeat(2,1fr);}}
+@media(max-width:768px){
+  /* Header compacto */
+  .header{padding:8px 12px 10px;}
+  .header-right{gap:4px;}
+  .brand h1{font-size:14px;}.brand p{font-size:9px;}
+  .status-badge{font-size:8px;padding:2px 6px;}
+  .btn{padding:3px 5px;}.btn svg{width:13px;height:13px;}
+  /* Filtros ~2 por linha, full-width */
+  .header-filters{gap:6px;margin-top:8px;}
+  .filter-group{flex:0 0 calc(50% - 3px);}
+  .ms-wrap{width:100%;}
+  .ms-btn{width:100%;min-width:0;font-size:8px;padding:4px 8px;}
+  .ms-panel{min-width:0;width:100%;}
+  /* Main */
+  .main{padding:12px;}
+  /* Hero menor */
+  .hero{margin-bottom:14px;}
+  .hero-value{font-size:38px;}
+  .hero-subs{gap:24px;margin-top:10px;}
+  .sub b{font-size:20px;}
+  .hero-leg{gap:14px;margin-top:12px;}
+  .hero-leg span{font-size:10px;}
+  /* KPI cards 3 colunas, compactos */
+  .kpi-row{grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:14px;}
+  .kpi{padding:9px 10px;}
+  .kpi-lbl{font-size:8px;gap:5px;}
+  .kpi-lbl .fdot{width:9px;height:9px;}
+  .kpi-val{font-size:20px;margin-top:4px;}
+  /* Gráficos empilhados */
+  .charts-row{grid-template-columns:1fr;gap:12px;margin-bottom:14px;}
+  .card{padding:14px;}
+  .chart-title{font-size:13px;}
+  .chart-wrap{height:220px;}
+  /* Tabela: esconder coluna secundária (TT Ações), scroll + fonte menor */
+  .tbl-section{padding:12px 12px 14px;}
+  .tbl-head h2{font-size:14px;}
+  .dim-btn{padding:5px 10px;font-size:9px;}
+  .tbl-mob-toggle{
+    display:inline-flex;align-items:center;gap:6px;margin-bottom:10px;
+    background:rgba(249,115,22,.12);border:1px solid rgba(249,115,22,.3);
+    border-radius:4px;padding:5px 12px;
+    font-family:'Montserrat',sans-serif;font-size:10px;font-weight:700;
+    color:var(--orange);cursor:pointer;text-transform:uppercase;letter-spacing:.5px;
+  }
+  #tbl{overflow-x:auto;-webkit-overflow-scrolling:touch;}
+  table.dre{font-size:12px;}
+  table.dre thead th{font-size:9px;padding:7px 5px;}
+  table.dre tbody td{padding:8px 5px;}
+  /* coluna 2 = TT Ações (secundária): oculta por padrão */
+  table.dre thead th:nth-child(2),
+  table.dre tbody td:nth-child(2){display:none;}
+  .tbl-expanded table.dre thead th:nth-child(2),
+  .tbl-expanded table.dre tbody td:nth-child(2){display:table-cell;}
+  .tbl-expanded table.dre{font-size:11px;}
+  .tbl-expanded table.dre thead th{font-size:9px;padding:6px 4px;}
+  .tbl-expanded table.dre tbody td{padding:7px 4px;}
+}
+@media(max-width:480px){
+  .kpi-row{grid-template-columns:repeat(2,1fr);}
+  .hero-value{font-size:34px;}
+  .hero-subs{gap:18px;}
+}
 </style>
 </head>
 <body>
@@ -141,6 +203,7 @@ body.light-mode table.dre tbody td{border-bottom-color:rgba(0,0,0,.035);}
         <button class="dim-btn" data-dim="projeto" onclick="setDim('projeto')">Projeto</button>
       </div>
     </div>
+    <button class="tbl-mob-toggle" id="tbl-mob-toggle" onclick="toggleTblCols()">+ Ver detalhes</button>
     <div id="tbl"><div class="loading">Carregando…</div></div>
   </div>
 </main>
@@ -258,6 +321,16 @@ function renderTable(rows){
 }
 function sortBy(c){tblSort=c;renderTable(ALL.filter(o=>passa(o)));}
 function setDim(d){tableDim=d;document.querySelectorAll('.dim-btn').forEach(b=>b.classList.toggle('active',b.dataset.dim===d));document.getElementById('tbl-title').textContent='Aderência por '+(d==='unidade'?'Unidade':'Projeto');renderTable(ALL.filter(o=>passa(o)));}
+
+// mobile-only: expandir colunas secundárias da tabela (aditivo, não afeta desktop)
+let tblExpanded=false;
+function toggleTblCols(){
+  tblExpanded=!tblExpanded;
+  const sec=document.querySelector('.tbl-section');
+  if(sec)sec.classList.toggle('tbl-expanded',tblExpanded);
+  const btn=document.getElementById('tbl-mob-toggle');
+  if(btn)btn.textContent=tblExpanded?'– Ocultar detalhes':'+ Ver detalhes';
+}
 
 function fetchTab(){return new Promise((res,rej)=>{const fn='_gvFcaG'+Math.floor(Math.random()*1e9);const s=document.createElement('script');const clr=()=>{try{delete window[fn];s.remove();}catch(e){}};window[fn]=r=>{clr();try{if(r.status!=='ok')throw 0;res(r.table.rows.map(x=>(x.c||[]).map(c=>c?c.v:null)));}catch(e){rej(e);}};s.onerror=()=>{clr();rej(0);};s.src=`https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?gid=${GID}&tqx=out:json;responseHandler:${fn}`;document.head.appendChild(s);});}
 

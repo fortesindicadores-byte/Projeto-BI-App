@@ -250,10 +250,15 @@ body.light-mode table.dre .sep-l{border-left-color:rgba(0,0,0,.10);}
 body.light-mode table.dre tr.ref-row td{border-bottom-color:rgba(0,0,0,.08);}
 body.light-mode table.dre tbody tr{border-bottom:1px solid rgba(0,0,0,.06);}
 
+/* botão expandir tabela — só mobile (oculto no desktop) */
+.tbl-ind-toggle{display:none;}
+
 /* ══ MOBILE RESPONSIVE ══ */
 @media(max-width:768px){
   .main{padding:12px 10px;}
   .header{padding:8px 12px 10px;}
+  .brand h1{font-size:14px;}
+  .brand p{font-size:8px;}
   .hero{flex-direction:column;align-items:flex-start;gap:4px;margin-bottom:14px;}
   .hero-value{font-size:36px;}
   .hero-side{padding:0 0 8px;flex-direction:row;gap:20px;}
@@ -280,19 +285,50 @@ body.light-mode table.dre tbody tr{border-bottom:1px solid rgba(0,0,0,.06);}
   .ms-btn{width:100%;min-width:0;font-size:8px;padding:3px 6px;gap:3px;}
   .ms-btn svg{width:9px;height:9px;}
   .filter-hint{display:none;}
-  .tbl-wrap{overflow-x:hidden;}
   .tbl-section{padding:12px 10px 10px;}
-  table.dre{table-layout:fixed;width:100%;font-size:1.6vmin;}
-  table.dre td,table.dre th{padding:4px 2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-  table.dre thead tr.cols th{font-size:1.6vmin;padding:4px 2px;letter-spacing:0;}
-  .grp-lbl{font-size:1.6vmin;letter-spacing:0;margin-bottom:2px;padding-bottom:2px;}
-  table.dre tr.total td{font-size:1.6vmin;padding-top:6px;padding-bottom:4px;}
-  table.dre td.imp-cell,table.dre tr.total td.imp-cell{font-size:1.8vmin;}
-  .w-conta{width:30%;}
-  .w-num{width:12%;}
-  .w-d{width:11%;}
-  .w-pct{width:8%;}
-  .w-imp{width:13%;}
+
+  /* botão expandir/recolher — só mobile */
+  .tbl-ind-toggle{
+    display:inline-flex;align-items:center;gap:6px;
+    margin-bottom:10px;
+    background:rgba(249,115,22,.12);border:1px solid rgba(249,115,22,.3);
+    border-radius:4px;padding:5px 12px;
+    font-family:'Montserrat',sans-serif;font-size:10px;font-weight:700;
+    color:var(--orange);cursor:pointer;text-transform:uppercase;letter-spacing:.5px;
+  }
+
+  /* ── Modo compacto (padrão): conta + REAL, sem estourar ── */
+  .tbl-wrap{overflow-x:hidden;}
+  table.dre{table-layout:fixed;width:100%;font-size:11px;}
+  table.dre td,table.dre th{padding:6px 4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  table.dre thead tr.cols th{font-size:11px;padding:6px 4px;letter-spacing:0;}
+  .grp-lbl{font-size:11px;letter-spacing:0;margin-bottom:2px;padding-bottom:2px;}
+  table.dre tr.total td{font-size:11px;padding-top:6px;padding-bottom:4px;}
+  table.dre td.imp-cell,table.dre tr.total td.imp-cell{font-size:11px;padding-left:4px;padding-right:4px;}
+
+  /* esconde todas as colunas exceto conta (1ª) e REAL (3ª) */
+  table.dre td:not(:first-child):not(:nth-child(3)),
+  table.dre th:not(:first-child):not(:nth-child(3)){display:none;}
+  table.dre td.conta{min-width:0;}
+  table.dre .sep-l{border-left:none;padding-left:4px;}
+  table.dre td:first-child,table.dre th:first-child{width:auto;}
+
+  /* ── Modo expandido: revela todas as colunas + scroll horizontal ── */
+  .tbl-expanded .tbl-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch;}
+  .tbl-expanded table.dre{table-layout:auto;width:auto;min-width:100%;font-size:9.5px;}
+  .tbl-expanded table.dre td,
+  .tbl-expanded table.dre th{display:table-cell;padding:5px 5px;white-space:nowrap;overflow:visible;text-overflow:clip;}
+  .tbl-expanded table.dre thead tr.cols th{font-size:9.5px;}
+  .tbl-expanded .grp-lbl{font-size:9.5px;}
+  .tbl-expanded table.dre tr.total td{font-size:9.5px;}
+  .tbl-expanded table.dre td.imp-cell,
+  .tbl-expanded table.dre tr.total td.imp-cell{font-size:9.5px;}
+  .tbl-expanded table.dre td.conta{min-width:120px;}
+  .tbl-expanded table.dre .sep-l{border-left:1px solid rgba(255,255,255,.13);padding-left:8px;}
+}
+@media(max-width:480px){
+  table.dre{font-size:10px;}
+  table.dre thead tr.cols th{font-size:10px;}
 }
 </style>
 </head>
@@ -481,6 +517,7 @@ body.light-mode table.dre tbody tr{border-bottom:1px solid rgba(0,0,0,.06);}
       </div>
     </div>
     <div class="tbl-sub" id="sub-pacote">—</div>
+    <button class="tbl-ind-toggle" onclick="toggleTblCols(this)">+ Ver detalhes</button>
     <div class="tbl-wrap">
       <table class="dre">
         <thead>
@@ -511,6 +548,7 @@ body.light-mode table.dre tbody tr{border-bottom:1px solid rgba(0,0,0,.06);}
       </div>
     </div>
     <div class="tbl-sub">Custo DRE × AV (%) × Impacto = Δ pp × Receita Líquida Realizada</div>
+    <button class="tbl-ind-toggle" onclick="toggleTblCols(this)">+ Ver detalhes</button>
     <div class="tbl-wrap">
       <table class="dre">
         <thead>
@@ -540,6 +578,7 @@ body.light-mode table.dre tbody tr{border-bottom:1px solid rgba(0,0,0,.06);}
       </div>
     </div>
     <div class="tbl-sub">Custo DRE × AV (%) × Impacto = Δ pp × Receita Líquida Realizada</div>
+    <button class="tbl-ind-toggle" onclick="toggleTblCols(this)">+ Ver detalhes</button>
     <div class="tbl-wrap">
       <table class="dre">
         <thead>
@@ -1291,6 +1330,12 @@ function initAccessLog(){
   }
   localStorage.setItem('bi_last_access',new Date().toISOString());
   localStorage.setItem('bi_last_user',name);
+}
+// Toggle de colunas da tabela (efeito só no mobile, via CSS .tbl-expanded)
+function toggleTblCols(btn){
+  const sec=btn.closest('.tbl-section'); if(!sec) return;
+  const exp=sec.classList.toggle('tbl-expanded');
+  btn.textContent=exp?'− Ocultar detalhes':'+ Ver detalhes';
 }
 document.addEventListener('DOMContentLoaded',()=>{initAccessLog();init();});
 let _resizeTimer;

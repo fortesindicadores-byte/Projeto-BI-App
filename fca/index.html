@@ -51,7 +51,61 @@ body.light-mode .main{background:#F0F0F0;--text:#1a1a1a;--text2:#444444;--text3:
 body.light-mode .tbl-section{background:rgba(128,128,128,.14)!important;border:none!important;box-shadow:none!important;--text:#1a1a1a;--text2:#444444;--text3:#555555;}
 body.light-mode thead th{background:#F0F0F0;}
 body.light-mode tbody td{border-bottom-color:rgba(0,0,0,.08);}
-@media(max-width:768px){.main{padding:12px;}.header{padding:8px 12px 10px;}}
+.tbl-ind-toggle{display:none;}
+@media(max-width:768px){
+  .main{padding:12px;}
+  /* Header compacto */
+  .header{padding:8px 12px 10px;}
+  .brand h1{font-size:14px;}
+  .brand p{font-size:9px;}
+  .header-right{gap:4px;}
+  .status-badge{font-size:8px;padding:2px 6px;}
+  .btn{padding:3px 5px;}
+  .btn svg{width:13px;height:13px;}
+  /* Filtros 2 por linha, full-width */
+  .header-filters{gap:6px;margin-top:8px;}
+  .filter-group{flex:0 0 calc(50% - 3px);}
+  .ms-wrap{width:100%;}
+  .ms-btn{width:100%;min-width:0;font-size:9px;padding:5px 7px;}
+  .ms-panel{min-width:160px;}
+  /* Tabela: esconder colunas secundárias por padrão.
+     Ordem: 1 Origem · 2 Unidade · 3 Projeto · 4 Fato · 5 Causa · 6 Ação · 7 Prazo · 8 Status Prazo · 9 Status
+     Mantém: Unidade(2) Projeto(3) Fato(4) Status(9). Esconde: 1,5,6,7,8 */
+  table{min-width:0;font-size:11px;}
+  thead th{font-size:9px;padding:7px 5px;}
+  tbody td{padding:8px 5px;line-height:1.4;}
+  td.txt{min-width:0;}
+  td.txtsm{min-width:0;}
+  table th:nth-child(1),table td:nth-child(1),
+  table th:nth-child(5),table td:nth-child(5),
+  table th:nth-child(6),table td:nth-child(6),
+  table th:nth-child(7),table td:nth-child(7),
+  table th:nth-child(8),table td:nth-child(8){display:none;}
+  /* Botão toggle (mobile-only) */
+  .tbl-ind-toggle{
+    display:inline-flex;align-items:center;gap:6px;margin-bottom:10px;
+    background:rgba(249,115,22,.12);border:1px solid rgba(249,115,22,.3);
+    border-radius:4px;padding:5px 12px;
+    font-family:'Montserrat',sans-serif;font-size:10px;font-weight:700;
+    color:var(--orange);cursor:pointer;text-transform:uppercase;letter-spacing:.5px;
+  }
+  /* Expandido: revela todas as colunas, fonte menor, scroll horizontal */
+  .tbl-expanded table th:nth-child(1),.tbl-expanded table td:nth-child(1),
+  .tbl-expanded table th:nth-child(5),.tbl-expanded table td:nth-child(5),
+  .tbl-expanded table th:nth-child(6),.tbl-expanded table td:nth-child(6),
+  .tbl-expanded table th:nth-child(7),.tbl-expanded table td:nth-child(7),
+  .tbl-expanded table th:nth-child(8),.tbl-expanded table td:nth-child(8){display:table-cell;}
+  .tbl-expanded table{min-width:760px;font-size:10px;}
+  .tbl-expanded thead th{font-size:9px;padding:6px 4px;}
+  .tbl-expanded tbody td{padding:7px 4px;font-size:10px;}
+  .tbl-expanded td.txt{min-width:150px;}
+  .tbl-expanded td.txtsm{min-width:120px;}
+}
+@media(max-width:480px){
+  .filter-group{flex:0 0 calc(50% - 3px);}
+  table{font-size:10px;}
+  thead th{font-size:8px;padding:6px 4px;}
+}
 </style>
 </head>
 <body>
@@ -67,7 +121,7 @@ body.light-mode tbody td{border-bottom-color:rgba(0,0,0,.08);}
 </header>
 
 <main class="main">
-  <div class="tbl-section"><div class="tbl-wrap"><div id="tbl"><div class="loading">Carregando…</div></div></div></div>
+  <div class="tbl-section"><button class="tbl-ind-toggle" id="tbl-ind-toggle" onclick="toggleIndCols()">+ Ver detalhes</button><div class="tbl-wrap"><div id="tbl"><div class="loading">Carregando…</div></div></div></div>
 </main>
 
 <script>
@@ -229,6 +283,16 @@ const _sun=`<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="
 const _moon=`<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>`;
 function applyTheme(t){document.body.classList.toggle('light-mode',t==='light');localStorage.setItem('bi_theme',t);const b=document.getElementById('themeBtn');if(b)b.innerHTML=t==='light'?_moon:_sun;}
 (function(){const t=localStorage.getItem('bi_theme')||'dark';applyTheme(t);document.getElementById('themeBtn').addEventListener('click',()=>applyTheme(document.body.classList.contains('light-mode')?'dark':'light'));})();
+
+// Toggle mobile: revela/esconde colunas secundárias (efeito só mobile via CSS)
+let _fcaColsExp=false;
+function toggleIndCols(){
+  _fcaColsExp=!_fcaColsExp;
+  const sec=document.querySelector('.tbl-section');
+  if(sec)sec.classList.toggle('tbl-expanded',_fcaColsExp);
+  const btn=document.getElementById('tbl-ind-toggle');
+  if(btn)btn.textContent=_fcaColsExp?'− Ocultar detalhes':'+ Ver detalhes';
+}
 
 carregar();
 </script>

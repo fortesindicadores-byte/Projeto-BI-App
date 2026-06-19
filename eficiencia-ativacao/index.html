@@ -200,6 +200,9 @@ body.light-mode tbody tr{border-bottom:1px solid rgba(0,0,0,.06);}
 .cg{color:var(--green)!important;font-weight:700;}
 .cy{color:var(--yellow)!important;font-weight:700;}
 
+/* ── Toggle detalhes tabela (só mobile) ── */
+.tbl-det-toggle{display:none;}
+
 /* ── Mobile ── */
 @media(max-width:768px){
   body{font-size:13px;}
@@ -218,19 +221,52 @@ body.light-mode tbody tr{border-bottom:1px solid rgba(0,0,0,.06);}
   .ms-cnt{font-size:8px;}
   .ms-opt{font-size:9px;}
   .main{padding:12px;}
+  .hero{margin-bottom:14px;}
   .hero-label{font-size:9px;}
   .hero-value{font-size:32px;}
+  .hero-info-row{gap:14px;margin:5px 0 8px;}
+  .hero-info-label{font-size:9px;}
   .hero-info-val{font-size:16px;}
+  .hero-deltas{gap:12px;}
   .hero-delta{font-size:9px;}
   .hero-delta b{font-size:13px;}
+  .hero-sep{height:28px;}
+  .chart-card{padding:14px 14px;}
   .chart-title{font-size:11px;}
   .chart-sub{font-size:8px;}
+  .chart-wrap,.chart-wrap-tall{height:220px;}
+  .tbl-section{padding:14px 14px 12px;}
   .tbl-title{font-size:14px;}
   .tbl-sub{font-size:9px;}
-  .charts-grid{grid-template-columns:1fr;}
-  table{table-layout:fixed;width:100%;font-size:1.6vmin;}
-  thead th{font-size:1.6vmin;padding:4px 2px;letter-spacing:0;}
-  tfoot tr.total td{font-size:1.6vmin;padding-top:6px;padding-bottom:4px;}
+  .charts-grid{grid-template-columns:1fr;gap:12px;}
+
+  /* Botão "+ Ver detalhes" — só mobile */
+  .tbl-det-toggle{
+    display:inline-flex;align-items:center;gap:6px;margin-bottom:10px;
+    background:rgba(249,115,22,.12);border:1px solid rgba(249,115,22,.3);
+    border-radius:4px;padding:5px 12px;
+    font-family:'Montserrat',sans-serif;font-size:10px;font-weight:700;
+    color:var(--orange);cursor:pointer;text-transform:uppercase;letter-spacing:.5px;
+  }
+
+  /* Compacto: identificador + métricas principais (Ativo, Real, Δ, Atv%);
+     oculta colunas secundárias (col 6-9: YoY%, Δ YTD, Atv% YTD, YTD YoY%) */
+  table{width:100%;font-size:13px;}
+  thead th{font-size:12px;padding:8px 5px 10px;letter-spacing:0;}
+  td{padding:10px 5px;}
+  tfoot tr.total td{font-size:13px;padding-top:8px;padding-bottom:6px;}
+  thead th:nth-child(n+6),
+  tbody td:nth-child(n+6),
+  tfoot tr.total td:nth-child(n+6){display:none;}
+
+  /* Expandido: mostra todas as colunas + scroll horizontal + fonte menor */
+  .tbl-expanded table{font-size:10px;}
+  .tbl-expanded thead th{font-size:10px;padding:6px 4px;}
+  .tbl-expanded td{font-size:10px;padding:8px 4px;}
+  .tbl-expanded tfoot tr.total td{font-size:10px;}
+  .tbl-expanded thead th:nth-child(n+6),
+  .tbl-expanded tbody td:nth-child(n+6),
+  .tbl-expanded tfoot tr.total td:nth-child(n+6){display:table-cell;}
 }
 </style>
 </head>
@@ -365,6 +401,7 @@ body.light-mode tbody tr{border-bottom:1px solid rgba(0,0,0,.06);}
         <button class="drill-tab" data-view="proj" onclick="setDrill('proj')">Projeto</button>
       </div>
     </div>
+    <button class="tbl-det-toggle" id="tbl-det-toggle" onclick="toggleTblDet()">+ Ver detalhes</button>
     <div style="overflow-x:auto;margin-top:16px;">
       <table>
         <thead>
@@ -406,6 +443,16 @@ function setDrill(v) {
   document.getElementById('title-disp').textContent = v === 'und' ? 'Dispersão por Unidade' : 'Dispersão por Projeto';
   document.getElementById('th-key').textContent = v === 'und' ? 'Unidade' : 'Projeto';
   if (_lastTblArgs) renderTable(..._lastTblArgs);
+}
+
+/* ── Toggle detalhes tabela (só mobile) ── */
+let _tblDetVisible = false;
+function toggleTblDet() {
+  _tblDetVisible = !_tblDetVisible;
+  const sec = document.querySelector('.tbl-section');
+  if (sec) sec.classList.toggle('tbl-expanded', _tblDetVisible);
+  const btn = document.getElementById('tbl-det-toggle');
+  if (btn) btn.textContent = _tblDetVisible ? '− Ocultar detalhes' : '+ Ver detalhes';
 }
 
 /* ── Formatters ── */

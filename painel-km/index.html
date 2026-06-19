@@ -197,6 +197,9 @@ body.light-mode tbody tr{border-bottom:1px solid rgba(0,0,0,.06);}
 .cr{color:var(--red)!important;font-weight:700;}
 .cg{color:var(--green)!important;font-weight:700;}
 
+/* Toggle de colunas (mobile-only) — oculto no desktop */
+.km-tbl-toggle{display:none;}
+
 /* ── Mobile ── */
 @media(max-width:768px){
   body{font-size:13px;}
@@ -220,14 +223,56 @@ body.light-mode tbody tr{border-bottom:1px solid rgba(0,0,0,.06);}
   .hero-info-val{font-size:16px;}
   .hero-delta{font-size:9px;}
   .hero-delta b{font-size:13px;}
-  .chart-title{font-size:11px;}
-  .chart-sub{font-size:8px;}
+  .hero{margin-bottom:14px;padding:0 2px;}
+  .hero-info-row{gap:14px;margin:5px 0 8px;}
+  .hero-info-label{font-size:9px;}
+  .hero-deltas{gap:12px 14px;}
+  .hero-sep{height:24px;margin:0 2px;}
+
+  /* Gráficos: 1 coluna, altura reduzida, títulos/legendas menores */
+  .charts-grid{grid-template-columns:1fr;gap:12px;margin-bottom:12px;}
+  .chart-card{padding:12px 12px;}
+  .chart-title{font-size:13px;margin-bottom:2px;}
+  .chart-sub{font-size:9px;margin-bottom:10px;}
+  .chart-leg{gap:8px;margin-bottom:8px;}
+  .chart-leg span{font-size:9px;}
+  .chart-wrap{height:220px;}
+  .chart-wrap-tall{height:220px;}
+
+  /* Tabela */
   .tbl-title{font-size:14px;}
   .tbl-sub{font-size:9px;}
-  .charts-grid{grid-template-columns:1fr;}
-  table{table-layout:fixed;width:100%;font-size:1.6vmin;}
-  thead th{font-size:1.6vmin;padding:4px 2px;letter-spacing:0;}
-  tfoot tr.total td{font-size:1.6vmin;padding-top:6px;padding-bottom:4px;}
+  .drill-tab{font-size:9px;}
+  table{width:100%;font-size:10px;}
+  thead th{font-size:10px;padding:6px 5px 8px;letter-spacing:0;}
+  td{padding:9px 5px;font-size:10px;}
+  tfoot tr.total td{font-size:10px;padding-top:8px;padding-bottom:5px;}
+  th.sep-imp,td.sep-imp{padding-right:6px;}
+
+  /* Esconder colunas secundárias por padrão: mantém Unidade(1), Δ(4), Δ%(5) */
+  .tbl-section th:nth-child(2),.tbl-section td:nth-child(2),
+  .tbl-section th:nth-child(3),.tbl-section td:nth-child(3),
+  .tbl-section th:nth-child(6),.tbl-section td:nth-child(6),
+  .tbl-section th:nth-child(7),.tbl-section td:nth-child(7),
+  .tbl-section th:nth-child(8),.tbl-section td:nth-child(8),
+  .tbl-section th:nth-child(9),.tbl-section td:nth-child(9){display:none;}
+
+  /* Botão toggle (estilo .tbl-ind-toggle da referência) */
+  .km-tbl-toggle{
+    display:inline-flex;align-items:center;gap:6px;
+    margin-bottom:10px;
+    background:rgba(249,115,22,.12);border:1px solid rgba(249,115,22,.3);
+    border-radius:4px;padding:5px 12px;
+    font-family:'Montserrat',sans-serif;font-size:10px;font-weight:700;
+    color:var(--orange);cursor:pointer;text-transform:uppercase;letter-spacing:.5px;
+  }
+
+  /* Expandido: mostra todas as colunas + scroll horizontal + fonte menor */
+  .tbl-section.km-expanded th,.tbl-section.km-expanded td{display:table-cell;}
+  .tbl-section.km-expanded table{font-size:9px;}
+  .tbl-section.km-expanded thead th{font-size:9px;padding:5px 4px 6px;}
+  .tbl-section.km-expanded td{padding:7px 4px;font-size:9px;}
+  .tbl-section.km-expanded tfoot tr.total td{font-size:9px;}
 }
 </style>
 </head>
@@ -373,6 +418,7 @@ body.light-mode tbody tr{border-bottom:1px solid rgba(0,0,0,.06);}
       </div>
     </div>
     <div class="tbl-sub">Ranqueado pelo Δ KM do mês · positivo = realizou mais que o remunerado</div>
+    <button class="km-tbl-toggle" id="km-tbl-toggle" onclick="toggleKmCols()">+ Ver detalhes</button>
     <div style="overflow-x:auto;">
       <table>
         <thead>
@@ -563,6 +609,14 @@ function buildMsFilter(id, items, label, displayFn, afterChange){
   }, ()=>items, afterChange||render);
 }
 
+let kmColsVisible = false;
+function toggleKmCols() {
+  kmColsVisible = !kmColsVisible;
+  const sec = document.querySelector('.tbl-section');
+  if(sec) sec.classList.toggle('km-expanded', kmColsVisible);
+  const btn = document.getElementById('km-tbl-toggle');
+  if(btn) btn.textContent = kmColsVisible ? '− Ocultar detalhes' : '+ Ver detalhes';
+}
 function toggleMs(id) {
   const wrap=document.getElementById(id);
   if(!wrap) return;

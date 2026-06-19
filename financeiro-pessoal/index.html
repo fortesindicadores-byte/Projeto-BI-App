@@ -198,9 +198,49 @@ tbody tr:hover td{background:rgba(255,255,255,.03);}
 .amt{font-weight:600;text-align:right;font-variant-numeric:tabular-nums;}
 .tfoot-row td{font-weight:700;border-top:1px solid var(--border);font-size:13px;padding-top:10px;}
 
+/* ── TOGGLE DETALHES TABELA (só mobile) ── */
+.tbl-det-toggle{display:none;}
+
 /* ── MOBILE ── */
 @media(max-width:900px){
   .row2{grid-template-columns:1fr;}
+}
+@media(max-width:768px){
+  /* main padding */
+  .main{padding:12px;}
+
+  /* filtros full-width */
+  .filter-group{flex:0 0 100%;}
+
+  /* charts: 1 coluna, altura compacta */
+  .chart-box{height:200px!important;}
+
+  /* TABELA: esconder colunas secundárias (Cluster, Status) por padrão */
+  .tbl-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch;}
+  table{font-size:11px;}
+  th{font-size:10px;padding:8px 6px 6px;}
+  td{padding:8px 6px;}
+  /* col 2 = Cluster, col 3 = Status (só thead/tbody; tfoot usa colspan) */
+  table thead th:nth-child(2),table tbody td:nth-child(2),
+  table thead th:nth-child(3),table tbody td:nth-child(3){display:none;}
+  /* tfoot Total: reduzir colspan visual via JS não necessário; alinhamento mantido por text-align */
+
+  /* botão toggle — só mobile */
+  .tbl-det-toggle{
+    display:inline-flex;align-items:center;gap:6px;
+    margin-bottom:10px;
+    background:rgba(249,115,22,.12);border:1px solid rgba(249,115,22,.3);
+    border-radius:4px;padding:5px 12px;
+    font-family:'Montserrat',sans-serif;font-size:10px;font-weight:700;
+    color:var(--orange);cursor:pointer;text-transform:uppercase;letter-spacing:.5px;
+  }
+
+  /* expandido: mostrar colunas + scroll horizontal + fonte menor */
+  .tbl-expanded table thead th:nth-child(2),.tbl-expanded table tbody td:nth-child(2),
+  .tbl-expanded table thead th:nth-child(3),.tbl-expanded table tbody td:nth-child(3){display:table-cell;}
+  .tbl-expanded table{font-size:10px;}
+  .tbl-expanded th{font-size:9px;padding:6px 4px;}
+  .tbl-expanded td{padding:6px 4px;}
 }
 @media(max-width:768px){
   .main{padding:12px 10px;}
@@ -212,7 +252,7 @@ tbody tr:hover td{background:rgba(255,255,255,.03);}
   .theme-btn{padding:3px 5px;}
   .theme-btn svg{width:13px;height:13px;}
   .header-filters{gap:5px;}
-  .filter-group{flex:0 0 calc(50% - 3px);}
+  .filter-group{flex:0 0 100%;}
   .ms-wrap{width:100%;}
   .ms-btn{width:100%;min-width:0;font-size:8px;padding:3px 6px;gap:3px;}
   .ms-btn svg{width:9px;height:9px;}
@@ -224,6 +264,15 @@ tbody tr:hover td{background:rgba(255,255,255,.03);}
   .kpi-card .card-label{font-size:7px;letter-spacing:0;}
   .kpi-card .card-value{font-size:12px;}
   .kpi-card .card-sub{font-size:8px;}
+}
+@media(max-width:480px){
+  .main{padding:10px 8px;}
+  .hero-value{font-size:30px;}
+  .kpi-cards-row{grid-template-columns:repeat(2,1fr);}
+  .chart-box{height:180px!important;}
+  table{font-size:10px;}
+  th{font-size:9px;padding:6px 4px;}
+  td{padding:6px 4px;}
 }
 </style>
 </head>
@@ -402,7 +451,8 @@ tbody tr:hover td{background:rgba(255,255,255,.03);}
       Contas do Mês — Detalhe
       <small id="tblLbl"></small>
     </div>
-    <div class="tbl-wrap">
+    <button class="tbl-det-toggle" id="tblDetToggle" onclick="toggleTblDet()">+ Ver detalhes</button>
+    <div class="tbl-wrap" id="tblWrap">
       <table>
         <thead>
           <tr>
@@ -555,6 +605,16 @@ function toggleMs(id){
     if(inp) setTimeout(()=>inp.focus(),50);
   }
 }
+// ── TOGGLE DETALHES TABELA (só mobile) ───────────────────────
+let _tblDetVisible=false;
+function toggleTblDet(){
+  _tblDetVisible=!_tblDetVisible;
+  const card=document.getElementById('tblWrap')?.closest('.card');
+  if(card) card.classList.toggle('tbl-expanded',_tblDetVisible);
+  const btn=document.getElementById('tblDetToggle');
+  if(btn) btn.textContent=_tblDetVisible?'− Ocultar detalhes':'+ Ver detalhes';
+}
+
 function getMsValues(id){
   const wrap=document.getElementById(id); if(!wrap) return [];
   return wrap._sel?[...wrap._sel]:[];
