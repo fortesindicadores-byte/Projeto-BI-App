@@ -4271,43 +4271,29 @@ function gerarSugestoes(pior, pneusPior, par) {
 
   const html = `<div class="laudo">${laudo}${resumo}${atencaoHtml}${reusoHtml}</div>`;
 
-  // "Como fica após o plano": direcional sempre NOVO; os demais eixos recebem os pneus
-  // bons + recapes REDISTRIBUÍDOS — melhor sulco nos eixos da frente e EXTERNO; mais
-  // velho/menor no último eixo e INTERNO (regras de colocação que você definiu).
+  // "Como fica após o plano": direcional → NOVO. Demais eixos → RECAPE POR EIXO INTEIRO
+  // (se qualquer pneu do eixo está ≤3 mm, recapa TODOS daquele eixo → eixo uniforme, sem
+  // mismatch de 14 mm ao lado de 5 mm). Eixo todo bom → mantém.
   const NOVO_MM = 16, RECAPE_MM = 14;
-  const internoP = p => { const t = mapa[p]; const n = (t && t.nomePosicao || '').toUpperCase().replace(/^\d+/, ''); return n.length >= 2 ? n[1] === 'I' : String(p)[2] === '2'; };
   const projetado = [];
 
-  // Direcional: pneu novo 1ª linha em cada posição (fica no lugar)
-  eixosCfg.filter(e => e.direcional).forEach(e => e.posicoes.forEach(p => {
-    const t = mapa[p]; if (!t) return;
-    projetado.push({ ...t, menorMM: NOVO_MM, mm1: NOVO_MM, mm2: NOVO_MM, mm3: NOVO_MM, mm4: NOVO_MM,
-      amplitude: 0, statusMM: 'Bom Estado', cicloVida: 1, banda: '',
-      pressaoNOK: false, desvioPressao: 0, pressaoAtual: t.pressaoIdeal || t.pressaoAtual });
-  }));
-
-  // Demais eixos: monta o "pool" de pneus finais (bom/regular mantém; ≤3 mm vira recape)
-  const outros = eixosCfg.filter(e => !e.direcional);
-  const pool = [];
-  outros.forEach(e => e.posicoes.forEach(p => {
-    const t = mapa[p]; if (!t) return;
-    if (t.menorMM > 3) pool.push({ ...t });
-    else pool.push({ ...t, menorMM: RECAPE_MM, mm1: RECAPE_MM, mm2: RECAPE_MM, mm3: RECAPE_MM, mm4: RECAPE_MM,
-      amplitude: 0, statusMM: 'Bom Estado', cicloVida: (t.cicloVida || 1) + 1, banda: 'Recape',
-      pressaoNOK: false, desvioPressao: 0, pressaoAtual: t.pressaoIdeal || t.pressaoAtual });
-  }));
-  // melhor primeiro: maior sulco; empate -> vida mais nova
-  pool.sort((a, b) => (b.menorMM - a.menorMM) || ((a.cicloVida || 1) - (b.cicloVida || 1)));
-  // slots por prioridade: eixo da frente primeiro; dentro do eixo, externo antes de interno
-  const slots = [];
-  outros.forEach(e => {
-    const ext = e.posicoes.filter(p => !internoP(p));
-    const int = e.posicoes.filter(p => internoP(p));
-    [...ext, ...int].forEach(p => slots.push(p));
-  });
-  slots.forEach((p, i) => {
-    const tire = pool[i]; if (!tire) return;
-    projetado.push({ ...tire, posicao: p, nomePosicao: (mapa[p] || {}).nomePosicao || p });
+  eixosCfg.forEach(e => {
+    const tires = e.posicoes.map(p => mapa[p]).filter(Boolean);
+    const recapaEixo = !e.direcional && tires.some(t => t.menorMM > 0 && t.menorMM <= 3);
+    e.posicoes.forEach(p => {
+      const t = mapa[p]; if (!t) return;
+      if (e.direcional && t.menorMM <= 3) {
+        projetado.push({ ...t, menorMM: NOVO_MM, mm1: NOVO_MM, mm2: NOVO_MM, mm3: NOVO_MM, mm4: NOVO_MM,
+          amplitude: 0, statusMM: 'Bom Estado', cicloVida: 1, banda: '',
+          pressaoNOK: false, desvioPressao: 0, pressaoAtual: t.pressaoIdeal || t.pressaoAtual });
+      } else if (recapaEixo) {
+        projetado.push({ ...t, menorMM: RECAPE_MM, mm1: RECAPE_MM, mm2: RECAPE_MM, mm3: RECAPE_MM, mm4: RECAPE_MM,
+          amplitude: 0, statusMM: 'Bom Estado', cicloVida: (t.cicloVida || 1) + 1, banda: 'Recape',
+          pressaoNOK: false, desvioPressao: 0, pressaoAtual: t.pressaoIdeal || t.pressaoAtual });
+      } else {
+        projetado.push({ ...t }); // eixo bom (ou direcional já bom) → mantém
+      }
+    });
   });
 
   const validos = projetado.filter(t => t.menorMM > 0);
