@@ -556,6 +556,7 @@
   .farol-dot.vencida::before { background: var(--red-soft); }
   .farol-dot.atencao::before { background: var(--yellow); }
   .farol-dot.prazo::before   { background: var(--green); }
+  .farol-dot.sem::before     { background: var(--text-muted); }
 
   @media (max-width: 900px) {
     .adh-cards  { grid-template-columns: 1fr; }
@@ -3332,20 +3333,23 @@ function renderPainel() {
   document.getElementById('adhDeltaVencida').textContent = vencida;
   document.getElementById('adhDeltaSemAfer').textContent = lista.filter(v => v.status === 'sem').length;
 
-  // Tabelas
-  const ordenados = [...lista]
-    .filter(v => v.dias !== null)
-    .sort((a, b) => (b.dias ?? 0) - (a.dias ?? 0));
+  // Tabelas — inclui os SEM AFERIÇÃO (no topo), depois vencidos→no prazo por dias
+  const ordenados = [...lista].sort((a, b) => {
+    const aSem = a.dias === null, bSem = b.dias === null;
+    if (aSem !== bSem) return aSem ? -1 : 1;        // sem aferição primeiro
+    return (b.dias ?? 0) - (a.dias ?? 0);
+  });
 
   const rowTabela = v => {
     const cls   = v.status;
-    const label = cls === 'vencida' ? 'Vencida' : cls === 'atencao' ? 'Em Atenção' : 'No Prazo';
+    const label = cls === 'sem' ? 'Sem Aferição' : cls === 'vencida' ? 'Vencida' : cls === 'atencao' ? 'Em Atenção' : 'No Prazo';
     const data  = v.dataInsp ? new Date(v.dataInsp).toLocaleDateString('pt-BR') : '—';
+    const dias  = v.dias === null ? '—' : v.dias;
     return `<tr>
       <td><strong>${v.placa}</strong></td>
       <td>${data}</td>
       <td><span class="farol-dot ${cls}">${label}</span></td>
-      <td style="text-align:right"><span class="td-dias ${cls}">${v.dias}</span></td>
+      <td style="text-align:right"><span class="td-dias ${cls}">${dias}</span></td>
     </tr>`;
   };
 
