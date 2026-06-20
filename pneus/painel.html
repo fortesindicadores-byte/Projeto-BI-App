@@ -2244,7 +2244,38 @@ function navigate(page) {
 // CACHE (localStorage, TTL 1h)
 // ============================================================
 const CACHE_KEY = 'bipneus_cache';
-const CACHE_TTL = 60 * 60 * 1000; // 1 hora em ms
+const CACHE_TTL = 3 * 60 * 60 * 1000; // 3h: dentro disso usa cache sem bater na rede (loader roda 2x/dia)
+
+// ---- IndexedDB (cache grande: os dados da Conlog passam de 30MB, não cabem no localStorage) ----
+const IDB_NAME = 'bipneus', IDB_STORE = 'cache', IDB_KEY = 'snapshot';
+function idbOpen() {
+  return new Promise((res, rej) => {
+    const r = indexedDB.open(IDB_NAME, 1);
+    r.onupgradeneeded = () => { if (!r.result.objectStoreNames.contains(IDB_STORE)) r.result.createObjectStore(IDB_STORE); };
+    r.onsuccess = () => res(r.result);
+    r.onerror = () => rej(r.error);
+  });
+}
+async function idbGet() {
+  try {
+    const db = await idbOpen();
+    return await new Promise((res, rej) => {
+      const req = db.transaction(IDB_STORE, 'readonly').objectStore(IDB_STORE).get(IDB_KEY);
+      req.onsuccess = () => res(req.result || null);
+      req.onerror = () => rej(req.error);
+    });
+  } catch (e) { return null; }
+}
+async function idbSet(val) {
+  try {
+    const db = await idbOpen();
+    await new Promise((res, rej) => {
+      const req = db.transaction(IDB_STORE, 'readwrite').objectStore(IDB_STORE).put(val, IDB_KEY);
+      req.onsuccess = () => res();
+      req.onerror = () => rej(req.error);
+    });
+  } catch (e) { /* sem espaço / indisponível */ }
+}
 
 function saveCache(data) {
   try {
@@ -2270,75 +2301,104 @@ function formatCacheTime(ts) {
 // ============================================================
 // LOAD DATA
 // ============================================================
+// Busca o snapshot completo na rede e retorna { data, ult } (sem tocar o DOM/DATA).
+async function fetchSnapshotFromNetwork() {
+  // O snapshot tem 1 linha por (endpoint, branch_id). Buscar TUDO de uma vez
+  // estoura o limite de payload do Supabase (500), então busca por unidade
+  // (14 requests menores em lotes) e junta no cliente, marcando cada
+  // registro com a unidade de origem (p/ filtro + ranking por unidade).
+  const branchIds = Object.keys(UNIDADE_MAP);
+  const merged = { vehicles: [], tires: [], inspections: [] };
+  const updatedAts = [];
+  const sleep = ms => new Promise(r => setTimeout(r, ms));
+  const fetchBranch = bid => fetch(`${SUPABASE_URL}/rest/v1/snapshot?branch_id=eq.${bid}&select=endpoint,branch_id,data,updated_at`, {
+    headers: { apikey: SUPABASE_KEY, Authorization: 'Bearer ' + SUPABASE_KEY }
+  }).then(r => r.ok ? r.json() : null).catch(() => null);
+  // O Supabase free dá 500 intermitente nos jsonb grandes (pior enquanto o loader
+  // está escrevendo). Lotes de 3 + até 5 tentativas por unidade com backoff.
+  const perBranch = [];
+  const CHUNK = 3;
+  for (let i = 0; i < branchIds.length; i += CHUNK) {
+    const batch = branchIds.slice(i, i + CHUNK);
+    const res = await Promise.all(batch.map(async bid => {
+      for (let a = 0; a < 5; a++) {
+        const out = await fetchBranch(bid);
+        if (out !== null) return out;
+        await sleep(800);
+      }
+      return [];
+    }));
+    perBranch.push(...res);
+  }
+  perBranch.flat().forEach(r => {
+    const uni = UNIDADE_MAP[r.branch_id] || ('Unidade ' + r.branch_id);
+    const arr = Array.isArray(r.data) ? r.data : [];
+    if (r.updated_at) updatedAts.push(new Date(r.updated_at));
+    if (!merged[r.endpoint]) return;
+    for (const rec of arr) { rec.unidade = uni; rec.branchId = r.branch_id; merged[r.endpoint].push(rec); }
+  });
+  if (!merged.vehicles.length) throw new Error('Sem dados no Supabase — aguarde a primeira carga do loader');
+
+  // Histórico mensal (CPK etc.) — opcional, alimenta o gráfico temporal de CPK
+  let historico = [];
+  try {
+    const rh = await fetch(`${SUPABASE_URL}/rest/v1/historico_mensal?select=competencia,cpk,km_rodados,custo&cpk=gt.0`, {
+      headers: { apikey: SUPABASE_KEY, Authorization: 'Bearer ' + SUPABASE_KEY }
+    });
+    historico = rh.ok ? await rh.json() : [];
+  } catch(_) {}
+
+  const ult = (updatedAts.sort((a, b) => b - a)[0] || new Date()).getTime();
+  return { data: { vehicles: merged.vehicles, tires: merged.tires, inspections: merged.inspections, historico }, ult };
+}
+
+function aplicarDados(data, ult, prefixo) {
+  DATA = data;
+  document.getElementById('lastUpdate').textContent = (prefixo || '🔄 Dados de: ') + formatCacheTime(ult);
+  populateFilters();
+  renderAll();
+}
+
+// Stale-while-revalidate: pinta na hora a partir do cache (IndexedDB) e só
+// rebusca na rede se o cache estiver velho (> CACHE_TTL) ou se for refresh manual.
 async function loadData(forceRefresh = false) {
-  document.getElementById('btnRefresh').disabled = true;
+  const btn = document.getElementById('btnRefresh');
+  btn.disabled = true;
+  let shownFromCache = false, cachedUlt = null;
 
   try {
-    showLoading('Carregando dados...');
-    // O snapshot tem 1 linha por (endpoint, branch_id). Buscar TUDO de uma vez
-    // estoura o limite de payload do Supabase (500), então busca por unidade
-    // (14 requests menores em paralelo) e junta no cliente, marcando cada
-    // registro com a unidade de origem (p/ filtro + ranking por unidade).
-    const branchIds = Object.keys(UNIDADE_MAP);
-    const merged = { vehicles: [], tires: [], inspections: [] };
-    const updatedAts = [];
-    const fetchBranch = bid => fetch(`${SUPABASE_URL}/rest/v1/snapshot?branch_id=eq.${bid}&select=endpoint,branch_id,data,updated_at`, {
-      headers: { apikey: SUPABASE_KEY, Authorization: 'Bearer ' + SUPABASE_KEY }
-    }).then(r => r.ok ? r.json() : null).catch(() => null);
-    // Lotes de 4 (14 requests grandes em paralelo derrubam o Supabase) + 1 retry por unidade
-    const perBranch = [];
-    const CHUNK = 4;
-    for (let i = 0; i < branchIds.length; i += CHUNK) {
-      const batch = branchIds.slice(i, i + CHUNK);
-      const res = await Promise.all(batch.map(async bid => {
-        let out = await fetchBranch(bid);
-        if (out === null) out = await fetchBranch(bid); // retry 1x
-        return out || [];
-      }));
-      perBranch.push(...res);
+    if (!forceRefresh) {
+      const cached = await idbGet();
+      if (cached && cached.data && cached.data.vehicles && cached.data.vehicles.length) {
+        cachedUlt = cached.ult;
+        aplicarDados(cached.data, cached.ult || cached.ts);
+        shownFromCache = true;
+        hideLoading();
+        // cache fresco -> não bate na rede (troca de aba instantânea)
+        if (Date.now() - cached.ts < CACHE_TTL) { btn.disabled = false; return; }
+      }
     }
-    perBranch.flat().forEach(r => {
-      const uni = UNIDADE_MAP[r.branch_id] || ('Unidade ' + r.branch_id);
-      const arr = Array.isArray(r.data) ? r.data : [];
-      if (r.updated_at) updatedAts.push(new Date(r.updated_at));
-      if (!merged[r.endpoint]) return;
-      for (const rec of arr) { rec.unidade = uni; rec.branchId = r.branch_id; merged[r.endpoint].push(rec); }
-    });
-    if (!merged.vehicles.length) throw new Error('Sem dados no Supabase — aguarde a primeira carga do loader');
-    DATA.vehicles    = merged.vehicles;
-    DATA.tires       = merged.tires;
-    DATA.inspections = merged.inspections;
 
-    // Histórico mensal (CPK etc.) — opcional, alimenta o gráfico temporal de CPK
-    try {
-      const rh = await fetch(`${SUPABASE_URL}/rest/v1/historico_mensal?select=competencia,cpk,km_rodados,custo&cpk=gt.0`, {
-        headers: { apikey: SUPABASE_KEY, Authorization: 'Bearer ' + SUPABASE_KEY }
-      });
-      DATA.historico = rh.ok ? await rh.json() : [];
-    } catch(_) { DATA.historico = []; }
+    if (!shownFromCache) showLoading('Carregando dados...');
+    const fresh = await fetchSnapshotFromNetwork();
 
-    saveCache(DATA);
-    const ult = updatedAts.sort((a, b) => b - a)[0] || new Date();
-    document.getElementById('lastUpdate').textContent =
-      '🔄 Dados de: ' + formatCacheTime(ult.getTime());
-
-    populateFilters();
-    renderAll();
+    if (shownFromCache && cachedUlt && fresh.ult <= cachedUlt) {
+      // dados não mudaram desde o cache — só renova o ts (evita re-render e re-fetch logo)
+      await idbSet({ ts: Date.now(), ult: cachedUlt, data: DATA });
+    } else {
+      await idbSet({ ts: Date.now(), ult: fresh.ult, data: fresh.data });
+      aplicarDados(fresh.data, fresh.ult);
+    }
   } catch(e) {
     console.error(e);
-    try {
-      const raw = localStorage.getItem(CACHE_KEY);
-      if (raw) {
-        const obj = JSON.parse(raw);
-        DATA = obj.data;
-        document.getElementById('lastUpdate').textContent =
-          '⚠️ Cache local: ' + formatCacheTime(obj.ts);
-        populateFilters();
-        renderAll();
-        return;
+    if (!shownFromCache) {
+      const cached = await idbGet();
+      if (cached && cached.data && cached.data.vehicles) {
+        aplicarDados(cached.data, cached.ult || cached.ts, '⚠️ Cache: ');
+      } else {
+        alert('Erro ao carregar dados: ' + e.message);
       }
-    } catch(_) {}
-    alert('Erro ao carregar dados: ' + e.message);
+    }
   } finally {
     hideLoading();
     document.getElementById('btnRefresh').disabled = false;
