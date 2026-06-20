@@ -4,9 +4,10 @@
 // Segredos vêm de env: PROLOG_TOKEN, SUPABASE_URL, SUPABASE_SERVICE_KEY
 // ============================================================
 
-const TOKEN       = process.env.PROLOG_TOKEN;
-const SUPABASE    = process.env.SUPABASE_URL;
-const SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY;
+// .trim() defende contra espaço/quebra-de-linha colado junto no GitHub Secret
+const TOKEN       = (process.env.PROLOG_TOKEN || '').trim();
+const SUPABASE    = (process.env.SUPABASE_URL || '').trim().replace(/\/+$/, '');
+const SERVICE_KEY = (process.env.SUPABASE_SERVICE_KEY || '').trim();
 
 const BASE_URL   = 'https://prologapp.com/prolog/api/v3';
 const BRANCH_IDS = [1676, 1677, 37, 1906, 1907, 1878, 20, 30, 24, 2517, 26, 38, 2277, 2550];
