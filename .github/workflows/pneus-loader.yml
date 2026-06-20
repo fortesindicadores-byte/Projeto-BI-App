@@ -1,0 +1,28 @@
+name: Pneus Loader (Conlog)
+
+# Carrega Prolog -> Supabase. Repo público = Actions grátis/ilimitado.
+on:
+  schedule:
+    - cron: '0 9,21 * * *'   # 06h e 18h (BRT, UTC-3) = 09h e 21h UTC — 2x/dia
+  workflow_dispatch:          # botão "Run workflow" para rodar na hora
+
+# Evita 2 cargas ao mesmo tempo
+concurrency:
+  group: pneus-loader
+  cancel-in-progress: false
+
+jobs:
+  load:
+    runs-on: ubuntu-latest
+    timeout-minutes: 350       # até ~5,8h (limite do job é 6h)
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Rodar loader
+        run: node scripts/pneus-loader.mjs
+        env:
+          PROLOG_TOKEN:         ${{ secrets.PROLOG_TOKEN }}
+          SUPABASE_URL:         ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
