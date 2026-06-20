@@ -4242,22 +4242,33 @@ function gerarSugestoes(pior, pneusPior, par) {
     .sort((a, b) => (a.cicloVida||1) - (b.cicloVida||1)); // V1 primeiro (melhor carcaça)
   let reusoHtml = '';
   if (removidos.length && typeof DATA !== 'undefined' && DATA.tires) {
-    const necessidades = DATA.tires.filter(t =>
-      t.status === 'INSTALLED' && t.unidade === unidade && t.veiculoId !== pior.v.id &&
-      t.menorMM > 0 && t.menorMM <= 3 && String(t.posicao)[0] !== '1' // tração/truck de outras placas
-    ).sort((a, b) => a.menorMM - b.menorMM);
-    const usados = new Set();
+    // Agrupa pneus de OUTRAS placas da unidade por (placa, eixo) — p/ avaliar onde o recape encaixa.
+    const grupos = {};
+    DATA.tires.forEach(t => {
+      if (t.status !== 'INSTALLED' || t.unidade !== unidade || t.veiculoId === pior.v.id || t.direcional) return;
+      const ax = eixoDoNome(t); if (!ax) return;
+      const k = t.veiculoId + '|' + ax;
+      (grupos[k] = grupos[k] || { placa: t.placa, ax, tires: [] }).tires.push(t);
+    });
+    const candidatos = Object.values(grupos).map(g => {
+      const needy = g.tires.filter(x => x.menorMM > 0 && x.menorMM <= 3).length;
+      const marcas = {}; g.tires.forEach(x => { if (x.marca) marcas[x.marca] = (marcas[x.marca] || 0) + 1; });
+      const marcaTop = (Object.entries(marcas).sort((a, b) => b[1] - a[1])[0] || [''])[0];
+      return { placa: g.placa, ax: g.ax, needy, marcaTop };
+    }).filter(g => g.needy > 0);
+    const usados = {};
+    const vaga = g => (usados[g.placa + '|' + g.ax] || 0) < g.needy;
     const linhas = removidos.map(t => {
-      const dest = necessidades.find(n => !usados.has(n.serial) && n.marca === t.marca)
-                || necessidades.find(n => !usados.has(n.serial));
-      if (dest) usados.add(dest.serial);
-      const destTxt = dest
-        ? `→ <b>${dest.placa}</b> (pos. ${dest.nomePosicao || dest.posicao}, hoje ${fmt(dest.menorMM)} mm)`
-        : `→ <b>pool de carcaças da unidade ${unidade}</b>`;
-      const caveat = t.menorMM <= 2 ? ` <span class="lv-fix">(rodou baixo — confirmar carcaça na inspeção)</span>` : '';
+      const dest = candidatos.filter(g => vaga(g) && g.marcaTop === t.marca).sort((a, b) => b.needy - a.needy)[0]
+                || candidatos.filter(vaga).sort((a, b) => b.needy - a.needy)[0];
+      let destTxt;
+      if (dest) { usados[dest.placa + '|' + dest.ax] = (usados[dest.placa + '|' + dest.ax] || 0) + 1;
+        destTxt = `→ <b>${dest.placa}</b> · Eixo ${dest.ax} (precisa ${dest.needy} pneu(s)${dest.marcaTop ? `, ${dest.marcaTop}` : ''})`;
+      } else destTxt = `→ <b>estoque de carcaças recapadas — ${unidade}</b>`;
+      const caveat = t.menorMM <= 2 ? ` <span class="lv-fix">(rodou baixo — confirmar carcaça)</span>` : '';
       return `<div class="lp"><div><span class="lp-e">♻️</span> <b>${pos(t)}</b> · ${t.serial} · ${t.marca} V${t.cicloVida} → <b>recape</b> (vira V${(t.cicloVida||1)+1})${caveat}</div><div class="lp-ac">${destTxt}</div></div>`;
     });
-    reusoHtml = `<div class="le"><div class="le-h">♻️ Reaproveitamento de carcaças — ${unidade}</div>${linhas.join('')}<div class="lp lp-ac">Carcaça V1 é o ativo mais valioso — recapar e realocar em vez de descartar (teto ${MAX_VIDAS} vidas${EMPURRADA.includes(unidade)?', empurrada 3':''}). Recapado não volta ao direcional.</div></div>`;
+    reusoHtml = `<div class="le"><div class="le-h">♻️ Reaproveitamento de carcaças — ${unidade}</div>${linhas.join('')}<div class="lp lp-ac">Encaixe avaliado por placa/eixo da unidade (mesma marca, eixo que precise); senão, estoque recapado. Carcaça V1 é o ativo mais valioso (teto ${MAX_VIDAS} vidas${EMPURRADA.includes(unidade)?', empurrada 3':''}). Recapado não volta ao direcional.</div></div>`;
   }
 
   // ---- Ponto de atenção (calibragem geral) ----
