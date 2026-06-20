@@ -1988,7 +1988,7 @@ function vigOf(i) { const d = new Date(i.dataInspecao); return `${String(d.getMo
 function distinctSorted(arr, mode) {
   const a = [...new Set(arr.filter(v => v !== null && v !== undefined && v !== ''))];
   if (mode === 'anoDesc') return a.sort((x,y)=>y-x);
-  if (mode === 'vigDesc') return a.sort().reverse();
+  if (mode === 'vigDesc') { const k = v => { const [m, an] = v.split('/'); return +an * 100 + +m; }; return a.sort((x, y) => k(y) - k(x)); }
   if (mode === 'vidaAsc') return a.sort((x,y)=>x-y);
   return a.sort();
 }
@@ -3496,29 +3496,31 @@ function renderUnidadeChart(porUni) {
         datalabels: {
           anchor: 'end', align: 'end', offset: 2,
           color: isLight ? '#111' : '#fff',
-          font: { family: 'Montserrat', size: 11, weight: '700' },
+          font: { family: 'Montserrat', size: 9, weight: '700' },
           formatter: v => v.toFixed(1).replace('.', ',') + '%'
         }
       }]
     },
     plugins: [ChartDataLabels],
     options: {
-      indexAxis: 'y',
       responsive: true, maintainAspectRatio: false,
-      layout: { padding: { right: 40 } },
+      layout: { padding: { top: 20 } },
       plugins: {
         legend: { display: false },
         tooltip: {
           backgroundColor: '#141B26', titleColor: '#F97316', bodyColor: '#F1F5F9',
           borderColor: '#1E2D40', borderWidth: 1,
           titleFont: { family: 'Montserrat' }, bodyFont: { family: 'Montserrat' },
-          callbacks: { label: ctx => 'Aderência: ' + ctx.parsed.x.toFixed(1).replace('.', ',') + '%' }
+          callbacks: {
+            title: items => items[0].label,
+            label: ctx => 'Aderência: ' + ctx.parsed.y.toFixed(1).replace('.', ',') + '%'
+          }
         }
       },
       scales: {
-        x: { beginAtZero: true, max: 100, grid: { color: gridColor }, ticks: { color: tickColor, font: { family: 'Montserrat', size: 10 }, callback: v => v + '%' } },
-        y: { grid: { display: false }, ticks: { color: tickColor, font: { family: 'Montserrat', size: 10 },
-          callback: function(val) { const l = this.getLabelForValue(val); return l.length > 24 ? l.slice(0, 22) + '…' : l; } } }
+        y: { beginAtZero: true, max: 100, grid: { color: gridColor }, ticks: { color: tickColor, font: { family: 'Montserrat', size: 10 }, callback: v => v + '%' } },
+        x: { grid: { display: false }, ticks: { color: tickColor, font: { family: 'Montserrat', size: 9 }, maxRotation: 60, minRotation: 60, autoSkip: false,
+          callback: function(val) { const l = this.getLabelForValue(val); return l.length > 14 ? l.slice(0, 12) + '…' : l; } } }
       }
     }
   });
