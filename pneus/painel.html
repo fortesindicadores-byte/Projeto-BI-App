@@ -1070,6 +1070,9 @@
   .lv { margin: 8px 12px 10px; padding: 9px 11px; font-size: 12.5px; line-height: 1.55;
     background: rgba(255,102,102,0.10); border: 1px solid rgba(255,102,102,0.30); border-radius: 6px; color: var(--text); }
   .lv-fix { color: var(--text-muted); }
+  .le-acao { padding: 10px 12px; font-size: 13px; line-height: 1.6; color: var(--text); border-top: 1px solid rgba(255,255,255,0.04); }
+  body.light-mode .le-acao { border-top-color: rgba(0,0,0,0.05); }
+  .le-atencao { background: rgba(243,156,18,0.10); border: 1px solid rgba(243,156,18,0.30); border-radius: 8px; padding: 10px 13px; font-size: 12.5px; line-height: 1.6; color: var(--text); }
   .le-resumo { border: 1px dashed var(--border); border-radius: 8px; padding: 11px 13px; font-size: 12.5px; line-height: 1.7; }
   .rs { display: inline-block; padding: 2px 9px; border-radius: 12px; font-weight: 700; font-size: 11px; margin: 0 2px; }
   .rs-red { background: rgba(255,102,102,0.15); color: var(--red-soft); }
@@ -4169,44 +4172,30 @@ function gerarSugestoes(pior, pneusPior, par) {
 
   eixosCfg.forEach(e => {
     const direcional = e.direcional;
-    const dual = e.posicoes.length === 4;
-    let pneusHtml = '';
+    const dual = e.posicoes.length >= 4;
+    const tires = e.posicoes.map(p => mapa[p]).filter(t => t && t.menorMM > 0);
+    if (!tires.length) return;
+    const nBloq  = tires.filter(t => t.menorMM <= 2).length;
+    const nRec   = tires.filter(t => t.menorMM > 2 && t.menorMM <= 3).length;
+    const nBad   = nBloq + nRec, nTot = tires.length;
+    const noTeto = tires.filter(t => t.menorMM <= 3 && !recapavel(t)).length;
+    const chegando = tires.some(t => t.menorMM > 3 && t.menorMM <= 4);
 
-    e.posicoes.forEach(p => {
-      const t = mapa[p];
-      if (!t || !(t.menorMM > 0)) { pneusHtml += `<div class="lp"><span class="lp-e">⚪</span> <b>${p}</b> — sem leitura</div>`; return; }
-      let acao;
-      if (t.menorMM <= 2) {
-        comprarNovo++;
-        acao = direcional
-          ? `<b>BLOQUEAR</b> → substituir por <b>pneu novo de 1ª linha</b> (direcional exige composto premium de sílica p/ forças laterais). Carcaça rodada abaixo do talão: enviar p/ análise em reformadora certificada (INMETRO).`
-          : `<b>BLOQUEAR</b> → retirar de circulação. Rodou abaixo de 2 mm (passou da janela de recape) → carcaça provavelmente comprometida: <b>sucata / pneu novo</b>, não recape.`;
-      } else if (t.menorMM <= 3) {
-        if (direcional) { comprarNovo++;
-          acao = `<b>RECAPAR atingido</b>, mas é direcional → substituir por <b>novo 1ª linha</b> (recapado não vai p/ direcional); mandar a carcaça p/ recape e usar na tração.`;
-        } else if (!recapavel(t)) { comprarNovo++;
-          acao = `<b>FIM DE VIDA DA CARCAÇA</b> (V${t.cicloVida}, teto ${MAX_VIDAS} vida(s)${EMPURRADA.includes(pior.v.unidade)?' — unidade empurrada':''}) → não recapa mais: <b>descartar</b> e repor a posição com recape de outra carcaça.`;
-        } else { recapar++;
-          acao = ombroGasto(t)
-            ? `<b>RECAUCHUTAGEM</b> (banda + ombros gastos) — a quente 150 °C com camelback. Retirar agora preserva a carcaça (otimiza CPK).`
-            : `<b>RECAPAGEM</b> da banda — a frio 115 °C, banda pré-moldada (padrão carga). Retirar preventivamente preserva a carcaça p/ o ciclo V${(t.cicloVida||1)+1} (teto ${MAX_VIDAS}).`;
-        }
-      } else if (t.menorMM <= 6) { acao = `<b>REGULAR</b> → manter em operação e monitorar no próximo ciclo.`;
-      } else { acao = `<b>BOM ESTADO</b> → nenhuma ação.`; }
+    // ---- AÇÃO CONSOLIDADA POR EIXO ----
+    let acao;
+    if (direcional) {
+      if (nBad > 0) { comprarNovo += nBad;
+        acao = `<b>Comprar ${nBad} pneu(s) novo(s) de 1ª linha.</b> Os atuais → recape (carcaça V1) e destinar a outra placa da unidade / pool (ver reaproveitamento). Recapado não volta ao direcional.`;
+      } else acao = `Em ordem — monitorar no próximo ciclo.`;
+    } else if (nBad === nTot) { recapar += (nTot - noTeto);
+      acao = `<b>Recapar o eixo inteiro</b> (${nTot} pneus).` + (noTeto ? ` ⚠️ ${noTeto} no teto de vida (V≥${MAX_VIDAS}) → sucata; repor com recape de outra carcaça.` : ``);
+    } else if (nBad > 0) { recapar += Math.max(0, nBad - noTeto);
+      acao = `<b>Recapar ${nBad} pneu(s)</b> (na janela) e <b>rodiziar</b>: melhor sulco/marca neste eixo, mais gasto pro último; marca-com-marca por lado, maior sulco externo.`;
+    } else {
+      acao = chegando ? `Em ordem — programar <b>recape no próximo mês</b> (chegando na janela).` : `Em ordem — monitorar.`;
+    }
 
-      const al = [];
-      if (t.amplitude > AMP_ALERTA) al.push(`⚙️ Desgaste irregular (amplitude ${fmt(t.amplitude)} mm) → <b>virar o pneu no aro</b> + alinhamento 3D e balanceamento.`);
-      if (t.pressaoNOK) al.push(`🔧 Pressão fora do ideal (${fmt(t.desvioPressao)}%) — calibrar a frio; subinflação reduz a vida da borracha.`);
-      else if (ombroGasto(t) && t.menorMM > 3) al.push(`🔧 Desgaste de ombro — indício de subinflação; calibrar a frio.`);
-      if (direcional && linha(t.marca) === '2ª') al.push(`⚠️ ${t.marca} é 2ª linha — direcional pede 1ª linha (premium).`);
-
-      pneusHtml += `<div class="lp">
-        <div class="lp-top"><span class="lp-e">${emoji(t)}</span> <b>${pos(t)}</b> · ${t.serial} · <b style="color:${corMM(t.statusMM)}">${fmt(t.menorMM)} mm</b> · ${t.marca} V${t.cicloVida}${t.banda?` · ${t.banda}`:''}</div>
-        <div class="lp-ac">${acao}</div>
-        ${al.map(x => `<div class="lp-al">${x}</div>`).join('')}
-      </div>`;
-    });
-
+    // ---- MATCHING INDEX (dual) ----
     let verdito = '';
     if (dual) {
       const falhas = [];
@@ -4219,15 +4208,20 @@ function gerarSugestoes(pior, pneusPior, par) {
         if (ext.banda && int.banda && ext.banda !== int.banda) f.push(`bandas diferentes`);
         if (ext.menorMM>0 && int.menorMM>0 && Math.abs(ext.menorMM-int.menorMM) > DUAL_TOL) {
           const M = ext.menorMM>int.menorMM?ext:int, m = ext.menorMM>int.menorMM?int:ext;
-          f.push(`Δ ${fmt(Math.abs(ext.menorMM-int.menorMM))} mm de sulco → <b>arraste</b>: ${M.serial} (${fmt(M.menorMM)}) sobrecarregado, ${m.serial} (${fmt(m.menorMM)}) arrastando`);
+          f.push(`Δ ${fmt(Math.abs(ext.menorMM-int.menorMM))} mm → arraste (${M.serial} sobrecarregado, ${m.serial} arrastando)`);
         }
         if (f.length) falhas.push(`<b>Lado ${lado}:</b> ${f.join('; ')}`);
       });
       if (falhas.length) { bloqueioConjunto++;
-        verdito = `<div class="lv">🔴 <b>BLOQUEAR CONJUNTO</b> — falha de pareamento do rodado duplo:<br>${falhas.join('<br>')}<br><span class="lv-fix">Desmontar o eixo, corrigir geometria e remontar <b>4 pneus idênticos</b> — mesma marca, banda, ciclo e diâmetro (tolerância zero).</span></div>`;
+        verdito = `<div class="lv">🔴 <b>Bloquear conjunto</b> — pareamento do dual: ${falhas.join(' · ')}. Remontar 4 idênticos (marca, banda, ciclo, diâmetro).</div>`;
       }
     }
-    laudo += `<div class="le"><div class="le-h">${e.label}</div>${pneusHtml}${verdito}</div>`;
+
+    // ---- AMPLITUDE (desgaste irregular) ----
+    const irreg = tires.filter(t => t.amplitude > AMP_ALERTA);
+    const ampHtml = irreg.length ? `<div class="lp-al">⚙️ Desgaste irregular (${irreg.map(t => pos(t)).join(', ')}) → <b>virar o pneu no aro</b> + alinhamento 3D e balanceamento.</div>` : '';
+
+    laudo += `<div class="le"><div class="le-h">${e.label}</div><div class="le-acao">${acao}</div>${verdito}${ampHtml}</div>`;
   });
 
   const partes = [];
@@ -4265,7 +4259,16 @@ function gerarSugestoes(pior, pneusPior, par) {
     reusoHtml = `<div class="le"><div class="le-h">♻️ Reaproveitamento de carcaças — ${unidade}</div>${linhas.join('')}<div class="lp lp-ac">Carcaça V1 é o ativo mais valioso — recapar e realocar em vez de descartar (teto ${MAX_VIDAS} vidas${EMPURRADA.includes(unidade)?', empurrada 3':''}). Recapado não volta ao direcional.</div></div>`;
   }
 
-  const html = `<div class="laudo">${laudo}${resumo}${reusoHtml}</div>`;
+  // ---- Ponto de atenção (calibragem geral) ----
+  const comP = pneusPior.filter(t => t.pressaoAtual > 0);
+  const nokP = comP.filter(t => t.pressaoNOK || ombroGasto(t)).length;
+  const atencao = [];
+  if (comP.length >= 2 && nokP / comP.length >= 0.3)
+    atencao.push('Calibrar 100% dos pneus (vários com pressão fora do ideal / desgaste de ombro — subinflação reduz a vida da borracha).');
+  const atencaoHtml = atencao.length
+    ? `<div class="le-atencao"><b>⚠️ Ponto de atenção:</b> ${atencao.join(' ')}</div>` : '';
+
+  const html = `<div class="laudo">${laudo}${resumo}${atencaoHtml}${reusoHtml}</div>`;
 
   // "Como fica após o plano": direcional sempre NOVO; os demais eixos recebem os pneus
   // bons + recapes REDISTRIBUÍDOS — melhor sulco nos eixos da frente e EXTERNO; mais
