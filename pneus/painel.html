@@ -1053,6 +1053,29 @@
   .sug-item:last-child { border-bottom: none; }
   .sug-icon { display: none; }
 
+  /* ===== LAUDO POR EIXO ===== */
+  .laudo { display: flex; flex-direction: column; gap: 14px; }
+  .le { border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+  .le-h { background: rgba(249,115,22,0.10); color: var(--orange); font-weight: 800;
+    font-size: 11px; letter-spacing: .6px; text-transform: uppercase; padding: 8px 12px; }
+  body.light-mode .le-h { background: rgba(249,115,22,0.12); }
+  .lp { padding: 9px 12px; border-top: 1px solid rgba(255,255,255,0.04); font-size: 12.5px; line-height: 1.55; }
+  body.light-mode .lp { border-top-color: rgba(0,0,0,0.05); }
+  .lp-top { color: var(--text); }
+  .lp-e { font-size: 13px; }
+  .lp-ac { color: var(--text2, var(--text-muted)); margin-top: 2px; }
+  .lp-al { color: var(--text); margin-top: 3px; font-size: 12px;
+    background: rgba(255,102,102,0.07); border-left: 2px solid var(--red-soft); padding: 4px 8px; border-radius: 3px; }
+  .lv { margin: 8px 12px 10px; padding: 9px 11px; font-size: 12.5px; line-height: 1.55;
+    background: rgba(255,102,102,0.10); border: 1px solid rgba(255,102,102,0.30); border-radius: 6px; color: var(--text); }
+  .lv-fix { color: var(--text-muted); }
+  .le-resumo { border: 1px dashed var(--border); border-radius: 8px; padding: 11px 13px; font-size: 12.5px; line-height: 1.7; }
+  .rs { display: inline-block; padding: 2px 9px; border-radius: 12px; font-weight: 700; font-size: 11px; margin: 0 2px; }
+  .rs-red { background: rgba(255,102,102,0.15); color: var(--red-soft); }
+  .rs-org { background: rgba(243,156,18,0.15); color: var(--yellow); }
+  .rs-grn { background: rgba(59,179,59,0.15); color: var(--green); }
+  .rs-cpk { color: var(--text-muted); font-size: 11px; margin-top: 7px; }
+
   .sug-list {
     margin: 8px 0 0 18px; padding: 0;
   }
@@ -4114,6 +4137,108 @@ function renderEixos() {
 // preferência por pneu novo; recapagem em conjunto quando ≥4 na faixa.
 // ============================================================
 function gerarSugestoes(pior, pneusPior, par) {
+  // ============================================================
+  // LAUDO POR EIXO — engenharia de pneus (regras validadas + spec da operação)
+  // Sulco: >6 Bom · 3–6 Regular · 2–3 Recapar · ≤2 Bloquear (CONTRAN 1,6 mm)
+  // Recape só de carcaça válida (≤3 mm preventivo); bloqueado = sucata/novo.
+  // Direcional = novo 1ª linha. Matching Index do dual (marca/ciclo/banda/arraste).
+  // Amplitude: 5 mm (desgaste irregular real; 0,3 mm é ruído). Pressão por ombro.
+  // ============================================================
+  const placa = pior.v.placa;
+  const pos = t => t.nomePosicao || t.posicao;
+  const mapa = {};
+  pneusPior.forEach(t => { mapa[t.posicao] = t; });
+
+  const AMP_ALERTA = 5;   // mm — alinhamento 3D + balanceamento
+  const DUAL_TOL   = 3;   // mm — diferença de sulco entre geminados (RMA ~4/32")
+  const SEGUNDA = ['FATE','KELLY','FORMULA','CEAT','BARUM','TORNEL','WINDPOWER','AEOLUS','LINGLONG'];
+  const PREMIUM = ['GOODYEAR','MICHELIN','BRIDGESTONE','PIRELLI','CONTINENTAL','DUNLOP','FIRESTONE'];
+  const linha = m => { const M = (m||'').toUpperCase();
+    if (SEGUNDA.some(x => M.includes(x))) return '2ª';
+    if (PREMIUM.some(x => M.includes(x))) return '1ª'; return null; };
+  const emoji = t => t.menorMM<=2?'🔴':t.menorMM<=3?'🟡':t.menorMM<=6?'🟢':'🌟';
+  const ombroGasto = t => { if (![t.mm1,t.mm2,t.mm3,t.mm4].every(x => x>0)) return false;
+    return ((t.mm2+t.mm3)/2 - (t.mm1+t.mm4)/2) > 2; };
+
+  const eixosCfg = getEixosConfig(pior.v.tipo, pior.v.pneusEsperados);
+  let comprarNovo = 0, recapar = 0, bloqueioConjunto = 0, laudo = '';
+
+  eixosCfg.forEach(e => {
+    const direcional = e.label.includes('Direcional');
+    const dual = e.posicoes.length === 4;
+    let pneusHtml = '';
+
+    e.posicoes.forEach(p => {
+      const t = mapa[p];
+      if (!t || !(t.menorMM > 0)) { pneusHtml += `<div class="lp"><span class="lp-e">⚪</span> <b>${p}</b> — sem leitura</div>`; return; }
+      let acao;
+      if (t.menorMM <= 2) {
+        comprarNovo++;
+        acao = direcional
+          ? `<b>BLOQUEAR</b> → substituir por <b>pneu novo de 1ª linha</b> (direcional exige composto premium de sílica p/ forças laterais). Carcaça rodada abaixo do talão: enviar p/ análise em reformadora certificada (INMETRO).`
+          : `<b>BLOQUEAR</b> → retirar de circulação. Rodou abaixo de 2 mm (passou da janela de recape) → carcaça provavelmente comprometida: <b>sucata / pneu novo</b>, não recape.`;
+      } else if (t.menorMM <= 3) {
+        if (direcional) { comprarNovo++;
+          acao = `<b>RECAPAR atingido</b>, mas é direcional → substituir por <b>novo 1ª linha</b> (recapado não vai p/ direcional); mandar a carcaça p/ recape e usar na tração.`;
+        } else { recapar++;
+          acao = ombroGasto(t)
+            ? `<b>RECAUCHUTAGEM</b> (banda + ombros gastos) — a quente 150 °C com camelback. Retirar agora preserva a carcaça (otimiza CPK).`
+            : `<b>RECAPAGEM</b> da banda — a frio 115 °C, banda pré-moldada (padrão carga). Retirar preventivamente preserva a carcaça p/ o ciclo V${(t.cicloVida||1)+1}.`;
+        }
+      } else if (t.menorMM <= 6) { acao = `<b>REGULAR</b> → manter em operação e monitorar no próximo ciclo.`;
+      } else { acao = `<b>BOM ESTADO</b> → nenhuma ação.`; }
+
+      const al = [];
+      if (t.amplitude > AMP_ALERTA) al.push(`⚙️ Desgaste irregular agudo (amplitude ${fmt(t.amplitude)} mm) → <b>alinhamento 3D + balanceamento</b>.`);
+      if (t.pressaoNOK) al.push(`🔧 Pressão fora do ideal (${fmt(t.desvioPressao)}%) — calibrar a frio; subinflação reduz a vida da borracha.`);
+      else if (ombroGasto(t) && t.menorMM > 3) al.push(`🔧 Desgaste de ombro — indício de subinflação; calibrar a frio.`);
+      if (direcional && linha(t.marca) === '2ª') al.push(`⚠️ ${t.marca} é 2ª linha — direcional pede 1ª linha (premium).`);
+
+      pneusHtml += `<div class="lp">
+        <div class="lp-top"><span class="lp-e">${emoji(t)}</span> <b>${pos(t)}</b> · ${t.serial} · <b style="color:${corMM(t.statusMM)}">${fmt(t.menorMM)} mm</b> · ${t.marca} V${t.cicloVida}${t.banda?` · ${t.banda}`:''}</div>
+        <div class="lp-ac">${acao}</div>
+        ${al.map(x => `<div class="lp-al">${x}</div>`).join('')}
+      </div>`;
+    });
+
+    let verdito = '';
+    if (dual) {
+      const falhas = [];
+      [[0,1,'direito'],[2,3,'esquerdo']].forEach(([ie,ii,lado]) => {
+        const ext = mapa[e.posicoes[ie]], int = mapa[e.posicoes[ii]];
+        if (!ext || !int) return;
+        const f = [];
+        if (ext.marca && int.marca && ext.marca !== int.marca) f.push(`marcas diferentes (${ext.marca} × ${int.marca})`);
+        if (ext.cicloVida !== int.cicloVida) f.push(`ciclos diferentes (V${ext.cicloVida} × V${int.cicloVida}${(ext.cicloVida===1||int.cicloVida===1)?' = novo + recapado':''})`);
+        if (ext.banda && int.banda && ext.banda !== int.banda) f.push(`bandas diferentes`);
+        if (ext.menorMM>0 && int.menorMM>0 && Math.abs(ext.menorMM-int.menorMM) > DUAL_TOL) {
+          const M = ext.menorMM>int.menorMM?ext:int, m = ext.menorMM>int.menorMM?int:ext;
+          f.push(`Δ ${fmt(Math.abs(ext.menorMM-int.menorMM))} mm de sulco → <b>arraste</b>: ${M.serial} (${fmt(M.menorMM)}) sobrecarregado, ${m.serial} (${fmt(m.menorMM)}) arrastando`);
+        }
+        if (f.length) falhas.push(`<b>Lado ${lado}:</b> ${f.join('; ')}`);
+      });
+      if (falhas.length) { bloqueioConjunto++;
+        verdito = `<div class="lv">🔴 <b>BLOQUEAR CONJUNTO</b> — falha de pareamento do rodado duplo:<br>${falhas.join('<br>')}<br><span class="lv-fix">Desmontar o eixo, corrigir geometria e remontar <b>4 pneus idênticos</b> — mesma marca, banda, ciclo e diâmetro (tolerância zero).</span></div>`;
+      }
+    }
+    laudo += `<div class="le"><div class="le-h">${e.label}</div>${pneusHtml}${verdito}</div>`;
+  });
+
+  const partes = [];
+  if (comprarNovo) partes.push(`<span class="rs rs-red">🔴 ${comprarNovo} pneu(s) novo(s)</span>`);
+  if (recapar) partes.push(`<span class="rs rs-org">🟡 ${recapar} p/ recape</span>`);
+  if (bloqueioConjunto) partes.push(`<span class="rs rs-red">⛔ ${bloqueioConjunto} eixo(s) com falha de pareamento</span>`);
+  if (!partes.length) partes.push(`<span class="rs rs-grn">✅ Sem ação crítica — eixos equilibrados</span>`);
+  const resumo = `<div class="le-resumo"><b>Reposição — ${placa}</b> ${partes.join(' ')}
+    <div class="rs-cpk">Decisão de compra pelo <b>CPK</b> = (custo do pneu + consertos + recapagens) ÷ (km V1 + V2 + V3). Direcional/rota longa: 1ª linha; eixo livre/urbano: 2ª linha aceitável.</div></div>`;
+
+  const html = `<div class="laudo">${laudo}${resumo}</div>`;
+  // Remontagem só faz sentido com pneu BOM sobrando p/ realocar — veículo crítico não rodízia, repõe.
+  const plano = null;
+  return { html, plano };
+}
+
+function _gerarSugestoesLegacy(pior, pneusPior, par) {
   const sugestoes = [];
   let plano = null;
   const placa = pior.v.placa;
