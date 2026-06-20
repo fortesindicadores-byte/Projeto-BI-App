@@ -998,7 +998,7 @@
   .axle-side-v { display: flex; gap: 4px; }
 
   .tire-v {
-    width: 108px; height: 156px; background: var(--surface2);
+    width: 108px; height: 178px; background: var(--surface2);
     border: 1.5px solid var(--border);
     border-radius: 8px; padding: 8px 9px;
     font-size: 12px; overflow: hidden;
@@ -4152,6 +4152,9 @@ function gerarSugestoes(pior, pneusPior, par) {
 
   const AMP_ALERTA = 5;   // mm — alinhamento 3D + balanceamento
   const DUAL_TOL   = 3;   // mm — diferença de sulco entre geminados (RMA ~4/32")
+  const EMPURRADA  = ['MCC T1','CBA T1'];                                  // unidades empurrada: até 3 vidas
+  const MAX_VIDAS  = EMPURRADA.includes(pior.v.unidade) ? 3 : 5;           // teto de recapes da carcaça
+  const recapavel  = t => (t.cicloVida || 1) < MAX_VIDAS;
   const SEGUNDA = ['FATE','KELLY','FORMULA','CEAT','BARUM','TORNEL','WINDPOWER','AEOLUS','LINGLONG'];
   const PREMIUM = ['GOODYEAR','MICHELIN','BRIDGESTONE','PIRELLI','CONTINENTAL','DUNLOP','FIRESTONE'];
   const linha = m => { const M = (m||'').toUpperCase();
@@ -4181,10 +4184,12 @@ function gerarSugestoes(pior, pneusPior, par) {
       } else if (t.menorMM <= 3) {
         if (direcional) { comprarNovo++;
           acao = `<b>RECAPAR atingido</b>, mas é direcional → substituir por <b>novo 1ª linha</b> (recapado não vai p/ direcional); mandar a carcaça p/ recape e usar na tração.`;
+        } else if (!recapavel(t)) { comprarNovo++;
+          acao = `<b>FIM DE VIDA DA CARCAÇA</b> (V${t.cicloVida}, teto ${MAX_VIDAS} vida(s)${EMPURRADA.includes(pior.v.unidade)?' — unidade empurrada':''}) → não recapa mais: <b>descartar</b> e repor a posição com recape de outra carcaça.`;
         } else { recapar++;
           acao = ombroGasto(t)
             ? `<b>RECAUCHUTAGEM</b> (banda + ombros gastos) — a quente 150 °C com camelback. Retirar agora preserva a carcaça (otimiza CPK).`
-            : `<b>RECAPAGEM</b> da banda — a frio 115 °C, banda pré-moldada (padrão carga). Retirar preventivamente preserva a carcaça p/ o ciclo V${(t.cicloVida||1)+1}.`;
+            : `<b>RECAPAGEM</b> da banda — a frio 115 °C, banda pré-moldada (padrão carga). Retirar preventivamente preserva a carcaça p/ o ciclo V${(t.cicloVida||1)+1} (teto ${MAX_VIDAS}).`;
         }
       } else if (t.menorMM <= 6) { acao = `<b>REGULAR</b> → manter em operação e monitorar no próximo ciclo.`;
       } else { acao = `<b>BOM ESTADO</b> → nenhuma ação.`; }
@@ -4233,7 +4238,34 @@ function gerarSugestoes(pior, pneusPior, par) {
   const resumo = `<div class="le-resumo"><b>Reposição — ${placa}</b> ${partes.join(' ')}
     <div class="rs-cpk">Decisão de compra pelo <b>CPK</b> = (custo do pneu + consertos + recapagens) ÷ (km V1 + V2 + V3). Direcional/rota longa: 1ª linha; eixo livre/urbano: 2ª linha aceitável.</div></div>`;
 
-  const html = `<div class="laudo">${laudo}${resumo}</div>`;
+  // ---- Reaproveitamento de carcaças (mesma unidade) ----
+  // Pneus retirados (≤3 mm) com carcaça ainda dentro da vida → recape → realocar p/ tração/truck
+  // de outra placa da MESMA unidade que precise (posição com pneu pior). Mesma marca preferida.
+  const unidade = pior.v.unidade || '';
+  const removidos = pneusPior
+    .filter(t => t.menorMM > 0 && t.menorMM <= 3 && recapavel(t))
+    .sort((a, b) => (a.cicloVida||1) - (b.cicloVida||1)); // V1 primeiro (melhor carcaça)
+  let reusoHtml = '';
+  if (removidos.length && typeof DATA !== 'undefined' && DATA.tires) {
+    const necessidades = DATA.tires.filter(t =>
+      t.status === 'INSTALLED' && t.unidade === unidade && t.veiculoId !== pior.v.id &&
+      t.menorMM > 0 && t.menorMM <= 3 && String(t.posicao)[0] !== '1' // tração/truck de outras placas
+    ).sort((a, b) => a.menorMM - b.menorMM);
+    const usados = new Set();
+    const linhas = removidos.map(t => {
+      const dest = necessidades.find(n => !usados.has(n.serial) && n.marca === t.marca)
+                || necessidades.find(n => !usados.has(n.serial));
+      if (dest) usados.add(dest.serial);
+      const destTxt = dest
+        ? `→ <b>${dest.placa}</b> (pos. ${dest.nomePosicao || dest.posicao}, hoje ${fmt(dest.menorMM)} mm)`
+        : `→ <b>pool de carcaças da unidade ${unidade}</b>`;
+      const caveat = t.menorMM <= 2 ? ` <span class="lv-fix">(rodou baixo — confirmar carcaça na inspeção)</span>` : '';
+      return `<div class="lp"><div><span class="lp-e">♻️</span> <b>${pos(t)}</b> · ${t.serial} · ${t.marca} V${t.cicloVida} → <b>recape</b> (vira V${(t.cicloVida||1)+1})${caveat}</div><div class="lp-ac">${destTxt}</div></div>`;
+    });
+    reusoHtml = `<div class="le"><div class="le-h">♻️ Reaproveitamento de carcaças — ${unidade}</div>${linhas.join('')}<div class="lp lp-ac">Carcaça V1 é o ativo mais valioso — recapar e realocar em vez de descartar (teto ${MAX_VIDAS} vidas${EMPURRADA.includes(unidade)?', empurrada 3':''}). Recapado não volta ao direcional.</div></div>`;
+  }
+
+  const html = `<div class="laudo">${laudo}${resumo}${reusoHtml}</div>`;
 
   // "Como fica após o plano": projeta CADA posição com a ação prescrita.
   // Direcional baixo/bloqueado + bloqueado de tração = NOVO; janela 2–3 mm da tração = RECAPE;
@@ -4251,11 +4283,13 @@ function gerarSugestoes(pior, pneusPior, par) {
       } else if (direcional) {
         // Direcional: SEMPRE pneu novo 1ª linha (V1)
         novo = { ...t, menorMM: NOVO_MM, mm1: NOVO_MM, mm2: NOVO_MM, mm3: NOVO_MM, mm4: NOVO_MM,
-                 amplitude: 0, statusMM: 'Bom Estado', cicloVida: 1, banda: '' };
+                 amplitude: 0, statusMM: 'Bom Estado', cicloVida: 1, banda: '',
+                 pressaoNOK: false, desvioPressao: 0, pressaoAtual: t.pressaoIdeal || t.pressaoAtual };
       } else {
         // Tração/Truck: RECAPE (não se compra novo p/ esses eixos)
         novo = { ...t, menorMM: RECAPE_MM, mm1: RECAPE_MM, mm2: RECAPE_MM, mm3: RECAPE_MM, mm4: RECAPE_MM,
-                 amplitude: 0, statusMM: 'Bom Estado', cicloVida: (t.cicloVida||1)+1, banda: 'Recape novo' };
+                 amplitude: 0, statusMM: 'Bom Estado', cicloVida: (t.cicloVida||1)+1, banda: 'Recape novo',
+                 pressaoNOK: false, desvioPressao: 0, pressaoAtual: t.pressaoIdeal || t.pressaoAtual };
       }
       projetado.push(novo);
     });
@@ -4615,6 +4649,7 @@ function renderVehVertical(v, pneusArr, mmMed) {
         <div class="tv-serial">${t.serial}</div>
         <div class="tv-mm" style="color:${corMM(t.statusMM)}">${fmt(t.menorMM)} mm</div>
         <div class="tv-sub">Amp. <b style="color:${t.amplitude > 5 ? 'var(--red-soft)' : t.amplitude > 3 ? 'var(--yellow)' : 'var(--green)'}">${fmt(t.amplitude)} mm</b></div>
+        ${t.pressaoAtual > 0 ? `<div class="tv-sub">Pressão <b style="color:${t.pressaoNOK ? 'var(--red-soft)' : 'var(--green)'}">${fmt(t.pressaoAtual)} PSI</b></div>` : ''}
         <div class="tv-sub">${t.marca} · V${t.cicloVida}</div>
         ${t.cicloVida > 1 ? `<div class="tv-sub">Banda: ${[t.bandaMarca, t.banda].filter(Boolean).join(' ') || '—'}</div>` : ''}
       </div>`;
@@ -4623,7 +4658,7 @@ function renderVehVertical(v, pneusArr, mmMed) {
   return `
     <div class="veh-vert">
       <div class="veh-vert-head">
-        <div class="veh-vert-placa">${v.placa}</div>
+        <div class="veh-vert-placa">${v.placa}${v.unidade ? ` <span style="font-size:13px;color:var(--orange);font-weight:700">· ${v.unidade}</span>` : ''}</div>
         <div class="veh-vert-info">
           <span>Frota: <strong>${v.frota}</strong></span>
           <span>Tipo: <strong>${v.tipo}</strong></span>
