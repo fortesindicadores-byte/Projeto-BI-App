@@ -79,7 +79,7 @@ function fetchAllTires(branchId) {
 
 async function fetchAllInspections(branchId) {
   const hoje = new Date();
-  const inicio = new Date(hoje.getFullYear() - 1, 0, 1); // 01/01 do ano anterior — ~2 anos (YoY)
+  const inicio = new Date(hoje.getFullYear(), 0, 1); // 01/01 do ano atual — janela enxuta (jsonb menor, evita timeout/500 do Supabase free). YoY, se preciso, via agregado mensal separado.
   const raw = await fetchPaginated('/tire-inspections/vehicles', {
     branchOfficesId: branchId,
     startDate: inicio.toISOString().split('.')[0] + 'Z',
