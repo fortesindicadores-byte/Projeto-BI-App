@@ -4164,11 +4164,11 @@ function gerarSugestoes(pior, pneusPior, par) {
   const ombroGasto = t => { if (![t.mm1,t.mm2,t.mm3,t.mm4].every(x => x>0)) return false;
     return ((t.mm2+t.mm3)/2 - (t.mm1+t.mm4)/2) > 2; };
 
-  const eixosCfg = getEixosFromTires(pneusPior);
+  const eixosCfg = getEixosFromTires(pneusPior, pior.v.tipo);
   let comprarNovo = 0, recapar = 0, bloqueioConjunto = 0, laudo = '';
 
   eixosCfg.forEach(e => {
-    const direcional = e.label.includes('Direcional');
+    const direcional = e.direcional;
     const dual = e.posicoes.length === 4;
     let pneusHtml = '';
 
@@ -4195,7 +4195,7 @@ function gerarSugestoes(pior, pneusPior, par) {
       } else { acao = `<b>BOM ESTADO</b> → nenhuma ação.`; }
 
       const al = [];
-      if (t.amplitude > AMP_ALERTA) al.push(`⚙️ Desgaste irregular agudo (amplitude ${fmt(t.amplitude)} mm) → <b>alinhamento 3D + balanceamento</b>.`);
+      if (t.amplitude > AMP_ALERTA) al.push(`⚙️ Desgaste irregular (amplitude ${fmt(t.amplitude)} mm) → <b>virar o pneu no aro</b> + alinhamento 3D e balanceamento.`);
       if (t.pressaoNOK) al.push(`🔧 Pressão fora do ideal (${fmt(t.desvioPressao)}%) — calibrar a frio; subinflação reduz a vida da borracha.`);
       else if (ombroGasto(t) && t.menorMM > 3) al.push(`🔧 Desgaste de ombro — indício de subinflação; calibrar a frio.`);
       if (direcional && linha(t.marca) === '2ª') al.push(`⚠️ ${t.marca} é 2ª linha — direcional pede 1ª linha (premium).`);
@@ -4267,33 +4267,45 @@ function gerarSugestoes(pior, pneusPior, par) {
 
   const html = `<div class="laudo">${laudo}${resumo}${reusoHtml}</div>`;
 
-  // "Como fica após o plano": projeta CADA posição com a ação prescrita.
-  // Direcional baixo/bloqueado + bloqueado de tração = NOVO; janela 2–3 mm da tração = RECAPE;
-  // Regular/Bom mantém. (É o estado-alvo após executar a reposição — honesto, troca tudo que está ruim.)
+  // "Como fica após o plano": direcional sempre NOVO; os demais eixos recebem os pneus
+  // bons + recapes REDISTRIBUÍDOS — melhor sulco nos eixos da frente e EXTERNO; mais
+  // velho/menor no último eixo e INTERNO (regras de colocação que você definiu).
   const NOVO_MM = 16, RECAPE_MM = 14;
+  const internoP = p => { const t = mapa[p]; const n = (t && t.nomePosicao || '').toUpperCase().replace(/^\d+/, ''); return n.length >= 2 ? n[1] === 'I' : String(p)[2] === '2'; };
   const projetado = [];
-  eixosCfg.forEach(e => {
-    const direcional = e.label.includes('Direcional');
-    e.posicoes.forEach(p => {
-      const t = mapa[p];
-      if (!t) return;
-      let novo;
-      if (t.menorMM > 3) {
-        novo = { ...t }; // Regular/Bom: mantém
-      } else if (direcional) {
-        // Direcional: SEMPRE pneu novo 1ª linha (V1)
-        novo = { ...t, menorMM: NOVO_MM, mm1: NOVO_MM, mm2: NOVO_MM, mm3: NOVO_MM, mm4: NOVO_MM,
-                 amplitude: 0, statusMM: 'Bom Estado', cicloVida: 1, banda: '',
-                 pressaoNOK: false, desvioPressao: 0, pressaoAtual: t.pressaoIdeal || t.pressaoAtual };
-      } else {
-        // Tração/Truck: RECAPE (não se compra novo p/ esses eixos)
-        novo = { ...t, menorMM: RECAPE_MM, mm1: RECAPE_MM, mm2: RECAPE_MM, mm3: RECAPE_MM, mm4: RECAPE_MM,
-                 amplitude: 0, statusMM: 'Bom Estado', cicloVida: (t.cicloVida||1)+1, banda: 'Recape novo',
-                 pressaoNOK: false, desvioPressao: 0, pressaoAtual: t.pressaoIdeal || t.pressaoAtual };
-      }
-      projetado.push(novo);
-    });
+
+  // Direcional: pneu novo 1ª linha em cada posição (fica no lugar)
+  eixosCfg.filter(e => e.direcional).forEach(e => e.posicoes.forEach(p => {
+    const t = mapa[p]; if (!t) return;
+    projetado.push({ ...t, menorMM: NOVO_MM, mm1: NOVO_MM, mm2: NOVO_MM, mm3: NOVO_MM, mm4: NOVO_MM,
+      amplitude: 0, statusMM: 'Bom Estado', cicloVida: 1, banda: '',
+      pressaoNOK: false, desvioPressao: 0, pressaoAtual: t.pressaoIdeal || t.pressaoAtual });
+  }));
+
+  // Demais eixos: monta o "pool" de pneus finais (bom/regular mantém; ≤3 mm vira recape)
+  const outros = eixosCfg.filter(e => !e.direcional);
+  const pool = [];
+  outros.forEach(e => e.posicoes.forEach(p => {
+    const t = mapa[p]; if (!t) return;
+    if (t.menorMM > 3) pool.push({ ...t });
+    else pool.push({ ...t, menorMM: RECAPE_MM, mm1: RECAPE_MM, mm2: RECAPE_MM, mm3: RECAPE_MM, mm4: RECAPE_MM,
+      amplitude: 0, statusMM: 'Bom Estado', cicloVida: (t.cicloVida || 1) + 1, banda: 'Recape',
+      pressaoNOK: false, desvioPressao: 0, pressaoAtual: t.pressaoIdeal || t.pressaoAtual });
+  }));
+  // melhor primeiro: maior sulco; empate -> vida mais nova
+  pool.sort((a, b) => (b.menorMM - a.menorMM) || ((a.cicloVida || 1) - (b.cicloVida || 1)));
+  // slots por prioridade: eixo da frente primeiro; dentro do eixo, externo antes de interno
+  const slots = [];
+  outros.forEach(e => {
+    const ext = e.posicoes.filter(p => !internoP(p));
+    const int = e.posicoes.filter(p => internoP(p));
+    [...ext, ...int].forEach(p => slots.push(p));
   });
+  slots.forEach((p, i) => {
+    const tire = pool[i]; if (!tire) return;
+    projetado.push({ ...tire, posicao: p, nomePosicao: (mapa[p] || {}).nomePosicao || p });
+  });
+
   const validos = projetado.filter(t => t.menorMM > 0);
   const mmNova = validos.length ? validos.reduce((s, t) => s + t.menorMM, 0) / validos.length : 0;
   const plano = projetado.length ? { conjunto: projetado, mmNova } : null;
@@ -4636,7 +4648,7 @@ function renderVehVertical(v, pneusArr, mmMed) {
   const pneus = {};
   pneusArr.forEach(t => { pneus[t.posicao] = t; });
 
-  const eixosConfig = getEixosFromTires(pneusArr);
+  const eixosConfig = getEixosFromTires(pneusArr, v.tipo);
   const corMed = mmMed > 6 ? 'var(--green)' : mmMed > 3 ? 'var(--yellow)' : 'var(--red-soft)';
 
   const tireBox = pos => {
@@ -4668,8 +4680,11 @@ function renderVehVertical(v, pneusArr, mmMed) {
         <div class="veh-vert-score" style="color:${corMed}">MM média: ${fmt(mmMed)} mm</div>
       </div>
       ${eixosConfig.map(eixo => {
-        const dir = eixo.posicoes.filter(p => p.toString()[1] === '1');
-        const esq = eixo.posicoes.filter(p => p.toString()[1] === '2');
+        // Lado (D/E) e interno/externo vêm do nomePosicao ("2EI"->E,interno); fallback numérico.
+        const ladoOf = p => { const t = pneus[p]; const n = (t && t.nomePosicao || '').toUpperCase().replace(/^\d+/, ''); if (n[0] === 'D') return 'D'; if (n[0] === 'E') return 'E'; return String(p)[1] === '2' ? 'E' : 'D'; };
+        const intOf  = p => { const t = pneus[p]; const n = (t && t.nomePosicao || '').toUpperCase().replace(/^\d+/, ''); if (n.length >= 2) return n[1] === 'I'; return String(p)[2] === '2'; };
+        const esq = eixo.posicoes.filter(p => ladoOf(p) === 'E').sort((a, b) => (intOf(a) ? 1 : 0) - (intOf(b) ? 1 : 0)); // externo, interno
+        const dir = eixo.posicoes.filter(p => ladoOf(p) === 'D').sort((a, b) => (intOf(a) ? 0 : 1) - (intOf(b) ? 0 : 1)); // interno, externo
         return `
           <div>
             <div class="axle-v-label">${eixo.label}</div>
@@ -4685,7 +4700,7 @@ function renderVehVertical(v, pneusArr, mmMed) {
 
 function renderVehicleCard(v, pneus) {
   // Eixos derivados das posições reais (sem "Vazio")
-  const eixosConfig = getEixosFromTires(pneus);
+  const eixosConfig = getEixosFromTires(pneus, v.tipo);
 
   return `
     <div class="vehicle-card">
@@ -4750,27 +4765,34 @@ function renderEixo(eixo, pneus) {
 // Deriva a config de eixos das POSIÇÕES REAIS do veículo (não chuta por contagem).
 // Mostra só os eixos/posições que existem (sem "Vazio") e quantos eixos forem (bitruck 4 eixos etc.).
 // Direcional = eixo com pneu marcado isOnSteeringAxle; dual = 4 posições no eixo.
-function getEixosFromTires(pneusArr) {
+// Nº do eixo a partir do nomePosicao ("1EI"->1, "2DE"->2); ignora estepe.
+function eixoDoNome(t) {
+  const nome = (t.nomePosicao || '').toUpperCase().trim();
+  if (!nome) return String(t.posicao || '')[0] || null;            // fallback numérico
+  if (/ESTEPE|STEP|RESERV/.test(nome)) return null;                // estepe não é eixo
+  const m = nome.match(/^(\d+)/);
+  return m ? m[1] : (String(t.posicao || '')[0] || null);
+}
+
+function getEixosFromTires(pneusArr, tipo) {
+  const reboque = /REBOQUE|CARRETA|SIDER|DOLLY|RANDON SR/.test((tipo || '').toUpperCase());
   const byAxle = {};
   (pneusArr || []).forEach(t => {
-    if (t.posicao == null) return;
-    const ax = String(t.posicao)[0];
+    const ax = eixoDoNome(t);
+    if (!ax) return;
     (byAxle[ax] = byAxle[ax] || []).push(t);
   });
-  const keys = Object.keys(byAxle).sort();
+  const keys = Object.keys(byAxle).sort((a, b) => +a - +b);
   if (!keys.length) return getEixosConfig(null, 0); // fallback
   const naoDir = keys.filter(ax => !byAxle[ax].some(t => t.direcional));
   const ultimoNaoDir = naoDir[naoDir.length - 1];
-  return keys.map(ax => {
+  return keys.map((ax, i) => {
     const tires = byAxle[ax];
-    const posicoes = [...new Set(tires.map(t => t.posicao))].sort((a, b) => a - b);
-    const direcional = tires.some(t => t.direcional);
-    const dual = posicoes.length >= 4;
-    let label;
-    if (direcional) label = `Eixo ${ax} — Direcional`;
-    else label = `Eixo ${ax} — ${(ax === ultimoNaoDir && dual) ? 'Truck' : 'Tração'}`;
-    return { label, posicoes, direcional, dual };
-  });
+    const posicoes = [...new Set(tires.map(t => t.posicao))];
+    const direcional = !reboque && tires.some(t => t.direcional);
+    const dual = tires.length >= 4;
+    return { label: `Eixo ${ax}`, posicoes, direcional, dual, ax: +ax, ordem: i, ultimo: false };
+  }).map((e, i, arr) => ({ ...e, ultimo: i === arr.length - 1 }));
 }
 
 function getEixosConfig(tipo, totalPneus) {
