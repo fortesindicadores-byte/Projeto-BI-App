@@ -23,14 +23,22 @@ if (!TOKEN || !SUPABASE || !SERVICE_KEY) {
 
 // ── PROLOG ──
 async function fetchPaginated(path, params) {
-  const all = []; let page = 0;
+  const all = []; let page = 0; let pageErrors = 0;
   while (true) {
     const qs = new URLSearchParams({ ...params, pageSize: PAGE_SIZE, pageNumber: page }).toString();
     let res;
     try { res = await fetch(`${BASE_URL}${path}?${qs}`, { headers: { 'x-prolog-api-token': TOKEN } }); }
     catch (e) { console.log(`fetch falhou (${e.message}) — retry em 10s`); await sleep(10000); continue; }
     if (res.status === 429) { console.log('429 (rate limit) — esperando 61s'); await sleep(61000); continue; }
+    // 5xx/timeout: RETRY a mesma página (não trunca a paginação — isso zerava a unidade pesada)
+    if (res.status >= 500) {
+      pageErrors++;
+      if (pageErrors > 6) { throw new Error(`Prolog ${res.status} em ${path} pág ${page} — 6 falhas seguidas, abortando unidade`); }
+      console.log(`Prolog ${res.status} em ${path} pág ${page} — retry ${pageErrors}/6 em 15s`);
+      await sleep(15000); continue;
+    }
     if (res.status >= 300) { console.log(`Prolog ${res.status} em ${path} — parando paginação`); break; }
+    pageErrors = 0;
     const json = await res.json();
     if (!json.content || json.content.length === 0) break;
     all.push(...json.content);
@@ -135,7 +143,12 @@ async function main() {
       if (!vehicles.length) { console.error(`unidade ${b}: 0 veículos — fetch suspeito, pulando (mantém dado anterior)`); continue; }
       await upsertSnapshot('vehicles', b, vehicles);
       await upsertSnapshot('tires', b, tires);
-      await upsertSnapshot('inspections', b, inspections);
+      // Trava: não zera as inspeções se vieram vazias mas a unidade tem veículos (fetch suspeito)
+      if (inspections.length === 0 && vehicles.length > 0) {
+        console.error(`unidade ${b}: 0 inspeções com ${vehicles.length} veículos — fetch suspeito, NÃO sobrescreve inspeções (mantém anterior)`);
+      } else {
+        await upsertSnapshot('inspections', b, inspections);
+      }
       console.log(`unidade ${b}: ${vehicles.length}v ${tires.length}p ${inspections.length}i`);
     } catch (e) {
       console.error(`ERRO unidade ${b}: ${e.message}`);
