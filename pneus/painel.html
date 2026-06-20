@@ -3404,12 +3404,15 @@ function renderPainel() {
   }
   if (refDate > hoje) refDate = hoje;
 
-  // Última inspeção por veículo DENTRO do período filtrado
+  // Última aferição de cada veículo ATÉ refDate (todo o histórico, não só o período filtrado)
+  // — define o status atual. A vigência define a DATA de referência, não quais aferições contam.
+  const idsF = new Set(vehicles.map(v => v.id));
   const ultimaInsp = {};
-  insps.forEach(i => {
-    if (!ultimaInsp[i.veiculoId] || new Date(i.dataInspecao) > new Date(ultimaInsp[i.veiculoId].dataInspecao)) {
-      ultimaInsp[i.veiculoId] = i;
-    }
+  DATA.inspections.forEach(i => {
+    if (!idsF.has(i.veiculoId)) return;
+    const d = new Date(i.dataInspecao);
+    if (d > refDate) return;
+    if (!ultimaInsp[i.veiculoId] || d > new Date(ultimaInsp[i.veiculoId].dataInspecao)) ultimaInsp[i.veiculoId] = i;
   });
 
   // Classificar veículos filtrados (dias recalculados contra refDate)
@@ -3501,16 +3504,20 @@ function renderMensalChart() {
   const idsFiltrados = new Set(veiculosFiltrados.map(v => v.id));
   const totalFrota = veiculosFiltrados.length || 1;
 
-  // % de aderência mensal = veículos inspecionados no mês / frota filtrada
+  // Aderência mensal = MESMO status do hero, na virada de cada mês:
+  // % da frota cuja última aferição (≤ fim do mês) está dentro de 30 dias.
+  // (Assim o mês atual = aderência do hero, e os meses conversam entre si.)
+  const inspF = DATA.inspections.filter(i => idsFiltrados.has(i.veiculoId))
+    .map(i => ({ vid: i.veiculoId, t: new Date(i.dataInspecao).getTime() }));
   const pcts = meses.map(m => {
     if (isFuturo(m)) return null;
-    const set = new Set();
-    DATA.inspections.forEach(i => {
-      if (!idsFiltrados.has(i.veiculoId)) return;
-      const d = new Date(i.dataInspecao);
-      if (d.getFullYear() === m.ano && d.getMonth() === m.mes) set.add(i.veiculoId);
-    });
-    return parseFloat((set.size / totalFrota * 100).toFixed(1));
+    const ehAtual = (m.ano === hoje.getFullYear() && m.mes === hoje.getMonth());
+    const ref = (ehAtual ? hoje : new Date(m.ano, m.mes + 1, 0, 23, 59, 59)).getTime();
+    const ultima = {};
+    for (const i of inspF) { if (i.t > ref) continue; if (ultima[i.vid] === undefined || i.t > ultima[i.vid]) ultima[i.vid] = i.t; }
+    let ok = 0;
+    for (const v of veiculosFiltrados) { const u = ultima[v.id]; if (u !== undefined && Math.floor((ref - u) / 86400000) <= 30) ok++; }
+    return parseFloat((ok / totalFrota * 100).toFixed(1));
   });
 
   // Cor por cluster: ≥98 verde | 85–98 amarelo | <85 vermelho (mais saturado no modo claro)
