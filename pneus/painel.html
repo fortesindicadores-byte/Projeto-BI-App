@@ -998,10 +998,11 @@
   .axle-side-v { display: flex; gap: 4px; }
 
   .tire-v {
-    width: 108px; background: var(--surface2);
+    width: 108px; height: 156px; background: var(--surface2);
     border: 1.5px solid var(--border);
     border-radius: 8px; padding: 8px 9px;
-    font-size: 12px;
+    font-size: 12px; overflow: hidden;
+    display: flex; flex-direction: column; gap: 1px;
   }
   .tire-v.bom      { border-color: var(--green); }
   .tire-v.regular  { border-color: var(--yellow); }
@@ -4247,12 +4248,14 @@ function gerarSugestoes(pior, pneusPior, par) {
       let novo;
       if (t.menorMM > 3) {
         novo = { ...t }; // Regular/Bom: mantém
-      } else if (t.menorMM > 2 && !direcional) {
-        novo = { ...t, menorMM: RECAPE_MM, mm1: RECAPE_MM, mm2: RECAPE_MM, mm3: RECAPE_MM, mm4: RECAPE_MM,
-                 amplitude: 0, statusMM: 'Bom Estado', cicloVida: (t.cicloVida||1)+1, banda: 'Recape novo' }; // recape
-      } else {
+      } else if (direcional) {
+        // Direcional: SEMPRE pneu novo 1ª linha (V1)
         novo = { ...t, menorMM: NOVO_MM, mm1: NOVO_MM, mm2: NOVO_MM, mm3: NOVO_MM, mm4: NOVO_MM,
-                 amplitude: 0, statusMM: 'Bom Estado', cicloVida: 1, banda: '' }; // novo (1ª linha no direcional)
+                 amplitude: 0, statusMM: 'Bom Estado', cicloVida: 1, banda: '' };
+      } else {
+        // Tração/Truck: RECAPE (não se compra novo p/ esses eixos)
+        novo = { ...t, menorMM: RECAPE_MM, mm1: RECAPE_MM, mm2: RECAPE_MM, mm3: RECAPE_MM, mm4: RECAPE_MM,
+                 amplitude: 0, statusMM: 'Bom Estado', cicloVida: (t.cicloVida||1)+1, banda: 'Recape novo' };
       }
       projetado.push(novo);
     });
