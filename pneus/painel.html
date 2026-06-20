@@ -1898,7 +1898,7 @@
 
       <!-- SUGESTÕES -->
       <div class="card" style="margin-top:20px">
-        <div class="card-title">Sugestões de Rodízio</div>
+        <div class="card-title">Laudo Técnico — Ações por Pneu</div>
         <div id="eixosTexto"></div>
       </div>
 
@@ -4233,8 +4233,33 @@ function gerarSugestoes(pior, pneusPior, par) {
     <div class="rs-cpk">Decisão de compra pelo <b>CPK</b> = (custo do pneu + consertos + recapagens) ÷ (km V1 + V2 + V3). Direcional/rota longa: 1ª linha; eixo livre/urbano: 2ª linha aceitável.</div></div>`;
 
   const html = `<div class="laudo">${laudo}${resumo}</div>`;
-  // Remontagem só faz sentido com pneu BOM sobrando p/ realocar — veículo crítico não rodízia, repõe.
-  const plano = null;
+
+  // "Como fica após o plano": projeta CADA posição com a ação prescrita.
+  // Direcional baixo/bloqueado + bloqueado de tração = NOVO; janela 2–3 mm da tração = RECAPE;
+  // Regular/Bom mantém. (É o estado-alvo após executar a reposição — honesto, troca tudo que está ruim.)
+  const NOVO_MM = 16, RECAPE_MM = 14;
+  const projetado = [];
+  eixosCfg.forEach(e => {
+    const direcional = e.label.includes('Direcional');
+    e.posicoes.forEach(p => {
+      const t = mapa[p];
+      if (!t) return;
+      let novo;
+      if (t.menorMM > 3) {
+        novo = { ...t }; // Regular/Bom: mantém
+      } else if (t.menorMM > 2 && !direcional) {
+        novo = { ...t, menorMM: RECAPE_MM, mm1: RECAPE_MM, mm2: RECAPE_MM, mm3: RECAPE_MM, mm4: RECAPE_MM,
+                 amplitude: 0, statusMM: 'Bom Estado', cicloVida: (t.cicloVida||1)+1, banda: 'Recape novo' }; // recape
+      } else {
+        novo = { ...t, menorMM: NOVO_MM, mm1: NOVO_MM, mm2: NOVO_MM, mm3: NOVO_MM, mm4: NOVO_MM,
+                 amplitude: 0, statusMM: 'Bom Estado', cicloVida: 1, banda: '' }; // novo (1ª linha no direcional)
+      }
+      projetado.push(novo);
+    });
+  });
+  const validos = projetado.filter(t => t.menorMM > 0);
+  const mmNova = validos.length ? validos.reduce((s, t) => s + t.menorMM, 0) / validos.length : 0;
+  const plano = projetado.length ? { conjunto: projetado, mmNova } : null;
   return { html, plano };
 }
 
