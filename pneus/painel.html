@@ -4232,12 +4232,13 @@ function gerarSugestoes(pior, pneusPior, par) {
   const resumo = `<div class="le-resumo"><b>Reposição — ${placa}</b> ${partes.join(' ')}
     <div class="rs-cpk">Decisão de compra pelo <b>CPK</b> = (custo do pneu + consertos + recapagens) ÷ (km V1 + V2 + V3). Direcional/rota longa: 1ª linha; eixo livre/urbano: 2ª linha aceitável.</div></div>`;
 
-  // ---- Reaproveitamento de carcaças (mesma unidade) ----
-  // Pneus retirados (≤3 mm) com carcaça ainda dentro da vida → recape → realocar p/ tração/truck
-  // de outra placa da MESMA unidade que precise (posição com pneu pior). Mesma marca preferida.
+  // ---- Reaproveitamento de carcaças (só as que SAEM da placa) ----
+  // Sai da placa apenas a carcaça DESLOCADA: direcional substituído por novo (recapável).
+  // Tração/truck são recapados no próprio eixo → ficam, não entram aqui.
   const unidade = pior.v.unidade || '';
-  const removidos = pneusPior
-    .filter(t => t.menorMM > 0 && t.menorMM <= 3 && recapavel(t))
+  const removidos = eixosCfg.filter(e => e.direcional)
+    .flatMap(e => e.posicoes.map(p => mapa[p]))
+    .filter(t => t && t.menorMM > 0 && t.menorMM <= 3 && recapavel(t))
     .sort((a, b) => (a.cicloVida||1) - (b.cicloVida||1)); // V1 primeiro (melhor carcaça)
   let reusoHtml = '';
   if (removidos.length && typeof DATA !== 'undefined' && DATA.tires) {
