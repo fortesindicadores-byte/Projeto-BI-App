@@ -1927,7 +1927,7 @@ function toggleTheme() {
   const isLight = document.body.classList.toggle('light-mode');
   localStorage.setItem('pneus_theme', isLight ? 'light' : 'dark');
   // Re-renderiza gráficos com as cores do tema
-  if (DATA.vehicles.length) { renderPainel(); renderSaudeMensalChart(); renderMMMensalCharts(); renderPressaoMensalCharts(); renderCPK(); renderPrevisao(); renderOrcamento(); }
+  if (DATA.vehicles && DATA.vehicles.length) renderAll(); // re-renderiza a aba ativa com as cores do tema (as outras ao navegar)
   const icon = document.getElementById('themeIcon');
   // Troca ícone sol ↔ lua
   if (isLight) {
@@ -2215,11 +2215,35 @@ function mediaSobreMeses(aggFn) {
 // ============================================================
 // NAVIGATION
 // ============================================================
+// Render preguiçoso: renderiza SÓ a aba ativa; as outras viram "stale" e
+// renderizam sob demanda ao navegar (corta o crunch por carga em ~8x).
+const PAGE_RENDER = {
+  saude: () => renderSaude(),
+  painel: () => renderPainel(),
+  milimetragem: () => renderMilimetragem(),
+  pressao: () => renderPressao(),
+  cpk: () => renderCPK(),
+  previsao: () => renderPrevisao(),
+  orcamento: () => renderOrcamento(),
+  eixos: () => { renderEixosFilters(); renderEixos(); }
+};
+let currentPage = (new URLSearchParams(location.search).get('page')) || 'saude';
+let renderedPages = new Set();
+
+function renderPage(page, force) {
+  if (typeof DATA === 'undefined' || !DATA.vehicles || !DATA.vehicles.length) return;
+  const fn = PAGE_RENDER[page];
+  if (!fn) return;
+  if (force || !renderedPages.has(page)) { fn(); renderedPages.add(page); }
+}
+
 function navigate(page) {
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   const el = document.getElementById('page-' + page);
   if (!el) return;
   el.classList.add('active');
+  currentPage = page;
+  renderPage(page); // renderiza sob demanda (página já visível -> canvas com tamanho correto)
 
   const titles = {
     saude: 'Saúde dos Pneus',
@@ -2408,16 +2432,11 @@ async function loadData(forceRefresh = false) {
 // ============================================================
 // RENDER ALL
 // ============================================================
+// Dados ou filtros mudaram: as 8 abas ficam "stale". Renderiza só a ativa agora;
+// as outras renderizam quando o usuário navegar pra elas.
 function renderAll() {
-  renderSaude();
-  renderPainel();
-  renderMilimetragem();
-  renderPressao();
-  renderCPK();
-  renderPrevisao();
-  renderOrcamento();
-  renderEixosFilters();
-  renderEixos();
+  renderedPages.clear();
+  renderPage(currentPage, true);
 }
 
 // ============================================================
