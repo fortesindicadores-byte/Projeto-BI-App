@@ -72,6 +72,7 @@ function fetchAllTires(branchId) {
     return {
       id: p.id, serial: p.serialNumber || '', status: p.status || '',
       marca: p.make?.name?.trim() || '', modelo: p.model?.name || '', sulcos: p.model?.groovesQuantity || 0,
+      medida: p.tireSize ? `${Math.round(p.tireSize.width||0)}/${Math.round(p.tireSize.height||0)} R${p.tireSize.rim||''}` : '',
       cicloVida: p.currentLifeCycle || 1, maxCiclos: p.maxLifeCycles || 5,
       banda: p.currentRetread?.model?.name || '', bandaMarca: p.currentRetread?.make?.name || '',
       dot: p.dot || '', mm1, mm2, mm3, mm4, menorMM: menor, amplitude, statusMM,

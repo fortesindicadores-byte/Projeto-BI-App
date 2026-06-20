@@ -998,7 +998,7 @@
   .axle-side-v { display: flex; gap: 4px; }
 
   .tire-v {
-    width: 108px; height: 178px; background: var(--surface2);
+    width: 108px; height: 196px; background: var(--surface2);
     border: 1.5px solid var(--border);
     border-radius: 8px; padding: 8px 9px;
     font-size: 12px; overflow: hidden;
@@ -4164,7 +4164,7 @@ function gerarSugestoes(pior, pneusPior, par) {
   const ombroGasto = t => { if (![t.mm1,t.mm2,t.mm3,t.mm4].every(x => x>0)) return false;
     return ((t.mm2+t.mm3)/2 - (t.mm1+t.mm4)/2) > 2; };
 
-  const eixosCfg = getEixosConfig(pior.v.tipo, pior.v.pneusEsperados);
+  const eixosCfg = getEixosFromTires(pneusPior);
   let comprarNovo = 0, recapar = 0, bloqueioConjunto = 0, laudo = '';
 
   eixosCfg.forEach(e => {
@@ -4636,7 +4636,7 @@ function renderVehVertical(v, pneusArr, mmMed) {
   const pneus = {};
   pneusArr.forEach(t => { pneus[t.posicao] = t; });
 
-  const eixosConfig = getEixosConfig(v.tipo, v.pneusEsperados);
+  const eixosConfig = getEixosFromTires(pneusArr);
   const corMed = mmMed > 6 ? 'var(--green)' : mmMed > 3 ? 'var(--yellow)' : 'var(--red-soft)';
 
   const tireBox = pos => {
@@ -4651,6 +4651,7 @@ function renderVehVertical(v, pneusArr, mmMed) {
         <div class="tv-sub">Amp. <b style="color:${t.amplitude > 5 ? 'var(--red-soft)' : t.amplitude > 3 ? 'var(--yellow)' : 'var(--green)'}">${fmt(t.amplitude)} mm</b></div>
         ${t.pressaoAtual > 0 ? `<div class="tv-sub">Pressão <b style="color:${t.pressaoNOK ? 'var(--red-soft)' : 'var(--green)'}">${fmt(t.pressaoAtual)} PSI</b></div>` : ''}
         <div class="tv-sub">${t.marca} · V${t.cicloVida}</div>
+        ${t.medida ? `<div class="tv-sub">${t.medida}</div>` : ''}
         ${t.cicloVida > 1 ? `<div class="tv-sub">Banda: ${[t.bandaMarca, t.banda].filter(Boolean).join(' ') || '—'}</div>` : ''}
       </div>`;
   };
@@ -4683,8 +4684,8 @@ function renderVehVertical(v, pneusArr, mmMed) {
 }
 
 function renderVehicleCard(v, pneus) {
-  // Determina eixos pelo número de pneus esperados
-  const eixosConfig = getEixosConfig(v.tipo, v.pneusEsperados);
+  // Eixos derivados das posições reais (sem "Vazio")
+  const eixosConfig = getEixosFromTires(pneus);
 
   return `
     <div class="vehicle-card">
@@ -4744,6 +4745,32 @@ function renderEixo(eixo, pneus) {
       </div>
     </div>
   `;
+}
+
+// Deriva a config de eixos das POSIÇÕES REAIS do veículo (não chuta por contagem).
+// Mostra só os eixos/posições que existem (sem "Vazio") e quantos eixos forem (bitruck 4 eixos etc.).
+// Direcional = eixo com pneu marcado isOnSteeringAxle; dual = 4 posições no eixo.
+function getEixosFromTires(pneusArr) {
+  const byAxle = {};
+  (pneusArr || []).forEach(t => {
+    if (t.posicao == null) return;
+    const ax = String(t.posicao)[0];
+    (byAxle[ax] = byAxle[ax] || []).push(t);
+  });
+  const keys = Object.keys(byAxle).sort();
+  if (!keys.length) return getEixosConfig(null, 0); // fallback
+  const naoDir = keys.filter(ax => !byAxle[ax].some(t => t.direcional));
+  const ultimoNaoDir = naoDir[naoDir.length - 1];
+  return keys.map(ax => {
+    const tires = byAxle[ax];
+    const posicoes = [...new Set(tires.map(t => t.posicao))].sort((a, b) => a - b);
+    const direcional = tires.some(t => t.direcional);
+    const dual = posicoes.length >= 4;
+    let label;
+    if (direcional) label = `Eixo ${ax} — Direcional`;
+    else label = `Eixo ${ax} — ${(ax === ultimoNaoDir && dual) ? 'Truck' : 'Tração'}`;
+    return { label, posicoes, direcional, dual };
+  });
 }
 
 function getEixosConfig(tipo, totalPneus) {
