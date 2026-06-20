@@ -463,6 +463,13 @@
     font-size: 10px; color: var(--text-muted); opacity: 0.7;
   }
 
+  /* GRÁFICOS LADO A LADO (mensal + por unidade) */
+  .adh-charts {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px; margin-bottom: 24px;
+  }
+
   /* TABELAS LADO A LADO */
   .adh-tables {
     display: grid;
@@ -553,6 +560,7 @@
   @media (max-width: 900px) {
     .adh-cards  { grid-template-columns: 1fr; }
     .adh-tables { grid-template-columns: 1fr; }
+    .adh-charts { grid-template-columns: 1fr; }
     .adh-value  { font-size: 52px; }
   }
 
@@ -1231,6 +1239,16 @@
           <div id="opts-vigencia"></div>
         </div>
       </div>
+      <div class="ms-wrap" id="wrap-branch">
+        <button class="ms-btn" onclick="toggleMs('branch')">
+          UNIDADE <span class="ms-count" id="cnt-branch" style="display:none"></span><span class="ms-arrow">▾</span>
+        </button>
+        <div class="ms-panel" id="panel-branch">
+          <input class="ms-search" placeholder="Buscar..." oninput="filterMs(this,'panel-branch')">
+          <div class="ms-option select-all"><label><input type="checkbox" onchange="selectAll('panel-branch',this)"> Todos</label></div>
+          <div id="opts-branch"></div>
+        </div>
+      </div>
       <div class="ms-wrap" id="wrap-unidade">
         <button class="ms-btn" onclick="toggleMs('unidade')">
           TIPO DE VEÍCULO <span class="ms-count" id="cnt-unidade" style="display:none"></span><span class="ms-arrow">▾</span>
@@ -1413,16 +1431,29 @@
         </div>
       </div>
 
-      <!-- GRÁFICO ADERÊNCIA MENSAL -->
-      <div class="card" style="margin-bottom:24px">
-        <div class="card-title" style="margin-bottom:6px">Aderência Mensal (%)</div>
-        <div class="chart-legend">
-          <span class="lg-item"><span class="lg-dot" style="background:var(--green)"></span> ≥ 98%</span>
-          <span class="lg-item"><span class="lg-dot" style="background:var(--yellow)"></span> 85% a 98%</span>
-          <span class="lg-item"><span class="lg-dot" style="background:var(--red-soft)"></span> &lt; 85%</span>
+      <!-- GRÁFICOS: MENSAL + POR UNIDADE (proporcionais) -->
+      <div class="adh-charts">
+        <div class="card" style="margin:0">
+          <div class="card-title" style="margin-bottom:6px">Aderência Mensal (%)</div>
+          <div class="chart-legend">
+            <span class="lg-item"><span class="lg-dot" style="background:var(--green)"></span> ≥ 98%</span>
+            <span class="lg-item"><span class="lg-dot" style="background:var(--yellow)"></span> 85% a 98%</span>
+            <span class="lg-item"><span class="lg-dot" style="background:var(--red-soft)"></span> &lt; 85%</span>
+          </div>
+          <div style="position:relative;height:288px">
+            <canvas id="chartMensal"></canvas>
+          </div>
         </div>
-        <div style="position:relative;height:288px">
-          <canvas id="chartMensal"></canvas>
+        <div class="card" style="margin:0">
+          <div class="card-title" style="margin-bottom:6px">Aderência por Unidade (%)</div>
+          <div class="chart-legend">
+            <span class="lg-item"><span class="lg-dot" style="background:var(--green)"></span> ≥ 98%</span>
+            <span class="lg-item"><span class="lg-dot" style="background:var(--yellow)"></span> 85% a 98%</span>
+            <span class="lg-item"><span class="lg-dot" style="background:var(--red-soft)"></span> &lt; 85%</span>
+          </div>
+          <div style="position:relative;height:288px">
+            <canvas id="chartUnidade"></canvas>
+          </div>
         </div>
       </div>
 
@@ -1859,15 +1890,33 @@
 // ============================================================
 // CONFIG — Supabase (dados carregados pelo loader 1x/hora)
 // ============================================================
-const SUPABASE_URL = 'https://qqcnavptvfcthuidzipj.supabase.co';
-const SUPABASE_KEY = 'sb_publishable_6GvYIjIoAYQSzFaWTiSptQ_VP8ravoC';
+const SUPABASE_URL = 'https://ewbzeqsneeylwkxtcpme.supabase.co';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImV3YnplcXNuZWV5bHdreHRjcG1lIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE4NzY2MTcsImV4cCI6MjA5NzQ1MjYxN30.W8W6Yunt6Z8NB73qpOD8eqYlrsgMRgEG-siYsJFwDwE';
+
+// branch_id (Prolog/Conlog) -> nome da unidade
+const UNIDADE_MAP = {
+  1676: 'Cachoeiras de Macacu - T1 (Empurrada)',
+  1677: 'Cachoeiras de Macacu - T2 (Rota Ambev)',
+  37:   'Campo Grande',
+  1906: 'Cuiabá - Armazém',
+  1907: 'Cuiabá - T1 (Empurrada)',
+  1878: 'Cuiabá - T2 (Rota Ambev)',
+  20:   'Florianópolis',
+  30:   'Guarulhos',
+  24:   'Itajaí',
+  2517: 'Nova Friburgo',
+  26:   'Pelotas',
+  38:   'Piraí',
+  2277: 'Rondonópolis',
+  2550: 'Seara Anhanguera'
+};
 
 // ============================================================
 // STATE
 // ============================================================
 let DATA = { vehicles: [], tires: [], inspections: [] };
 let charts = {};
-let FILTERS = { ano: [], vigencia: [], unidade: [], placa: [], marca: [], modelo: [], vida: [] };
+let FILTERS = { ano: [], vigencia: [], branch: [], unidade: [], placa: [], marca: [], modelo: [], vida: [] };
 
 // ============================================================
 // TEMA
@@ -1928,8 +1977,8 @@ function filterMs(input, panelId) {
 // Os filtros se conectam: as opções de um filtro vêm dos dados
 // já filtrados por TODOS os outros (ex.: marca restringe placa/vigência).
 // ============================================================
-const FILTER_KEYS = ['ano','vigencia','unidade','placa','marca','modelo','vida'];
-let SEL = { ano:'all', vigencia:'all', unidade:'all', placa:'all', marca:'all', modelo:'all', vida:'all' };
+const FILTER_KEYS = ['ano','vigencia','branch','unidade','placa','marca','modelo','vida'];
+let SEL = { ano:'all', vigencia:'all', branch:'all', unidade:'all', placa:'all', marca:'all', modelo:'all', vida:'all' };
 
 function labelVida(cv) { return (cv || 1) === 1 ? 'V1 (Novo)' : 'V' + cv + ' (recapado)'; }
 
@@ -1945,6 +1994,7 @@ function distinctSorted(arr, mode) {
 
 // veículo passa pelos filtros de veículo (ignorando o dimensão 'except')
 function vehPass(v, except) {
+  if (except!=='branch'  && FILTERS.branch.length  && !FILTERS.branch.includes(v.unidade))  return false;
   if (except!=='unidade' && FILTERS.unidade.length && !FILTERS.unidade.includes(v.tipo))   return false;
   if (except!=='placa'   && FILTERS.placa.length   && !FILTERS.placa.includes(v.placa))     return false;
   if (except!=='marca'   && FILTERS.marca.length   && !FILTERS.marca.includes(v.marca))     return false;
@@ -1958,6 +2008,7 @@ function optionsFor(key) {
   const vehOkIds = new Set(vehOk.map(v => v.id));
   const placasOk = new Set(vehOk.map(v => v.placa));
 
+  if (key === 'branch')  return distinctSorted(vehOk.map(v => v.unidade));
   if (key === 'unidade') return distinctSorted(vehOk.map(v => v.tipo));
   if (key === 'marca')   return distinctSorted(vehOk.map(v => v.marca));
   if (key === 'modelo')  return distinctSorted(vehOk.map(v => v.modelo));
@@ -2043,7 +2094,7 @@ function selectAll(panelId, cb) {
 
 function populateFilters() {
   // padrão: tudo "Todos", exceto VIGÊNCIA = mês mais recente com dado
-  SEL = { ano:'all', vigencia:'all', unidade:'all', placa:'all', marca:'all', modelo:'all', vida:'all' };
+  SEL = { ano:'all', vigencia:'all', branch:'all', unidade:'all', placa:'all', marca:'all', modelo:'all', vida:'all' };
   const vigs = optionsFor('vigencia');          // mais recente primeiro
   if (vigs.length) SEL.vigencia = new Set([vigs[0]]);
   syncFiltersFromSel();
@@ -2052,6 +2103,7 @@ function populateFilters() {
 
 function getFilteredVehicles() {
   let v = DATA.vehicles;
+  if (FILTERS.branch.length)  v = v.filter(x => FILTERS.branch.includes(x.unidade));
   if (FILTERS.unidade.length) v = v.filter(x => FILTERS.unidade.includes(x.tipo));
   if (FILTERS.placa.length)   v = v.filter(x => FILTERS.placa.includes(x.placa));
   if (FILTERS.marca.length)   v = v.filter(x => FILTERS.marca.includes(x.marca));
@@ -2102,7 +2154,7 @@ function getFilteredTires() {
   // Sem período: estado atual (snapshot). Com período: reconstrói da última medição no período.
   let t = temPeriodo ? reconstructTires(getFilteredInspections()) : DATA.tires;
 
-  if (FILTERS.placa.length || FILTERS.unidade.length || FILTERS.marca.length || FILTERS.modelo.length) {
+  if (FILTERS.placa.length || FILTERS.branch.length || FILTERS.unidade.length || FILTERS.marca.length || FILTERS.modelo.length) {
     const placasOk = new Set(getFilteredVehicles().map(v => v.placa));
     t = t.filter(x => placasOk.has(x.placa));
   }
@@ -2221,17 +2273,39 @@ async function loadData(forceRefresh = false) {
 
   try {
     showLoading('Carregando dados...');
-    const res = await fetch(`${SUPABASE_URL}/rest/v1/snapshot?select=endpoint,data,updated_at`, {
+    // O snapshot tem 1 linha por (endpoint, branch_id). Buscar TUDO de uma vez
+    // estoura o limite de payload do Supabase (500), então busca por unidade
+    // (14 requests menores em paralelo) e junta no cliente, marcando cada
+    // registro com a unidade de origem (p/ filtro + ranking por unidade).
+    const branchIds = Object.keys(UNIDADE_MAP);
+    const merged = { vehicles: [], tires: [], inspections: [] };
+    const updatedAts = [];
+    const fetchBranch = bid => fetch(`${SUPABASE_URL}/rest/v1/snapshot?branch_id=eq.${bid}&select=endpoint,branch_id,data,updated_at`, {
       headers: { apikey: SUPABASE_KEY, Authorization: 'Bearer ' + SUPABASE_KEY }
+    }).then(r => r.ok ? r.json() : null).catch(() => null);
+    // Lotes de 4 (14 requests grandes em paralelo derrubam o Supabase) + 1 retry por unidade
+    const perBranch = [];
+    const CHUNK = 4;
+    for (let i = 0; i < branchIds.length; i += CHUNK) {
+      const batch = branchIds.slice(i, i + CHUNK);
+      const res = await Promise.all(batch.map(async bid => {
+        let out = await fetchBranch(bid);
+        if (out === null) out = await fetchBranch(bid); // retry 1x
+        return out || [];
+      }));
+      perBranch.push(...res);
+    }
+    perBranch.flat().forEach(r => {
+      const uni = UNIDADE_MAP[r.branch_id] || ('Unidade ' + r.branch_id);
+      const arr = Array.isArray(r.data) ? r.data : [];
+      if (r.updated_at) updatedAts.push(new Date(r.updated_at));
+      if (!merged[r.endpoint]) return;
+      for (const rec of arr) { rec.unidade = uni; rec.branchId = r.branch_id; merged[r.endpoint].push(rec); }
     });
-    if (!res.ok) throw new Error(`Supabase ${res.status}`);
-    const rows = await res.json();
-    if (!rows.length) throw new Error('Sem dados no Supabase — aguarde a primeira carga do loader');
-
-    rows.forEach(r => { DATA[r.endpoint] = r.data; });
-    DATA.vehicles    = DATA.vehicles    || [];
-    DATA.tires       = DATA.tires       || [];
-    DATA.inspections = DATA.inspections || [];
+    if (!merged.vehicles.length) throw new Error('Sem dados no Supabase — aguarde a primeira carga do loader');
+    DATA.vehicles    = merged.vehicles;
+    DATA.tires       = merged.tires;
+    DATA.inspections = merged.inspections;
 
     // Histórico mensal (CPK etc.) — opcional, alimenta o gráfico temporal de CPK
     try {
@@ -2242,7 +2316,7 @@ async function loadData(forceRefresh = false) {
     } catch(_) { DATA.historico = []; }
 
     saveCache(DATA);
-    const ult = rows.map(r => new Date(r.updated_at)).sort((a, b) => b - a)[0];
+    const ult = updatedAts.sort((a, b) => b - a)[0] || new Date();
     document.getElementById('lastUpdate').textContent =
       '🔄 Dados de: ' + formatCacheTime(ult.getTime());
 
@@ -3279,7 +3353,17 @@ function renderPainel() {
   document.getElementById('tbodyAdhMM').innerHTML    = ordenados.length ? ordenados.map(rowTabela).join('') : semRow;
   document.getElementById('tbodyAdhCalib').innerHTML = ordenados.length ? ordenados.map(rowTabela).join('') : semRow;
 
+  // Aderência por unidade (mesma definição do hero: (prazo+atenção)/total)
+  const porUni = {};
+  lista.forEach(v => {
+    const u = v.unidade || '—';
+    (porUni[u] = porUni[u] || { ok: 0, tot: 0 });
+    porUni[u].tot++;
+    if (v.status === 'prazo' || v.status === 'atencao') porUni[u].ok++;
+  });
+
   renderMensalChart();
+  renderUnidadeChart(porUni);
 }
 
 // ============================================================
@@ -3368,6 +3452,70 @@ function renderMensalChart() {
         }
       },
       scales: monthlyScales(isLight, v => v + '%')
+    }
+  });
+}
+
+// ============================================================
+// GRÁFICO ADERÊNCIA POR UNIDADE (pior -> melhor)
+// ============================================================
+function renderUnidadeChart(porUni) {
+  const isLight   = document.body.classList.contains('light-mode');
+  const gridColor = isLight ? 'rgba(0,0,0,.08)' : 'rgba(255,255,255,.06)';
+  const tickColor = isLight ? '#444444' : '#94A3B8';
+  const clusterColor = (p, alpha) =>
+    p >= 98 ? `rgba(59,179,59,${alpha})` :
+    p >= 85 ? `rgba(243,156,18,${alpha})` :
+              `rgba(255,102,102,${alpha})`;
+
+  const arr = Object.entries(porUni)
+    .map(([nome, o]) => ({ nome, pct: o.tot ? parseFloat((o.ok / o.tot * 100).toFixed(1)) : 0 }))
+    .sort((a, b) => a.pct - b.pct); // pior primeiro (topo)
+
+  const labels = arr.map(a => a.nome);
+  const pcts   = arr.map(a => a.pct);
+
+  destroyChart('chartUnidade');
+  if (!labels.length) return;
+
+  charts.chartUnidade = new Chart(document.getElementById('chartUnidade'), {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [{
+        label: 'Aderência',
+        data: pcts,
+        backgroundColor: pcts.map(p => clusterColor(p, 0.7)),
+        borderColor:     pcts.map(p => clusterColor(p, 1)),
+        borderWidth: 1.5,
+        borderRadius: 3,
+        datalabels: {
+          anchor: 'end', align: 'end', offset: 2,
+          color: isLight ? '#111' : '#fff',
+          font: { family: 'Montserrat', size: 11, weight: '700' },
+          formatter: v => v.toFixed(1).replace('.', ',') + '%'
+        }
+      }]
+    },
+    plugins: [ChartDataLabels],
+    options: {
+      indexAxis: 'y',
+      responsive: true, maintainAspectRatio: false,
+      layout: { padding: { right: 40 } },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          backgroundColor: '#141B26', titleColor: '#F97316', bodyColor: '#F1F5F9',
+          borderColor: '#1E2D40', borderWidth: 1,
+          titleFont: { family: 'Montserrat' }, bodyFont: { family: 'Montserrat' },
+          callbacks: { label: ctx => 'Aderência: ' + ctx.parsed.x.toFixed(1).replace('.', ',') + '%' }
+        }
+      },
+      scales: {
+        x: { beginAtZero: true, max: 100, grid: { color: gridColor }, ticks: { color: tickColor, font: { family: 'Montserrat', size: 10 }, callback: v => v + '%' } },
+        y: { grid: { display: false }, ticks: { color: tickColor, font: { family: 'Montserrat', size: 10 },
+          callback: function(val) { const l = this.getLabelForValue(val); return l.length > 24 ? l.slice(0, 22) + '…' : l; } } }
+      }
     }
   });
 }
