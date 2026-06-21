@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FCA · Preenchimento (teste)</title>
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#0C1017;--card:#141B26;--border:#1E2D40;--orange:#F97316;--blue:#38BDF8;--text:#F1F5F9;--text2:#94A3B8;--text3:#475569;--green:#3BB33B;--red:#FF6666;--amber:#F4A100;}
+*{margin:0;padding:0;box-sizing:border-box;}
+body{background:radial-gradient(ellipse at 10% 25%,rgba(249,115,22,.06) 0%,transparent 50%),radial-gradient(ellipse at 90% 75%,rgba(56,189,248,.05) 0%,transparent 50%),var(--bg);color:var(--text);font-family:'Montserrat',-apple-system,sans-serif;font-size:13px;min-height:100vh;}
+.header{background:rgba(12,16,23,.75);border-bottom:1px solid rgba(255,255,255,.07);padding:10px 24px 12px;display:flex;flex-wrap:wrap;align-items:center;gap:10px;position:sticky;top:0;z-index:100;backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);box-shadow:0 2px 12px rgba(0,0,0,.3);}
+.brand{flex:1;}.brand h1{font-size:17px;font-weight:800;color:var(--orange);}.brand p{font-size:10px;color:var(--text2);margin-top:2px;font-style:italic;}
+.uni-badge{font-size:12px;font-weight:800;color:#fff;background:rgba(249,115,22,.22);border:1px solid rgba(249,115,22,.4);border-radius:6px;padding:5px 12px;}
+.btn{background:rgba(249,115,22,.15);border:1px solid rgba(249,115,22,.35);border-radius:6px;padding:7px 14px;cursor:pointer;color:var(--orange);font-family:'Montserrat',sans-serif;font-weight:800;font-size:12px;display:flex;align-items:center;gap:6px;}
+.btn:hover{background:rgba(249,115,22,.3);}
+.btn.theme{padding:7px 9px;}
+.main{padding:20px 24px 60px;max-width:1100px;}
+.intro{font-size:12px;color:var(--text2);margin-bottom:18px;line-height:1.5;}
+.intro b{color:var(--text);}
+.saved-msg{display:none;font-size:12px;font-weight:700;color:var(--green);margin-left:8px;}
+.loading{text-align:center;color:var(--text3);padding:50px;font-size:14px;}
+.fca-card{background:rgba(20,27,38,.55);border:1px solid rgba(255,255,255,.07);border-left:3px solid var(--text3);border-radius:10px;padding:16px 18px;margin-bottom:14px;backdrop-filter:blur(16px);box-shadow:0 2px 12px rgba(0,0,0,.25);}
+.fca-card.crit{border-left-color:var(--red);}
+.fca-card.aten{border-left-color:var(--orange);}
+.fca-top{display:flex;flex-wrap:wrap;gap:8px 16px;align-items:baseline;margin-bottom:14px;padding-bottom:12px;border-bottom:1px solid rgba(255,255,255,.07);}
+.chip{font-size:10px;color:var(--text2);text-transform:uppercase;letter-spacing:.5px;}
+.chip b{display:block;font-size:12px;color:var(--text);font-weight:700;text-transform:none;letter-spacing:0;margin-top:2px;}
+.fato{flex:1;min-width:220px;}
+.fato .fato-nome{font-size:15px;font-weight:800;color:var(--text);}
+.fato .fato-desv{font-size:12px;font-weight:700;margin-top:3px;}
+.fato .fato-desv .dn{color:var(--text3);font-weight:600;margin-right:4px;}
+.up{color:var(--red);}.up.am{color:var(--amber);}
+.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px 16px;}
+.fld{display:flex;flex-direction:column;gap:4px;}
+.fld.full{grid-column:1 / -1;}
+.fld label{font-size:10px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:.5px;}
+.fld label .req{color:var(--orange);}
+.fld input,.fld textarea,.fld select{background:#0a0f18;border:1px solid #2a3a50;border-radius:6px;color:var(--text);font-family:'Montserrat',sans-serif;font-size:13px;padding:8px 10px;outline:none;width:100%;}
+.fld input:focus,.fld textarea:focus,.fld select:focus{border-color:var(--orange);}
+.fld textarea{resize:vertical;min-height:42px;}
+.fld select option{background:#0f1824;}
+.st-wrap{position:relative;}
+.st-dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:6px;vertical-align:middle;}
+.empty{text-align:center;color:var(--text2);padding:40px;background:rgba(59,179,59,.08);border:1px solid rgba(59,179,59,.2);border-radius:10px;}
+/* modo claro padrão (cinza translúcido) */
+body.light-mode{background:#F0F0F0;}
+body.light-mode .main{--text:#1a1a1a;--text2:#444444;--text3:#666666;color:var(--text);}
+body.light-mode .fca-card{background:rgba(128,128,128,.14)!important;border:none!important;border-left:3px solid var(--text3)!important;box-shadow:none!important;--text:#1a1a1a;--text2:#444444;--text3:#666666;}
+body.light-mode .fca-card.crit{border-left:3px solid var(--red)!important;}
+body.light-mode .fca-card.aten{border-left:3px solid var(--orange)!important;}
+body.light-mode .fld input,body.light-mode .fld textarea,body.light-mode .fld select{background:#fff;border-color:#ccc;color:#1a1a1a;}
+body.light-mode .fato .fato-nome{color:#1a1a1a;}
+@media(max-width:680px){.form-grid{grid-template-columns:1fr;}.main{padding:16px;}}
+</style>
+</head>
+<body>
+<header class="header">
+  <div class="brand"><h1>FCA · Preenchimento</h1><p>Gestão em Movimento — teste (não alimenta o BI ainda)</p></div>
+  <span class="uni-badge" id="uniBadge">—</span>
+  <button class="btn theme" id="themeBtn" title="Modo claro/escuro">☀</button>
+  <button class="btn" id="saveBtn">Salvar</button>
+  <span class="saved-msg" id="savedMsg">Salvo ✓ (teste — só no seu navegador)</span>
+</header>
+<main class="main">
+  <div class="intro">Preencha <b>Causa</b>, <b>Ação</b>, <b>Prazo</b>, <b>Dono</b> e <b>Status</b> para cada fato (indicador com desvio). Os fatos vêm dos ICs do Gerot, da Disponibilidade e dos desvios financeiros (Visão Financeira) da unidade. <b>Tudo é salvo no seu navegador</b> para você testar — ainda não envia pro BI.</div>
+  <div id="list"><div class="loading">Carregando fatos da unidade…</div></div>
+</main>
+<script>
+// ── Config / unidade de teste ──
+const UNIDADE_IC = 'CDD RIO DE JANEIRO';   // nome na planilha de ICs
+const UNIDADE_DRE = 'CAMPO GRANDE';        // nome na DRE (cidade)
+const UNIDADE_LBL = 'CDD Rio de Janeiro (CGR)';
+const LS_PREFIX = 'fca_teste_CGR_';
+
+const SRC_ICS = 'https://docs.google.com/spreadsheets/d/1xGl1Xrk2sPS9zWghEuecFMNBHwmeLiZ02U-QpO8cDPY/gviz/tq?sheet='+encodeURIComponent('Consolidado ICs');
+const SRC_DRE = 'https://docs.google.com/spreadsheets/d/1qcTy2ppLCGBKKqZCxCYWCTL9kTAuWfHBMyBfWJOyih8/gviz/tq?sheet='+encodeURIComponent('Consolidado DRE');
+const MESES=['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
+// ICs do Gerot + Disponibilidade (col, label) — valores 0-1; meta 90%
+const IC=[{c:2,l:'Disponibilidade'},{c:3,l:'Preventivas'},{c:4,l:'Consumo Km/L'},{c:6,l:'Checklist T1/T2'},{c:7,l:'Checklist Apoio'},{c:8,l:'Conformidade Frota'},{c:9,l:'Stress Test Cam.'},{c:10,l:'Stress Test Emp.'},{c:11,l:'SLA Atendimento'},{c:12,l:'CIVF'}];
+const META_IC=90;
+
+function parseD(v){if(v==null)return null;const m=String(v).match(/Date\((\d+),(\d+),(\d+)/);return m?new Date(+m[1],+m[2],+m[3]):null;}
+function vigKeyN(d){return d?d.getFullYear()*100+d.getMonth():0;}
+function vigLbl(d){return d?MESES[d.getMonth()]+'/'+String(d.getFullYear()).slice(2):'';}
+function brl(v){const a=Math.abs(v);let s;if(a>=1e6)s=(a/1e6).toFixed(1)+' mi';else if(a>=1e3)s=(a/1e3).toFixed(0)+'k';else s=Math.round(a).toLocaleString('pt-BR');return 'R$ '+s;}
+function gviz(url){return new Promise((res,rej)=>{const fn='_gv'+Math.floor(Math.random()*1e9);const s=document.createElement('script');const clr=()=>{try{delete window[fn];s.remove();}catch(e){}};window[fn]=r=>{clr();try{if(r.status!=='ok')throw 0;res((r.table.rows||[]).map(x=>(x.c||[]).map(c=>c?c.v:null)));}catch(e){rej(e);}};s.onerror=()=>{clr();rej(0);};s.src=url+(url.includes('?')?'&':'?')+'tqx=out:json;responseHandler:'+fn;document.head.appendChild(s);});}
+
+function slug(s){return String(s).normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^a-zA-Z0-9]+/g,'_').replace(/^_|_$/g,'').toLowerCase();}
+
+function pushICs(ics,fatos){
+  const icRows=(ics||[]).filter(r=>r[0]&&r[1]&&parseD(r[0])&&String(r[1]).trim().toUpperCase()===UNIDADE_IC);
+  if(!icRows.length)return;
+  icRows.sort((a,b)=>vigKeyN(parseD(a[0]))-vigKeyN(parseD(b[0])));
+  const last=icRows[icRows.length-1];const vig=vigLbl(parseD(last[0]));
+  IC.forEach(d=>{const raw=last[d.c];if(raw==null)return;const v=+raw*100;if(v>=META_IC)return;
+    const gap=META_IC-v;const gapPct=gap/META_IC*100;
+    fatos.push({vig,unidade:UNIDADE_LBL,projeto:'—',fato:d.l,sub:'IC '+Math.round(v)+'% · meta '+META_IC+'%',abs:'▲ '+gap.toFixed(1)+' pp',pct:'▲% '+gapPct.toFixed(1)+'%',sev:v<70?'crit':'aten'});});
+}
+function pushDRE(dre,fatos){
+  const drRows=(dre||[]).filter(r=>parseD(r[9])&&String(r[10]||'').trim().toUpperCase()===UNIDADE_DRE&&String(r[12]||'').trim()!=='Receita Líquida');
+  if(!drRows.length)return;
+  let maxK=0;drRows.forEach(r=>{const k=vigKeyN(parseD(r[9]));if(k>maxK)maxK=k;});
+  const vig=vigLbl(new Date(Math.floor(maxK/100),maxK%100,1));
+  const acc={};
+  drRows.filter(r=>vigKeyN(parseD(r[9]))===maxK).forEach(r=>{const conta=String(r[12]||'—').trim();const niv=String(r[11]||'').trim();const rem=r[1]!=null?+r[1]:0,real=r[2]!=null?+r[2]:0;const key=niv+'||'+conta;if(!acc[key])acc[key]={conta,niv,rem:0,real:0};acc[key].rem+=rem;acc[key].real+=real;});
+  Object.values(acc).map(o=>({...o,dv:o.real-o.rem,dpct:o.rem>0?(o.real/o.rem-1)*100:0}))
+    .filter(o=>o.dv>0&&o.rem>0).sort((a,b)=>b.dv-a.dv).slice(0,6)
+    .forEach(o=>{fatos.push({vig,unidade:UNIDADE_LBL,projeto:o.niv||'—',fato:o.conta,sub:'Realizado '+brl(o.real)+' vs Remunerado '+brl(o.rem),abs:'▲ '+brl(o.dv),pct:'▲% '+o.dpct.toFixed(1)+'%',sev:o.dpct>=5?'crit':'aten'});});
+}
+async function carregar(){
+  const fatos=[];
+  // ICs primeiro (rápido) — já renderiza
+  try{ const ics=await gviz(SRC_ICS); pushICs(ics,fatos); }catch(e){}
+  render(fatos.length?fatos:[]);
+  // DRE depois (planilha pesada) — anexa os financeiros e re-renderiza
+  try{ const dre=await gviz(SRC_DRE); pushDRE(dre,fatos); render(fatos); }
+  catch(e){ if(!fatos.length)document.getElementById('list').innerHTML='<div class="empty">Sem desvios financeiros carregados (planilha pesada) — mostrando só ICs.</div>'; }
+}
+
+const STATUS=['Não iniciada','Em andamento','Concluída'];
+const stColor=s=>s==='Concluída'?'var(--green)':s==='Em andamento'?'var(--amber)':'var(--red)';
+
+function render(fatos){
+  const list=document.getElementById('list');
+  if(!fatos.length){list.innerHTML='<div class="empty">✓ Nenhum desvio encontrado para esta unidade na vigência mais recente — sem fatos a tratar.</div>';return;}
+  list.innerHTML=fatos.map((f,i)=>{
+    const id=LS_PREFIX+slug(f.vig+'_'+f.projeto+'_'+f.fato);
+    let sv={};try{sv=JSON.parse(localStorage.getItem(id))||{};}catch(e){}
+    const opts=STATUS.map(s=>`<option ${sv.status===s?'selected':''}>${s}</option>`).join('');
+    return `<div class="fca-card ${f.sev}" data-id="${id}">
+      <div class="fca-top">
+        <div class="chip">Vigência<b>${f.vig}</b></div>
+        <div class="chip">Unidade<b>${f.unidade}</b></div>
+        <div class="chip">Projeto<b>${f.projeto}</b></div>
+        <div class="fato">
+          <div class="fato-nome">${f.fato}</div>
+          <div class="fato-desv"><span class="dn">${f.sub} · Desvio:</span><span class="up ${f.sev==='aten'?'am':''}">${f.abs}</span> &nbsp; <span class="up ${f.sev==='aten'?'am':''}">${f.pct}</span></div>
+        </div>
+      </div>
+      <div class="form-grid">
+        <div class="fld full"><label>Causa <span class="req">*</span></label><textarea data-k="causa" placeholder="Por que aconteceu?">${sv.causa||''}</textarea></div>
+        <div class="fld full"><label>Ação <span class="req">*</span></label><textarea data-k="acao" placeholder="O que será feito?">${sv.acao||''}</textarea></div>
+        <div class="fld"><label>Prazo <span class="req">*</span></label><input type="date" data-k="prazo" value="${sv.prazo||''}"></div>
+        <div class="fld"><label>Dono <span class="req">*</span></label><input type="text" data-k="dono" placeholder="Responsável" value="${sv.dono||''}"></div>
+        <div class="fld full"><label>Status</label><div class="st-wrap"><span class="st-dot" style="background:${stColor(sv.status||'Não iniciada')}"></span><select data-k="status" style="display:inline-block;width:auto;min-width:200px">${opts}</select></div></div>
+      </div>
+    </div>`;
+  }).join('');
+  // auto-save por campo + atualiza cor do status
+  list.querySelectorAll('.fca-card').forEach(card=>{
+    const save=()=>{const o={};card.querySelectorAll('[data-k]').forEach(el=>o[el.dataset.k]=el.value);localStorage.setItem(card.dataset.id,JSON.stringify(o));};
+    card.querySelectorAll('[data-k]').forEach(el=>el.addEventListener('input',()=>{save();if(el.dataset.k==='status'){card.querySelector('.st-dot').style.background=stColor(el.value);}}));
+  });
+}
+
+// salvar (feedback) — o auto-save já grava; este botão só confirma
+document.getElementById('saveBtn').addEventListener('click',()=>{
+  document.querySelectorAll('.fca-card').forEach(card=>{const o={};card.querySelectorAll('[data-k]').forEach(el=>o[el.dataset.k]=el.value);localStorage.setItem(card.dataset.id,JSON.stringify(o));});
+  const m=document.getElementById('savedMsg');m.style.display='inline';setTimeout(()=>m.style.display='none',2500);
+});
+
+// tema
+function applyTheme(t){document.body.classList.toggle('light-mode',t==='light');localStorage.setItem('bi_theme',t);document.getElementById('themeBtn').textContent=t==='light'?'🌙':'☀';}
+document.getElementById('themeBtn').addEventListener('click',()=>applyTheme(document.body.classList.contains('light-mode')?'dark':'light'));
+applyTheme(localStorage.getItem('bi_theme')||'dark');
+
+document.getElementById('uniBadge').textContent=UNIDADE_LBL;
+carregar();
+</script>
+</body>
+</html>
