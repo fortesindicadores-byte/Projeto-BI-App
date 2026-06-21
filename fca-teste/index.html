@@ -144,7 +144,9 @@ function pushICs(ics,fatos){
     fatos.push({vig,fato:d.l,desvio,sev});});
 }
 function pushDRE(dre,fatos){
-  const drRows=(dre||[]).filter(r=>parseD(r[9])&&String(r[10]||'').trim().toUpperCase()===UNIDADE_DRE&&String(r[12]||'').trim()!=='Receita Líquida');
+  const _nc=s=>String(s||'').normalize('NFD').replace(/[̀-ͯ]/g,'').toUpperCase().replace(/\s+/g,' ').trim();
+  const EXCL=new Set(['RECEITA LIQUIDA','ICMS CREDITO PRESUMIDO','IPVA E LICENCIAMENTO DE VEICULOS','ESTORNO ICMS NAO APROVEITADO']);
+  const drRows=(dre||[]).filter(r=>parseD(r[9])&&String(r[10]||'').trim().toUpperCase()===UNIDADE_DRE&&!EXCL.has(_nc(r[12])));
   if(!drRows.length)return;
   let maxK=0;drRows.forEach(r=>{const k=vigKeyN(parseD(r[9]));if(k>maxK)maxK=k;});
   const vig=vigLbl(new Date(Math.floor(maxK/100),maxK%100,1));
