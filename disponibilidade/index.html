@@ -790,8 +790,14 @@ function _buildMs(wrap,renderFn,getAllFn){
   const render=(q='')=>{ renderFn(list,sel,q); syncBadge(wrap); };
   list.addEventListener('change',e=>{
     const box=e.target;
-    if(box.classList.contains('ms-all')){ sel.clear(); list.querySelectorAll('input:not(.ms-all)').forEach(b=>b.checked=false); }
-    else{ box.checked?sel.add(box.dataset.v):sel.delete(box.dataset.v); if(getAllFn){ const all=getAllFn(); if(all.length&&all.every(v=>sel.has(v))) sel.clear(); } }
+    if(box.classList.contains('ms-all')){
+      sel.clear();
+    } else if(sel.size===0){
+      if(!box.checked){ const all=getAllFn?getAllFn():[]; all.forEach(v=>{ if(v!==box.dataset.v) sel.add(v); }); }
+    } else {
+      if(box.checked) sel.add(box.dataset.v); else sel.delete(box.dataset.v);
+      if(getAllFn){ const all=getAllFn(); if(all.length>0&&all.every(v=>sel.has(v))) sel.clear(); }
+    }
     render(srch.value); onFilterChange();
   });
   list.addEventListener('click',e=>{
