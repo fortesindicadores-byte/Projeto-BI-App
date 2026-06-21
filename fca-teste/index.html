@@ -153,11 +153,12 @@ function pushDRE(dre,fatos){
   const vig=vigLbl(new Date(Math.floor(maxK/100),maxK%100,1));
   const acc={};
   drRows.filter(r=>vigKeyN(parseD(r[9]))===maxK).forEach(r=>{const conta=String(r[12]||'—').trim();const niv=String(r[11]||'').trim();const rem=r[1]!=null?+r[1]:0,real=r[2]!=null?+r[2]:0;const key=niv+'||'+conta;if(!acc[key])acc[key]={conta,niv,rem:0,real:0};acc[key].rem+=rem;acc[key].real+=real;});
-  Object.values(acc).map(o=>({...o,dv:o.real-o.rem,dpct:o.rem>0?(o.real/o.rem-1)*100:0}))
-    .filter(o=>o.dv>0&&o.rem>0).sort((a,b)=>b.dv-a.dv)
+  // Custos na DRE são negativos: gasto ACIMA do orçado => (rem - real) > 0 (mais gasto que o remunerado)
+  Object.values(acc).map(o=>{const over=o.rem-o.real,base=Math.abs(o.rem);return {...o,over,dpct:base>0?over/base*100:0};})
+    .filter(o=>o.over>0&&o.rem!==0).sort((a,b)=>b.over-a.over)
     .forEach(o=>{const sev=o.dpct>=5?'crit':'aten';
-      // Fato financeiro: "Desvio de R$ X (-Y%)" — % com sinal negativo
-      const desvio=`<span class="dn">Desvio: </span><span class="val ${sev==='aten'?'am':''}">▲ ${brl(o.dv)} · ▲ -${Math.round(o.dpct)}%</span>`;
+      // Fato financeiro: "Desvio: ▲ R$ X · ▲ -Y%"
+      const desvio=`<span class="dn">Desvio: </span><span class="val ${sev==='aten'?'am':''}">▲ ${brl(o.over)} · ▲ -${Math.round(o.dpct)}%</span>`;
       fatos.push({vig,fato:o.conta,proj:o.niv,desvio,sev});});
 }
 function pushKML(kml,fatos){
@@ -197,8 +198,8 @@ function blankAcao(){return {causa:'',acao:'',resp:'',prazo:'',status:DEFAULT_ST
 function rowHTML(a,canRemove){
   const opts=STATUS.map(s=>`<option ${a.status===s?'selected':''}>${s}</option>`).join('');
   return `<tr>
-    <td class="col-causa"><span class="cell-label">Causa</span><textarea data-k="causa" placeholder="Por que aconteceu?">${esc(a.causa)}</textarea></td>
-    <td class="col-acao"><span class="cell-label">Ação</span><textarea data-k="acao" placeholder="O que será feito?">${esc(a.acao)}</textarea></td>
+    <td class="col-causa"><span class="cell-label">Causa</span><textarea rows="1" data-k="causa" placeholder="Por que aconteceu?">${esc(a.causa)}</textarea></td>
+    <td class="col-acao"><span class="cell-label">Ação</span><textarea rows="1" data-k="acao" placeholder="O que será feito?">${esc(a.acao)}</textarea></td>
     <td class="col-resp"><span class="cell-label">Responsável</span><input type="text" data-k="resp" placeholder="Quem?" value="${esc(a.resp)}"></td>
     <td class="col-prazo"><span class="cell-label">Prazo</span><input type="date" data-k="prazo" value="${esc(a.prazo)}"></td>
     <td class="col-status"><span class="cell-label">Status</span><select class="st" data-k="status" data-v="${esc(a.status||DEFAULT_STATUS)}">${opts}</select></td>
