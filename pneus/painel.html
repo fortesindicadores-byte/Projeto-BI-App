@@ -2421,6 +2421,13 @@ async function fetchSnapshotFromNetwork() {
 }
 
 function aplicarDados(data, ult, prefixo) {
+  // Paleteira não é veículo de frota rodante — fora do painel (veículos, pneus e inspeções)
+  const foraIds = new Set((data.vehicles || []).filter(v => /PALETEIRA/i.test(v.tipo || '')).map(v => v.id));
+  if (foraIds.size) {
+    data.vehicles    = data.vehicles.filter(v => !foraIds.has(v.id));
+    data.tires       = (data.tires || []).filter(t => !foraIds.has(t.veiculoId));
+    data.inspections = (data.inspections || []).filter(i => !foraIds.has(i.veiculoId));
+  }
   DATA = data;
   document.getElementById('lastUpdate').textContent = (prefixo || '🔄 Dados de: ') + formatCacheTime(ult);
   populateFilters();
