@@ -391,6 +391,27 @@ const UNI_MAP = {
 };
 function mapUni(v){ return UNI_MAP[String(v||'').toUpperCase().trim()] || (v||''); }
 
+// De-para da aba Indisponibilidade: usa nome de cidade (com acento) em vez do nome da
+// Disponibilidade. Mapeia por (Unidade + Projeto) p/ casar com os códigos da tabela Disp%Unidade.
+const _nrm = v => String(v||'').toUpperCase().normalize('NFD').replace(/[̀-ͯ]/g,'').trim();
+const IND_CITY_MAP = {
+  'RONDONOPOLIS':'RON','GUARULHOS':'GRL','FLORIANOPOLIS':'FLP','PELOTAS':'PLT',
+  'NOVA FRIBURGO':'NFR','BALNEARIO CAMBORIU':'BLC','CAMPO GRANDE':'CGR',
+  'ANHANGUERA':'ANG','PIRAI':'PIR',
+};
+function mapUniInd(uni, proj, tipo){
+  const u=_nrm(uni), p=_nrm(proj), t=_nrm(tipo);
+  if(u==='CUIABA'){
+    if(p==='APOIO'||t.includes('EMPILHADEIRA')) return 'CBA - T1 WH'; // armazém/apoio
+    if(p==='EMPURRADA') return 'CBA - T1';
+    return 'CBA T2'; // ROTA/AS/demais = CDD Cuiabá
+  }
+  if(u==='CACHOEIRAS DE MACACU'||u==='MACACU'){
+    return p==='EMPURRADA' ? 'MCC - T1' : 'MCC - T2';
+  }
+  return IND_CITY_MAP[u] || (uni||'');
+}
+
 function mapProj(p){
   if(!p) return p||'';
   const u=String(p).toUpperCase().normalize('NFD').replace(/[̀-ͯ]/g,'').trim();
@@ -505,7 +526,7 @@ function parseInd(rawRow, cols){
   // Dias Prazo = Previsão Retorno − data do relatório (negativo = vencido)
   const pPrev=parseBR(r.prevRetorno), pRel=parseBR(r.dataRel);
   if(pPrev&&pRel) r.diasPrazo=Math.round((pPrev-pRel)/864e5);
-  r.uniMap  = mapUni(r.unidade||'');
+  r.uniMap  = mapUniInd(r.unidade||'', r.projeto||'', r.tipo||'');
   r.projMap = mapProj(r.projeto||'');
   return r;
 }
