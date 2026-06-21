@@ -46,7 +46,7 @@ table.acoes tbody tr+tr td{border-top:1px solid rgba(255,255,255,.05);}
 .col-prazo{width:11%;}
 .col-status{width:12%;}
 .col-x{width:26px;}
-.acoes input,.acoes textarea,.acoes select{background:#0a0f18;border:1px solid #2a3a50;border-radius:6px;color:var(--text);font-family:'Montserrat',sans-serif;font-size:12.5px;padding:7px 9px;outline:none;width:100%;}
+.acoes input,.acoes textarea,.acoes select{background:#0a0f18;border:1px solid #2a3a50;border-radius:6px;color:var(--text);font-family:'Montserrat',sans-serif;font-size:12.5px;padding:7px 9px;outline:none;width:100%;min-height:38px;}
 .acoes input:focus,.acoes textarea:focus,.acoes select:focus{border-color:var(--orange);}
 .acoes textarea{resize:none;overflow:hidden;min-height:38px;line-height:1.4;display:block;}
 .acoes select option{background:#0f1824;color:#fff;}
@@ -117,9 +117,10 @@ const LS_PREFIX = 'fca_teste_CGR_';
 
 const SRC_ICS = 'https://docs.google.com/spreadsheets/d/1xGl1Xrk2sPS9zWghEuecFMNBHwmeLiZ02U-QpO8cDPY/gviz/tq?sheet='+encodeURIComponent('Consolidado ICs');
 const SRC_DRE = 'https://docs.google.com/spreadsheets/d/1qcTy2ppLCGBKKqZCxCYWCTL9kTAuWfHBMyBfWJOyih8/gviz/tq?sheet='+encodeURIComponent('Consolidado DRE');
+const SRC_KML = 'https://docs.google.com/spreadsheets/d/1ZZdvG_RK5cTBLdPl3TWCbNeqw-Y4fTYwWsQV4w-e__A/gviz/tq?sheet='+encodeURIComponent('Km/L');
 const MESES=['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
 // ICs do Gerot + Disponibilidade (col, label) — valores 0-1; meta 90%
-const IC=[{c:2,l:'Disponibilidade'},{c:3,l:'Preventivas'},{c:4,l:'Consumo Km/L'},{c:6,l:'Checklist T1/T2'},{c:7,l:'Checklist Apoio'},{c:8,l:'Conformidade Frota'},{c:9,l:'Stress Test Cam.'},{c:10,l:'Stress Test Emp.'},{c:11,l:'SLA Atendimento'},{c:12,l:'CIVF'}];
+const IC=[{c:2,l:'Disponibilidade'},{c:3,l:'Preventivas'},{c:6,l:'Checklist T1/T2'},{c:7,l:'Checklist Apoio'},{c:8,l:'Conformidade Frota'},{c:9,l:'Stress Test Cam.'},{c:10,l:'Stress Test Emp.'},{c:11,l:'SLA Atendimento'},{c:12,l:'CIVF'}];
 const META_IC=90;
 
 function parseD(v){if(v==null)return null;const m=String(v).match(/Date\((\d+),(\d+),(\d+)/);return m?new Date(+m[1],+m[2],+m[3]):null;}
@@ -151,18 +152,34 @@ function pushDRE(dre,fatos){
   let maxK=0;drRows.forEach(r=>{const k=vigKeyN(parseD(r[9]));if(k>maxK)maxK=k;});
   const vig=vigLbl(new Date(Math.floor(maxK/100),maxK%100,1));
   const acc={};
-  drRows.filter(r=>vigKeyN(parseD(r[9]))===maxK).forEach(r=>{const conta=String(r[12]||'—').trim();const niv=String(r[11]||'').trim();const rem=r[1]!=null?+r[1]:0,real=r[2]!=null?+r[2]:0;const key=conta;if(!acc[key])acc[key]={conta,niv,rem:0,real:0};acc[key].rem+=rem;acc[key].real+=real;});
+  drRows.filter(r=>vigKeyN(parseD(r[9]))===maxK).forEach(r=>{const conta=String(r[12]||'—').trim();const niv=String(r[11]||'').trim();const rem=r[1]!=null?+r[1]:0,real=r[2]!=null?+r[2]:0;const key=niv+'||'+conta;if(!acc[key])acc[key]={conta,niv,rem:0,real:0};acc[key].rem+=rem;acc[key].real+=real;});
   Object.values(acc).map(o=>({...o,dv:o.real-o.rem,dpct:o.rem>0?(o.real/o.rem-1)*100:0}))
     .filter(o=>o.dv>0&&o.rem>0).sort((a,b)=>b.dv-a.dv)
     .forEach(o=>{const sev=o.dpct>=5?'crit':'aten';
       // Fato financeiro: "Desvio de R$ X (-Y%)" — % com sinal negativo
       const desvio=`<span class="dn">Desvio de </span><span class="val ${sev==='aten'?'am':''}">${brl(o.dv)} (-${Math.round(o.dpct)}%)</span>`;
-      fatos.push({vig,fato:o.conta,desvio,sev});});
+      fatos.push({vig,fato:o.conta,proj:o.niv,desvio,sev});});
+}
+function pushKML(kml,fatos){
+  const rows=(kml||[]).filter(r=>parseD(r[0])&&String(r[15]||'').trim().toUpperCase()===UNIDADE_DRE);
+  if(!rows.length)return;
+  let maxK=0;rows.forEach(r=>{const k=vigKeyN(parseD(r[0]));if(k>maxK)maxK=k;});
+  let km=0,lit=0,remW=0;
+  rows.filter(r=>vigKeyN(parseD(r[0]))===maxK).forEach(r=>{const k=+r[22]||0,l=+r[23]||0,rk=+r[4]||0;km+=k;lit+=l;remW+=rk*k;});
+  if(!km||!lit)return;
+  const real=km/lit, rem=remW/km;
+  if(!(rem>0)||real>=rem)return; // só quando o real está pior (consome mais)
+  const nom=rem-real, pct=(real/rem-1)*100, sev=Math.abs(pct)>=10?'crit':'aten';
+  const f2=v=>v.toFixed(2).replace('.',',');
+  const vig=vigLbl(new Date(Math.floor(maxK/100),maxK%100,1));
+  const desvio=`<span class="dn">Desvio de </span><span class="val ${sev==='aten'?'am':''}">▲ ${f2(nom)} Km/L · ▲ ${Math.round(pct)}%</span>`;
+  fatos.push({vig,fato:'Consumo Km/L',desvio,sev});
 }
 async function carregar(){
   const fatos=[];
   try{ const ics=await gviz(SRC_ICS); pushICs(ics,fatos); }catch(e){}
   render(fatos.length?fatos:[]);
+  try{ const kml=await gviz(SRC_KML); pushKML(kml,fatos); render(fatos); }catch(e){}
   try{ const dre=await gviz(SRC_DRE); pushDRE(dre,fatos); render(fatos); }
   catch(e){ if(!fatos.length)document.getElementById('list').innerHTML='<div class="empty">Sem desvios financeiros carregados (planilha pesada) — mostrando só ICs.</div>'; }
 }
@@ -193,12 +210,12 @@ function render(fatos){
   const list=document.getElementById('list');
   if(!fatos.length){list.innerHTML='<div class="empty">✓ Nenhum desvio encontrado para esta unidade na vigência mais recente — sem fatos a tratar.</div>';return;}
   list.innerHTML=fatos.map(f=>{
-    const id=LS_PREFIX+slug(f.vig+'_'+f.fato);
+    const id=LS_PREFIX+slug(f.vig+'_'+(f.proj||'')+'_'+f.fato);
     const acoes=loadAcoes(id);
     const rows=acoes.map((a,i)=>rowHTML(a,i>0)).join('');
     return `<div class="fato-block ${f.sev}" data-id="${id}">
       <div class="fato-head">
-        <div class="fato-meta"><b>${UNIDADE_COD}</b><span class="sep">·</span>${f.vig}<span class="sep">·</span>Fato</div>
+        <div class="fato-meta"><b>${UNIDADE_COD}</b><span class="sep">·</span>${f.vig}${f.proj?'<span class="sep">·</span>'+esc(f.proj):''}</div>
         <div class="fato-nome">${esc(f.fato)}</div>
         <div class="fato-desv">${f.desvio}</div>
       </div>
