@@ -42,7 +42,7 @@ body{background:radial-gradient(ellipse at 10% 25%,rgba(249,115,22,.06) 0%,trans
 .legend{display:flex;gap:14px;align-items:center;font-size:10px;color:var(--text2);margin-bottom:14px;flex-wrap:wrap;}
 .legend i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:5px;vertical-align:middle;}
 .sec-title{font-size:13px;font-weight:800;text-transform:uppercase;letter-spacing:.5px;color:var(--text);margin:0 0 12px;}
-.cards{display:grid;grid-template-columns:repeat(9,minmax(0,1fr));gap:10px;margin-bottom:26px;}
+.cards{display:grid;grid-template-columns:repeat(10,minmax(0,1fr));gap:10px;margin-bottom:26px;}
 @media(max-width:1100px){.cards{grid-template-columns:repeat(6,1fr);}}
 .kpi{background:rgba(20,27,38,.55);border:1px solid rgba(255,255,255,.07);border-radius:8px;padding:12px 14px;backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);box-shadow:0 2px 12px rgba(0,0,0,.25);border-left:3px solid var(--text3);}
 .kpi.g{border-left-color:#3BB33B;}.kpi.y{border-left-color:#EAB308;}.kpi.o{border-left-color:#F97316;}.kpi.r{border-left-color:#FF6666;}
@@ -309,7 +309,7 @@ function gviz(url){return new Promise((res,rej)=>{const fn='_gv'+Math.floor(Math
 // ── Indicadores cross-painel (nível empresa) ──
 function compDisp(rows){const mo={};rows.forEach(r=>{const d=parseD(r[0]);if(!d)return;const proj=String(r[14]||'').split('-')[0].trim().toUpperCase();if(!(proj==='ROTA'||proj==='AUTO SERVIÇO'||proj==='AUTO SERVICO'))return;const k=vigKeyN(d);const rem=r[31]!=null?+r[31]:0,real=r[32]!=null?+r[32]:0;const o=mo[k]=mo[k]||{rem:0,real:0};o.rem+=rem;o.real+=real;});const out={},acc={};Object.keys(mo).map(Number).sort((a,b)=>a-b).forEach(k=>{const y=Math.floor(k/100);acc[y]=acc[y]||{rem:0,real:0};acc[y].rem+=mo[k].rem;acc[y].real+=mo[k].real;out[k]=acc[y].rem?((acc[y].real-acc[y].rem)/acc[y].rem*100):null;});return out;}
 // DPO Sustentável = último H; por unidade ≥ Nível 3 = 100%, senão 0% → % de unidades sustentáveis
-function compDPO(rows){const hdr=rows[0]||[];let li=-1;for(let i=hdr.length-1;i>=1;i--){if(rows.slice(1).some(r=>/Nível/i.test(String(r[i]||'')))){li=i;break;}}if(li<0)return{pct:null,ok:0,tot:0,n4:[],sem:null,byUni:{}};let ok=0,tot=0;const n4=[];const byUni={};rows.slice(1).forEach(r=>{const label=String(r[0]||'').trim().toUpperCase().replace(/\s+/g,' ');const code=label.split(' ')[0];const m=String(r[li]||'').match(/Nível\s*(\d+)/i);if(m){tot++;const lvl=+m[1];if(lvl>=3)ok++;if(lvl>=4&&n4.indexOf(code)<0)n4.push(code);byUni[label]=lvl*20;}});return{pct:tot?ok/tot*100:null,ok,tot,n4,sem:String(hdr[li]||''),byUni};}
+function compDPO(rows){const hdr=rows[0]||[];let li=-1;for(let i=hdr.length-1;i>=1;i--){if(rows.slice(1).some(r=>/Nível/i.test(String(r[i]||'')))){li=i;break;}}if(li<0)return{pct:null,ok:0,tot:0,n4:[],sem:null,byUni:{}};const NOTA=l=>l>=4?100:l===3?80:l===2?60:l===1?40:0;let ok=0,tot=0;const n4=[];const byUni={};rows.slice(1).forEach(r=>{const label=String(r[0]||'').trim().toUpperCase().replace(/\s+/g,' ');if(!label||label==='UNIDADE')return;const code=label.split(' ')[0];const me=String(r[li]||'').match(/Nível\s*(\d+)/i);if(me){tot++;const lvl=+me[1];if(lvl>=3)ok++;if(lvl>=4&&n4.indexOf(code)<0)n4.push(code);}for(let i=li;i>=1;i--){const m=String(r[i]||'').match(/Nível\s*(\d+)/i);if(m){byUni[label]=NOTA(+m[1]);break;}}});return{pct:tot?ok/tot*100:null,ok,tot,n4,sem:String(hdr[li]||''),byUni};}
 // DPO nota por unidade scorecard (média das linhas DPO mapeadas; null se ausente)
 function dpoNotaU(unis){if(!XPANEL.dpo||!XPANEL.dpo.byUni)return null;const vs=unis.map(u=>XPANEL.dpo.byUni[UNI2DPO[u]]).filter(v=>v!=null);return vs.length?vs.reduce((a,b)=>a+b,0)/vs.length:null;}
 function compFCA(rows){const today=new Date();today.setHours(0,0,0,0);const recs=[];rows.forEach(r=>{const d=parseD(r[1]);if(!d)return;const st=String(r[8]||'');const prazo=parseD(r[7]);const concl=/conclu/i.test(st)?'C':/andamento/i.test(st)?'A':'N';const venc=concl==='C'?false:(prazo&&prazo<today);const cod=String(r[2]||'').trim().toUpperCase().split(/\s+/)[0];recs.push({k:vigKeyN(d),cod,concl,venc});});return recs;}
@@ -459,8 +459,9 @@ function renderRanking(perKeys,yr,mi,periodo){
   const cellFg2=(v,rr)=>{if(v==null)return 'var(--text3)';const cls=rr?bandCost(v):band(v);return cellFg(cls);};
   body.innerHTML=rk.map((x,i)=>{
     const sc=Math.round(x.score);const scCls=band(x.score);
+    const scBg=scCls==='g'?'#3BB33B':scCls==='y'?'#EAB308':scCls==='o'?'#F97316':scCls==='r'?'#FF6666':'transparent';
     return `<tr><td class="rank lft">${i+1}</td><td class="uni lft">${x.uni}</td>`+
-      `<td class="scol" style="font-weight:800;color:${cellFg(scCls)}">${sc}</td>`+
+      `<td class="scol"><span style="display:inline-block;min-width:42px;padding:3px 10px;border-radius:5px;font-weight:800;color:#0C1017;background:${scBg}">${sc}</span></td>`+
       RK_COLS.map(c=>{const v=x.notes[c.k];return `<td class="ind-col" style="color:${cellFg2(v,c.rr)}">${v==null?'—':Math.round(v)}</td>`;}).join('')+'</tr>';
   }).join('');
 }
