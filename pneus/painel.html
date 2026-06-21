@@ -1674,6 +1674,19 @@
         </div>
       </div>
 
+      <!-- CALIBRAGEM POR UNIDADE -->
+      <div class="card" style="margin-top:24px">
+        <div class="card-title" style="margin-bottom:6px">Calibragem por Unidade (% pressão OK)</div>
+        <div class="chart-legend">
+          <span class="lg-item"><span class="lg-dot" style="background:var(--green)"></span> ≥ 98%</span>
+          <span class="lg-item"><span class="lg-dot" style="background:var(--yellow)"></span> 85% a 98%</span>
+          <span class="lg-item"><span class="lg-dot" style="background:var(--red-soft)"></span> &lt; 85%</span>
+        </div>
+        <div style="position:relative;height:260px">
+          <canvas id="chartCalibUnidade"></canvas>
+        </div>
+      </div>
+
       <!-- RANKING -->
       <div class="adh-table-wrap" style="margin-top:20px">
         <div class="adh-table-title" style="display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap">
@@ -3870,10 +3883,42 @@ function renderPressao() {
 
   // Gráficos mensais
   renderPressaoMensalCharts();
+  renderCalibUnidadeChart(tires);
 
   // Ranking pelo maior desvio absoluto
   window._tiresPressao = [...tires].sort((a, b) => Math.abs(b.desvioPressao) - Math.abs(a.desvioPressao));
   filtrarPressao();
+}
+
+function renderCalibUnidadeChart(tires) {
+  if (!document.getElementById('chartCalibUnidade')) return;
+  const isLight = document.body.classList.contains('light-mode');
+  const gridColor = isLight ? 'rgba(0,0,0,.08)' : 'rgba(255,255,255,.06)';
+  const tickColor = isLight ? '#444444' : '#94A3B8';
+  const clusterColor = (p, a) => p >= 98 ? `rgba(59,179,59,${a})` : p >= 85 ? `rgba(243,156,18,${a})` : `rgba(255,102,102,${a})`;
+  const por = {};
+  tires.forEach(t => { const u = t.unidade || '—'; (por[u] = por[u] || { ok: 0, tot: 0 }); por[u].tot++; if (!t.pressaoNOK) por[u].ok++; });
+  const arr = Object.entries(por).map(([u, o]) => ({ u, pct: o.tot ? parseFloat((o.ok / o.tot * 100).toFixed(1)) : 0 })).sort((a, b) => a.pct - b.pct);
+  const labels = arr.map(a => a.u), pcts = arr.map(a => a.pct);
+  destroyChart('chartCalibUnidade');
+  if (!labels.length) return;
+  charts.chartCalibUnidade = new Chart(document.getElementById('chartCalibUnidade'), {
+    type: 'bar',
+    data: { labels, datasets: [{ label: 'Calibragem', data: pcts,
+      backgroundColor: pcts.map(p => clusterColor(p, 0.7)), borderColor: pcts.map(p => clusterColor(p, 1)), borderWidth: 1.5, borderRadius: 3,
+      datalabels: { anchor: 'end', align: 'end', offset: 2, color: isLight ? '#111' : '#fff', font: { family: 'Montserrat', size: 12, weight: '700' }, formatter: v => Math.round(v) + '%' } }] },
+    plugins: [ChartDataLabels],
+    options: {
+      responsive: true, maintainAspectRatio: false, layout: { padding: { top: 20 } },
+      plugins: { legend: { display: false },
+        tooltip: { backgroundColor: '#141B26', titleColor: '#F97316', bodyColor: '#F1F5F9', borderColor: '#1E2D40', borderWidth: 1, titleFont: { family: 'Montserrat' }, bodyFont: { family: 'Montserrat' },
+          callbacks: { title: items => items[0].label, label: ctx => 'Calibragem: ' + ctx.parsed.y.toFixed(1).replace('.', ',') + '%' } } },
+      scales: {
+        y: { beginAtZero: true, max: 100, grid: { color: gridColor }, ticks: { color: tickColor, font: { family: 'Montserrat', size: 10 }, callback: v => v + '%' } },
+        x: { grid: { display: false }, ticks: { color: tickColor, font: { family: 'Montserrat', size: 11 }, maxRotation: 45, minRotation: 45, autoSkip: false } }
+      }
+    }
+  });
 }
 
 function filtrarPressao() {
