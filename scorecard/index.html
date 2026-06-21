@@ -163,6 +163,12 @@ body.light-mode tbody tr+tr td{border-top-color:rgba(0,0,0,.05);}
   <h2 class="sec-title">Indicadores Principais</h2>
   <div class="cards" id="cards"><div class="loading">Carregando…</div></div>
   <div class="chart-card"><div class="chart-head"><h2>Pontuação Geral · Mensal</h2><div class="chart-sub" id="ch-sub"></div></div><div class="chart-wrap"><canvas id="ch-temp"></canvas></div></div>
+  <h2 class="sec-title" style="margin-top:26px">Ranking — Score por Unidade</h2>
+  <div class="tbl-section">
+    <div class="tbl-head"><h2>Ranking</h2><div class="tbl-sub" id="rk-sub">Score ponderado · melhor → pior</div></div>
+    <button class="tbl-ind-toggle" id="tbl-ind-toggle" onclick="toggleIndCols()">+ Ver detalhes</button>
+    <div class="tbl-wrap"><table id="rk-table"><thead id="rk-head"></thead><tbody id="rk-body"><tr><td class="loading">Carregando…</td></tr></tbody></table></div>
+  </div>
 </main>
 
 <script>
@@ -184,6 +190,34 @@ const IC=[
 ];
 let ICS=[],VIGS=[],XPANEL={},chT=null;
 
+// ── DE-PARA por unidade (spec scorecard_ranking) ──
+// 13 unidades do scorecard (nome ICs) → código FCA/DPO, cidade (DRE), e Conlog.
+const UNI_LIST=['CDD CAMBORIU','CDD CUIABA','CDD FLORIANOPOLIS','CDD GUARULHOS','CDD NOVA FRIBURGO','CDD PELOTAS','CDD RIO DE JANEIRO','CDD RONDONOPOLIS','CDI MACACU','CUIABA','CUIABA EMPURRADA','MACACU EMPURRADA','PIRAI EMPURRADA'];
+// nome ICs → código base (FCA usa este; DPO/Conlog usam subcódigo abaixo)
+const UNI2COD={'CDD CAMBORIU':'BLC','CDD CUIABA':'CBA','CUIABA':'CBA','CUIABA EMPURRADA':'CBA','CDD FLORIANOPOLIS':'FLP','CDD GUARULHOS':'GRL','CDD NOVA FRIBURGO':'NFR','CDD PELOTAS':'PLT','CDD RIO DE JANEIRO':'CGR','CDD RONDONOPOLIS':'RON','CDI MACACU':'MCC','MACACU EMPURRADA':'MCC','PIRAI EMPURRADA':'PIR'};
+// nome ICs → linha da aba DPO (subunidade T1/T2 quando existe)
+const UNI2DPO={'CDD CAMBORIU':'BLC','CDD CUIABA':'CBA T2','CUIABA':'CBA T1','CUIABA EMPURRADA':'CBA T1','CDD FLORIANOPOLIS':'FLP','CDD GUARULHOS':'GRL','CDD NOVA FRIBURGO':'NFR','CDD PELOTAS':'PLT','CDD RIO DE JANEIRO':'CGR','CDD RONDONOPOLIS':'RON','CDI MACACU':'MCC T2','MACACU EMPURRADA':'MCC T1','PIRAI EMPURRADA':'PIR'};
+// nome ICs → cidade (DRE col10, sem acento, upper)
+const UNI2CID={'CDD CAMBORIU':'BALNEARIO CAMBORIU','CDD CUIABA':'CUIABA','CUIABA':'CUIABA','CUIABA EMPURRADA':'CUIABA','CDD FLORIANOPOLIS':'FLORIANOPOLIS','CDD GUARULHOS':'GUARULHOS','CDD NOVA FRIBURGO':'NOVA FRIBURGO','CDD PELOTAS':'PELOTAS','CDD RIO DE JANEIRO':'CAMPO GRANDE','CDD RONDONOPOLIS':'RONDONOPOLIS','CDI MACACU':'CACHOEIRAS DE MACACU','MACACU EMPURRADA':'CACHOEIRAS DE MACACU','PIRAI EMPURRADA':'PIRAI'};
+// nome ICs → código Conlog (UNIDADE_MAP do pneus/painel.html). Armazém (CUIABA/WH) usa CBA T1 WH.
+const UNI2CONLOG={'CDD CAMBORIU':'BLC','CDD CUIABA':'CBA T2','CUIABA':'CBA T1 WH','CUIABA EMPURRADA':'CBA T1','CDD FLORIANOPOLIS':'FLP','CDD GUARULHOS':'GRL','CDD NOVA FRIBURGO':'NFR','CDD PELOTAS':'PLT','CDD RIO DE JANEIRO':'CGR','CDD RONDONOPOLIS':'RON','CDI MACACU':'MCC T2','MACACU EMPURRADA':'MCC T1','PIRAI EMPURRADA':'PIR'};
+// km/KmL: por projeto. Armazém (CUIABA = APOIO/WH) NÃO tem km/combustível → ausente.
+const UNI_SEM_KM=new Set(['CUIABA']);
+// nome ICs → prefixo de projeto na aba km/KmL (col PROJ tipo "EMPURRADA - CBA", "ROTA - BLC").
+// Mapeamos por código+tipo de operação.
+function projMatchUni(uniNome,projStr){
+  const p=NK(projStr);const cod=UNI2COD[uniNome];if(!cod)return false;
+  // o projeto contém o código da cidade? (BLC/CBA/FLP…). Para colisões CBA/MCC, separa por EMPURRADA.
+  const hasCod=p.includes(cod);
+  if(!hasCod)return false;
+  const isEmp=/EMPURRAD/.test(p);
+  if(uniNome==='CUIABA EMPURRADA'||uniNome==='MACACU EMPURRADA')return isEmp;
+  if(uniNome==='CDD CUIABA'||uniNome==='CDI MACACU')return !isEmp; // rota/AS, não empurrada
+  return true; // demais: código único basta
+}
+// SCORE_PESOS por indicador (soma 100) — ordem/labels da spec
+const SCORE_PESOS={custos:11,disp:10,dpo:9,kmAt:8,prev:7,kml:6,saude:5,conf:4,sla:4,chkT:4,stCam:4,rkm:4,pressao:4,fcaC:3,fcaP:3,rl:3,chkApoio:3,stEmp:3,afer:3,civf:2};
+
 function parseD(v){if(v==null)return null;const m=String(v).match(/Date\((\d+),(\d+),(\d+)/);return m?new Date(+m[1],+m[2],+m[3]):null;}
 function vigKeyN(d){return d?d.getFullYear()*100+d.getMonth():0;}
 function vigLbl(d){return d?MESES[d.getMonth()]+'/'+String(d.getFullYear()).slice(2):'';}
@@ -196,16 +230,16 @@ function band(v){return v==null?'':v>=90?'g':v>=80?'y':v>=70?'o':'r';}
 function bandCost(v){return v==null?'':v>=100?'g':v>=98?'y':v>=95?'o':'r';}
 // banda com limiar "bom" por indicador (default 90); Preventivas usa 95
 function bandG(v,good){good=good||90;return v==null?'':v>=good?'g':v>=good-10?'y':v>=good-20?'o':'r';}
-function sumAtt(rows,perKeys){let rem=0,real=0,has=false;rows.forEach(o=>{if(perKeys.has(o.vk)){rem+=o.rem;real+=o.real;has=true;}});return has&&rem?real/rem*100:null;}
+function sumAtt(rows,perKeys,uf){let rem=0,real=0,has=false;rows.forEach(o=>{if(perKeys.has(o.vk)&&(!uf||uf(o))){rem+=o.rem;real+=o.real;has=true;}});return has&&rem?real/rem*100:null;}
 // R$/km atingimento = (custoReal/kmReal) / (custoRem/kmRem)
-function rkmAtt(perKeys){let cr=0,cR=0,kr=0,kR=0;(XPANEL.dre||[]).forEach(o=>{if(perKeys.has(o.vk)){cr+=o.rem;cR+=o.real;}});(XPANEL.km||[]).forEach(o=>{if(perKeys.has(o.vk)){kr+=o.rem;kR+=o.real;}});if(!kR||!kr||!cr)return null;const rem=cr/kr;return rem?(cR/kR)/rem*100:null;}
+function rkmAtt(perKeys,ufDre,ufKm){let cr=0,cR=0,kr=0,kR=0;(XPANEL.dre||[]).forEach(o=>{if(perKeys.has(o.vk)&&(!ufDre||ufDre(o))){cr+=o.rem;cR+=o.real;}});(XPANEL.km||[]).forEach(o=>{if(perKeys.has(o.vk)&&(!ufKm||ufKm(o))){kr+=o.rem;kR+=o.real;}});if(!kR||!kr||!cr)return null;const rem=cr/kr;return rem?(cR/kR)/rem*100:null;}
 // normalização p/ casar Projeto/Combustível entre as abas (igual ao painel Preço/L)
 function NK(s){return String(s==null?'':s).normalize('NFD').replace(/[̀-ͯ]/g,'').toUpperCase().replace(/\s+/g,' ').trim();}
 function NF(s){let x=String(s==null?'':s);const i=x.indexOf(':');if(i>=0)x=x.slice(i+1);return NK(x);}
 // R$/L (igual painel Preço/L): real = ΣtotalRS/Σlitros; rem = Σ(precoOperadora×litros)/Σlitros (lookup aba R$/L por proj+vig+comb)
-function rlAtt(perKeys){let lit=0,tot=0,remxl=0,litrem=0;(XPANEL.kmlEf||[]).forEach(o=>{if(perKeys.has(o.vk)){lit+=o.lit;if(o.tot>0)tot+=o.tot;if(o.rp!=null&&o.rp>0){remxl+=o.rp*o.lit;litrem+=o.lit;}}});if(!lit||!litrem)return null;const rem=remxl/litrem;return rem?(tot/lit)/rem*100:null;}
+function rlAtt(perKeys,uf){let lit=0,tot=0,remxl=0,litrem=0;(XPANEL.kmlEf||[]).forEach(o=>{if(perKeys.has(o.vk)&&(!uf||uf(o))){lit+=o.lit;if(o.tot>0)tot+=o.tot;if(o.rp!=null&&o.rp>0){remxl+=o.rp*o.lit;litrem+=o.lit;}}});if(!lit||!litrem)return null;const rem=remxl/litrem;return rem?(tot/lit)/rem*100:null;}
 // Km/L (aba Km/L do painel): real = Σkm/Σlitros; rem = média simples do "Rem Médio" (col4) — igual ao painel
-function kmlAtt(perKeys){let km=0,lit=0,rs=0,cnt=0;(XPANEL.kmlEf||[]).forEach(o=>{if(perKeys.has(o.vk)){km+=o.km;lit+=o.lit;if(o.remKmL>0){rs+=o.remKmL;cnt++;}}});if(!lit||!cnt)return null;const rem=rs/cnt;return rem?(km/lit)/rem*100:null;}
+function kmlAtt(perKeys,uf){let km=0,lit=0,rs=0,cnt=0;(XPANEL.kmlEf||[]).forEach(o=>{if(perKeys.has(o.vk)&&(!uf||uf(o))){km+=o.km;lit+=o.lit;if(o.remKmL>0){rs+=o.remKmL;cnt++;}}});if(!lit||!cnt)return null;const rem=rs/cnt;return rem?(km/lit)/rem*100:null;}
 // FCA separado: % no prazo e % concluída (acumulado até o mês selecionado)
 function fcaSplit(recs,year,monthIdx){const sel=recs.filter(r=>Math.floor(r.k/100)===year&&(r.k%100)<=monthIdx);if(!sel.length)return{prazo:null,concl:null};const tt=sel.length;return{prazo:sel.filter(r=>!r.venc).length/tt*100,concl:sel.filter(r=>r.concl==='C').length/tt*100};}
 const barLabels={id:'bl',afterDatasetsDraw(c){const ds=c.data.datasets[0],m=c.getDatasetMeta(0),ctx=c.ctx;ctx.save();ctx.font='700 11px Montserrat';ctx.fillStyle=document.body.classList.contains('light-mode')?'#1a1a1a':'#F1F5F9';ctx.textAlign='center';ctx.textBaseline='bottom';m.data.forEach((b,i)=>{const v=ds.data[i];if(v==null)return;if(ds._on&&!ds._on[i])return;ctx.fillText(n1(v),b.x,b.y-4);});ctx.restore();}};
@@ -233,13 +267,54 @@ function toggleMs(id){document.querySelectorAll('.ms-panel.open').forEach(p=>{if
 function getMsValues(id){const wrap=document.getElementById(id);if(!wrap)return[];return wrap._sel?[...wrap._sel]:[];}
 document.addEventListener('click',e=>{if(!e.target.closest('.ms-wrap'))document.querySelectorAll('.ms-panel.open').forEach(p=>p.classList.remove('open'));});
 
+// ── Conlog (Supabase) — pneus por unidade (igual pneus/painel.html) ──
+const CONLOG_URL='https://ewbzeqsneeylwkxtcpme.supabase.co';
+const CONLOG_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImV3YnplcXNuZWV5bHdreHRjcG1lIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE4NzY2MTcsImV4cCI6MjA5NzQ1MjYxN30.W8W6Yunt6Z8NB73qpOD8eqYlrsgMRgEG-siYsJFwDwE';
+const CONLOG_BRANCH={1676:'MCC T1',1677:'MCC T2',37:'CGR',1906:'CBA T1 WH',1907:'CBA T1',1878:'CBA T2',20:'FLP',30:'GRL',24:'BLC',2517:'NFR',26:'PLT',38:'PIR',2277:'RON',2550:'ANG'};
+// Busca snapshot por branch (lotes de 3, retries) e agrega por código Conlog.
+async function fetchConlog(){
+  const bids=Object.keys(CONLOG_BRANCH);
+  const merged={vehicles:[],tires:[],inspections:[]};
+  const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+  const fetchBranch=bid=>fetch(`${CONLOG_URL}/rest/v1/snapshot?branch_id=eq.${bid}&select=endpoint,branch_id,data`,{headers:{apikey:CONLOG_KEY,Authorization:'Bearer '+CONLOG_KEY}}).then(r=>r.ok?r.json():null).catch(()=>null);
+  const perBranch=[];const CHUNK=3;
+  for(let i=0;i<bids.length;i+=CHUNK){const batch=bids.slice(i,i+CHUNK);const res=await Promise.all(batch.map(async bid=>{for(let a=0;a<4;a++){const out=await fetchBranch(bid);if(out!==null)return out;await sleep(700);}return[];}));perBranch.push(...res);}
+  perBranch.flat().forEach(r=>{const uni=CONLOG_BRANCH[r.branch_id];const arr=Array.isArray(r.data)?r.data:[];if(!merged[r.endpoint])return;for(const rec of arr){rec.unidade=uni;merged[r.endpoint].push(rec);}});
+  if(!merged.vehicles.length)return null;
+  return conlogAgg(merged);
+}
+// Agrega por código Conlog: saude=(Bom+Regular)/total, pressao=% calibrados (|desvio|≤15%), afer=% placas última aferição ≤30 dias.
+function conlogAgg(d){
+  const tires=(d.tires||[]).filter(t=>t.status==='INSTALLED'&&t.placa&&!/PALETEIRA/i.test(t.tipo||''));
+  const byU={};
+  const ensure=u=>byU[u]=byU[u]||{tBom:0,tTot:0,pOk:0,pTot:0};
+  tires.forEach(t=>{const u=t.unidade;if(!u)return;const o=ensure(u);
+    const mm=+t.menorMM||0;if(mm>0){o.tTot++;if(mm>3)o.tBom++;} // Bom(>6)+Regular(>3) = saudável; ≤3 = recapar/bloquear
+    const id=+t.pressaoIdeal||0;if(id>0){o.pTot++;if(Math.abs(+t.desvioPressao||0)<=15)o.pOk++;}
+  });
+  // Aferições: por placa, última inspeção; ≤30 dias = aderente
+  const ultByPlaca={};
+  (d.inspections||[]).forEach(i=>{if(!i.placa)return;const dt=new Date(i.dataInspecao);const k=i.unidade+'|'+i.placa;if(!ultByPlaca[k]||dt>ultByPlaca[k].dt)ultByPlaca[k]={dt,u:i.unidade};});
+  const afer={};const hoje=new Date();
+  Object.values(ultByPlaca).forEach(x=>{const o=afer[x.u]=afer[x.u]||{ok:0,tot:0};o.tot++;const dias=Math.floor((hoje-x.dt)/86400000);if(dias<=30)o.ok++;});
+  const out={};
+  Object.keys(byU).forEach(u=>{const o=byU[u];out[u]={saude:o.tTot?o.tBom/o.tTot*100:null,pressao:o.pTot?o.pOk/o.pTot*100:null,afer:afer[u]&&afer[u].tot?afer[u].ok/afer[u].tot*100:null};});
+  return out;
+}
+// média de uma métrica Conlog sobre as unidades scorecard selecionadas
+function conlogU(unis,metric){if(!XPANEL.conlog)return null;const vs=unis.map(u=>{const c=XPANEL.conlog[UNI2CONLOG[u]];return c?c[metric]:null;}).filter(v=>v!=null);return vs.length?vs.reduce((a,b)=>a+b,0)/vs.length:null;}
+
 function gviz(url){return new Promise((res,rej)=>{const fn='_gv'+Math.floor(Math.random()*1e9);const s=document.createElement('script');const clr=()=>{try{delete window[fn];s.remove();}catch(e){}};window[fn]=r=>{clr();try{if(r.status!=='ok')throw 0;res((r.table.rows||[]).map(x=>(x.c||[]).map(c=>c?c.v:null)));}catch(e){rej(e);}};s.onerror=()=>{clr();rej(0);};s.src=url+(url.includes('?')?'&':'?')+'tqx=out:json;responseHandler:'+fn;document.head.appendChild(s);});}
 
 // ── Indicadores cross-painel (nível empresa) ──
 function compDisp(rows){const mo={};rows.forEach(r=>{const d=parseD(r[0]);if(!d)return;const proj=String(r[14]||'').split('-')[0].trim().toUpperCase();if(!(proj==='ROTA'||proj==='AUTO SERVIÇO'||proj==='AUTO SERVICO'))return;const k=vigKeyN(d);const rem=r[31]!=null?+r[31]:0,real=r[32]!=null?+r[32]:0;const o=mo[k]=mo[k]||{rem:0,real:0};o.rem+=rem;o.real+=real;});const out={},acc={};Object.keys(mo).map(Number).sort((a,b)=>a-b).forEach(k=>{const y=Math.floor(k/100);acc[y]=acc[y]||{rem:0,real:0};acc[y].rem+=mo[k].rem;acc[y].real+=mo[k].real;out[k]=acc[y].rem?((acc[y].real-acc[y].rem)/acc[y].rem*100):null;});return out;}
 // DPO Sustentável = último H; por unidade ≥ Nível 3 = 100%, senão 0% → % de unidades sustentáveis
-function compDPO(rows){const hdr=rows[0]||[];let li=-1;for(let i=hdr.length-1;i>=1;i--){if(rows.slice(1).some(r=>/Nível/i.test(String(r[i]||'')))){li=i;break;}}if(li<0)return{pct:null,ok:0,tot:0,n4:[],sem:null};let ok=0,tot=0;const n4=[];rows.slice(1).forEach(r=>{const code=String(r[0]||'').trim().split(' ')[0];const m=String(r[li]||'').match(/Nível\s*(\d+)/i);if(m){tot++;if(+m[1]>=3)ok++;if(+m[1]>=4&&n4.indexOf(code)<0)n4.push(code);}});return{pct:tot?ok/tot*100:null,ok,tot,n4,sem:String(hdr[li]||'')};}
-function compFCA(rows){const today=new Date();today.setHours(0,0,0,0);const recs=[];rows.forEach(r=>{const d=parseD(r[1]);if(!d)return;const st=String(r[8]||'');const prazo=parseD(r[7]);const concl=/conclu/i.test(st)?'C':/andamento/i.test(st)?'A':'N';const venc=concl==='C'?false:(prazo&&prazo<today);recs.push({k:vigKeyN(d),concl,venc});});return recs;}
+function compDPO(rows){const hdr=rows[0]||[];let li=-1;for(let i=hdr.length-1;i>=1;i--){if(rows.slice(1).some(r=>/Nível/i.test(String(r[i]||'')))){li=i;break;}}if(li<0)return{pct:null,ok:0,tot:0,n4:[],sem:null,byUni:{}};let ok=0,tot=0;const n4=[];const byUni={};rows.slice(1).forEach(r=>{const label=String(r[0]||'').trim().toUpperCase().replace(/\s+/g,' ');const code=label.split(' ')[0];const m=String(r[li]||'').match(/Nível\s*(\d+)/i);if(m){tot++;const lvl=+m[1];if(lvl>=3)ok++;if(lvl>=4&&n4.indexOf(code)<0)n4.push(code);byUni[label]=lvl*20;}});return{pct:tot?ok/tot*100:null,ok,tot,n4,sem:String(hdr[li]||''),byUni};}
+// DPO nota por unidade scorecard (média das linhas DPO mapeadas; null se ausente)
+function dpoNotaU(unis){if(!XPANEL.dpo||!XPANEL.dpo.byUni)return null;const vs=unis.map(u=>XPANEL.dpo.byUni[UNI2DPO[u]]).filter(v=>v!=null);return vs.length?vs.reduce((a,b)=>a+b,0)/vs.length:null;}
+function compFCA(rows){const today=new Date();today.setHours(0,0,0,0);const recs=[];rows.forEach(r=>{const d=parseD(r[1]);if(!d)return;const st=String(r[8]||'');const prazo=parseD(r[7]);const concl=/conclu/i.test(st)?'C':/andamento/i.test(st)?'A':'N';const venc=concl==='C'?false:(prazo&&prazo<today);const cod=String(r[2]||'').trim().toUpperCase().split(/\s+/)[0];recs.push({k:vigKeyN(d),cod,concl,venc});});return recs;}
+// FCA por unidade (cods=Set de códigos das unidades selecionadas; null=todas)
+function fcaSplitU(recs,year,monthIdx,cods){const sel=recs.filter(r=>Math.floor(r.k/100)===year&&(r.k%100)<=monthIdx&&(!cods||cods.has(r.cod)));if(!sel.length)return{prazo:null,concl:null};const tt=sel.length;return{prazo:sel.filter(r=>!r.venc).length/tt*100,concl:sel.filter(r=>r.concl==='C').length/tt*100};}
 function fcaAderAte(recs,year,monthIdx){const sel=recs.filter(r=>Math.floor(r.k/100)===year&&(r.k%100)<=monthIdx);if(!sel.length)return null;const tt=sel.length,noP=sel.filter(r=>!r.venc).length,cc=sel.filter(r=>r.concl==='C').length;return((noP/tt*100)+(cc/tt*100))/2;}
 // Consolidação FCAs: média do score por status (Concluída=100, Em andamento=50, Não iniciada=0), acumulado até o mês.
 function fcaConsol(recs,year,monthIdx){const sel=recs.filter(r=>Math.floor(r.k/100)===year&&(r.k%100)<=monthIdx);if(!sel.length)return null;return sel.reduce((s,r)=>s+(r.concl==='C'?100:r.concl==='A'?50:0),0)/sel.length;}
@@ -266,15 +341,39 @@ function atualizar(){
   const cap=v=>v==null?null:Math.min(100,Math.max(0,v));
   const inv=ratio=>(ratio==null||!ratio)?null:cap(10000/ratio); // lower-better: inverte (rem/real) e capa
   const icAvg=i=>{const vs=rows.map(o=>o.ic[i]).filter(v=>v!=null);return vs.length?vs.reduce((a,b)=>a+b,0)/vs.length*100:null;};
-  const fcaS=XPANEL.fca?fcaSplit(XPANEL.fca,yr,mi):{prazo:null,concl:null};
-  const dpoMeta=XPANEL.dpo&&XPANEL.dpo.sem?XPANEL.dpo.sem+' · '+XPANEL.dpo.ok+'/'+XPANEL.dpo.tot+' ≥ N3'+(XPANEL.dpo.n4&&XPANEL.dpo.n4.length?' · ★N4 '+XPANEL.dpo.n4.join(','):''):'nível empresa';
+  // unidades scorecard selecionadas (nomes ICs). Vazio = todas as 13.
+  const unisSel=selUni.length?selUni.filter(u=>UNI_LIST.includes(u)):UNI_LIST.slice();
+  // de-paras → predicados de filtro por fonte
+  const cidSet=new Set(unisSel.map(u=>NK(UNI2CID[u])).filter(Boolean));
+  const codSet=new Set(unisSel.map(u=>UNI2COD[u]).filter(Boolean));
+  const unisKm=unisSel.filter(u=>!UNI_SEM_KM.has(u)); // armazém sem km/combustível
+  const ufDre=o=>cidSet.has(o.cid);
+  const ufProj=o=>unisKm.some(u=>projMatchUni(u,o.proj));
+  const hasKm=unisKm.length>0;
+  // financeiros por unidade
+  const custosV=XPANEL.dre?inv(sumAtt(XPANEL.dre,perKeys,ufDre)):null;
+  const kmlV=(XPANEL.kmlEf&&hasKm)?cap(kmlAtt(perKeys,ufProj)):null;
+  const kmAtV=(XPANEL.km&&hasKm)?inv(sumAtt(XPANEL.km,perKeys,ufProj)):null;
+  const rkmV=(XPANEL.dre&&XPANEL.km&&hasKm)?inv(rkmAtt(perKeys,ufDre,ufProj)):null;
+  const rlV=(XPANEL.kmlEf&&hasKm)?inv(rlAtt(perKeys,ufProj)):null;
+  // FCA por unidade (split prazo/conclusão)
+  const fcaS=XPANEL.fca?fcaSplitU(XPANEL.fca,yr,mi,codSet):{prazo:null,concl:null};
+  // DPO por unidade
+  const dpoV=cap(dpoNotaU(unisSel));
+  const dpoMeta=XPANEL.dpo&&XPANEL.dpo.sem?XPANEL.dpo.sem+(selUni.length?'':' · '+XPANEL.dpo.ok+'/'+XPANEL.dpo.tot+' ≥ N3'):'nível unidade';
+  // Pneus (Conlog) por unidade
+  const saudeV=cap(conlogU(unisSel,'saude'));
+  const pressaoV=cap(conlogU(unisSel,'pressao'));
+  const aferV=cap(conlogU(unisSel,'afer'));
   const cards=[
-    {lbl:'Custos Frota',         val:XPANEL.dre?inv(sumAtt(XPANEL.dre,perKeys)):null, meta:'Real / Remunerado'},
+    {lbl:'Custos Frota',         val:custosV, meta:'Real / Remunerado'},
     {lbl:'Disponibilidade',      val:cap(icAvg(0))},
-    {lbl:'DPO/VPO Sustentável',  val:XPANEL.dpo?cap(XPANEL.dpo.pct):null, meta:dpoMeta},
+    {lbl:'DPO/VPO Sustentável',  val:dpoV, meta:dpoMeta},
     {lbl:'Preventivas',          val:cap(icAvg(1)), good:95},
-    {lbl:'Consumo Km/L',         val:XPANEL.kmlEf?cap(kmlAtt(perKeys)):null, meta:'Real / Remunerado'},
-    {lbl:'Aferições',            val:cap(icAvg(3))},
+    {lbl:'Consumo Km/L',         val:kmlV, meta:'Real / Remunerado'},
+    {lbl:'Saúde dos Pneus',      val:saudeV, meta:'Conlog · Bom+Regular'},
+    {lbl:'Pressão dos Pneus',    val:pressaoV, meta:'Conlog · calibrados'},
+    {lbl:'Aferições',            val:aferV, meta:'Conlog · ≤30 dias'},
     {lbl:'Checklist T1/T2',      val:cap(icAvg(4))},
     {lbl:'Checklist Apoio',      val:cap(icAvg(5))},
     {lbl:'Conformidade Frota',   val:cap(icAvg(6))},
@@ -282,10 +381,11 @@ function atualizar(){
     {lbl:'Stress Test Emp.',     val:cap(icAvg(8))},
     {lbl:'SLA Atendimento',      val:cap(icAvg(9))},
     {lbl:'CIVF',                 val:cap(icAvg(10))},
-    {lbl:'Atingimento KM',       val:XPANEL.km?inv(sumAtt(XPANEL.km,perKeys)):null, meta:'Real / Remunerado'},
-    {lbl:'R$/km',                val:(XPANEL.dre&&XPANEL.km)?inv(rkmAtt(perKeys)):null, meta:'Real / Remunerado'},
-    {lbl:'R$/L',                 val:XPANEL.kmlEf?inv(rlAtt(perKeys)):null, meta:'Real / Remunerado'},
-    {lbl:'FCA Geral',            val:XPANEL.fca?cap(fcaConsol(XPANEL.fca,yr,mi)):null, meta:'nível empresa'}
+    {lbl:'Atingimento KM',       val:kmAtV, meta:'Real / Remunerado'},
+    {lbl:'R$/km',                val:rkmV, meta:'Real / Remunerado'},
+    {lbl:'R$/L',                 val:rlV, meta:'Real / Remunerado'},
+    {lbl:'FCA Prazo',            val:cap(fcaS.prazo), meta:'% no prazo'},
+    {lbl:'FCA Conclusão',        val:cap(fcaS.concl), meta:'% concluída'}
   ];
   document.getElementById('cards').innerHTML=cards.map(c=>{
     const cls=c.meta==='Real / Remunerado'?bandCost(c.val):bandG(c.val,c.good);const disp=c.val==null?'—':Math.round(c.val)+'%';
@@ -295,6 +395,74 @@ function atualizar(){
   // ── Gráfico temporal (Pontuação Geral mensal, jan→dez) ──
   document.getElementById('ch-sub').textContent='Pontuação média da frota · '+periodo;
   chartTemporal(selD);
+
+  // ── Ranking ponderado por unidade ──
+  renderRanking(perKeys,yr,mi,periodo);
+}
+
+// Notas 0-100 de cada indicador para UMA unidade scorecard (chaves = SCORE_PESOS).
+function unitScores(uni,perKeys,yr,mi){
+  const cap=v=>v==null?null:Math.min(100,Math.max(0,v));
+  const inv=ratio=>(ratio==null||!ratio)?null:cap(10000/ratio);
+  const r=ICS.filter(o=>perKeys.has(vigKeyN(o.vigD))&&o.unidade===uni);
+  const icAvg=i=>{const vs=r.map(o=>o.ic[i]).filter(v=>v!=null);return vs.length?vs.reduce((a,b)=>a+b,0)/vs.length*100:null;};
+  const cid=NK(UNI2CID[uni]);const ufDre=o=>o.cid===cid;
+  const semKm=UNI_SEM_KM.has(uni);const ufProj=o=>projMatchUni(uni,o.proj);
+  const codSet=new Set([UNI2COD[uni]]);
+  const fcaS=XPANEL.fca?fcaSplitU(XPANEL.fca,yr,mi,codSet):{prazo:null,concl:null};
+  return {
+    custos: XPANEL.dre?inv(sumAtt(XPANEL.dre,perKeys,ufDre)):null,
+    disp:   cap(icAvg(0)),
+    dpo:    cap(dpoNotaU([uni])),
+    kmAt:   (XPANEL.km&&!semKm)?inv(sumAtt(XPANEL.km,perKeys,ufProj)):null,
+    prev:   cap(icAvg(1)),
+    kml:    (XPANEL.kmlEf&&!semKm)?cap(kmlAtt(perKeys,ufProj)):null,
+    saude:  cap(conlogU([uni],'saude')),
+    conf:   cap(icAvg(6)),
+    sla:    cap(icAvg(9)),
+    chkT:   cap(icAvg(4)),
+    stCam:  cap(icAvg(7)),
+    rkm:    (XPANEL.dre&&XPANEL.km&&!semKm)?inv(rkmAtt(perKeys,ufDre,ufProj)):null,
+    pressao:cap(conlogU([uni],'pressao')),
+    fcaC:   cap(fcaS.concl),
+    fcaP:   cap(fcaS.prazo),
+    rl:     (XPANEL.kmlEf&&!semKm)?inv(rlAtt(perKeys,ufProj)):null,
+    chkApoio:cap(icAvg(5)),
+    stEmp:  cap(icAvg(8)),
+    afer:   cap(conlogU([uni],'afer')),
+    civf:   cap(icAvg(10))
+  };
+}
+// Score ponderado renormalizado (ignora indicadores ausentes)
+function scoreFromNotes(notes){let s=0,p=0;for(const k in SCORE_PESOS){const v=notes[k];if(v!=null&&isFinite(v)){s+=SCORE_PESOS[k]*v;p+=SCORE_PESOS[k];}}return p?s/p:null;}
+
+// colunas exibidas na tabela (label, chave, meta-tipo)
+const RK_COLS=[
+  {k:'custos',l:'Custos',rr:1},{k:'disp',l:'Disponib.'},{k:'dpo',l:'DPO/VPO'},
+  {k:'kmAt',l:'Atg. Km',rr:1},{k:'prev',l:'Prevent.'},{k:'kml',l:'Km/L',rr:1},
+  {k:'saude',l:'Saúde Pneu'},{k:'conf',l:'Conform.'},{k:'sla',l:'SLA'},
+  {k:'chkT',l:'Chk T1/T2'},{k:'stCam',l:'Stress Cam'},{k:'rkm',l:'R$/km',rr:1},
+  {k:'pressao',l:'Pressão'},{k:'fcaC',l:'FCA Concl'},{k:'fcaP',l:'FCA Prazo'},
+  {k:'rl',l:'R$/L',rr:1},{k:'chkApoio',l:'Chk Apoio'},{k:'stEmp',l:'Stress Emp'},
+  {k:'afer',l:'Aferições'},{k:'civf',l:'CIVF'}
+];
+function renderRanking(perKeys,yr,mi,periodo){
+  const head=document.getElementById('rk-head'),body=document.getElementById('rk-body');
+  if(!head||!body)return;
+  document.getElementById('rk-sub').textContent='Score ponderado · melhor → pior · '+periodo;
+  // todas as unidades (exceto Seara/ANG, já fora de UNI_LIST)
+  const rk=UNI_LIST.map(uni=>{const notes=unitScores(uni,perKeys,yr,mi);return {uni,notes,score:scoreFromNotes(notes)};})
+    .filter(x=>x.score!=null).sort((a,b)=>b.score-a.score);
+  head.innerHTML='<tr><th class="lft">#</th><th class="lft">Unidade</th><th class="scol">Score</th>'+
+    RK_COLS.map(c=>`<th class="ind-col">${c.l}</th>`).join('')+'</tr>';
+  if(!rk.length){body.innerHTML='<tr><td class="loading" colspan="3">Sem dados</td></tr>';return;}
+  const cellFg2=(v,rr)=>{if(v==null)return 'var(--text3)';const cls=rr?bandCost(v):band(v);return cellFg(cls);};
+  body.innerHTML=rk.map((x,i)=>{
+    const sc=Math.round(x.score);const scCls=band(x.score);
+    return `<tr><td class="rank lft">${i+1}</td><td class="uni lft">${x.uni}</td>`+
+      `<td class="scol" style="font-weight:800;color:${cellFg(scCls)}">${sc}</td>`+
+      RK_COLS.map(c=>{const v=x.notes[c.k];return `<td class="ind-col" style="color:${cellFg2(v,c.rr)}">${v==null?'—':Math.round(v)}</td>`;}).join('')+'</tr>';
+  }).join('');
 }
 
 function chartTemporal(selD){
@@ -327,16 +495,17 @@ function wr(k,v){try{localStorage.setItem('sc_'+k,JSON.stringify(v));}catch(e){}
 function applyData(d){
   const selV=getMsValues('ms-vig'),selU=getMsValues('ms-uni'); // preserva seleção ao revalidar
   XPANEL={};
-  const {ics:icRows,dre:dreR,km:kmR,dpo:dpoR,fca:fcaR,rsl:rslR,kmlEf:kmlEfR}=d;
+  const {ics:icRows,dre:dreR,km:kmR,dpo:dpoR,fca:fcaR,rsl:rslR,kmlEf:kmlEfR,conlog:conlogR}=d;
+  if(conlogR)XPANEL.conlog=conlogR;
   // Custos = custo da FROTA → EXCLUI a linha "Receita Líquida" (ela só baliza o AV)
-  if(dreR)try{XPANEL.dre=dreR.filter(r=>parseD(r[9])&&String(r[12]||'').trim()!=='Receita Líquida').map(r=>({vk:vigKeyN(parseD(r[9])),rem:r[1]!=null?+r[1]:0,real:r[2]!=null?+r[2]:0}));}catch(e){}
-  if(kmR)try{XPANEL.km=kmR.filter(r=>parseD(r[0])).map(r=>({vk:vigKeyN(parseD(r[0])),rem:r[31]!=null?+r[31]:0,real:r[32]!=null?+r[32]:0}));}catch(e){}
+  if(dreR)try{XPANEL.dre=dreR.filter(r=>parseD(r[9])&&String(r[12]||'').trim()!=='Receita Líquida').map(r=>({vk:vigKeyN(parseD(r[9])),cid:NK(r[10]),rem:r[1]!=null?+r[1]:0,real:r[2]!=null?+r[2]:0}));}catch(e){}
+  if(kmR)try{XPANEL.km=kmR.filter(r=>parseD(r[0])).map(r=>({vk:vigKeyN(parseD(r[0])),proj:r[14],rem:r[31]!=null?+r[31]:0,real:r[32]!=null?+r[32]:0}));}catch(e){}
   // R$/L: lookup do preço remunerado (aba R$/L) por Projeto|Vigência|Combustível — proj=0, vig=3, preco=22, comb=23
   const L1={},L2={};
   if(rslR)rslR.forEach(r=>{const p=NK(r[0]),dt=parseD(r[3]);if(!p||!dt)return;const ym=vigKeyN(dt),f=NF(r[23]),v=r[22]!=null?+r[22]:0;if(!(v>0))return;const k1=p+'|'+ym+'|'+f,k2=p+'|'+ym;(L1[k1]=L1[k1]||{s:0,n:0}).s+=v;L1[k1].n++;(L2[k2]=L2[k2]||{s:0,n:0}).s+=v;L2[k2].n++;});
   const remPrice=(p,ym,f)=>{let e=L1[p+'|'+ym+'|'+f];if(!e)e=L2[p+'|'+ym];return e&&e.n>0?e.s/e.n:null;};
   // aba Km/L (consumo): km=22, lit=23, remKmL=4, totalRS=25, proj=14, comb=20 → guarda rp (preço rem) por linha
-  if(kmlEfR)try{XPANEL.kmlEf=kmlEfR.filter(r=>parseD(r[0])).map(r=>{const vk=vigKeyN(parseD(r[0]));return{vk,km:r[22]!=null?+r[22]:0,lit:r[23]!=null?+r[23]:0,remKmL:r[4]!=null?+r[4]:0,tot:r[25]!=null?+r[25]:0,rp:remPrice(NK(r[14]),vk,NF(r[20]))};});}catch(e){}
+  if(kmlEfR)try{XPANEL.kmlEf=kmlEfR.filter(r=>parseD(r[0])).map(r=>{const vk=vigKeyN(parseD(r[0]));return{vk,proj:r[14],km:r[22]!=null?+r[22]:0,lit:r[23]!=null?+r[23]:0,remKmL:r[4]!=null?+r[4]:0,tot:r[25]!=null?+r[25]:0,rp:remPrice(NK(r[14]),vk,NF(r[20]))};});}catch(e){}
   if(dpoR)try{XPANEL.dpo=compDPO(dpoR);}catch(e){}
   if(fcaR)try{XPANEL.fca=compFCA(fcaR);}catch(e){}
   ICS=(icRows||[]).filter(r=>r[0]&&r[1]&&parseD(r[0])).map(r=>{const vigD=parseD(r[0]);return{vigD,unidade:String(r[1]).trim(),ic:IC.map(dd=>r[dd.c]!=null?+r[dd.c]:null),pont:r[13]!=null?+r[13]:null};});
@@ -358,8 +527,8 @@ async function carregar(){
   else document.getElementById('status').textContent='Carregando…';
   try{
     const icRows=await gviz(SRC.ics);
-    const [dreR,kmR,dpoR,fcaR,rslR,kmlEfR]=await Promise.all([gviz(SRC.dre).catch(()=>null),gviz(SRC.km).catch(()=>null),gviz(SRC.dpo).catch(()=>null),gviz(SRC.fca).catch(()=>null),gviz(SRC.rsl).catch(()=>null),gviz(SRC.kmlEf).catch(()=>null)]);
-    const d={ics:icRows,dre:dreR,km:kmR,dpo:dpoR,fca:fcaR,rsl:rslR,kmlEf:kmlEfR};
+    const [dreR,kmR,dpoR,fcaR,rslR,kmlEfR,conlogR]=await Promise.all([gviz(SRC.dre).catch(()=>null),gviz(SRC.km).catch(()=>null),gviz(SRC.dpo).catch(()=>null),gviz(SRC.fca).catch(()=>null),gviz(SRC.rsl).catch(()=>null),gviz(SRC.kmlEf).catch(()=>null),fetchConlog().catch(()=>null)]);
+    const d={ics:icRows,dre:dreR,km:kmR,dpo:dpoR,fca:fcaR,rsl:rslR,kmlEf:kmlEfR,conlog:conlogR};
     wr('data2',d);
     applyData(d);
     const now=new Date();document.getElementById('status').textContent=`${now.toLocaleDateString('pt-BR')} ${now.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})}`;
