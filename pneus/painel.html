@@ -1957,10 +1957,30 @@ const UNIDADE_MAP = {
   2550: 'ANG'
 };
 
+// De-para: código da unidade (UNIDADE_MAP) -> cidade (como aparece na planilha Km/L, col15).
+// Usado só p/ o fallback de km/dia por unidade (cidade). Comparação é feita normalizada (sem acento/upper).
+const CIDADE_MAP = {
+  'CBA T1 WH': 'CUIABA', 'CBA T1': 'CUIABA', 'CBA T2': 'CUIABA',
+  'MCC T1': 'CACHOEIRAS DE MACACU', 'MCC T2': 'CACHOEIRAS DE MACACU',
+  'CGR': 'CAMPO GRANDE',
+  'BLC': 'BALNEARIO CAMBORIU',
+  'FLP': 'FLORIANOPOLIS',
+  'GRL': 'GUARULHOS',
+  'NFR': 'NOVA FRIBURGO',
+  'PLT': 'PELOTAS',
+  'RON': 'RONDONOPOLIS',
+  'PIR': 'PIRAI',
+  'ANG': 'ANHANGUERA'
+};
+
 // ============================================================
 // STATE
 // ============================================================
 let DATA = { vehicles: [], tires: [], inspections: [] };
+// km/dia vindo da planilha de combustível (Km/L). Maps por placa / modelo / cidade.
+// Preenchido por loadKmDia(); se a planilha não carregar, ficam vazios e a Previsão
+// cai no km/dia do odômetro (comportamento atual) — nunca regride/zera.
+let KMDIA = { placa: {}, modelo: {}, cidade: {}, carregado: false };
 let charts = {};
 let FILTERS = { ano: [], vigencia: [], branch: [], unidade: [], placa: [], marca: [], modelo: [], vida: [] };
 
@@ -2675,6 +2695,100 @@ function renderOrcCharts(rows) {
 // ============================================================
 const PULL_POINT = 3; // mm — ponto ideal de retirada para recape
 
+// ============================================================
+// KM/DIA VINDO DO COMBUSTÍVEL (planilha Km/L)
+// ============================================================
+const KMDIA_SHEET_ID  = '1ZZdvG_RK5cTBLdPl3TWCbNeqw-Y4fTYwWsQV4w-e__A';
+const KMDIA_SHEET_TAB = 'Km/L';
+const KMDIA_DIAS_VIG  = 25;   // dias úteis por vigência (kmdiaVig = kmTotalVig / 25)
+const KMDIA_EMPILHADEIRA = 250;
+
+// normaliza p/ matching robusto: trim, upper, remove acentos
+const _norm = s => (s == null ? '' : String(s)).trim().toUpperCase()
+  .normalize('NFD').replace(/[̀-ͯ]/g, '');
+
+// média simples de um array de números válidos
+const _avgNum = a => { const v = a.filter(x => typeof x === 'number' && isFinite(x) && x > 0); return v.length ? v.reduce((s, x) => s + x, 0) / v.length : 0; };
+
+// Busca a planilha Km/L (gviz JSONP via fetch) e monta KMDIA.placa/modelo/cidade.
+// NÃO bloqueia a renderização: try/catch; em falha, KMDIA fica vazio e a Previsão
+// usa o km/dia do odômetro (fallback). cols: 0 Vigência, 15 Unidade(cidade), 16 Placa, 19 Modelo, 22 KM Rodado.
+async function loadKmDia() {
+  try {
+    const url = `https://docs.google.com/spreadsheets/d/${KMDIA_SHEET_ID}/gviz/tq?tqx=out:json&sheet=${encodeURIComponent(KMDIA_SHEET_TAB)}&t=${Date.now()}`;
+    const res  = await fetch(url);
+    const text = await res.text();
+    const json = JSON.parse(text.match(/google\.visualization\.Query\.setResponse\(([\s\S]*)\)/)[1]);
+    const rows = (json.table && json.table.rows) || [];
+
+    const cell = (r, i) => (r.c && r.c[i] ? r.c[i].v : null);
+
+    // por placa: acumula kmdiaVig (= kmRodado/25) de cada linha (= vigência); kmDiaPlaca = média
+    const porPlaca = {};   // placaNorm -> { soma, n, modeloNorm, cidadeNorm }
+    rows.forEach(r => {
+      const placa = _norm(cell(r, 16));
+      const kmRod = parseFloat(cell(r, 22));
+      if (!placa || !(kmRod > 0)) return;
+      const kmdiaVig = kmRod / KMDIA_DIAS_VIG;
+      const p = porPlaca[placa] || (porPlaca[placa] = { soma: 0, n: 0, modelo: '', cidade: '' });
+      p.soma += kmdiaVig; p.n += 1;
+      if (!p.modelo) p.modelo = _norm(cell(r, 19));
+      if (!p.cidade) p.cidade = _norm(cell(r, 15));
+    });
+
+    const placaMap = {}, porModelo = {}, porCidade = {};
+    Object.entries(porPlaca).forEach(([placa, p]) => {
+      if (!p.n) return;
+      const kmDiaPlaca = p.soma / p.n;
+      placaMap[placa] = kmDiaPlaca;
+      if (p.modelo) (porModelo[p.modelo] = porModelo[p.modelo] || []).push(kmDiaPlaca);
+      if (p.cidade) (porCidade[p.cidade] = porCidade[p.cidade] || []).push(kmDiaPlaca);
+    });
+
+    const modeloMap = {}, cidadeMap = {};
+    Object.entries(porModelo).forEach(([k, arr]) => { modeloMap[k] = _avgNum(arr); });
+    Object.entries(porCidade).forEach(([k, arr]) => { cidadeMap[k] = _avgNum(arr); });
+
+    KMDIA = { placa: placaMap, modelo: modeloMap, cidade: cidadeMap, carregado: true };
+  } catch (e) {
+    console.warn('Km/L (combustível) não carregou — Previsão usa km/dia do odômetro.', e);
+    KMDIA.carregado = false;
+  }
+}
+
+// km/dia do veículo de um pneu, vindo do combustível. Cadeia (spec):
+// empilhadeira -> 250 ; senão placa -> modelo -> cidade(unidade). Retorna 0 se nada bater
+// (aí calcPrevisao cai no km/dia do odômetro). Matching normalizado (trim/upper/sem acento).
+let _vehPorPlaca = null, _vehPorPlacaSrc = null;
+function _getVehPorPlaca() {
+  // memoiza placa(normalizada)->veículo; reconstrói só quando DATA.vehicles troca
+  if (_vehPorPlaca && _vehPorPlacaSrc === DATA.vehicles) return _vehPorPlaca;
+  const m = {};
+  (DATA.vehicles || []).forEach(v => { const k = _norm(v.placa); if (k && !m[k]) m[k] = v; });
+  _vehPorPlaca = m; _vehPorPlacaSrc = DATA.vehicles;
+  return m;
+}
+function kmDiaVeiculo(tire) {
+  if (!tire) return 0;
+  const placaN = _norm(tire.placa);
+  // veículo (p/ tipo e modelo) via DATA.vehicles pela placa do pneu
+  const veh = _getVehPorPlaca()[placaN];
+  const tipoN = _norm(veh && veh.tipo);
+  if (tipoN.includes('EMPILHADEIRA')) return KMDIA_EMPILHADEIRA;
+
+  if (placaN && KMDIA.placa[placaN] > 0) return KMDIA.placa[placaN];
+
+  const modeloN = _norm(veh && veh.modelo);
+  if (modeloN && KMDIA.modelo[modeloN] > 0) return KMDIA.modelo[modeloN];
+
+  // cidade via código da unidade (UNIDADE_MAP já gravado em tire.unidade / veh.unidade)
+  const codUni = (tire.unidade) || (veh && veh.unidade) || '';
+  const cidadeN = _norm(CIDADE_MAP[codUni]);
+  if (cidadeN && KMDIA.cidade[cidadeN] > 0) return KMDIA.cidade[cidadeN];
+
+  return 0;
+}
+
 // Calcula projeção por pneu (1ª vs última inspeção, robusto a ruído)
 function calcPrevisao() {
   const tires = getFilteredTires().filter(t => t.status === 'INSTALLED' && t.menorMM > 0);
@@ -2709,7 +2823,9 @@ function calcPrevisao() {
     const a = h[0], b = h[h.length - 1];
     const dKm  = b.odometro - a.odometro;
     const dDia = (new Date(b.dataInspecao) - new Date(a.dataInspecao)) / 86400000;
-    const kmDia = (dKm > 0 && dDia > 0) ? dKm / dDia : 0;
+    const kmDiaOdo = (dKm > 0 && dDia > 0) ? dKm / dDia : 0; // método antigo (odômetro) — fallback
+    // km/dia vindo do combustível (placa->modelo->cidade->empilhadeira); se nada bater, cai no odômetro
+    const kmDia = kmDiaVeiculo(t) || kmDiaOdo;
     if (!(kmDia > 0)) { linhas.push({ t, semBase: true }); return; }
 
     const mmAtual = t.menorMM;
@@ -2818,8 +2934,8 @@ function filtrarPrev() {
 
 function renderPrevMensalChart(comBase) {
   const hoje = new Date();
-  // 8 meses à frente a partir do mês atual
-  const meses = Array.from({ length: 8 }, (_, k) => {
+  // 12 meses à frente a partir do mês atual
+  const meses = Array.from({ length: 12 }, (_, k) => {
     const d = new Date(hoje.getFullYear(), hoje.getMonth() + k, 1);
     return { ano: d.getFullYear(), mes: d.getMonth(), label: d.toLocaleDateString('pt-BR', { month: 'short' }).replace('.', '') + '/' + String(d.getFullYear()).slice(2) };
   });
@@ -4976,6 +5092,13 @@ function getMockData() {
 // INIT
 // ============================================================
 loadData();
+// Carrega o km/dia do combustível em paralelo (não bloqueia o painel). Quando
+// chegar, re-renderiza a Previsão p/ aplicar o km/dia novo. Se falhar, fica no odômetro.
+loadKmDia().then(() => {
+  if (KMDIA.carregado && DATA.vehicles && DATA.vehicles.length) {
+    try { if (typeof renderPrevisao === 'function') renderPrevisao(); } catch (e) {}
+  }
+});
 </script>
 </body>
 </html>
