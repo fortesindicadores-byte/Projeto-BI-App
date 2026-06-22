@@ -191,15 +191,18 @@ function pushKML(kml,fatos){
   rows.filter(r=>vigKeyN(parseD(r[0]))===maxK).forEach(r=>{
     const proj=String(r[14]||'—').trim();
     const km=+r[22]||0,lit=+r[23]||0,remkl=+r[4]||0,totR=+r[25]||0,remrl=+r[8]||0;
-    if(!acc[proj])acc[proj]={km:0,lit:0,remklW:0,totR:0,remrlW:0};
+    if(!acc[proj])acc[proj]={km:0,lit:0,remklW:0,totR:0,remrlW:0,plates:[]};
     const a=acc[proj];a.km+=km;a.lit+=lit;a.remklW+=remkl*km;a.totR+=totR;a.remrlW+=remrl*lit;
+    a.plates.push({placa:String(r[16]||'').trim(),remMod:+r[5]||0,remMed:remkl,real:+r[6]||0});
   });
   const f2=v=>v.toFixed(2).replace('.',',');
   Object.entries(acc).forEach(([proj,a])=>{
     // Consumo Km/L: real < rem (rodou menos km/litro que o remunerado)
     if(a.km>0&&a.lit>0){const real=a.km/a.lit,rem=a.remklW/a.km;
       if(rem>0&&real<rem){const nom=rem-real,pct=Math.abs((real/rem-1)*100),sev=pct>=10?'crit':'aten';
-        fatos.push({vig,fato:'Consumo Km/L',proj,sev,desvio:`<span class="dn">Desvio: </span><span class="val ${sev==='aten'?'am':''}">▲ ${f2(nom)} Km/L · ▲ -${Math.round(pct)}%</span>`});}}
+        const worst=a.plates.filter(p=>p.placa&&p.real>0).sort((x,y)=>(x.real-x.remMed)-(y.real-y.remMed)).slice(0,3);
+        const causaAuto=worst.length?('Piores placas (Km/L):\n'+worst.map(p=>`${p.placa}: Rem Modelo ${f2(p.remMod)} | Rem Médio ${f2(p.remMed)} | Real ${f2(p.real)}`).join('\n')):'';
+        fatos.push({vig,fato:'Consumo Km/L',proj,sev,causaAuto,desvio:`<span class="dn">Desvio: </span><span class="val ${sev==='aten'?'am':''}">▲ ${f2(nom)} Km/L · ▲ -${Math.round(pct)}%</span>`});}}
     // R$/L: preço realizado > remunerado (pagou mais por litro que o orçado)
     if(a.lit>0&&a.totR>0){const real=a.totR/a.lit,rem=a.remrlW/a.lit;
       if(rem>0&&real>rem){const nom=real-rem,pct=Math.abs((real/rem-1)*100),sev=pct>=5?'crit':'aten';
@@ -219,9 +222,9 @@ const STATUS=['Não iniciada','Em andamento','Concluída','Cancelada'];
 const DEFAULT_STATUS='Não iniciada';
 
 // ── localStorage por fato: guarda array de ações ──
-function loadAcoes(id){
+function loadAcoes(id,causaAuto){
   try{const v=JSON.parse(localStorage.getItem(id));if(Array.isArray(v)&&v.length)return v;}catch(e){}
-  return [{causa:'',acao:'',resp:'',prazo:'',status:DEFAULT_STATUS,obs:''}];
+  return [{causa:causaAuto||'',acao:'',resp:'',prazo:'',status:DEFAULT_STATUS,obs:''}];
 }
 function blankAcao(){return {causa:'',acao:'',resp:'',prazo:'',status:DEFAULT_STATUS,obs:''};}
 
@@ -267,7 +270,7 @@ function aplicar(){
   if(!vis.length){list.innerHTML='<div class="empty">Nenhum fato para o filtro selecionado.</div>';return;}
   list.innerHTML=vis.map(f=>{
     const id=LS_PREFIX+slug(f.vig+'_'+(f.proj||'')+'_'+f.fato);
-    const acoes=loadAcoes(id);
+    const acoes=loadAcoes(id,f.causaAuto);
     const rows=acoes.map((a,i)=>rowHTML(a,i>0)).join('');
     return `<div class="fato-block ${f.sev}" data-id="${id}">
       <div class="fato-head">
