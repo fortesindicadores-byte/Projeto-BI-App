@@ -203,8 +203,8 @@ function pushDRE(dre,fatos,kmlCausas,dispCausas,frotaMaps){
   const yrMax=Math.floor(maxK/100);
   const acc={};
   drRows.filter(r=>vigKeyN(parseD(r[9]))===maxK).forEach(r=>{const conta=String(r[12]||'—').trim();const niv=String(r[11]||'').trim();const rem=r[1]!=null?+r[1]:0,real=r[2]!=null?+r[2]:0;const key=niv+'||'+conta;if(!acc[key])acc[key]={conta,niv,rem:0,real:0};acc[key].rem+=rem;acc[key].real+=real;});
-  // Manutenção/Pneus: custo de CADA mês do ano (YTD) por projeto+conta, p/ a média do custo/placa ativa
-  const isMP=c=>/MANUTEN|PNEU/.test(_nc(c));
+  // Manutenção/Pneus/Recapagem: custo de CADA mês do ano (YTD) por projeto+conta, p/ a média do custo/placa ativa
+  const isMP=c=>/MANUTEN|PNEU|RECAP/.test(_nc(c));
   const custoPorMes={}; // key proj||conta -> { vigKey: custo }
   drRows.forEach(r=>{const k=vigKeyN(parseD(r[9]));if(Math.floor(k/100)!==yrMax||k>maxK)return;const conta=String(r[12]||'').trim();if(!isMP(conta))return;const key=projKey(r[11])+'||'+_nc(conta);(custoPorMes[key]=custoPorMes[key]||{});custoPorMes[key][k]=(custoPorMes[key][k]||0)+Math.abs(r[2]!=null?+r[2]:0);});
   // Custos na DRE são negativos: gasto ACIMA do orçado => (rem - real) > 0 (mais gasto que o remunerado)
@@ -216,7 +216,7 @@ function pushDRE(dre,fatos,kmlCausas,dispCausas,frotaMaps){
       const fato={vig,fato:o.conta,proj:o.niv,desvio,sev};
       // Combustível: causa automática = Dispersão de km (Painel KM) + Eficiência Km/L (+3 piores placas) + Preço R$/L do projeto
       if(/COMBUST/.test(_nc(o.conta))){const parts=[];const d=dispCausas[projKey(o.niv)];if(d)parts.push(d);const c=kmlCausas[projKey(o.niv)];if(c)parts.push(c);if(parts.length)fato.causaAuto=parts.join('\n');}
-      // Manutenção veíc./equip., Carrocerias e Pneus: custo/placa ativa do mês vs média do ano (referência)
+      // Manutenção veíc./equip., Carrocerias, Pneus e Recapagem: custo/placa ativa do mês vs média do ano (referência)
       else if(isMP(o.conta)){
         const pk=projKey(o.niv);const fMes=frotaMaps.mes[pk]||0;
         const cpMes=fMes>0?Math.abs(o.real)/fMes:null;
