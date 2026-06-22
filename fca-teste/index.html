@@ -122,6 +122,7 @@ body.light-mode select.st[data-v="Cancelada"]{background:#333333;color:#fff;}
   <div class="hfilter"><label>Indicador</label><div class="ms-wrap" id="ms-ind"><button class="ms-btn" onclick="toggleMs('ms-ind')"><span class="ms-lbl">Todos</span><span class="ms-cnt"></span><svg width="10" height="6" viewBox="0 0 10 6"><path d="M0 0l5 6 5-6z" fill="#F97316"/></svg></button><div class="ms-panel"><div class="ms-search"><input type="text" placeholder="Pesquisar…"></div><div class="ms-list"></div></div></div></div>
   <span class="uni-badge" id="uniBadge">—</span>
   <button class="btn theme" id="themeBtn" title="Modo claro/escuro">☀</button>
+  <button class="btn" id="adminBtn" title="Modo admin (edita tudo) — teste; em produção será por RLS">Admin</button>
   <button class="btn" id="saveBtn">Salvar</button>
   <span class="saved-msg" id="savedMsg">Salvo ✓ (teste — só no seu navegador)</span>
 </header>
@@ -135,6 +136,8 @@ const UNIDADE_IC = 'CDD RIO DE JANEIRO';   // nome na planilha de ICs
 const UNIDADE_DRE = 'CAMPO GRANDE';        // nome na DRE (cidade)
 const UNIDADE_COD = 'CGR';                 // código da nossa nomenclatura (exibido)
 const LS_PREFIX = 'fca_teste_CGR_';
+// Modo admin (teste): edita qualquer campo mesmo travado. Em produção isto vem da role/RLS do Supabase.
+let ADMIN = localStorage.getItem('fca_admin')==='1';
 
 // Gerot (ICs + IVs): mesma planilha dos ICs, aba gid=0 — formato longo bloco|unidade|vig|kpi|un|meta|real|atg.
 // Cada bloco tem 1 IC e seus IVs; o kpi começa com "IC"/"IV". UNIDADE_IC deve casar com a coluna 'unidade' do Gerot.
@@ -329,20 +332,22 @@ const DEFAULT_STATUS='Não iniciada';
 // ── localStorage por fato: guarda array de ações ──
 function loadAcoes(id,causaAuto){
   try{const v=JSON.parse(localStorage.getItem(id));if(Array.isArray(v)&&v.length)return v;}catch(e){}
-  return [{causa:causaAuto||'',acao:'',resp:'',prazo:'',status:DEFAULT_STATUS,obs:''}];
+  return [{causa:causaAuto||'',acao:'',resp:'',prazo:'',status:DEFAULT_STATUS,obs:'',locked:false}];
 }
-function blankAcao(){return {causa:'',acao:'',resp:'',prazo:'',status:DEFAULT_STATUS,obs:''};}
+function blankAcao(){return {causa:'',acao:'',resp:'',prazo:'',status:DEFAULT_STATUS,obs:'',locked:false};}
 
 function rowHTML(a,canRemove){
   const opts=STATUS.map(s=>`<option ${a.status===s?'selected':''}>${s}</option>`).join('');
-  return `<tr>
-    <td class="col-causa"><span class="cell-label">Causa</span><textarea rows="1" data-k="causa" placeholder="Por que aconteceu?">${esc(a.causa)}</textarea></td>
-    <td class="col-acao"><span class="cell-label">Ação</span><textarea rows="1" data-k="acao" placeholder="O que será feito?">${esc(a.acao)}</textarea></td>
-    <td class="col-resp"><span class="cell-label">Responsável</span><input type="text" data-k="resp" placeholder="Quem?" value="${esc(a.resp)}"></td>
-    <td class="col-prazo"><span class="cell-label">Prazo</span><input type="date" data-k="prazo" value="${esc(a.prazo)}"></td>
-    <td class="col-status"><span class="cell-label">Status</span><select class="st" data-k="status" data-v="${esc(a.status||DEFAULT_STATUS)}">${opts}</select></td>
+  const lk=a.locked&&!ADMIN;          // travado p/ usuário comum após salvar; admin edita tudo
+  const d=lk?' disabled':'';
+  return `<tr data-locked="${a.locked?1:''}"${lk?' class="locked"':''}>
+    <td class="col-causa"><span class="cell-label">Causa</span><textarea rows="1" data-k="causa" placeholder="Por que aconteceu?"${d}>${esc(a.causa)}</textarea></td>
+    <td class="col-acao"><span class="cell-label">Ação</span><textarea rows="1" data-k="acao" placeholder="O que será feito?"${d}>${esc(a.acao)}</textarea></td>
+    <td class="col-resp"><span class="cell-label">Responsável</span><input type="text" data-k="resp" placeholder="Quem?" value="${esc(a.resp)}"${d}></td>
+    <td class="col-prazo"><span class="cell-label">Prazo</span><input type="date" data-k="prazo" value="${esc(a.prazo)}"${d}></td>
+    <td class="col-status"><span class="cell-label">Status</span><select class="st" data-k="status" data-v="${esc(a.status||DEFAULT_STATUS)}"${d}>${opts}</select></td>
     <td class="col-acomp"><span class="cell-label">Acompanhamento</span><textarea rows="1" data-k="obs" placeholder="Atualizações de progresso…">${esc(a.obs||'')}</textarea></td>
-    <td class="col-x"><button class="rm-btn" title="Remover ação" ${canRemove?'':'style="visibility:hidden"'}>&times;</button></td>
+    <td class="col-x"><button class="rm-btn" title="Remover ação" ${canRemove&&!lk?'':'style="visibility:hidden"'}>&times;</button></td>
   </tr>`;
 }
 
@@ -402,6 +407,7 @@ function collect(block){
   const acoes=[];
   block.querySelectorAll('tbody tr').forEach(tr=>{
     const o={};tr.querySelectorAll('[data-k]').forEach(el=>o[el.dataset.k]=el.value);
+    o.locked=tr.dataset.locked==='1';
     acoes.push(o);
   });
   return acoes;
@@ -446,11 +452,22 @@ function wireBlock(block){
   });
 }
 
-// salvar (feedback) — o auto-save já grava; este botão só confirma
+// salvar — grava e TRAVA as linhas com conteúdo (depois só Acompanhamento fica editável; admin edita tudo)
 document.getElementById('saveBtn').addEventListener('click',()=>{
-  document.querySelectorAll('.fato-block').forEach(save);
+  document.querySelectorAll('.fato-block').forEach(block=>{
+    const acoes=collect(block).map(a=>{
+      const tem=(a.causa&&a.causa.trim())||(a.acao&&a.acao.trim())||(a.resp&&a.resp.trim())||(a.prazo&&a.prazo.trim());
+      return {...a,locked:a.locked||!!tem};
+    });
+    localStorage.setItem(block.dataset.id,JSON.stringify(acoes));
+  });
+  aplicar(); // re-render reflete o lock
   const m=document.getElementById('savedMsg');m.style.display='inline';setTimeout(()=>m.style.display='none',2500);
 });
+// modo admin (teste) — em produção virá da role/RLS do Supabase
+function applyAdmin(){const b=document.getElementById('adminBtn');b.textContent=ADMIN?'Admin ✓':'Admin';b.style.background=ADMIN?'rgba(249,115,22,.4)':'';}
+document.getElementById('adminBtn').addEventListener('click',()=>{ADMIN=!ADMIN;localStorage.setItem('fca_admin',ADMIN?'1':'0');applyAdmin();aplicar();});
+applyAdmin();
 
 // tema
 function applyTheme(t){document.body.classList.toggle('light-mode',t==='light');localStorage.setItem('bi_theme',t);document.getElementById('themeBtn').textContent=t==='light'?'🌙':'☀';}
