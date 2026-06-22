@@ -135,7 +135,7 @@ body.light-mode select.st[data-v="Cancelada"]{background:#333333;color:#fff;}
 // ── Supabase (mesmo projeto do hub/auth) ──
 const SUPABASE_URL='https://lozwipoeacpvplgkrxkq.supabase.co';
 const SUPABASE_KEY='sb_publishable_ggKEEebc5zjgQDVsF92Upw_6uoLmKe9';
-let sb=null, SESSION=null, PROFILE=null, REAL_ADMIN=false, ADMIN=false;
+let sb=null, SESSION=null, PROFILE=null, REAL_ADMIN=false, ADMIN=false, PREVIEW=false;
 let _DBROWS={}; // chave do fato -> linhas salvas no banco
 
 // ── Unidade (vem do perfil; admin pode trocar via ?u=COD) ──
@@ -323,7 +323,7 @@ function frotaAtivaPorProj(disp){
 // Carrega as ações já salvas (Supabase) da unidade, indexadas por chave de fato
 async function fetchDB(){
   _DBROWS={};
-  if(!sb) return;
+  if(!sb||PREVIEW) return;
   const {data,error}=await sb.from('fca').select('*').eq('unidade',UNIDADE_COD).order('created_at',{ascending:true});
   if(error){console.error('fca select',error);return;}
   (data||[]).forEach(r=>{const k=`${r.vigencia}||${r.origem}||${r.projeto||''}||${r.fato}`;(_DBROWS[k]=_DBROWS[k]||[]).push(r);});
@@ -347,6 +347,7 @@ const DEFAULT_STATUS='Não iniciada';
 const keyOf=f=>`${f.vig}||${f.origem||''}||${f.proj||''}||${f.fato}`;
 const stripTags=h=>String(h||'').replace(/<[^>]*>/g,'').replace(/\s+/g,' ').trim();
 function loadAcoes(key,causaAuto){
+  if(PREVIEW){ try{const v=JSON.parse(localStorage.getItem('fca_prev_'+key));if(Array.isArray(v)&&v.length)return v;}catch(e){} return [{id:'',causa:causaAuto||'',acao:'',resp:'',prazo:'',status:DEFAULT_STATUS,obs:'',locked:false}]; }
   const rows=_DBROWS[key];
   if(rows&&rows.length)return rows.map(r=>({id:r.id,causa:r.causa||'',acao:r.acao||'',resp:r.responsavel||'',prazo:r.prazo||'',status:r.status||DEFAULT_STATUS,obs:r.acompanhamento||'',locked:!!r.locked}));
   return [{id:'',causa:causaAuto||'',acao:'',resp:'',prazo:'',status:DEFAULT_STATUS,obs:'',locked:false}];
@@ -422,6 +423,13 @@ function autoResize(ta){ta.style.height='auto';ta.style.height=ta.scrollHeight+'
 
 // Reconcilia as ações do bloco com o Supabase: update (com id) · insert (novo) · delete (removido)
 async function saveBlock(block){
+  const trsAll=[...block.querySelectorAll('tbody tr')];
+  if(PREVIEW){ // sem nuvem: grava no localStorage
+    const g=(tr,k)=>{const el=tr.querySelector('[data-k="'+k+'"]');return el?el.value:'';};
+    const acoes=trsAll.map(tr=>({id:'',causa:g(tr,'causa'),acao:g(tr,'acao'),resp:g(tr,'resp'),prazo:g(tr,'prazo'),status:g(tr,'status'),obs:g(tr,'obs'),locked:tr.dataset.locked==='1'}));
+    localStorage.setItem('fca_prev_'+block.dataset.key,JSON.stringify(acoes));
+    return;
+  }
   if(!sb)return;
   const ident={unidade:UNIDADE_COD,vigencia:block.dataset.vig,origem:block.dataset.origem,fato:block.dataset.fato,projeto:block.dataset.proj||null,fato_desvio:block.dataset.desvio||null};
   const trs=[...block.querySelectorAll('tbody tr')];
@@ -477,13 +485,22 @@ _buildMs(document.getElementById('ms-ind'),()=>IND_OPTS);
 document.addEventListener('click',e=>{if(!e.target.closest('.ms-wrap'))document.querySelectorAll('.ms-panel.open').forEach(p=>p.classList.remove('open'));});
 
 // ── Início: exige login (hub), carrega perfil (unidade/admin) e os fatos ──
+// Pré-visualização: Supabase ainda não configurado/sem login → CGR + localStorage, pra poder olhar.
+function enterPreview(){
+  PREVIEW=true; REAL_ADMIN=true; ADMIN=true;
+  UNIDADE_COD='CGR'; applyDepara('CGR');
+  document.getElementById('uniBadge').textContent='CGR · preview';
+  const bp=document.querySelector('.brand p'); if(bp) bp.textContent='pré-visualização (sem nuvem)';
+  applyAdminUI(); carregar();
+}
 async function initApp(){
   try{ sb=supabase.createClient(SUPABASE_URL,SUPABASE_KEY); }
   catch(e){ document.getElementById('list').innerHTML='<div class="empty">Erro ao iniciar (Supabase).</div>'; return; }
   const {data:{session}}=await sb.auth.getSession();
-  if(!session){ location.replace('../'); return; }       // hub cuida do login
+  if(!session){ enterPreview(); return; }                 // sem login -> pré-visualização (não trava)
   SESSION=session;
-  const {data:prof}=await sb.from('fca_profiles').select('*').eq('user_id',session.user.id).maybeSingle();
+  const {data:prof,error:profErr}=await sb.from('fca_profiles').select('*').eq('user_id',session.user.id).maybeSingle();
+  if(profErr){ enterPreview(); return; }                   // tabela ainda não existe -> pré-visualização
   PROFILE=prof||{}; REAL_ADMIN=!!PROFILE.is_admin; ADMIN=REAL_ADMIN;
   const params=new URLSearchParams(location.search);
   UNIDADE_COD=((REAL_ADMIN?(params.get('u')||PROFILE.unidade||'CGR'):PROFILE.unidade)||'').toUpperCase();
