@@ -117,10 +117,10 @@ drop policy if exists fca_update on public.fca;
 create policy fca_update on public.fca for update
   using (public.fca_is_admin() or unidade = public.fca_my_unit())
   with check (public.fca_is_admin() or unidade = public.fca_my_unit());
--- DELETE — só admin
+-- DELETE — admin tudo; usuário só ação própria da sua unidade e ainda NÃO travada
 drop policy if exists fca_delete on public.fca;
 create policy fca_delete on public.fca for delete
-  using (public.fca_is_admin());
+  using (public.fca_is_admin() or (unidade = public.fca_my_unit() and not locked));
 
 -- ============================================================================
 --  PÓS-SETUP (rodar manualmente, ajustando os valores):
