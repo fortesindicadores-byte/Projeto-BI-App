@@ -189,16 +189,21 @@ function pushGerot(rows,fatos){
     });
   });
 }
-function pushDRE(dre,fatos,kmlCausas,dispCausas){
-  kmlCausas=kmlCausas||{};dispCausas=dispCausas||{};
+function pushDRE(dre,fatos,kmlCausas,dispCausas,frotaMaps){
+  kmlCausas=kmlCausas||{};dispCausas=dispCausas||{};frotaMaps=frotaMaps||{mes:{},ano:{}};
   const _nc=s=>String(s||'').normalize('NFD').replace(/[̀-ͯ]/g,'').toUpperCase().replace(/\s+/g,' ').trim();
   const EXCL=new Set(['RECEITA LIQUIDA','ICMS CREDITO PRESUMIDO','IPVA E LICENCIAMENTO DE VEICULOS','ESTORNO ICMS NAO APROVEITADO']);
   const drRows=(dre||[]).filter(r=>parseD(r[9])&&String(r[10]||'').trim().toUpperCase()===UNIDADE_DRE&&!EXCL.has(_nc(r[12])));
   if(!drRows.length)return;
   let maxK=0;drRows.forEach(r=>{const k=vigKeyN(parseD(r[9]));if(k>maxK)maxK=k;});
   const vig=vigLbl(new Date(Math.floor(maxK/100),maxK%100,1));
+  const yrMax=Math.floor(maxK/100);
   const acc={};
   drRows.filter(r=>vigKeyN(parseD(r[9]))===maxK).forEach(r=>{const conta=String(r[12]||'—').trim();const niv=String(r[11]||'').trim();const rem=r[1]!=null?+r[1]:0,real=r[2]!=null?+r[2]:0;const key=niv+'||'+conta;if(!acc[key])acc[key]={conta,niv,rem:0,real:0};acc[key].rem+=rem;acc[key].real+=real;});
+  // Manutenção/Pneus: custo do ANO (YTD do ano corrente) por projeto+conta, p/ a média custo/placa ativa
+  const isMP=c=>/MANUTEN|PNEU/.test(_nc(c));
+  const custoAno={};
+  drRows.forEach(r=>{const k=vigKeyN(parseD(r[9]));if(Math.floor(k/100)!==yrMax||k>maxK)return;const conta=String(r[12]||'').trim();if(!isMP(conta))return;const key=_nc(String(r[11]||'').trim())+'||'+_nc(conta);custoAno[key]=(custoAno[key]||0)+Math.abs(r[2]!=null?+r[2]:0);});
   // Custos na DRE são negativos: gasto ACIMA do orçado => (rem - real) > 0 (mais gasto que o remunerado)
   Object.values(acc).map(o=>{const over=o.rem-o.real,base=Math.abs(o.rem);return {...o,over,dpct:base>0?over/base*100:0};})
     .filter(o=>o.over>0&&o.rem!==0).sort((a,b)=>b.over-a.over)
@@ -208,6 +213,14 @@ function pushDRE(dre,fatos,kmlCausas,dispCausas){
       const fato={vig,fato:o.conta,proj:o.niv,desvio,sev};
       // Combustível: causa automática = Dispersão de km (Painel KM) + Eficiência Km/L (+3 piores placas) + Preço R$/L do projeto
       if(/COMBUST/.test(_nc(o.conta))){const parts=[];const d=dispCausas[_nc(o.niv)];if(d)parts.push(d);const c=kmlCausas[_nc(o.niv)];if(c)parts.push(c);if(parts.length)fato.causaAuto=parts.join('\n');}
+      // Manutenção veíc./equip., Carrocerias e Pneus: custo/placa ativa do mês vs média do ano (referência)
+      else if(isMP(o.conta)){
+        const pk=_nc(o.niv);const fMes=frotaMaps.mes[pk]||0,fAno=frotaMaps.ano[pk]||0;
+        const custoMes=Math.abs(o.real),cAno=custoAno[pk+'||'+_nc(o.conta)]||0;
+        const cpMes=fMes>0?custoMes/fMes:null,cpAno=fAno>0?cAno/fAno:null;
+        if(cpMes!=null){const gap=cpAno?Math.round((cpMes/cpAno-1)*100):null;
+          fato.causaAuto=`Custo/placa ativa: ${brl(cpMes)}/placa (mês)`+(cpAno!=null?` vs ${brl(cpAno)}/placa (média ano)${gap!=null?' | ▲ '+gap+'%':''}`:'')+` | Frota ativa: ${Math.round(fMes)}`;}
+      }
       fatos.push(fato);});
 }
 // Causas automáticas de Combustível por projeto — Km/L e R$/L NÃO são mais fatos próprios;
@@ -280,14 +293,27 @@ function dispCausasPorProj(disp){
   });
   return out;
 }
+// Frota ativa (col21 da Ativação, mesma planilha de Dispersão) por projeto: mês (última vig) e ano (YTD).
+function frotaAtivaPorProj(disp){
+  const res={mes:{},ano:{}};
+  const norm=s=>String(s||'').normalize('NFD').replace(/[̀-ͯ]/g,'').toUpperCase().replace(/\s+/g,' ').trim();
+  const rows=(disp||[]).filter(r=>{const u=String(r[14]||'').includes('-')?String(r[14]).split('-').slice(1).join('-').trim():String(r[13]||'').trim();return vigDisp(r[0])&&norm(u)===norm(UNIDADE_DRE);});
+  if(!rows.length)return res;
+  let maxK=0;rows.forEach(r=>{const k=vigKeyN(vigDisp(r[0]));if(k>maxK)maxK=k;});
+  const yr=Math.floor(maxK/100);
+  rows.forEach(r=>{const k=vigKeyN(vigDisp(r[0]));const pk=norm(String(r[14]||'—').split('-')[0].trim());const fa=+r[21]||0;
+    if(k===maxK)res.mes[pk]=(res.mes[pk]||0)+fa;
+    if(Math.floor(k/100)===yr&&k<=maxK)res.ano[pk]=(res.ano[pk]||0)+fa;});
+  return res;
+}
 async function carregar(){
   const fatos=[];
-  let kmlCausas={},dispCausas={};
+  let kmlCausas={},dispCausas={},frotaMaps={mes:{},ano:{}};
   try{ const ger=await gviz(SRC_GEROT); pushGerot(ger,fatos); }catch(e){}
   render(fatos.length?fatos:[]);
-  try{ const disp=await gviz(SRC_DISP); dispCausas=dispCausasPorProj(disp); }catch(e){}
+  try{ const disp=await gviz(SRC_DISP); dispCausas=dispCausasPorProj(disp); frotaMaps=frotaAtivaPorProj(disp); }catch(e){}
   try{ const kml=await gviz(SRC_KML); kmlCausas=kmlCausasPorProj(kml); }catch(e){}
-  try{ const dre=await gviz(SRC_DRE); pushDRE(dre,fatos,kmlCausas,dispCausas); render(fatos); }
+  try{ const dre=await gviz(SRC_DRE); pushDRE(dre,fatos,kmlCausas,dispCausas,frotaMaps); render(fatos); }
   catch(e){ if(!fatos.length)document.getElementById('list').innerHTML='<div class="empty">Sem desvios financeiros carregados (planilha pesada) — mostrando só ICs do Gerot.</div>'; }
 }
 
