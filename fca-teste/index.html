@@ -17,6 +17,20 @@ body{background:radial-gradient(ellipse at 10% 25%,rgba(249,115,22,.06) 0%,trans
 .hfilter select{background:#0a0f18;color:var(--text);border:1px solid #2a3a50;border-radius:6px;font-family:'Montserrat',sans-serif;font-size:11px;font-weight:700;padding:6px 10px;cursor:pointer;max-width:220px;outline:none;}
 .hfilter select:hover{border-color:var(--orange);}
 .hfilter select option{background:#0f1824;color:#fff;}
+.ms-wrap{position:relative;}
+.ms-btn{display:flex;align-items:center;gap:8px;background:#0a0f18;color:var(--text);border:1px solid #2a3a50;border-radius:6px;font-family:'Montserrat',sans-serif;font-size:11px;font-weight:700;padding:6px 12px;cursor:pointer;text-transform:uppercase;letter-spacing:.5px;white-space:nowrap;min-width:150px;}
+.ms-btn:hover{border-color:var(--orange);}
+.ms-lbl{flex:1;text-align:left;}
+.ms-cnt{background:var(--orange);color:#000;border-radius:10px;padding:1px 6px;font-size:9px;font-weight:800;display:none;}
+.ms-panel{display:none;flex-direction:column;position:absolute;top:calc(100% + 4px);right:0;z-index:500;background:#0f1824;border:1px solid #2a3a50;border-radius:6px;min-width:240px;max-height:320px;box-shadow:0 8px 24px rgba(0,0,0,.7);}
+.ms-panel.open{display:flex;}
+.ms-search{padding:7px 10px;border-bottom:1px solid #1e2d40;flex-shrink:0;}
+.ms-search input{width:100%;background:transparent;border:none;color:var(--text);font-family:'Montserrat',sans-serif;font-size:11px;outline:none;}
+.ms-list{overflow-y:auto;flex:1;}
+.ms-opt{display:flex;align-items:center;gap:8px;padding:7px 12px;cursor:pointer;font-size:11px;color:var(--text2);text-transform:uppercase;letter-spacing:.3px;}
+.ms-opt:hover{background:rgba(255,255,255,.05);color:var(--text);}
+.ms-opt.all-opt{border-bottom:1px solid #1e2d40;color:var(--text);font-weight:700;}
+.ms-opt input[type=checkbox]{accent-color:var(--orange);cursor:pointer;width:14px;height:14px;flex-shrink:0;}
 .uni-badge{font-size:12px;font-weight:800;color:#fff;background:rgba(249,115,22,.22);border:1px solid rgba(249,115,22,.4);border-radius:6px;padding:5px 12px;}
 .btn{background:rgba(249,115,22,.15);border:1px solid rgba(249,115,22,.35);border-radius:6px;padding:7px 14px;cursor:pointer;color:var(--orange);font-family:'Montserrat',sans-serif;font-weight:800;font-size:12px;display:flex;align-items:center;gap:6px;}
 .btn:hover{background:rgba(249,115,22,.3);}
@@ -47,10 +61,11 @@ table.acoes{width:100%;border-collapse:collapse;font-size:12px;}
 table.acoes thead th{font-size:10px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:.5px;text-align:left;padding:8px 8px 6px;border-bottom:1px solid rgba(255,255,255,.08);white-space:nowrap;}
 table.acoes td{padding:8px 8px;vertical-align:top;}
 table.acoes tbody tr+tr td{border-top:1px solid rgba(255,255,255,.05);}
-.col-causa,.col-acao{width:30%;}
-.col-resp{width:14%;}
-.col-prazo{width:11%;}
-.col-status{width:12%;}
+.col-causa,.col-acao{width:23%;}
+.col-acomp{width:20%;}
+.col-resp{width:12%;}
+.col-prazo{width:10%;}
+.col-status{width:10%;}
 .col-x{width:26px;}
 .acoes input,.acoes textarea,.acoes select{background:#0a0f18;border:1px solid #2a3a50;border-radius:6px;color:var(--text);font-family:'Montserrat',sans-serif;font-size:12.5px;padding:7px 9px;outline:none;width:100%;min-height:38px;}
 .acoes input:focus,.acoes textarea:focus,.acoes select:focus{border-color:var(--orange);}
@@ -103,8 +118,8 @@ body.light-mode select.st[data-v="Cancelada"]{background:#333333;color:#fff;}
 <body>
 <header class="header">
   <div class="brand"><div class="brand-eyebrow">Gestão em Movimento · BI Frota</div><h1>FCA · Preenchimento</h1><p>teste — ainda não alimenta o BI</p></div>
-  <div class="hfilter"><label>Projeto</label><select id="fProj" onchange="aplicar()"><option value="">Todos</option></select></div>
-  <div class="hfilter"><label>Indicador</label><select id="fInd" onchange="aplicar()"><option value="">Todos</option></select></div>
+  <div class="hfilter"><label>Projeto</label><div class="ms-wrap" id="ms-proj"><button class="ms-btn" onclick="toggleMs('ms-proj')"><span class="ms-lbl">Todos</span><span class="ms-cnt"></span><svg width="10" height="6" viewBox="0 0 10 6"><path d="M0 0l5 6 5-6z" fill="#F97316"/></svg></button><div class="ms-panel"><div class="ms-search"><input type="text" placeholder="Pesquisar…"></div><div class="ms-list"></div></div></div></div>
+  <div class="hfilter"><label>Indicador</label><div class="ms-wrap" id="ms-ind"><button class="ms-btn" onclick="toggleMs('ms-ind')"><span class="ms-lbl">Todos</span><span class="ms-cnt"></span><svg width="10" height="6" viewBox="0 0 10 6"><path d="M0 0l5 6 5-6z" fill="#F97316"/></svg></button><div class="ms-panel"><div class="ms-search"><input type="text" placeholder="Pesquisar…"></div><div class="ms-list"></div></div></div></div>
   <span class="uni-badge" id="uniBadge">—</span>
   <button class="btn theme" id="themeBtn" title="Modo claro/escuro">☀</button>
   <button class="btn" id="saveBtn">Salvar</button>
@@ -197,9 +212,9 @@ const DEFAULT_STATUS='Não iniciada';
 // ── localStorage por fato: guarda array de ações ──
 function loadAcoes(id){
   try{const v=JSON.parse(localStorage.getItem(id));if(Array.isArray(v)&&v.length)return v;}catch(e){}
-  return [{causa:'',acao:'',resp:'',prazo:'',status:DEFAULT_STATUS}];
+  return [{causa:'',acao:'',resp:'',prazo:'',status:DEFAULT_STATUS,obs:''}];
 }
-function blankAcao(){return {causa:'',acao:'',resp:'',prazo:'',status:DEFAULT_STATUS};}
+function blankAcao(){return {causa:'',acao:'',resp:'',prazo:'',status:DEFAULT_STATUS,obs:''};}
 
 function rowHTML(a,canRemove){
   const opts=STATUS.map(s=>`<option ${a.status===s?'selected':''}>${s}</option>`).join('');
@@ -209,22 +224,37 @@ function rowHTML(a,canRemove){
     <td class="col-resp"><span class="cell-label">Responsável</span><input type="text" data-k="resp" placeholder="Quem?" value="${esc(a.resp)}"></td>
     <td class="col-prazo"><span class="cell-label">Prazo</span><input type="date" data-k="prazo" value="${esc(a.prazo)}"></td>
     <td class="col-status"><span class="cell-label">Status</span><select class="st" data-k="status" data-v="${esc(a.status||DEFAULT_STATUS)}">${opts}</select></td>
+    <td class="col-acomp"><span class="cell-label">Acompanhamento</span><textarea rows="1" data-k="obs" placeholder="Atualizações de progresso…">${esc(a.obs||'')}</textarea></td>
     <td class="col-x"><button class="rm-btn" title="Remover ação" ${canRemove?'':'style="visibility:hidden"'}>&times;</button></td>
   </tr>`;
 }
 
 let _FATOS=[];
 function render(fatos){ _FATOS=fatos||[]; popFiltros(); aplicar(); }
-function fillSel(id,vals){const s=document.getElementById(id);if(!s)return;const cur=s.value;s.innerHTML='<option value="">Todos</option>'+vals.map(v=>`<option ${cur===v?'selected':''}>${esc(v)}</option>`).join('');}
+let PROJ_OPTS=[],IND_OPTS=[];
+function syncBadge(w){const c=w.querySelector('.ms-cnt'),n=w._sel?w._sel.size:0;if(c){c.textContent=n;c.style.display=n?'':'none';}}
+function _buildMs(w,getItems){
+  if(!w)return; if(!(w._sel instanceof Set))w._sel=new Set();
+  const sel=w._sel,list=w.querySelector('.ms-list'),srch=w.querySelector('.ms-search input');
+  w._render=(q='')=>{const f=(q||'').toLowerCase(),items=getItems(),shown=items.filter(v=>String(v).toLowerCase().includes(f)),all=sel.size===0;
+    list.innerHTML=(!q?`<label class="ms-opt all-opt"><input type="checkbox" class="ms-all" ${all?'checked':''}> Todos</label>`:'')+shown.map(v=>`<label class="ms-opt"><input type="checkbox" data-v="${esc(v)}" ${all||sel.has(v)?'checked':''}> ${esc(v)}</label>`).join('');syncBadge(w);};
+  list.addEventListener('change',e=>{const b=e.target;if(b.classList.contains('ms-all')){sel.clear();}else if(sel.size===0){if(!b.checked)getItems().forEach(v=>{if(v!==b.dataset.v)sel.add(v);});}else{if(b.checked)sel.add(b.dataset.v);else sel.delete(b.dataset.v);const a=getItems();if(a.length&&a.every(v=>sel.has(v)))sel.clear();}w._render(srch.value);aplicar();});
+  srch.addEventListener('input',()=>w._render(srch.value));srch.addEventListener('click',e=>e.stopPropagation());
+  w._render();
+}
+function toggleMs(id){document.querySelectorAll('.ms-panel.open').forEach(p=>{if(p.closest('.ms-wrap').id!==id)p.classList.remove('open');});const p=document.querySelector('#'+id+' .ms-panel');if(p)p.classList.toggle('open');}
+function getMsValues(id){const w=document.getElementById(id);return w&&w._sel?[...w._sel]:[];}
 function popFiltros(){
-  fillSel('fProj',[...new Set(_FATOS.map(f=>f.proj||'Geral'))].sort());
-  fillSel('fInd',[...new Set(_FATOS.map(f=>f.fato))].sort());
+  PROJ_OPTS=[...new Set(_FATOS.map(f=>f.proj||'Geral'))].sort();
+  IND_OPTS=[...new Set(_FATOS.map(f=>f.fato))].sort();
+  const wp=document.getElementById('ms-proj'),wi=document.getElementById('ms-ind');
+  if(wp&&wp._render)wp._render(''); if(wi&&wi._render)wi._render('');
 }
 function aplicar(){
   const list=document.getElementById('list');
   if(!_FATOS.length){list.innerHTML='<div class="empty">✓ Nenhum desvio encontrado para esta unidade na vigência mais recente — sem fatos a tratar.</div>';return;}
-  const fp=(document.getElementById('fProj')||{}).value||'', fi=(document.getElementById('fInd')||{}).value||'';
-  const vis=_FATOS.filter(f=>(!fp||(f.proj||'Geral')===fp)&&(!fi||f.fato===fi));
+  const fp=getMsValues('ms-proj'), fi=getMsValues('ms-ind');
+  const vis=_FATOS.filter(f=>(!fp.length||fp.includes(f.proj||'Geral'))&&(!fi.length||fi.includes(f.fato)));
   if(!vis.length){list.innerHTML='<div class="empty">Nenhum fato para o filtro selecionado.</div>';return;}
   list.innerHTML=vis.map(f=>{
     const id=LS_PREFIX+slug(f.vig+'_'+(f.proj||'')+'_'+f.fato);
@@ -239,7 +269,7 @@ function aplicar(){
       </div>
       <div class="acoes-wrap">
         <table class="acoes">
-          <thead><tr><th class="col-causa">Causa</th><th class="col-acao">Ação</th><th class="col-resp">Responsável</th><th class="col-prazo">Prazo</th><th class="col-status">Status</th><th class="col-x"></th></tr></thead>
+          <thead><tr><th class="col-causa">Causa</th><th class="col-acao">Ação</th><th class="col-resp">Responsável</th><th class="col-prazo">Prazo</th><th class="col-status">Status</th><th class="col-acomp">Acompanhamento</th><th class="col-x"></th></tr></thead>
           <tbody>${rows}</tbody>
         </table>
         <div class="add-row"><button class="add-acao" type="button">+ adicionar ação</button></div>
@@ -303,6 +333,9 @@ document.getElementById('themeBtn').addEventListener('click',()=>applyTheme(docu
 applyTheme(localStorage.getItem('bi_theme')||'dark');
 
 document.getElementById('uniBadge').textContent=UNIDADE_COD;
+_buildMs(document.getElementById('ms-proj'),()=>PROJ_OPTS);
+_buildMs(document.getElementById('ms-ind'),()=>IND_OPTS);
+document.addEventListener('click',e=>{if(!e.target.closest('.ms-wrap'))document.querySelectorAll('.ms-panel.open').forEach(p=>p.classList.remove('open'));});
 carregar();
 </script>
 </body>
