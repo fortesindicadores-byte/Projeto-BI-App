@@ -186,16 +186,25 @@ function pushKML(kml,fatos){
   const rows=(kml||[]).filter(r=>parseD(r[0])&&String(r[15]||'').trim().toUpperCase()===UNIDADE_DRE);
   if(!rows.length)return;
   let maxK=0;rows.forEach(r=>{const k=vigKeyN(parseD(r[0]));if(k>maxK)maxK=k;});
-  let km=0,lit=0,remW=0;
-  rows.filter(r=>vigKeyN(parseD(r[0]))===maxK).forEach(r=>{const k=+r[22]||0,l=+r[23]||0,rk=+r[4]||0;km+=k;lit+=l;remW+=rk*k;});
-  if(!km||!lit)return;
-  const real=km/lit, rem=remW/km;
-  if(!(rem>0)||real>=rem)return; // só quando o real está pior (consome mais)
-  const nom=rem-real, pct=(real/rem-1)*100, sev=Math.abs(pct)>=10?'crit':'aten';
-  const f2=v=>v.toFixed(2).replace('.',',');
   const vig=vigLbl(new Date(Math.floor(maxK/100),maxK%100,1));
-  const desvio=`<span class="dn">Desvio: </span><span class="val ${sev==='aten'?'am':''}">▲ ${f2(nom)} Km/L · ▲ ${Math.round(pct)}%</span>`;
-  fatos.push({vig,fato:'Consumo Km/L',desvio,sev});
+  const acc={}; // por projeto (col14)
+  rows.filter(r=>vigKeyN(parseD(r[0]))===maxK).forEach(r=>{
+    const proj=String(r[14]||'—').trim();
+    const km=+r[22]||0,lit=+r[23]||0,remkl=+r[4]||0,totR=+r[25]||0,remrl=+r[8]||0;
+    if(!acc[proj])acc[proj]={km:0,lit:0,remklW:0,totR:0,remrlW:0};
+    const a=acc[proj];a.km+=km;a.lit+=lit;a.remklW+=remkl*km;a.totR+=totR;a.remrlW+=remrl*lit;
+  });
+  const f2=v=>v.toFixed(2).replace('.',',');
+  Object.entries(acc).forEach(([proj,a])=>{
+    // Consumo Km/L: real < rem (rodou menos km/litro que o remunerado)
+    if(a.km>0&&a.lit>0){const real=a.km/a.lit,rem=a.remklW/a.km;
+      if(rem>0&&real<rem){const nom=rem-real,pct=Math.abs((real/rem-1)*100),sev=pct>=10?'crit':'aten';
+        fatos.push({vig,fato:'Consumo Km/L',proj,sev,desvio:`<span class="dn">Desvio: </span><span class="val ${sev==='aten'?'am':''}">▲ ${f2(nom)} Km/L · ▲ -${Math.round(pct)}%</span>`});}}
+    // R$/L: preço realizado > remunerado (pagou mais por litro que o orçado)
+    if(a.lit>0&&a.totR>0){const real=a.totR/a.lit,rem=a.remrlW/a.lit;
+      if(rem>0&&real>rem){const nom=real-rem,pct=Math.abs((real/rem-1)*100),sev=pct>=5?'crit':'aten';
+        fatos.push({vig,fato:'R$/L',proj,sev,desvio:`<span class="dn">Desvio: </span><span class="val ${sev==='aten'?'am':''}">▲ R$ ${f2(nom)}/L · ▲ -${Math.round(pct)}%</span>`});}}
+  });
 }
 async function carregar(){
   const fatos=[];
