@@ -191,6 +191,8 @@ function pushDRE(dre,fatos,kmlCausas){
 function kmlCausasPorProj(kml){
   const out={};
   const f2=v=>(+v).toFixed(2).replace('.',',');
+  // Formato de impacto p/ a causa: 20K · 7K · 1,5K · 1,2K (como na referência)
+  const impFmt=v=>{const a=Math.abs(v);if(a>=1e6)return String(Math.round(a/1e6*10)/10).replace('.',',')+'M';if(a>=1e3){let k=a>=1e4?Math.round(a/1e3):Math.round(a/100)/10;return String(k).replace('.',',')+'K';}return String(Math.round(a));};
   const norm=s=>String(s||'').normalize('NFD').replace(/[̀-ͯ]/g,'').toUpperCase().replace(/\s+/g,' ').trim();
   const rows=(kml||[]).filter(r=>parseD(r[0])&&String(r[15]||'').trim().toUpperCase()===UNIDADE_DRE);
   if(!rows.length)return out;
@@ -201,23 +203,36 @@ function kmlCausasPorProj(kml){
     const km=+r[22]||0,lit=+r[23]||0,remkl=+r[4]||0,totR=+r[25]||0,remrl=+r[8]||0;
     if(!acc[proj])acc[proj]={km:0,lit:0,remklW:0,totR:0,remrlW:0,plates:[]};
     const a=acc[proj];a.km+=km;a.lit+=lit;a.remklW+=remkl*km;a.totR+=totR;a.remrlW+=remrl*lit;
-    a.plates.push({placa:String(r[16]||'').trim(),remMod:+r[5]||0,remMed:remkl,real:+r[6]||0});
+    a.plates.push({placa:String(r[16]||'').trim(),remMod:+r[5]||0,remMed:remkl,real:+r[6]||0,km:km});
   });
   Object.entries(acc).forEach(([proj,a])=>{
     const lines=[];
-    // Eficiência Km/L: real < rem (rodou menos km/litro que o remunerado)
-    if(a.km>0&&a.lit>0){const real=a.km/a.lit,rem=a.remklW/a.km;
-      if(rem>0&&real<rem){const nom=rem-real,pct=Math.round(Math.abs((real/rem-1)*100));
-        lines.push(`Eficiência Km/L: ▲ ${f2(nom)} | ▲ ${pct}%`);
-        const worst=a.plates.filter(p=>p.placa&&p.real>0&&p.remMed>0).sort((x,y)=>(x.real-x.remMed)-(y.real-y.remMed)).slice(0,3);
-        if(worst.length){lines.push('Bottom 3 placas:');
-          worst.forEach(p=>{const pp=Math.round(Math.abs((p.real/p.remMed-1)*100));
-            lines.push(`- ${p.placa}: Modelo ${f2(p.remMod)} | Rem ${f2(p.remMed)} | Real ${f2(p.real)} | ▲ ${pp}%`);});}
-      }}
-    // Preço R$/L: real > rem (pagou mais por litro que o orçado)
-    if(a.lit>0&&a.totR>0){const real=a.totR/a.lit,rem=a.remrlW/a.lit;
-      if(rem>0&&real>rem){const nom=real-rem,pct=Math.round(Math.abs((real/rem-1)*100));
-        lines.push(`Preço R$/L: ▲ R$ ${f2(nom)} | ▲ ${pct}%`);}}
+    const rsLRem =a.lit>0?a.remrlW/a.lit:0;   // R$/L remunerado (ponderado por litros)
+    const rsLReal=a.lit>0?a.totR  /a.lit:0;   // R$/L realizado
+    const kmLReal=a.lit>0?a.km    /a.lit:0;   // Km/L realizado
+    const kmLRem =a.km >0?a.remklW/a.km :0;   // Km/L remunerado (ponderado por km)
+    // ── Eficiência Km/L: real < rem ──
+    // Impacto R$ (decomposição feita no FCA): preço fixo no Rem, varia só a eficiência
+    //   = R$/L_rem × (1/Km/L_real − 1/Km/L_rem) × KM_real
+    if(kmLRem>0&&kmLReal>0&&kmLReal<kmLRem){
+      const nom=kmLRem-kmLReal,pct=Math.round(Math.abs((kmLReal/kmLRem-1)*100));
+      const imp=rsLRem>0?(rsLRem/kmLReal-rsLRem/kmLRem)*a.km:0;
+      lines.push(`Eficiência Km/L: ▲ ${f2(nom)} | ▲ ${pct}%${imp>0?' | Impacto: '+impFmt(imp):''}`);
+      const worst=a.plates.filter(p=>p.placa&&p.real>0&&p.remMed>0&&p.km>0)
+        .map(p=>({...p,imp:rsLRem>0&&p.real<p.remMed?(rsLRem/p.real-rsLRem/p.remMed)*p.km:0}))
+        .filter(p=>p.imp>0).sort((x,y)=>y.imp-x.imp).slice(0,3);
+      if(worst.length){lines.push('Bottom 3 placas:');
+        worst.forEach(p=>{const pp=Math.round(Math.abs((p.real/p.remMed-1)*100));
+          lines.push(`- ${p.placa}: Modelo ${f2(p.remMod)} | Rem ${f2(p.remMed)} | Real ${f2(p.real)} | ▲ ${pp}% | Impacto: ${impFmt(p.imp)}`);});}
+    }
+    // ── Preço R$/L: real > rem ──
+    // Impacto R$ (decomposição feita no FCA): eficiência fixa no Real, varia só o preço
+    //   = (R$/L_real − R$/L_rem) / Km/L_real × KM_real = (R$/L_real − R$/L_rem) × Litros
+    if(rsLRem>0&&rsLReal>rsLRem){
+      const nom=rsLReal-rsLRem,pct=Math.round(Math.abs((rsLReal/rsLRem-1)*100));
+      const imp=kmLReal>0?(rsLReal-rsLRem)/kmLReal*a.km:0;
+      lines.push(`Preço R$/L: ▲ R$ ${f2(nom)} | ▲ ${pct}%${imp>0?' | Impacto: '+impFmt(imp):''}`);
+    }
     if(lines.length)out[norm(proj)]=lines.join('\n');
   });
   return out;
