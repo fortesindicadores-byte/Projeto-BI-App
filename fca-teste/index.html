@@ -78,7 +78,7 @@ select.st[data-v="Não iniciada"]{background:#FF6666;color:#0C1017;border-color:
 select.st[data-v="Cancelada"]{background:#333333;color:#fff;border-color:#333333;}
 .rm-btn{background:transparent;border:none;color:var(--text3);font-size:18px;line-height:1;cursor:pointer;padding:4px 6px;border-radius:5px;}
 .rm-btn:hover{color:var(--red);background:rgba(255,102,102,.12);}
-.add-row{padding:4px 8px 2px;}
+.add-row{padding:4px 8px 2px;display:flex;gap:8px;flex-wrap:wrap;}
 .add-acao{background:rgba(249,115,22,.12);border:1px dashed rgba(249,115,22,.45);border-radius:6px;color:var(--orange);font-family:'Montserrat',sans-serif;font-weight:700;font-size:11.5px;padding:6px 12px;cursor:pointer;}
 .add-acao:hover{background:rgba(249,115,22,.22);}
 .cell-label{display:none;}
@@ -389,7 +389,7 @@ function aplicar(){
           <thead><tr><th class="col-causa">Causa</th><th class="col-acao">Ação</th><th class="col-resp">Responsável</th><th class="col-prazo">Prazo</th><th class="col-status">Status</th><th class="col-acomp">Acompanhamento</th><th class="col-x"></th></tr></thead>
           <tbody>${rows}</tbody>
         </table>
-        <div class="add-row"><button class="add-acao" type="button">+ adicionar ação</button></div>
+        <div class="add-row"><button class="add-acao add-rep" type="button">+ adicionar ação</button><button class="add-acao add-new" type="button">+ adicionar causa</button></div>
       </div>
     </div>`;
   }).join('');
@@ -419,16 +419,24 @@ function wireBlock(block){
     if(el.dataset&&el.dataset.k)save(block);
   });
   block.addEventListener('change',e=>{if(e.target.classList.contains('st')){e.target.dataset.v=e.target.value;save(block);}});
-  // adicionar ação
-  block.querySelector('.add-acao').addEventListener('click',()=>{
+  // helper: adiciona uma linha (ação) ao bloco
+  const appendRow=acao=>{
     const tbody=block.querySelector('tbody');
     const tmp=document.createElement('tbody');
-    tmp.innerHTML=rowHTML(blankAcao(),true);
+    tmp.innerHTML=rowHTML(acao,true);
     const tr=tmp.firstElementChild;
     tbody.appendChild(tr);
     tr.querySelectorAll('textarea').forEach(autoResize);
     save(block);
+  };
+  // adicionar AÇÃO: nova linha repetindo a causa da última linha
+  block.querySelector('.add-rep').addEventListener('click',()=>{
+    const rows=block.querySelectorAll('tbody tr');
+    const causa=rows.length?(rows[rows.length-1].querySelector('[data-k="causa"]').value||''):'';
+    appendRow({...blankAcao(),causa});
   });
+  // adicionar CAUSA: nova linha totalmente em branco
+  block.querySelector('.add-new').addEventListener('click',()=>appendRow(blankAcao()));
   // remover ação (delegação)
   block.querySelector('tbody').addEventListener('click',e=>{
     const btn=e.target.closest('.rm-btn');if(!btn)return;
