@@ -126,7 +126,7 @@ body.light-mode select.st[data-v="Cancelada"]{background:#333333;color:#fff;}
   <span class="saved-msg" id="savedMsg">Salvo ✓ (teste — só no seu navegador)</span>
 </header>
 <main class="main">
-  <div class="intro">Para cada <b>fato</b> (indicador com desvio) preencha uma ou mais <b>ações</b> com <b>Causa</b>, <b>Ação</b>, <b>Responsável</b>, <b>Prazo</b> e <b>Status</b>. Os fatos vêm dos ICs do Gerot, da Disponibilidade e dos desvios financeiros (Visão Financeira) da unidade. <b>Tudo é salvo no seu navegador</b> para você testar — ainda não envia pro BI.</div>
+  <div class="intro">Para cada <b>fato</b> (indicador com desvio) preencha uma ou mais <b>ações</b> com <b>Causa</b>, <b>Ação</b>, <b>Responsável</b>, <b>Prazo</b> e <b>Status</b>. Os fatos vêm dos <b>ICs do Gerot</b> e dos <b>Custos da DRE</b> da unidade (Km/L e R$/L entram como causa do Custo Combustível, não como fato próprio). <b>Tudo é salvo no seu navegador</b> para você testar — ainda não envia pro BI.</div>
   <div id="list"><div class="loading">Carregando fatos da unidade…</div></div>
 </main>
 <script>
@@ -165,7 +165,8 @@ function pushICs(ics,fatos){
     const desvio=`<span class="dn">Desvio: </span><span class="val ${sev==='aten'?'am':''}">▲ ${gap.toFixed(1)} pp · ▲ -${Math.round(gap/META_IC*100)}%</span> <span class="dn">(meta ${META_IC}%)</span>`;
     fatos.push({vig,fato:d.l,desvio,sev});});
 }
-function pushDRE(dre,fatos){
+function pushDRE(dre,fatos,kmlCausas){
+  kmlCausas=kmlCausas||{};
   const _nc=s=>String(s||'').normalize('NFD').replace(/[̀-ͯ]/g,'').toUpperCase().replace(/\s+/g,' ').trim();
   const EXCL=new Set(['RECEITA LIQUIDA','ICMS CREDITO PRESUMIDO','IPVA E LICENCIAMENTO DE VEICULOS','ESTORNO ICMS NAO APROVEITADO']);
   const drRows=(dre||[]).filter(r=>parseD(r[9])&&String(r[10]||'').trim().toUpperCase()===UNIDADE_DRE&&!EXCL.has(_nc(r[12])));
@@ -180,13 +181,20 @@ function pushDRE(dre,fatos){
     .forEach(o=>{const sev=o.dpct>=5?'crit':'aten';
       // Fato financeiro: "Desvio: ▲ R$ X · ▲ -Y%"
       const desvio=`<span class="dn">Desvio: </span><span class="val ${sev==='aten'?'am':''}">▲ ${brl(o.over)} · ▲ -${Math.round(o.dpct)}%</span>`;
-      fatos.push({vig,fato:o.conta,proj:o.niv,desvio,sev});});
+      const fato={vig,fato:o.conta,proj:o.niv,desvio,sev};
+      // Combustível: causa automática com Eficiência Km/L (+3 piores placas) e Preço R$/L do projeto
+      if(/COMBUST/.test(_nc(o.conta))){const c=kmlCausas[_nc(o.niv)];if(c)fato.causaAuto=c;}
+      fatos.push(fato);});
 }
-function pushKML(kml,fatos){
+// Causas automáticas de Combustível por projeto — Km/L e R$/L NÃO são mais fatos próprios;
+// entram como CAUSA do Custo Combustível (conta da DRE). Retorna { projNormalizado: textoCausa }.
+function kmlCausasPorProj(kml){
+  const out={};
+  const f2=v=>(+v).toFixed(2).replace('.',',');
+  const norm=s=>String(s||'').normalize('NFD').replace(/[̀-ͯ]/g,'').toUpperCase().replace(/\s+/g,' ').trim();
   const rows=(kml||[]).filter(r=>parseD(r[0])&&String(r[15]||'').trim().toUpperCase()===UNIDADE_DRE);
-  if(!rows.length)return;
+  if(!rows.length)return out;
   let maxK=0;rows.forEach(r=>{const k=vigKeyN(parseD(r[0]));if(k>maxK)maxK=k;});
-  const vig=vigLbl(new Date(Math.floor(maxK/100),maxK%100,1));
   const acc={}; // por projeto (col14)
   rows.filter(r=>vigKeyN(parseD(r[0]))===maxK).forEach(r=>{
     const proj=String(r[14]||'—').trim();
@@ -195,26 +203,32 @@ function pushKML(kml,fatos){
     const a=acc[proj];a.km+=km;a.lit+=lit;a.remklW+=remkl*km;a.totR+=totR;a.remrlW+=remrl*lit;
     a.plates.push({placa:String(r[16]||'').trim(),remMod:+r[5]||0,remMed:remkl,real:+r[6]||0});
   });
-  const f2=v=>v.toFixed(2).replace('.',',');
   Object.entries(acc).forEach(([proj,a])=>{
-    // Consumo Km/L: real < rem (rodou menos km/litro que o remunerado)
+    const lines=[];
+    // Eficiência Km/L: real < rem (rodou menos km/litro que o remunerado)
     if(a.km>0&&a.lit>0){const real=a.km/a.lit,rem=a.remklW/a.km;
-      if(rem>0&&real<rem){const nom=rem-real,pct=Math.abs((real/rem-1)*100),sev=pct>=10?'crit':'aten';
-        const worst=a.plates.filter(p=>p.placa&&p.real>0).sort((x,y)=>(x.real-x.remMed)-(y.real-y.remMed)).slice(0,3);
-        const causaAuto=worst.length?('Piores placas (Km/L):\n'+worst.map(p=>`${p.placa}: Rem Modelo ${f2(p.remMod)} | Rem Médio ${f2(p.remMed)} | Real ${f2(p.real)}`).join('\n')):'';
-        fatos.push({vig,fato:'Consumo Km/L',proj,sev,causaAuto,desvio:`<span class="dn">Desvio: </span><span class="val ${sev==='aten'?'am':''}">▲ ${f2(nom)} Km/L · ▲ -${Math.round(pct)}%</span>`});}}
-    // R$/L: preço realizado > remunerado (pagou mais por litro que o orçado)
+      if(rem>0&&real<rem){const nom=rem-real,pct=Math.round(Math.abs((real/rem-1)*100));
+        lines.push(`Eficiência Km/L: ▲ ${f2(nom)} | ▲ ${pct}%`);
+        const worst=a.plates.filter(p=>p.placa&&p.real>0&&p.remMed>0).sort((x,y)=>(x.real-x.remMed)-(y.real-y.remMed)).slice(0,3);
+        if(worst.length){lines.push('Bottom 3 placas:');
+          worst.forEach(p=>{const pp=Math.round(Math.abs((p.real/p.remMed-1)*100));
+            lines.push(`- ${p.placa}: Modelo ${f2(p.remMod)} | Rem ${f2(p.remMed)} | Real ${f2(p.real)} | ▲ ${pp}%`);});}
+      }}
+    // Preço R$/L: real > rem (pagou mais por litro que o orçado)
     if(a.lit>0&&a.totR>0){const real=a.totR/a.lit,rem=a.remrlW/a.lit;
-      if(rem>0&&real>rem){const nom=real-rem,pct=Math.abs((real/rem-1)*100),sev=pct>=5?'crit':'aten';
-        fatos.push({vig,fato:'R$/L',proj,sev,desvio:`<span class="dn">Desvio: </span><span class="val ${sev==='aten'?'am':''}">▲ R$ ${f2(nom)}/L · ▲ -${Math.round(pct)}%</span>`});}}
+      if(rem>0&&real>rem){const nom=real-rem,pct=Math.round(Math.abs((real/rem-1)*100));
+        lines.push(`Preço R$/L: ▲ R$ ${f2(nom)} | ▲ ${pct}%`);}}
+    if(lines.length)out[norm(proj)]=lines.join('\n');
   });
+  return out;
 }
 async function carregar(){
   const fatos=[];
+  let kmlCausas={};
   try{ const ics=await gviz(SRC_ICS); pushICs(ics,fatos); }catch(e){}
   render(fatos.length?fatos:[]);
-  try{ const kml=await gviz(SRC_KML); pushKML(kml,fatos); render(fatos); }catch(e){}
-  try{ const dre=await gviz(SRC_DRE); pushDRE(dre,fatos); render(fatos); }
+  try{ const kml=await gviz(SRC_KML); kmlCausas=kmlCausasPorProj(kml); }catch(e){}
+  try{ const dre=await gviz(SRC_DRE); pushDRE(dre,fatos,kmlCausas); render(fatos); }
   catch(e){ if(!fatos.length)document.getElementById('list').innerHTML='<div class="empty">Sem desvios financeiros carregados (planilha pesada) — mostrando só ICs.</div>'; }
 }
 
