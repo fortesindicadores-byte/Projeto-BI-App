@@ -52,6 +52,12 @@ Página de preenchimento de FCA por unidade. URL: `/gestao-em-movimento/fca-test
 - **Persistência: SÓ localStorage (por navegador/dispositivo).** Ao clicar Salvar hoje: grava só naquele navegador — NÃO vai pro BI, NÃO é compartilhado, some se limpar cache/trocar de aparelho. É só teste de UX.
 - **PRÓXIMO PASSO (a fazer):** ligar no **Supabase** — tabela `fca` (unidade, vigência, fato/indicador, projeto, ações…), RLS por unidade (link por token ou login), cliente usa **só chave anon + RLS** (nunca service_role). Aí grava na nuvem, consolida e alimenta o BI.
 
+## 6.1 FCA — Roadmap definido p/ próxima sessão (ordem do usuário)
+1. **Consolidar os FCAs que já existem no Sheet** na MESMA base do novo formato (Supabase `fca`), **sem perder histórico**, e **continuar alimentando** os painéis **FCA** e **Aderência FCA**. → Migrar as linhas da planilha FCA (gid=216663799: origem, vigência, unidade=código, projeto, prazo, status) para a tabela `fca`; decidir se os painéis FCA/Aderência passam a ler do Supabase ou se mantém a planilha sincronizada. Não quebrar o histórico.
+2. **Aplicar o novo formato a TODAS as unidades** (hoje só CGR). → Parametrizar `fca-teste` (UNIDADE_IC/UNIDADE_DRE/UNIDADE_COD viram variáveis por unidade; de-paras por unidade já estão nas memórias). A unidade virá do link/login.
+3. **Hub para liberar acesso por unidade.** → Link por unidade (token) ou auth Supabase + **RLS** (cada unidade só a sua); o hub já tem auth Supabase para reusar.
+4. **Visão consolidada das ações (admin).** → Página que lê todas as linhas de `fca` e permite o **admin editar** (RLS de admin); para o usuário acompanhar/ajustar tudo.
+
 ## 7. Pendências / próximos passos
 1. **Ligar o FCA no Supabase** (gravar de verdade por unidade, link por unidade, depois alimentar o BI). Plano: tabela `fca` + RLS por unidade + página de preenchimento por token/login. (Hoje só localStorage.)
 2. **Validar no navegador** (o preview local não carrega DRE/Conlog): números do Scorecard por unidade e do km do combustível no Pneus (matching de placa/modelo/cidade).
