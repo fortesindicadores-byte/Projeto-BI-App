@@ -44,10 +44,13 @@ Repositório central de **painéis de BI** da Fortes Indicadores (operação de 
 
 ## 6. FCA de teste (`fca-teste/index.html`) — em desenvolvimento
 Página de preenchimento de FCA por unidade. URL: `/gestao-em-movimento/fca-teste/` (unidade de teste **CGR**).
-- **Fatos** (indicadores com desvio) vêm de: ICs do Gerot + Disponibilidade (planilha ICs, abaixo da meta 90%), **Consumo Km/L** (nominal, da planilha Km/L), e **desvios financeiros** da DRE (custos são **negativos**; desvio = `remunerado − realizado > 0` = gasto acima do orçado). Excluídos sempre: Receita Líquida, ICMS Crédito Presumido, IPVA e Licenciamento, Estorno ICMS.
-- Formato do desvio (todos): **"Desvio: ▲ nominal · ▲ %"**.
-- Layout **tabela**, unidade por **código** (sem coluna Projeto; mas financeiro mostra o projeto/nível3 na linha pois não agrupa), **por ação** ("+ adicionar ação", cada ação com Causa/Ação/Responsável/Prazo/Status), Causa/Ação `<textarea rows=1>` auto-expansível, **Status** colorido (Concluída verde, Em andamento âmbar, Não iniciada vermelho, **Cancelada cinza escuro/branco**).
-- **Persistência:** localStorage (ainda **NÃO** grava em backend).
+- **Fatos** (indicadores com desvio) vêm de: ICs do Gerot + Disponibilidade (planilha ICs, abaixo da meta 90%), **Consumo Km/L** (nominal, da planilha Km/L: km÷litros real vs rem), e **desvios financeiros** da DRE. **IMPORTANTE: custos na DRE são NEGATIVOS**; desvio (gasto acima do orçado) = `remunerado − realizado > 0`; magnitude = esse valor, % = mag/|rem|. Excluídos sempre: Receita Líquida, ICMS Crédito Presumido, IPVA e Licenciamento, Estorno ICMS.
+- DRE filtrada **no servidor** (`&tq=select * where K = 'CAMPO GRANDE'`) — senão o JSONP de 18k linhas falha no navegador.
+- **Cabeçalho do fato (ordem):** Unidade·Vigência (11px) → Indicador → rótulo **"Fato:"** (12px) → **Desvio** (o desvio É o fato). Formato do desvio (todos): **"Desvio: ▲ nominal · ▲ %"**.
+- **Barra de título** em 2 níveis (eyebrow "Gestão em Movimento · BI Frota" + h1 "FCA · Preenchimento") + **filtros de Projeto e Indicador** (`<select>` `aplicar()`; sem projeto = "Geral") + badge da unidade (CGR).
+- Layout **tabela**, unidade por **código** (sem coluna Projeto; financeiro **não agrupa** — mostra o projeto/nível3 na linha de meta), **por ação** ("+ adicionar ação", cada ação com Causa/Ação/Responsável/Prazo/Status), Causa/Ação `<textarea rows=1>` auto-expansível, campos com altura inicial igual (38px), **Status** colorido (Concluída verde, Em andamento âmbar, Não iniciada vermelho, **Cancelada cinza escuro/branco**). Card com borda uniforme (sem barra lateral colorida).
+- **Persistência: SÓ localStorage (por navegador/dispositivo).** Ao clicar Salvar hoje: grava só naquele navegador — NÃO vai pro BI, NÃO é compartilhado, some se limpar cache/trocar de aparelho. É só teste de UX.
+- **PRÓXIMO PASSO (a fazer):** ligar no **Supabase** — tabela `fca` (unidade, vigência, fato/indicador, projeto, ações…), RLS por unidade (link por token ou login), cliente usa **só chave anon + RLS** (nunca service_role). Aí grava na nuvem, consolida e alimenta o BI.
 
 ## 7. Pendências / próximos passos
 1. **Ligar o FCA no Supabase** (gravar de verdade por unidade, link por unidade, depois alimentar o BI). Plano: tabela `fca` + RLS por unidade + página de preenchimento por token/login. (Hoje só localStorage.)
