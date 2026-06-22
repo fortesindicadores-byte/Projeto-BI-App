@@ -136,37 +136,61 @@ const UNIDADE_DRE = 'CAMPO GRANDE';        // nome na DRE (cidade)
 const UNIDADE_COD = 'CGR';                 // código da nossa nomenclatura (exibido)
 const LS_PREFIX = 'fca_teste_CGR_';
 
-const SRC_ICS = 'https://docs.google.com/spreadsheets/d/1xGl1Xrk2sPS9zWghEuecFMNBHwmeLiZ02U-QpO8cDPY/gviz/tq?sheet='+encodeURIComponent('Consolidado ICs');
+// Gerot (ICs + IVs): mesma planilha dos ICs, aba gid=0 — formato longo bloco|unidade|vig|kpi|un|meta|real|atg.
+// Cada bloco tem 1 IC e seus IVs; o kpi começa com "IC"/"IV". UNIDADE_IC deve casar com a coluna 'unidade' do Gerot.
+const SRC_GEROT = 'https://docs.google.com/spreadsheets/d/1xGl1Xrk2sPS9zWghEuecFMNBHwmeLiZ02U-QpO8cDPY/gviz/tq?gid=0';
 const SRC_DRE = 'https://docs.google.com/spreadsheets/d/1qcTy2ppLCGBKKqZCxCYWCTL9kTAuWfHBMyBfWJOyih8/gviz/tq?sheet='+encodeURIComponent('Consolidado DRE')+'&tq='+encodeURIComponent("select * where K = '"+UNIDADE_DRE+"'");
 const SRC_KML = 'https://docs.google.com/spreadsheets/d/1ZZdvG_RK5cTBLdPl3TWCbNeqw-Y4fTYwWsQV4w-e__A/gviz/tq?sheet='+encodeURIComponent('Km/L');
+// Dispersão de km (Painel KM): col0 vig · col13/14 unidade · col14 antes do "-" projeto · col31 rem · col32 real · col36 impacto R$
+const SRC_DISP = 'https://docs.google.com/spreadsheets/d/1wCoRGsvOgmIvfLW4F9Sxr-5AX9Go-aFlRVjrQ_B2ilM/gviz/tq?sheet='+encodeURIComponent('Dispersão de km');
 const MESES=['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
-// ICs do Gerot + Disponibilidade (col, label) — valores 0-1; meta 90%
-const IC=[{c:2,l:'Disponibilidade'},{c:3,l:'Preventivas'},{c:6,l:'Checklist T1/T2'},{c:7,l:'Checklist Apoio'},{c:8,l:'Conformidade Frota'},{c:9,l:'Stress Test Cam.'},{c:10,l:'Stress Test Emp.'},{c:11,l:'SLA Atendimento'},{c:12,l:'CIVF'}];
-const META_IC=90;
 
 function parseD(v){if(v==null)return null;const m=String(v).match(/Date\((\d+),(\d+),(\d+)/);return m?new Date(+m[1],+m[2],+m[3]):null;}
 function vigKeyN(d){return d?d.getFullYear()*100+d.getMonth():0;}
 function vigLbl(d){return d?MESES[d.getMonth()]+'/'+String(d.getFullYear()).slice(2):'';}
 function brl(v){const a=Math.abs(v);let s;if(a>=1e6)s=(a/1e6).toFixed(1)+' mi';else if(a>=1e3)s=(a/1e3).toFixed(0)+'k';else s=Math.round(a).toLocaleString('pt-BR');return 'R$ '+s;}
+// Formato curto p/ causas: 20K · 7K · 1,5K · 1,2K (como na referência)
+function impFmt(v){const a=Math.abs(v);if(a>=1e6)return String(Math.round(a/1e6*10)/10).replace('.',',')+'M';if(a>=1e3){const k=a>=1e4?Math.round(a/1e3):Math.round(a/100)/10;return String(k).replace('.',',')+'K';}return String(Math.round(a));}
+// Vigência da Dispersão (col0): aceita "Date(...)" ou "MM/YYYY"
+function vigDisp(v){if(v==null)return null;const s=String(v);let m=s.match(/Date\((\d+),(\d+),(\d+)/);if(m)return new Date(+m[1],+m[2],+m[3]);m=s.match(/^(\d{1,2})\/(\d{4})$/);if(m)return new Date(+m[2],+m[1]-1,1);return null;}
 function gviz(url){return new Promise((res,rej)=>{const fn='_gv'+Math.floor(Math.random()*1e9);const s=document.createElement('script');const clr=()=>{try{delete window[fn];s.remove();}catch(e){}};window[fn]=r=>{clr();try{if(r.status!=='ok')throw 0;res((r.table.rows||[]).map(x=>(x.c||[]).map(c=>c?c.v:null)));}catch(e){rej(e);}};s.onerror=()=>{clr();rej(0);};s.src=url+(url.includes('?')?'&':'?')+'tqx=out:json;responseHandler:'+fn;document.head.appendChild(s);});}
 
 function slug(s){return String(s).normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^a-zA-Z0-9]+/g,'_').replace(/^_|_$/g,'').toLowerCase();}
 function esc(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
 
-// ── Fatos: { vig, fato, desvio(html), sev } — desvio já formatado ──
-function pushICs(ics,fatos){
-  const icRows=(ics||[]).filter(r=>r[0]&&r[1]&&parseD(r[0])&&String(r[1]).trim().toUpperCase()===UNIDADE_IC);
-  if(!icRows.length)return;
-  icRows.sort((a,b)=>vigKeyN(parseD(a[0]))-vigKeyN(parseD(b[0])));
-  const last=icRows[icRows.length-1];const vig=vigLbl(parseD(last[0]));
-  IC.forEach(d=>{const raw=last[d.c];if(raw==null)return;const v=+raw*100;if(v>=META_IC)return;
-    const gap=META_IC-v;const sev=v<70?'crit':'aten';
-    // Fato de IC: "Desvio de X pp (meta 90%)"
-    const desvio=`<span class="dn">Desvio: </span><span class="val ${sev==='aten'?'am':''}">▲ ${gap.toFixed(1)} pp · ▲ -${Math.round(gap/META_IC*100)}%</span> <span class="dn">(meta ${META_IC}%)</span>`;
-    fatos.push({vig,fato:d.l,desvio,sev});});
+// ── Fatos: { vig, fato, desvio(html), sev, causaAuto } — desvio já formatado ──
+const _normU=s=>String(s||'').normalize('NFD').replace(/[̀-ͯ]/g,'').toUpperCase().replace(/\s+/g,' ').trim();
+const _g2=v=>v==null||!isFinite(v)?'—':(+v).toLocaleString('pt-BR',{maximumFractionDigits:2});
+// Gerot: cada IC com desvio (atg<1) vira fato; a causa já traz os IVs do mesmo bloco que também desviaram.
+function pushGerot(rows,fatos){
+  const data=(rows||[]).filter(r=>r[4]&&parseD(r[3])&&_normU(r[2])===_normU(UNIDADE_IC));
+  if(!data.length)return;
+  // última vigência COM dados (real/atg preenchidos)
+  let maxK=0;data.forEach(r=>{if(r[7]!=null||r[8]!=null){const k=vigKeyN(parseD(r[3]));if(k>maxK)maxK=k;}});
+  if(!maxK)return;
+  const vig=vigLbl(new Date(Math.floor(maxK/100),maxK%100,1));
+  const blocos={};
+  data.filter(r=>vigKeyN(parseD(r[3]))===maxK).forEach(r=>{
+    const bloco=String(r[1]||'').trim(),kpi=String(r[4]||'').trim();
+    const tipo=/^\s*IC/i.test(kpi)?'IC':/^\s*IV/i.test(kpi)?'IV':'';
+    const o={kpi,un:String(r[5]||'').trim(),meta:r[6]!=null?+r[6]:null,real:r[7]!=null?+r[7]:null,atg:r[8]!=null?+r[8]:null};
+    if(!blocos[bloco])blocos[bloco]={ics:[],ivs:[]};
+    if(tipo==='IC')blocos[bloco].ics.push(o);else if(tipo==='IV')blocos[bloco].ivs.push(o);
+  });
+  Object.values(blocos).forEach(b=>{
+    b.ics.filter(ic=>ic.atg!=null&&ic.atg<1).forEach(ic=>{
+      const pct=Math.round(ic.atg*100),sev=ic.atg<0.7?'crit':'aten';
+      const gap=(ic.meta!=null&&ic.real!=null)?ic.meta-ic.real:null;
+      const desvio=`<span class="dn">Desvio: </span><span class="val ${sev==='aten'?'am':''}">ating. ${pct}%${gap!=null?' · ▲ '+_g2(gap)+(ic.un?' '+ic.un:''):''}</span>${ic.meta!=null?' <span class="dn">(meta '+_g2(ic.meta)+(ic.un?' '+ic.un:'')+')</span>':''}`;
+      // Causa automática: IVs do bloco com desvio (atg<1)
+      const ivBad=b.ivs.filter(iv=>iv.atg!=null&&iv.atg<1);
+      const causaAuto=ivBad.length?('IVs com desvio:\n'+ivBad.map(iv=>`- ${iv.kpi}: Real ${_g2(iv.real)} | Meta ${_g2(iv.meta)} | ating. ${iv.atg!=null?Math.round(iv.atg*100)+'%':'—'}`).join('\n')):'';
+      fatos.push({vig,fato:ic.kpi,sev,desvio,causaAuto});
+    });
+  });
 }
-function pushDRE(dre,fatos,kmlCausas){
-  kmlCausas=kmlCausas||{};
+function pushDRE(dre,fatos,kmlCausas,dispCausas){
+  kmlCausas=kmlCausas||{};dispCausas=dispCausas||{};
   const _nc=s=>String(s||'').normalize('NFD').replace(/[̀-ͯ]/g,'').toUpperCase().replace(/\s+/g,' ').trim();
   const EXCL=new Set(['RECEITA LIQUIDA','ICMS CREDITO PRESUMIDO','IPVA E LICENCIAMENTO DE VEICULOS','ESTORNO ICMS NAO APROVEITADO']);
   const drRows=(dre||[]).filter(r=>parseD(r[9])&&String(r[10]||'').trim().toUpperCase()===UNIDADE_DRE&&!EXCL.has(_nc(r[12])));
@@ -182,8 +206,8 @@ function pushDRE(dre,fatos,kmlCausas){
       // Fato financeiro: "Desvio: ▲ R$ X · ▲ -Y%"
       const desvio=`<span class="dn">Desvio: </span><span class="val ${sev==='aten'?'am':''}">▲ ${brl(o.over)} · ▲ -${Math.round(o.dpct)}%</span>`;
       const fato={vig,fato:o.conta,proj:o.niv,desvio,sev};
-      // Combustível: causa automática com Eficiência Km/L (+3 piores placas) e Preço R$/L do projeto
-      if(/COMBUST/.test(_nc(o.conta))){const c=kmlCausas[_nc(o.niv)];if(c)fato.causaAuto=c;}
+      // Combustível: causa automática = Dispersão de km (Painel KM) + Eficiência Km/L (+3 piores placas) + Preço R$/L do projeto
+      if(/COMBUST/.test(_nc(o.conta))){const parts=[];const d=dispCausas[_nc(o.niv)];if(d)parts.push(d);const c=kmlCausas[_nc(o.niv)];if(c)parts.push(c);if(parts.length)fato.causaAuto=parts.join('\n');}
       fatos.push(fato);});
 }
 // Causas automáticas de Combustível por projeto — Km/L e R$/L NÃO são mais fatos próprios;
@@ -191,8 +215,6 @@ function pushDRE(dre,fatos,kmlCausas){
 function kmlCausasPorProj(kml){
   const out={};
   const f2=v=>(+v).toFixed(2).replace('.',',');
-  // Formato de impacto p/ a causa: 20K · 7K · 1,5K · 1,2K (como na referência)
-  const impFmt=v=>{const a=Math.abs(v);if(a>=1e6)return String(Math.round(a/1e6*10)/10).replace('.',',')+'M';if(a>=1e3){let k=a>=1e4?Math.round(a/1e3):Math.round(a/100)/10;return String(k).replace('.',',')+'K';}return String(Math.round(a));};
   const norm=s=>String(s||'').normalize('NFD').replace(/[̀-ͯ]/g,'').toUpperCase().replace(/\s+/g,' ').trim();
   const rows=(kml||[]).filter(r=>parseD(r[0])&&String(r[15]||'').trim().toUpperCase()===UNIDADE_DRE);
   if(!rows.length)return out;
@@ -237,14 +259,36 @@ function kmlCausasPorProj(kml){
   });
   return out;
 }
+// Dispersão de km (Painel KM) por projeto — 1ª linha da causa de Combustível: Rem | Real | ▲% | Impacto.
+function dispCausasPorProj(disp){
+  const out={};
+  const norm=s=>String(s||'').normalize('NFD').replace(/[̀-ͯ]/g,'').toUpperCase().replace(/\s+/g,' ').trim();
+  const rows=(disp||[]).filter(r=>{const u=String(r[14]||'').includes('-')?String(r[14]).split('-').slice(1).join('-').trim():String(r[13]||'').trim();return vigDisp(r[0])&&norm(u)===norm(UNIDADE_DRE);});
+  if(!rows.length)return out;
+  let maxK=0;rows.forEach(r=>{const k=vigKeyN(vigDisp(r[0]));if(k>maxK)maxK=k;});
+  const acc={};
+  rows.filter(r=>vigKeyN(vigDisp(r[0]))===maxK).forEach(r=>{
+    const proj=String(r[14]||'—').split('-')[0].trim();
+    const rem=+r[31]||0,real=+r[32]||0,imp=+r[36]||0;
+    if(!acc[proj])acc[proj]={rem:0,real:0,imp:0};
+    acc[proj].rem+=rem;acc[proj].real+=real;acc[proj].imp+=imp;
+  });
+  Object.entries(acc).forEach(([proj,a])=>{
+    // só quando rodou MAIS que o remunerado (over-run = mais custo)
+    if(a.rem>0&&a.real>a.rem){const pct=Math.round((a.real/a.rem-1)*100);
+      out[norm(proj)]=`Dispersão de km: Rem ${impFmt(a.rem)} | Real ${impFmt(a.real)} | ▲ ${pct}% | Impacto: ${impFmt(a.imp)}`;}
+  });
+  return out;
+}
 async function carregar(){
   const fatos=[];
-  let kmlCausas={};
-  try{ const ics=await gviz(SRC_ICS); pushICs(ics,fatos); }catch(e){}
+  let kmlCausas={},dispCausas={};
+  try{ const ger=await gviz(SRC_GEROT); pushGerot(ger,fatos); }catch(e){}
   render(fatos.length?fatos:[]);
+  try{ const disp=await gviz(SRC_DISP); dispCausas=dispCausasPorProj(disp); }catch(e){}
   try{ const kml=await gviz(SRC_KML); kmlCausas=kmlCausasPorProj(kml); }catch(e){}
-  try{ const dre=await gviz(SRC_DRE); pushDRE(dre,fatos,kmlCausas); render(fatos); }
-  catch(e){ if(!fatos.length)document.getElementById('list').innerHTML='<div class="empty">Sem desvios financeiros carregados (planilha pesada) — mostrando só ICs.</div>'; }
+  try{ const dre=await gviz(SRC_DRE); pushDRE(dre,fatos,kmlCausas,dispCausas); render(fatos); }
+  catch(e){ if(!fatos.length)document.getElementById('list').innerHTML='<div class="empty">Sem desvios financeiros carregados (planilha pesada) — mostrando só ICs do Gerot.</div>'; }
 }
 
 const STATUS=['Não iniciada','Em andamento','Concluída','Cancelada'];
