@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>FCA · Preenchimento (teste)</title>
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
 :root{--bg:#0C1017;--card:#141B26;--border:#1E2D40;--orange:#F97316;--blue:#38BDF8;--text:#F1F5F9;--text2:#94A3B8;--text3:#475569;--green:#3BB33B;--red:#FF6666;--amber:#F4A100;}
 *{margin:0;padding:0;box-sizing:border-box;}
@@ -117,32 +118,36 @@ body.light-mode select.st[data-v="Cancelada"]{background:#333333;color:#fff;}
 </head>
 <body>
 <header class="header">
-  <div class="brand"><div class="brand-eyebrow">Gestão em Movimento · BI Frota</div><h1>FCA · Preenchimento</h1><p>teste — ainda não alimenta o BI</p></div>
+  <div class="brand"><div class="brand-eyebrow">Gestão em Movimento · BI Frota</div><h1>FCA · Preenchimento</h1><p>preenchimento por unidade</p></div>
   <div class="hfilter"><label>Projeto</label><div class="ms-wrap" id="ms-proj"><button class="ms-btn" onclick="toggleMs('ms-proj')"><span class="ms-lbl">Todos</span><span class="ms-cnt"></span><svg width="10" height="6" viewBox="0 0 10 6"><path d="M0 0l5 6 5-6z" fill="#F97316"/></svg></button><div class="ms-panel"><div class="ms-search"><input type="text" placeholder="Pesquisar…"></div><div class="ms-list"></div></div></div></div>
   <div class="hfilter"><label>Indicador</label><div class="ms-wrap" id="ms-ind"><button class="ms-btn" onclick="toggleMs('ms-ind')"><span class="ms-lbl">Todos</span><span class="ms-cnt"></span><svg width="10" height="6" viewBox="0 0 10 6"><path d="M0 0l5 6 5-6z" fill="#F97316"/></svg></button><div class="ms-panel"><div class="ms-search"><input type="text" placeholder="Pesquisar…"></div><div class="ms-list"></div></div></div></div>
   <span class="uni-badge" id="uniBadge">—</span>
   <button class="btn theme" id="themeBtn" title="Modo claro/escuro">☀</button>
   <button class="btn" id="adminBtn" title="Modo admin (edita tudo) — teste; em produção será por RLS">Admin</button>
   <button class="btn" id="saveBtn">Salvar</button>
-  <span class="saved-msg" id="savedMsg">Salvo ✓ (teste — só no seu navegador)</span>
+  <span class="saved-msg" id="savedMsg">Salvo ✓ na nuvem</span>
 </header>
 <main class="main">
-  <div class="intro">Para cada <b>fato</b> (indicador com desvio) preencha uma ou mais <b>ações</b> com <b>Causa</b>, <b>Ação</b>, <b>Responsável</b>, <b>Prazo</b> e <b>Status</b>. Os fatos vêm dos <b>ICs do Gerot</b> e dos <b>Custos da DRE</b> da unidade (Km/L e R$/L entram como causa do Custo Combustível, não como fato próprio). <b>Tudo é salvo no seu navegador</b> para você testar — ainda não envia pro BI.</div>
+  <div class="intro">Para cada <b>fato</b> (indicador com desvio) preencha uma ou mais <b>ações</b> com <b>Causa</b>, <b>Ação</b>, <b>Responsável</b>, <b>Prazo</b> e <b>Status</b>. Os fatos vêm dos <b>ICs do Gerot</b> e dos <b>Custos da DRE</b> da unidade (Km/L e R$/L entram como causa do Custo Combustível, não como fato próprio). Ao <b>Salvar</b>, as ações são gravadas na <b>nuvem</b> e travadas (depois só o Acompanhamento fica editável).</div>
   <div id="list"><div class="loading">Carregando fatos da unidade…</div></div>
 </main>
 <script>
-// ── Config / unidade de teste ──
-const UNIDADE_IC = 'CDD RIO DE JANEIRO';   // nome na planilha de ICs
-const UNIDADE_DRE = 'CAMPO GRANDE';        // nome na DRE (cidade)
-const UNIDADE_COD = 'CGR';                 // código da nossa nomenclatura (exibido)
-const LS_PREFIX = 'fca_teste_CGR_';
-// Modo admin (teste): edita qualquer campo mesmo travado. Em produção isto vem da role/RLS do Supabase.
-let ADMIN = localStorage.getItem('fca_admin')==='1';
+// ── Supabase (mesmo projeto do hub/auth) ──
+const SUPABASE_URL='https://lozwipoeacpvplgkrxkq.supabase.co';
+const SUPABASE_KEY='sb_publishable_ggKEEebc5zjgQDVsF92Upw_6uoLmKe9';
+let sb=null, SESSION=null, PROFILE=null, REAL_ADMIN=false, ADMIN=false;
+let _DBROWS={}; // chave do fato -> linhas salvas no banco
+
+// ── Unidade (vem do perfil; admin pode trocar via ?u=COD) ──
+// De-para código → nomes nas planilhas-fonte. TODO: completar todas as unidades.
+const DEPARA={ 'CGR':{dre:'CAMPO GRANDE', ic:'CDD RIO DE JANEIRO'} };
+let UNIDADE_COD='CGR', UNIDADE_DRE='CAMPO GRANDE', UNIDADE_IC='CDD RIO DE JANEIRO';
+function applyDepara(cod){const d=DEPARA[cod]; if(d){UNIDADE_DRE=d.dre; UNIDADE_IC=d.ic;}}
 
 // Gerot (ICs + IVs): mesma planilha dos ICs, aba gid=0 — formato longo bloco|unidade|vig|kpi|un|meta|real|atg.
 // Cada bloco tem 1 IC e seus IVs; o kpi começa com "IC"/"IV". UNIDADE_IC deve casar com a coluna 'unidade' do Gerot.
 const SRC_GEROT = 'https://docs.google.com/spreadsheets/d/1xGl1Xrk2sPS9zWghEuecFMNBHwmeLiZ02U-QpO8cDPY/gviz/tq?gid=0';
-const SRC_DRE = 'https://docs.google.com/spreadsheets/d/1qcTy2ppLCGBKKqZCxCYWCTL9kTAuWfHBMyBfWJOyih8/gviz/tq?sheet='+encodeURIComponent('Consolidado DRE')+'&tq='+encodeURIComponent("select * where K = '"+UNIDADE_DRE+"'");
+const srcDre = ()=>'https://docs.google.com/spreadsheets/d/1qcTy2ppLCGBKKqZCxCYWCTL9kTAuWfHBMyBfWJOyih8/gviz/tq?sheet='+encodeURIComponent('Consolidado DRE')+'&tq='+encodeURIComponent("select * where K = '"+UNIDADE_DRE+"'");
 const SRC_KML = 'https://docs.google.com/spreadsheets/d/1ZZdvG_RK5cTBLdPl3TWCbNeqw-Y4fTYwWsQV4w-e__A/gviz/tq?sheet='+encodeURIComponent('Km/L');
 // Dispersão de km (Painel KM): col0 vig · col13/14 unidade · col14 antes do "-" projeto · col31 rem · col32 real · col36 impacto R$
 const SRC_DISP = 'https://docs.google.com/spreadsheets/d/1wCoRGsvOgmIvfLW4F9Sxr-5AX9Go-aFlRVjrQ_B2ilM/gviz/tq?sheet='+encodeURIComponent('Dispersão de km');
@@ -315,32 +320,44 @@ function frotaAtivaPorProj(disp){
     if(Math.floor(k/100)===yr&&k<=maxK){(res.porMes[pk]=res.porMes[pk]||{});res.porMes[pk][k]=(res.porMes[pk][k]||0)+fa;}});
   return res;
 }
+// Carrega as ações já salvas (Supabase) da unidade, indexadas por chave de fato
+async function fetchDB(){
+  _DBROWS={};
+  if(!sb) return;
+  const {data,error}=await sb.from('fca').select('*').eq('unidade',UNIDADE_COD).order('created_at',{ascending:true});
+  if(error){console.error('fca select',error);return;}
+  (data||[]).forEach(r=>{const k=`${r.vigencia}||${r.origem}||${r.projeto||''}||${r.fato}`;(_DBROWS[k]=_DBROWS[k]||[]).push(r);});
+}
 async function carregar(){
+  await fetchDB();
   const fatos=[];
-  let kmlCausas={},dispCausas={},frotaMaps={mes:{},ano:{}};
+  let kmlCausas={},dispCausas={},frotaMaps={mes:{},porMes:{}};
   try{ const ger=await gviz(SRC_GEROT); pushGerot(ger,fatos); }catch(e){}
   render(fatos.length?fatos:[]);
   try{ const disp=await gviz(SRC_DISP); dispCausas=dispCausasPorProj(disp); frotaMaps=frotaAtivaPorProj(disp); }catch(e){}
   try{ const kml=await gviz(SRC_KML); kmlCausas=kmlCausasPorProj(kml); }catch(e){}
-  try{ const dre=await gviz(SRC_DRE); pushDRE(dre,fatos,kmlCausas,dispCausas,frotaMaps); render(fatos); }
+  try{ const dre=await gviz(srcDre()); pushDRE(dre,fatos,kmlCausas,dispCausas,frotaMaps); render(fatos); }
   catch(e){ if(!fatos.length)document.getElementById('list').innerHTML='<div class="empty">Sem desvios financeiros carregados (planilha pesada) — mostrando só ICs do Gerot.</div>'; }
 }
 
 const STATUS=['Não iniciada','Em andamento','Concluída','Cancelada'];
 const DEFAULT_STATUS='Não iniciada';
 
-// ── localStorage por fato: guarda array de ações ──
-function loadAcoes(id,causaAuto){
-  try{const v=JSON.parse(localStorage.getItem(id));if(Array.isArray(v)&&v.length)return v;}catch(e){}
-  return [{causa:causaAuto||'',acao:'',resp:'',prazo:'',status:DEFAULT_STATUS,obs:'',locked:false}];
+// ── Ações vêm do Supabase (mapeadas por chave de fato) ──
+const keyOf=f=>`${f.vig}||${f.origem||''}||${f.proj||''}||${f.fato}`;
+const stripTags=h=>String(h||'').replace(/<[^>]*>/g,'').replace(/\s+/g,' ').trim();
+function loadAcoes(key,causaAuto){
+  const rows=_DBROWS[key];
+  if(rows&&rows.length)return rows.map(r=>({id:r.id,causa:r.causa||'',acao:r.acao||'',resp:r.responsavel||'',prazo:r.prazo||'',status:r.status||DEFAULT_STATUS,obs:r.acompanhamento||'',locked:!!r.locked}));
+  return [{id:'',causa:causaAuto||'',acao:'',resp:'',prazo:'',status:DEFAULT_STATUS,obs:'',locked:false}];
 }
-function blankAcao(){return {causa:'',acao:'',resp:'',prazo:'',status:DEFAULT_STATUS,obs:'',locked:false};}
+function blankAcao(){return {id:'',causa:'',acao:'',resp:'',prazo:'',status:DEFAULT_STATUS,obs:'',locked:false};}
 
 function rowHTML(a,canRemove){
   const opts=STATUS.map(s=>`<option ${a.status===s?'selected':''}>${s}</option>`).join('');
   const lk=a.locked&&!ADMIN;          // travado p/ usuário comum após salvar; admin edita tudo
   const d=lk?' disabled':'';
-  return `<tr data-locked="${a.locked?1:''}"${lk?' class="locked"':''}>
+  return `<tr data-id="${a.id||''}" data-locked="${a.locked?1:''}"${lk?' class="locked"':''}>
     <td class="col-causa"><span class="cell-label">Causa</span><textarea rows="1" data-k="causa" placeholder="Por que aconteceu?"${d}>${esc(a.causa)}</textarea></td>
     <td class="col-acao"><span class="cell-label">Ação</span><textarea rows="1" data-k="acao" placeholder="O que será feito?"${d}>${esc(a.acao)}</textarea></td>
     <td class="col-resp"><span class="cell-label">Responsável</span><input type="text" data-k="resp" placeholder="Quem?" value="${esc(a.resp)}"${d}></td>
@@ -379,12 +396,12 @@ function aplicar(){
   const vis=_FATOS.filter(f=>(!fp.length||fp.includes(f.proj||'Geral'))&&(!fi.length||fi.includes(f.fato)));
   if(!vis.length){list.innerHTML='<div class="empty">Nenhum fato para o filtro selecionado.</div>';return;}
   list.innerHTML=vis.map(f=>{
-    const id=LS_PREFIX+slug(f.vig+'_'+(f.proj||'')+'_'+f.fato);
-    const acoes=loadAcoes(id,f.causaAuto);
+    const key=keyOf(f);
+    const acoes=loadAcoes(key,f.causaAuto);
     const rows=acoes.map((a,i)=>rowHTML(a,i>0)).join('');
-    return `<div class="fato-block ${f.sev}" data-id="${id}">
+    return `<div class="fato-block ${f.sev}" data-key="${esc(key)}" data-vig="${esc(f.vig)}" data-origem="${esc(f.origem||'')}" data-proj="${esc(f.proj||'')}" data-fato="${esc(f.fato)}" data-desvio="${esc(stripTags(f.desvio))}">
       <div class="fato-head">
-        <div class="fato-meta"><b>${UNIDADE_COD}</b><span class="sep">·</span>${f.vig}${f.proj?'<span class="sep">·</span>'+esc(f.proj):''}</div>
+        <div class="fato-meta"><b>${UNIDADE_COD}</b><span class="sep">·</span>${f.vig}${f.proj?'<span class="sep">·</span>'+esc(f.proj):''}${f.origem?'<span class="sep">·</span>'+esc(f.origem):''}</div>
         <div class="fato-nome">${esc(f.fato)}</div>
         <div class="fato-lbl">Fato:</div>
         <div class="fato-desv">${f.desvio}</div>
@@ -403,82 +420,80 @@ function aplicar(){
 
 function autoResize(ta){ta.style.height='auto';ta.style.height=ta.scrollHeight+'px';}
 
-function collect(block){
-  const acoes=[];
-  block.querySelectorAll('tbody tr').forEach(tr=>{
-    const o={};tr.querySelectorAll('[data-k]').forEach(el=>o[el.dataset.k]=el.value);
-    o.locked=tr.dataset.locked==='1';
-    acoes.push(o);
-  });
-  return acoes;
+// Reconcilia as ações do bloco com o Supabase: update (com id) · insert (novo) · delete (removido)
+async function saveBlock(block){
+  if(!sb)return;
+  const ident={unidade:UNIDADE_COD,vigencia:block.dataset.vig,origem:block.dataset.origem,fato:block.dataset.fato,projeto:block.dataset.proj||null,fato_desvio:block.dataset.desvio||null};
+  const trs=[...block.querySelectorAll('tbody tr')];
+  const seen=new Set();
+  for(const tr of trs){
+    const g=k=>{const el=tr.querySelector('[data-k="'+k+'"]');return el?el.value:'';};
+    const payload={causa:g('causa'),acao:g('acao'),responsavel:g('resp'),prazo:g('prazo')||null,status:g('status'),acompanhamento:g('obs'),locked:tr.dataset.locked==='1'};
+    const id=tr.dataset.id;
+    if(id){seen.add(id);const {error}=await sb.from('fca').update(payload).eq('id',id);if(error)console.error('update',error);}
+    else{const {data,error}=await sb.from('fca').insert({...ident,...payload}).select('id').single();if(error)console.error('insert',error);else if(data){tr.dataset.id=data.id;seen.add(data.id);}}
+  }
+  const dbRows=_DBROWS[block.dataset.key]||[];
+  for(const d of dbRows){if(!seen.has(d.id)){const {error}=await sb.from('fca').delete().eq('id',d.id);if(error)console.error('delete',error);}}
 }
-function save(block){localStorage.setItem(block.dataset.id,JSON.stringify(collect(block)));}
 
 function wireBlock(block){
-  // auto-resize inicial dos textareas existentes
   block.querySelectorAll('textarea').forEach(autoResize);
-  // delegação de eventos no bloco
-  block.addEventListener('input',e=>{
-    const el=e.target;
-    if(el.tagName==='TEXTAREA')autoResize(el);
-    if(el.classList.contains('st'))el.dataset.v=el.value;
-    if(el.dataset&&el.dataset.k)save(block);
-  });
-  block.addEventListener('change',e=>{if(e.target.classList.contains('st')){e.target.dataset.v=e.target.value;save(block);}});
-  // helper: adiciona uma linha (ação) ao bloco
-  const appendRow=acao=>{
-    const tbody=block.querySelector('tbody');
-    const tmp=document.createElement('tbody');
-    tmp.innerHTML=rowHTML(acao,true);
-    const tr=tmp.firstElementChild;
-    tbody.appendChild(tr);
-    tr.querySelectorAll('textarea').forEach(autoResize);
-    save(block);
-  };
-  // adicionar AÇÃO: nova linha repetindo a causa da última linha
-  block.querySelector('.add-rep').addEventListener('click',()=>{
-    const rows=block.querySelectorAll('tbody tr');
-    const causa=rows.length?(rows[rows.length-1].querySelector('[data-k="causa"]').value||''):'';
-    appendRow({...blankAcao(),causa});
-  });
-  // adicionar CAUSA: nova linha totalmente em branco
+  block.addEventListener('input',e=>{const el=e.target;if(el.tagName==='TEXTAREA')autoResize(el);if(el.classList.contains('st'))el.dataset.v=el.value;});
+  block.addEventListener('change',e=>{if(e.target.classList.contains('st'))e.target.dataset.v=e.target.value;});
+  // adicionar/remover linhas só no DOM; persiste no Salvar
+  const appendRow=acao=>{const tbody=block.querySelector('tbody');const tmp=document.createElement('tbody');tmp.innerHTML=rowHTML(acao,true);const tr=tmp.firstElementChild;tbody.appendChild(tr);tr.querySelectorAll('textarea').forEach(autoResize);};
+  block.querySelector('.add-rep').addEventListener('click',()=>{const rows=block.querySelectorAll('tbody tr');const causa=rows.length?(rows[rows.length-1].querySelector('[data-k="causa"]').value||''):'';appendRow({...blankAcao(),causa});});
   block.querySelector('.add-new').addEventListener('click',()=>appendRow(blankAcao()));
-  // remover ação (delegação)
-  block.querySelector('tbody').addEventListener('click',e=>{
-    const btn=e.target.closest('.rm-btn');if(!btn)return;
-    const tr=btn.closest('tr');const tbody=tr.parentNode;
-    if(tbody.children.length<=1)return; // nunca remove a última
-    tr.remove();save(block);
-  });
+  block.querySelector('tbody').addEventListener('click',e=>{const btn=e.target.closest('.rm-btn');if(!btn)return;const tr=btn.closest('tr');const tbody=tr.parentNode;if(tbody.children.length<=1)return;tr.remove();});
 }
 
-// salvar — grava e TRAVA as linhas com conteúdo (depois só Acompanhamento fica editável; admin edita tudo)
-document.getElementById('saveBtn').addEventListener('click',()=>{
-  document.querySelectorAll('.fato-block').forEach(block=>{
-    const acoes=collect(block).map(a=>{
-      const tem=(a.causa&&a.causa.trim())||(a.acao&&a.acao.trim())||(a.resp&&a.resp.trim())||(a.prazo&&a.prazo.trim());
-      return {...a,locked:a.locked||!!tem};
-    });
-    localStorage.setItem(block.dataset.id,JSON.stringify(acoes));
+// salvar — grava no Supabase e TRAVA as linhas com conteúdo (depois só Acompanhamento; admin edita tudo)
+const _saveBtn=document.getElementById('saveBtn');
+_saveBtn.addEventListener('click',async ()=>{
+  const m=document.getElementById('savedMsg');_saveBtn.disabled=true;
+  document.querySelectorAll('.fato-block tbody tr').forEach(tr=>{
+    const tem=['causa','acao','resp','prazo'].some(k=>{const el=tr.querySelector('[data-k="'+k+'"]');return el&&el.value.trim();});
+    if(tem)tr.dataset.locked='1';
   });
-  aplicar(); // re-render reflete o lock
-  const m=document.getElementById('savedMsg');m.style.display='inline';setTimeout(()=>m.style.display='none',2500);
+  try{
+    for(const block of document.querySelectorAll('.fato-block')) await saveBlock(block);
+    await fetchDB(); aplicar();
+    m.textContent='Salvo ✓ na nuvem';m.style.display='inline';setTimeout(()=>m.style.display='none',2500);
+  }catch(e){console.error(e);m.textContent='Erro ao salvar';m.style.display='inline';}
+  _saveBtn.disabled=false;
 });
-// modo admin (teste) — em produção virá da role/RLS do Supabase
-function applyAdmin(){const b=document.getElementById('adminBtn');b.textContent=ADMIN?'Admin ✓':'Admin';b.style.background=ADMIN?'rgba(249,115,22,.4)':'';}
-document.getElementById('adminBtn').addEventListener('click',()=>{ADMIN=!ADMIN;localStorage.setItem('fca_admin',ADMIN?'1':'0');applyAdmin();aplicar();});
-applyAdmin();
+// admin: botão só p/ admin; alterna "ver como unidade" (preview do lock)
+function applyAdminUI(){const b=document.getElementById('adminBtn');if(!b)return;if(!REAL_ADMIN){b.style.display='none';return;}b.style.display='';b.textContent=ADMIN?'Admin ✓':'Ver como unidade';b.style.background=ADMIN?'rgba(249,115,22,.4)':'';}
+document.getElementById('adminBtn').addEventListener('click',()=>{if(!REAL_ADMIN)return;ADMIN=!ADMIN;applyAdminUI();aplicar();});
 
 // tema
 function applyTheme(t){document.body.classList.toggle('light-mode',t==='light');localStorage.setItem('bi_theme',t);document.getElementById('themeBtn').textContent=t==='light'?'🌙':'☀';}
 document.getElementById('themeBtn').addEventListener('click',()=>applyTheme(document.body.classList.contains('light-mode')?'dark':'light'));
 applyTheme(localStorage.getItem('bi_theme')||'dark');
 
-document.getElementById('uniBadge').textContent=UNIDADE_COD;
 _buildMs(document.getElementById('ms-proj'),()=>PROJ_OPTS);
 _buildMs(document.getElementById('ms-ind'),()=>IND_OPTS);
 document.addEventListener('click',e=>{if(!e.target.closest('.ms-wrap'))document.querySelectorAll('.ms-panel.open').forEach(p=>p.classList.remove('open'));});
-carregar();
+
+// ── Início: exige login (hub), carrega perfil (unidade/admin) e os fatos ──
+async function initApp(){
+  try{ sb=supabase.createClient(SUPABASE_URL,SUPABASE_KEY); }
+  catch(e){ document.getElementById('list').innerHTML='<div class="empty">Erro ao iniciar (Supabase).</div>'; return; }
+  const {data:{session}}=await sb.auth.getSession();
+  if(!session){ location.replace('../'); return; }       // hub cuida do login
+  SESSION=session;
+  const {data:prof}=await sb.from('fca_profiles').select('*').eq('user_id',session.user.id).maybeSingle();
+  PROFILE=prof||{}; REAL_ADMIN=!!PROFILE.is_admin; ADMIN=REAL_ADMIN;
+  const params=new URLSearchParams(location.search);
+  UNIDADE_COD=((REAL_ADMIN?(params.get('u')||PROFILE.unidade||'CGR'):PROFILE.unidade)||'').toUpperCase();
+  if(!UNIDADE_COD){ document.getElementById('list').innerHTML='<div class="empty">Seu usuário ainda não está vinculado a uma unidade. Fale com o administrador.</div>'; return; }
+  applyDepara(UNIDADE_COD);
+  document.getElementById('uniBadge').textContent=UNIDADE_COD;
+  applyAdminUI();
+  carregar();
+}
+initApp();
 </script>
 </body>
 </html>
