@@ -266,6 +266,7 @@ body{background:radial-gradient(ellipse at 15% 20%,rgba(249,115,22,.07) 0%,trans
         <div class="dash-card active"><div class="card-top"><div class="card-icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg></div><span class="badge on">Ativo</span></div><div class="card-title">Gerot</div><div class="card-desc">Reunião de Planejamento Mensal — KPIs por bloco, meta, real e % de atingimento por vigência.</div><a class="card-link" href="gerot/">Abrir <svg viewBox="0 0 24 24" fill="none" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg></a></div>
         <div class="dash-card active"><div class="card-top"><div class="card-icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg></div><span class="badge on">Ativo</span></div><div class="card-title">Auditorias</div><div class="card-desc">Consolidado Demarco &amp; DPO — níveis por unidade e semestre (1H25 a 2H26).</div><a class="card-link" href="auditorias/">Abrir <svg viewBox="0 0 24 24" fill="none" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg></a></div>
         <div class="dash-card active"><div class="card-top"><div class="card-icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg></div><span class="badge on">Ativo</span></div><div class="card-title">FCA</div><div class="card-desc">Fato, Causa e Ação — ocorrências, prazos e status dos planos de melhoria.</div><a class="card-link" href="fca/">Abrir <svg viewBox="0 0 24 24" fill="none" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg></a></div>
+        <div class="dash-card active"><div class="card-top"><div class="card-icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4z"/></svg></div><span class="badge on">Ativo</span></div><div class="card-title">FCA · Preenchimento</div><div class="card-desc">Preenchimento do FCA por unidade — fatos do mês, causas automáticas e plano de ação.</div><a class="card-link" href="fca-preenchimento/">Abrir <svg viewBox="0 0 24 24" fill="none" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg></a></div>
       </div>
     </div>
 
@@ -334,7 +335,24 @@ function hideAll() {
     .forEach(id => document.getElementById(id).style.display = 'none');
 }
 
-function showHub(user) {
+// Roteamento por papel: gestor (perfil com unidade e não-admin) vai direto pro preenchimento.
+// Trava por sessão p/ não prender (ele pode voltar ao hub). Falha silenciosa se a tabela não existir.
+async function maybeRouteByRole(user) {
+  if (sessionStorage.getItem('gem_routed')) return false;
+  try {
+    const { data: prof } = await sb.from('fca_profiles').select('unidade,is_admin').eq('user_id', user.id).maybeSingle();
+    if (prof && prof.unidade && !prof.is_admin) {
+      sessionStorage.setItem('gem_routed', '1');
+      sessionStorage.setItem('gem_hub', '1'); // libera acesso ao painel nesta sessão
+      location.href = 'fca-preenchimento/';
+      return true;
+    }
+  } catch (e) {}
+  return false;
+}
+
+async function showHub(user) {
+  if (await maybeRouteByRole(user)) return;
   currentUser = user;
   isApproved = true;
   localStorage.setItem('bi_approved_' + user.id, '1');
