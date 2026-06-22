@@ -9,7 +9,7 @@ Cada painel é um arquivo `index.html` autocontido — sem framework, sem backen
 - **GitHub Pages:** `https://fortesindicadores-byte.github.io/gestao-em-movimento/`
 - **Hub principal:** `index.html` na raiz — contém autenticação Supabase + lista de painéis
 
-> ⚠️ **Git push:** O repositório foi renomeado no GitHub. O proxy local ainda aponta para o nome antigo e rejeita `git push`. **Sempre usar `mcp__github__push_files`** para enviar alterações. Após o push MCP, sincronizar local com: `git fetch origin main && git reset --hard origin/main`
+> **Git push:** Hoje `git push origin main` **funciona** normalmente (deploy automático no GitHub Pages). _(Nota histórica: o repo foi renomeado de `Projeto-BI-App`; numa época o proxy local rejeitava o push e era preciso usar `mcp__github__push_files` — não é mais o caso.)_
 
 ---
 

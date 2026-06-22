@@ -10,7 +10,7 @@ Repositório central de **painéis de BI** da Fortes Indicadores (operação de 
 - **Repo GitHub:** `fortesindicadores-byte/gestao-em-movimento` (a "nuvem" do projeto)
 - **No ar (GitHub Pages):** https://fortesindicadores-byte.github.io/gestao-em-movimento/
 - **Hub + login:** `index.html` na raiz (auth Supabase)
-- **Push:** `git push origin main` (funciona; nas notas antigas havia ressalva de nome renomeado — hoje o push direto está OK)
+- **Push:** `git push origin main` funciona (deploy automático no GitHub Pages). _(Nota histórica: numa época o proxy local rejeitava o push por causa do rename do repo e usava-se `mcp__github__push_files`; hoje o push direto está OK.)_
 
 ## 2. Stack e fontes de dados
 - **Google Sheets via gviz JSONP** (a maioria dos painéis). Planilhas pesadas (DRE 18k linhas) devem ser filtradas no servidor com `&tq=` (ex.: `select * where K = 'CAMPO GRANDE'`) — senão o JSONP falha no navegador.
