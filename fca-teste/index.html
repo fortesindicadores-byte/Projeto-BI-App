@@ -190,7 +190,7 @@ function pushGerot(rows,fatos){
   });
 }
 function pushDRE(dre,fatos,kmlCausas,dispCausas,frotaMaps){
-  kmlCausas=kmlCausas||{};dispCausas=dispCausas||{};frotaMaps=frotaMaps||{mes:{},ano:{}};
+  kmlCausas=kmlCausas||{};dispCausas=dispCausas||{};frotaMaps=frotaMaps||{mes:{},porMes:{}};
   const _nc=s=>String(s||'').normalize('NFD').replace(/[̀-ͯ]/g,'').toUpperCase().replace(/\s+/g,' ').trim();
   const EXCL=new Set(['RECEITA LIQUIDA','ICMS CREDITO PRESUMIDO','IPVA E LICENCIAMENTO DE VEICULOS','ESTORNO ICMS NAO APROVEITADO']);
   const drRows=(dre||[]).filter(r=>parseD(r[9])&&String(r[10]||'').trim().toUpperCase()===UNIDADE_DRE&&!EXCL.has(_nc(r[12])));
@@ -200,10 +200,10 @@ function pushDRE(dre,fatos,kmlCausas,dispCausas,frotaMaps){
   const yrMax=Math.floor(maxK/100);
   const acc={};
   drRows.filter(r=>vigKeyN(parseD(r[9]))===maxK).forEach(r=>{const conta=String(r[12]||'—').trim();const niv=String(r[11]||'').trim();const rem=r[1]!=null?+r[1]:0,real=r[2]!=null?+r[2]:0;const key=niv+'||'+conta;if(!acc[key])acc[key]={conta,niv,rem:0,real:0};acc[key].rem+=rem;acc[key].real+=real;});
-  // Manutenção/Pneus: custo do ANO (YTD do ano corrente) por projeto+conta, p/ a média custo/placa ativa
+  // Manutenção/Pneus: custo de CADA mês do ano (YTD) por projeto+conta, p/ a média do custo/placa ativa
   const isMP=c=>/MANUTEN|PNEU/.test(_nc(c));
-  const custoAno={};
-  drRows.forEach(r=>{const k=vigKeyN(parseD(r[9]));if(Math.floor(k/100)!==yrMax||k>maxK)return;const conta=String(r[12]||'').trim();if(!isMP(conta))return;const key=_nc(String(r[11]||'').trim())+'||'+_nc(conta);custoAno[key]=(custoAno[key]||0)+Math.abs(r[2]!=null?+r[2]:0);});
+  const custoPorMes={}; // key proj||conta -> { vigKey: custo }
+  drRows.forEach(r=>{const k=vigKeyN(parseD(r[9]));if(Math.floor(k/100)!==yrMax||k>maxK)return;const conta=String(r[12]||'').trim();if(!isMP(conta))return;const key=_nc(String(r[11]||'').trim())+'||'+_nc(conta);(custoPorMes[key]=custoPorMes[key]||{});custoPorMes[key][k]=(custoPorMes[key][k]||0)+Math.abs(r[2]!=null?+r[2]:0);});
   // Custos na DRE são negativos: gasto ACIMA do orçado => (rem - real) > 0 (mais gasto que o remunerado)
   Object.values(acc).map(o=>{const over=o.rem-o.real,base=Math.abs(o.rem);return {...o,over,dpct:base>0?over/base*100:0};})
     .filter(o=>o.over>0&&o.rem!==0).sort((a,b)=>b.over-a.over)
@@ -215,11 +215,14 @@ function pushDRE(dre,fatos,kmlCausas,dispCausas,frotaMaps){
       if(/COMBUST/.test(_nc(o.conta))){const parts=[];const d=dispCausas[_nc(o.niv)];if(d)parts.push(d);const c=kmlCausas[_nc(o.niv)];if(c)parts.push(c);if(parts.length)fato.causaAuto=parts.join('\n');}
       // Manutenção veíc./equip., Carrocerias e Pneus: custo/placa ativa do mês vs média do ano (referência)
       else if(isMP(o.conta)){
-        const pk=_nc(o.niv);const fMes=frotaMaps.mes[pk]||0,fAno=frotaMaps.ano[pk]||0;
-        const custoMes=Math.abs(o.real),cAno=custoAno[pk+'||'+_nc(o.conta)]||0;
-        const cpMes=fMes>0?custoMes/fMes:null,cpAno=fAno>0?cAno/fAno:null;
+        const pk=_nc(o.niv);const fMes=frotaMaps.mes[pk]||0;
+        const cpMes=fMes>0?Math.abs(o.real)/fMes:null;
+        // média ano = média dos (custo do mês ÷ frota ativa do mês) dos meses do ano
+        const cm=custoPorMes[pk+'||'+_nc(o.conta)]||{},fm=frotaMaps.porMes[pk]||{};
+        const ratios=[];Object.keys(cm).forEach(k=>{const f=fm[k];if(f>0)ratios.push(cm[k]/f);});
+        const cpAno=ratios.length?ratios.reduce((a,b)=>a+b,0)/ratios.length:null;
         if(cpMes!=null){const gap=cpAno?Math.round((cpMes/cpAno-1)*100):null;
-          fato.causaAuto=`Custo/placa ativa: ${brl(cpMes)}/placa (mês)`+(cpAno!=null?` vs ${brl(cpAno)}/placa (média ano)${gap!=null?' | ▲ '+gap+'%':''}`:'')+` | Frota ativa: ${Math.round(fMes)}`;}
+          fato.causaAuto=`Custo/placa ativa: ${brl(cpMes)} (mês)`+(cpAno!=null?` vs ${brl(cpAno)} (média ano)${gap!=null?' | ▲ '+gap+'%':''}`:'');}
       }
       fatos.push(fato);});
 }
@@ -293,9 +296,9 @@ function dispCausasPorProj(disp){
   });
   return out;
 }
-// Frota ativa (col21 da Ativação, mesma planilha de Dispersão) por projeto: mês (última vig) e ano (YTD).
+// Frota ativa (col21 da Ativação, mesma planilha de Dispersão) por projeto: mês (última vig) e por mês do ano (YTD).
 function frotaAtivaPorProj(disp){
-  const res={mes:{},ano:{}};
+  const res={mes:{},porMes:{}};
   const norm=s=>String(s||'').normalize('NFD').replace(/[̀-ͯ]/g,'').toUpperCase().replace(/\s+/g,' ').trim();
   const rows=(disp||[]).filter(r=>{const u=String(r[14]||'').includes('-')?String(r[14]).split('-').slice(1).join('-').trim():String(r[13]||'').trim();return vigDisp(r[0])&&norm(u)===norm(UNIDADE_DRE);});
   if(!rows.length)return res;
@@ -303,7 +306,7 @@ function frotaAtivaPorProj(disp){
   const yr=Math.floor(maxK/100);
   rows.forEach(r=>{const k=vigKeyN(vigDisp(r[0]));const pk=norm(String(r[14]||'—').split('-')[0].trim());const fa=+r[21]||0;
     if(k===maxK)res.mes[pk]=(res.mes[pk]||0)+fa;
-    if(Math.floor(k/100)===yr&&k<=maxK)res.ano[pk]=(res.ano[pk]||0)+fa;});
+    if(Math.floor(k/100)===yr&&k<=maxK){(res.porMes[pk]=res.porMes[pk]||{});res.porMes[pk][k]=(res.porMes[pk][k]||0)+fa;}});
   return res;
 }
 async function carregar(){
