@@ -12,6 +12,11 @@ body{background:radial-gradient(ellipse at 10% 25%,rgba(249,115,22,.06) 0%,trans
 .header{background:rgba(12,16,23,.75);border-bottom:1px solid rgba(255,255,255,.07);padding:10px 24px 12px;display:flex;flex-wrap:wrap;align-items:center;gap:10px;position:sticky;top:0;z-index:100;backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);box-shadow:0 2px 12px rgba(0,0,0,.3);}
 .brand{flex:1;}.brand h1{font-size:18px;font-weight:800;color:var(--orange);line-height:1.1;}.brand p{font-size:10px;color:var(--text2);margin-top:2px;font-style:italic;}
 .brand-eyebrow{font-size:10px;color:var(--text2);text-transform:uppercase;letter-spacing:1.2px;font-weight:700;margin-bottom:2px;}
+.hfilter{display:flex;flex-direction:column;gap:2px;}
+.hfilter label{font-size:9px;color:var(--text2);text-transform:uppercase;letter-spacing:.5px;}
+.hfilter select{background:#0a0f18;color:var(--text);border:1px solid #2a3a50;border-radius:6px;font-family:'Montserrat',sans-serif;font-size:11px;font-weight:700;padding:6px 10px;cursor:pointer;max-width:220px;outline:none;}
+.hfilter select:hover{border-color:var(--orange);}
+.hfilter select option{background:#0f1824;color:#fff;}
 .uni-badge{font-size:12px;font-weight:800;color:#fff;background:rgba(249,115,22,.22);border:1px solid rgba(249,115,22,.4);border-radius:6px;padding:5px 12px;}
 .btn{background:rgba(249,115,22,.15);border:1px solid rgba(249,115,22,.35);border-radius:6px;padding:7px 14px;cursor:pointer;color:var(--orange);font-family:'Montserrat',sans-serif;font-weight:800;font-size:12px;display:flex;align-items:center;gap:6px;}
 .btn:hover{background:rgba(249,115,22,.3);}
@@ -102,6 +107,8 @@ body.light-mode select.st[data-v="Cancelada"]{background:#333333;color:#fff;}
 <body>
 <header class="header">
   <div class="brand"><div class="brand-eyebrow">Gestão em Movimento · BI Frota</div><h1>FCA · Preenchimento</h1><p>teste — ainda não alimenta o BI</p></div>
+  <div class="hfilter"><label>Projeto</label><select id="fProj" onchange="aplicar()"><option value="">Todos</option></select></div>
+  <div class="hfilter"><label>Indicador</label><select id="fInd" onchange="aplicar()"><option value="">Todos</option></select></div>
   <span class="uni-badge" id="uniBadge">—</span>
   <button class="btn theme" id="themeBtn" title="Modo claro/escuro">☀</button>
   <button class="btn" id="saveBtn">Salvar</button>
@@ -210,10 +217,20 @@ function rowHTML(a,canRemove){
   </tr>`;
 }
 
-function render(fatos){
+let _FATOS=[];
+function render(fatos){ _FATOS=fatos||[]; popFiltros(); aplicar(); }
+function fillSel(id,vals){const s=document.getElementById(id);if(!s)return;const cur=s.value;s.innerHTML='<option value="">Todos</option>'+vals.map(v=>`<option ${cur===v?'selected':''}>${esc(v)}</option>`).join('');}
+function popFiltros(){
+  fillSel('fProj',[...new Set(_FATOS.map(f=>f.proj||'Geral'))].sort());
+  fillSel('fInd',[...new Set(_FATOS.map(f=>f.fato))].sort());
+}
+function aplicar(){
   const list=document.getElementById('list');
-  if(!fatos.length){list.innerHTML='<div class="empty">✓ Nenhum desvio encontrado para esta unidade na vigência mais recente — sem fatos a tratar.</div>';return;}
-  list.innerHTML=fatos.map(f=>{
+  if(!_FATOS.length){list.innerHTML='<div class="empty">✓ Nenhum desvio encontrado para esta unidade na vigência mais recente — sem fatos a tratar.</div>';return;}
+  const fp=(document.getElementById('fProj')||{}).value||'', fi=(document.getElementById('fInd')||{}).value||'';
+  const vis=_FATOS.filter(f=>(!fp||(f.proj||'Geral')===fp)&&(!fi||f.fato===fi));
+  if(!vis.length){list.innerHTML='<div class="empty">Nenhum fato para o filtro selecionado.</div>';return;}
+  list.innerHTML=vis.map(f=>{
     const id=LS_PREFIX+slug(f.vig+'_'+(f.proj||'')+'_'+f.fato);
     const acoes=loadAcoes(id);
     const rows=acoes.map((a,i)=>rowHTML(a,i>0)).join('');
