@@ -176,14 +176,6 @@ const DEPARA={
   'MCC':{dre:'CACHOEIRAS DE MACACU', ger:['CDI MACACU','MACACU EMPURRADA']},
   'PIR':{dre:'PIRAI',                ger:['PIRAI EMPURRADA']},
 };
-// De-para da sub-unidade do Gerot (col 'unidade') → rótulo (sub-projeto). Unidades com 1 sub = só o código; com várias = COD - tier.
-const GER_LABEL={
-  'CDI MACACU':'MCC - T2','MACACU EMPURRADA':'MCC - T1',
-  'CDD RIO DE JANEIRO':'CGR','CDD RONDONOPOLIS':'RON','CDD GUARULHOS':'GRL',
-  'CDD FLORIANOPOLIS':'FLP','CDD NOVA FRIBURGO':'NFR','CDD PELOTAS':'PLT',
-  'CDD CUIABA':'CBA - T2','CUIABA EMPURRADA':'CBA - T1','CUIABA':'CBA T1 WH',
-  'PIRAI EMPURRADA':'PIR','CDD CAMBORIU':'BLC',
-};
 let UNIDADE_COD='CGR', UNIDADE_DRE='CAMPO GRANDE', UNIDADE_GER=['CDD RIO DE JANEIRO'];
 function applyDepara(cod){const d=DEPARA[cod]; if(d){UNIDADE_DRE=d.dre; UNIDADE_GER=d.ger;}}
 
@@ -236,7 +228,7 @@ function parseDePara(rows){
   });
   return m;
 }
-// Gerot: cada IC/IV com desvio (atg<1) vira fato; o projeto vem do De-Para (sub-unidade), com fallback no GER_LABEL.
+// Gerot: cada IC/IV com desvio (atg<1) vira fato; o projeto vem do De-Para (ROTA/AS/EMPURRADA/INSUMOS/UDC), fallback = nome cru da unidade Gerot.
 function pushGerot(rows,fatos,deParaMap){
   deParaMap=deParaMap||{};
   const gset=new Set((UNIDADE_GER||[]).map(_normU));
@@ -251,8 +243,8 @@ function pushGerot(rows,fatos,deParaMap){
     if(!/^\s*I[CV]/i.test(kpi))return;                 // só IC/IV
     const atg=r[8]!=null?+r[8]:null;
     if(atg==null||atg>=1)return;                        // só com desvio (atg<1)
-    const _dp=deParaMap[_normU(r[2])];                              // sub-projeto: De-Para (fonte de verdade) → GER_LABEL → nome cru
-    const proj=_dp?_dp.abrev:(GER_LABEL[_normU(r[2])]||String(r[2]||'').trim());
+    const _dp=deParaMap[_normU(r[2])];                              // projeto vem do De-Para (ROTA / AUTO SERVIÇO / EMPURRADA / INSUMOS / UDC)
+    const proj=_dp?_dp.projeto:String(r[2]||'').trim();
     const un=String(r[5]||'').trim(), sev=atg<0.7?'crit':'aten';
     const meta=r[6]!=null?_g2(+r[6])+(un?' '+un:''):'—';
     const real=r[7]!=null?_g2(+r[7])+(un?' '+un:''):'—';
