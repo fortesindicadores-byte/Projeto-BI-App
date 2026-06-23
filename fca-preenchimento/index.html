@@ -56,7 +56,8 @@ body{background:radial-gradient(ellipse at 10% 25%,rgba(249,115,22,.06) 0%,trans
 .fato-unit{font-size:22px;font-weight:800;color:var(--text);line-height:1;margin-bottom:12px;}
 .fato-field{font-size:13px;color:var(--text2);margin-bottom:6px;line-height:1.35;}
 .fato-field b{color:var(--text);font-weight:700;margin-right:4px;}
-.fato-lbl{font-size:12px;color:var(--text2);text-transform:uppercase;letter-spacing:.6px;font-weight:700;margin-top:12px;}
+.fato-nome{font-size:15px;font-weight:700;color:var(--text);line-height:1.25;margin-top:10px;}
+.fato-lbl{font-size:12px;color:var(--text2);text-transform:uppercase;letter-spacing:.6px;font-weight:700;margin-top:10px;}
 .fato-desv{font-size:12.5px;font-weight:700;margin-top:5px;}
 .fato-desv .dn{color:var(--text2);font-weight:600;}
 .fato-desv .val{color:var(--red);}
@@ -409,13 +410,32 @@ function isDriverCombust(fato){
   if(/preco/.test(s) && /(litro|\/\s*l|r\$)/.test(s)) return true;   // preço por litro / preço r$/l
   return false;
 }
+// Formata o desvio (o Fato) como "▲ R$ nominal · ▲ %". Para desvios de custo (têm R$);
+// RPM/atingimento (sem R$) fica como veio. Extrai os números do texto salvo.
+function fmtDesvio(txt){
+  const s=String(txt||'').trim();
+  if(!s) return '—';
+  const mv=s.match(/R\$\s*([\d.\,]+)/);
+  if(!mv) return esc(s);                                  // sem R$ (ex.: RPM 'ating. 80%') -> como está
+  const mp=s.match(/(-?\d+(?:[.,]\d+)?)\s*%/);
+  const nominal=parseInt(mv[1].replace(/[.\,]/g,''),10);
+  const parts=[];
+  if(!isNaN(nominal)) parts.push('▲ R$ '+nominal.toLocaleString('pt-BR'));
+  if(mp){ const p=Math.abs(parseFloat(mp[1].replace(',','.'))); parts.push('▲ '+Math.round(p)+'%'); }
+  return parts.length?esc(parts.join('  ·  ')):esc(s);
+}
 // Fatos a partir da BASE (Supabase) — fonte do dia a dia, não depende mais da planilha
 function fatosDaBase(){
   const fatos=[];
   Object.keys(_DBROWS).forEach(k=>{const r=_DBROWS[k][0];
     if(isDriverCombust(r.fato))return;
-    fatos.push({vig:r.vigencia||'',origem:r.origem||'Custos',proj:r.projeto||'',fato:r.fato||'(sem fato)',sev:'aten',
-      desvio:r.fato_desvio?`<span class="dn">Desvio: </span><span class="val am">${esc(r.fato_desvio)}</span>`:'<span class="dn">—</span>'});});
+    const raw=r.fato||'(sem fato)';
+    // separa nome × desvio embutido (ex.: migrado "Combustíveis Desvio de R$ 7.294")
+    const m=raw.match(/^([\s\S]*?)\s+(desvio\b[\s\S]*)$/i);
+    const nome=m?m[1].trim():raw, emb=m?m[2].trim():'';
+    const desvSrc=r.fato_desvio||emb;
+    fatos.push({vig:r.vigencia||'',origem:r.origem||'Custos',proj:r.projeto||'',fato:raw,nome,sev:'aten',
+      desvio:desvSrc?`<span class="val am">${fmtDesvio(desvSrc)}</span>`:'<span class="dn">—</span>'});});
   fatos.sort((a,b)=>vigNum(b.vig)-vigNum(a.vig)||String(a.origem).localeCompare(String(b.origem))||String(a.fato).localeCompare(String(b.fato)));
   return fatos;
 }
@@ -527,7 +547,7 @@ function aplicar(){
         <div class="fato-field"><b>Projeto</b> <span>${esc(f.proj||'—')}</span></div>
         <div class="fato-field"><b>Origem:</b> <span>${esc(f.origem||'—')}</span></div>
         <div class="fato-field"><b>Vigência:</b> <span>${esc((f.vig||'').toUpperCase())}</span></div>
-        <div class="fato-field"><b>Indicador/Conta:</b> <span>${esc(f.fato)}</span></div>
+        <div class="fato-nome">${esc(f.nome||f.fato)}</div>
         <div class="fato-lbl">Fato:</div>
         <div class="fato-desv">${f.desvio}</div>
       </div>
