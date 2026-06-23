@@ -31,6 +31,12 @@ body{background:radial-gradient(ellipse at 10% 25%,rgba(249,115,22,.06) 0%,trans
 .ms-opt{display:flex;align-items:center;gap:8px;padding:7px 12px;cursor:pointer;font-size:11px;color:var(--text2);text-transform:uppercase;letter-spacing:.3px;}
 .ms-only{margin-left:auto;font-size:8px;color:var(--orange);padding:1px 6px;border-radius:3px;cursor:pointer;opacity:0;transition:opacity .12s;flex-shrink:0;}
 .ms-opt:hover .ms-only{opacity:1;}.ms-only:hover{background:rgba(249,115,22,.2);}
+.genres{max-width:560px;}
+.genres-h{font-size:16px;font-weight:800;color:var(--text);margin-bottom:14px;}
+.gentbl{width:100%;border-collapse:collapse;font-size:12px;}
+.gentbl th{text-align:left;font-size:11px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:.5px;padding:6px 8px;border-bottom:1px solid var(--border);}
+.gentbl td{padding:7px 8px;border-bottom:1px solid rgba(255,255,255,.05);color:var(--text);}
+.gentbl .num{text-align:right;}
 .ms-opt:hover{background:rgba(255,255,255,.05);color:var(--text);}
 .ms-opt.all-opt{border-bottom:1px solid #1e2d40;color:var(--text);font-weight:700;}
 .ms-opt input[type=checkbox]{accent-color:var(--orange);cursor:pointer;width:14px;height:14px;flex-shrink:0;}
@@ -141,7 +147,6 @@ body.light-mode select.st[data-v="Cancelada"]{background:#333333;color:#fff;}
   <a class="btn" href="../" title="Voltar ao hub" style="text-decoration:none">← Hub</a>
   <button class="btn theme" id="themeBtn" title="Modo claro/escuro">☀</button>
   <button class="btn" id="adminBtn" title="Modo admin (edita tudo) — teste; em produção será por RLS">Admin</button>
-  <button class="btn" id="genBtn" title="Puxa os desvios do mês das planilhas e grava na base" style="display:none">Gerar fatos do mês</button>
   <button class="btn" id="saveBtn">Salvar</button>
   <span class="saved-msg" id="savedMsg">Salvo ✓ na nuvem</span>
 </header>
@@ -231,7 +236,7 @@ function pushGerot(rows,fatos){
       // Causa automática: IVs do bloco com desvio (atg<1)
       const ivBad=b.ivs.filter(iv=>iv.atg!=null&&iv.atg<1);
       const causaAuto=ivBad.length?('IVs com desvio:\n'+ivBad.map(iv=>`- ${iv.kpi}: Real ${_g2(iv.real)} | Meta ${_g2(iv.meta)} | ating. ${iv.atg!=null?Math.round(iv.atg*100)+'%':'—'}`).join('\n')):'';
-      fatos.push({vig,fato:ic.kpi,sev,desvio,causaAuto});
+      fatos.push({vig,fato:ic.kpi,sev,desvio,causaAuto,origem:'RPM'});
     });
   });
 }
@@ -256,7 +261,7 @@ function pushDRE(dre,fatos,kmlCausas,dispCausas,frotaMaps){
     .forEach(o=>{const sev=o.dpct>=5?'crit':'aten';
       // Fato financeiro: "Desvio: ▲ R$ X · ▲ -Y%"
       const desvio=`<span class="dn">Desvio: </span><span class="val ${sev==='aten'?'am':''}">▲ ${brl(o.over)} · ▲ -${Math.round(o.dpct)}%</span>`;
-      const fato={vig,fato:o.conta,proj:o.niv,desvio,sev};
+      const fato={vig,fato:o.conta,proj:o.niv,desvio,sev,origem:'Custos'};
       // Combustível: causa automática = Dispersão de km (Painel KM) + Eficiência Km/L (+3 piores placas) + Preço R$/L do projeto
       if(/COMBUST/.test(_nc(o.conta))){const parts=[];const d=dispCausas[projKey(o.niv)];if(d)parts.push(d);const c=kmlCausas[projKey(o.niv)];if(c)parts.push(c);if(parts.length)fato.causaAuto=parts.join('\n');}
       // Manutenção veíc./equip., Carrocerias, Pneus, Recapagem e Lavação: custo/placa ativa do mês vs média do ano (referência)
@@ -363,15 +368,29 @@ async function fetchDB(){
   if(error){console.error('fca select',error);return;}
   (data||[]).forEach(r=>{const k=fkey(r.vigencia,r.origem,r.projeto,r.fato);(_DBROWS[k]=_DBROWS[k]||[]).push(r);});
 }
-// Gera fatos a partir das PLANILHAS (DRE = Custos, Gerot = RPM, + drivers de causa)
-async function gerarFatos(){
+// Gera fatos a partir das PLANILHAS para a UNIDADE atual (DRE = Custos, Gerot = RPM, + drivers de causa).
+// `shared` = planilhas Gerot/Disp/Km/L já baixadas (reuso no loop de todas as unidades). DRE é sempre por unidade.
+const _gvizSafe=url=>gviz(url).catch(()=>null);
+async function gerarFatos(shared){
   const fatos=[];
   let kmlCausas={},dispCausas={},frotaMaps={mes:{},porMes:{}};
-  try{ const ger=await gviz(SRC_GEROT); pushGerot(ger,fatos); }catch(e){}
-  try{ const disp=await gviz(SRC_DISP); dispCausas=dispCausasPorProj(disp); frotaMaps=frotaAtivaPorProj(disp); }catch(e){}
-  try{ const kml=await gviz(SRC_KML); kmlCausas=kmlCausasPorProj(kml); }catch(e){}
+  const ger=shared?shared.ger:await _gvizSafe(SRC_GEROT);  if(ger){try{pushGerot(ger,fatos);}catch(e){}}
+  const disp=shared?shared.disp:await _gvizSafe(SRC_DISP); if(disp){try{dispCausas=dispCausasPorProj(disp);frotaMaps=frotaAtivaPorProj(disp);}catch(e){}}
+  const kml=shared?shared.kml:await _gvizSafe(SRC_KML);    if(kml){try{kmlCausas=kmlCausasPorProj(kml);}catch(e){}}
   try{ const dre=await gviz(srcDre()); pushDRE(dre,fatos,kmlCausas,dispCausas,frotaMaps); }catch(e){}
   return fatos;
+}
+// Grava na base os fatos da unidade atual que ainda não existem. Retorna nº de novos.
+async function seedUnidade(u,shared){
+  const fatos=await gerarFatos(shared);
+  await fetchDB();                       // _DBROWS desta unidade (fetchDB usa UNIDADE_COD)
+  const have=new Set(Object.keys(_DBROWS));
+  const novos=fatos.filter(f=>!have.has(keyOf(f)));
+  if(novos.length){
+    const payload=novos.map(f=>({unidade:u,vigencia:f.vig,origem:f.origem||'Custos',fato:f.fato,projeto:f.proj||null,fato_desvio:stripTags(f.desvio)||null,causa:f.causaAuto||null,status:DEFAULT_STATUS,locked:false}));
+    for(let i=0;i<payload.length;i+=200){const {error}=await sb.from('fca').insert(payload.slice(i,i+200));if(error)throw error;}
+  }
+  return novos.length;
 }
 // Fatos a partir da BASE (Supabase) — fonte do dia a dia, não depende mais da planilha
 function fatosDaBase(){
@@ -387,23 +406,28 @@ async function carregar(){
   await fetchDB();
   render(fatosDaBase());
 }
-// "Gerar fatos do mês": puxa da planilha e GRAVA na base os fatos novos. Depois o painel não depende mais do sheet.
-async function gerarMes(){
-  if(PREVIEW||!sb){alert('Disponível só com login no Supabase.');return;}
-  const g=document.getElementById('genBtn'); if(g){g.disabled=true;g.textContent='Gerando…';}
-  try{
-    const fatos=await gerarFatos();
-    await fetchDB();
-    const have=new Set(Object.keys(_DBROWS));
-    const novos=fatos.filter(f=>!have.has(keyOf(f)));
-    if(novos.length){
-      const payload=novos.map(f=>({unidade:UNIDADE_COD,vigencia:f.vig,origem:f.origem||'Custos',fato:f.fato,projeto:f.proj||null,fato_desvio:stripTags(f.desvio)||null,causa:f.causaAuto||null,status:DEFAULT_STATUS,locked:false}));
-      for(let i=0;i<payload.length;i+=200){const {error}=await sb.from('fca').insert(payload.slice(i,i+200));if(error)throw error;}
-    }
-    alert(novos.length?`${novos.length} fato(s) do mês gravados na base.`:'Nenhum fato novo (já estão na base).');
-    await carregar();
-  }catch(e){console.error(e);alert('Erro ao gerar: '+(e.message||e));}
-  if(g){g.disabled=false;g.textContent='Gerar fatos do mês';}
+// "Gerar todas as unidades" (só admin, chamado via ?gen=all): puxa da planilha e GRAVA na base os fatos novos
+// de cada unidade. Depois o painel não depende mais do sheet.
+async function gerarTodas(){
+  const list=document.getElementById('list');
+  document.querySelectorAll('.hfilter').forEach(e=>e.style.display='none');
+  ['uniBadge','uniSel','adminBtn','saveBtn','savedMsg','backUnits'].forEach(id=>{const e=document.getElementById(id);if(e)e.style.display='none';});
+  const intro=document.querySelector('.intro'); if(intro)intro.style.display='none';
+  list.innerHTML='<div class="loading">Baixando planilhas…</div>';
+  const shared={ger:await _gvizSafe(SRC_GEROT), disp:await _gvizSafe(SRC_DISP), kml:await _gvizSafe(SRC_KML)};
+  const units=Object.keys(DEPARA).sort();
+  const log=[]; let tot=0;
+  for(const u of units){
+    UNIDADE_COD=u; applyDepara(u);
+    let novos=0,err='';
+    try{ novos=await seedUnidade(u,shared); tot+=novos; }
+    catch(e){ err=e.message||String(e); }
+    log.push(`<tr><td>${esc(u)}</td><td class="num">${novos}</td><td>${err?'<span style="color:var(--red)">'+esc(err)+'</span>':'<span style="color:var(--green)">ok</span>'}</td></tr>`);
+    list.innerHTML=`<div class="loading">Gerando… ${log.length}/${units.length} unidades</div>`;
+  }
+  list.innerHTML=`<div class="genres"><h2 class="genres-h">Geração concluída — ${tot} fato(s) novo(s)</h2>
+    <table class="gentbl"><thead><tr><th>Unidade</th><th class="num">Novos</th><th>Status</th></tr></thead><tbody>${log.join('')}</tbody></table>
+    <a class="btn" style="display:inline-block;margin-top:14px;text-decoration:none" href="../fca-consolidado/">← Voltar ao Admin</a></div>`;
 }
 
 const STATUS=['Não iniciada','Em andamento','Concluída','Cancelada'];
@@ -555,7 +579,6 @@ _buildMs(document.getElementById('ms-vig'),()=>VIG_OPTS);
 _buildMs(document.getElementById('ms-org'),()=>ORG_OPTS);
 _buildMs(document.getElementById('ms-proj'),()=>PROJ_OPTS);
 _buildMs(document.getElementById('ms-ind'),()=>IND_OPTS);
-const _gb=document.getElementById('genBtn'); if(_gb)_gb.addEventListener('click',gerarMes);
 document.addEventListener('click',e=>{if(!e.target.closest('.ms-wrap'))document.querySelectorAll('.ms-panel.open').forEach(p=>p.classList.remove('open'));});
 
 // ── Início: exige login (hub), carrega perfil (unidade/admin) e os fatos ──
@@ -579,13 +602,17 @@ async function initApp(){
   // unidades que o usuário pode acessar: admin = todas; gestor = a sua
   const allowed = REAL_ADMIN ? Object.keys(DEPARA) : (PROFILE.unidade?[String(PROFILE.unidade).toUpperCase()]:[]);
   const params=new URLSearchParams(location.search);
+  if((params.get('gen')||'')==='all'){                       // ── geração de TODAS as unidades (só admin) ──
+    if(!REAL_ADMIN){ document.getElementById('list').innerHTML='<div class="empty">Apenas administradores podem gerar os fatos.</div>'; return; }
+    document.getElementById('uniBadge').textContent='Admin · gerar';
+    gerarTodas(); return;
+  }
   const u=(params.get('u')||'').toUpperCase();
   if(u && allowed.includes(u) && DEPARA[u]){
     // ── modo PREENCHIMENTO de uma unidade ──
     UNIDADE_COD=u; applyDepara(u);
     document.getElementById('uniBadge').textContent=u;
     document.getElementById('backUnits').style.display='';
-    document.getElementById('genBtn').style.display='';
     applyAdminUI();
     setupUniSel();
     carregar();
@@ -597,7 +624,7 @@ async function initApp(){
 // Mini-hub: um card por unidade liberada + card Admin (consolidado) só p/ admin
 function renderSubHub(allowed){
   document.querySelectorAll('.hfilter').forEach(e=>e.style.display='none');
-  ['uniBadge','uniSel','adminBtn','saveBtn','savedMsg','backUnits','genBtn'].forEach(id=>{const e=document.getElementById(id);if(e)e.style.display='none';});
+  ['uniBadge','uniSel','adminBtn','saveBtn','savedMsg','backUnits'].forEach(id=>{const e=document.getElementById(id);if(e)e.style.display='none';});
   const intro=document.querySelector('.intro'); if(intro)intro.textContent='Selecione a unidade para preencher o FCA do mês.';
   const list=document.getElementById('list');
   if(!REAL_ADMIN && !allowed.length){ list.innerHTML='<div class="empty">Seu usuário ainda não tem unidade liberada. Fale com o administrador.</div>'; return; }
