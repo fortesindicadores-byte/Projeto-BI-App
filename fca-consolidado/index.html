@@ -141,7 +141,7 @@ body.light-mode select.st[data-v="Cancelada"]{background:#333333;color:#fff;}
   <div class="hfilter"><label>Origem</label><div class="ms-wrap" id="ms-org"><button class="ms-btn" onclick="toggleMs('ms-org')"><span class="ms-lbl">Todas</span><span class="ms-cnt"></span><svg width="10" height="6" viewBox="0 0 10 6"><path d="M0 0l5 6 5-6z" fill="#F97316"/></svg></button><div class="ms-panel"><div class="ms-search"><input type="text" placeholder="Pesquisar…"></div><div class="ms-list"></div></div></div></div>
   <div class="hfilter"><label>Status</label><div class="ms-wrap" id="ms-st"><button class="ms-btn" onclick="toggleMs('ms-st')"><span class="ms-lbl">Todos</span><span class="ms-cnt"></span><svg width="10" height="6" viewBox="0 0 10 6"><path d="M0 0l5 6 5-6z" fill="#F97316"/></svg></button><div class="ms-panel"><div class="ms-search"><input type="text" placeholder="Pesquisar…"></div><div class="ms-list"></div></div></div></div>
   <span class="saved-msg" id="savedMsg">Salvo ✓</span>
-  <button class="btn" id="genAllBtn" title="Puxa os desvios do mês das planilhas e grava na base — todas as unidades" onclick="if(confirm('Gerar os fatos do mês de TODAS as unidades a partir das planilhas?\n\nCustos: adiciona os novos (não duplica).\nRPM (Gerot): é recriado do zero — preenchimentos de RPM serão refeitos.'))location.href='../fca-preenchimento/?gen=all';">Gerar fatos do mês</button>
+  <button class="btn" id="genAllBtn" title="Puxa os desvios do mês das planilhas e grava na base — todas as unidades" onclick="if(confirm('Gerar os fatos do mês de TODAS as unidades a partir das planilhas?\n\nCustos: adiciona os novos (não duplica).\nRPM (Gerot): recria apenas o mês gerado (meses anteriores preservados).'))location.href='../fca-preenchimento/?gen=all';">Gerar fatos do mês</button>
   <a class="btn ghost" href="../fca-preenchimento/" title="Voltar às unidades">← Unidades</a>
   <a class="btn ghost" href="../index.html" title="Voltar ao hub">← Hub</a>
   <button class="btn theme" id="themeBtn" title="Modo claro/escuro">☀</button>
@@ -183,32 +183,35 @@ function gateAdmin(){gate('⛔','Acesso restrito (somente admin)','<p>Sua conta 
 function gateSetup(){gate('🛠️','Banco ainda não configurado','<p>As tabelas do FCA não foram encontradas. Rode o script <code>scripts/fca-supabase.sql</code> no Supabase primeiro.</p>');}
 function gateError(msg){gate('⚠️','Não foi possível carregar',`<p>${esc(msg||'Erro inesperado ao consultar o Supabase.')}</p>`);}
 
+// Projeto "limpo": corta no '-' (ex.: "AUTO SERVIÇO - CGR" → "AUTO SERVIÇO"). RPM já vem limpo. Unifica exibição e filtro.
+function projLabel(s){const t=String(s==null?'':s).trim();if(!t)return '—';const i=t.indexOf('-');return i>=0?(t.substring(0,i).trim()||'—'):t;}
 // ── Multi-select (padrão Gestão em Movimento) ──
 function syncBadge(w){const c=w.querySelector('.ms-cnt'),n=w._sel?w._sel.size:0;if(c){c.textContent=n;c.style.display=n?'':'none';}}
-function _buildMs(w,getItems){
+function _buildMs(w,getItems,after){
   if(!w)return; if(!(w._sel instanceof Set))w._sel=new Set();
-  const list=w.querySelector('.ms-list'),srch=w.querySelector('.ms-search input');
+  const list=w.querySelector('.ms-list'),srch=w.querySelector('.ms-search input'),run=after||render;
   w._render=(q='')=>{const sel=w._sel,f=(q||'').toLowerCase(),items=getItems(),shown=items.filter(v=>String(v).toLowerCase().includes(f)),all=sel.size===0;
     list.innerHTML=(!q?`<label class="ms-opt all-opt"><input type="checkbox" class="ms-all" ${all?'checked':''}> Todos</label>`:'')+shown.map(v=>`<label class="ms-opt"><input type="checkbox" data-v="${esc(v)}" ${all||sel.has(v)?'checked':''}> ${esc(v)}<span class="ms-only" data-v="${esc(v)}">só</span></label>`).join('');syncBadge(w);};
-  list.addEventListener('change',e=>{const sel=w._sel,b=e.target;if(!b.matches('input[type=checkbox]'))return;if(b.classList.contains('ms-all')){sel.clear();}else if(sel.size===0){if(!b.checked)getItems().forEach(v=>{if(v!==b.dataset.v)sel.add(v);});}else{if(b.checked)sel.add(b.dataset.v);else sel.delete(b.dataset.v);const a=getItems();if(a.length&&a.every(v=>sel.has(v)))sel.clear();}w._render(srch.value);render();});
-  list.addEventListener('click',e=>{const sel=w._sel,o=e.target.closest('.ms-only');if(!o)return;e.preventDefault();e.stopPropagation();sel.clear();sel.add(o.dataset.v);w._render(srch.value);render();});
+  list.addEventListener('change',e=>{const sel=w._sel,b=e.target;if(!b.matches('input[type=checkbox]'))return;if(b.classList.contains('ms-all')){sel.clear();}else if(sel.size===0){if(!b.checked)getItems().forEach(v=>{if(v!==b.dataset.v)sel.add(v);});}else{if(b.checked)sel.add(b.dataset.v);else sel.delete(b.dataset.v);const a=getItems();if(a.length&&a.every(v=>sel.has(v)))sel.clear();}w._render(srch.value);run();});
+  list.addEventListener('click',e=>{const sel=w._sel,o=e.target.closest('.ms-only');if(!o)return;e.preventDefault();e.stopPropagation();sel.clear();sel.add(o.dataset.v);w._render(srch.value);run();});
   srch.addEventListener('input',()=>w._render(srch.value));srch.addEventListener('click',e=>e.stopPropagation());
   w._render();
 }
 function toggleMs(id){document.querySelectorAll('.ms-panel.open').forEach(p=>{if(p.closest('.ms-wrap').id!==id)p.classList.remove('open');});const p=document.querySelector('#'+id+' .ms-panel');if(p)p.classList.toggle('open');}
 function getMsValues(id){const w=document.getElementById(id);return w&&w._sel?[...w._sel]:[];}
 
-let UNI_OPTS=[],VIG_OPTS=[],ORG_OPTS=[],ST_OPTS=[],PROJ_OPTS=[],_vigInit=false;
+let UNI_OPTS=[],VIG_OPTS=[],ORG_OPTS=[],ST_OPTS=[],_vigInit=false;
+// Projetos disponíveis dependem da(s) Unidade(s) selecionada(s) — filtro em cascata. Usa projeto "limpo".
+function projItems(){const fu=getMsValues('ms-uni');return [...new Set(_ROWS.filter(r=>!fu.length||fu.includes(r.unidade)).map(r=>projLabel(r.projeto)))].sort();}
 function popFiltros(){
   UNI_OPTS=[...new Set(_ROWS.map(r=>r.unidade).filter(Boolean))].sort();
   VIG_OPTS=[...new Set(_ROWS.map(r=>r.vigencia).filter(Boolean))].sort((a,b)=>vigNum(b)-vigNum(a));
   ORG_OPTS=[...new Set(_ROWS.map(r=>r.origem).filter(Boolean))].sort();
   ST_OPTS=[...new Set(_ROWS.map(r=>r.status||DEFAULT_STATUS))].sort();
-  PROJ_OPTS=[...new Set(_ROWS.map(r=>r.projeto||'—').filter(Boolean))].sort();
   // 1ª carga: abre já na vigência mais recente (menos linhas = mais rápido); admin pode trocar
   const wv=document.getElementById('ms-vig');
   if(wv && wv._sel && !_vigInit && VIG_OPTS.length){ wv._sel.clear(); wv._sel.add(VIG_OPTS[0]); _vigInit=true; }  // muta o Set (não substitui) p/ o dropdown refletir
-  [['ms-uni',()=>UNI_OPTS],['ms-vig',()=>VIG_OPTS],['ms-org',()=>ORG_OPTS],['ms-st',()=>ST_OPTS],['ms-proj',()=>PROJ_OPTS]].forEach(([id])=>{const w=document.getElementById(id);if(w&&w._render)w._render('');});
+  ['ms-uni','ms-vig','ms-org','ms-st','ms-proj'].forEach(id=>{const w=document.getElementById(id);if(w&&w._render)w._render('');});
 }
 
 function autoResize(ta){ta.style.height='auto';ta.style.height=ta.scrollHeight+'px';}
@@ -289,7 +292,7 @@ function rowHTML(r){
     <td class="c-vig"><span class="cell-label">Vigência</span>${esc(r.vigencia)}</td>
     <td class="c-org"><span class="cell-label">Origem</span><span class="org-tag ${org}">${esc(r.origem)}</span></td>
     <td class="c-fato"><span class="cell-label">Fato</span>${fatoCell(r)}</td>
-    <td class="c-proj"><span class="cell-label">Projeto</span>${esc(r.projeto||'—')}</td>
+    <td class="c-proj"><span class="cell-label">Projeto</span>${esc(projLabel(r.projeto))}</td>
     <td class="col-causa"><span class="cell-label">Causa</span><textarea rows="1" data-col="causa">${esc(r.causa)}</textarea></td>
     <td class="col-acao"><span class="cell-label">Ação</span><textarea rows="1" data-col="acao">${esc(r.acao)}</textarea></td>
     <td class="col-resp"><span class="cell-label">Responsável</span><input type="text" data-col="responsavel" value="${esc(r.responsavel)}"></td>
@@ -308,7 +311,7 @@ function render(){
   const c=document.getElementById('content');
   if(!_ROWS.length){c.innerHTML=summaryHTML([])+'<div class="tbl-section"><div class="empty">Nenhuma ação cadastrada ainda. Assim que as unidades preencherem o FCA, os registros aparecem aqui.</div></div>';return;}
   const fu=getMsValues('ms-uni'),fv=getMsValues('ms-vig'),fo=getMsValues('ms-org'),fs=getMsValues('ms-st'),fp=getMsValues('ms-proj');
-  const vis=_ROWS.filter(r=>(!fu.length||fu.includes(r.unidade))&&(!fv.length||fv.includes(r.vigencia))&&(!fo.length||fo.includes(r.origem))&&(!fs.length||fs.includes(r.status||DEFAULT_STATUS))&&(!fp.length||fp.includes(r.projeto||'—')));
+  const vis=_ROWS.filter(r=>(!fu.length||fu.includes(r.unidade))&&(!fv.length||fv.includes(r.vigencia))&&(!fo.length||fo.includes(r.origem))&&(!fs.length||fs.includes(r.status||DEFAULT_STATUS))&&(!fp.length||fp.includes(projLabel(r.projeto))));
   vis.sort((a,b)=>String(a.unidade||'').localeCompare(String(b.unidade||''))||(vigNum(b.vigencia)-vigNum(a.vigencia))||String(a.projeto||'').localeCompare(String(b.projeto||''))||String(a.fato||'').localeCompare(String(b.fato||'')));  // unidade A→Z, vigência recente, projeto, fato
   let body;
   if(!vis.length){body='<div class="tbl-section"><div class="empty">Nenhuma ação para os filtros selecionados.</div></div>';}
@@ -361,11 +364,13 @@ applyTheme(localStorage.getItem('bi_theme')||'dark');
 document.getElementById('logoutBtn').addEventListener('click',async()=>{try{if(sb)await sb.auth.signOut();}catch(e){}location.href='../index.html';});
 
 wireDelegation();
-_buildMs(document.getElementById('ms-uni'),()=>UNI_OPTS);
+// Ao mudar a Unidade, o filtro de Projeto reseta e recarrega só os projetos daquela(s) unidade(s) (cascata)
+function _onUniChange(){const p=document.getElementById('ms-proj');if(p&&p._sel){p._sel.clear();if(p._render)p._render('');}render();}
+_buildMs(document.getElementById('ms-uni'),()=>UNI_OPTS,_onUniChange);
 _buildMs(document.getElementById('ms-vig'),()=>VIG_OPTS);
 _buildMs(document.getElementById('ms-org'),()=>ORG_OPTS);
 _buildMs(document.getElementById('ms-st'),()=>ST_OPTS);
-_buildMs(document.getElementById('ms-proj'),()=>PROJ_OPTS);
+_buildMs(document.getElementById('ms-proj'),projItems);
 document.addEventListener('click',e=>{if(!e.target.closest('.ms-wrap'))document.querySelectorAll('.ms-panel.open').forEach(p=>p.classList.remove('open'));});
 
 // ── Início: exige login + admin (mesmo fluxo do fca-preenchimento) ──

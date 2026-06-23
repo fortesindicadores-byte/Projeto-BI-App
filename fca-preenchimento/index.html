@@ -398,7 +398,10 @@ async function gerarFatos(shared){
 // Grava/atualiza na base os fatos da unidade atual. Retorna nº de novos.
 async function seedUnidade(u,shared){
   const fatos=await gerarFatos(shared);
-  const rows=await fetchDB();            // _DBROWS desta unidade (fetchDB usa UNIDADE_COD)
+  // RPM: recria só as vigências geradas desta unidade (meses anteriores e Custos preservados)
+  const rpmVigs=[...new Set(fatos.filter(f=>(f.origem||'')==='RPM').map(f=>f.vig).filter(Boolean))];
+  for(const v of rpmVigs){ const {error}=await sb.from('fca').delete().eq('unidade',u).eq('origem','RPM').eq('vigencia',v); if(error)throw error; }
+  const rows=await fetchDB();            // _DBROWS desta unidade (após o delete)
   if(rows===null) throw new Error('falha ao ler a base');
   const have=new Set(Object.keys(_DBROWS));
   const novos=fatos.filter(f=>!have.has(keyOf(f)));
@@ -416,6 +419,8 @@ function isDriverCombust(fato){
   if(/preco/.test(s) && /(litro|\/\s*l|r\$)/.test(s)) return true;   // preço por litro / preço r$/l
   return false;
 }
+// Projeto "limpo": corta no '-' (ex.: "AUTO SERVIÇO - CGR" → "AUTO SERVIÇO"). RPM já vem limpo.
+function projLabel(s){const t=String(s==null?'':s).trim();if(!t)return '—';const i=t.indexOf('-');return i>=0?(t.substring(0,i).trim()||'—'):t;}
 // Formata o desvio (o Fato) como "▲ R$ nominal · ▲ %". Para desvios de custo (têm R$);
 // RPM/atingimento (sem R$) fica como veio. Extrai os números do texto salvo.
 function fmtDesvio(txt){
@@ -465,8 +470,7 @@ async function gerarTodas(){
   ['uniBadge','uniSel','adminBtn','saveBtn','savedMsg','backUnits'].forEach(id=>{const e=document.getElementById(id);if(e)e.style.display='none';});
   const intro=document.querySelector('.intro'); if(intro)intro.style.display='none';
   list.innerHTML='<div class="loading">Baixando planilhas…</div>';
-  // RPM é recriado do zero a cada geração (Custos são preservados) — garante o formato atual de forma determinística
-  try{ await sb.from('fca').delete().eq('origem','RPM'); }catch(e){console.error('limpeza RPM',e);}
+  // RPM recriado por (unidade, vigência) dentro do seedUnidade — meses anteriores e Custos preservados
   const shared={ger:await _gvizSafe(SRC_GEROT), disp:await _gvizSafe(SRC_DISP), kml:await _gvizSafe(SRC_KML), dep:await _gvizSafe(SRC_DEPARA)};
   const units=Object.keys(DEPARA).sort();
   const log=[]; let tot=0;
@@ -532,7 +536,7 @@ function getMsValues(id){const w=document.getElementById(id);return w&&w._sel?[.
 function popFiltros(){
   VIG_OPTS=[...new Set(_FATOS.map(f=>f.vig).filter(Boolean))].sort((a,b)=>vigNum(b)-vigNum(a));
   ORG_OPTS=[...new Set(_FATOS.map(f=>f.origem).filter(Boolean))].sort();
-  PROJ_OPTS=[...new Set(_FATOS.map(f=>f.proj||'Geral'))].sort();
+  PROJ_OPTS=[...new Set(_FATOS.map(f=>projLabel(f.proj)))].sort();
   IND_OPTS=[...new Set(_FATOS.map(f=>f.fato))].sort();
   // 1ª carga: já abre na vigência mais recente (as outras ficam no filtro)
   const wv=document.getElementById('ms-vig');
@@ -543,7 +547,7 @@ function aplicar(){
   const list=document.getElementById('list');
   if(!_FATOS.length){list.innerHTML='<div class="empty">✓ Nenhum desvio encontrado para esta unidade na vigência mais recente — sem fatos a tratar.</div>';return;}
   const fv=getMsValues('ms-vig'), fo=getMsValues('ms-org'), fp=getMsValues('ms-proj'), fi=getMsValues('ms-ind');
-  const vis=_FATOS.filter(f=>(!fv.length||fv.includes(f.vig))&&(!fo.length||fo.includes(f.origem))&&(!fp.length||fp.includes(f.proj||'Geral'))&&(!fi.length||fi.includes(f.fato)));
+  const vis=_FATOS.filter(f=>(!fv.length||fv.includes(f.vig))&&(!fo.length||fo.includes(f.origem))&&(!fp.length||fp.includes(projLabel(f.proj)))&&(!fi.length||fi.includes(f.fato)));
   if(!vis.length){list.innerHTML='<div class="empty">Nenhum fato para o filtro selecionado.</div>';return;}
   list.innerHTML=vis.map(f=>{
     const key=keyOf(f);
@@ -552,7 +556,7 @@ function aplicar(){
     return `<div class="fato-block ${f.sev}" data-key="${esc(key)}" data-vig="${esc(f.vig)}" data-origem="${esc(f.origem||'')}" data-proj="${esc(f.proj||'')}" data-fato="${esc(f.fato)}" data-desvio="${esc(stripTags(f.desvio))}">
       <div class="fato-head">
         <div class="fato-unit">${esc(UNIDADE_COD)}</div>
-        <div class="fato-field"><b>${f.origem==='RPM'?'Bloco':'Projeto'}</b> <span>${esc(f.proj||'—')}</span></div>
+        <div class="fato-field"><b>Projeto</b> <span>${esc(projLabel(f.proj))}</span></div>
         <div class="fato-field"><b>Origem:</b> <span>${esc(f.origem||'—')}</span></div>
         <div class="fato-field"><b>Vigência:</b> <span>${esc((f.vig||'').toUpperCase())}</span></div>
         <div class="fato-nome">${esc(f.nome||f.fato)}</div>
