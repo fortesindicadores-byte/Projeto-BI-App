@@ -166,12 +166,36 @@ function renderMapeamento(){
 }
 
 function getMap(){const m={};document.querySelectorAll('#mapCard select[data-k]').forEach(s=>m[s.dataset.k]=+s.value);return m;}
+// De-para nome/cidade → código de unidade (mesmo do scorecard). Importados entram pelo código.
+const _CODES=new Set(['CGR','BLC','CBA','FLP','GRL','NFR','PLT','RON','MCC','PIR']);
+const NAME2COD={
+  'CAMPO GRANDE':'CGR','CDD RIO DE JANEIRO':'CGR','RIO DE JANEIRO':'CGR',
+  'BALNEARIO CAMBORIU':'BLC','CDD CAMBORIU':'BLC','CAMBORIU':'BLC',
+  'CUIABA':'CBA','CDD CUIABA':'CBA','CUIABA EMPURRADA':'CBA',
+  'FLORIANOPOLIS':'FLP','CDD FLORIANOPOLIS':'FLP',
+  'GUARULHOS':'GRL','CDD GUARULHOS':'GRL',
+  'NOVA FRIBURGO':'NFR','CDD NOVA FRIBURGO':'NFR',
+  'PELOTAS':'PLT','CDD PELOTAS':'PLT',
+  'RONDONOPOLIS':'RON','CDD RONDONOPOLIS':'RON',
+  'CACHOEIRAS DE MACACU':'MCC','CDI MACACU':'MCC','MACACU':'MCC','MACACU EMPURRADA':'MCC',
+  'PIRAI':'PIR','PIRAI EMPURRADA':'PIR'
+};
+function toUnitCode(raw){
+  if(!raw)return '';
+  const k=String(raw).normalize('NFD').replace(/[̀-ͯ]/g,'').toUpperCase().replace(/\s+/g,' ').trim();
+  if(_CODES.has(k))return k;
+  if(NAME2COD[k])return NAME2COD[k];
+  const k2=k.replace(/\(.*?\)/g,'').replace(/\b(EMPURRADA|T1|T2|WH|APOIO)\b/g,'').replace(/\s+/g,' ').trim();
+  if(_CODES.has(k2))return k2;
+  if(NAME2COD[k2])return NAME2COD[k2];
+  return raw; // desconhecido: mantém o original (aparece no Admin p/ ajustarmos)
+}
 function buildRow(cells,map){
   const get=k=>map[k]>=0?cellText(cells[map[k]]):'';
   const fato=get('fato'), unidade=get('unidade');
   if(!fato && !unidade && !get('causa') && !get('acao'))return null; // linha vazia
   return {
-    unidade:unidade||'(sem unidade)',
+    unidade:toUnitCode(unidade)||'(sem unidade)',
     vigencia:map.vigencia>=0?toVig(cells[map.vigencia]):'',
     origem:'Custos',
     fato:fato||'(sem fato)',
