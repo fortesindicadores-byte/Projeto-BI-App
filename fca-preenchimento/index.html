@@ -228,22 +228,19 @@ function parseDePara(rows){
   });
   return m;
 }
-// Gerot: cada IC/IV com desvio (atg<1) vira fato; o projeto vem do De-Para (ROTA/AS/EMPURRADA/INSUMOS/UDC), fallback = nome cru da unidade Gerot.
+// Gerot: cada IC/IV com desvio (atg<1) vira fato, em TODAS as vigências (≥2026). projeto vem do De-Para (ROTA/AS/EMPURRADA/INSUMOS/UDC), fallback = nome cru.
 function pushGerot(rows,fatos,deParaMap){
   deParaMap=deParaMap||{};
   const gset=new Set((UNIDADE_GER||[]).map(_normU));
-  const data=(rows||[]).filter(r=>r[4]&&parseD(r[3])&&gset.has(_normU(r[2])));
-  if(!data.length)return;
-  // última vigência COM dados (real/atg preenchidos)
-  let maxK=0;data.forEach(r=>{if(r[7]!=null||r[8]!=null){const k=vigKeyN(parseD(r[3]));if(k>maxK)maxK=k;}});
-  if(!maxK)return;
-  const vig=vigLbl(new Date(Math.floor(maxK/100),maxK%100,1));
-  data.filter(r=>vigKeyN(parseD(r[3]))===maxK).forEach(r=>{
+  (rows||[]).forEach(r=>{
+    if(!r[4]||!gset.has(_normU(r[2])))return;
+    const d=parseD(r[3]); if(!d||d.getFullYear()<2026)return;          // todas as vigências de 2026 em diante
     const kpi=String(r[4]||'').trim();
     if(!/^\s*I[CV]/i.test(kpi))return;                 // só IC/IV
     const atg=r[8]!=null?+r[8]:null;
     if(atg==null||atg>=1)return;                        // só com desvio (atg<1)
-    const _dp=deParaMap[_normU(r[2])];                              // projeto vem do De-Para (ROTA / AUTO SERVIÇO / EMPURRADA / INSUMOS / UDC)
+    const vig=vigLbl(d);                                 // vigência DESTA linha
+    const _dp=deParaMap[_normU(r[2])];                  // projeto vem do De-Para (ROTA / AUTO SERVIÇO / EMPURRADA / INSUMOS / UDC)
     const proj=_dp?_dp.projeto:String(r[2]||'').trim();
     const un=String(r[5]||'').trim(), sev=atg<0.7?'crit':'aten';
     const meta=r[6]!=null?_g2(+r[6])+(un?' '+un:''):'—';
