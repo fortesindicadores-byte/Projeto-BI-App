@@ -190,6 +190,8 @@ function applyDepara(cod){const d=DEPARA[cod]; if(d){UNIDADE_DRE=d.dre; UNIDADE_
 // Gerot (ICs + IVs): mesma planilha dos ICs, aba gid=0 — formato longo bloco|unidade|vig|kpi|un|meta|real|atg.
 // Cada bloco tem 1 IC e seus IVs; o kpi começa com "IC"/"IV". UNIDADE_GER (do de-para) casa com a coluna 'unidade' do Gerot.
 const SRC_GEROT = 'https://docs.google.com/spreadsheets/d/1xGl1Xrk2sPS9zWghEuecFMNBHwmeLiZ02U-QpO8cDPY/gviz/tq?gid=0';
+// Aba "De-Para" (mesma planilha do Gerot): col A = "PROJETO - ABREV" (ex.: "ROTA - CBA - T2"), col B = unidade do Gerot (ex.: "CDD CUIABA").
+const SRC_DEPARA = 'https://docs.google.com/spreadsheets/d/1xGl1Xrk2sPS9zWghEuecFMNBHwmeLiZ02U-QpO8cDPY/gviz/tq?sheet='+encodeURIComponent('De-Para')+'&headers=0';
 const srcDre = ()=>'https://docs.google.com/spreadsheets/d/1qcTy2ppLCGBKKqZCxCYWCTL9kTAuWfHBMyBfWJOyih8/gviz/tq?sheet='+encodeURIComponent('Consolidado DRE')+'&tq='+encodeURIComponent("select * where K = '"+UNIDADE_DRE+"'");
 const SRC_KML = 'https://docs.google.com/spreadsheets/d/1ZZdvG_RK5cTBLdPl3TWCbNeqw-Y4fTYwWsQV4w-e__A/gviz/tq?sheet='+encodeURIComponent('Km/L');
 // Dispersão de km (Painel KM): col0 vig · col13/14 unidade · col14 antes do "-" projeto · col31 rem · col32 real · col36 impacto R$
@@ -219,8 +221,24 @@ const uniMatch=v=>{const n=_normU(v);return n===_normU(UNIDADE_DRE)||n===_normU(
 const fatoKey=s=>_normU(String(s||'').split('\n')[0]);
 const fkey=(vig,origem,proj,fato)=>`${vig}||${origem||''}||${projKey(proj)}||${fatoKey(fato)}`;
 function vigNum(v){const m=String(v||'').match(/^([a-zç]{3})\/(\d{2})$/i);if(!m)return 0;const i=MESES.indexOf(m[1].toLowerCase());return (2000+ +m[2])*100+(i<0?0:i);}
-// Gerot: cada IC com desvio (atg<1) vira fato; a causa já traz os IVs do mesmo bloco que também desviaram.
-function pushGerot(rows,fatos){
+// Lê a aba "De-Para" do Gerot → { unidadeGerot(normalizada): {projeto, abrev} }. Fonte de verdade do sub-projeto.
+function parseDePara(rows){
+  const m={};
+  (rows||[]).forEach(r=>{
+    const projetoAbrev=String(r[0]||'').trim(), unidadeRPM=String(r[1]||'').trim();
+    if(!projetoAbrev||!unidadeRPM)return;
+    if(/\(INATIVO\)/i.test(projetoAbrev))return;
+    const dash=projetoAbrev.indexOf('-'); if(dash<0)return;
+    const projeto=projetoAbrev.substring(0,dash).trim(), abrev=projetoAbrev.substring(dash+1).trim();
+    if(!projeto||!abrev)return;
+    const k=_normU(unidadeRPM), ex=m[k];
+    if(!ex || (projeto.toUpperCase()==='ROTA'&&ex.projeto.toUpperCase()!=='ROTA')) m[k]={projeto,abrev};
+  });
+  return m;
+}
+// Gerot: cada IC/IV com desvio (atg<1) vira fato; o projeto vem do De-Para (sub-unidade), com fallback no GER_LABEL.
+function pushGerot(rows,fatos,deParaMap){
+  deParaMap=deParaMap||{};
   const gset=new Set((UNIDADE_GER||[]).map(_normU));
   const data=(rows||[]).filter(r=>r[4]&&parseD(r[3])&&gset.has(_normU(r[2])));
   if(!data.length)return;
@@ -233,7 +251,8 @@ function pushGerot(rows,fatos){
     if(!/^\s*I[CV]/i.test(kpi))return;                 // só IC/IV
     const atg=r[8]!=null?+r[8]:null;
     if(atg==null||atg>=1)return;                        // só com desvio (atg<1)
-    const proj=GER_LABEL[_normU(r[2])]||String(r[2]||'').trim();   // sub-projeto (de-para por sub-unidade do Gerot)
+    const _dp=deParaMap[_normU(r[2])];                              // sub-projeto: De-Para (fonte de verdade) → GER_LABEL → nome cru
+    const proj=_dp?_dp.abrev:(GER_LABEL[_normU(r[2])]||String(r[2]||'').trim());
     const un=String(r[5]||'').trim(), sev=atg<0.7?'crit':'aten';
     const meta=r[6]!=null?_g2(+r[6])+(un?' '+un:''):'—';
     const real=r[7]!=null?_g2(+r[7])+(un?' '+un:''):'—';
@@ -377,7 +396,8 @@ const _gvizSafe=url=>gviz(url).catch(()=>null);
 async function gerarFatos(shared){
   const fatos=[];
   let kmlCausas={},dispCausas={},frotaMaps={mes:{},porMes:{}};
-  const ger=shared?shared.ger:await _gvizSafe(SRC_GEROT);  if(ger){try{pushGerot(ger,fatos);}catch(e){}}
+  const dep=shared?shared.dep:await _gvizSafe(SRC_DEPARA); const deParaMap=parseDePara(dep);
+  const ger=shared?shared.ger:await _gvizSafe(SRC_GEROT);  if(ger){try{pushGerot(ger,fatos,deParaMap);}catch(e){}}
   const disp=shared?shared.disp:await _gvizSafe(SRC_DISP); if(disp){try{dispCausas=dispCausasPorProj(disp);frotaMaps=frotaAtivaPorProj(disp);}catch(e){}}
   const kml=shared?shared.kml:await _gvizSafe(SRC_KML);    if(kml){try{kmlCausas=kmlCausasPorProj(kml);}catch(e){}}
   try{ const dre=await gviz(srcDre()); pushDRE(dre,fatos,kmlCausas,dispCausas,frotaMaps); }catch(e){}
@@ -455,7 +475,7 @@ async function gerarTodas(){
   list.innerHTML='<div class="loading">Baixando planilhas…</div>';
   // RPM é recriado do zero a cada geração (Custos são preservados) — garante o formato atual de forma determinística
   try{ await sb.from('fca').delete().eq('origem','RPM'); }catch(e){console.error('limpeza RPM',e);}
-  const shared={ger:await _gvizSafe(SRC_GEROT), disp:await _gvizSafe(SRC_DISP), kml:await _gvizSafe(SRC_KML)};
+  const shared={ger:await _gvizSafe(SRC_GEROT), disp:await _gvizSafe(SRC_DISP), kml:await _gvizSafe(SRC_KML), dep:await _gvizSafe(SRC_DEPARA)};
   const units=Object.keys(DEPARA).sort();
   const log=[]; let tot=0;
   for(const u of units){
