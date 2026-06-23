@@ -396,10 +396,19 @@ async function seedUnidade(u,shared){
   }
   return novos.length;
 }
+// Km/L e Preço R$/L não são fatos próprios — entram como CAUSA do Custo Combustível. Oculta esses cards (ex.: vindos da importação).
+function isDriverCombust(fato){
+  const s=String(fato||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'');
+  if(/km\s*\/?\s*l/.test(s)) return true;                            // km/l, kml, km / l
+  if(/r\$\s*\/?\s*l/.test(s)) return true;                           // r$/l
+  if(/preco/.test(s) && /(litro|\/\s*l|r\$)/.test(s)) return true;   // preço por litro / preço r$/l
+  return false;
+}
 // Fatos a partir da BASE (Supabase) — fonte do dia a dia, não depende mais da planilha
 function fatosDaBase(){
   const fatos=[];
   Object.keys(_DBROWS).forEach(k=>{const r=_DBROWS[k][0];
+    if(isDriverCombust(r.fato))return;
     fatos.push({vig:r.vigencia||'',origem:r.origem||'Custos',proj:r.projeto||'',fato:r.fato||'(sem fato)',sev:'aten',
       desvio:r.fato_desvio?`<span class="dn">Desvio: </span><span class="val am">${esc(r.fato_desvio)}</span>`:'<span class="dn">—</span>'});});
   return fatos;

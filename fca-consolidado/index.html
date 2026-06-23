@@ -148,6 +148,14 @@ const SUPABASE_KEY='sb_publishable_ggKEEebc5zjgQDVsF92Upw_6uoLmKe9';
 let sb=null, SESSION=null, PROFILE=null;
 let _ROWS=[];                 // todos os registros (1 por ação)
 const CACHE_KEY='fca_cache_all';
+// Km/L e Preço R$/L entram como CAUSA do Custo Combustível — não devem aparecer como fato/ação própria.
+function isDriverCombust(fato){
+  const s=String(fato||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'');
+  if(/km\s*\/?\s*l/.test(s)) return true;
+  if(/r\$\s*\/?\s*l/.test(s)) return true;
+  if(/preco/.test(s) && /(litro|\/\s*l|r\$)/.test(s)) return true;
+  return false;
+}
 function readCache(k){try{const s=localStorage.getItem(k);return s?JSON.parse(s):null;}catch(e){return null;}}
 function writeCache(k,v){try{localStorage.setItem(k,JSON.stringify(v));}catch(e){}}
 const STATUS=['Não iniciada','Em andamento','Concluída','Cancelada'];
@@ -279,7 +287,7 @@ function wireTable(){
 async function carregar(){
   // 1) pinta na hora com o cache (se houver) — stale-while-revalidate
   const cached=readCache(CACHE_KEY);
-  if(cached&&cached.length){ _ROWS=cached; popFiltros(); render(); }
+  if(cached&&cached.length){ _ROWS=cached.filter(r=>!isDriverCombust(r.fato)); popFiltros(); render(); }
   else document.getElementById('content').innerHTML='<div class="loading">Carregando ações de todas as unidades…</div>';
   // 2) revalida do Supabase em segundo plano
   const {data,error}=await sb.from('fca').select('*').order('unidade',{ascending:true}).order('vigencia',{ascending:false}).order('created_at',{ascending:true});
@@ -289,7 +297,7 @@ async function carregar(){
     else gateError(error.message);
     return;
   }
-  _ROWS=data||[];
+  _ROWS=(data||[]).filter(r=>!isDriverCombust(r.fato));
   writeCache(CACHE_KEY,_ROWS);
   popFiltros();
   render();
