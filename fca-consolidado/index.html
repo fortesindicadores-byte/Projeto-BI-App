@@ -160,6 +160,8 @@ function readCache(k){try{const s=localStorage.getItem(k);return s?JSON.parse(s)
 function writeCache(k,v){try{localStorage.setItem(k,JSON.stringify(v));}catch(e){}}
 const STATUS=['Não iniciada','Em andamento','Concluída','Cancelada'];
 const DEFAULT_STATUS='Não iniciada';
+const MESES=['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
+function vigNum(v){const m=String(v||'').match(/^([a-zç]{3})\/(\d{2})$/i);if(!m)return 0;const i=MESES.indexOf(m[1].toLowerCase());return (2000+ +m[2])*100+(i<0?0:i);}
 
 function esc(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
 
@@ -187,16 +189,26 @@ function _buildMs(w,getItems){
 function toggleMs(id){document.querySelectorAll('.ms-panel.open').forEach(p=>{if(p.closest('.ms-wrap').id!==id)p.classList.remove('open');});const p=document.querySelector('#'+id+' .ms-panel');if(p)p.classList.toggle('open');}
 function getMsValues(id){const w=document.getElementById(id);return w&&w._sel?[...w._sel]:[];}
 
-let UNI_OPTS=[],VIG_OPTS=[],ORG_OPTS=[],ST_OPTS=[];
+let UNI_OPTS=[],VIG_OPTS=[],ORG_OPTS=[],ST_OPTS=[],_vigInit=false;
 function popFiltros(){
   UNI_OPTS=[...new Set(_ROWS.map(r=>r.unidade).filter(Boolean))].sort();
-  VIG_OPTS=[...new Set(_ROWS.map(r=>r.vigencia).filter(Boolean))].sort();
+  VIG_OPTS=[...new Set(_ROWS.map(r=>r.vigencia).filter(Boolean))].sort((a,b)=>vigNum(b)-vigNum(a));
   ORG_OPTS=[...new Set(_ROWS.map(r=>r.origem).filter(Boolean))].sort();
   ST_OPTS=[...new Set(_ROWS.map(r=>r.status||DEFAULT_STATUS))].sort();
+  // 1ª carga: abre já na vigência mais recente (menos linhas = mais rápido); admin pode trocar
+  const wv=document.getElementById('ms-vig');
+  if(wv && !_vigInit && VIG_OPTS.length){ wv._sel=new Set([VIG_OPTS[0]]); _vigInit=true; }
   [['ms-uni',()=>UNI_OPTS],['ms-vig',()=>VIG_OPTS],['ms-org',()=>ORG_OPTS],['ms-st',()=>ST_OPTS]].forEach(([id])=>{const w=document.getElementById(id);if(w&&w._render)w._render('');});
 }
 
 function autoResize(ta){ta.style.height='auto';ta.style.height=ta.scrollHeight+'px';}
+// Redimensiona TODAS as textareas em lote: escreve 'auto' em todas, lê todas as alturas, escreve todas → 2 reflows em vez de N
+function autoResizeAll(c){
+  const tas=[...c.querySelectorAll('textarea')];
+  tas.forEach(ta=>ta.style.height='auto');
+  const hs=tas.map(ta=>ta.scrollHeight);
+  tas.forEach((ta,i)=>{ta.style.height=hs[i]+'px';});
+}
 
 // ── Auto-save de um campo (admin: RLS permite update em qualquer linha) ──
 async function saveField(el,id,col){
@@ -262,25 +274,17 @@ function render(){
     <thead><tr><th>Unidade</th><th>Vigência</th><th>Origem</th><th>Fato</th><th>Projeto</th><th>Causa</th><th>Ação</th><th>Responsável</th><th>Prazo</th><th>Status</th><th>Acompanhamento</th><th>🔒</th></tr></thead>
     <tbody>${vis.map(rowHTML).join('')}</tbody></table></div>`;}
   c.innerHTML=summaryHTML(vis)+body;
-  wireTable();
+  autoResizeAll(c);
 }
-function wireTable(){
+// Listeners FIXOS no #content (event delegation) — montados 1x; sobrevivem às trocas de innerHTML
+function wireDelegation(){
   const c=document.getElementById('content');
-  c.querySelectorAll('textarea').forEach(autoResize);
-  c.querySelectorAll('textarea').forEach(ta=>ta.addEventListener('input',()=>autoResize(ta)));
-  // auto-save no blur (texto) e change (select/date)
-  c.querySelectorAll('textarea[data-col],input[data-col]').forEach(el=>{
-    el.addEventListener('blur',()=>{const tr=el.closest('tr');saveField(el,tr.dataset.id,el.dataset.col);});
-  });
-  c.querySelectorAll('select.st').forEach(sel=>{
-    sel.addEventListener('change',()=>{sel.dataset.v=sel.value;const tr=sel.closest('tr');saveField(sel,tr.dataset.id,'status');});
-  });
-  c.querySelectorAll('input[type=date][data-col]').forEach(d=>{
-    d.addEventListener('change',()=>{const tr=d.closest('tr');saveField(d,tr.dataset.id,'prazo');});
-  });
-  c.querySelectorAll('.lock-btn').forEach(b=>{
-    b.addEventListener('click',()=>{const tr=b.closest('tr');toggleLock(b,tr.dataset.id);});
-  });
+  c.addEventListener('input',e=>{const ta=e.target;if(ta.tagName==='TEXTAREA')autoResize(ta);});
+  c.addEventListener('focusout',e=>{const el=e.target;if(el.matches&&el.matches('textarea[data-col],input[type=text][data-col]')){const tr=el.closest('tr');if(tr)saveField(el,tr.dataset.id,el.dataset.col);}});
+  c.addEventListener('change',e=>{const el=e.target;if(!el.matches)return;
+    if(el.matches('select.st')){el.dataset.v=el.value;const tr=el.closest('tr');if(tr)saveField(el,tr.dataset.id,'status');}
+    else if(el.matches('input[type=date][data-col]')){const tr=el.closest('tr');if(tr)saveField(el,tr.dataset.id,'prazo');}});
+  c.addEventListener('click',e=>{const b=e.target.closest&&e.target.closest('.lock-btn');if(b){const tr=b.closest('tr');if(tr)toggleLock(b,tr.dataset.id);}});
 }
 
 // ── Carregar TODOS os registros (RLS devolve tudo p/ admin) ──
@@ -309,6 +313,7 @@ document.getElementById('themeBtn').addEventListener('click',()=>applyTheme(docu
 applyTheme(localStorage.getItem('bi_theme')||'dark');
 document.getElementById('logoutBtn').addEventListener('click',async()=>{try{if(sb)await sb.auth.signOut();}catch(e){}location.href='../index.html';});
 
+wireDelegation();
 _buildMs(document.getElementById('ms-uni'),()=>UNI_OPTS);
 _buildMs(document.getElementById('ms-vig'),()=>VIG_OPTS);
 _buildMs(document.getElementById('ms-org'),()=>ORG_OPTS);

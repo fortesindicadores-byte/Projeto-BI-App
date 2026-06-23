@@ -532,9 +532,12 @@ function aplicar(){
     </div>`;
   }).join('');
   list.querySelectorAll('.fato-block').forEach(wireBlock);
+  autoResizeAll(list);
 }
 
 function autoResize(ta){ta.style.height='auto';ta.style.height=ta.scrollHeight+'px';}
+// Redimensiona todas as textareas em lote (2 reflows em vez de N)
+function autoResizeAll(c){const tas=[...c.querySelectorAll('textarea')];tas.forEach(ta=>ta.style.height='auto');const hs=tas.map(ta=>ta.scrollHeight);tas.forEach((ta,i)=>{ta.style.height=hs[i]+'px';});}
 
 // Reconcilia as ações do bloco com o Supabase: update (com id) · insert (novo) · delete (removido)
 async function saveBlock(block){
@@ -561,7 +564,6 @@ async function saveBlock(block){
 }
 
 function wireBlock(block){
-  block.querySelectorAll('textarea').forEach(autoResize);
   block.addEventListener('input',e=>{const el=e.target;if(el.tagName==='TEXTAREA')autoResize(el);if(el.classList.contains('st'))el.dataset.v=el.value;});
   block.addEventListener('change',e=>{if(e.target.classList.contains('st'))e.target.dataset.v=e.target.value;});
   // adicionar/remover linhas só no DOM; persiste no Salvar
