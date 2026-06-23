@@ -93,6 +93,10 @@ select.st[data-v="Cancelada"]{background:#333333;color:#fff;border-color:#333333
 .lock-btn{background:transparent;border:none;font-size:17px;line-height:1;cursor:pointer;padding:6px 4px;border-radius:5px;opacity:.45;}
 .lock-btn.on{opacity:1;}
 .lock-btn:hover{background:rgba(255,255,255,.08);}
+.col-add{width:88px;white-space:nowrap;}
+.mini-add{display:block;width:100%;margin:0 0 4px;background:rgba(249,115,22,.12);border:1px solid rgba(249,115,22,.30);color:var(--orange);font-family:'Montserrat',sans-serif;font-size:10px;font-weight:700;border-radius:5px;padding:4px 6px;cursor:pointer;white-space:nowrap;}
+.mini-add:last-child{margin-bottom:0;}
+.mini-add:hover{background:rgba(249,115,22,.28);}
 .cell-saving{outline:2px solid rgba(249,115,22,.5)!important;}
 .empty{text-align:center;color:var(--text2);padding:40px;}
 
@@ -233,6 +237,15 @@ async function toggleLock(btn,id){
 }
 let _flashT=null;
 function flash(msg,err){const m=document.getElementById('savedMsg');m.textContent=msg;m.classList.toggle('err',!!err);m.classList.add('show');clearTimeout(_flashT);_flashT=setTimeout(()=>m.classList.remove('show'),2000);}
+// Adiciona nova linha (ação ou causa) para o mesmo fato. comCausa=true → repete a causa (nova ação); false → causa em branco (nova causa).
+async function addRow(srcId,comCausa){
+  const src=_ROWS.find(r=>r.id===srcId); if(!src)return;
+  const novo={unidade:src.unidade,vigencia:src.vigencia,origem:src.origem,fato:src.fato,projeto:src.projeto||null,fato_desvio:src.fato_desvio||null,
+    causa:comCausa?(src.causa||null):null,acao:null,responsavel:null,prazo:null,status:DEFAULT_STATUS,acompanhamento:null,locked:false};
+  const {data,error}=await sb.from('fca').insert(novo).select('*').single();
+  if(error){flash('Erro ao adicionar',true);console.error('insert add',error);return;}
+  _ROWS.push(data); writeCache(CACHE_KEY,_ROWS); flash('Adicionado ✓'); render();
+}
 
 function summaryHTML(rows){
   const by=s=>rows.filter(r=>(r.status||DEFAULT_STATUS)===s).length;
@@ -261,6 +274,7 @@ function rowHTML(r){
     <td class="col-status"><span class="cell-label">Status</span><select class="st" data-col="status" data-v="${esc(st)}">${opts}</select></td>
     <td class="col-acomp"><span class="cell-label">Acompanhamento</span><textarea rows="1" data-col="acompanhamento">${esc(r.acompanhamento)}</textarea></td>
     <td class="col-lock"><span class="cell-label">Trava</span><button class="lock-btn ${r.locked?'on':''}" title="${r.locked?'Travado (clique p/ destravar)':'Destravado (clique p/ travar)'}">${r.locked?'🔒':'🔓'}</button></td>
+    <td class="col-add"><span class="cell-label">Adicionar</span><button class="mini-add" data-add="acao" title="Adicionar ação (mantém a mesma causa)">+ ação</button><button class="mini-add" data-add="causa" title="Adicionar nova causa para este fato">+ causa</button></td>
   </tr>`;
 }
 function render(){
@@ -268,11 +282,11 @@ function render(){
   if(!_ROWS.length){c.innerHTML=summaryHTML([])+'<div class="tbl-section"><div class="empty">Nenhuma ação cadastrada ainda. Assim que as unidades preencherem o FCA, os registros aparecem aqui.</div></div>';return;}
   const fu=getMsValues('ms-uni'),fv=getMsValues('ms-vig'),fo=getMsValues('ms-org'),fs=getMsValues('ms-st');
   const vis=_ROWS.filter(r=>(!fu.length||fu.includes(r.unidade))&&(!fv.length||fv.includes(r.vigencia))&&(!fo.length||fo.includes(r.origem))&&(!fs.length||fs.includes(r.status||DEFAULT_STATUS)));
-  vis.sort((a,b)=>String(a.unidade||'').localeCompare(String(b.unidade||''))||(vigNum(b.vigencia)-vigNum(a.vigencia)));  // unidade A→Z, depois vigência mais recente
+  vis.sort((a,b)=>String(a.unidade||'').localeCompare(String(b.unidade||''))||(vigNum(b.vigencia)-vigNum(a.vigencia))||String(a.fato||'').localeCompare(String(b.fato||'')));  // unidade A→Z, vigência recente, fato agrupado
   let body;
   if(!vis.length){body='<div class="tbl-section"><div class="empty">Nenhuma ação para os filtros selecionados.</div></div>';}
   else{body=`<div class="tbl-section"><table class="cons">
-    <thead><tr><th>Unidade</th><th>Vigência</th><th>Origem</th><th>Fato</th><th>Projeto</th><th>Causa</th><th>Ação</th><th>Responsável</th><th>Prazo</th><th>Status</th><th>Acompanhamento</th><th>🔒</th></tr></thead>
+    <thead><tr><th>Unidade</th><th>Vigência</th><th>Origem</th><th>Fato</th><th>Projeto</th><th>Causa</th><th>Ação</th><th>Responsável</th><th>Prazo</th><th>Status</th><th>Acompanhamento</th><th>🔒</th><th></th></tr></thead>
     <tbody>${vis.map(rowHTML).join('')}</tbody></table></div>`;}
   c.innerHTML=summaryHTML(vis)+body;
   autoResizeAll(c);
@@ -285,7 +299,10 @@ function wireDelegation(){
   c.addEventListener('change',e=>{const el=e.target;if(!el.matches)return;
     if(el.matches('select.st')){el.dataset.v=el.value;const tr=el.closest('tr');if(tr)saveField(el,tr.dataset.id,'status');}
     else if(el.matches('input[type=date][data-col]')){const tr=el.closest('tr');if(tr)saveField(el,tr.dataset.id,'prazo');}});
-  c.addEventListener('click',e=>{const b=e.target.closest&&e.target.closest('.lock-btn');if(b){const tr=b.closest('tr');if(tr)toggleLock(b,tr.dataset.id);}});
+  c.addEventListener('click',e=>{
+    const add=e.target.closest&&e.target.closest('.mini-add');
+    if(add){const tr=add.closest('tr');if(tr)addRow(tr.dataset.id,add.dataset.add==='acao');return;}
+    const b=e.target.closest&&e.target.closest('.lock-btn');if(b){const tr=b.closest('tr');if(tr)toggleLock(b,tr.dataset.id);}});
 }
 
 // ── Carregar TODOS os registros (RLS devolve tudo p/ admin) ──
