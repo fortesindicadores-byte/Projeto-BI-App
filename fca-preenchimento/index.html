@@ -176,6 +176,14 @@ const DEPARA={
   'MCC':{dre:'CACHOEIRAS DE MACACU', ger:['CDI MACACU','MACACU EMPURRADA']},
   'PIR':{dre:'PIRAI',                ger:['PIRAI EMPURRADA']},
 };
+// De-para da sub-unidade do Gerot (col 'unidade') → rótulo (sub-projeto). Unidades com 1 sub = só o código; com várias = COD - tier.
+const GER_LABEL={
+  'CDI MACACU':'MCC - T2','MACACU EMPURRADA':'MCC - T1',
+  'CDD RIO DE JANEIRO':'CGR','CDD RONDONOPOLIS':'RON','CDD GUARULHOS':'GRL',
+  'CDD FLORIANOPOLIS':'FLP','CDD NOVA FRIBURGO':'NFR','CDD PELOTAS':'PLT',
+  'CDD CUIABA':'CBA - T2','CUIABA EMPURRADA':'CBA - T1','CUIABA':'CBA T1 WH',
+  'PIRAI EMPURRADA':'PIR','CDD CAMBORIU':'BLC',
+};
 let UNIDADE_COD='CGR', UNIDADE_DRE='CAMPO GRANDE', UNIDADE_GER=['CDD RIO DE JANEIRO'];
 function applyDepara(cod){const d=DEPARA[cod]; if(d){UNIDADE_DRE=d.dre; UNIDADE_GER=d.ger;}}
 
@@ -220,24 +228,18 @@ function pushGerot(rows,fatos){
   let maxK=0;data.forEach(r=>{if(r[7]!=null||r[8]!=null){const k=vigKeyN(parseD(r[3]));if(k>maxK)maxK=k;}});
   if(!maxK)return;
   const vig=vigLbl(new Date(Math.floor(maxK/100),maxK%100,1));
-  const blocos={};
   data.filter(r=>vigKeyN(parseD(r[3]))===maxK).forEach(r=>{
-    const bloco=String(r[1]||'').trim(),kpi=String(r[4]||'').trim();
-    const tipo=/^\s*IC/i.test(kpi)?'IC':/^\s*IV/i.test(kpi)?'IV':'';
-    const o={kpi,un:String(r[5]||'').trim(),meta:r[6]!=null?+r[6]:null,real:r[7]!=null?+r[7]:null,atg:r[8]!=null?+r[8]:null};
-    if(!blocos[bloco])blocos[bloco]={ics:[],ivs:[]};
-    if(tipo==='IC')blocos[bloco].ics.push(o);else if(tipo==='IV')blocos[bloco].ivs.push(o);
-  });
-  Object.entries(blocos).forEach(([bloco,b])=>{
-    // RPM: IC e IV viram fato próprio, com o Bloco (no projeto) e o Fato = Meta | Real | Ating (sem "desvio")
-    const mk=o=>{
-      const sev=(o.atg!=null&&o.atg<0.7)?'crit':'aten', un=o.un?' '+o.un:'';
-      const meta=o.meta!=null?_g2(o.meta)+un:'—', real=o.real!=null?_g2(o.real)+un:'—', at=o.atg!=null?Math.round(o.atg*100)+'%':'—';
-      const desvio=`<span class="val ${sev==='aten'?'am':''}">Meta: ${meta} | Real: ${real} | Ating: ${at}</span>`;
-      return {vig,fato:o.kpi,proj:bloco,sev,desvio,causaAuto:'',origem:'RPM'};
-    };
-    b.ics.filter(ic=>ic.atg!=null&&ic.atg<1).forEach(ic=>fatos.push(mk(ic)));
-    b.ivs.filter(iv=>iv.atg!=null&&iv.atg<1).forEach(iv=>fatos.push(mk(iv)));
+    const kpi=String(r[4]||'').trim();
+    if(!/^\s*I[CV]/i.test(kpi))return;                 // só IC/IV
+    const atg=r[8]!=null?+r[8]:null;
+    if(atg==null||atg>=1)return;                        // só com desvio (atg<1)
+    const proj=GER_LABEL[_normU(r[2])]||String(r[2]||'').trim();   // sub-projeto (de-para por sub-unidade do Gerot)
+    const un=String(r[5]||'').trim(), sev=atg<0.7?'crit':'aten';
+    const meta=r[6]!=null?_g2(+r[6])+(un?' '+un:''):'—';
+    const real=r[7]!=null?_g2(+r[7])+(un?' '+un:''):'—';
+    const at=Math.round(atg*100)+'%';
+    const desvio=`<span class="val ${sev==='aten'?'am':''}">Meta: ${meta} | Real: ${real} | Ating: ${at}</span>`;
+    fatos.push({vig,fato:kpi,proj,sev,desvio,causaAuto:'',origem:'RPM'});
   });
 }
 function pushDRE(dre,fatos,kmlCausas,dispCausas,frotaMaps){
@@ -386,27 +388,13 @@ async function seedUnidade(u,shared){
   const fatos=await gerarFatos(shared);
   const rows=await fetchDB();            // _DBROWS desta unidade (fetchDB usa UNIDADE_COD)
   if(rows===null) throw new Error('falha ao ler a base');
-  let n=0;
-  for(const f of fatos){
-    const desv=stripTags(f.desvio)||null;
-    if((f.origem||'Custos')==='RPM'){
-      // casa por (vigência, fato) ignorando projeto, para migrar o Bloco e o formato Meta/Real/Ating sem duplicar nem perder o preenchido
-      const ex=rows.filter(r=>r.origem==='RPM'&&r.vigencia===f.vig&&r.fato===f.fato);
-      if(ex.length){
-        for(const r of ex){
-          const patch={};
-          if((r.projeto||'')!==(f.proj||'')) patch.projeto=f.proj||null;
-          if((r.fato_desvio||'')!==(desv||'')) patch.fato_desvio=desv;
-          if(/^IVs com desvio/i.test(r.causa||'')) patch.causa=null;   // limpa auto-causa antiga (IV agora é linha própria)
-          if(Object.keys(patch).length){const {error}=await sb.from('fca').update(patch).eq('id',r.id);if(error)throw error;}
-        }
-        continue;
-      }
-    } else if(_DBROWS[keyOf(f)]){ continue; }
-    const {error}=await sb.from('fca').insert({unidade:u,vigencia:f.vig,origem:f.origem||'Custos',fato:f.fato,projeto:f.proj||null,fato_desvio:desv,causa:f.causaAuto||null,status:DEFAULT_STATUS,locked:false});
-    if(error)throw error; n++;
+  const have=new Set(Object.keys(_DBROWS));
+  const novos=fatos.filter(f=>!have.has(keyOf(f)));
+  if(novos.length){
+    const payload=novos.map(f=>({unidade:u,vigencia:f.vig,origem:f.origem||'Custos',fato:f.fato,projeto:f.proj||null,fato_desvio:stripTags(f.desvio)||null,causa:f.causaAuto||null,status:DEFAULT_STATUS,locked:false}));
+    for(let i=0;i<payload.length;i+=200){const {error}=await sb.from('fca').insert(payload.slice(i,i+200));if(error)throw error;}
   }
-  return n;
+  return novos.length;
 }
 // Km/L e Preço R$/L não são fatos próprios — entram como CAUSA do Custo Combustível. Oculta esses cards (ex.: vindos da importação).
 function isDriverCombust(fato){
@@ -465,6 +453,8 @@ async function gerarTodas(){
   ['uniBadge','uniSel','adminBtn','saveBtn','savedMsg','backUnits'].forEach(id=>{const e=document.getElementById(id);if(e)e.style.display='none';});
   const intro=document.querySelector('.intro'); if(intro)intro.style.display='none';
   list.innerHTML='<div class="loading">Baixando planilhas…</div>';
+  // RPM é recriado do zero a cada geração (Custos são preservados) — garante o formato atual de forma determinística
+  try{ await sb.from('fca').delete().eq('origem','RPM'); }catch(e){console.error('limpeza RPM',e);}
   const shared={ger:await _gvizSafe(SRC_GEROT), disp:await _gvizSafe(SRC_DISP), kml:await _gvizSafe(SRC_KML)};
   const units=Object.keys(DEPARA).sort();
   const log=[]; let tot=0;
