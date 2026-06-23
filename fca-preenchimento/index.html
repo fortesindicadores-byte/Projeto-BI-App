@@ -233,15 +233,10 @@ function pushGerot(rows,fatos){
       const pct=Math.round(ic.atg*100),sev=ic.atg<0.7?'crit':'aten';
       const gap=(ic.meta!=null&&ic.real!=null)?ic.meta-ic.real:null;
       const desvio=`<span class="dn">Desvio: </span><span class="val ${sev==='aten'?'am':''}">ating. ${pct}%${gap!=null?' · ▲ '+_g2(gap)+(ic.un?' '+ic.un:''):''}</span>${ic.meta!=null?' <span class="dn">(meta '+_g2(ic.meta)+(ic.un?' '+ic.un:'')+')</span>':''}`;
-      // RPM não tem auto-causa: o IC vem com causa em branco (só Custos vêm com causa preenchida)
-      fatos.push({vig,fato:ic.kpi,sev,desvio,causaAuto:'',origem:'RPM'});
-    });
-    // IVs que desviaram também viram fato próprio (tudo que desviou no Gerot vem)
-    b.ivs.filter(iv=>iv.atg!=null&&iv.atg<1).forEach(iv=>{
-      const pct=Math.round(iv.atg*100),sev=iv.atg<0.7?'crit':'aten';
-      const gap=(iv.meta!=null&&iv.real!=null)?iv.meta-iv.real:null;
-      const desvio=`<span class="dn">Desvio: </span><span class="val ${sev==='aten'?'am':''}">ating. ${pct}%${gap!=null?' · ▲ '+_g2(gap)+(iv.un?' '+iv.un:''):''}</span>${iv.meta!=null?' <span class="dn">(meta '+_g2(iv.meta)+(iv.un?' '+iv.un:'')+')</span>':''}`;
-      fatos.push({vig,fato:iv.kpi,sev,desvio,causaAuto:'',origem:'RPM'});
+      // IC traz, como causa automática, os IVs do bloco que desviaram (atg<1). IV não vira fato/linha própria.
+      const ivBad=b.ivs.filter(iv=>iv.atg!=null&&iv.atg<1);
+      const causaAuto=ivBad.length?('IVs com desvio:\n'+ivBad.map(iv=>`- ${iv.kpi}: Real ${_g2(iv.real)} | Meta ${_g2(iv.meta)} | ating. ${iv.atg!=null?Math.round(iv.atg*100)+'%':'—'}`).join('\n')):'';
+      fatos.push({vig,fato:ic.kpi,sev,desvio,causaAuto,origem:'RPM'});
     });
   });
 }
@@ -456,8 +451,8 @@ async function gerarTodas(){
   ['uniBadge','uniSel','adminBtn','saveBtn','savedMsg','backUnits'].forEach(id=>{const e=document.getElementById(id);if(e)e.style.display='none';});
   const intro=document.querySelector('.intro'); if(intro)intro.style.display='none';
   list.innerHTML='<div class="loading">Baixando planilhas…</div>';
-  // limpeza única: remove a antiga auto-causa "IVs com desvio" das linhas RPM (agora RPM vem com causa em branco)
-  try{ await sb.from('fca').update({causa:null}).eq('origem','RPM').like('causa','IVs com desvio%'); }catch(e){console.error('limpeza RPM',e);}
+  // resync RPM: apaga as linhas RPM sem nada preenchido (IVs soltos e ICs em branco) para a geração recriar os ICs já com os IVs na causa
+  try{ await sb.from('fca').delete().eq('origem','RPM').is('acao',null).is('responsavel',null).is('acompanhamento',null); }catch(e){console.error('resync RPM',e);}
   const shared={ger:await _gvizSafe(SRC_GEROT), disp:await _gvizSafe(SRC_DISP), kml:await _gvizSafe(SRC_KML)};
   const units=Object.keys(DEPARA).sort();
   const log=[]; let tot=0;
