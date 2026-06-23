@@ -122,6 +122,7 @@ body.light-mode select.st[data-v="Cancelada"]{background:#333333;color:#fff;}
   <div class="hfilter"><label>Projeto</label><div class="ms-wrap" id="ms-proj"><button class="ms-btn" onclick="toggleMs('ms-proj')"><span class="ms-lbl">Todos</span><span class="ms-cnt"></span><svg width="10" height="6" viewBox="0 0 10 6"><path d="M0 0l5 6 5-6z" fill="#F97316"/></svg></button><div class="ms-panel"><div class="ms-search"><input type="text" placeholder="Pesquisar…"></div><div class="ms-list"></div></div></div></div>
   <div class="hfilter"><label>Indicador</label><div class="ms-wrap" id="ms-ind"><button class="ms-btn" onclick="toggleMs('ms-ind')"><span class="ms-lbl">Todos</span><span class="ms-cnt"></span><svg width="10" height="6" viewBox="0 0 10 6"><path d="M0 0l5 6 5-6z" fill="#F97316"/></svg></button><div class="ms-panel"><div class="ms-search"><input type="text" placeholder="Pesquisar…"></div><div class="ms-list"></div></div></div></div>
   <span class="uni-badge" id="uniBadge">—</span>
+  <select id="uniSel" title="Trocar de unidade (admin)" style="display:none;background:#0a0f18;color:var(--text);border:1px solid #2a3a50;border-radius:6px;font-family:'Montserrat',sans-serif;font-size:11px;font-weight:700;padding:6px 10px;cursor:pointer;outline:none;"></select>
   <a class="btn" href="../" title="Voltar ao hub" style="text-decoration:none">← Hub</a>
   <button class="btn theme" id="themeBtn" title="Modo claro/escuro">☀</button>
   <button class="btn" id="adminBtn" title="Modo admin (edita tudo) — teste; em produção será por RLS">Admin</button>
@@ -139,14 +140,26 @@ const SUPABASE_KEY='sb_publishable_ggKEEebc5zjgQDVsF92Upw_6uoLmKe9';
 let sb=null, SESSION=null, PROFILE=null, REAL_ADMIN=false, ADMIN=false, PREVIEW=false;
 let _DBROWS={}; // chave do fato -> linhas salvas no banco
 
-// ── Unidade (vem do perfil; admin pode trocar via ?u=COD) ──
-// De-para código → nomes nas planilhas-fonte. TODO: completar todas as unidades.
-const DEPARA={ 'CGR':{dre:'CAMPO GRANDE', ic:'CDD RIO DE JANEIRO'} };
-let UNIDADE_COD='CGR', UNIDADE_DRE='CAMPO GRANDE', UNIDADE_IC='CDD RIO DE JANEIRO';
-function applyDepara(cod){const d=DEPARA[cod]; if(d){UNIDADE_DRE=d.dre; UNIDADE_IC=d.ic;}}
+// ── Unidade (vem do perfil; admin pode trocar via ?u=COD ou no seletor) ──
+// De-para por código → nome na DRE (cidade, col10) e nome(s) no Gerot/ICs (col unidade).
+// Fonte: scorecard (UNI2COD/UNI2CID). A Dispersão/Ativação usa o próprio código.
+const DEPARA={
+  'CGR':{dre:'CAMPO GRANDE',         ger:['CDD RIO DE JANEIRO']},
+  'BLC':{dre:'BALNEARIO CAMBORIU',   ger:['CDD CAMBORIU']},
+  'CBA':{dre:'CUIABA',               ger:['CDD CUIABA','CUIABA','CUIABA EMPURRADA']},
+  'FLP':{dre:'FLORIANOPOLIS',        ger:['CDD FLORIANOPOLIS']},
+  'GRL':{dre:'GUARULHOS',            ger:['CDD GUARULHOS']},
+  'NFR':{dre:'NOVA FRIBURGO',        ger:['CDD NOVA FRIBURGO']},
+  'PLT':{dre:'PELOTAS',              ger:['CDD PELOTAS']},
+  'RON':{dre:'RONDONOPOLIS',         ger:['CDD RONDONOPOLIS']},
+  'MCC':{dre:'CACHOEIRAS DE MACACU', ger:['CDI MACACU','MACACU EMPURRADA']},
+  'PIR':{dre:'PIRAI',                ger:['PIRAI EMPURRADA']},
+};
+let UNIDADE_COD='CGR', UNIDADE_DRE='CAMPO GRANDE', UNIDADE_GER=['CDD RIO DE JANEIRO'];
+function applyDepara(cod){const d=DEPARA[cod]; if(d){UNIDADE_DRE=d.dre; UNIDADE_GER=d.ger;}}
 
 // Gerot (ICs + IVs): mesma planilha dos ICs, aba gid=0 — formato longo bloco|unidade|vig|kpi|un|meta|real|atg.
-// Cada bloco tem 1 IC e seus IVs; o kpi começa com "IC"/"IV". UNIDADE_IC deve casar com a coluna 'unidade' do Gerot.
+// Cada bloco tem 1 IC e seus IVs; o kpi começa com "IC"/"IV". UNIDADE_GER (do de-para) casa com a coluna 'unidade' do Gerot.
 const SRC_GEROT = 'https://docs.google.com/spreadsheets/d/1xGl1Xrk2sPS9zWghEuecFMNBHwmeLiZ02U-QpO8cDPY/gviz/tq?gid=0';
 const srcDre = ()=>'https://docs.google.com/spreadsheets/d/1qcTy2ppLCGBKKqZCxCYWCTL9kTAuWfHBMyBfWJOyih8/gviz/tq?sheet='+encodeURIComponent('Consolidado DRE')+'&tq='+encodeURIComponent("select * where K = '"+UNIDADE_DRE+"'");
 const SRC_KML = 'https://docs.google.com/spreadsheets/d/1ZZdvG_RK5cTBLdPl3TWCbNeqw-Y4fTYwWsQV4w-e__A/gviz/tq?sheet='+encodeURIComponent('Km/L');
@@ -175,7 +188,8 @@ const projKey=s=>_normU(String(s||'').split('-')[0]);
 const uniMatch=v=>{const n=_normU(v);return n===_normU(UNIDADE_DRE)||n===_normU(UNIDADE_COD);};
 // Gerot: cada IC com desvio (atg<1) vira fato; a causa já traz os IVs do mesmo bloco que também desviaram.
 function pushGerot(rows,fatos){
-  const data=(rows||[]).filter(r=>r[4]&&parseD(r[3])&&_normU(r[2])===_normU(UNIDADE_IC));
+  const gset=new Set((UNIDADE_GER||[]).map(_normU));
+  const data=(rows||[]).filter(r=>r[4]&&parseD(r[3])&&gset.has(_normU(r[2])));
   if(!data.length)return;
   // última vigência COM dados (real/atg preenchidos)
   let maxK=0;data.forEach(r=>{if(r[7]!=null||r[8]!=null){const k=vigKeyN(parseD(r[3]));if(k>maxK)maxK=k;}});
@@ -509,7 +523,16 @@ async function initApp(){
   applyDepara(UNIDADE_COD);
   document.getElementById('uniBadge').textContent=UNIDADE_COD;
   applyAdminUI();
+  setupUniSel();
   carregar();
+}
+// Seletor de unidade (só admin): troca a unidade exibida sem mexer na URL
+function setupUniSel(){
+  const sel=document.getElementById('uniSel'); if(!sel)return;
+  if(!REAL_ADMIN){sel.style.display='none';return;}
+  sel.innerHTML=Object.keys(DEPARA).sort().map(c=>`<option value="${c}" ${c===UNIDADE_COD?'selected':''}>${c}</option>`).join('');
+  sel.style.display='';
+  sel.onchange=()=>{UNIDADE_COD=sel.value;applyDepara(UNIDADE_COD);document.getElementById('uniBadge').textContent=UNIDADE_COD;document.getElementById('list').innerHTML='<div class="loading">Carregando…</div>';carregar();};
 }
 initApp();
 </script>
