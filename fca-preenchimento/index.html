@@ -62,11 +62,11 @@ table.acoes{width:100%;border-collapse:collapse;font-size:12px;}
 table.acoes thead th{font-size:10px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:.5px;text-align:left;padding:8px 8px 6px;border-bottom:1px solid rgba(255,255,255,.08);white-space:nowrap;}
 table.acoes td{padding:8px 8px;vertical-align:top;}
 table.acoes tbody tr+tr td{border-top:1px solid rgba(255,255,255,.05);}
-.col-causa,.col-acao{width:23%;}
-.col-acomp{width:20%;}
-.col-resp{width:12%;}
-.col-prazo{width:10%;}
-.col-status{width:10%;}
+.col-causa,.col-acao{width:28%;}
+.col-acomp{width:13%;}
+.col-resp{width:10%;}
+.col-prazo{width:9%;}
+.col-status{width:9%;}
 .col-x{width:26px;}
 .acoes input,.acoes textarea,.acoes select{background:#0a0f18;border:1px solid #2a3a50;border-radius:6px;color:var(--text);font-family:'Montserrat',sans-serif;font-size:12.5px;padding:7px 9px;outline:none;width:100%;min-height:38px;}
 .acoes input:focus,.acoes textarea:focus,.acoes select:focus{border-color:var(--orange);}
@@ -129,6 +129,7 @@ body.light-mode select.st[data-v="Cancelada"]{background:#333333;color:#fff;}
 <body>
 <header class="header">
   <div class="brand"><div class="brand-eyebrow">Gestão em Movimento · BI Frota</div><h1>FCA · Preenchimento</h1><p>preenchimento por unidade</p></div>
+  <div class="hfilter"><label>Vigência</label><div class="ms-wrap" id="ms-vig"><button class="ms-btn" onclick="toggleMs('ms-vig')"><span class="ms-lbl">Todas</span><span class="ms-cnt"></span><svg width="10" height="6" viewBox="0 0 10 6"><path d="M0 0l5 6 5-6z" fill="#F97316"/></svg></button><div class="ms-panel"><div class="ms-search"><input type="text" placeholder="Pesquisar…"></div><div class="ms-list"></div></div></div></div>
   <div class="hfilter"><label>Projeto</label><div class="ms-wrap" id="ms-proj"><button class="ms-btn" onclick="toggleMs('ms-proj')"><span class="ms-lbl">Todos</span><span class="ms-cnt"></span><svg width="10" height="6" viewBox="0 0 10 6"><path d="M0 0l5 6 5-6z" fill="#F97316"/></svg></button><div class="ms-panel"><div class="ms-search"><input type="text" placeholder="Pesquisar…"></div><div class="ms-list"></div></div></div></div>
   <div class="hfilter"><label>Indicador</label><div class="ms-wrap" id="ms-ind"><button class="ms-btn" onclick="toggleMs('ms-ind')"><span class="ms-lbl">Todos</span><span class="ms-cnt"></span><svg width="10" height="6" viewBox="0 0 10 6"><path d="M0 0l5 6 5-6z" fill="#F97316"/></svg></button><div class="ms-panel"><div class="ms-search"><input type="text" placeholder="Pesquisar…"></div><div class="ms-list"></div></div></div></div>
   <span class="uni-badge" id="uniBadge">—</span>
@@ -197,6 +198,10 @@ const _g2=v=>v==null||!isFinite(v)?'—':(+v).toLocaleString('pt-BR',{maximumFra
 // Chave de projeto = parte antes do "-" (nível3 da DRE inclui "- UNIDADE"); unidade aceita código (CGR) ou nome (CAMPO GRANDE).
 const projKey=s=>_normU(String(s||'').split('-')[0]);
 const uniMatch=v=>{const n=_normU(v);return n===_normU(UNIDADE_DRE)||n===_normU(UNIDADE_COD);};
+// Chave de fato robusta: casa importado (projeto "ROTA") com gerado (nivel3 "ROTA - BLC") e ignora linhas extras do fato
+const fatoKey=s=>_normU(String(s||'').split('\n')[0]);
+const fkey=(vig,origem,proj,fato)=>`${vig}||${origem||''}||${projKey(proj)}||${fatoKey(fato)}`;
+function vigNum(v){const m=String(v||'').match(/^([a-zç]{3})\/(\d{2})$/i);if(!m)return 0;const i=MESES.indexOf(m[1].toLowerCase());return (2000+ +m[2])*100+(i<0?0:i);}
 // Gerot: cada IC com desvio (atg<1) vira fato; a causa já traz os IVs do mesmo bloco que também desviaram.
 function pushGerot(rows,fatos){
   const gset=new Set((UNIDADE_GER||[]).map(_normU));
@@ -352,25 +357,36 @@ async function fetchDB(){
   if(!sb||PREVIEW) return;
   const {data,error}=await sb.from('fca').select('*').eq('unidade',UNIDADE_COD).order('created_at',{ascending:true});
   if(error){console.error('fca select',error);return;}
-  (data||[]).forEach(r=>{const k=`${r.vigencia}||${r.origem}||${r.projeto||''}||${r.fato}`;(_DBROWS[k]=_DBROWS[k]||[]).push(r);});
+  (data||[]).forEach(r=>{const k=fkey(r.vigencia,r.origem,r.projeto,r.fato);(_DBROWS[k]=_DBROWS[k]||[]).push(r);});
+}
+// Acrescenta como fatos os FCAs já salvos/importados que NÃO têm fato gerado (outros meses, contas sem desvio no mês, etc.)
+function mergeDBOnly(fatos){
+  const gen=new Set(fatos.map(keyOf));
+  Object.keys(_DBROWS).forEach(k=>{
+    if(gen.has(k))return;
+    const r=_DBROWS[k][0];
+    fatos.push({vig:r.vigencia||'',origem:r.origem||'Custos',proj:r.projeto||'',fato:r.fato||'(sem fato)',sev:'aten',
+      desvio:r.fato_desvio?`<span class="dn">Desvio: </span><span class="val am">${esc(r.fato_desvio)}</span>`:'<span class="dn">—</span>'});
+  });
 }
 async function carregar(){
+  document.getElementById('list').innerHTML='<div class="loading">Carregando fatos da unidade…</div>';
   await fetchDB();
   const fatos=[];
   let kmlCausas={},dispCausas={},frotaMaps={mes:{},porMes:{}};
   try{ const ger=await gviz(SRC_GEROT); pushGerot(ger,fatos); }catch(e){}
-  render(fatos.length?fatos:[]);
   try{ const disp=await gviz(SRC_DISP); dispCausas=dispCausasPorProj(disp); frotaMaps=frotaAtivaPorProj(disp); }catch(e){}
   try{ const kml=await gviz(SRC_KML); kmlCausas=kmlCausasPorProj(kml); }catch(e){}
-  try{ const dre=await gviz(srcDre()); pushDRE(dre,fatos,kmlCausas,dispCausas,frotaMaps); render(fatos); }
-  catch(e){ if(!fatos.length)document.getElementById('list').innerHTML='<div class="empty">Sem desvios financeiros carregados (planilha pesada) — mostrando só ICs do Gerot.</div>'; }
+  try{ const dre=await gviz(srcDre()); pushDRE(dre,fatos,kmlCausas,dispCausas,frotaMaps); }catch(e){}
+  mergeDBOnly(fatos);   // inclui importados/salvos (todos os meses)
+  render(fatos);
 }
 
 const STATUS=['Não iniciada','Em andamento','Concluída','Cancelada'];
 const DEFAULT_STATUS='Não iniciada';
 
 // ── Ações vêm do Supabase (mapeadas por chave de fato) ──
-const keyOf=f=>`${f.vig}||${f.origem||''}||${f.proj||''}||${f.fato}`;
+const keyOf=f=>fkey(f.vig,f.origem,f.proj,f.fato);
 const stripTags=h=>String(h||'').replace(/<[^>]*>/g,'').replace(/\s+/g,' ').trim();
 function loadAcoes(key,causaAuto){
   if(PREVIEW){ try{const v=JSON.parse(localStorage.getItem('fca_prev_'+key));if(Array.isArray(v)&&v.length)return v;}catch(e){} return [{id:'',causa:causaAuto||'',acao:'',resp:'',prazo:'',status:DEFAULT_STATUS,obs:'',locked:false}]; }
@@ -397,7 +413,7 @@ function rowHTML(a,canRemove){
 
 let _FATOS=[];
 function render(fatos){ _FATOS=fatos||[]; popFiltros(); aplicar(); }
-let PROJ_OPTS=[],IND_OPTS=[];
+let PROJ_OPTS=[],IND_OPTS=[],VIG_OPTS=[],_vigInit=false;
 function syncBadge(w){const c=w.querySelector('.ms-cnt'),n=w._sel?w._sel.size:0;if(c){c.textContent=n;c.style.display=n?'':'none';}}
 function _buildMs(w,getItems){
   if(!w)return; if(!(w._sel instanceof Set))w._sel=new Set();
@@ -411,16 +427,19 @@ function _buildMs(w,getItems){
 function toggleMs(id){document.querySelectorAll('.ms-panel.open').forEach(p=>{if(p.closest('.ms-wrap').id!==id)p.classList.remove('open');});const p=document.querySelector('#'+id+' .ms-panel');if(p)p.classList.toggle('open');}
 function getMsValues(id){const w=document.getElementById(id);return w&&w._sel?[...w._sel]:[];}
 function popFiltros(){
+  VIG_OPTS=[...new Set(_FATOS.map(f=>f.vig).filter(Boolean))].sort((a,b)=>vigNum(b)-vigNum(a));
   PROJ_OPTS=[...new Set(_FATOS.map(f=>f.proj||'Geral'))].sort();
   IND_OPTS=[...new Set(_FATOS.map(f=>f.fato))].sort();
-  const wp=document.getElementById('ms-proj'),wi=document.getElementById('ms-ind');
-  if(wp&&wp._render)wp._render(''); if(wi&&wi._render)wi._render('');
+  // 1ª carga: já abre na vigência mais recente (as outras ficam no filtro)
+  const wv=document.getElementById('ms-vig');
+  if(wv && !_vigInit && VIG_OPTS.length){ wv._sel=new Set([VIG_OPTS[0]]); _vigInit=true; }
+  ['ms-vig','ms-proj','ms-ind'].forEach(id=>{const w=document.getElementById(id);if(w&&w._render)w._render('');});
 }
 function aplicar(){
   const list=document.getElementById('list');
   if(!_FATOS.length){list.innerHTML='<div class="empty">✓ Nenhum desvio encontrado para esta unidade na vigência mais recente — sem fatos a tratar.</div>';return;}
-  const fp=getMsValues('ms-proj'), fi=getMsValues('ms-ind');
-  const vis=_FATOS.filter(f=>(!fp.length||fp.includes(f.proj||'Geral'))&&(!fi.length||fi.includes(f.fato)));
+  const fv=getMsValues('ms-vig'), fp=getMsValues('ms-proj'), fi=getMsValues('ms-ind');
+  const vis=_FATOS.filter(f=>(!fv.length||fv.includes(f.vig))&&(!fp.length||fp.includes(f.proj||'Geral'))&&(!fi.length||fi.includes(f.fato)));
   if(!vis.length){list.innerHTML='<div class="empty">Nenhum fato para o filtro selecionado.</div>';return;}
   list.innerHTML=vis.map(f=>{
     const key=keyOf(f);
@@ -506,6 +525,7 @@ function applyTheme(t){document.body.classList.toggle('light-mode',t==='light');
 document.getElementById('themeBtn').addEventListener('click',()=>applyTheme(document.body.classList.contains('light-mode')?'dark':'light'));
 applyTheme(localStorage.getItem('bi_theme')||'dark');
 
+_buildMs(document.getElementById('ms-vig'),()=>VIG_OPTS);
 _buildMs(document.getElementById('ms-proj'),()=>PROJ_OPTS);
 _buildMs(document.getElementById('ms-ind'),()=>IND_OPTS);
 document.addEventListener('click',e=>{if(!e.target.closest('.ms-wrap'))document.querySelectorAll('.ms-panel.open').forEach(p=>p.classList.remove('open'));});
