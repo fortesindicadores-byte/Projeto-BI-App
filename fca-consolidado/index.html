@@ -96,6 +96,8 @@ select.st[data-v="Cancelada"]{background:#333333;color:#fff;border-color:#333333
 .add-row{display:flex;gap:6px;margin-top:7px;}
 .mini-add{background:rgba(249,115,22,.12);border:1px solid rgba(249,115,22,.30);color:var(--orange);font-family:'Montserrat',sans-serif;font-size:10px;font-weight:700;border-radius:5px;padding:4px 9px;cursor:pointer;white-space:nowrap;}
 .mini-add:hover{background:rgba(249,115,22,.28);}
+.mini-del{margin-left:auto;background:rgba(255,102,102,.10);border:1px solid rgba(255,102,102,.30);color:var(--red);font-size:12px;line-height:1;border-radius:5px;padding:3px 8px;cursor:pointer;}
+.mini-del:hover{background:rgba(255,102,102,.25);}
 .cell-saving{outline:2px solid rgba(249,115,22,.5)!important;}
 .empty{text-align:center;color:var(--text2);padding:40px;}
 
@@ -245,6 +247,13 @@ async function addRow(srcId,comCausa){
   if(error){flash('Erro ao adicionar',true);console.error('insert add',error);return;}
   _ROWS.push(data); writeCache(CACHE_KEY,_ROWS); flash('Adicionado ✓'); render();
 }
+async function delRow(id){
+  if(!id)return;
+  if(!confirm('Excluir esta linha do FCA? Esta ação não pode ser desfeita.'))return;
+  const {error}=await sb.from('fca').delete().eq('id',id);
+  if(error){flash('Erro ao excluir',true);console.error('delete',error);return;}
+  _ROWS=_ROWS.filter(r=>r.id!==id); writeCache(CACHE_KEY,_ROWS); flash('Excluído ✓'); render();
+}
 
 function summaryHTML(rows){
   const by=s=>rows.filter(r=>(r.status||DEFAULT_STATUS)===s).length;
@@ -267,7 +276,7 @@ function rowHTML(r){
     <td class="c-fato"><span class="cell-label">Fato</span>${esc(r.fato)}${r.fato_desvio?`<small>${esc(r.fato_desvio)}</small>`:''}</td>
     <td class="c-proj"><span class="cell-label">Projeto</span>${esc(r.projeto||'—')}</td>
     <td class="col-causa"><span class="cell-label">Causa</span><textarea rows="1" data-col="causa">${esc(r.causa)}</textarea></td>
-    <td class="col-acao"><span class="cell-label">Ação</span><textarea rows="1" data-col="acao">${esc(r.acao)}</textarea><div class="add-row"><button class="mini-add" data-add="acao" title="Nova ação (mantém a mesma causa)">+ ação</button><button class="mini-add" data-add="causa" title="Nova causa para este fato">+ causa</button></div></td>
+    <td class="col-acao"><span class="cell-label">Ação</span><textarea rows="1" data-col="acao">${esc(r.acao)}</textarea><div class="add-row"><button class="mini-add" data-add="acao" title="Nova ação (mantém a mesma causa)">+ ação</button><button class="mini-add" data-add="causa" title="Nova causa para este fato">+ causa</button><button class="mini-del" title="Excluir esta linha">🗑️</button></div></td>
     <td class="col-resp"><span class="cell-label">Responsável</span><input type="text" data-col="responsavel" value="${esc(r.responsavel)}"></td>
     <td class="col-prazo"><span class="cell-label">Prazo</span><input type="date" data-col="prazo" value="${esc(r.prazo)}"></td>
     <td class="col-status"><span class="cell-label">Status</span><select class="st" data-col="status" data-v="${esc(st)}">${opts}</select></td>
@@ -300,6 +309,8 @@ function wireDelegation(){
   c.addEventListener('click',e=>{
     const add=e.target.closest&&e.target.closest('.mini-add');
     if(add){const tr=add.closest('tr');if(tr)addRow(tr.dataset.id,add.dataset.add==='acao');return;}
+    const del=e.target.closest&&e.target.closest('.mini-del');
+    if(del){const tr=del.closest('tr');if(tr)delRow(tr.dataset.id);return;}
     const b=e.target.closest&&e.target.closest('.lock-btn');if(b){const tr=b.closest('tr');if(tr)toggleLock(b,tr.dataset.id);}});
 }
 
