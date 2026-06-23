@@ -109,6 +109,10 @@ body{background:radial-gradient(ellipse at 15% 20%,rgba(249,115,22,.07) 0%,trans
 .user-email{font-size:11px;color:var(--text2);margin-top:2px;}
 .user-phone{font-size:11px;color:var(--text3);margin-top:2px;}
 .user-date{font-size:10px;color:var(--text3);margin-top:4px;}
+.user-fca{margin-top:8px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+.user-fca label{font-size:10px;font-weight:700;color:var(--orange);text-transform:uppercase;letter-spacing:.5px;}
+.user-fca select{background:#0a0f18;color:var(--text);border:1px solid #2a3a50;border-radius:6px;font-family:'Montserrat',sans-serif;font-size:11px;font-weight:700;padding:5px 9px;cursor:pointer;outline:none;}
+.user-fca select:hover{border-color:var(--orange);}
 .user-actions{display:flex;gap:8px;flex-shrink:0;}
 .btn-approve{background:rgba(59,179,59,.15);border:1px solid rgba(59,179,59,.3);border-radius:6px;padding:7px 16px;font-family:'Montserrat',sans-serif;font-size:10px;font-weight:800;color:var(--green);cursor:pointer;text-transform:uppercase;letter-spacing:.5px;transition:all .2s;}
 .btn-approve:hover{background:rgba(59,179,59,.3);}
@@ -332,6 +336,9 @@ const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 let currentUser    = null;
 let adminTabActive = 'pending';
 let allApprovals   = [];
+// Acesso FCA por usuário (perfil): código de unidade ou admin
+const FCA_UNITS = ['CGR','BLC','CBA','FLP','GRL','NFR','PLT','RON','MCC','PIR'];
+let _fcaProf = {};   // user_id -> { unidade, is_admin }
 let isRegistering  = false;
 let isApproved     = false;
 let pollingInterval = null;
@@ -596,8 +603,28 @@ async function doUpdatePassword() {
 async function loadAdminData() {
   const { data } = await sb.from('user_approvals').select('*').order('created_at', { ascending: false });
   allApprovals = data || [];
+  try {
+    const { data: profs } = await sb.from('fca_profiles').select('user_id,unidade,is_admin');
+    _fcaProf = {}; (profs || []).forEach(p => { _fcaProf[p.user_id] = p; });
+  } catch (e) { _fcaProf = {}; }
   renderAdminUsers();
   updateAdminCounts();
+}
+
+// Define o acesso FCA do usuário (Admin / unidade / sem acesso) — grava no fca_profiles
+async function setUserUnit(userId, value, nome) {
+  if (!userId) return;
+  try {
+    if (value === '') {
+      await sb.from('fca_profiles').delete().eq('user_id', userId);
+      delete _fcaProf[userId];
+    } else {
+      const row = { user_id: userId, nome: nome || null, unidade: value === '__ADMIN__' ? null : value, is_admin: value === '__ADMIN__' };
+      const { error } = await sb.from('fca_profiles').upsert(row, { onConflict: 'user_id' });
+      if (error) throw error;
+      _fcaProf[userId] = row;
+    }
+  } catch (e) { alert('Erro ao salvar acesso FCA: ' + (e.message || e)); }
 }
 
 async function loadAdminBadge() {
@@ -648,6 +675,18 @@ function renderAdminUsers() {
       actions = `<button class="btn-remove" onclick="removeUser(${idx})">Remover</button>
                  <button class="btn-unblock" onclick="unblockUser(${idx})">Desbloquear</button>`;
     }
+    let fcaSel = '';
+    if (u.status === 'approved' && u.user_id) {
+      const p = _fcaProf[u.user_id] || {};
+      const cur = p.is_admin ? '__ADMIN__' : (p.unidade ? String(p.unidade).toUpperCase() : '');
+      const nm = (u.name || '').replace(/'/g, '’');
+      fcaSel = `<div class="user-fca"><label>Acesso FCA:</label>
+        <select onchange="setUserUnit('${u.user_id}', this.value, '${nm}')">
+          <option value="" ${cur === '' ? 'selected' : ''}>— sem acesso —</option>
+          <option value="__ADMIN__" ${cur === '__ADMIN__' ? 'selected' : ''}>Admin (todas)</option>
+          ${FCA_UNITS.map(c => `<option value="${c}" ${cur === c ? 'selected' : ''}>${c}</option>`).join('')}
+        </select></div>`;
+    }
     return `<div class="user-card">
       <div class="user-avatar">${initial}</div>
       <div class="user-info">
@@ -655,6 +694,7 @@ function renderAdminUsers() {
         <div class="user-email">${u.email}</div>
         <div class="user-phone">${u.phone || '—'}</div>
         <div class="user-date">Cadastro: ${dt}</div>
+        ${fcaSel}
       </div>
       <div class="user-actions">${actions}</div>
     </div>`;
