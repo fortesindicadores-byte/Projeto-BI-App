@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FCA · Migração</title>
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+:root{--bg:#0C1017;--card:#141B26;--border:#1E2D40;--orange:#F97316;--blue:#38BDF8;--text:#F1F5F9;--text2:#94A3B8;--text3:#475569;--green:#3BB33B;--red:#FF6666;--amber:#F4A100;}
+*{margin:0;padding:0;box-sizing:border-box;}
+body{background:radial-gradient(ellipse at 10% 25%,rgba(249,115,22,.06) 0%,transparent 50%),radial-gradient(ellipse at 90% 75%,rgba(56,189,248,.05) 0%,transparent 50%),var(--bg);color:var(--text);font-family:'Montserrat',-apple-system,sans-serif;font-size:13px;min-height:100vh;}
+.header{background:rgba(12,16,23,.75);border-bottom:1px solid rgba(255,255,255,.07);padding:10px 24px 12px;display:flex;flex-wrap:wrap;align-items:center;gap:10px;position:sticky;top:0;z-index:100;backdrop-filter:blur(20px);box-shadow:0 2px 12px rgba(0,0,0,.3);}
+.brand{flex:1;min-width:200px;}.brand h1{font-size:18px;font-weight:800;color:var(--orange);line-height:1.1;}.brand p{font-size:10px;color:var(--text2);margin-top:2px;font-style:italic;}
+.brand-eyebrow{font-size:10px;color:var(--text2);text-transform:uppercase;letter-spacing:1.2px;font-weight:700;margin-bottom:2px;}
+.btn{background:rgba(249,115,22,.15);border:1px solid rgba(249,115,22,.35);border-radius:6px;padding:7px 14px;cursor:pointer;color:var(--orange);font-family:'Montserrat',sans-serif;font-weight:800;font-size:12px;display:inline-flex;align-items:center;gap:6px;text-decoration:none;}
+.btn:hover{background:rgba(249,115,22,.3);}
+.btn:disabled{opacity:.5;cursor:not-allowed;}
+.btn.ghost{background:rgba(255,255,255,.05);border-color:rgba(255,255,255,.12);color:var(--text2);}
+.btn.ghost:hover{background:rgba(255,255,255,.1);color:var(--text);}
+.btn.theme{padding:7px 9px;}
+.main{padding:20px 24px 60px;max-width:1100px;}
+.card{background:rgba(20,27,38,.55);border:1px solid rgba(255,255,255,.07);border-radius:12px;padding:18px 20px;margin-bottom:16px;backdrop-filter:blur(16px);box-shadow:0 2px 12px rgba(0,0,0,.25);}
+.card h2{font-size:14px;font-weight:800;margin-bottom:4px;}
+.card .sub{font-size:11px;color:var(--text2);margin-bottom:14px;line-height:1.5;}
+.row{display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end;}
+.fld{display:flex;flex-direction:column;gap:4px;}
+.fld label{font-size:10px;color:var(--text2);text-transform:uppercase;letter-spacing:.5px;}
+input[type=text],select{background:#0a0f18;border:1px solid #2a3a50;border-radius:6px;color:var(--text);font-family:'Montserrat',sans-serif;font-size:12px;padding:8px 10px;outline:none;}
+input[type=text]:focus,select:focus{border-color:var(--orange);}
+select option{background:#0f1824;color:#fff;}
+.map-grid{display:grid;grid-template-columns:170px 1fr;gap:8px 14px;align-items:center;}
+.map-grid .mk{font-size:12px;font-weight:700;}
+.map-grid .mk small{display:block;font-weight:500;color:var(--text3);font-size:10px;}
+table{width:100%;border-collapse:collapse;font-size:11.5px;margin-top:6px;}
+th{font-size:10px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:.5px;text-align:left;padding:7px 8px;border-bottom:1px solid rgba(255,255,255,.10);white-space:nowrap;}
+td{padding:6px 8px;border-top:1px solid rgba(255,255,255,.05);vertical-align:top;color:var(--text);}
+.tbl-wrap{overflow-x:auto;}
+.muted{color:var(--text3);}
+.opt{display:flex;align-items:center;gap:7px;font-size:12px;color:var(--text2);margin-top:8px;}
+.opt input{width:15px;height:15px;accent-color:var(--orange);}
+.note{font-size:11px;color:var(--amber);margin-top:8px;}
+.log{font-size:12px;white-space:pre-wrap;background:#0a0f18;border:1px solid #1e2d40;border-radius:8px;padding:12px;margin-top:10px;max-height:220px;overflow:auto;}
+.loading{text-align:center;color:var(--text3);padding:50px;font-size:14px;}
+.gate{max-width:520px;margin:80px auto;text-align:center;background:rgba(20,27,38,.55);border:1px solid rgba(255,255,255,.08);border-radius:14px;padding:38px 34px;}
+.gate .ic{font-size:38px;margin-bottom:14px;}.gate h2{font-size:18px;font-weight:800;margin-bottom:10px;}.gate p{font-size:13px;color:var(--text2);line-height:1.6;margin-bottom:18px;}
+.gate code{background:rgba(249,115,22,.14);color:var(--orange);padding:2px 7px;border-radius:5px;}
+body.light-mode{background:#F0F0F0;}
+body.light-mode .main{--text:#1a1a1a;--text2:#444;--text3:#666;color:var(--text);}
+body.light-mode .card,body.light-mode .gate{background:rgba(128,128,128,.14)!important;border:none!important;box-shadow:none!important;--text:#1a1a1a;--text2:#444;--text3:#666;}
+body.light-mode input,body.light-mode select{background:#fff;border-color:#ccc;color:#1a1a1a;}
+body.light-mode .log{background:#fff;border-color:#ccc;}
+</style>
+</head>
+<body>
+<header class="header">
+  <div class="brand"><div class="brand-eyebrow">Gestão em Movimento · BI Frota</div><h1>FCA · Migração</h1><p>importa o FCA antigo (planilha) para a base</p></div>
+  <a class="btn ghost" href="../index.html" title="Voltar ao hub">← Hub</a>
+  <button class="btn theme" id="themeBtn" title="Modo claro/escuro">☀</button>
+</header>
+<main class="main">
+  <div id="content"><div class="loading">Verificando acesso…</div></div>
+</main>
+<script>
+const SUPABASE_URL='https://lozwipoeacpvplgkrxkq.supabase.co';
+const SUPABASE_KEY='sb_publishable_ggKEEebc5zjgQDVsF92Upw_6uoLmKe9';
+let sb=null, PROFILE=null;
+let _COLS=[], _ROWS=[];           // planilha lida
+const MES=['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
+const STATUS=['Não iniciada','Em andamento','Concluída','Cancelada'];
+const DEFAULT_SHEET='1oW3mss0pXVI6gaDU2z5cDAKvW40LWHCQXpanqSvb12o';
+const DEFAULT_GID='216663799';
+const TARGETS=[
+  {k:'unidade',lbl:'Unidade (código)',req:true,guess:['unidade','cod','sigla','filial','cidade','und']},
+  {k:'vigencia',lbl:'Vigência',req:true,guess:['vig','compet','mes','mês','período','periodo','data ref','referenc']},
+  {k:'fato',lbl:'Fato / Indicador',req:true,guess:['fato','indicador','ocorr','conta','problema','desvio','item','kpi']},
+  {k:'projeto',lbl:'Projeto / Nível 3',guess:['projeto','nivel','nível','rota','contrato','operac','operação']},
+  {k:'causa',lbl:'Causa',guess:['causa','porqu','motivo','raiz']},
+  {k:'acao',lbl:'Ação',guess:['ação','acao','plano','contramedida','tratativa','o que será','o que sera']},
+  {k:'responsavel',lbl:'Responsável',guess:['resp','quem','dono','owner','respons']},
+  {k:'prazo',lbl:'Prazo',guess:['prazo','data','previs','deadline','quando']},
+  {k:'status',lbl:'Status',guess:['status','situa','andamento','estágio','estagio','etapa']},
+  {k:'acompanhamento',lbl:'Acompanhamento',guess:['acompanh','observ','progresso','coment','nota']},
+];
+
+function esc(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+function norm(s){return String(s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').trim();}
+function gate(ic,t,h){document.getElementById('content').innerHTML=`<div class="gate"><div class="ic">${ic}</div><h2>${t}</h2>${h}</div>`;}
+
+// célula gviz -> texto (prefere o formatado)
+function cellText(c){if(!c)return '';if(c.f!=null&&c.f!=='')return String(c.f).trim();if(c.v!=null)return String(c.v).trim();return '';}
+function toVig(c){
+  if(!c)return '';
+  const v=c.v!=null?String(c.v):'';
+  let m=v.match(/^Date\((\d+),(\d+),(\d+)/); if(m)return MES[+m[2]]+'/'+String(+m[1]).slice(2);
+  const t=cellText(c);
+  m=t.match(/^(\d{1,2})\/(\d{4})$/); if(m)return MES[(+m[1])-1]+'/'+m[2].slice(2);
+  m=t.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/); if(m){const y=m[3].length===2?'20'+m[3]:m[3];return MES[(+m[2])-1]+'/'+y.slice(2);}
+  return t;
+}
+function toDate(c){
+  if(!c)return null;
+  const v=c.v!=null?String(c.v):'';
+  let m=v.match(/^Date\((\d+),(\d+),(\d+)/); if(m){const d=new Date(+m[1],+m[2],+m[3]);return d.toISOString().slice(0,10);}
+  const t=cellText(c);
+  m=t.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/); if(m){const y=m[3].length===2?'20'+m[3]:m[3];return `${y}-${String(+m[2]).padStart(2,'0')}-${String(+m[1]).padStart(2,'0')}`;}
+  if(/^\d{4}-\d{2}-\d{2}/.test(t))return t.slice(0,10);
+  return null;
+}
+function toStatus(c){
+  const t=norm(cellText(c));
+  if(!t)return 'Não iniciada';
+  if(/conclu|finaliz|feito|ok|encerr/.test(t))return 'Concluída';
+  if(/andamento|execu|em curso|iniciad/.test(t))return 'Em andamento';
+  if(/cancel/.test(t))return 'Cancelada';
+  if(/não inic|nao inic|pendente|aberto|a iniciar/.test(t))return 'Não iniciada';
+  return cellText(c); // mantém o texto original se não reconhecer
+}
+
+function gviz(url){return new Promise((res,rej)=>{const fn='_gvm'+Math.floor(Math.random()*1e9);const s=document.createElement('script');const clr=()=>{try{delete window[fn];s.remove();}catch(e){}};window[fn]=r=>{clr();try{if(r.status!=='ok')throw new Error((r.errors&&r.errors[0]&&(r.errors[0].detailed_message||r.errors[0].message))||'Erro gviz');res(r.table);}catch(e){rej(e);}};s.onerror=()=>{clr();rej(new Error('Falha ao ler a planilha. Você está logado no Google e tem acesso a ela?'));};s.src=url+(url.includes('?')?'&':'?')+'tqx=out:json;responseHandler:'+fn;document.head.appendChild(s);});}
+
+function wizardHTML(){
+  return `<div class="card">
+    <h2>1 · Planilha de origem</h2>
+    <div class="sub">A aba FCA do Sheets antigo. Você precisa estar logado no Google com acesso a ela.</div>
+    <div class="row">
+      <div class="fld"><label>ID da planilha</label><input type="text" id="sheetId" value="${DEFAULT_SHEET}" style="width:430px"></div>
+      <div class="fld"><label>GID (aba)</label><input type="text" id="sheetGid" value="${DEFAULT_GID}" style="width:130px"></div>
+      <button class="btn" id="loadBtn">Carregar colunas</button>
+    </div>
+    <div id="loadMsg" class="note" style="display:none"></div>
+  </div>
+  <div id="mapCard"></div>
+  <div id="prevCard"></div>`;
+}
+function showWizard(){document.getElementById('content').innerHTML=wizardHTML();document.getElementById('loadBtn').addEventListener('click',carregarPlanilha);}
+
+async function carregarPlanilha(){
+  const id=document.getElementById('sheetId').value.trim();
+  const gid=document.getElementById('sheetGid').value.trim();
+  const msg=document.getElementById('loadMsg');msg.style.display='';msg.style.color='var(--text2)';msg.textContent='Carregando…';
+  try{
+    const t=await gviz(`https://docs.google.com/spreadsheets/d/${id}/gviz/tq?gid=${encodeURIComponent(gid)}`);
+    _COLS=(t.cols||[]).map((c,i)=>c.label||c.id||('Col '+i));
+    _ROWS=(t.rows||[]).map(r=>r.c||[]);
+    msg.style.color='var(--green)';msg.textContent=`✓ ${_ROWS.length} linhas, ${_COLS.length} colunas.`;
+    renderMapeamento();
+  }catch(e){msg.style.color='var(--red)';msg.textContent='✗ '+e.message;}
+}
+
+function sampleOf(idx){for(let i=0;i<Math.min(_ROWS.length,8);i++){const v=cellText(_ROWS[i][idx]);if(v)return v;}return '';}
+function guessCol(t){for(const g of t.guess){const i=_COLS.findIndex(c=>norm(c).includes(g));if(i>=0)return i;}return -1;}
+
+function renderMapeamento(){
+  const colOpts=i=>['<option value="-1">— (vazio) —</option>'].concat(_COLS.map((c,j)=>`<option value="${j}" ${j===i?'selected':''}>${esc(c)} · ex: ${esc(sampleOf(j).slice(0,28))}</option>`)).join('');
+  const rows=TARGETS.map(t=>{const g=guessCol(t);return `<div class="mk">${t.lbl}${t.req?' *':''}<small>campo da base: ${t.k}</small></div><select data-k="${t.k}">${colOpts(g)}</select>`;}).join('');
+  document.getElementById('mapCard').innerHTML=`<div class="card">
+    <h2>2 · Mapeamento de colunas</h2>
+    <div class="sub">Confirme de qual coluna da planilha vem cada campo. (* obrigatório). Já tentei adivinhar pelos nomes.</div>
+    <div class="map-grid">${rows}</div>
+    <div class="opt"><input type="checkbox" id="optLock" checked> <label for="optLock">Marcar importados como <b>travados</b> (histórico)</label></div>
+    <div class="opt"><input type="checkbox" id="optClear" checked> <label for="optClear">Apagar importações anteriores (legado) antes de importar — evita duplicar</label></div>
+    <div style="margin-top:14px"><button class="btn" id="prevBtn">Pré-visualizar</button></div>
+  </div>`;
+  document.getElementById('prevBtn').addEventListener('click',preVisualizar);
+}
+
+function getMap(){const m={};document.querySelectorAll('#mapCard select[data-k]').forEach(s=>m[s.dataset.k]=+s.value);return m;}
+function buildRow(cells,map){
+  const get=k=>map[k]>=0?cellText(cells[map[k]]):'';
+  const fato=get('fato'), unidade=get('unidade');
+  if(!fato && !unidade && !get('causa') && !get('acao'))return null; // linha vazia
+  return {
+    unidade:unidade||'(sem unidade)',
+    vigencia:map.vigencia>=0?toVig(cells[map.vigencia]):'',
+    origem:'Custos',
+    fato:fato||'(sem fato)',
+    projeto:get('projeto')||null,
+    causa:get('causa')||null,
+    acao:get('acao')||null,
+    responsavel:get('responsavel')||null,
+    prazo:map.prazo>=0?toDate(cells[map.prazo]):null,
+    status:map.status>=0?toStatus(cells[map.status]):'Não iniciada',
+    acompanhamento:get('acompanhamento')||null
+  };
+}
+function preVisualizar(){
+  const map=getMap();
+  const built=_ROWS.map(c=>buildRow(c,map)).filter(Boolean);
+  window._BUILT=built;
+  const cols=['unidade','vigencia','fato','projeto','causa','acao','responsavel','prazo','status','acompanhamento'];
+  const head=cols.map(c=>`<th>${c}</th>`).join('');
+  const body=built.slice(0,10).map(r=>`<tr>${cols.map(c=>`<td>${esc((r[c]==null?'':r[c]).toString().slice(0,40))}</td>`).join('')}</tr>`).join('');
+  document.getElementById('prevCard').innerHTML=`<div class="card">
+    <h2>3 · Pré-visualização &amp; importação</h2>
+    <div class="sub"><b>${built.length}</b> linhas válidas serão importadas (origem <b>Custos</b>). Mostrando as 10 primeiras.</div>
+    <div class="tbl-wrap"><table><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table></div>
+    <div style="margin-top:14px"><button class="btn" id="impBtn">Importar ${built.length} linhas</button></div>
+    <div id="impLog" class="log" style="display:none"></div>
+  </div>`;
+  document.getElementById('impBtn').addEventListener('click',importar);
+}
+
+async function importar(){
+  const btn=document.getElementById('impBtn');btn.disabled=true;
+  const log=document.getElementById('impLog');log.style.display='';log.textContent='';
+  const add=t=>{log.textContent+=t+'\n';log.scrollTop=log.scrollHeight;};
+  const built=window._BUILT||[];
+  const lock=document.getElementById('optLock').checked;
+  const clear=document.getElementById('optClear').checked;
+  try{
+    if(clear){add('Apagando importações anteriores (legado=true)…');const {error}=await sb.from('fca').delete().eq('legado',true);if(error)throw error;add('✓ limpo.');}
+    const payload=built.map(r=>({...r,locked:lock,legado:true}));
+    let ok=0;const B=200;
+    for(let i=0;i<payload.length;i+=B){
+      const batch=payload.slice(i,i+B);
+      const {error}=await sb.from('fca').insert(batch);
+      if(error)throw error;
+      ok+=batch.length;add(`✓ ${ok}/${payload.length} importadas…`);
+    }
+    add(`\n✅ Concluído: ${ok} linhas importadas. Veja em FCA · Consolidado.`);
+  }catch(e){add('\n✗ Erro: '+(e.message||e));console.error(e);}
+  btn.disabled=false;
+}
+
+// tema
+function applyTheme(t){document.body.classList.toggle('light-mode',t==='light');localStorage.setItem('bi_theme',t);document.getElementById('themeBtn').textContent=t==='light'?'🌙':'☀';}
+document.getElementById('themeBtn').addEventListener('click',()=>applyTheme(document.body.classList.contains('light-mode')?'dark':'light'));
+applyTheme(localStorage.getItem('bi_theme')||'dark');
+
+async function initApp(){
+  try{ sb=supabase.createClient(SUPABASE_URL,SUPABASE_KEY); }catch(e){ gate('⚠️','Erro','<p>Falha ao iniciar o Supabase.</p>'); return; }
+  const {data:{session}}=await sb.auth.getSession();
+  if(!session){ gate('🔒','Login necessário','<p>Entre pelo hub para continuar.</p><a class="btn" href="../index.html">Ir para o hub</a>'); return; }
+  const {data:prof,error}=await sb.from('fca_profiles').select('is_admin').eq('user_id',session.user.id).maybeSingle();
+  if(error){ if(/does not exist|find the table|schema cache/i.test(error.message||'')) gate('🛠️','Banco não configurado','<p>Rode <code>scripts/fca-supabase.sql</code> no Supabase primeiro.</p>'); else gate('⚠️','Erro',`<p>${esc(error.message)}</p>`); return; }
+  PROFILE=prof||{};
+  if(!PROFILE.is_admin){ gate('⛔','Somente admin','<p>Esta ferramenta é restrita a administradores.</p><a class="btn ghost" href="../index.html">← Hub</a>'); return; }
+  showWizard();
+}
+initApp();
+</script>
+</body>
+</html>

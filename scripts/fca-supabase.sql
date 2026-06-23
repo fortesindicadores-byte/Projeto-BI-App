@@ -40,6 +40,7 @@ create table if not exists public.fca (
   status        text not null default 'Não iniciada',
   acompanhamento text,
   locked        boolean not null default false,
+  legado        boolean not null default false,              -- true = importado do FCA antigo (planilha)
   created_by    uuid references auth.users(id) default auth.uid(),
   created_at    timestamptz not null default now(),
   updated_at    timestamptz not null default now()
