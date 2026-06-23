@@ -147,6 +147,9 @@ const SUPABASE_URL='https://lozwipoeacpvplgkrxkq.supabase.co';
 const SUPABASE_KEY='sb_publishable_ggKEEebc5zjgQDVsF92Upw_6uoLmKe9';
 let sb=null, SESSION=null, PROFILE=null;
 let _ROWS=[];                 // todos os registros (1 por ação)
+const CACHE_KEY='fca_cache_all';
+function readCache(k){try{const s=localStorage.getItem(k);return s?JSON.parse(s):null;}catch(e){return null;}}
+function writeCache(k,v){try{localStorage.setItem(k,JSON.stringify(v));}catch(e){}}
 const STATUS=['Não iniciada','Em andamento','Concluída','Cancelada'];
 const DEFAULT_STATUS='Não iniciada';
 
@@ -196,6 +199,7 @@ async function saveField(el,id,col){
   el.classList.remove('cell-saving');
   if(error){flash('Erro ao salvar',true);console.error('update',col,error);return;}
   const row=_ROWS.find(r=>r.id===id);if(row)row[col]=val;
+  writeCache(CACHE_KEY,_ROWS);
   flash('Salvo ✓');
 }
 async function toggleLock(btn,id){
@@ -204,6 +208,7 @@ async function toggleLock(btn,id){
   const {error}=await sb.from('fca').update({locked:nv}).eq('id',id);
   if(error){flash('Erro ao salvar',true);console.error('lock',error);return;}
   row.locked=nv;btn.classList.toggle('on',nv);btn.textContent=nv?'🔒':'🔓';btn.title=nv?'Travado (clique p/ destravar)':'Destravado (clique p/ travar)';
+  writeCache(CACHE_KEY,_ROWS);
   flash('Salvo ✓');
 }
 let _flashT=null;
@@ -272,14 +277,20 @@ function wireTable(){
 
 // ── Carregar TODOS os registros (RLS devolve tudo p/ admin) ──
 async function carregar(){
-  document.getElementById('content').innerHTML='<div class="loading">Carregando ações de todas as unidades…</div>';
+  // 1) pinta na hora com o cache (se houver) — stale-while-revalidate
+  const cached=readCache(CACHE_KEY);
+  if(cached&&cached.length){ _ROWS=cached; popFiltros(); render(); }
+  else document.getElementById('content').innerHTML='<div class="loading">Carregando ações de todas as unidades…</div>';
+  // 2) revalida do Supabase em segundo plano
   const {data,error}=await sb.from('fca').select('*').order('unidade',{ascending:true}).order('vigencia',{ascending:false}).order('created_at',{ascending:true});
   if(error){
+    if(cached&&cached.length) return;   // já tem cache na tela: ignora erro de rede
     if(/relation .*fca.* does not exist|could not find the table|schema cache/i.test(error.message||'')) gateSetup();
     else gateError(error.message);
     return;
   }
   _ROWS=data||[];
+  writeCache(CACHE_KEY,_ROWS);
   popFiltros();
   render();
 }

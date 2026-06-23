@@ -160,6 +160,8 @@ const SUPABASE_URL='https://lozwipoeacpvplgkrxkq.supabase.co';
 const SUPABASE_KEY='sb_publishable_ggKEEebc5zjgQDVsF92Upw_6uoLmKe9';
 let sb=null, SESSION=null, PROFILE=null, REAL_ADMIN=false, ADMIN=false, PREVIEW=false;
 let _DBROWS={}; // chave do fato -> linhas salvas no banco
+function readCache(k){try{const s=localStorage.getItem(k);return s?JSON.parse(s):null;}catch(e){return null;}}
+function writeCache(k,v){try{localStorage.setItem(k,JSON.stringify(v));}catch(e){}}
 
 // ── Unidade (vem do perfil; admin pode trocar via ?u=COD ou no seletor) ──
 // De-para por código → nome na DRE (cidade, col10) e nome(s) no Gerot/ICs (col unidade).
@@ -360,13 +362,14 @@ function frotaAtivaPorProj(disp){
     if(Math.floor(k/100)===yr&&k<=maxK){(res.porMes[pk]=res.porMes[pk]||{});res.porMes[pk][k]=(res.porMes[pk][k]||0)+fa;}});
   return res;
 }
-// Carrega as ações já salvas (Supabase) da unidade, indexadas por chave de fato
+// Indexa as linhas da base por chave de fato
+function indexDB(rows){_DBROWS={};(rows||[]).forEach(r=>{const k=fkey(r.vigencia,r.origem,r.projeto,r.fato);(_DBROWS[k]=_DBROWS[k]||[]).push(r);});}
+// Carrega as ações já salvas (Supabase) da unidade. Retorna o array (ou null em erro de rede). Só atualiza _DBROWS no sucesso.
 async function fetchDB(){
-  _DBROWS={};
-  if(!sb||PREVIEW) return;
+  if(!sb||PREVIEW){_DBROWS={};return [];}
   const {data,error}=await sb.from('fca').select('*').eq('unidade',UNIDADE_COD).order('created_at',{ascending:true});
-  if(error){console.error('fca select',error);return;}
-  (data||[]).forEach(r=>{const k=fkey(r.vigencia,r.origem,r.projeto,r.fato);(_DBROWS[k]=_DBROWS[k]||[]).push(r);});
+  if(error){console.error('fca select',error);return null;}
+  indexDB(data||[]); return data||[];
 }
 // Gera fatos a partir das PLANILHAS para a UNIDADE atual (DRE = Custos, Gerot = RPM, + drivers de causa).
 // `shared` = planilhas Gerot/Disp/Km/L já baixadas (reuso no loop de todas as unidades). DRE é sempre por unidade.
@@ -383,7 +386,8 @@ async function gerarFatos(shared){
 // Grava na base os fatos da unidade atual que ainda não existem. Retorna nº de novos.
 async function seedUnidade(u,shared){
   const fatos=await gerarFatos(shared);
-  await fetchDB();                       // _DBROWS desta unidade (fetchDB usa UNIDADE_COD)
+  const rows=await fetchDB();            // _DBROWS desta unidade (fetchDB usa UNIDADE_COD)
+  if(rows===null) throw new Error('falha ao ler a base');
   const have=new Set(Object.keys(_DBROWS));
   const novos=fatos.filter(f=>!have.has(keyOf(f)));
   if(novos.length){
@@ -401,10 +405,16 @@ function fatosDaBase(){
   return fatos;
 }
 async function carregar(){
-  document.getElementById('list').innerHTML='<div class="loading">Carregando…</div>';
-  if(PREVIEW){ render(await gerarFatos()); return; }   // preview: direto da planilha (sem nuvem)
-  await fetchDB();
-  render(fatosDaBase());
+  const list=document.getElementById('list');
+  if(PREVIEW){ list.innerHTML='<div class="loading">Carregando…</div>'; render(await gerarFatos()); return; }
+  const CK='fca_cache_'+UNIDADE_COD;
+  const cached=readCache(CK);
+  if(cached&&cached.length){ indexDB(cached); render(fatosDaBase()); }   // pinta na hora
+  else list.innerHTML='<div class="loading">Carregando…</div>';
+  const rows=await fetchDB();                                            // revalida
+  if(rows){ writeCache(CK,rows); render(fatosDaBase()); }
+  else if(cached){ indexDB(cached); render(fatosDaBase()); }             // rede falhou: mantém cache
+  else render(fatosDaBase());
 }
 // "Gerar todas as unidades" (só admin, chamado via ?gen=all): puxa da planilha e GRAVA na base os fatos novos
 // de cada unidade. Depois o painel não depende mais do sheet.
@@ -425,6 +435,7 @@ async function gerarTodas(){
     log.push(`<tr><td>${esc(u)}</td><td class="num">${novos}</td><td>${err?'<span style="color:var(--red)">'+esc(err)+'</span>':'<span style="color:var(--green)">ok</span>'}</td></tr>`);
     list.innerHTML=`<div class="loading">Gerando… ${log.length}/${units.length} unidades</div>`;
   }
+  try{Object.keys(localStorage).filter(k=>k.indexOf('fca_cache_')===0).forEach(k=>localStorage.removeItem(k));}catch(e){}  // força revalidação
   list.innerHTML=`<div class="genres"><h2 class="genres-h">Geração concluída — ${tot} fato(s) novo(s)</h2>
     <table class="gentbl"><thead><tr><th>Unidade</th><th class="num">Novos</th><th>Status</th></tr></thead><tbody>${log.join('')}</tbody></table>
     <a class="btn" style="display:inline-block;margin-top:14px;text-decoration:none" href="../fca-consolidado/">← Voltar ao Admin</a></div>`;
@@ -561,7 +572,7 @@ _saveBtn.addEventListener('click',async ()=>{
   });
   try{
     for(const block of document.querySelectorAll('.fato-block')) await saveBlock(block);
-    await fetchDB(); aplicar();
+    const rows=await fetchDB(); if(rows) writeCache('fca_cache_'+UNIDADE_COD,rows); aplicar();
     m.textContent='Salvo ✓ na nuvem';m.style.display='inline';setTimeout(()=>m.style.display='none',2500);
   }catch(e){console.error(e);m.textContent='Erro ao salvar';m.style.display='inline';}
   _saveBtn.disabled=false;
