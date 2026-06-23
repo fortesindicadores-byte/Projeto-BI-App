@@ -26,6 +26,8 @@ body{background:radial-gradient(ellipse at 10% 25%,rgba(249,115,22,.06) 0%,trans
 .ms-search input{width:100%;background:transparent;border:none;color:var(--text);font-family:'Montserrat',sans-serif;font-size:11px;outline:none;}
 .ms-list{overflow-y:auto;flex:1;}
 .ms-opt{display:flex;align-items:center;gap:8px;padding:7px 12px;cursor:pointer;font-size:11px;color:var(--text2);text-transform:uppercase;letter-spacing:.3px;}
+.ms-only{margin-left:auto;font-size:8px;color:var(--orange);padding:1px 6px;border-radius:3px;cursor:pointer;opacity:0;transition:opacity .12s;flex-shrink:0;}
+.ms-opt:hover .ms-only{opacity:1;}.ms-only:hover{background:rgba(249,115,22,.2);}
 .ms-opt:hover{background:rgba(255,255,255,.05);color:var(--text);}
 .ms-opt.all-opt{border-bottom:1px solid #1e2d40;color:var(--text);font-weight:700;}
 .ms-opt input[type=checkbox]{accent-color:var(--orange);cursor:pointer;width:14px;height:14px;flex-shrink:0;}
@@ -164,8 +166,9 @@ function _buildMs(w,getItems){
   if(!w)return; if(!(w._sel instanceof Set))w._sel=new Set();
   const sel=w._sel,list=w.querySelector('.ms-list'),srch=w.querySelector('.ms-search input');
   w._render=(q='')=>{const f=(q||'').toLowerCase(),items=getItems(),shown=items.filter(v=>String(v).toLowerCase().includes(f)),all=sel.size===0;
-    list.innerHTML=(!q?`<label class="ms-opt all-opt"><input type="checkbox" class="ms-all" ${all?'checked':''}> Todos</label>`:'')+shown.map(v=>`<label class="ms-opt"><input type="checkbox" data-v="${esc(v)}" ${all||sel.has(v)?'checked':''}> ${esc(v)}</label>`).join('');syncBadge(w);};
-  list.addEventListener('change',e=>{const b=e.target;if(b.classList.contains('ms-all')){sel.clear();}else if(sel.size===0){if(!b.checked)getItems().forEach(v=>{if(v!==b.dataset.v)sel.add(v);});}else{if(b.checked)sel.add(b.dataset.v);else sel.delete(b.dataset.v);const a=getItems();if(a.length&&a.every(v=>sel.has(v)))sel.clear();}w._render(srch.value);render();});
+    list.innerHTML=(!q?`<label class="ms-opt all-opt"><input type="checkbox" class="ms-all" ${all?'checked':''}> Todos</label>`:'')+shown.map(v=>`<label class="ms-opt"><input type="checkbox" data-v="${esc(v)}" ${all||sel.has(v)?'checked':''}> ${esc(v)}<span class="ms-only" data-v="${esc(v)}">só</span></label>`).join('');syncBadge(w);};
+  list.addEventListener('change',e=>{const b=e.target;if(!b.matches('input[type=checkbox]'))return;if(b.classList.contains('ms-all')){sel.clear();}else if(sel.size===0){if(!b.checked)getItems().forEach(v=>{if(v!==b.dataset.v)sel.add(v);});}else{if(b.checked)sel.add(b.dataset.v);else sel.delete(b.dataset.v);const a=getItems();if(a.length&&a.every(v=>sel.has(v)))sel.clear();}w._render(srch.value);render();});
+  list.addEventListener('click',e=>{const o=e.target.closest('.ms-only');if(!o)return;e.preventDefault();e.stopPropagation();sel.clear();sel.add(o.dataset.v);w._render(srch.value);render();});
   srch.addEventListener('input',()=>w._render(srch.value));srch.addEventListener('click',e=>e.stopPropagation());
   w._render();
 }

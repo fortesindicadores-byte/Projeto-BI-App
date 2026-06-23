@@ -29,6 +29,8 @@ body{background:radial-gradient(ellipse at 10% 25%,rgba(249,115,22,.06) 0%,trans
 .ms-search input{width:100%;background:transparent;border:none;color:var(--text);font-family:'Montserrat',sans-serif;font-size:11px;outline:none;}
 .ms-list{overflow-y:auto;flex:1;}
 .ms-opt{display:flex;align-items:center;gap:8px;padding:7px 12px;cursor:pointer;font-size:11px;color:var(--text2);text-transform:uppercase;letter-spacing:.3px;}
+.ms-only{margin-left:auto;font-size:8px;color:var(--orange);padding:1px 6px;border-radius:3px;cursor:pointer;opacity:0;transition:opacity .12s;flex-shrink:0;}
+.ms-opt:hover .ms-only{opacity:1;}.ms-only:hover{background:rgba(249,115,22,.2);}
 .ms-opt:hover{background:rgba(255,255,255,.05);color:var(--text);}
 .ms-opt.all-opt{border-bottom:1px solid #1e2d40;color:var(--text);font-weight:700;}
 .ms-opt input[type=checkbox]{accent-color:var(--orange);cursor:pointer;width:14px;height:14px;flex-shrink:0;}
@@ -131,6 +133,7 @@ body.light-mode select.st[data-v="Cancelada"]{background:#333333;color:#fff;}
   <div class="brand"><div class="brand-eyebrow">Gestão em Movimento · BI Frota</div><h1>FCA · Preenchimento</h1><p>preenchimento por unidade</p></div>
   <div class="hfilter"><label>Vigência</label><div class="ms-wrap" id="ms-vig"><button class="ms-btn" onclick="toggleMs('ms-vig')"><span class="ms-lbl">Todas</span><span class="ms-cnt"></span><svg width="10" height="6" viewBox="0 0 10 6"><path d="M0 0l5 6 5-6z" fill="#F97316"/></svg></button><div class="ms-panel"><div class="ms-search"><input type="text" placeholder="Pesquisar…"></div><div class="ms-list"></div></div></div></div>
   <div class="hfilter"><label>Projeto</label><div class="ms-wrap" id="ms-proj"><button class="ms-btn" onclick="toggleMs('ms-proj')"><span class="ms-lbl">Todos</span><span class="ms-cnt"></span><svg width="10" height="6" viewBox="0 0 10 6"><path d="M0 0l5 6 5-6z" fill="#F97316"/></svg></button><div class="ms-panel"><div class="ms-search"><input type="text" placeholder="Pesquisar…"></div><div class="ms-list"></div></div></div></div>
+  <div class="hfilter"><label>Origem</label><div class="ms-wrap" id="ms-org"><button class="ms-btn" onclick="toggleMs('ms-org')"><span class="ms-lbl">Todas</span><span class="ms-cnt"></span><svg width="10" height="6" viewBox="0 0 10 6"><path d="M0 0l5 6 5-6z" fill="#F97316"/></svg></button><div class="ms-panel"><div class="ms-search"><input type="text" placeholder="Pesquisar…"></div><div class="ms-list"></div></div></div></div>
   <div class="hfilter"><label>Indicador</label><div class="ms-wrap" id="ms-ind"><button class="ms-btn" onclick="toggleMs('ms-ind')"><span class="ms-lbl">Todos</span><span class="ms-cnt"></span><svg width="10" height="6" viewBox="0 0 10 6"><path d="M0 0l5 6 5-6z" fill="#F97316"/></svg></button><div class="ms-panel"><div class="ms-search"><input type="text" placeholder="Pesquisar…"></div><div class="ms-list"></div></div></div></div>
   <span class="uni-badge" id="uniBadge">—</span>
   <select id="uniSel" title="Trocar de unidade (admin)" style="display:none;background:#0a0f18;color:var(--text);border:1px solid #2a3a50;border-radius:6px;font-family:'Montserrat',sans-serif;font-size:11px;font-weight:700;padding:6px 10px;cursor:pointer;outline:none;"></select>
@@ -138,6 +141,7 @@ body.light-mode select.st[data-v="Cancelada"]{background:#333333;color:#fff;}
   <a class="btn" href="../" title="Voltar ao hub" style="text-decoration:none">← Hub</a>
   <button class="btn theme" id="themeBtn" title="Modo claro/escuro">☀</button>
   <button class="btn" id="adminBtn" title="Modo admin (edita tudo) — teste; em produção será por RLS">Admin</button>
+  <button class="btn" id="genBtn" title="Puxa os desvios do mês das planilhas e grava na base" style="display:none">Gerar fatos do mês</button>
   <button class="btn" id="saveBtn">Salvar</button>
   <span class="saved-msg" id="savedMsg">Salvo ✓ na nuvem</span>
 </header>
@@ -359,27 +363,47 @@ async function fetchDB(){
   if(error){console.error('fca select',error);return;}
   (data||[]).forEach(r=>{const k=fkey(r.vigencia,r.origem,r.projeto,r.fato);(_DBROWS[k]=_DBROWS[k]||[]).push(r);});
 }
-// Acrescenta como fatos os FCAs já salvos/importados que NÃO têm fato gerado (outros meses, contas sem desvio no mês, etc.)
-function mergeDBOnly(fatos){
-  const gen=new Set(fatos.map(keyOf));
-  Object.keys(_DBROWS).forEach(k=>{
-    if(gen.has(k))return;
-    const r=_DBROWS[k][0];
-    fatos.push({vig:r.vigencia||'',origem:r.origem||'Custos',proj:r.projeto||'',fato:r.fato||'(sem fato)',sev:'aten',
-      desvio:r.fato_desvio?`<span class="dn">Desvio: </span><span class="val am">${esc(r.fato_desvio)}</span>`:'<span class="dn">—</span>'});
-  });
-}
-async function carregar(){
-  document.getElementById('list').innerHTML='<div class="loading">Carregando fatos da unidade…</div>';
-  await fetchDB();
+// Gera fatos a partir das PLANILHAS (DRE = Custos, Gerot = RPM, + drivers de causa)
+async function gerarFatos(){
   const fatos=[];
   let kmlCausas={},dispCausas={},frotaMaps={mes:{},porMes:{}};
   try{ const ger=await gviz(SRC_GEROT); pushGerot(ger,fatos); }catch(e){}
   try{ const disp=await gviz(SRC_DISP); dispCausas=dispCausasPorProj(disp); frotaMaps=frotaAtivaPorProj(disp); }catch(e){}
   try{ const kml=await gviz(SRC_KML); kmlCausas=kmlCausasPorProj(kml); }catch(e){}
   try{ const dre=await gviz(srcDre()); pushDRE(dre,fatos,kmlCausas,dispCausas,frotaMaps); }catch(e){}
-  mergeDBOnly(fatos);   // inclui importados/salvos (todos os meses)
-  render(fatos);
+  return fatos;
+}
+// Fatos a partir da BASE (Supabase) — fonte do dia a dia, não depende mais da planilha
+function fatosDaBase(){
+  const fatos=[];
+  Object.keys(_DBROWS).forEach(k=>{const r=_DBROWS[k][0];
+    fatos.push({vig:r.vigencia||'',origem:r.origem||'Custos',proj:r.projeto||'',fato:r.fato||'(sem fato)',sev:'aten',
+      desvio:r.fato_desvio?`<span class="dn">Desvio: </span><span class="val am">${esc(r.fato_desvio)}</span>`:'<span class="dn">—</span>'});});
+  return fatos;
+}
+async function carregar(){
+  document.getElementById('list').innerHTML='<div class="loading">Carregando…</div>';
+  if(PREVIEW){ render(await gerarFatos()); return; }   // preview: direto da planilha (sem nuvem)
+  await fetchDB();
+  render(fatosDaBase());
+}
+// "Gerar fatos do mês": puxa da planilha e GRAVA na base os fatos novos. Depois o painel não depende mais do sheet.
+async function gerarMes(){
+  if(PREVIEW||!sb){alert('Disponível só com login no Supabase.');return;}
+  const g=document.getElementById('genBtn'); if(g){g.disabled=true;g.textContent='Gerando…';}
+  try{
+    const fatos=await gerarFatos();
+    await fetchDB();
+    const have=new Set(Object.keys(_DBROWS));
+    const novos=fatos.filter(f=>!have.has(keyOf(f)));
+    if(novos.length){
+      const payload=novos.map(f=>({unidade:UNIDADE_COD,vigencia:f.vig,origem:f.origem||'Custos',fato:f.fato,projeto:f.proj||null,fato_desvio:stripTags(f.desvio)||null,causa:f.causaAuto||null,status:DEFAULT_STATUS,locked:false}));
+      for(let i=0;i<payload.length;i+=200){const {error}=await sb.from('fca').insert(payload.slice(i,i+200));if(error)throw error;}
+    }
+    alert(novos.length?`${novos.length} fato(s) do mês gravados na base.`:'Nenhum fato novo (já estão na base).');
+    await carregar();
+  }catch(e){console.error(e);alert('Erro ao gerar: '+(e.message||e));}
+  if(g){g.disabled=false;g.textContent='Gerar fatos do mês';}
 }
 
 const STATUS=['Não iniciada','Em andamento','Concluída','Cancelada'];
@@ -413,14 +437,15 @@ function rowHTML(a,canRemove){
 
 let _FATOS=[];
 function render(fatos){ _FATOS=fatos||[]; popFiltros(); aplicar(); }
-let PROJ_OPTS=[],IND_OPTS=[],VIG_OPTS=[],_vigInit=false;
+let PROJ_OPTS=[],IND_OPTS=[],VIG_OPTS=[],ORG_OPTS=[],_vigInit=false;
 function syncBadge(w){const c=w.querySelector('.ms-cnt'),n=w._sel?w._sel.size:0;if(c){c.textContent=n;c.style.display=n?'':'none';}}
 function _buildMs(w,getItems){
   if(!w)return; if(!(w._sel instanceof Set))w._sel=new Set();
   const sel=w._sel,list=w.querySelector('.ms-list'),srch=w.querySelector('.ms-search input');
   w._render=(q='')=>{const f=(q||'').toLowerCase(),items=getItems(),shown=items.filter(v=>String(v).toLowerCase().includes(f)),all=sel.size===0;
-    list.innerHTML=(!q?`<label class="ms-opt all-opt"><input type="checkbox" class="ms-all" ${all?'checked':''}> Todos</label>`:'')+shown.map(v=>`<label class="ms-opt"><input type="checkbox" data-v="${esc(v)}" ${all||sel.has(v)?'checked':''}> ${esc(v)}</label>`).join('');syncBadge(w);};
-  list.addEventListener('change',e=>{const b=e.target;if(b.classList.contains('ms-all')){sel.clear();}else if(sel.size===0){if(!b.checked)getItems().forEach(v=>{if(v!==b.dataset.v)sel.add(v);});}else{if(b.checked)sel.add(b.dataset.v);else sel.delete(b.dataset.v);const a=getItems();if(a.length&&a.every(v=>sel.has(v)))sel.clear();}w._render(srch.value);aplicar();});
+    list.innerHTML=(!q?`<label class="ms-opt all-opt"><input type="checkbox" class="ms-all" ${all?'checked':''}> Todos</label>`:'')+shown.map(v=>`<label class="ms-opt"><input type="checkbox" data-v="${esc(v)}" ${all||sel.has(v)?'checked':''}> ${esc(v)}<span class="ms-only" data-v="${esc(v)}">só</span></label>`).join('');syncBadge(w);};
+  list.addEventListener('change',e=>{const b=e.target;if(!b.matches('input[type=checkbox]'))return;if(b.classList.contains('ms-all')){sel.clear();}else if(sel.size===0){if(!b.checked)getItems().forEach(v=>{if(v!==b.dataset.v)sel.add(v);});}else{if(b.checked)sel.add(b.dataset.v);else sel.delete(b.dataset.v);const a=getItems();if(a.length&&a.every(v=>sel.has(v)))sel.clear();}w._render(srch.value);aplicar();});
+  list.addEventListener('click',e=>{const o=e.target.closest('.ms-only');if(!o)return;e.preventDefault();e.stopPropagation();sel.clear();sel.add(o.dataset.v);w._render(srch.value);aplicar();});
   srch.addEventListener('input',()=>w._render(srch.value));srch.addEventListener('click',e=>e.stopPropagation());
   w._render();
 }
@@ -428,18 +453,19 @@ function toggleMs(id){document.querySelectorAll('.ms-panel.open').forEach(p=>{if
 function getMsValues(id){const w=document.getElementById(id);return w&&w._sel?[...w._sel]:[];}
 function popFiltros(){
   VIG_OPTS=[...new Set(_FATOS.map(f=>f.vig).filter(Boolean))].sort((a,b)=>vigNum(b)-vigNum(a));
+  ORG_OPTS=[...new Set(_FATOS.map(f=>f.origem).filter(Boolean))].sort();
   PROJ_OPTS=[...new Set(_FATOS.map(f=>f.proj||'Geral'))].sort();
   IND_OPTS=[...new Set(_FATOS.map(f=>f.fato))].sort();
   // 1ª carga: já abre na vigência mais recente (as outras ficam no filtro)
   const wv=document.getElementById('ms-vig');
   if(wv && !_vigInit && VIG_OPTS.length){ wv._sel=new Set([VIG_OPTS[0]]); _vigInit=true; }
-  ['ms-vig','ms-proj','ms-ind'].forEach(id=>{const w=document.getElementById(id);if(w&&w._render)w._render('');});
+  ['ms-vig','ms-org','ms-proj','ms-ind'].forEach(id=>{const w=document.getElementById(id);if(w&&w._render)w._render('');});
 }
 function aplicar(){
   const list=document.getElementById('list');
   if(!_FATOS.length){list.innerHTML='<div class="empty">✓ Nenhum desvio encontrado para esta unidade na vigência mais recente — sem fatos a tratar.</div>';return;}
-  const fv=getMsValues('ms-vig'), fp=getMsValues('ms-proj'), fi=getMsValues('ms-ind');
-  const vis=_FATOS.filter(f=>(!fv.length||fv.includes(f.vig))&&(!fp.length||fp.includes(f.proj||'Geral'))&&(!fi.length||fi.includes(f.fato)));
+  const fv=getMsValues('ms-vig'), fo=getMsValues('ms-org'), fp=getMsValues('ms-proj'), fi=getMsValues('ms-ind');
+  const vis=_FATOS.filter(f=>(!fv.length||fv.includes(f.vig))&&(!fo.length||fo.includes(f.origem))&&(!fp.length||fp.includes(f.proj||'Geral'))&&(!fi.length||fi.includes(f.fato)));
   if(!vis.length){list.innerHTML='<div class="empty">Nenhum fato para o filtro selecionado.</div>';return;}
   list.innerHTML=vis.map(f=>{
     const key=keyOf(f);
@@ -526,8 +552,10 @@ document.getElementById('themeBtn').addEventListener('click',()=>applyTheme(docu
 applyTheme(localStorage.getItem('bi_theme')||'dark');
 
 _buildMs(document.getElementById('ms-vig'),()=>VIG_OPTS);
+_buildMs(document.getElementById('ms-org'),()=>ORG_OPTS);
 _buildMs(document.getElementById('ms-proj'),()=>PROJ_OPTS);
 _buildMs(document.getElementById('ms-ind'),()=>IND_OPTS);
+const _gb=document.getElementById('genBtn'); if(_gb)_gb.addEventListener('click',gerarMes);
 document.addEventListener('click',e=>{if(!e.target.closest('.ms-wrap'))document.querySelectorAll('.ms-panel.open').forEach(p=>p.classList.remove('open'));});
 
 // ── Início: exige login (hub), carrega perfil (unidade/admin) e os fatos ──
@@ -557,6 +585,7 @@ async function initApp(){
     UNIDADE_COD=u; applyDepara(u);
     document.getElementById('uniBadge').textContent=u;
     document.getElementById('backUnits').style.display='';
+    document.getElementById('genBtn').style.display='';
     applyAdminUI();
     setupUniSel();
     carregar();
@@ -568,7 +597,7 @@ async function initApp(){
 // Mini-hub: um card por unidade liberada + card Admin (consolidado) só p/ admin
 function renderSubHub(allowed){
   document.querySelectorAll('.hfilter').forEach(e=>e.style.display='none');
-  ['uniBadge','uniSel','adminBtn','saveBtn','savedMsg','backUnits'].forEach(id=>{const e=document.getElementById(id);if(e)e.style.display='none';});
+  ['uniBadge','uniSel','adminBtn','saveBtn','savedMsg','backUnits','genBtn'].forEach(id=>{const e=document.getElementById(id);if(e)e.style.display='none';});
   const intro=document.querySelector('.intro'); if(intro)intro.textContent='Selecione a unidade para preencher o FCA do mês.';
   const list=document.getElementById('list');
   if(!REAL_ADMIN && !allowed.length){ list.innerHTML='<div class="empty">Seu usuário ainda não tem unidade liberada. Fale com o administrador.</div>'; return; }
