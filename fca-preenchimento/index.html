@@ -83,6 +83,16 @@ select.st[data-v="Cancelada"]{background:#333333;color:#fff;border-color:#333333
 .add-acao{background:rgba(249,115,22,.12);border:1px dashed rgba(249,115,22,.45);border-radius:6px;color:var(--orange);font-family:'Montserrat',sans-serif;font-weight:700;font-size:11.5px;padding:6px 12px;cursor:pointer;}
 .add-acao:hover{background:rgba(249,115,22,.22);}
 .cell-label{display:none;}
+/* mini-hub de unidades */
+.uhub-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:14px;}
+.uhub-card{display:flex;flex-direction:column;gap:5px;background:rgba(20,27,38,.55);border:1px solid rgba(255,255,255,.08);border-radius:12px;padding:18px;text-decoration:none;color:var(--text);box-shadow:0 2px 12px rgba(0,0,0,.25);transition:border-color .15s,transform .1s;}
+.uhub-card:hover{border-color:var(--orange);transform:translateY(-2px);}
+.uhub-cod{font-size:20px;font-weight:800;color:var(--orange);}
+.uhub-name{font-size:11px;color:var(--text2);text-transform:uppercase;letter-spacing:.5px;}
+.uhub-go{font-size:11px;font-weight:700;color:var(--text2);margin-top:6px;}
+.uhub-card.admin{border-color:rgba(249,115,22,.45);background:rgba(249,115,22,.10);}
+body.light-mode .uhub-card{background:rgba(128,128,128,.14)!important;border:none!important;color:#1a1a1a;}
+body.light-mode .uhub-card.admin{background:rgba(249,115,22,.14)!important;}
 
 .empty{text-align:center;color:var(--text2);padding:40px;background:rgba(59,179,59,.08);border:1px solid rgba(59,179,59,.2);border-radius:10px;}
 
@@ -123,6 +133,7 @@ body.light-mode select.st[data-v="Cancelada"]{background:#333333;color:#fff;}
   <div class="hfilter"><label>Indicador</label><div class="ms-wrap" id="ms-ind"><button class="ms-btn" onclick="toggleMs('ms-ind')"><span class="ms-lbl">Todos</span><span class="ms-cnt"></span><svg width="10" height="6" viewBox="0 0 10 6"><path d="M0 0l5 6 5-6z" fill="#F97316"/></svg></button><div class="ms-panel"><div class="ms-search"><input type="text" placeholder="Pesquisar…"></div><div class="ms-list"></div></div></div></div>
   <span class="uni-badge" id="uniBadge">—</span>
   <select id="uniSel" title="Trocar de unidade (admin)" style="display:none;background:#0a0f18;color:var(--text);border:1px solid #2a3a50;border-radius:6px;font-family:'Montserrat',sans-serif;font-size:11px;font-weight:700;padding:6px 10px;cursor:pointer;outline:none;"></select>
+  <a class="btn" id="backUnits" href="./" title="Trocar de unidade" style="display:none;text-decoration:none">← Unidades</a>
   <a class="btn" href="../" title="Voltar ao hub" style="text-decoration:none">← Hub</a>
   <button class="btn theme" id="themeBtn" title="Modo claro/escuro">☀</button>
   <button class="btn" id="adminBtn" title="Modo admin (edita tudo) — teste; em produção será por RLS">Admin</button>
@@ -517,14 +528,33 @@ async function initApp(){
   const {data:prof,error:profErr}=await sb.from('fca_profiles').select('*').eq('user_id',session.user.id).maybeSingle();
   if(profErr){ enterPreview(); return; }                   // tabela ainda não existe -> pré-visualização
   PROFILE=prof||{}; REAL_ADMIN=!!PROFILE.is_admin; ADMIN=REAL_ADMIN;
+  // unidades que o usuário pode acessar: admin = todas; gestor = a sua
+  const allowed = REAL_ADMIN ? Object.keys(DEPARA) : (PROFILE.unidade?[String(PROFILE.unidade).toUpperCase()]:[]);
   const params=new URLSearchParams(location.search);
-  UNIDADE_COD=((REAL_ADMIN?(params.get('u')||PROFILE.unidade||'CGR'):PROFILE.unidade)||'').toUpperCase();
-  if(!UNIDADE_COD){ document.getElementById('list').innerHTML='<div class="empty">Seu usuário ainda não está vinculado a uma unidade. Fale com o administrador.</div>'; return; }
-  applyDepara(UNIDADE_COD);
-  document.getElementById('uniBadge').textContent=UNIDADE_COD;
-  applyAdminUI();
-  setupUniSel();
-  carregar();
+  const u=(params.get('u')||'').toUpperCase();
+  if(u && allowed.includes(u) && DEPARA[u]){
+    // ── modo PREENCHIMENTO de uma unidade ──
+    UNIDADE_COD=u; applyDepara(u);
+    document.getElementById('uniBadge').textContent=u;
+    document.getElementById('backUnits').style.display='';
+    applyAdminUI();
+    setupUniSel();
+    carregar();
+  } else {
+    // ── modo MINI-HUB (cards de unidade) ──
+    renderSubHub(allowed);
+  }
+}
+// Mini-hub: um card por unidade liberada + card Admin (consolidado) só p/ admin
+function renderSubHub(allowed){
+  document.querySelectorAll('.hfilter').forEach(e=>e.style.display='none');
+  ['uniBadge','uniSel','adminBtn','saveBtn','savedMsg','backUnits'].forEach(id=>{const e=document.getElementById(id);if(e)e.style.display='none';});
+  const intro=document.querySelector('.intro'); if(intro)intro.textContent='Selecione a unidade para preencher o FCA do mês.';
+  const list=document.getElementById('list');
+  if(!REAL_ADMIN && !allowed.length){ list.innerHTML='<div class="empty">Seu usuário ainda não tem unidade liberada. Fale com o administrador.</div>'; return; }
+  const adminCard = REAL_ADMIN ? `<a class="uhub-card admin" href="../fca-consolidado/"><div class="uhub-cod">★ Admin</div><div class="uhub-name">Consolidado — todas as unidades</div><div class="uhub-go">Ver / editar tudo →</div></a>` : '';
+  const cards = allowed.map(c=>`<a class="uhub-card" href="?u=${c}"><div class="uhub-cod">${esc(c)}</div><div class="uhub-name">${DEPARA[c]?esc(DEPARA[c].dre):''}</div><div class="uhub-go">Abrir FCA →</div></a>`).join('');
+  list.innerHTML=`<div class="uhub-grid">${adminCard}${cards}</div>`;
 }
 // Seletor de unidade (só admin): troca a unidade exibida sem mexer na URL
 function setupUniSel(){
