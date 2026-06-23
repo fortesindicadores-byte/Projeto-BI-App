@@ -6,6 +6,7 @@
 <title>FCA Gerencial</title>
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
 :root{--bg:#0C1017;--card:#141B26;--border:#1E2D40;--orange:#F97316;--blue:#38BDF8;--text:#F1F5F9;--text2:#94A3B8;--text3:#475569;--green:#3BB33B;--red:#FF6666;--amber:#F4A100;}
 *{margin:0;padding:0;box-sizing:border-box;}
@@ -215,6 +216,12 @@ const GID='216663799';
 const MESES=['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
 const FILTROS=['unidade','origem','vig','projeto','sprazo','status'];
 let ALL=[],VIGS=[],tableDim='unidade',tblSort='total',chPrazo=null,chConcl=null,BASE_FIRST=null,PRESENT=[];
+// ── Fonte: Supabase (tabela fca) — substitui a planilha antiga ──
+const SUPABASE_URL='https://lozwipoeacpvplgkrxkq.supabase.co';
+const SUPABASE_KEY='sb_publishable_ggKEEebc5zjgQDVsF92Upw_6uoLmKe9';
+let sb=null;
+function vigToDate(vig){const m=String(vig||'').match(/^([a-zç]{3})\/(\d{2})$/i);if(!m)return null;const mi=MESES.indexOf(m[1].toLowerCase());return mi<0?null:new Date(2000+ +m[2],mi,1);}
+function dateOnly(s){const m=String(s||'').match(/^(\d{4})-(\d{2})-(\d{2})/);return m?new Date(+m[1],+m[2]-1,+m[3]):null;}
 // janela do gráfico: 12 meses a partir do 1º mês COM dados; meses selecionados fora da janela também entram
 function buildVigs(){
   if(!BASE_FIRST){VIGS=[];return;}
@@ -333,14 +340,14 @@ function toggleTblCols(){
   if(btn)btn.textContent=tblExpanded?'– Ocultar detalhes':'+ Ver detalhes';
 }
 
-function fetchTab(){return new Promise((res,rej)=>{const fn='_gvFcaG'+Math.floor(Math.random()*1e9);const s=document.createElement('script');const clr=()=>{try{delete window[fn];s.remove();}catch(e){}};window[fn]=r=>{clr();try{if(r.status!=='ok')throw 0;res(r.table.rows.map(x=>(x.c||[]).map(c=>c?c.v:null)));}catch(e){rej(e);}};s.onerror=()=>{clr();rej(0);};s.src=`https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?gid=${GID}&tqx=out:json;responseHandler:${fn}`;document.head.appendChild(s);});}
-
 async function carregar(){
   document.getElementById('status').textContent='Carregando…';
   try{
-    const rows=await fetchTab();
+    if(!sb)sb=supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
+    const {data,error}=await sb.from('fca').select('*');
+    if(error)throw error;
     const normU=u=>String(u||'').trim().replace(/\s*\([^)]*\)\s*$/,'').trim();
-    ALL=rows.slice(1).filter(r=>r[0]).map(r=>{const vigD=parseD(r[1]),prazoD=parseD(r[7]);const o={origem:String(r[0]||'').trim(),vigD,vig:vigLbl(vigD),unidade:normU(r[2]),projeto:String(r[3]||'').trim(),prazoD,status:String(r[8]||'').trim()};o.concl=categConcl(o.status);o.sprazo=statusPrazo(o);return o;});
+    ALL=(data||[]).map(r=>{const vigD=vigToDate(r.vigencia),prazoD=dateOnly(r.prazo);const o={origem:String(r.origem||'').trim(),vigD,vig:r.vigencia||vigLbl(vigD),unidade:normU(r.unidade),projeto:String(r.projeto||'').trim(),prazoD,status:String(r.status||'').trim()};o.concl=categConcl(o.status);o.sprazo=statusPrazo(o);return o;});
     // 12 meses a partir do 1º mês com dados (preenche conforme entram dados)
     const vm=new Map();ALL.forEach(o=>{if(o.vigD)vm.set(vigKeyN(o.vigD),o.vigD);});
     PRESENT=[...vm.values()].sort((a,b)=>vigKeyN(a)-vigKeyN(b));

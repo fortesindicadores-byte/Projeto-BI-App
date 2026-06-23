@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>FCAs</title>
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
 :root{--bg:#0C1017;--card:#141B26;--border:#1E2D40;--orange:#F97316;--blue:#38BDF8;--text:#F1F5F9;--text2:#94A3B8;--text3:#475569;--green:#3BB33B;--red:#FF6666;--amber:#F4A100;}
 *{margin:0;padding:0;box-sizing:border-box;}
@@ -163,6 +164,13 @@ const FILTROS=[
 const SEL={};FILTROS.forEach(f=>SEL[f.id]=new Set());
 let ALL=[];
 
+// ── Fonte: Supabase (tabela fca) — substitui a planilha antiga ──
+const SUPABASE_URL='https://lozwipoeacpvplgkrxkq.supabase.co';
+const SUPABASE_KEY='sb_publishable_ggKEEebc5zjgQDVsF92Upw_6uoLmKe9';
+let sb=null;
+function vigToDate(vig){const m=String(vig||'').match(/^([a-zç]{3})\/(\d{2})$/i);if(!m)return null;const mi=MESES.indexOf(m[1].toLowerCase());return mi<0?null:new Date(2000+ +m[2],mi,1);}
+function dateOnly(s){const m=String(s||'').match(/^(\d{4})-(\d{2})-(\d{2})/);return m?new Date(+m[1],+m[2]-1,+m[3]):null;}
+
 function parseD(v){if(!v)return null;const m=String(v).match(/^Date\((\d+),(\d+),(\d+)/);if(m)return new Date(+m[1],+m[2],+m[3]);if(v instanceof Date)return v;return null;}
 function fmtD(d){return d?String(d.getDate()).padStart(2,'0')+'/'+String(d.getMonth()+1).padStart(2,'0')+'/'+d.getFullYear():'-';}
 function vigLbl(d){return d?MESES[d.getMonth()]+'/'+String(d.getFullYear()).slice(2):'';}
@@ -172,21 +180,6 @@ function statusPrazo(o){
   if(concl)return 'No prazo';
   if(o.prazoD){const hoje=new Date();hoje.setHours(0,0,0,0);if(o.prazoD<hoje)return 'Vencida';}
   return 'No prazo';
-}
-
-function fetchTab(){
-  return new Promise((resolve,reject)=>{
-    const fn='_gvFca'+Math.floor(Math.random()*1e9);
-    const s=document.createElement('script');
-    const clr=()=>{try{delete window[fn];s.remove();}catch(e){}};
-    window[fn]=resp=>{clr();try{
-      if(resp.status!=='ok')throw new Error('erro');
-      resolve(resp.table.rows.map(r=>(r.c||[]).map(c=>c?(c.v):null)));
-    }catch(e){reject(e);}};
-    s.onerror=()=>{clr();reject(new Error('sem acesso'));};
-    s.src=`https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?gid=${GID}&tqx=out:json;responseHandler:${fn}`;
-    document.head.appendChild(s);
-  });
 }
 
 // ── Multi-select ──
@@ -265,18 +258,20 @@ function render(){
 async function carregar(){
   document.getElementById('status').textContent='Carregando…';
   try{
-    const rows=await fetchTab();
-    ALL=rows.slice(1).filter(r=>r[0]).map(r=>{
-      const vigD=parseD(r[1]),prazoD=parseD(r[7]);
-      const conta=(String(r[4]||'').split('\n')[0]||'').trim();
-      const o={origem:String(r[0]||'').trim(),vigD,vig:vigLbl(vigD),unidade:String(r[2]||'').trim(),projeto:String(r[3]||'').trim(),conta,pacote:getPacote(conta),fato:r[4]||'',causa:r[5]||'',acao:r[6]||'',prazoD,status:String(r[8]||'').trim()};
+    if(!sb)sb=supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
+    const {data,error}=await sb.from('fca').select('*');
+    if(error)throw error;
+    ALL=(data||[]).map(r=>{
+      const vigD=vigToDate(r.vigencia),prazoD=dateOnly(r.prazo);
+      const conta=(String(r.fato||'').split('\n')[0]||'').trim();
+      const o={origem:String(r.origem||'').trim(),vigD,vig:r.vigencia||vigLbl(vigD),unidade:String(r.unidade||'').trim(),projeto:String(r.projeto||'').trim(),conta,pacote:getPacote(conta),fato:r.fato||'',causa:r.causa||'',acao:r.acao||'',prazoD,status:String(r.status||'').trim()};
       o.sprazo=statusPrazo(o);
       return o;
     });
     buildFilters();render();
     const now=new Date();
     document.getElementById('status').textContent=`${ALL.length} FCAs · ${now.toLocaleDateString('pt-BR')} ${now.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})}`;
-  }catch(e){console.error(e);document.getElementById('status').textContent='Erro ao carregar';document.getElementById('tbl').innerHTML='<div class="loading">Erro ao carregar dados</div>';}
+  }catch(e){console.error(e);document.getElementById('status').textContent='Erro ao carregar';document.getElementById('tbl').innerHTML='<div class="loading">Erro ao carregar dados (Supabase). Rode o SQL e verifique o login.</div>';}
 }
 
 // Tema claro/escuro

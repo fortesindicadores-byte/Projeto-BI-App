@@ -105,10 +105,13 @@ drop policy if exists fca_profiles_admin_all on public.fca_profiles;
 create policy fca_profiles_admin_all on public.fca_profiles for all
   using (public.fca_is_admin()) with check (public.fca_is_admin());
 
--- fca: SELECT — admin tudo; usuário só a sua unidade
+-- fca: SELECT — qualquer usuário logado lê tudo (painéis de BI FCAs/Aderência são visão geral).
+-- A privacidade por unidade fica na ESCRITA (insert/update/delete abaixo). A página de
+-- preenchimento já filtra pela própria unidade. Se quiser restringir a leitura por unidade,
+-- troque por: using (public.fca_is_admin() or unidade = public.fca_my_unit())
 drop policy if exists fca_select on public.fca;
 create policy fca_select on public.fca for select
-  using (public.fca_is_admin() or unidade = public.fca_my_unit());
+  using (auth.uid() is not null);
 -- INSERT — admin qualquer; usuário só na sua unidade
 drop policy if exists fca_insert on public.fca;
 create policy fca_insert on public.fca for insert
