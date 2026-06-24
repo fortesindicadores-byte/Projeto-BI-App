@@ -207,6 +207,8 @@ function applyDepara(cod){const d=DEPARA[cod]; if(d){UNIDADE_DRE=d.dre; UNIDADE_
 const SRC_GEROT = 'https://docs.google.com/spreadsheets/d/1xGl1Xrk2sPS9zWghEuecFMNBHwmeLiZ02U-QpO8cDPY/gviz/tq?gid=0';
 // Aba "De-Para" (mesma planilha do Gerot): col A = "PROJETO - ABREV" (ex.: "ROTA - CBA - T2"), col B = unidade do Gerot (ex.: "CDD CUIABA").
 const SRC_DEPARA = 'https://docs.google.com/spreadsheets/d/1xGl1Xrk2sPS9zWghEuecFMNBHwmeLiZ02U-QpO8cDPY/gviz/tq?sheet='+encodeURIComponent('De-Para')+'&headers=0';
+// Aba "Base RPM" (mesma planilha do Gerot): fonte DIRETA da RPM (o FCA Total consolida errado). Lida por NOME de coluna.
+const SRC_BASE_RPM = 'https://docs.google.com/spreadsheets/d/1xGl1Xrk2sPS9zWghEuecFMNBHwmeLiZ02U-QpO8cDPY/gviz/tq?sheet='+encodeURIComponent('Base RPM')+'&headers=1';
 // FCA Total (consolidação do script): Origem | Vigência | Unidade | Projeto | Fato | Causa | Ação | Prazo | Status
 const SRC_FCATOTAL = 'https://docs.google.com/spreadsheets/d/1oW3mss0pXVI6gaDU2z5cDAKvW40LWHCQXpanqSvb12o/gviz/tq?sheet='+encodeURIComponent('FCA Total')+'&headers=1';
 const srcDre = ()=>'https://docs.google.com/spreadsheets/d/1qcTy2ppLCGBKKqZCxCYWCTL9kTAuWfHBMyBfWJOyih8/gviz/tq?sheet='+encodeURIComponent('Consolidado DRE')+'&tq='+encodeURIComponent("select * where K = '"+UNIDADE_DRE+"'");
@@ -224,6 +226,13 @@ function impFmt(v){const a=Math.abs(v);if(a>=1e6)return String(Math.round(a/1e6*
 // Vigência da Dispersão (col0): aceita "Date(...)" ou "MM/YYYY"
 function vigDisp(v){if(v==null)return null;const s=String(v);let m=s.match(/Date\((\d+),(\d+),(\d+)/);if(m)return new Date(+m[1],+m[2],+m[3]);m=s.match(/^(\d{1,2})\/(\d{4})$/);if(m)return new Date(+m[2],+m[1]-1,1);return null;}
 function gviz(url){return new Promise((res,rej)=>{const fn='_gv'+Math.floor(Math.random()*1e9);const s=document.createElement('script');const clr=()=>{try{delete window[fn];s.remove();}catch(e){}};window[fn]=r=>{clr();try{if(r.status!=='ok')throw 0;res((r.table.rows||[]).map(x=>(x.c||[]).map(c=>c?c.v:null)));}catch(e){rej(e);}};s.onerror=()=>{clr();rej(0);};s.src=url+(url.includes('?')?'&':'?')+'tqx=out:json;responseHandler:'+fn;document.head.appendChild(s);});}
+// Como gviz, mas devolve {cols:[rótulos], rows:[[valores]]} — preciso dos cabeçalhos p/ ler por NOME (Base RPM).
+function gvizT(url){return new Promise((res,rej)=>{const fn='_gt'+Math.floor(Math.random()*1e9);const s=document.createElement('script');const clr=()=>{try{delete window[fn];s.remove();}catch(e){}};window[fn]=r=>{clr();try{if(r.status!=='ok')throw 0;const cols=(r.table.cols||[]).map(c=>String((c&&(c.label||c.id))||'').trim());const rows=(r.table.rows||[]).map(x=>(x.c||[]).map(c=>c?c.v:null));res({cols,rows});}catch(e){rej(e);}};s.onerror=()=>{clr();rej(0);};s.src=url+(url.includes('?')?'&':'?')+'tqx=out:json;responseHandler:'+fn;document.head.appendChild(s);});}
+// Acha o índice da coluna pelo NOME do cabeçalho (sem acento/maiúsc./pontuação); tenta exato e depois "contém".
+const _normH=s=>String(s||'').normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase().replace(/[^a-z0-9]/g,'');
+function _idxByName(cols,names){const norm=(cols||[]).map(_normH);for(const n of names){const t=_normH(n);const i=norm.indexOf(t);if(i>=0)return i;}for(const n of names){const t=_normH(n);if(t.length<=2)continue;const i=norm.findIndex(c=>c.includes(t));if(i>=0)return i;}return -1;}
+// Data robusta: "Date(y,m,d)", "MM/YYYY", "dd/mm/aaaa" e textual "abr./2026".
+function parseAnyDate(v){if(v==null)return null;const s=String(v).trim();let m=s.match(/Date\((\d+),(\d+),(\d+)/);if(m)return new Date(+m[1],+m[2],+m[3]);m=s.match(/^(\d{1,2})\/(\d{4})$/);if(m)return new Date(+m[2],+m[1]-1,1);m=s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/);if(m){let y=+m[3];if(y<100)y+=2000;return new Date(y,+m[2]-1,+m[1]);}const mm=s.toLowerCase().match(/([a-zç]{3})[a-zç]*\.?\s*\/?\s*(?:de\s*)?(\d{2,4})/);if(mm){const i=MESES.indexOf(mm[1].slice(0,3));if(i>=0){let y=+mm[2];if(y<100)y+=2000;return new Date(y,i,1);}}return null;}
 
 function slug(s){return String(s).normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^a-zA-Z0-9]+/g,'_').replace(/^_|_$/g,'').toLowerCase();}
 function esc(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
@@ -252,6 +261,40 @@ function parseDePara(rows){
     if(!ex || (projeto.toUpperCase()==='ROTA'&&ex.projeto.toUpperCase()!=='ROTA')) m[k]={projeto,abrev};
   });
   return m;
+}
+// Lê a aba "Base RPM" (POR NOME de coluna) → payloads de RPM prontos p/ a base. Unidade/projeto vêm do De-Para.
+// Traz TODOS os meses; só IC/IV com atingimento < 100%. Se faltar coluna, lança erro listando os cabeçalhos lidos.
+function parseBaseRPM(t,deParaMap){
+  deParaMap=deParaMap||{};
+  const cols=t.cols||[], rows=t.rows||[];
+  const ci={
+    uni: _idxByName(cols,['Unidade','Unidades','Operação','Operacao','CDD','Loja','Filial']),
+    vig: _idxByName(cols,['Vigência','Vigencia','Mês','Mes','Competência','Competencia','Período','Periodo','Data']),
+    kpi: _idxByName(cols,['KPI','Indicador','Indicadores','Métrica','Metrica','Nome do Indicador']),
+    meta:_idxByName(cols,['Meta','Objetivo','Orçado','Orcado']),
+    real:_idxByName(cols,['Real','Realizado','Resultado','Valor']),
+    atg: _idxByName(cols,['% de Ating.','% de Ating','% Ating.','% Ating','Atingimento','% Atingimento','Aderência','Aderencia','Ating.','Ating']),
+    un:  _idxByName(cols,['Unidade de Medida','Un.','Unid.','UM','Medida'])
+  };
+  const miss=[]; if(ci.uni<0)miss.push('Unidade'); if(ci.vig<0)miss.push('Vigência'); if(ci.kpi<0)miss.push('KPI/Indicador'); if(ci.atg<0)miss.push('% de Ating.');
+  if(miss.length){throw new Error('Colunas não encontradas em "Base RPM": '+miss.join(', ')+'. Cabeçalhos lidos: '+cols.filter(Boolean).join(' | '));}
+  const out=[];
+  rows.forEach(r=>{
+    const dp=deParaMap[_normU(r[ci.uni])]; if(!dp)return;                       // só unidades mapeadas no De-Para
+    const kpi=String(r[ci.kpi]||'').trim(); if(!/^\s*I[CV]/i.test(kpi))return;  // só IC/IV
+    let atg=ci.atg>=0?r[ci.atg]:null;
+    if(atg!=null&&typeof atg!=='number')atg=parseFloat(String(atg).replace('%','').replace(/\./g,atg.includes(',')?'':'.').replace(',','.'));
+    if(atg!=null&&atg>1.5)atg=atg/100;                                          // veio 80 em vez de 0,80
+    if(atg==null||!isFinite(atg)||atg>=1)return;                               // só com desvio
+    const d=parseAnyDate(r[ci.vig]); const vig=vigLbl(d)||String(r[ci.vig]||'').trim(); if(!vig)return;
+    const un=ci.un>=0?String(r[ci.un]||'').trim():'';
+    const meta=ci.meta>=0&&r[ci.meta]!=null&&r[ci.meta]!==''?_g2(+r[ci.meta])+(un?' '+un:''):'—';
+    const real=ci.real>=0&&r[ci.real]!=null&&r[ci.real]!==''?_g2(+r[ci.real])+(un?' '+un:''):'—';
+    const at=Math.round(atg*100)+'%';
+    out.push({unidade:dp.abrev,vigencia:vig,origem:'RPM',fato:kpi,projeto:dp.projeto,
+      fato_desvio:`Meta: ${meta} | Real: ${real} | Ating: ${at}`,status:DEFAULT_STATUS,locked:false});
+  });
+  return out;
 }
 // Gerot: gera só o ÚLTIMO mês com dados (histórico vem do FCA Total). projeto vem do De-Para (ROTA/AS/EMPURRADA/INSUMOS/UDC).
 function pushGerot(rows,fatos,deParaMap){
@@ -412,8 +455,7 @@ const _gvizSafe=url=>gviz(url).catch(()=>null);
 async function gerarFatos(shared){
   const fatos=[];
   let kmlCausas={},dispCausas={},frotaMaps={mes:{},porMes:{}};
-  const dep=shared?shared.dep:await _gvizSafe(SRC_DEPARA); const deParaMap=parseDePara(dep);
-  const ger=shared?shared.ger:await _gvizSafe(SRC_GEROT);  if(ger){try{pushGerot(ger,fatos,deParaMap);}catch(e){}}
+  // RPM agora é sincronizada à parte (Base RPM, via "Sincronizar RPM"); aqui só Custos (DRE) + drivers de causa.
   const disp=shared?shared.disp:await _gvizSafe(SRC_DISP); if(disp){try{dispCausas=dispCausasPorProj(disp);frotaMaps=frotaAtivaPorProj(disp);}catch(e){}}
   const kml=shared?shared.kml:await _gvizSafe(SRC_KML);    if(kml){try{kmlCausas=kmlCausasPorProj(kml);}catch(e){}}
   try{ const dre=await gviz(srcDre()); pushDRE(dre,fatos,kmlCausas,dispCausas,frotaMaps); }catch(e){}
@@ -536,6 +578,35 @@ async function importarFCATotal(){
   }catch(e){console.error(e); list.innerHTML='<div class="empty">Erro ao importar: '+esc(e.message||e)+'</div>'; return; }
   try{Object.keys(localStorage).filter(k=>k.indexOf('fca_cache_')===0).forEach(k=>localStorage.removeItem(k));}catch(e){}
   list.innerHTML='<div class="genres"><h2 class="genres-h">FCA Total importado — '+payload.length+' linha(s)</h2><a class="btn" style="display:inline-block;margin-top:14px;text-decoration:none" href="../fca-consolidado/">← Voltar ao Admin</a></div>';
+}
+// Sincroniza a RPM direto da aba "Base RPM" (o FCA Total consolida errado). Substitui só as linhas origem='RPM',
+// preservando causa/ação/status já preenchidos que casarem pela chave do fato. Só admin (?sync=rpm).
+async function sincronizarRPM(){
+  const list=document.getElementById('list');
+  document.querySelectorAll('.hfilter').forEach(e=>e.style.display='none');
+  ['uniBadge','uniSel','adminBtn','saveBtn','savedMsg','backUnits','viewBtn'].forEach(id=>{const e=document.getElementById(id);if(e)e.style.display='none';});
+  const intro=document.querySelector('.intro'); if(intro)intro.style.display='none';
+  list.innerHTML='<div class="loading">Lendo De-Para e Base RPM…</div>';
+  let payload;
+  try{
+    const dep=await gviz(SRC_DEPARA); const deParaMap=parseDePara(dep);
+    if(!Object.keys(deParaMap).length) throw new Error('De-Para vazio — não foi possível mapear as unidades da RPM.');
+    const t=await gvizT(SRC_BASE_RPM);
+    payload=parseBaseRPM(t,deParaMap);
+  }catch(e){ list.innerHTML='<div class="empty">Erro ao ler/processar a RPM:<br>'+esc(e.message||e)+'</div>'; return; }
+  if(!payload.length){ list.innerHTML='<div class="empty">Nenhum desvio de RPM encontrado (IC/IV com atingimento &lt; 100%).</div>'; return; }
+  list.innerHTML='<div class="loading">Atualizando RPM na base ('+payload.length+' linhas)…</div>';
+  try{
+    // preserva o que já foi preenchido, casando pela chave do fato (vig+RPM+projeto+fato)
+    const {data:cur}=await sb.from('fca').select('*').eq('origem','RPM');
+    const filled={};
+    (cur||[]).forEach(r=>{const has=r.causa||r.acao||r.responsavel||r.prazo||r.acompanhamento||(r.status&&r.status!==DEFAULT_STATUS);if(has)filled[fkey(r.vigencia,'RPM',r.projeto,r.fato)]=r;});
+    payload.forEach(p=>{const f=filled[fkey(p.vigencia,'RPM',p.projeto,p.fato)];if(f){p.causa=f.causa;p.acao=f.acao;p.responsavel=f.responsavel;p.prazo=f.prazo;p.status=f.status||DEFAULT_STATUS;p.acompanhamento=f.acompanhamento;p.locked=!!f.locked;}});
+    await sb.from('fca').delete().eq('origem','RPM');                 // substitui só a RPM (Custos preservado)
+    for(let i=0;i<payload.length;i+=200){const {error}=await sb.from('fca').insert(payload.slice(i,i+200));if(error)throw error;}
+  }catch(e){ list.innerHTML='<div class="empty">Erro ao gravar na base: '+esc(e.message||e)+'</div>'; return; }
+  try{Object.keys(localStorage).filter(k=>k.indexOf('fca_cache_')===0).forEach(k=>localStorage.removeItem(k));}catch(e){}
+  list.innerHTML='<div class="genres"><h2 class="genres-h">RPM sincronizada — '+payload.length+' fato(s)</h2><a class="btn" style="display:inline-block;margin-top:14px;text-decoration:none" href="../fca-consolidado/">← Voltar ao Admin</a></div>';
 }
 
 const STATUS=['Não iniciada','Em andamento','Concluída','Cancelada'];
@@ -759,6 +830,11 @@ async function initApp(){
   if((params.get('import')||'')==='total'){                  // ── importação do FCA Total (só admin) ──
     if(!REAL_ADMIN){ document.getElementById('list').innerHTML='<div class="empty">Apenas administradores.</div>'; return; }
     importarFCATotal(); return;
+  }
+  if((params.get('sync')||'')==='rpm'){                       // ── sincroniza RPM da Base RPM (só admin) ──
+    if(!REAL_ADMIN){ document.getElementById('list').innerHTML='<div class="empty">Apenas administradores.</div>'; return; }
+    document.getElementById('uniBadge').textContent='Admin · RPM';
+    sincronizarRPM(); return;
   }
   const u=(params.get('u')||'').toUpperCase();
   if(u && allowed.includes(u) && DEPARA[u]){
