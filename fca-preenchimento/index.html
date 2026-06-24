@@ -305,7 +305,6 @@ function parseBaseRPM(t){
   const mapSt=s=>{const x=String(s||'').toLowerCase();if(x.includes('conclu'))return 'Concluída';if(x.includes('andam'))return 'Em andamento';if(x.includes('cancel'))return 'Cancelada';return DEFAULT_STATUS;};
   const isoD=v=>{const d=parseAnyDate(v);return d?d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'):null;};
   const txt=i=>{if(i<0)return null;const s=String(rTmp[i]==null?'':rTmp[i]).trim();return s||null;};
-  const MAX_VIGKEY=202603;   // limite: traz só até abr/2026 (ano*100+mês; abr = índice 3)
   let rTmp;
   const out=[];
   rows.forEach(r=>{
@@ -315,18 +314,16 @@ function parseBaseRPM(t){
     let atg=ci.atg>=0?r[ci.atg]:null;
     if(atg!=null&&typeof atg!=='number')atg=parseFloat(String(atg).replace('%','').replace(/\./g,String(atg).includes(',')?'':'.').replace(',','.'));
     if(atg!=null&&atg>1.5)atg=atg/100;                                          // veio 80 em vez de 0,80
-    if(atg==null||!isFinite(atg)||atg>=1)return;                               // só com desvio
-    const causaV=txt(ci.causa), acaoV=txt(ci.acao);
-    if(!causaV&&!acaoV)return;                                                  // vazio (sem causa/ação) não vai
+    if(atg==null||!isFinite(atg)||atg>=1)return;                               // só o que desviou (IC e IV, atg<1)
     const d=parseAnyDate(r[ci.vig]); const vig=vigLbl(d)||String(r[ci.vig]||'').trim(); if(!vig)return;
-    const vk=d?vigKeyN(d):vigNum(vig); if(vk>MAX_VIGKEY)return;                  // só até abr/2026
     const un=ci.un>=0?String(r[ci.un]||'').trim():'';
     const meta=ci.meta>=0&&r[ci.meta]!=null&&r[ci.meta]!==''?_g2(+r[ci.meta])+(un?' '+un:''):'—';
     const real=ci.real>=0&&r[ci.real]!=null&&r[ci.real]!==''?_g2(+r[ci.real])+(un?' '+un:''):'—';
     const at=(Math.round(atg*1000)/10).toLocaleString('pt-BR')+'%';
+    // desvio vazio (sem causa/ação) — as unidades preenchem no painel. Banco é a fonte daqui pra frente.
     out.push({unidade:dp.abrev,vigencia:vig,origem:'RPM',fato:kpi,projeto:dp.projeto,
       fato_desvio:`Meta: ${meta} | Real: ${real} | Ating: ${at}`,
-      causa:causaV,acao:acaoV,prazo:isoD(r[ci.prazo]),status:ci.st>=0?mapSt(r[ci.st]):DEFAULT_STATUS,locked:false});
+      causa:null,acao:null,prazo:null,status:DEFAULT_STATUS,locked:false});
   });
   return out;
 }
@@ -613,8 +610,8 @@ async function importarFCATotal(){
   try{Object.keys(localStorage).filter(k=>k.indexOf('fca_cache_')===0).forEach(k=>localStorage.removeItem(k));}catch(e){}
   list.innerHTML='<div class="genres"><h2 class="genres-h">FCA Total importado — '+payload.length+' linha(s)</h2><a class="btn" style="display:inline-block;margin-top:14px;text-decoration:none" href="../fca-consolidado/">← Voltar ao Admin</a></div>';
 }
-// Sincroniza a RPM direto da aba "Base RPM" (o FCA Total consolida errado). Substitui só as linhas origem='RPM',
-// preservando causa/ação/status já preenchidos que casarem pela chave do fato. Só admin (?sync=rpm).
+// Gera os desvios da RPM (IC e IV que desviaram) da aba "Base RPM" para o banco — ADITIVO, vazios p/ as unidades
+// preencherem no painel. Nada é apagado: histórico e o que já foi preenchido ficam intactos. Só admin (?sync=rpm).
 async function sincronizarRPM(){
   const list=document.getElementById('list');
   document.querySelectorAll('.hfilter').forEach(e=>e.style.display='none');
@@ -627,25 +624,18 @@ async function sincronizarRPM(){
     payload=parseBaseRPM(t);                                                    // mapa de unidade/projeto é fixo (RPM_UNIT_MAP)
   }catch(e){ list.innerHTML='<div class="empty">Erro ao ler/processar a RPM:<br>'+esc(e.message||e)+'</div>'; return; }
   if(!payload.length){ list.innerHTML='<div class="empty">Nenhum desvio de RPM encontrado (IC/IV com atingimento &lt; 100%).</div>'; return; }
-  list.innerHTML='<div class="loading">Atualizando RPM na base ('+payload.length+' linhas)…</div>';
+  list.innerHTML='<div class="loading">Gravando os desvios novos de RPM…</div>';
+  let novos=0;
   try{
-    // A aba Base RPM é a fonte de Causa/Ação/Prazo/Status. Do painel preservamos só Responsável e Acompanhamento
-    // (que você preenche aqui); e mantemos o valor do painel só quando a aba vier vazia naquele campo.
-    const {data:cur}=await sb.from('fca').select('*').eq('origem','RPM');
-    const prev={};
-    (cur||[]).forEach(r=>{prev[fkey(r.vigencia,'RPM',r.projeto,r.fato)]=r;});
-    payload.forEach(p=>{const f=prev[fkey(p.vigencia,'RPM',p.projeto,p.fato)];if(!f)return;
-      p.responsavel=f.responsavel; p.acompanhamento=f.acompanhamento;          // só no painel
-      if(!p.causa) p.causa=f.causa;
-      if(!p.acao) p.acao=f.acao;
-      if(!p.prazo) p.prazo=f.prazo;
-      if(!p.status||p.status===DEFAULT_STATUS){ if(f.status) p.status=f.status; }
-    });
-    await sb.from('fca').delete().eq('origem','RPM');                 // substitui só a RPM (Custos preservado)
-    for(let i=0;i<payload.length;i+=200){const {error}=await sb.from('fca').insert(payload.slice(i,i+200));if(error)throw error;}
+    // aditivo: só insere o que ainda não existe (chave = vig+RPM+projeto+fato). Não apaga nem sobrescreve.
+    const {data:cur}=await sb.from('fca').select('vigencia,projeto,fato').eq('origem','RPM');
+    const have=new Set((cur||[]).map(r=>fkey(r.vigencia,'RPM',r.projeto,r.fato)));
+    const ins=payload.filter(p=>!have.has(fkey(p.vigencia,'RPM',p.projeto,p.fato)));
+    novos=ins.length;
+    for(let i=0;i<ins.length;i+=200){const {error}=await sb.from('fca').insert(ins.slice(i,i+200));if(error)throw error;}
   }catch(e){ list.innerHTML='<div class="empty">Erro ao gravar na base: '+esc(e.message||e)+'</div>'; return; }
   try{Object.keys(localStorage).filter(k=>k.indexOf('fca_cache_')===0).forEach(k=>localStorage.removeItem(k));}catch(e){}
-  list.innerHTML='<div class="genres"><h2 class="genres-h">RPM sincronizada — '+payload.length+' fato(s)</h2><a class="btn" style="display:inline-block;margin-top:14px;text-decoration:none" href="../fca-consolidado/">← Voltar ao Admin</a></div>';
+  list.innerHTML='<div class="genres"><h2 class="genres-h">RPM gerada — '+novos+' desvio(s) novo(s) no banco</h2><a class="btn" style="display:inline-block;margin-top:14px;text-decoration:none" href="../fca-consolidado/">← Voltar ao Admin</a></div>';
 }
 
 const STATUS=['Não iniciada','Em andamento','Concluída','Cancelada'];
