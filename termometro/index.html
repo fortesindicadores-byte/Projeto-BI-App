@@ -754,6 +754,9 @@ function renderRanking(rows){
     .sort((a,b)=>b.score-a.score);
   // colunas de indicador = união pela ordem dos tiers presentes
   const indCols=[]; list.forEach(m=>m.names.forEach(n=>{const cn=canonInd(n);if(!indCols.includes(cn))indCols.push(cn);}));
+  // máximo de pontos de cada indicador (20 ou 10), p/ pintar igual às Regras: máx=verde, meio=amarelo, 0=vermelho (sem laranja)
+  const maxByInd={};
+  indCols.forEach(n=>{let mx=0;list.forEach(m=>{const d=m.ind[n];if(d&&d.p.length)mx=Math.max(mx,...d.p);});maxByInd[n]=mx>=20?20:10;});
   const head=`<thead><tr>
     <th style="text-align:left;width:28px">#</th><th style="text-align:left;width:158px">Unidade</th><th style="text-align:left;width:96px">Tier</th>
     <th class="num sep-l" style="width:62px">Pontuação</th>
@@ -765,8 +768,9 @@ function renderRanking(rows){
       if(!d||(!d.p.length&&d.lastV==null)) return `<td class="num sep-l" style="color:var(--text3)">—</td>`;
       const pAvg=d.p.length?Math.round(d.p.reduce((a,b)=>a+b,0)/d.p.length):null;
       const val=fmtIndVal(d.lastV);
-      // pontos grandes em cima (pintados pela regra 20/10/5/0) + valor pequeno embaixo
-      const pCls=pAvg!=null?(pAvg>=15?'g':pAvg>=7.5?'y':pAvg>=2.5?'o':'r'):'';
+      // pontos grandes em cima (pintados pela regra: máx=verde, meio=amarelo, 0=vermelho — sem laranja) + valor pequeno embaixo
+      const mx=maxByInd[n]||20;
+      const pCls=pAvg!=null?(pAvg>=mx*0.75?'g':pAvg>=mx*0.25?'y':'r'):'';
       return `<td class="num sep-l rk-ind"><span class="p" style="color:${bandFg(pCls)}">${pAvg!=null?pAvg:'—'}</span>${val?`<span class="v">${val}</span>`:''}</td>`;
     }).join('');
     const scBg=bandHex(band(m.pct));
