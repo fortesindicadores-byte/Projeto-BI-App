@@ -292,6 +292,18 @@ const LIMIAR_PTS=['20','10','5','0'];
 // ════════ FORMAT ════════
 const set=(id,v)=>{const e=document.getElementById(id);if(e)e.textContent=v;};
 const num1=v=>v==null||!isFinite(v)?'—':(Math.round(v*10)/10).toLocaleString('pt-BR');
+// ── Faixa de cor por % (padrão Scorecard): ≥90 verde · ≥80 amarelo · ≥70 laranja · <70 vermelho ──
+function band(p){return p==null||!isFinite(p)?'':p>=90?'g':p>=80?'y':p>=70?'o':'r';}
+function bandHex(cls){return cls==='g'?'#3BB33B':cls==='y'?'#EAB308':cls==='o'?'#F97316':cls==='r'?'#FF6666':'transparent';}
+function bandFg(cls){return cls==='g'?'#3BB33B':cls==='y'?'#EAB308':cls==='o'?'#F97316':cls==='r'?'#FF6666':'var(--text3)';}
+// Normalização do Score: % do MÁXIMO observado de "Total Pontos" no conjunto carregado.
+// (nem todo indicador pontua em todo tier — usar nº de indicadores×20 distorce; o máximo
+//  observado dá uma escala coerente: melhor do período ≈ verde, pior ≈ vermelho.)
+let MAX_TOTAL=0;
+function computeMaxTotal(){MAX_TOTAL=allRows.reduce((m,r)=>{const t=+r.raw[COL.total];return isFinite(t)&&t>m?t:m;},0)||100;}
+function pctOf(tot){return isFinite(tot)&&MAX_TOTAL>0?Math.min(100,tot/MAX_TOTAL*100):null;}
+// Score % de uma linha individual
+function rowScorePct(r){return pctOf(+r.raw[COL.total]);}
 const vigKey=v=>{const p=String(v).split('_');return (p[0]||'').padStart(2,'0')+'_'+(p[1]||'').padStart(2,'0');};
 const vigSort=(a,b)=>vigKey(a)<vigKey(b)?-1:vigKey(a)>vigKey(b)?1:0;
 
@@ -379,6 +391,7 @@ async function atualizar(){
   try{
     const parts=await Promise.all(TIERS.map(fetchTier));
     allRows=parts.flat();
+    computeMaxTotal();
     buildFilters();
     renderRegras();
     applyFilters();
@@ -395,9 +408,12 @@ function buildFilters(){
   const tiers=TIERS.filter(t=>allRows.some(r=>r.tier===t));
   const vigs=uniq(allRows.map(r=>r.raw[COL.vig])).filter(Boolean).sort(vigSort);
   const geos=uniq(allRows.map(r=>r.raw[COL.geo])).filter(Boolean).sort();
+  // Vigência inicia com a ÚLTIMA marcada (só na 1ª carga; refresh preserva a seleção do usuário)
+  const vw=document.getElementById('ms-vig');
+  if(!vw._init){vw._init=true;if(vigs.length){vw._sel=new Set([vigs[vigs.length-1]]);}}
   _buildMs(document.getElementById('ms-uni'),unis);
   _buildMs(document.getElementById('ms-tier'),tiers);
-  _buildMs(document.getElementById('ms-vig'),vigs);
+  _buildMs(vw,vigs);
   _buildMs(document.getElementById('ms-geo'),geos);
 }
 function selOrAll(id,all){const s=getMs(id);return s.length?new Set(s):new Set(all);}
@@ -421,8 +437,11 @@ function applyFilters(){
 
 // ════════ HERO ════════
 function avgTotal(rows){ if(!rows.length)return null; return rows.reduce((s,r)=>s+(+r.raw[COL.total]||0),0)/rows.length; }
+// score% médio das linhas (cada uma normalizada pelo max do seu tier)
+function avgPct(rows){const ps=rows.map(rowScorePct).filter(x=>x!=null);return ps.length?ps.reduce((a,b)=>a+b,0)/ps.length:null;}
 function renderHero(rows){
   set('h-score',num1(avgTotal(rows)));
+  const hv=document.querySelector('.hero-value');if(hv){const c=bandFg(band(avgPct(rows)));hv.style.color=c==='var(--text3)'?'var(--orange)':c;}
   set('h-uni',uniq(rows.map(r=>r.raw[COL.uni])).length||'—');
   set('h-vig',uniq(rows.map(r=>r.raw[COL.vig])).length||'—');
   // melhor unidade: média de total por unidade
@@ -440,11 +459,13 @@ function renderTierCards(rows){
   TIERS.forEach(t=>{
     const rs=rows.filter(r=>r.tier===t);
     const avg=avgTotal(rs);
-    const pctBar=avg==null?0:Math.max(0,Math.min(100,(avg/100)*100));
-    const col=TIER_COLORS[t];
+    const pct=avgPct(rs);
+    const pctBar=pct==null?0:Math.max(0,Math.min(100,pct));
+    const col=pct==null?TIER_COLORS[t]:bandHex(band(pct));
+    const vCol=pct==null?'var(--text)':bandFg(band(pct));
     const div=document.createElement('div'); div.className='kpi-card';
     div.innerHTML=`<div class="card-label">${t}</div>
-      <div class="card-value">${num1(avg)}<small style="font-size:13px;color:var(--text2);font-weight:700"> pts</small></div>
+      <div class="card-value" style="color:${vCol}">${num1(avg)}<small style="font-size:13px;color:var(--text2);font-weight:700"> pts</small></div>
       <div class="card-meta"><b>${uniq(rs.map(r=>r.raw[COL.uni])).length}</b> unid · <b>${rs.length}</b> reg</div>
       <div class="card-bar"><span style="width:${pctBar}%;background:${col}"></span></div>`;
     wrap.appendChild(div);
@@ -495,37 +516,61 @@ function fmtIndVal(v){
 // ════════ CHART ════════
 const getTickC=()=>document.body.classList.contains('light-mode')?'#444':'#94A3B8';
 const getGridC=()=>document.body.classList.contains('light-mode')?'rgba(0,0,0,.08)':'rgba(255,255,255,.06)';
+// Plugin de datalabel: rotula só as barras marcadas em ds._on (vigência selecionada).
+const barLabels={id:'bl',afterDatasetsDraw(c){const ds=c.data.datasets[0],m=c.getDatasetMeta(0),ctx=c.ctx;ctx.save();ctx.font='700 11px Montserrat';ctx.fillStyle=document.body.classList.contains('light-mode')?'#1a1a1a':'#F1F5F9';ctx.textAlign='center';ctx.textBaseline='bottom';m.data.forEach((b,i)=>{const v=ds.data[i];if(v==null)return;if(ds._on&&!ds._on[i])return;ctx.fillText(num1(v),b.x,b.y-4);});ctx.restore();}};
 function renderChart(){
-  const rows=getFiltered();
+  // evolução temporal ignora o filtro de Vigência (só Unid/Tier/GEO): todos os meses aparecem,
+  // a vigência selecionada fica destacada e rotulada; as demais esmaecidas.
+  const fU=selOrAll('ms-uni',uniq(allRows.map(r=>r.raw[COL.uni])));
+  const fT=selOrAll('ms-tier',TIERS);
+  const fG=selOrAll('ms-geo',uniq(allRows.map(r=>r.raw[COL.geo])));
+  const rows=allRows.filter(r=>fU.has(r.raw[COL.uni])&&fT.has(r.tier)&&fG.has(r.raw[COL.geo]));
   const ind=document.getElementById('ind-sel').value||'__total__';
-  const vigs=uniq(rows.map(r=>r.raw[COL.vig])).sort(vigSort);
-  const data=vigs.map(v=>{
+  // todas as vigências do conjunto (independe do filtro de vigência), p/ evolução temporal completa
+  const vigs=uniq(allRows.map(r=>r.raw[COL.vig])).sort(vigSort);
+  const selVig=getMs('ms-vig');
+  const hasFocus=selVig.length>0;
+  // valor (pts) e score% (p/ a faixa de cor) por vigência
+  const data=[],pcts=[],on=[];
+  vigs.forEach(v=>{
     const rs=rows.filter(r=>r.raw[COL.vig]===v);
-    let vals;
-    if(ind==='__total__') vals=rs.map(r=>+r.raw[COL.total]||0);
-    else vals=rs.map(r=>indPointsForRow(r,ind)).filter(x=>x!=null);
-    if(!vals.length) return null;
-    return Math.round((vals.reduce((a,b)=>a+b,0)/vals.length)*10)/10;
+    let val=null,pct=null;
+    if(ind==='__total__'){
+      const tots=rs.map(r=>+r.raw[COL.total]).filter(isFinite);
+      const ps=rs.map(rowScorePct).filter(x=>x!=null);
+      if(tots.length){val=Math.round(tots.reduce((a,b)=>a+b,0)/tots.length*10)/10;}
+      if(ps.length){pct=ps.reduce((a,b)=>a+b,0)/ps.length;}
+    }else{
+      const pts=rs.map(r=>indPointsForRow(r,ind)).filter(x=>x!=null);
+      if(pts.length){val=Math.round(pts.reduce((a,b)=>a+b,0)/pts.length*10)/10;pct=val/20*100;}
+    }
+    data.push(val);pcts.push(pct);on.push(selVig.length===0||selVig.includes(v));
   });
   set('ch-sub', ind==='__total__'?'Pontuação total média por vigência (M_Q)':`Pontos médios · ${ind}`);
+  // cores por faixa do valor; vigência selecionada cheia, demais esmaecidas
+  const bg=data.map((v,i)=>{if(v==null)return 'transparent';const a=hasFocus?(on[i]?.95:.20):.85;const hex=bandHex(band(pcts[i]));const rgb=hex==='#3BB33B'?'59,179,59':hex==='#EAB308'?'234,179,8':hex==='#F97316'?'249,115,22':'255,102,102';return `rgba(${rgb},${a})`;});
+  const bc=data.map((v,i)=>v==null?'transparent':bandFg(band(pcts[i])));
+  const isLight=document.body.classList.contains('light-mode');
+  const refC=isLight?'#000':'#F1F5F9';
+  const grid={color:getGridC()},tick={color:getTickC(),font:{family:'Montserrat',size:11}};
   const ctx=document.getElementById('ch-line');
   if(chLine) chLine.destroy();
   chLine=new Chart(ctx,{
-    type:'line',
     data:{labels:vigs,datasets:[{
+      type:'bar',
       label: ind==='__total__'?'Pontuação':ind,
-      data, borderColor:'#F97316', backgroundColor:'rgba(249,115,22,.12)',
-      borderWidth:3, tension:.3, fill:true, spanGaps:true,
-      pointRadius:4, pointBackgroundColor:'#F97316', pointHoverRadius:7
+      data, backgroundColor:bg, borderColor:bc, borderWidth:1,
+      _on: hasFocus?on:vigs.map(()=>true), borderRadius:3, maxBarThickness:64, categoryPercentage:.9, barPercentage:.95
     }]},
-    options:{responsive:true,maintainAspectRatio:false,
+    plugins:[barLabels],
+    options:{responsive:true,maintainAspectRatio:false,layout:{padding:{top:22}},
       plugins:{legend:{display:false},
         tooltip:{backgroundColor:'#141B26',titleColor:'#F97316',bodyColor:'#F1F5F9',borderColor:'#1E2D40',borderWidth:1,
           titleFont:{family:'Montserrat'},bodyFont:{family:'Montserrat'},
           callbacks:{label:c=>` ${c.parsed.y==null?'—':num1(c.parsed.y)+' pts'}`}}},
       scales:{
-        x:{grid:{color:getGridC()},ticks:{color:getTickC(),font:{family:'Montserrat',size:11}}},
-        y:{beginAtZero:true,grid:{color:getGridC()},ticks:{color:getTickC(),font:{family:'Montserrat',size:11}}}
+        x:{grid,ticks:tick},
+        y:{beginAtZero:true,grid,ticks:tick}
       }}
   });
 }
@@ -559,7 +604,7 @@ function renderRanking(rows){
       if(v!=null) map[key].ind[n].lastV=v;
     });
   });
-  const list=Object.values(map).map(m=>({...m, score: m.tot.reduce((a,b)=>a+b,0)/m.tot.length }))
+  const list=Object.values(map).map(m=>{const score=m.tot.reduce((a,b)=>a+b,0)/m.tot.length;return {...m, score, pct: pctOf(score) };})
     .sort((a,b)=>b.score-a.score);
   // colunas de indicador = união pela ordem dos tiers presentes
   const indCols=[]; list.forEach(m=>m.names.forEach(n=>{if(!indCols.includes(n))indCols.push(n);}));
@@ -574,14 +619,17 @@ function renderRanking(rows){
       if(!d||(!d.p.length&&d.lastV==null)) return `<td class="num sep-l" style="color:var(--text3)">—</td>`;
       const pAvg=d.p.length?Math.round(d.p.reduce((a,b)=>a+b,0)/d.p.length):null;
       const val=fmtIndVal(d.lastV);
-      return `<td class="num sep-l rk-ind"><span class="v">${val}</span><span class="p" style="color:${pAvg!=null?ptColor(pAvg):'var(--text2)'}">${pAvg!=null?pAvg+'pt':''}</span></td>`;
+      // faixa de cor pela % de pontos do indicador (pts/20)
+      const cFg=pAvg!=null?bandFg(band(pAvg/20*100)):'var(--text2)';
+      return `<td class="num sep-l rk-ind"><span class="v">${val}</span><span class="p" style="color:${cFg}">${pAvg!=null?pAvg+'pt':''}</span></td>`;
     }).join('');
+    const scBg=bandHex(band(m.pct));
     return `<tr>
       <td style="font-weight:800;color:var(--orange)">${i+1}</td>
       <td class="uni">${m.uni}</td>
       <td><span class="tier-chip">${m.tier}</span></td>
       <td style="color:var(--text2)">${m.geo||'—'}</td>
-      <td class="num pts sep-l" style="color:${ptColor(m.score)}">${num1(m.score)}</td>
+      <td class="num pts sep-l"><span style="display:inline-block;min-width:42px;padding:3px 10px;border-radius:5px;font-weight:800;color:#0C1017;background:${scBg}">${num1(m.score)}</span></td>
       ${cells}
     </tr>`;
   }).join('')+'</tbody>';
