@@ -146,6 +146,14 @@ table.dre td.pts{font-weight:800;}
 .reg-item:last-child{border-bottom:none;}
 .reg-kpi{color:var(--text2);font-weight:600;font-size:12px;text-transform:uppercase;letter-spacing:.3px;}
 .reg-val{color:var(--text);font-weight:800;white-space:nowrap;font-size:13px;flex-shrink:0;}
+/* Regras — tabela full-width: limiares coloridos por nível de pontos */
+table.dre th.lim{font-weight:800;}
+table.dre th.lim-g{color:#3BB33B;}table.dre th.lim-y{color:#EAB308;}table.dre th.lim-o{color:#F97316;}table.dre th.lim-r{color:#FF6666;}
+table.dre td.reg-lim{white-space:normal;font-weight:600;}
+table.dre td.reg-lim.lim-g{color:#3BB33B;}table.dre td.reg-lim.lim-y{color:#EAB308;}table.dre td.reg-lim.lim-o{color:#F97316;}table.dre td.reg-lim.lim-r{color:#FF6666;}
+table.dre td.reg-txt{white-space:normal;color:var(--text2);}
+table.dre#reg-table{table-layout:auto;}
+table.dre#reg-table td,table.dre#reg-table th{vertical-align:top;}
 body.light-mode table.dre tbody tr+tr td{border-top-color:rgba(0,0,0,.05);}
 
 /* MATRIX heatmap */
@@ -273,17 +281,16 @@ body.light-mode table.mtx thead th{border-bottom-color:rgba(0,0,0,.12);}
     <div class="tbl-wrap"><table class="dre" id="rk-table"></table></div>
   </div>
 
-  <div class="row-3">
-    <div class="tbl-section mtx-card" style="margin-bottom:0;">
-      <div class="tbl-title">Posição no Ranking · Mês a Mês</div>
-      <div class="tbl-sub">Posição de cada unidade por vigência (verde = topo · vermelho = fundo)</div>
-      <div class="mtx-wrap"><table class="mtx" id="mtx-table"></table></div>
-    </div>
-    <div class="tbl-section peso-box" style="margin-bottom:0;">
-      <div class="peso-title">Regras · Pontuação</div>
-      <div class="peso-header"><span>Indicador</span><span>Máx · Limiar</span></div>
-      <div id="reg-list" style="overflow-y:auto;"></div>
-    </div>
+  <div class="tbl-section">
+    <div class="tbl-title">Posição no Ranking · Mês a Mês</div>
+    <div class="tbl-sub">Posição de cada unidade por vigência (verde = topo · vermelho = fundo)</div>
+    <div class="mtx-wrap"><table class="mtx" id="mtx-table"></table></div>
+  </div>
+
+  <div class="tbl-section">
+    <div class="tbl-title">Regras · Pontuação</div>
+    <div class="tbl-sub">Critérios de pontuação por indicador (fonte: aba Regras)</div>
+    <div class="tbl-wrap"><table class="dre" id="reg-table"></table></div>
   </div>
 </main>
 
@@ -436,8 +443,9 @@ function fetchTier(tier){
 async function atualizar(){
   set('status-badge','Carregando…');
   try{
-    const parts=await Promise.all(TIERS.map(fetchTier));
+    const [parts,reg]=await Promise.all([Promise.all(TIERS.map(fetchTier)),fetchRegras()]);
     allRows=parts.flat();
+    if(reg) REGRAS_ROWS=reg;
     computeMaxTotal();
     buildFilters();
     renderRegras();
@@ -626,16 +634,73 @@ function renderChart(){
 }
 
 // ════════ REGRAS ════════
+// Lê a aba "Regras" via gviz (headers=0). Colunas (0-based):
+// 0 KPIS · 1 REGRA · 2 DONO · 3 EMAIL · 4 FONTE · 5 MEMÓRIA DE CÁLCULO ·
+// 6 PERÍODO AVALIADO · 7 OBSERVAÇÕES · 8 TIER VÁLIDO · 9=20pts · 10=10pts · 11=5pts · 12=0pts
+const REG_COL={kpi:0,mem:5,per:6,obs:7,tier:8,p20:9,p10:10,p5:11,p0:12};
+let REGRAS_ROWS=null; // preenchido pelo fetch; null = ainda não carregou
+function fetchRegras(){
+  return new Promise((resolve)=>{
+    const fn='gvr_'+Math.random().toString(36).slice(2);
+    const s=document.createElement('script');
+    const url=`https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?sheet=Regras&headers=0&tqx=out:json;responseHandler:${fn}`;
+    let done=false;
+    window[fn]=resp=>{ done=true;
+      try{
+        const rows=(resp.table.rows||[]).map(r=>r.c.map(c=>c&&c.v!=null?c.v:null));
+        // pula linha(s) de cabeçalho (primeira célula = "KPIS")
+        const out=rows.filter(r=>{const k=String(r[REG_COL.kpi]||'').trim().toUpperCase();return k && k!=='KPIS';});
+        resolve(out);
+      }catch(e){ resolve(null); }
+      delete window[fn]; s.remove();
+    };
+    s.onerror=()=>{ if(!done){resolve(null); delete window[fn]; s.remove();} };
+    s.src=url; document.head.appendChild(s);
+    setTimeout(()=>{ if(!done){resolve(null); try{delete window[fn];s.remove();}catch(e){}} },15000);
+  });
+}
+const _regClean=v=>{const s=String(v==null?'':v).trim();return (s===''||s==='-'||s==='—')?'—':s;};
 function renderRegras(){
-  const wrap=document.getElementById('reg-list');
-  // lista limpa: INDICADOR à esquerda · pontuação máxima + melhor limiar à direita
-  wrap.innerHTML=REGRAS.map(rg=>{
-    // 1º limiar (maior pontuação) com regra preenchida
-    let pts='', rule='';
-    for(let i=0;i<rg.l.length;i++){ if(rg.l[i]&&rg.l[i]!=='—'){ pts=LIMIAR_PTS[i]; rule=rg.l[i]; break; } }
-    const right=pts?`<b>${pts} pts</b> · ${rule}`:'—';
-    return `<div class="reg-item"><span class="reg-kpi">${rg.kpi}</span><span class="reg-val">${right}</span></div>`;
-  }).join('');
+  const tbl=document.getElementById('reg-table');
+  if(!tbl) return;
+  const head=`<thead><tr>
+    <th style="text-align:left;min-width:150px">Indicador</th>
+    <th class="lim lim-g" style="text-align:left;min-width:120px">20 pts</th>
+    <th class="lim lim-y" style="text-align:left;min-width:120px">10 pts</th>
+    <th class="lim lim-o" style="text-align:left;min-width:100px">5 pts</th>
+    <th class="lim lim-r" style="text-align:left;min-width:80px">0 pts</th>
+    <th style="text-align:left;min-width:180px">Memória de Cálculo</th>
+    <th style="text-align:left;min-width:90px">Período Avaliado</th>
+    <th style="text-align:left;min-width:180px">Observações</th>
+    <th style="text-align:left;min-width:120px">Tier Válido</th>
+  </tr></thead>`;
+  // fonte: dados da aba (REGRAS_ROWS) ou fallback do const REGRAS
+  let bodyRows;
+  if(REGRAS_ROWS&&REGRAS_ROWS.length){
+    bodyRows=REGRAS_ROWS.map(r=>`<tr>
+      <td class="uni" style="font-weight:700">${_regClean(r[REG_COL.kpi])}</td>
+      <td class="reg-lim lim-g">${_regClean(r[REG_COL.p20])}</td>
+      <td class="reg-lim lim-y">${_regClean(r[REG_COL.p10])}</td>
+      <td class="reg-lim lim-o">${_regClean(r[REG_COL.p5])}</td>
+      <td class="reg-lim lim-r">${_regClean(r[REG_COL.p0])}</td>
+      <td class="reg-txt">${_regClean(r[REG_COL.mem])}</td>
+      <td class="reg-txt">${_regClean(r[REG_COL.per])}</td>
+      <td class="reg-txt">${_regClean(r[REG_COL.obs])}</td>
+      <td class="reg-txt">${_regClean(r[REG_COL.tier])}</td>
+    </tr>`).join('');
+  }else{
+    // fallback: const REGRAS (só limiares + tier)
+    bodyRows=REGRAS.map(rg=>`<tr>
+      <td class="uni" style="font-weight:700">${rg.kpi}</td>
+      <td class="reg-lim lim-g">${_regClean(rg.l[0])}</td>
+      <td class="reg-lim lim-y">${_regClean(rg.l[1])}</td>
+      <td class="reg-lim lim-o">${_regClean(rg.l[2])}</td>
+      <td class="reg-lim lim-r">${_regClean(rg.l[3])}</td>
+      <td class="reg-txt">—</td><td class="reg-txt">—</td><td class="reg-txt">—</td>
+      <td class="reg-txt">${rg.tiers||'—'}</td>
+    </tr>`).join('');
+  }
+  tbl.innerHTML=head+'<tbody>'+bodyRows+'</tbody>';
 }
 
 // ════════ RANKING ════════
@@ -673,7 +738,7 @@ function renderRanking(rows){
       const val=fmtIndVal(d.lastV);
       // pontos grandes em cima (pintados pela regra 20/10/5/0) + valor pequeno embaixo
       const pCls=pAvg!=null?(pAvg>=15?'g':pAvg>=7.5?'y':pAvg>=2.5?'o':'r'):'';
-      return `<td class="num sep-l rk-ind"><span class="p" style="color:${bandFg(pCls)}">${pAvg!=null?pAvg+'pts':'—'}</span>${val?`<span class="v">${val}</span>`:''}</td>`;
+      return `<td class="num sep-l rk-ind"><span class="p" style="color:${bandFg(pCls)}">${pAvg!=null?pAvg:'—'}</span>${val?`<span class="v">${val}</span>`:''}</td>`;
     }).join('');
     const scBg=bandHex(band(m.pct));
     return `<tr>
