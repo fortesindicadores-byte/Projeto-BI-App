@@ -184,6 +184,8 @@ function applyDepara(cod){const d=DEPARA[cod]; if(d){UNIDADE_DRE=d.dre; UNIDADE_
 const SRC_GEROT = 'https://docs.google.com/spreadsheets/d/1xGl1Xrk2sPS9zWghEuecFMNBHwmeLiZ02U-QpO8cDPY/gviz/tq?gid=0';
 // Aba "De-Para" (mesma planilha do Gerot): col A = "PROJETO - ABREV" (ex.: "ROTA - CBA - T2"), col B = unidade do Gerot (ex.: "CDD CUIABA").
 const SRC_DEPARA = 'https://docs.google.com/spreadsheets/d/1xGl1Xrk2sPS9zWghEuecFMNBHwmeLiZ02U-QpO8cDPY/gviz/tq?sheet='+encodeURIComponent('De-Para')+'&headers=0';
+// FCA Total (consolidação do script): Origem | Vigência | Unidade | Projeto | Fato | Causa | Ação | Prazo | Status
+const SRC_FCATOTAL = 'https://docs.google.com/spreadsheets/d/1oW3mss0pXVI6gaDU2z5cDAKvW40LWHCQXpanqSvb12o/gviz/tq?sheet='+encodeURIComponent('FCA Total')+'&headers=1';
 const srcDre = ()=>'https://docs.google.com/spreadsheets/d/1qcTy2ppLCGBKKqZCxCYWCTL9kTAuWfHBMyBfWJOyih8/gviz/tq?sheet='+encodeURIComponent('Consolidado DRE')+'&tq='+encodeURIComponent("select * where K = '"+UNIDADE_DRE+"'");
 const SRC_KML = 'https://docs.google.com/spreadsheets/d/1ZZdvG_RK5cTBLdPl3TWCbNeqw-Y4fTYwWsQV4w-e__A/gviz/tq?sheet='+encodeURIComponent('Km/L');
 // Dispersão de km (Painel KM): col0 vig · col13/14 unidade · col14 antes do "-" projeto · col31 rem · col32 real · col36 impacto R$
@@ -228,18 +230,20 @@ function parseDePara(rows){
   });
   return m;
 }
-// Gerot: cada IC/IV com desvio (atg<1) vira fato, em TODAS as vigências (≥2026). projeto vem do De-Para (ROTA/AS/EMPURRADA/INSUMOS/UDC), fallback = nome cru.
+// Gerot: gera só o ÚLTIMO mês com dados (histórico vem do FCA Total). projeto vem do De-Para (ROTA/AS/EMPURRADA/INSUMOS/UDC).
 function pushGerot(rows,fatos,deParaMap){
   deParaMap=deParaMap||{};
   const gset=new Set((UNIDADE_GER||[]).map(_normU));
-  (rows||[]).forEach(r=>{
-    if(!r[4]||!gset.has(_normU(r[2])))return;
-    const d=parseD(r[3]); if(!d||d.getFullYear()<2026)return;          // todas as vigências de 2026 em diante
+  const data=(rows||[]).filter(r=>r[4]&&parseD(r[3])&&gset.has(_normU(r[2])));
+  if(!data.length)return;
+  let maxK=0;data.forEach(r=>{if(r[7]!=null||r[8]!=null){const k=vigKeyN(parseD(r[3]));if(k>maxK)maxK=k;}});
+  if(!maxK)return;
+  const vig=vigLbl(new Date(Math.floor(maxK/100),maxK%100,1));
+  data.filter(r=>vigKeyN(parseD(r[3]))===maxK).forEach(r=>{
     const kpi=String(r[4]||'').trim();
     if(!/^\s*I[CV]/i.test(kpi))return;                 // só IC/IV
     const atg=r[8]!=null?+r[8]:null;
     if(atg==null||atg>=1)return;                        // só com desvio (atg<1)
-    const vig=vigLbl(d);                                 // vigência DESTA linha
     const _dp=deParaMap[_normU(r[2])];                  // projeto vem do De-Para (ROTA / AUTO SERVIÇO / EMPURRADA / INSUMOS / UDC)
     const proj=_dp?_dp.projeto:String(r[2]||'').trim();
     const un=String(r[5]||'').trim(), sev=atg<0.7?'crit':'aten';
@@ -395,10 +399,8 @@ async function gerarFatos(shared){
 // Grava/atualiza na base os fatos da unidade atual. Retorna nº de novos.
 async function seedUnidade(u,shared){
   const fatos=await gerarFatos(shared);
-  // RPM: recria só as vigências geradas desta unidade (meses anteriores e Custos preservados)
-  const rpmVigs=[...new Set(fatos.filter(f=>(f.origem||'')==='RPM').map(f=>f.vig).filter(Boolean))];
-  for(const v of rpmVigs){ const {error}=await sb.from('fca').delete().eq('unidade',u).eq('origem','RPM').eq('vigencia',v); if(error)throw error; }
-  const rows=await fetchDB();            // _DBROWS desta unidade (após o delete)
+  // additivo: só insere o que ainda não existe (a base é dona; nada é apagado — histórico do FCA Total preservado)
+  const rows=await fetchDB();
   if(rows===null) throw new Error('falha ao ler a base');
   const have=new Set(Object.keys(_DBROWS));
   const novos=fatos.filter(f=>!have.has(keyOf(f)));
@@ -483,6 +485,34 @@ async function gerarTodas(){
   list.innerHTML=`<div class="genres"><h2 class="genres-h">Geração concluída — ${tot} fato(s) novo(s)</h2>
     <table class="gentbl"><thead><tr><th>Unidade</th><th class="num">Novos</th><th>Status</th></tr></thead><tbody>${log.join('')}</tbody></table>
     <a class="btn" style="display:inline-block;margin-top:14px;text-decoration:none" href="../fca-consolidado/">← Voltar ao Admin</a></div>`;
+}
+// Importação ÚNICA do FCA Total (histórico preenchido de Custos + RPM). Substitui a base (cutover). Só admin.
+async function importarFCATotal(){
+  const list=document.getElementById('list');
+  document.querySelectorAll('.hfilter').forEach(e=>e.style.display='none');
+  ['uniBadge','uniSel','adminBtn','saveBtn','savedMsg','backUnits'].forEach(id=>{const e=document.getElementById(id);if(e)e.style.display='none';});
+  const intro=document.querySelector('.intro'); if(intro)intro.style.display='none';
+  list.innerHTML='<div class="loading">Lendo FCA Total…</div>';
+  let rows; try{ rows=await gviz(SRC_FCATOTAL); }catch(e){ list.innerHTML='<div class="empty">Erro ao ler o FCA Total.</div>'; return; }
+  const isoD=d=>d?d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'):null;
+  const mapSt=s=>{const t=String(s||'').toLowerCase();if(t.includes('conclu'))return 'Concluída';if(t.includes('andam'))return 'Em andamento';if(t.includes('cancel'))return 'Cancelada';return 'Não iniciada';};
+  const txt=v=>{const s=v==null?'':String(v).trim();return s||null;};
+  const payload=[];
+  (rows||[]).forEach(r=>{
+    const unidade=String(r[2]||'').trim().toUpperCase(); if(!unidade)return;
+    let fato=String(r[4]||'').trim(); if(!fato)return;
+    const origem=String(r[0]||'').trim().toUpperCase()==='RPM'?'RPM':'Custos';
+    let fdesv=null;
+    if(origem==='RPM'){const nl=fato.indexOf('\n');if(nl>=0){fdesv=fato.slice(nl).replace(/\s+/g,' ').trim();fato=fato.slice(0,nl).trim();}}
+    payload.push({unidade,vigencia:vigLbl(parseD(r[1]))||String(r[1]||'').trim(),origem,fato,projeto:txt(r[3]),fato_desvio:fdesv,causa:txt(r[5]),acao:txt(r[6]),responsavel:null,prazo:isoD(parseD(r[7])),status:mapSt(r[8]),acompanhamento:null,locked:false});
+  });
+  list.innerHTML='<div class="loading">Limpando base e importando '+payload.length+' linhas…</div>';
+  try{
+    await sb.from('fca').delete().not('id','is',null);                 // cutover: zera a base
+    for(let i=0;i<payload.length;i+=200){const {error}=await sb.from('fca').insert(payload.slice(i,i+200));if(error)throw error;}
+  }catch(e){console.error(e); list.innerHTML='<div class="empty">Erro ao importar: '+esc(e.message||e)+'</div>'; return; }
+  try{Object.keys(localStorage).filter(k=>k.indexOf('fca_cache_')===0).forEach(k=>localStorage.removeItem(k));}catch(e){}
+  list.innerHTML='<div class="genres"><h2 class="genres-h">FCA Total importado — '+payload.length+' linha(s)</h2><a class="btn" style="display:inline-block;margin-top:14px;text-decoration:none" href="../fca-consolidado/">← Voltar ao Admin</a></div>';
 }
 
 const STATUS=['Não iniciada','Em andamento','Concluída','Cancelada'];
@@ -666,6 +696,10 @@ async function initApp(){
     if(!REAL_ADMIN){ document.getElementById('list').innerHTML='<div class="empty">Apenas administradores podem gerar os fatos.</div>'; return; }
     document.getElementById('uniBadge').textContent='Admin · gerar';
     gerarTodas(); return;
+  }
+  if((params.get('import')||'')==='total'){                  // ── importação do FCA Total (só admin) ──
+    if(!REAL_ADMIN){ document.getElementById('list').innerHTML='<div class="empty">Apenas administradores.</div>'; return; }
+    importarFCATotal(); return;
   }
   const u=(params.get('u')||'').toUpperCase();
   if(u && allowed.includes(u) && DEPARA[u]){
