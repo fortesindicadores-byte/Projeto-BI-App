@@ -102,7 +102,9 @@ body{
 
 /* TABLES — padrão limpo Scorecard: sem grade, underline no cabeçalho, separador sutil entre linhas */
 .tbl-section{margin-bottom:16px;}
-.tbl-wrap{overflow-x:visible;}
+.tbl-wrap{overflow-x:auto;}
+.tbl-wrap::-webkit-scrollbar{height:6px;}
+.tbl-wrap::-webkit-scrollbar-thumb{background:#2a3a50;border-radius:3px;}
 table.dre{width:100%;border-collapse:collapse;font-size:11.5px;table-layout:fixed;}
 table.dre thead th{background:transparent;color:var(--text2);font-size:8.5px;font-weight:700;
   padding:6px 3px 9px;border-bottom:1px solid rgba(255,255,255,.10);white-space:normal;line-height:1.15;text-transform:uppercase;letter-spacing:.1px;vertical-align:bottom;}
@@ -114,12 +116,12 @@ table.dre td.num{text-align:right;}
 table.dre td.uni{font-weight:600;}
 table.dre td.pts{font-weight:800;}
 /* separador sutil de bloco (Pontuação) sem virar grade */
-.sep-l{border-left:1px solid rgba(255,255,255,.08)!important;padding-left:10px!important;}
+.sep-l{padding-left:12px!important;}
 .pos-badge{display:inline-block;min-width:26px;text-align:center;font-weight:800;font-size:11px;border-radius:4px;padding:3px 6px;color:#0a0f18;}
 .tier-chip{font-size:8.5px;font-weight:700;padding:1px 6px;border-radius:10px;background:rgba(249,115,22,.15);color:var(--orange);border:1px solid rgba(249,115,22,.3);text-transform:uppercase;letter-spacing:.3px;}
 /* célula de indicador: pontos como número principal, valor pequeno embaixo */
-.rk-ind .p{font-weight:800;font-size:12px;display:block;}
-.rk-ind .v{color:var(--text3);font-size:8.5px;font-weight:600;display:block;margin-top:1px;}
+.rk-ind{font-weight:700;}
+.rk-ind .pp{color:var(--text2);font-weight:600;font-size:10px;white-space:nowrap;}
 
 /* Regras — estilo programa-reconhecimento (lista limpa, sem grade) */
 .reg-item{padding:9px 0;border-bottom:1px solid rgba(255,255,255,.05);}
@@ -617,7 +619,7 @@ function renderRanking(rows){
   // colunas de indicador = união pela ordem dos tiers presentes
   const indCols=[]; list.forEach(m=>m.names.forEach(n=>{if(!indCols.includes(n))indCols.push(n);}));
   const head=`<thead><tr>
-    <th style="text-align:left;width:30px">#</th><th style="text-align:left">Unidade</th><th style="text-align:left;width:64px">Tier</th><th style="text-align:left;width:54px">GEO</th>
+    <th style="text-align:left;width:30px">#</th><th style="text-align:left">Unidade</th><th style="text-align:left;width:64px">Tier</th>
     <th class="num sep-l" style="width:58px">Pontuação</th>
     ${indCols.map(n=>`<th class="num sep-l">${n}</th>`).join('')}
   </tr></thead>`;
@@ -627,15 +629,15 @@ function renderRanking(rows){
       if(!d||(!d.p.length&&d.lastV==null)) return `<td class="num sep-l" style="color:var(--text3)">—</td>`;
       const pAvg=d.p.length?Math.round(d.p.reduce((a,b)=>a+b,0)/d.p.length):null;
       const val=fmtIndVal(d.lastV);
-      // pontos por indicador SEM cor (texto normal); valor pequeno embaixo
-      return `<td class="num sep-l rk-ind"><span class="p">${pAvg!=null?pAvg:'—'}</span>${val?`<span class="v">${val}</span>`:''}</td>`;
+      // resultado do indicador como "valor - Npts" (ex.: 100% | 100% - 20pts), sem cor
+      const txt=val?(pAvg!=null?`${val} <span class="pp">- ${pAvg}pts</span>`:val):(pAvg!=null?`<span class="pp">${pAvg}pts</span>`:'—');
+      return `<td class="num sep-l rk-ind">${txt}</td>`;
     }).join('');
     const scBg=bandHex(band(m.pct));
     return `<tr>
       <td style="font-weight:800;color:var(--orange)">${i+1}</td>
       <td class="uni">${m.uni}</td>
       <td><span class="tier-chip">${m.tier}</span></td>
-      <td style="color:var(--text2)">${m.geo||'—'}</td>
       <td class="num pts sep-l"><span style="display:inline-block;min-width:42px;padding:3px 10px;border-radius:5px;font-weight:800;color:#0C1017;background:${scBg}">${num1(m.score)}</span></td>
       ${cells}
     </tr>`;
