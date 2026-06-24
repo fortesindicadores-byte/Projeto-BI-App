@@ -52,6 +52,28 @@ body{background:radial-gradient(ellipse at 10% 25%,rgba(249,115,22,.06) 0%,trans
 
 /* ── Bloco de fato ── */
 .fato-block{background:rgba(20,27,38,.55);border:1px solid rgba(255,255,255,.07);border-radius:10px;padding:0;margin-bottom:16px;backdrop-filter:blur(16px);box-shadow:0 2px 12px rgba(0,0,0,.25);overflow:hidden;}
+/* ── Kanban ── */
+.kanban{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;align-items:start;}
+.kcol{background:rgba(20,27,38,.55);border:1px solid var(--border);border-radius:10px;min-height:120px;display:flex;flex-direction:column;overflow:hidden;}
+.kcol.kover{border-color:var(--orange);background:rgba(249,115,22,.06);}
+.kcol-head{font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.5px;padding:12px 14px;display:flex;align-items:center;justify-content:space-between;}
+.kcol-head.nao{background:var(--red);color:#0C1017;}
+.kcol-head.and{background:#F4A100;color:#0C1017;}
+.kcol-head.con{background:var(--green);color:#fff;}
+.kcount{background:rgba(0,0,0,.22);border-radius:10px;padding:1px 9px;font-size:11px;font-weight:700;}
+.kcol-body{padding:10px;display:flex;flex-direction:column;gap:9px;}
+.kempty{color:var(--text3);text-align:center;padding:14px 0;font-size:12px;}
+.kcard{background:var(--card);border:1px solid var(--border);border-radius:8px;padding:10px 11px;cursor:grab;box-shadow:0 1px 4px rgba(0,0,0,.2);}
+.kcard:active{cursor:grabbing;} .kcard.dragging{opacity:.4;} .kcard.klock{cursor:default;opacity:.85;}
+.kcard-top{font-size:10px;color:var(--text2);margin-bottom:5px;display:flex;align-items:center;gap:6px;flex-wrap:wrap;}
+.korg{font-size:8.5px;font-weight:800;padding:1px 6px;border-radius:4px;}
+.korg.rpm{background:rgba(56,189,248,.18);color:#38BDF8;} .korg.cst{background:rgba(249,115,22,.18);color:var(--orange);}
+.kcard-fato{font-size:12.5px;font-weight:700;color:var(--text);line-height:1.25;}
+.kcard-ac{font-size:11.5px;color:var(--text2);margin-top:5px;line-height:1.3;}
+.kcard-meta{font-size:10px;color:var(--text2);margin-top:7px;} .kcard-meta .dim{color:var(--text3);}
+body.light-mode .kcol{background:#fff;border-color:rgba(0,0,0,.10);}
+body.light-mode .kcard{background:#F7F7F7;border-color:rgba(0,0,0,.10);}
+@media(max-width:768px){.kanban{grid-template-columns:1fr;}}
 .fato-head{padding:14px 18px;border-bottom:1px solid rgba(255,255,255,.07);}
 .fato-unit{font-size:22px;font-weight:800;color:var(--text);line-height:1;margin-bottom:12px;}
 .fato-field{font-size:12px;color:var(--text2);margin-bottom:5px;line-height:1.35;}
@@ -144,6 +166,7 @@ body.light-mode select.st[data-v="Cancelada"]{background:#333333;color:#fff;}
   <a class="btn" id="backUnits" href="./" title="Trocar de unidade" style="display:none;text-decoration:none">← Unidades</a>
   <a class="btn" href="../" title="Voltar ao hub" style="text-decoration:none">← Hub</a>
   <button class="btn theme" id="themeBtn" title="Modo claro/escuro">☀</button>
+  <button class="btn" id="viewBtn" onclick="toggleView()" title="Alternar entre Tabela e Kanban">Kanban</button>
   <button class="btn" id="adminBtn" title="Modo admin (edita tudo) — teste; em produção será por RLS">Admin</button>
   <button class="btn" id="saveBtn">Salvar</button>
   <span class="saved-msg" id="savedMsg">Salvo ✓ na nuvem</span>
@@ -466,7 +489,7 @@ async function carregar(){
 async function gerarTodas(){
   const list=document.getElementById('list');
   document.querySelectorAll('.hfilter').forEach(e=>e.style.display='none');
-  ['uniBadge','uniSel','adminBtn','saveBtn','savedMsg','backUnits'].forEach(id=>{const e=document.getElementById(id);if(e)e.style.display='none';});
+  ['uniBadge','uniSel','adminBtn','saveBtn','savedMsg','backUnits','viewBtn'].forEach(id=>{const e=document.getElementById(id);if(e)e.style.display='none';});
   const intro=document.querySelector('.intro'); if(intro)intro.style.display='none';
   list.innerHTML='<div class="loading">Baixando planilhas…</div>';
   // RPM recriado por (unidade, vigência) dentro do seedUnidade — meses anteriores e Custos preservados
@@ -490,7 +513,7 @@ async function gerarTodas(){
 async function importarFCATotal(){
   const list=document.getElementById('list');
   document.querySelectorAll('.hfilter').forEach(e=>e.style.display='none');
-  ['uniBadge','uniSel','adminBtn','saveBtn','savedMsg','backUnits'].forEach(id=>{const e=document.getElementById(id);if(e)e.style.display='none';});
+  ['uniBadge','uniSel','adminBtn','saveBtn','savedMsg','backUnits','viewBtn'].forEach(id=>{const e=document.getElementById(id);if(e)e.style.display='none';});
   const intro=document.querySelector('.intro'); if(intro)intro.style.display='none';
   list.innerHTML='<div class="loading">Lendo FCA Total…</div>';
   let rows; try{ rows=await gviz(SRC_FCATOTAL); }catch(e){ list.innerHTML='<div class="empty">Erro ao ler o FCA Total.</div>'; return; }
@@ -576,6 +599,7 @@ function aplicar(){
   const fv=getMsValues('ms-vig'), fo=getMsValues('ms-org'), fp=getMsValues('ms-proj'), fi=getMsValues('ms-ind');
   const vis=_FATOS.filter(f=>(!fv.length||fv.includes(f.vig))&&(!fo.length||fo.includes(f.origem))&&(!fp.length||fp.includes(projLabel(f.proj)))&&(!fi.length||fi.includes(f.fato)));
   if(!vis.length){list.innerHTML='<div class="empty">Nenhum fato para o filtro selecionado.</div>';return;}
+  if(VIEW==='kanban'){ list.innerHTML=kanbanHTMLpre(vis); return; }
   list.innerHTML=vis.map(f=>{
     const key=keyOf(f);
     const acoes=loadAcoes(key,f.causaAuto);
@@ -603,6 +627,41 @@ function aplicar(){
   autoResizeAll(list);
 }
 
+// ── Kanban (3 buckets) ──
+let VIEW='tabela';
+function toggleView(){VIEW=VIEW==='kanban'?'tabela':'kanban';const b=document.getElementById('viewBtn');if(b)b.textContent=VIEW==='kanban'?'Tabela':'Kanban';aplicar();}
+function _firstLine(s){return String(s==null?'':s).split('\n')[0].trim();}
+function kcardHTMLpre(x){const r=x.r,f=x.f,org=String(f.origem||'').toUpperCase()==='RPM'?'rpm':'cst',lk=r.locked&&!ADMIN;
+  return `<div class="kcard${lk?' klock':''}"${lk?'':' draggable="true"'} data-id="${esc(r.id||'')}">
+    <div class="kcard-top"><span class="korg ${org}">${esc(f.origem||'')}</span> ${esc(UNIDADE_COD)} · ${esc(projLabel(f.proj))} · ${esc(f.vig)}${r.locked?' 🔒':''}</div>
+    <div class="kcard-fato">${esc(_firstLine(f.nome||f.fato))}</div>
+    ${r.acao?`<div class="kcard-ac">${esc(r.acao)}</div>`:''}
+    <div class="kcard-meta">${r.responsavel?esc(r.responsavel):'<span class="dim">sem resp.</span>'} · ${r.prazo?esc(String(r.prazo).split('-').reverse().join('/')):'<span class="dim">sem prazo</span>'}</div>
+  </div>`;}
+function kanbanHTMLpre(vis){
+  const cards=[]; vis.forEach(f=>{const key=keyOf(f);(_DBROWS[key]||[]).forEach(r=>cards.push({r,f}));});
+  const COLS=[{k:'Não iniciada',cls:'nao'},{k:'Em andamento',cls:'and'},{k:'Concluída',cls:'con'}];
+  return `<div class="kanban">${COLS.map(c=>{const items=cards.filter(x=>(x.r.status||DEFAULT_STATUS)===c.k);
+    return `<div class="kcol" data-status="${esc(c.k)}"><div class="kcol-head ${c.cls}">${c.k}<span class="kcount">${items.length}</span></div>
+      <div class="kcol-body">${items.map(kcardHTMLpre).join('')||'<div class="kempty">—</div>'}</div></div>`;}).join('')}</div>`;
+}
+async function moveCardPre(id,status){
+  if(!id||PREVIEW||!sb)return;
+  let row=null; for(const k in _DBROWS){const f=_DBROWS[k].find(x=>x.id===id);if(f){row=f;break;}}
+  if(!row||(row.status||DEFAULT_STATUS)===status)return;
+  const old=row.status; row.status=status; aplicar();                 // otimista
+  const {error}=await sb.from('fca').update({status}).eq('id',id);
+  if(error){row.status=old;aplicar();return;}
+  const all=[]; for(const k in _DBROWS) all.push(..._DBROWS[k]); writeCache('fca_cache_'+UNIDADE_COD,all);
+}
+// Drag-and-drop do Kanban (montado 1x no #list, que persiste entre renders)
+(function(){const c=document.getElementById('list'); if(!c)return;
+  c.addEventListener('dragstart',e=>{const card=e.target.closest&&e.target.closest('.kcard');if(card&&card.getAttribute('draggable')==='true'){e.dataTransfer.setData('text/plain',card.dataset.id);e.dataTransfer.effectAllowed='move';card.classList.add('dragging');}});
+  c.addEventListener('dragend',e=>{const card=e.target.closest&&e.target.closest('.kcard');if(card)card.classList.remove('dragging');});
+  c.addEventListener('dragover',e=>{const col=e.target.closest&&e.target.closest('.kcol');if(col){e.preventDefault();e.dataTransfer.dropEffect='move';col.classList.add('kover');}});
+  c.addEventListener('dragleave',e=>{const col=e.target.closest&&e.target.closest('.kcol');if(col)col.classList.remove('kover');});
+  c.addEventListener('drop',e=>{const col=e.target.closest&&e.target.closest('.kcol');if(!col)return;e.preventDefault();col.classList.remove('kover');const id=e.dataTransfer.getData('text/plain');if(id&&col.dataset.status)moveCardPre(id,col.dataset.status);});
+})();
 function autoResize(ta){ta.style.height='auto';ta.style.height=ta.scrollHeight+'px';}
 // Redimensiona todas as textareas em lote (2 reflows em vez de N)
 function autoResizeAll(c){const tas=[...c.querySelectorAll('textarea')];tas.forEach(ta=>ta.style.height='auto');const hs=tas.map(ta=>ta.scrollHeight);tas.forEach((ta,i)=>{ta.style.height=hs[i]+'px';});}
@@ -718,7 +777,7 @@ async function initApp(){
 // Mini-hub: um card por unidade liberada + card Admin (consolidado) só p/ admin
 function renderSubHub(allowed){
   document.querySelectorAll('.hfilter').forEach(e=>e.style.display='none');
-  ['uniBadge','uniSel','adminBtn','saveBtn','savedMsg','backUnits'].forEach(id=>{const e=document.getElementById(id);if(e)e.style.display='none';});
+  ['uniBadge','uniSel','adminBtn','saveBtn','savedMsg','backUnits','viewBtn'].forEach(id=>{const e=document.getElementById(id);if(e)e.style.display='none';});
   const intro=document.querySelector('.intro'); if(intro)intro.textContent='Selecione a unidade para preencher o FCA do mês.';
   const list=document.getElementById('list');
   if(!REAL_ADMIN && !allowed.length){ list.innerHTML='<div class="empty">Seu usuário ainda não tem unidade liberada. Fale com o administrador.</div>'; return; }
