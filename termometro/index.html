@@ -231,7 +231,7 @@ body.light-mode table.mtx thead th{border-bottom-color:rgba(0,0,0,.12);}
   <div class="row-2">
     <div class="chart-card">
       <div class="sec-head">
-        <div><div class="chart-title">Evolução no Ano</div><div class="chart-sub" id="ch-sub">Pontuação média por vigência (M_Q)</div></div>
+        <div><div class="chart-title">Evolução no Ano</div><div class="chart-sub" id="ch-sub">Pontuação média por quinzena (ano completo)</div></div>
         <select class="ind-sel" id="ind-sel" onchange="renderChart()"></select>
       </div>
       <div class="chart-wrap"><canvas id="ch-line"></canvas></div>
@@ -308,12 +308,18 @@ function pctOf(tot){return isFinite(tot)?tot:null;}
 function rowScorePct(r){return pctOf(+r.raw[COL.total]);}
 const vigKey=v=>{const p=String(v).split('_');return (p[0]||'').padStart(2,'0')+'_'+(p[1]||'').padStart(2,'0');};
 const vigSort=(a,b)=>vigKey(a)<vigKey(b)?-1:vigKey(a)>vigKey(b)?1:0;
+// Rótulo de exibição: "MM_Q" → "MMM Qn" (mês abreviado PT maiúsculo + quinzena). Valor interno continua cru.
+const _VIG_MESES=['','JAN','FEV','MAR','ABR','MAI','JUN','JUL','AGO','SET','OUT','NOV','DEZ'];
+function vigLabel(mq){const k=vigKey(mq);const p=k.split('_');const m=+p[0],q=+p[1];const nome=_VIG_MESES[m]||p[0];return `${nome} Q${q}`;}
+// Lista FIXA de todas as 24 quinzenas do ano (01_01 … 12_02), ordenada — eixo completo p/ matriz e gráfico.
+const ALL_VIGS=(()=>{const a=[];for(let m=1;m<=12;m++){const mm=String(m).padStart(2,'0');a.push(mm+'_01',mm+'_02');}return a;})();
 
 // ════════ ESTADO ════════
 let allRows=[], chLine=null;
 
 // ════════ MULTI-SELECT ════════
-function _buildMs(wrap, items){
+function _buildMs(wrap, items, labelFn){
+  const lbl=labelFn||(v=>v);
   if(!(wrap._sel instanceof Set)) wrap._sel=new Set();
   const sel=wrap._sel;
   const validate=new Set(items);
@@ -325,10 +331,10 @@ function _buildMs(wrap, items){
   const lst=wrap.querySelector('.ms-list');
   const render=(q='')=>{
     const f=q.toLowerCase();
-    const shown=items.filter(v=>String(v).toLowerCase().includes(f));
+    const shown=items.filter(v=>String(lbl(v)).toLowerCase().includes(f)||String(v).toLowerCase().includes(f));
     const allChk=sel.size===0;
     lst.innerHTML=(!q?`<label class="ms-opt all-opt"><input type="checkbox" class="ms-all" ${allChk?'checked':''}> Todos</label>`:'')+
-      shown.map(v=>`<label class="ms-opt"><input type="checkbox" data-v="${v}" ${allChk||sel.has(v)?'checked':''}> ${v}<span class="ms-only" data-v="${v}">only</span></label>`).join('');
+      shown.map(v=>`<label class="ms-opt"><input type="checkbox" data-v="${v}" ${allChk||sel.has(v)?'checked':''}> ${lbl(v)}<span class="ms-only" data-v="${v}">only</span></label>`).join('');
     syncBadge(wrap);
   };
   lst.addEventListener('change',e=>{
@@ -415,7 +421,7 @@ function buildFilters(){
   if(!vw._init){vw._init=true;if(vigs.length){vw._sel=new Set([vigs[vigs.length-1]]);}}
   _buildMs(document.getElementById('ms-uni'),unis);
   _buildMs(document.getElementById('ms-tier'),tiers);
-  _buildMs(vw,vigs);
+  _buildMs(vw,vigs,vigLabel);
   _buildMs(document.getElementById('ms-geo'),geos);
 }
 function selOrAll(id,all){const s=getMs(id);return s.length?new Set(s):new Set(all);}
@@ -528,8 +534,8 @@ function renderChart(){
   const fG=selOrAll('ms-geo',uniq(allRows.map(r=>r.raw[COL.geo])));
   const rows=allRows.filter(r=>fU.has(r.raw[COL.uni])&&fT.has(r.tier)&&fG.has(r.raw[COL.geo]));
   const ind=document.getElementById('ind-sel').value||'__total__';
-  // todas as vigências do conjunto (independe do filtro de vigência), p/ evolução temporal completa
-  const vigs=uniq(allRows.map(r=>r.raw[COL.vig])).sort(vigSort);
+  // eixo FIXO: todas as 24 quinzenas do ano (mesmo sem dado aparecem no eixo), igual à matriz
+  const vigs=ALL_VIGS;
   const selVig=getMs('ms-vig');
   const hasFocus=selVig.length>0;
   // valor (pts) e score% (p/ a faixa de cor) por vigência
@@ -548,7 +554,7 @@ function renderChart(){
     }
     data.push(val);pcts.push(pct);on.push(selVig.length===0||selVig.includes(v));
   });
-  set('ch-sub', ind==='__total__'?'Pontuação total média por vigência (M_Q)':`Pontos médios · ${ind}`);
+  set('ch-sub', ind==='__total__'?'Pontuação total média por quinzena (ano completo)':`Pontos médios · ${ind}`);
   // cores por faixa do valor; vigência selecionada cheia, demais esmaecidas
   const bg=data.map((v,i)=>{if(v==null)return 'transparent';const a=hasFocus?(on[i]?.95:.20):.85;const hex=bandHex(band(pcts[i]));const rgb=hex==='#3BB33B'?'59,179,59':hex==='#EAB308'?'234,179,8':hex==='#F97316'?'249,115,22':'255,102,102';return `rgba(${rgb},${a})`;});
   const bc=data.map((v,i)=>v==null?'transparent':bandFg(band(pcts[i])));
@@ -558,7 +564,7 @@ function renderChart(){
   const ctx=document.getElementById('ch-line');
   if(chLine) chLine.destroy();
   chLine=new Chart(ctx,{
-    data:{labels:vigs,datasets:[{
+    data:{labels:vigs.map(vigLabel),datasets:[{
       type:'bar',
       label: ind==='__total__'?'Pontuação':ind,
       data, backgroundColor:bg, borderColor:bc, borderWidth:1,
@@ -571,7 +577,7 @@ function renderChart(){
           titleFont:{family:'Montserrat'},bodyFont:{family:'Montserrat'},
           callbacks:{label:c=>` ${c.parsed.y==null?'—':num1(c.parsed.y)+' pts'}`}}},
       scales:{
-        x:{grid,ticks:tick},
+        x:{grid,ticks:{...tick,autoSkip:false,maxRotation:90,minRotation:90,font:{family:'Montserrat',size:9}}},
         y:{beginAtZero:true,grid,ticks:tick}
       }}
   });
@@ -651,7 +657,8 @@ function rankColor(pos,maxPos){
 function renderMatrix(rows){
   const tbl=document.getElementById('mtx-table');
   if(!rows.length){ tbl.innerHTML='<tbody><tr><td style="padding:16px;color:var(--text2)">Sem dados.</td></tr></tbody>'; return; }
-  const vigs=uniq(rows.map(r=>r.raw[COL.vig])).sort(vigSort);
+  // eixo FIXO: todas as 24 quinzenas do ano (grade retangular completa, sem ragged)
+  const vigs=ALL_VIGS;
   // unidade+tier como linha (uma unidade pode estar em mais de um tier)
   const rowKeys=uniq(rows.map(r=>r.raw[COL.uni]+'||'+r.tier));
   // ranking máximo por vigência (para escala de cor)
@@ -664,7 +671,7 @@ function renderMatrix(rows){
     const poss=vigs.map(v=>get(uni,tier,v)).filter(x=>x!=null);
     return {uni,tier,avg:poss.length?poss.reduce((a,b)=>a+b,0)/poss.length:9999}; });
   rowMeta.sort((a,b)=>a.avg-b.avg);
-  const head=`<thead><tr><th class="uni-h">Unidade · Tier</th>${vigs.map(v=>`<th>${v}</th>`).join('')}</tr></thead>`;
+  const head=`<thead><tr><th class="uni-h">Unidade · Tier</th>${vigs.map(v=>`<th>${vigLabel(v)}</th>`).join('')}</tr></thead>`;
   const body='<tbody>'+rowMeta.map(m=>{
     const cells=vigs.map(v=>{
       const pos=get(m.uni,m.tier,v);
