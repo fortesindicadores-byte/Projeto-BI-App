@@ -250,8 +250,8 @@ function vigNum(v){const m=String(v||'').match(/^([a-zç]{3})\/(\d{2})$/i);if(!m
 // Lê a aba "De-Para" do Gerot → { unidadeGerot(normalizada): {projeto, abrev} }. Fonte de verdade do sub-projeto.
 function parseDePara(rows){
   const m={};
-  (rows||[]).forEach(r=>{
-    const projetoAbrev=String(r[0]||'').trim(), unidadeRPM=String(r[1]||'').trim();
+  const add=(projetoAbrev,unidadeRPM)=>{
+    projetoAbrev=String(projetoAbrev||'').trim(); unidadeRPM=String(unidadeRPM||'').trim();
     if(!projetoAbrev||!unidadeRPM)return;
     if(/\(INATIVO\)/i.test(projetoAbrev))return;
     const dash=projetoAbrev.indexOf('-'); if(dash<0)return;
@@ -259,13 +259,33 @@ function parseDePara(rows){
     if(!projeto||!abrev)return;
     const k=_normU(unidadeRPM), ex=m[k];
     if(!ex || (projeto.toUpperCase()==='ROTA'&&ex.projeto.toUpperCase()!=='ROTA')) m[k]={projeto,abrev};
-  });
+  };
+  // são DOIS de-paras lado a lado na mesma aba: colunas A:B (0,1) e E:F (4,5)
+  (rows||[]).forEach(r=>{ add(r[0],r[1]); add(r[4],r[5]); });
   return m;
 }
-// Lê a aba "Base RPM" (POR NOME de coluna) → payloads de RPM prontos p/ a base. Unidade/projeto vêm do De-Para.
-// A própria aba já traz Causa/Ação/Prazo/Status (fonte da RPM). Traz TODOS os meses; só IC/IV com atingimento < 100%.
-function parseBaseRPM(t,deParaMap){
-  deParaMap=deParaMap||{};
+// Mapa FIXO da RPM (informado): unidade do Gerot → { abrev=código, projeto }. Fonte da verdade (não depende da aba De-Para).
+// "Muitas Rotas têm Auto Serviço/Apoio dentro, mas p/ a RPM engloba tudo na Rota"; só o Apoio "CUIABA" fica separado.
+const RPM_UNIT_MAP={
+  'CUIABA':            {abrev:'CBA', projeto:'APOIO'},
+  'CUIABA EMPURRADA':  {abrev:'CBA', projeto:'EMPURRADA'},
+  'CDD CUIABA':        {abrev:'CBA', projeto:'ROTA'},
+  'MACACU EMPURRADA':  {abrev:'MCC', projeto:'EMPURRADA'},
+  'CDI MACACU':        {abrev:'MCC', projeto:'ROTA'},
+  'CDD RIO DE JANEIRO':{abrev:'CGR', projeto:'ROTA'},
+  'CDD RONDONOPOLIS':  {abrev:'RON', projeto:'ROTA'},
+  'CDD GUARULHOS':     {abrev:'GRL', projeto:'ROTA'},
+  'CDD FLORIANOPOLIS': {abrev:'FLP', projeto:'ROTA'},
+  'CDD NOVA FRIBURGO': {abrev:'NFR', projeto:'ROTA'},   // você escreveu FLP — assumi NFR (parece engano); me avise se for proposital
+  'CDD PELOTAS':       {abrev:'PLT', projeto:'ROTA'},
+  'PIRAI EMPURRADA':   {abrev:'PIR', projeto:'EMPURRADA'},
+  'CDD CAMBORIU':      {abrev:'BLC', projeto:'ROTA'}
+};
+const _RPM_MAP_N=(()=>{const m={};Object.keys(RPM_UNIT_MAP).forEach(k=>m[_normU(k)]=RPM_UNIT_MAP[k]);return m;})();
+// Lê a aba "Base RPM" (POR NOME de coluna) → payloads de RPM prontos p/ a base. Unidade/projeto vêm do RPM_UNIT_MAP.
+// A própria aba já traz Causa/Ação/Prazo/Status (fonte da RPM). Só IC/IV com desvio, com causa/ação, até abr/2026.
+function parseBaseRPM(t){
+  const uniMap=_RPM_MAP_N;
   const cols=t.cols||[], rows=t.rows||[];
   const ci={
     uni: _idxByName(cols,['Unidade','Unidades','Operação','Operacao','CDD','Loja','Filial']),
@@ -290,7 +310,7 @@ function parseBaseRPM(t,deParaMap){
   const out=[];
   rows.forEach(r=>{
     rTmp=r;
-    const dp=deParaMap[_normU(r[ci.uni])]; if(!dp)return;                       // só unidades mapeadas no De-Para
+    const dp=uniMap[_normU(r[ci.uni])]; if(!dp)return;                          // só unidades do mapa fixo da RPM
     const kpi=String(r[ci.kpi]||'').trim(); if(!/^\s*I[CV]/i.test(kpi))return;  // só IC/IV
     let atg=ci.atg>=0?r[ci.atg]:null;
     if(atg!=null&&typeof atg!=='number')atg=parseFloat(String(atg).replace('%','').replace(/\./g,String(atg).includes(',')?'':'.').replace(',','.'));
@@ -600,13 +620,11 @@ async function sincronizarRPM(){
   document.querySelectorAll('.hfilter').forEach(e=>e.style.display='none');
   ['uniBadge','uniSel','adminBtn','saveBtn','savedMsg','backUnits','viewBtn'].forEach(id=>{const e=document.getElementById(id);if(e)e.style.display='none';});
   const intro=document.querySelector('.intro'); if(intro)intro.style.display='none';
-  list.innerHTML='<div class="loading">Lendo De-Para e Base RPM…</div>';
+  list.innerHTML='<div class="loading">Lendo a Base RPM…</div>';
   let payload;
   try{
-    const dep=await gviz(SRC_DEPARA); const deParaMap=parseDePara(dep);
-    if(!Object.keys(deParaMap).length) throw new Error('De-Para vazio — não foi possível mapear as unidades da RPM.');
     const t=await gvizT(SRC_BASE_RPM);
-    payload=parseBaseRPM(t,deParaMap);
+    payload=parseBaseRPM(t);                                                    // mapa de unidade/projeto é fixo (RPM_UNIT_MAP)
   }catch(e){ list.innerHTML='<div class="empty">Erro ao ler/processar a RPM:<br>'+esc(e.message||e)+'</div>'; return; }
   if(!payload.length){ list.innerHTML='<div class="empty">Nenhum desvio de RPM encontrado (IC/IV com atingimento &lt; 100%).</div>'; return; }
   list.innerHTML='<div class="loading">Atualizando RPM na base ('+payload.length+' linhas)…</div>';
