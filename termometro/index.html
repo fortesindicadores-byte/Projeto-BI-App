@@ -343,6 +343,20 @@ function tierLabel(t){const T=String(t||'').toUpperCase().replace(/\s+/g,' ').tr
 function canonInd(name){const s=String(name||'').toUpperCase().replace(/\s+/g,' ').trim();
   const M={'ADERÊNCIA CHECK CONFORMIDADE':'ADERÊNCIA CHECK DE CONFORMIDADE','ORDENS DE SERVIÇO VENCIDA':'ORDENS DE SERVIÇO VENCIDAS'};
   return M[s]||s;}
+// de-para de exibição: nome curto p/ cabeçalho do ranking e botões do gráfico (chave = nome canônico)
+const IND_SHORT={
+  'ADERÊNCIA PREVENTIVA':'Preventiva',
+  'ADERÊNCIA CHECK DE CONFORMIDADE':'Conformidade',
+  'BLITZ DE SEGURANÇA':'Segurança',
+  'ADERÊNCIA CHECKLIST':'Checklist',
+  'ORDENS DE SERVIÇO VENCIDAS':'OS Vencida',
+  'STRESS TEST':'Stress Test',
+  'INDISP. MANUTENÇÃO':'Manutenção',
+  'MTTR':'MTTR','MTBF':'MTBF',
+  'MILIMETRAGEM PNEU':'MM Pneus',
+  'DISPONIBILIDADE CONTRATADA':'Disponibilidade'
+};
+function indShort(name){return IND_SHORT[canonInd(name)]||name;}
 function bandHex(cls){return cls==='g'?'#3BB33B':cls==='y'?'#EAB308':cls==='o'?'#F97316':cls==='r'?'#FF6666':'transparent';}
 function bandFg(cls){return cls==='g'?'#3BB33B':cls==='y'?'#EAB308':cls==='o'?'#F97316':cls==='r'?'#FF6666':'var(--text3)';}
 // Score é "Total Pontos" por quinzena, já numa escala de 0 a 100 → cor direta na faixa.
@@ -487,7 +501,14 @@ function applyFilters(){
   buildIndSelector();
   renderChart();
   renderRanking(rows);
-  renderMatrix(rows);
+  // a matriz é histórica: ignora o filtro de Vigência (mostra TODAS as quinzenas), só Unid/Tier/GEO
+  renderMatrix(getFilteredNoVig());
+}
+function getFilteredNoVig(){
+  const fU=selOrAll('ms-uni',uniq(allRows.map(r=>r.raw[COL.uni])));
+  const fT=selOrAll('ms-tier',TIERS);
+  const fG=selOrAll('ms-geo',uniq(allRows.map(r=>r.raw[COL.geo])));
+  return allRows.filter(r=>fU.has(r.raw[COL.uni])&&fT.has(r.tier)&&fG.has(r.raw[COL.geo]));
 }
 
 // ════════ HERO ════════
@@ -531,7 +552,7 @@ function buildIndSelector(){
   const names=[]; TIERS.forEach(t=>indNames(t).forEach(n=>{const cn=canonInd(n);if(!names.includes(cn))names.push(cn);}));
   // se o indicador ativo não existe mais no filtro atual, volta p/ total
   if(activeInd!=='__total__'&&!names.includes(activeInd)) activeInd='__total__';
-  const opts=[['__total__','MÉDIA GERAL'],...names.map(n=>[n,n])];
+  const opts=[['__total__','MÉDIA GERAL'],...names.map(n=>[n,indShort(n)])];
   sel.innerHTML=opts.map(([k,v])=>
     `<button class="ind-btn${k===activeInd?' active':''}" onclick="setActiveInd('${k.replace(/'/g,"\\'")}')">${v}</button>`
   ).join('');
@@ -723,9 +744,9 @@ function renderRanking(rows){
   // colunas de indicador = união pela ordem dos tiers presentes
   const indCols=[]; list.forEach(m=>m.names.forEach(n=>{const cn=canonInd(n);if(!indCols.includes(cn))indCols.push(cn);}));
   const head=`<thead><tr>
-    <th style="text-align:left;width:30px">#</th><th style="text-align:left">Unidade</th><th style="text-align:left;width:64px">Tier</th>
+    <th style="text-align:left;width:30px">#</th><th style="text-align:left">Unidade</th><th style="text-align:left;width:92px;min-width:92px">Tier</th>
     <th class="num sep-l" style="width:58px">Pontuação</th>
-    ${indCols.map(n=>`<th class="num sep-l">${n}</th>`).join('')}
+    ${indCols.map(n=>`<th class="num sep-l">${indShort(n)}</th>`).join('')}
   </tr></thead>`;
   const body='<tbody>'+list.map((m,i)=>{
     const cells=indCols.map(n=>{
