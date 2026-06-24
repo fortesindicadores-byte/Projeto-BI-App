@@ -152,6 +152,11 @@ table.dre th.lim-g{color:#3BB33B;}table.dre th.lim-y{color:#EAB308;}table.dre th
 table.dre td.reg-lim{white-space:normal;font-weight:600;}
 table.dre td.reg-lim.lim-g{color:#3BB33B;}table.dre td.reg-lim.lim-y{color:#EAB308;}table.dre td.reg-lim.lim-o{color:#F97316;}table.dre td.reg-lim.lim-r{color:#FF6666;}
 table.dre td.reg-txt{white-space:normal;color:var(--text2);}
+table.dre td.reg-pontos{white-space:normal;vertical-align:top;}
+.reg-pt{font-size:11.5px;font-weight:600;line-height:1.25;padding:2px 0;}
+.reg-pt+.reg-pt{margin-top:3px;}
+.reg-pt b{font-weight:800;}
+.reg-pt.lim-g{color:#3BB33B;}.reg-pt.lim-y{color:#EAB308;}.reg-pt.lim-r{color:#FF6666;}
 table.dre#reg-table{table-layout:auto;}
 table.dre#reg-table td,table.dre#reg-table th{vertical-align:top;}
 body.light-mode table.dre tbody tr+tr td{border-top-color:rgba(0,0,0,.05);}
@@ -682,15 +687,23 @@ function fetchRegras(){
   });
 }
 const _regClean=v=>{const s=String(v==null?'':v).trim();return (s===''||s==='-'||s==='—')?'—':s;};
+// Coluna única "Pontos": só verde/amarelo/vermelho (sem laranja).
+// Máx 20 (tem limiar de 20 pts): 20 verde · 10 amarelo · 0 vermelho.
+// Máx 10 (sem limiar de 20):     10 verde · 5 amarelo · 0 vermelho.
+function regPontosCell(v20,v10,v5,v0){
+  const empty=s=>!s||s==='—'||s==='';
+  let tiers;
+  if(!empty(v20)) tiers=[['20',v20,'g'],['10',v10,'y'],['0',v0,'r']];
+  else            tiers=[['10',v10,'g'],['5',v5,'y'],['0',v0,'r']];
+  return tiers.map(([pts,txt,cls])=>
+    `<div class="reg-pt lim-${cls}"><b>${pts} pts</b>${empty(txt)?'':' — '+txt}</div>`).join('');
+}
 function renderRegras(){
   const tbl=document.getElementById('reg-table');
   if(!tbl) return;
   const head=`<thead><tr>
     <th style="text-align:left;min-width:150px">Indicador</th>
-    <th class="lim lim-g" style="text-align:left;min-width:120px">20 pts</th>
-    <th class="lim lim-y" style="text-align:left;min-width:120px">10 pts</th>
-    <th class="lim lim-o" style="text-align:left;min-width:100px">5 pts</th>
-    <th class="lim lim-r" style="text-align:left;min-width:80px">0 pts</th>
+    <th style="text-align:left;min-width:240px">Pontos</th>
     <th style="text-align:left;min-width:180px">Memória de Cálculo</th>
     <th style="text-align:left;min-width:90px">Período Avaliado</th>
     <th style="text-align:left;min-width:180px">Observações</th>
@@ -701,10 +714,7 @@ function renderRegras(){
   if(REGRAS_ROWS&&REGRAS_ROWS.length){
     bodyRows=REGRAS_ROWS.map(r=>`<tr>
       <td class="uni" style="font-weight:700">${_regClean(r[REG_COL.kpi])}</td>
-      <td class="reg-lim lim-g">${_regClean(r[REG_COL.p20])}</td>
-      <td class="reg-lim lim-y">${_regClean(r[REG_COL.p10])}</td>
-      <td class="reg-lim lim-o">${_regClean(r[REG_COL.p5])}</td>
-      <td class="reg-lim lim-r">${_regClean(r[REG_COL.p0])}</td>
+      <td class="reg-pontos">${regPontosCell(_regClean(r[REG_COL.p20]),_regClean(r[REG_COL.p10]),_regClean(r[REG_COL.p5]),_regClean(r[REG_COL.p0]))}</td>
       <td class="reg-txt">${_regClean(r[REG_COL.mem])}</td>
       <td class="reg-txt">${_regClean(r[REG_COL.per])}</td>
       <td class="reg-txt">${_regClean(r[REG_COL.obs])}</td>
@@ -714,10 +724,7 @@ function renderRegras(){
     // fallback: const REGRAS (só limiares + tier)
     bodyRows=REGRAS.map(rg=>`<tr>
       <td class="uni" style="font-weight:700">${rg.kpi}</td>
-      <td class="reg-lim lim-g">${_regClean(rg.l[0])}</td>
-      <td class="reg-lim lim-y">${_regClean(rg.l[1])}</td>
-      <td class="reg-lim lim-o">${_regClean(rg.l[2])}</td>
-      <td class="reg-lim lim-r">${_regClean(rg.l[3])}</td>
+      <td class="reg-pontos">${regPontosCell(_regClean(rg.l[0]),_regClean(rg.l[1]),_regClean(rg.l[2]),_regClean(rg.l[3]))}</td>
       <td class="reg-txt">—</td><td class="reg-txt">—</td><td class="reg-txt">—</td>
       <td class="reg-txt">${rg.tiers||'—'}</td>
     </tr>`).join('');
