@@ -150,6 +150,10 @@ function getPacote(conta){
   if(/^I[VC]\s*:/i.test(conta))return 'Indicadores';
   return 'Outros';
 }
+// Mesma lógica do FCA Preenchimento: Km/L e R$/L são CAUSA do Combustível, não fato próprio — não aparecem aqui.
+function isDriverCombust(fato){const s=String(fato||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'');if(/km\s*\/?\s*l/.test(s))return true;if(/r\$\s*\/?\s*l/.test(s))return true;if(/preco/.test(s)&&/(litro|\/\s*l|r\$)/.test(s))return true;return false;}
+// Projeto "limpo": corta no '-' (ex.: "ROTA - BLC" → "ROTA"). RPM já vem limpo.
+function projLabel(s){const t=String(s==null?'':s).trim();if(!t)return '';const i=t.indexOf('-');return i>=0?(t.substring(0,i).trim()||t):t;}
 
 const FILTROS=[
   {id:'unidade',label:'Unidade'},
@@ -242,7 +246,7 @@ function render(){
       `<td class="center">${o.origem||'-'}</td>`+
       `<td class="center">${o.unidade||'-'}</td>`+
       `<td class="center">${o.projeto||'-'}</td>`+
-      `<td class="txt">${fatoCell(o.fato)}</td>`+
+      `<td class="txt">${fatoCell(o.fato)}${o.desvio?`<span class="metric">${o.desvio}</span>`:''}</td>`+
       `<td class="txtsm">${(o.causa||'-').replace(/\n/g,'<br>')}</td>`+
       `<td class="txtsm">${(o.acao||'-').replace(/\n/g,'<br>')}</td>`+
       `<td class="center">${o.prazoD?fmtD(o.prazoD):'-'}</td>`+
@@ -261,10 +265,10 @@ async function carregar(){
     if(!sb)sb=supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
     const {data,error}=await sb.from('fca').select('*');
     if(error)throw error;
-    ALL=(data||[]).map(r=>{
+    ALL=(data||[]).filter(r=>!isDriverCombust(r.fato)).map(r=>{
       const vigD=vigToDate(r.vigencia),prazoD=dateOnly(r.prazo);
       const conta=(String(r.fato||'').split('\n')[0]||'').trim();
-      const o={origem:String(r.origem||'').trim(),vigD,vig:r.vigencia||vigLbl(vigD),unidade:String(r.unidade||'').trim(),projeto:String(r.projeto||'').trim(),conta,pacote:getPacote(conta),fato:r.fato||'',causa:r.causa||'',acao:r.acao||'',prazoD,status:String(r.status||'').trim()};
+      const o={origem:String(r.origem||'').trim(),vigD,vig:r.vigencia||vigLbl(vigD),unidade:String(r.unidade||'').trim(),projeto:projLabel(r.projeto),conta,pacote:getPacote(conta),fato:r.fato||'',desvio:String(r.fato_desvio||'').trim(),causa:r.causa||'',acao:r.acao||'',prazoD,status:String(r.status||'').trim()};
       o.sprazo=statusPrazo(o);
       return o;
     });
