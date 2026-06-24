@@ -332,6 +332,10 @@ function band(p){return p==null||!isFinite(p)?'':p>=80?'g':p>=60?'y':p>=40?'o':'
 function tierLabel(t){const T=String(t||'').toUpperCase().replace(/\s+/g,' ').trim();
   if(T==='TRANSPORTES T1')return 'T1 TRANSP.';if(T==='TRANSPORTES T2')return 'T2 TRANSP.';
   if(T==='WH T1')return 'T1 WH';if(T==='WH T2')return 'T2 WH';return t;}
+// Unifica indicadores iguais com escrita diferente entre tiers (ex.: "...VENCIDA"/"...VENCIDAS")
+function canonInd(name){const s=String(name||'').toUpperCase().replace(/\s+/g,' ').trim();
+  const M={'ADERÊNCIA CHECK CONFORMIDADE':'ADERÊNCIA CHECK DE CONFORMIDADE','ORDENS DE SERVIÇO VENCIDA':'ORDENS DE SERVIÇO VENCIDAS'};
+  return M[s]||s;}
 function bandHex(cls){return cls==='g'?'#3BB33B':cls==='y'?'#EAB308':cls==='o'?'#F97316':cls==='r'?'#FF6666':'transparent';}
 function bandFg(cls){return cls==='g'?'#3BB33B':cls==='y'?'#EAB308':cls==='o'?'#F97316':cls==='r'?'#FF6666':'var(--text3)';}
 // Score é "Total Pontos" por quinzena, já numa escala de 0 a 100 → cor direta na faixa.
@@ -519,7 +523,7 @@ function renderTierCards(rows){
 function buildIndSelector(){
   const sel=document.getElementById('ind-selector');
   // união de nomes (Transportes + WH), dedup mantendo ordem
-  const names=[]; TIERS.forEach(t=>indNames(t).forEach(n=>{if(!names.includes(n))names.push(n);}));
+  const names=[]; TIERS.forEach(t=>indNames(t).forEach(n=>{const cn=canonInd(n);if(!names.includes(cn))names.push(cn);}));
   // se o indicador ativo não existe mais no filtro atual, volta p/ total
   if(activeInd!=='__total__'&&!names.includes(activeInd)) activeInd='__total__';
   const opts=[['__total__','MÉDIA GERAL'],...names.map(n=>[n,n])];
@@ -530,16 +534,15 @@ function buildIndSelector(){
 function setActiveInd(ind){ activeInd=ind; buildIndSelector(); renderChart(); }
 // retorna pontos do indicador (por nome) numa linha; null se o tier não tem esse indicador
 function indPointsForRow(r,name){
-  const names=indNames(r.tier);
-  const i=names.indexOf(name);
+  const names=indNames(r.tier);const cn=canonInd(name);
+  const i=names.findIndex(x=>canonInd(x)===cn);
   if(i<0) return null;
-  const ptIdx=IND_PAIRS[i][1];
-  const v=r.raw[ptIdx];
+  const v=r.raw[IND_PAIRS[i][1]];
   return v==null||isNaN(+v)?null:+v;
 }
 function indValueForRow(r,name){
-  const names=indNames(r.tier);
-  const i=names.indexOf(name);
+  const names=indNames(r.tier);const cn=canonInd(name);
+  const i=names.findIndex(x=>canonInd(x)===cn);
   if(i<0) return null;
   return r.raw[IND_PAIRS[i][0]];
 }
@@ -647,16 +650,16 @@ function renderRanking(rows){
     if(!map[key]) map[key]={uni:r.raw[COL.uni],tier:r.tier,geo:r.raw[COL.geo],tot:[],names:indNames(r.tier),ind:{}};
     map[key].tot.push(+r.raw[COL.total]||0);
     map[key].names.forEach(n=>{
-      const p=indPointsForRow(r,n); const v=indValueForRow(r,n);
-      if(!map[key].ind[n]) map[key].ind[n]={p:[],lastV:null};
-      if(p!=null) map[key].ind[n].p.push(p);
-      if(v!=null) map[key].ind[n].lastV=v;
+      const cn=canonInd(n); const p=indPointsForRow(r,n); const v=indValueForRow(r,n);
+      if(!map[key].ind[cn]) map[key].ind[cn]={p:[],lastV:null};
+      if(p!=null) map[key].ind[cn].p.push(p);
+      if(v!=null) map[key].ind[cn].lastV=v;
     });
   });
   const list=Object.values(map).map(m=>{const score=m.tot.reduce((a,b)=>a+b,0)/m.tot.length;return {...m, score, pct: pctOf(score) };})
     .sort((a,b)=>b.score-a.score);
   // colunas de indicador = união pela ordem dos tiers presentes
-  const indCols=[]; list.forEach(m=>m.names.forEach(n=>{if(!indCols.includes(n))indCols.push(n);}));
+  const indCols=[]; list.forEach(m=>m.names.forEach(n=>{const cn=canonInd(n);if(!indCols.includes(cn))indCols.push(cn);}));
   const head=`<thead><tr>
     <th style="text-align:left;width:30px">#</th><th style="text-align:left">Unidade</th><th style="text-align:left;width:64px">Tier</th>
     <th class="num sep-l" style="width:58px">Pontuação</th>
