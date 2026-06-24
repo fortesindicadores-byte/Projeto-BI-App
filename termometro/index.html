@@ -132,8 +132,8 @@ table.dre td.pts{font-weight:800;}
 .pos-badge{display:inline-block;min-width:26px;text-align:center;font-weight:800;font-size:11px;border-radius:4px;padding:3px 6px;color:#0a0f18;}
 .tier-chip{font-size:8.5px;font-weight:700;padding:1px 6px;border-radius:10px;background:rgba(249,115,22,.15);color:var(--orange);border:1px solid rgba(249,115,22,.3);text-transform:uppercase;letter-spacing:.3px;}
 /* célula de indicador: pontos como número principal, valor pequeno embaixo */
-.rk-ind{font-weight:700;}
-.rk-ind .pp{color:var(--text2);font-weight:600;font-size:10px;white-space:nowrap;}
+.rk-ind .p{font-weight:800;font-size:12.5px;display:block;}
+.rk-ind .v{color:var(--text3);font-size:9px;font-weight:600;display:block;margin-top:1px;white-space:nowrap;}
 
 /* Regras — estilo "Distribuição dos Pesos" do Programa Reconhecimento (lista limpa, sem grade) */
 .peso-title{font-size:12px;font-weight:800;color:var(--orange);margin-bottom:10px;text-transform:uppercase;letter-spacing:.5px;}
@@ -322,6 +322,10 @@ const set=(id,v)=>{const e=document.getElementById(id);if(e)e.textContent=v;};
 const num1=v=>v==null||!isFinite(v)?'—':(Math.round(v*10)/10).toLocaleString('pt-BR');
 // ── Faixa de cor por % (padrão Scorecard): ≥90 verde · ≥80 amarelo · ≥70 laranja · <70 vermelho ──
 function band(p){return p==null||!isFinite(p)?'':p>=90?'g':p>=80?'y':p>=60?'o':'r';}
+// De-para do Tier para exibição: "Transportes T1" -> "T1 TRANSP." ; "WH T1" -> "T1 WH"
+function tierLabel(t){const T=String(t||'').toUpperCase().replace(/\s+/g,' ').trim();
+  if(T==='TRANSPORTES T1')return 'T1 TRANSP.';if(T==='TRANSPORTES T2')return 'T2 TRANSP.';
+  if(T==='WH T1')return 'T1 WH';if(T==='WH T2')return 'T2 WH';return t;}
 function bandHex(cls){return cls==='g'?'#3BB33B':cls==='y'?'#EAB308':cls==='o'?'#F97316':cls==='r'?'#FF6666':'transparent';}
 function bandFg(cls){return cls==='g'?'#3BB33B':cls==='y'?'#EAB308':cls==='o'?'#F97316':cls==='r'?'#FF6666':'var(--text3)';}
 // Score é "Total Pontos" por quinzena, já numa escala de 0 a 100 → cor direta na faixa.
@@ -658,15 +662,15 @@ function renderRanking(rows){
       if(!d||(!d.p.length&&d.lastV==null)) return `<td class="num sep-l" style="color:var(--text3)">—</td>`;
       const pAvg=d.p.length?Math.round(d.p.reduce((a,b)=>a+b,0)/d.p.length):null;
       const val=fmtIndVal(d.lastV);
-      // resultado do indicador como "valor - Npts" (ex.: 100% | 100% - 20pts), sem cor
-      const txt=val?(pAvg!=null?`${val} <span class="pp">- ${pAvg}pts</span>`:val):(pAvg!=null?`<span class="pp">${pAvg}pts</span>`:'—');
-      return `<td class="num sep-l rk-ind">${txt}</td>`;
+      // pontos grandes em cima (pintados pela regra 20/10/5/0) + valor pequeno embaixo
+      const pCls=pAvg!=null?(pAvg>=15?'g':pAvg>=7.5?'y':pAvg>=2.5?'o':'r'):'';
+      return `<td class="num sep-l rk-ind"><span class="p" style="color:${bandFg(pCls)}">${pAvg!=null?pAvg+'pts':'—'}</span>${val?`<span class="v">${val}</span>`:''}</td>`;
     }).join('');
     const scBg=bandHex(band(m.pct));
     return `<tr>
       <td style="font-weight:800;color:var(--orange)">${i+1}</td>
       <td class="uni">${m.uni}</td>
-      <td><span class="tier-chip">${m.tier}</span></td>
+      <td><span class="tier-chip">${tierLabel(m.tier)}</span></td>
       <td class="num pts sep-l"><span style="display:inline-block;min-width:42px;padding:3px 10px;border-radius:5px;font-weight:800;color:#0C1017;background:${scBg}">${num1(m.score)}</span></td>
       ${cells}
     </tr>`;
@@ -710,7 +714,7 @@ function renderMatrix(rows){
       const bg=rankColor(pos,maxByVig[v]);
       return `<td class="cell" style="background:${bg}">${pos}</td>`;
     }).join('');
-    return `<tr><td class="uni-c">${m.uni} <span style="font-size:9px;color:var(--text3);font-weight:700">${m.tier}</span></td>${cells}</tr>`;
+    return `<tr><td class="uni-c">${m.uni} <span style="font-size:9px;color:var(--text3);font-weight:700">${tierLabel(m.tier)}</span></td>${cells}</tr>`;
   }).join('')+'</tbody>';
   tbl.innerHTML=head+body;
 }
