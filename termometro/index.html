@@ -91,6 +91,10 @@ body{
 .row-2{display:flex;gap:16px;align-items:stretch;margin-bottom:24px;}
 .row-2 .chart-card{flex:1;min-width:0;}
 .row-2 .tbl-section.peso-box{flex:0 0 300px;min-width:0;border-color:rgba(249,115,22,.2);display:flex;flex-direction:column;}
+.row-3{display:flex;gap:16px;align-items:stretch;margin-bottom:24px;}
+.row-3 .mtx-card{flex:1;min-width:0;}
+.row-3 .peso-box{flex:0 0 320px;min-width:0;border-color:rgba(249,115,22,.2);display:flex;flex-direction:column;}
+@media(max-width:900px){.row-3{flex-direction:column;}.row-3 .peso-box{flex:1 1 auto;}}
 .chart-card,.tbl-section{background:rgba(20,27,38,.55);border:1px solid rgba(255,255,255,.07);border-radius:8px;
   padding:18px 20px 16px;backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);box-shadow:0 2px 12px rgba(0,0,0,.25);}
 .chart-card{padding:18px 18px 14px;}
@@ -261,11 +265,6 @@ body.light-mode table.mtx thead th{border-bottom-color:rgba(0,0,0,.12);}
       </div>
       <div class="chart-wrap"><canvas id="ch-line"></canvas></div>
     </div>
-    <div class="tbl-section peso-box" style="margin-bottom:0;">
-      <div class="peso-title">Regras · Pontuação</div>
-      <div class="peso-header"><span>Indicador</span><span>Máx · Limiar</span></div>
-      <div id="reg-list" style="overflow-y:auto;"></div>
-    </div>
   </div>
 
   <div class="tbl-section">
@@ -274,10 +273,17 @@ body.light-mode table.mtx thead th{border-bottom-color:rgba(0,0,0,.12);}
     <div class="tbl-wrap"><table class="dre" id="rk-table"></table></div>
   </div>
 
-  <div class="tbl-section">
-    <div class="tbl-title">Posição no Ranking · Mês a Mês</div>
-    <div class="tbl-sub">Posição de cada unidade por vigência (verde = topo · vermelho = fundo)</div>
-    <div class="mtx-wrap"><table class="mtx" id="mtx-table"></table></div>
+  <div class="row-3">
+    <div class="tbl-section mtx-card" style="margin-bottom:0;">
+      <div class="tbl-title">Posição no Ranking · Mês a Mês</div>
+      <div class="tbl-sub">Posição de cada unidade por vigência (verde = topo · vermelho = fundo)</div>
+      <div class="mtx-wrap"><table class="mtx" id="mtx-table"></table></div>
+    </div>
+    <div class="tbl-section peso-box" style="margin-bottom:0;">
+      <div class="peso-title">Regras · Pontuação</div>
+      <div class="peso-header"><span>Indicador</span><span>Máx · Limiar</span></div>
+      <div id="reg-list" style="overflow-y:auto;"></div>
+    </div>
   </div>
 </main>
 
@@ -341,7 +347,7 @@ const vigSort=(a,b)=>vigKey(a)<vigKey(b)?-1:vigKey(a)>vigKey(b)?1:0;
 const _VIG_MESES=['','JAN','FEV','MAR','ABR','MAI','JUN','JUL','AGO','SET','OUT','NOV','DEZ'];
 function vigLabel(mq){const k=vigKey(mq);const p=k.split('_');const m=+p[0],q=+p[1];const nome=_VIG_MESES[m]||p[0];return `${nome} Q${q}`;}
 // Lista FIXA de todas as 24 quinzenas do ano (01_01 … 12_02), ordenada — eixo completo p/ matriz e gráfico.
-const ALL_VIGS=(()=>{const a=[];for(let m=1;m<=12;m++){const mm=String(m).padStart(2,'0');a.push(mm+'_01',mm+'_02');}return a;})();
+const ALL_VIGS=(()=>{const a=[];for(let m=2;m<=12;m++){const mm=String(m).padStart(2,'0');a.push(mm+'_01',mm+'_02');}return a;})();
 
 // ════════ ESTADO ════════
 let allRows=[], chLine=null, activeInd='__total__';
@@ -610,7 +616,7 @@ function renderChart(){
           titleFont:{family:'Montserrat'},bodyFont:{family:'Montserrat'},
           callbacks:{label:c=>` ${c.parsed.y==null?'—':num1(c.parsed.y)+' pts'}`}}},
       scales:{
-        x:{grid,ticks:{...tick,autoSkip:false,maxRotation:90,minRotation:90,font:{family:'Montserrat',size:9}}},
+        x:{grid,ticks:{...tick,autoSkip:false,maxRotation:0,minRotation:0,font:{family:'Montserrat',size:9}}},
         y:{beginAtZero:true,grid,ticks:tick}
       }}
   });
