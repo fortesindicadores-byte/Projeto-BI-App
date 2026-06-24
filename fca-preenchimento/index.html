@@ -305,6 +305,9 @@ function parseBaseRPM(t){
   const mapSt=s=>{const x=String(s||'').toLowerCase();if(x.includes('conclu'))return 'Concluída';if(x.includes('andam'))return 'Em andamento';if(x.includes('cancel'))return 'Cancelada';return DEFAULT_STATUS;};
   const isoD=v=>{const d=parseAnyDate(v);return d?d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'):null;};
   const txt=i=>{if(i<0)return null;const s=String(rTmp[i]==null?'':rTmp[i]).trim();return s||null;};
+  // Corte de transição: ATÉ mai/2026 (≤202604) o histórico já está preenchido NA ABA → importa causa/ação/prazo/status
+  // (e só traz o que está preenchido). De jun/2026 em diante vem VAZIO p/ as unidades preencherem no painel.
+  const FILL_UNTIL=202604;
   let rTmp;
   const out=[];
   rows.forEach(r=>{
@@ -316,14 +319,19 @@ function parseBaseRPM(t){
     if(atg!=null&&atg>1.5)atg=atg/100;                                          // veio 80 em vez de 0,80
     if(atg==null||!isFinite(atg)||atg>=1)return;                               // só o que desviou (IC e IV, atg<1)
     const d=parseAnyDate(r[ci.vig]); const vig=vigLbl(d)||String(r[ci.vig]||'').trim(); if(!vig)return;
+    const vk=d?vigKeyN(d):vigNum(vig);
+    const hist=vk<=FILL_UNTIL;                                                  // mês histórico (já preenchido na aba)
+    const causaV=txt(ci.causa), acaoV=txt(ci.acao);
+    if(hist && !causaV && !acaoV) return;                                       // histórico: só o que já está preenchido na aba
     const un=ci.un>=0?String(r[ci.un]||'').trim():'';
     const meta=ci.meta>=0&&r[ci.meta]!=null&&r[ci.meta]!==''?_g2(+r[ci.meta])+(un?' '+un:''):'—';
     const real=ci.real>=0&&r[ci.real]!=null&&r[ci.real]!==''?_g2(+r[ci.real])+(un?' '+un:''):'—';
     const at=(Math.round(atg*1000)/10).toLocaleString('pt-BR')+'%';
-    // desvio vazio (sem causa/ação) — as unidades preenchem no painel. Banco é a fonte daqui pra frente.
     out.push({unidade:dp.abrev,vigencia:vig,origem:'RPM',fato:kpi,projeto:dp.projeto,
       fato_desvio:`Meta: ${meta} | Real: ${real} | Ating: ${at}`,
-      causa:null,acao:null,prazo:null,status:DEFAULT_STATUS,locked:false});
+      causa:hist?causaV:null, acao:hist?acaoV:null,
+      prazo:hist?isoD(r[ci.prazo]):null,
+      status:(hist&&ci.st>=0)?mapSt(r[ci.st]):DEFAULT_STATUS, locked:false});
   });
   return out;
 }
