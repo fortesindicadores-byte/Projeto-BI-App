@@ -100,33 +100,36 @@ body{
   font-family:'Montserrat',sans-serif;font-size:10px;font-weight:700;padding:6px 8px;cursor:pointer;text-transform:uppercase;letter-spacing:.4px;max-width:230px;}
 .ind-sel:hover{border-color:var(--orange);}
 
-/* TABLES */
+/* TABLES — padrão limpo Scorecard: sem grade, underline no cabeçalho, separador sutil entre linhas */
 .tbl-section{margin-bottom:16px;}
-.tbl-wrap{overflow-x:auto;}
-table.dre{width:100%;border-collapse:collapse;font-size:12px;}
-table.dre thead th{background:transparent;color:var(--text2);font-size:10px;font-weight:700;
-  padding:7px 7px 10px;border-bottom:1px solid rgba(255,255,255,.10);white-space:nowrap;text-transform:uppercase;letter-spacing:.4px;position:sticky;top:0;}
+.tbl-wrap{overflow-x:visible;}
+table.dre{width:100%;border-collapse:collapse;font-size:11.5px;table-layout:fixed;}
+table.dre thead th{background:transparent;color:var(--text2);font-size:8.5px;font-weight:700;
+  padding:6px 3px 9px;border-bottom:1px solid rgba(255,255,255,.10);white-space:normal;line-height:1.15;text-transform:uppercase;letter-spacing:.1px;vertical-align:bottom;}
 table.dre thead th.num{text-align:right;}
-table.dre td{padding:9px 7px;border:none;color:var(--text);white-space:nowrap;}
-table.dre tbody tr{border-bottom:1px solid rgba(255,255,255,.05);}
-table.dre tbody tr:hover{background:rgba(255,255,255,.04);}
+table.dre td{padding:7px 3px;border:none;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+table.dre tbody tr+tr td{border-top:1px solid rgba(255,255,255,.04);}
+table.dre tbody tr:hover td{background:rgba(255,255,255,.03);}
 table.dre td.num{text-align:right;}
-table.dre td.uni{font-weight:600;min-width:140px;}
+table.dre td.uni{font-weight:600;}
 table.dre td.pts{font-weight:800;}
-.sep-l{border-left:1px solid rgba(255,255,255,.13)!important;padding-left:14px!important;}
+/* separador sutil de bloco (Pontuação) sem virar grade */
+.sep-l{border-left:1px solid rgba(255,255,255,.08)!important;padding-left:10px!important;}
 .pos-badge{display:inline-block;min-width:26px;text-align:center;font-weight:800;font-size:11px;border-radius:4px;padding:3px 6px;color:#0a0f18;}
-.tier-chip{font-size:9px;font-weight:700;padding:2px 7px;border-radius:10px;background:rgba(249,115,22,.15);color:var(--orange);border:1px solid rgba(249,115,22,.3);text-transform:uppercase;letter-spacing:.3px;}
-.rk-ind{font-size:10px;}
-.rk-ind .v{color:var(--text);} .rk-ind .p{color:var(--text2);font-weight:700;margin-left:4px;}
+.tier-chip{font-size:8.5px;font-weight:700;padding:1px 6px;border-radius:10px;background:rgba(249,115,22,.15);color:var(--orange);border:1px solid rgba(249,115,22,.3);text-transform:uppercase;letter-spacing:.3px;}
+/* célula de indicador: pontos como número principal, valor pequeno embaixo */
+.rk-ind .p{font-weight:800;font-size:12px;display:block;}
+.rk-ind .v{color:var(--text3);font-size:8.5px;font-weight:600;display:block;margin-top:1px;}
 
-/* Regras list */
-.reg-item{padding:9px 0;border-bottom:1px solid rgba(255,255,255,.06);}
+/* Regras — estilo programa-reconhecimento (lista limpa, sem grade) */
+.reg-item{padding:9px 0;border-bottom:1px solid rgba(255,255,255,.05);}
 .reg-item:last-child{border-bottom:none;}
 .reg-kpi{font-size:11px;font-weight:800;color:var(--text);text-transform:uppercase;letter-spacing:.3px;margin-bottom:5px;}
 .reg-tiers{font-size:8px;font-weight:700;color:var(--text3);margin-left:6px;letter-spacing:.3px;}
 .reg-limts{display:flex;gap:6px;flex-wrap:wrap;}
 .reg-pill{font-size:9.5px;color:var(--text2);background:rgba(255,255,255,.04);border-radius:4px;padding:3px 7px;line-height:1.25;border-left:3px solid;}
 .reg-pill b{color:var(--text);font-weight:800;}
+body.light-mode table.dre tbody tr+tr td{border-top-color:rgba(0,0,0,.05);}
 
 /* MATRIX heatmap */
 .mtx-wrap{overflow-x:auto;}
@@ -608,8 +611,8 @@ function renderRanking(rows){
   // colunas de indicador = união pela ordem dos tiers presentes
   const indCols=[]; list.forEach(m=>m.names.forEach(n=>{if(!indCols.includes(n))indCols.push(n);}));
   const head=`<thead><tr>
-    <th style="text-align:left">#</th><th style="text-align:left">Unidade</th><th style="text-align:left">Tier</th><th style="text-align:left">GEO</th>
-    <th class="num sep-l">Pontuação</th>
+    <th style="text-align:left;width:30px">#</th><th style="text-align:left">Unidade</th><th style="text-align:left;width:64px">Tier</th><th style="text-align:left;width:54px">GEO</th>
+    <th class="num sep-l" style="width:58px">Pontuação</th>
     ${indCols.map(n=>`<th class="num sep-l">${n}</th>`).join('')}
   </tr></thead>`;
   const body='<tbody>'+list.map((m,i)=>{
@@ -620,7 +623,8 @@ function renderRanking(rows){
       const val=fmtIndVal(d.lastV);
       // faixa de cor pela % de pontos do indicador (pts/20)
       const cFg=pAvg!=null?bandFg(band(pAvg/20*100)):'var(--text2)';
-      return `<td class="num sep-l rk-ind"><span class="v">${val}</span><span class="p" style="color:${cFg}">${pAvg!=null?pAvg+'pt':''}</span></td>`;
+      // pontos = número principal pintado; valor pequeno embaixo (compacto, sem rolagem)
+      return `<td class="num sep-l rk-ind"><span class="p" style="color:${cFg}">${pAvg!=null?pAvg:'—'}</span>${val?`<span class="v">${val}</span>`:''}</td>`;
     }).join('');
     const scBg=bandHex(band(m.pct));
     return `<tr>
