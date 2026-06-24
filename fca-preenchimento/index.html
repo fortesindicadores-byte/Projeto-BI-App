@@ -285,6 +285,7 @@ function parseBaseRPM(t,deParaMap){
   const mapSt=s=>{const x=String(s||'').toLowerCase();if(x.includes('conclu'))return 'Concluída';if(x.includes('andam'))return 'Em andamento';if(x.includes('cancel'))return 'Cancelada';return DEFAULT_STATUS;};
   const isoD=v=>{const d=parseAnyDate(v);return d?d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'):null;};
   const txt=i=>{if(i<0)return null;const s=String(rTmp[i]==null?'':rTmp[i]).trim();return s||null;};
+  const MAX_VIGKEY=202603;   // limite: traz só até abr/2026 (ano*100+mês; abr = índice 3)
   let rTmp;
   const out=[];
   rows.forEach(r=>{
@@ -295,14 +296,17 @@ function parseBaseRPM(t,deParaMap){
     if(atg!=null&&typeof atg!=='number')atg=parseFloat(String(atg).replace('%','').replace(/\./g,String(atg).includes(',')?'':'.').replace(',','.'));
     if(atg!=null&&atg>1.5)atg=atg/100;                                          // veio 80 em vez de 0,80
     if(atg==null||!isFinite(atg)||atg>=1)return;                               // só com desvio
+    const causaV=txt(ci.causa), acaoV=txt(ci.acao);
+    if(!causaV&&!acaoV)return;                                                  // vazio (sem causa/ação) não vai
     const d=parseAnyDate(r[ci.vig]); const vig=vigLbl(d)||String(r[ci.vig]||'').trim(); if(!vig)return;
+    const vk=d?vigKeyN(d):vigNum(vig); if(vk>MAX_VIGKEY)return;                  // só até abr/2026
     const un=ci.un>=0?String(r[ci.un]||'').trim():'';
     const meta=ci.meta>=0&&r[ci.meta]!=null&&r[ci.meta]!==''?_g2(+r[ci.meta])+(un?' '+un:''):'—';
     const real=ci.real>=0&&r[ci.real]!=null&&r[ci.real]!==''?_g2(+r[ci.real])+(un?' '+un:''):'—';
     const at=(Math.round(atg*1000)/10).toLocaleString('pt-BR')+'%';
     out.push({unidade:dp.abrev,vigencia:vig,origem:'RPM',fato:kpi,projeto:dp.projeto,
       fato_desvio:`Meta: ${meta} | Real: ${real} | Ating: ${at}`,
-      causa:txt(ci.causa),acao:txt(ci.acao),prazo:isoD(r[ci.prazo]),status:ci.st>=0?mapSt(r[ci.st]):DEFAULT_STATUS,locked:false});
+      causa:causaV,acao:acaoV,prazo:isoD(r[ci.prazo]),status:ci.st>=0?mapSt(r[ci.st]):DEFAULT_STATUS,locked:false});
   });
   return out;
 }
