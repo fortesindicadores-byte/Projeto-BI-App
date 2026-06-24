@@ -216,6 +216,10 @@ const GID='216663799';
 const MESES=['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
 const FILTROS=['unidade','origem','vig','projeto','sprazo','status'];
 let ALL=[],VIGS=[],tableDim='unidade',tblSort='total',chPrazo=null,chConcl=null,BASE_FIRST=null,PRESENT=[];
+// Mesma lógica do FCA Preenchimento: Km/L e R$/L são CAUSA do Combustível, não fato próprio — não contam aqui.
+function isDriverCombust(fato){const s=String(fato||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'');if(/km\s*\/?\s*l/.test(s))return true;if(/r\$\s*\/?\s*l/.test(s))return true;if(/preco/.test(s)&&/(litro|\/\s*l|r\$)/.test(s))return true;return false;}
+// Projeto "limpo": corta no '-' (ex.: "ROTA - BLC" → "ROTA"). RPM já vem limpo.
+function projLabel(s){const t=String(s==null?'':s).trim();if(!t)return '';const i=t.indexOf('-');return i>=0?(t.substring(0,i).trim()||t):t;}
 // ── Fonte: Supabase (tabela fca) — substitui a planilha antiga ──
 const SUPABASE_URL='https://lozwipoeacpvplgkrxkq.supabase.co';
 const SUPABASE_KEY='sb_publishable_ggKEEebc5zjgQDVsF92Upw_6uoLmKe9';
@@ -347,7 +351,7 @@ async function carregar(){
     const {data,error}=await sb.from('fca').select('*');
     if(error)throw error;
     const normU=u=>String(u||'').trim().replace(/\s*\([^)]*\)\s*$/,'').trim();
-    ALL=(data||[]).map(r=>{const vigD=vigToDate(r.vigencia),prazoD=dateOnly(r.prazo);const o={origem:String(r.origem||'').trim(),vigD,vig:r.vigencia||vigLbl(vigD),unidade:normU(r.unidade),projeto:String(r.projeto||'').trim(),prazoD,status:String(r.status||'').trim()};o.concl=categConcl(o.status);o.sprazo=statusPrazo(o);return o;});
+    ALL=(data||[]).filter(r=>!isDriverCombust(r.fato)).map(r=>{const vigD=vigToDate(r.vigencia),prazoD=dateOnly(r.prazo);const o={origem:String(r.origem||'').trim(),vigD,vig:r.vigencia||vigLbl(vigD),unidade:normU(r.unidade),projeto:projLabel(r.projeto),prazoD,status:String(r.status||'').trim()};o.concl=categConcl(o.status);o.sprazo=statusPrazo(o);return o;});
     // 12 meses a partir do 1º mês com dados (preenche conforme entram dados)
     const vm=new Map();ALL.forEach(o=>{if(o.vigD)vm.set(vigKeyN(o.vigD),o.vigD);});
     PRESENT=[...vm.values()].sort((a,b)=>vigKeyN(a)-vigKeyN(b));
