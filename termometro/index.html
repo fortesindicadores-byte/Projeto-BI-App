@@ -296,12 +296,11 @@ const num1=v=>v==null||!isFinite(v)?'—':(Math.round(v*10)/10).toLocaleString('
 function band(p){return p==null||!isFinite(p)?'':p>=90?'g':p>=80?'y':p>=70?'o':'r';}
 function bandHex(cls){return cls==='g'?'#3BB33B':cls==='y'?'#EAB308':cls==='o'?'#F97316':cls==='r'?'#FF6666':'transparent';}
 function bandFg(cls){return cls==='g'?'#3BB33B':cls==='y'?'#EAB308':cls==='o'?'#F97316':cls==='r'?'#FF6666':'var(--text3)';}
-// Normalização do Score: % do MÁXIMO observado de "Total Pontos" no conjunto carregado.
-// (nem todo indicador pontua em todo tier — usar nº de indicadores×20 distorce; o máximo
-//  observado dá uma escala coerente: melhor do período ≈ verde, pior ≈ vermelho.)
+// Score é "Total Pontos" por quinzena, já numa escala de 0 a 100 → cor direta na faixa.
+// Ao filtrar várias vigências/unidades, o agregado é MÉDIA (avgTotal/ranking por média).
 let MAX_TOTAL=0;
-function computeMaxTotal(){MAX_TOTAL=allRows.reduce((m,r)=>{const t=+r.raw[COL.total];return isFinite(t)&&t>m?t:m;},0)||100;}
-function pctOf(tot){return isFinite(tot)&&MAX_TOTAL>0?Math.min(100,tot/MAX_TOTAL*100):null;}
+function computeMaxTotal(){MAX_TOTAL=100;}
+function pctOf(tot){return isFinite(tot)?tot:null;}
 // Score % de uma linha individual
 function rowScorePct(r){return pctOf(+r.raw[COL.total]);}
 const vigKey=v=>{const p=String(v).split('_');return (p[0]||'').padStart(2,'0')+'_'+(p[1]||'').padStart(2,'0');};
