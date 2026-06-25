@@ -44,10 +44,11 @@ body{background:radial-gradient(ellipse at 10% 25%,rgba(249,115,22,.06) 0%,trans
 .tbl-title{font-size:16px;font-weight:800;color:var(--text);margin-bottom:3px;}
 .tbl-sub{font-size:10px;color:var(--text2);margin-bottom:14px;}
 
-table.mpr{border-collapse:collapse;width:100%;table-layout:fixed;font-size:12px;min-width:1800px;}
+table.mpr{border-collapse:collapse;width:100%;table-layout:fixed;font-size:12px;min-width:1800px;border:1px solid var(--grid);}
 table.mpr td{padding:8px 6px;border:1px solid var(--grid);color:var(--text);white-space:nowrap;text-align:center;vertical-align:middle;overflow:hidden;text-overflow:ellipsis;}
-/* dentro dos indicadores (Ano/YTD/meses): só linha horizontal, sem verticais */
-td.vc{border-left:none;border-right:none;}
+/* dentro dos indicadores (Ano/YTD/meses): SÓ linha horizontal, sem nenhuma vertical.
+   precisa de especificidade >= 'table.mpr td' p/ sobrescrever a borda. */
+table.mpr td.vc{border-left:none!important;border-right:none!important;}
 /* larguras fixas — meses todos iguais */
 col.c-uni{width:150px;}col.c-plan{width:76px;}col.c-ano{width:46px;}col.c-val{width:56px;}col.c-mes{width:50px;}
 /* linha mais grossa separando cada GEO */
@@ -305,7 +306,7 @@ function colgroup(){
 function headerRow(){
   return `<tr class="hdr"><th class="l">Unidade / GEO</th><th>Plan</th><th>Ano</th><th>YTD</th>${MESES.map(m=>`<th>${m}</th>`).join('')}<th class="l">Causa</th><th class="l">Ação</th><th class="l">Responsável</th><th class="l">Prazo</th></tr>`;
 }
-function dashCells(n){let h='';for(let i=0;i<n;i++)h+='<td class="vc"><span class="cell dash">—</span></td>';return h;}
+function dashCells(n){let h='';for(let i=0;i<n;i++)h+='<td class="vc'+(i===0?' vc-first':'')+(i===n-1?' vc-last':'')+'"><span class="cell dash">—</span></td>';return h;}
 
 function group(ind,label,unitKey,isGeo,monthsFn){
   const kind=fmtOf(ind);
@@ -333,7 +334,7 @@ function group(ind,label,unitKey,isGeo,monthsFn){
   </tr>`;
   // 2026 (resultado da Q2; cor na fonte pela pontuação do termômetro)
   h+=`<tr class="grp-end"><td class="per p2026 vc">2026</td><td class="vc">${valCard(ytdNum,ytdPts,kind,'tot')}</td>`;
-  cells2026.forEach(c=>{h+=`<td class="vc">${valCard(c.num,c.pts,kind)}</td>`;});
+  cells2026.forEach((c,i)=>{h+=`<td class="vc${i===0?' vc-first':''}${i===11?' vc-last':''}">${valCard(c.num,c.pts,kind)}</td>`;});
   h+=`</tr>`;
   return h;
 }
