@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MPR — Monthly Performance Review</title>
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#0C1017;--card:#141B26;--card2:#1A2335;--border:#1E2D40;--orange:#F97316;--blue:#38BDF8;--text:#F1F5F9;--text2:#94A3B8;--text3:#475569;--green:#3BB33B;--red:#FF6666;}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{background:radial-gradient(ellipse at 10% 25%,rgba(249,115,22,.06) 0%,transparent 50%),radial-gradient(ellipse at 90% 75%,rgba(56,189,248,.05) 0%,transparent 50%),var(--bg);color:var(--text);font-family:'Montserrat',-apple-system,sans-serif;font-size:13px;min-height:100vh;}
+
+/* HEADER (padrão visao-financeira) */
+.header{background:rgba(12,16,23,.75);border-bottom:1px solid rgba(255,255,255,.07);padding:10px 24px 12px;display:flex;flex-wrap:wrap;align-items:center;position:sticky;top:0;z-index:100;backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);box-shadow:0 2px 12px rgba(0,0,0,.3);}
+.brand{flex:1;order:1;min-width:160px;}
+.brand h1{font-size:16px;font-weight:700;color:var(--orange);}
+.brand p{font-size:10px;color:var(--text2);margin-top:2px;}
+.header-right{flex-shrink:0;order:2;display:flex;align-items:center;gap:8px;}
+.back-btn,.theme-btn,.refresh-btn{background:rgba(249,115,22,.15);border:1px solid rgba(249,115,22,.3);border-radius:4px;padding:5px 7px;cursor:pointer;color:var(--orange);display:flex;align-items:center;text-decoration:none;}
+.back-btn:hover,.theme-btn:hover,.refresh-btn:hover{background:rgba(249,115,22,.3);}
+.status-badge{font-size:9px;color:var(--text);background:rgba(249,115,22,.15);border:1px solid rgba(249,115,22,.3);border-radius:4px;padding:2px 8px;white-space:nowrap;}
+.header-filters{flex-basis:100%;order:3;margin-top:10px;display:flex;gap:10px;flex-wrap:wrap;align-items:flex-start;}
+
+/* MULTI-SELECT */
+.ms-wrap{position:relative;}
+.ms-btn{display:flex;align-items:center;gap:8px;background:#0a0f18;color:var(--text);border:1px solid #2a3a50;border-radius:4px;font-family:'Montserrat',sans-serif;font-size:11px;font-weight:700;padding:6px 12px;cursor:pointer;text-transform:uppercase;letter-spacing:.5px;white-space:nowrap;min-width:130px;}
+.ms-btn:hover{border-color:var(--orange);}
+.ms-lbl{flex:1;text-align:left;}
+.ms-cnt{background:var(--orange);color:#000;border-radius:10px;padding:1px 6px;font-size:9px;font-weight:800;display:none;}
+.ms-panel{display:none;flex-direction:column;position:absolute;top:calc(100% + 4px);left:0;z-index:500;background:#0f1824;border:1px solid #2a3a50;border-radius:6px;min-width:230px;max-height:320px;box-shadow:0 8px 24px rgba(0,0,0,.7);}
+.ms-panel.open{display:flex;}
+.ms-search{padding:7px 10px;border-bottom:1px solid #1e2d40;}
+.ms-search input{width:100%;background:transparent;border:none;color:var(--text);font-family:'Montserrat',sans-serif;font-size:11px;outline:none;}
+.ms-search input::placeholder{color:var(--text3);}
+.ms-list{overflow-y:auto;flex:1;}
+.ms-opt{display:flex;align-items:center;gap:8px;padding:7px 12px;cursor:pointer;font-size:11px;color:var(--text2);}
+.ms-opt:hover{background:rgba(255,255,255,.05);color:var(--text);}
+.ms-opt.all-opt{border-bottom:1px solid #1e2d40;color:var(--text);font-weight:700;}
+.ms-opt input[type=checkbox]{accent-color:var(--orange);cursor:pointer;width:14px;height:14px;}
+
+/* MAIN */
+.main{padding:20px 24px 80px;}
+.tbl-section{background:rgba(20,27,38,.55);border:1px solid rgba(255,255,255,.07);border-radius:8px;padding:14px 14px 16px;backdrop-filter:blur(16px);box-shadow:0 2px 12px rgba(0,0,0,.25);overflow-x:auto;}
+.tbl-title{font-size:16px;font-weight:800;color:var(--text);margin-bottom:3px;}
+.tbl-sub{font-size:10px;color:var(--text2);margin-bottom:14px;}
+
+table.mpr{border-collapse:separate;border-spacing:0;width:100%;font-size:11px;min-width:1500px;}
+table.mpr th{position:sticky;top:0;background:#0C1017;color:#fff;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;padding:9px 6px;text-align:center;border-bottom:1px solid rgba(255,255,255,.10);white-space:nowrap;z-index:2;}
+table.mpr td{padding:3px 4px;border-bottom:1px solid rgba(255,255,255,.05);text-align:center;vertical-align:middle;white-space:nowrap;}
+
+/* KPI section header row */
+tr.kpi-row td{background:rgba(249,115,22,.10);border-top:1px solid rgba(249,115,22,.25);border-bottom:1px solid rgba(249,115,22,.25);padding:8px 10px;text-align:left;}
+.kpi-name{font-size:13px;font-weight:800;color:var(--orange);letter-spacing:.5px;}
+.kpi-dir{font-size:9px;font-weight:600;color:var(--text2);margin-left:8px;text-transform:uppercase;}
+
+/* Unidade/GEO cell */
+.uni-cell{text-align:left;font-weight:700;color:var(--text);padding-left:10px;}
+.uni-cell.geo{cursor:pointer;}
+.uni-cell .toggle{display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;border-radius:3px;background:rgba(249,115,22,.2);color:var(--orange);font-weight:800;font-size:12px;margin-right:7px;}
+.uni-cell.unit{padding-left:26px;color:var(--text2);font-weight:600;}
+
+.per{font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;text-align:left;padding-left:8px;}
+.per.p2026{color:var(--text);}
+.row-2025 td:not(.span){background:rgba(255,255,255,.025);}
+
+/* value cards */
+.cell{display:inline-block;min-width:46px;border-radius:6px;padding:6px 7px;font-weight:700;font-size:11px;}
+.cell.plan{color:var(--text2);background:transparent;}
+.cell.v-green{background:rgba(59,179,59,.22);color:#7BE07B;}
+.cell.v-amber{background:rgba(244,194,13,.22);color:#F4C20D;}
+.cell.v-red{background:rgba(234,67,53,.20);color:#FF8A80;}
+.cell.v-na{color:var(--text3);}
+.cell.kpi-tot{font-weight:800;}
+
+/* editable fields (free input, persist localStorage) */
+.fld{width:100%;background:#0a0f18;border:1px solid #243349;border-radius:6px;color:var(--text);font-family:'Montserrat',sans-serif;font-size:11px;padding:7px 8px;resize:vertical;outline:none;}
+.fld:focus{border-color:var(--orange);}
+textarea.fld{min-height:46px;line-height:1.35;}
+td.span{vertical-align:top;padding:6px;border-left:1px solid rgba(255,255,255,.06);}
+td.data-cell{vertical-align:middle;}
+input.fld[type=date]{min-width:120px;}
+
+/* light mode */
+body.light-mode .main{background:#F0F0F0;--text:#1a1a1a;--text2:#444;--text3:#777;}
+body.light-mode .tbl-section{background:#fff!important;border-color:transparent!important;box-shadow:0 2px 12px rgba(0,0,0,.10)!important;}
+body.light-mode table.mpr td{border-bottom-color:rgba(0,0,0,.07);}
+body.light-mode .fld{background:#f4f6fa;border-color:#d3dae6;color:#1a1a1a;}
+body.light-mode .row-2025 td:not(.span){background:rgba(0,0,0,.03);}
+
+.loading{text-align:center;color:var(--text3);padding:40px;font-size:12px;}
+@media(max-width:768px){.main{padding:14px;} .brand h1{font-size:14px;}}
+</style>
+</head>
+<body>
+<header class="header">
+  <div class="brand"><h1>MPR</h1><p>Monthly Performance Review — indicadores do termômetro por unidade</p></div>
+  <div class="header-right">
+    <a href="../" class="back-btn" title="Voltar ao Hub"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg></a>
+    <button class="theme-btn" id="themeBtn" title="Modo claro/escuro"></button>
+    <button class="refresh-btn" onclick="location.reload()" title="Atualizar"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/></svg></button>
+    <span class="status-badge" id="status-badge">—</span>
+  </div>
+  <div class="header-filters">
+    <div class="ms-wrap" id="ms-kpi"><button class="ms-btn" onclick="toggleMs('ms-kpi')"><span class="ms-lbl">KPI</span><span class="ms-cnt"></span><svg width="10" height="6" viewBox="0 0 10 6"><path d="M0 0l5 6 5-6z" fill="#F97316"/></svg></button><div class="ms-panel"><div class="ms-search"><input type="text" placeholder="Pesquisar…"></div><div class="ms-list"></div></div></div>
+    <div class="ms-wrap" id="ms-geo"><button class="ms-btn" onclick="toggleMs('ms-geo')"><span class="ms-lbl">GEO</span><span class="ms-cnt"></span><svg width="10" height="6" viewBox="0 0 10 6"><path d="M0 0l5 6 5-6z" fill="#F97316"/></svg></button><div class="ms-panel"><div class="ms-search"><input type="text" placeholder="Pesquisar…"></div><div class="ms-list"></div></div></div>
+  </div>
+</header>
+
+<main class="main">
+  <div class="tbl-section">
+    <div class="tbl-title">Acompanhamento mensal — 2026</div>
+    <div class="tbl-sub">2025 (vazio) · Plan · 2026 (resultado). Cores por direção do indicador. Causa/Ação/Responsável/Prazo são campos livres (salvos neste navegador).</div>
+    <div id="tbl"><div class="loading">Carregando…</div></div>
+  </div>
+</main>
+
+<script>
+const MESES=['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+const CUR_MONTH=5;            // Jun = M+0 (mês corrente)
+
+// ── GEO → unidades (ajuste fácil quando vier o real) ──
+const GEOS={
+  'GEO SUL':          ['FLP','BLC','PLT'],
+  'GEO CENTRO-OESTE': ['CGR','CBA','RON'],
+  'GEO SUDESTE':      ['GRL','NFR','MCC','PIR'],
+};
+// ── Indicadores do termômetro (% ; maior=melhor salvo indicado) ──
+const KPIS=[
+  {key:'Disponibilidade',    dir:'maior', plan:95},
+  {key:'Preventivas',        dir:'maior', plan:90},
+  {key:'Combustível',        dir:'maior', plan:100},
+  {key:'Pneus',              dir:'maior', plan:100},
+  {key:'Checklist T1/T2 e WS',dir:'maior',plan:100},
+  {key:'Conformidade',       dir:'maior', plan:100},
+  {key:'SLA Manutenção',     dir:'maior', plan:100},
+  {key:'CIVF',               dir:'maior', plan:100},
+];
+const ALL_UNITS=[].concat(...Object.values(GEOS));
+const GEO_OF=u=>Object.keys(GEOS).find(g=>GEOS[g].includes(u))||'';
+
+// ───────────────────────────────────────────────────────────────────────────
+// DADOS — hoje EXEMPLO. Plugar o termômetro aqui: preencher DATA[kpi][unidade] =
+// { plan:[12], real:[12] } (real só até CUR_MONTH; resto null). Ver loadData().
+// ───────────────────────────────────────────────────────────────────────────
+let DATA={};
+function mockData(){
+  const d={};
+  KPIS.forEach((k,ki)=>{
+    d[k.key]={};
+    ALL_UNITS.forEach((u,ui)=>{
+      const plan=Array(12).fill(k.plan);
+      const real=[];
+      for(let m=0;m<12;m++){
+        if(m>CUR_MONTH){real.push(null);continue;}
+        const noise=(((ui*13)+(m*7)+(ki*5))%23-11)/100;   // -0.11..+0.11 determinístico
+        real.push(Math.max(0,Math.round(k.plan*(1+noise)*10)/10));
+      }
+      d[k.key][u]={plan,real};
+    });
+  });
+  return d;
+}
+// Quando o termômetro estiver acessível, troque mockData() por leitura real (gviz) aqui.
+async function loadData(){ DATA=mockData(); return true; }
+
+// ── helpers ──
+const avg=a=>{const v=a.filter(x=>x!=null&&isFinite(x));return v.length?v.reduce((s,x)=>s+x,0)/v.length:null;};
+function geoSeries(kpi,geo){
+  const us=GEOS[geo];const plan=[],real=[];
+  for(let m=0;m<12;m++){
+    plan.push(avg(us.map(u=>DATA[kpi][u].plan[m])));
+    real.push(avg(us.map(u=>DATA[kpi][u].real[m])));
+  }
+  return {plan,real};
+}
+function fmt(v){return v==null||!isFinite(v)?'—':(Math.round(v*10)/10).toLocaleString('pt-BR',{minimumFractionDigits:0,maximumFractionDigits:1})+'%';}
+function colorClass(real,plan,dir){
+  if(real==null||plan==null||!isFinite(real))return 'v-na';
+  const ok = dir==='maior' ? real>=plan : real<=plan;
+  const near = dir==='maior' ? real>=plan*0.95 : real<=plan*1.05;
+  return ok?'v-green':(near?'v-amber':'v-red');
+}
+function ytd(real){const v=real.filter(x=>x!=null);return v.length?avg(v):null;}              // média do ano até agora
+function mtd(real){return real[CUR_MONTH];}                                                    // mês corrente
+function lefy(real){return ytd(real);}                                                         // estimativa simples = YTD
+
+// ── persistência local dos campos livres ──
+const FLD_KEYS=['causa','acao','resp','prazo'];
+function fldVal(kpi,uni,f){try{return localStorage.getItem('mpr|'+kpi+'|'+uni+'|'+f)||'';}catch(e){return '';}}
+function saveFld(kpi,uni,f,v){try{localStorage.setItem('mpr|'+kpi+'|'+uni+'|'+f,v);}catch(e){}}
+
+// ── filtros ──
+let KPI_SEL=new Set(), GEO_SEL=new Set(), EXPANDED=new Set();   // EXPANDED guarda "kpi||geo"
+function getMsValues(id){const w=document.getElementById(id);return w&&w._sel?[...w._sel]:[];}
+function toggleMs(id){document.querySelectorAll('.ms-panel.open').forEach(p=>{if(p.closest('.ms-wrap').id!==id)p.classList.remove('open');});const p=document.querySelector('#'+id+' .ms-panel');if(p)p.classList.toggle('open');}
+function buildMs(id,items,sel){
+  const w=document.getElementById(id); w._sel=sel;
+  const list=w.querySelector('.ms-list'),srch=w.querySelector('.ms-search input');
+  w._render=(q='')=>{const f=(q||'').toLowerCase(),shown=items.filter(v=>v.toLowerCase().includes(f)),all=sel.size===0;
+    list.innerHTML=(!q?`<label class="ms-opt all-opt"><input type="checkbox" class="ms-all" ${all?'checked':''}> Todos</label>`:'')+shown.map(v=>`<label class="ms-opt"><input type="checkbox" data-v="${v}" ${all||sel.has(v)?'checked':''}> ${v}</label>`).join('');
+    const c=w.querySelector('.ms-cnt');c.textContent=sel.size;c.style.display=sel.size?'':'none';};
+  list.addEventListener('change',e=>{const b=e.target;if(!b.matches('input[type=checkbox]'))return;
+    if(b.classList.contains('ms-all')){sel.clear();}
+    else if(sel.size===0){if(!b.checked)items.forEach(v=>{if(v!==b.dataset.v)sel.add(v);});}
+    else{if(b.checked)sel.add(b.dataset.v);else sel.delete(b.dataset.v);if(items.every(v=>sel.has(v)))sel.clear();}
+    w._render(srch.value);render();});
+  srch.addEventListener('input',()=>w._render(srch.value));srch.addEventListener('click',e=>e.stopPropagation());
+  w._render();
+}
+document.addEventListener('click',e=>{if(!e.target.closest('.ms-wrap'))document.querySelectorAll('.ms-panel.open').forEach(p=>p.classList.remove('open'));});
+
+// ── render ──
+const NCOLS=4+12+1+4;   // uni, data, per, ytd + 12 meses + lefy + 4 campos
+function valCells(series,isPlan,dir){
+  let h='';
+  h+=`<td>${isPlan?'':cell(ytd(series.real),null,dir,'kpi-tot')}</td>`;   // YTD (só no 2026)
+  // a linha plan mostra YTD vazio; real mostra YTD colorido
+  return h;
+}
+function cell(v,plan,dir,extra){
+  if(v==null) return `<span class="cell v-na ${extra||''}">—</span>`;
+  const cls=plan==null?'kpi-tot':colorClass(v,plan,dir);
+  return `<span class="cell ${cls} ${extra||''}">${fmt(v)}</span>`;
+}
+function planCell(v){return v==null?`<span class="cell plan">—</span>`:`<span class="cell plan">${fmt(v)}</span>`;}
+
+function groupRows(kpi,label,unitKey,series,isGeo,geoForToggle){
+  const dir=KPIS.find(k=>k.key===kpi).dir;
+  const tog=isGeo?`<span class="toggle">${EXPANDED.has(kpi+'||'+label)?'−':'+'}</span>`:'';
+  const uniClass=isGeo?'uni-cell geo':'uni-cell unit';
+  const onclick=isGeo?`onclick="toggleGeo('${kpi.replace(/'/g,"\\'")}','${label}')"`:'';
+  let h='';
+  // 2025 (vazio)
+  h+=`<tr class="row-2025">
+    <td rowspan="3" class="${uniClass}" ${onclick}>${tog}${label}</td>
+    <td rowspan="3" class="data-cell"><input type="date" class="fld" value="${fldVal(kpi,unitKey,'data')}" onchange="saveFld('${kpi.replace(/'/g,"\\'")}','${unitKey}','data',this.value)"></td>
+    <td class="per">2025</td>
+    <td>—</td>${MESES.map(()=>'<td>—</td>').join('')}<td>—</td>
+    <td rowspan="3" class="span"><textarea class="fld" placeholder="Causa…" oninput="saveFld('${kpi.replace(/'/g,"\\'")}','${unitKey}','causa',this.value)">${fldVal(kpi,unitKey,'causa')}</textarea></td>
+    <td rowspan="3" class="span"><textarea class="fld" placeholder="Ação…" oninput="saveFld('${kpi.replace(/'/g,"\\'")}','${unitKey}','acao',this.value)">${fldVal(kpi,unitKey,'acao')}</textarea></td>
+    <td rowspan="3" class="span"><input class="fld" placeholder="Responsável" value="${fldVal(kpi,unitKey,'resp')}" oninput="saveFld('${kpi.replace(/'/g,"\\'")}','${unitKey}','resp',this.value)"></td>
+    <td rowspan="3" class="span"><input type="date" class="fld" value="${fldVal(kpi,unitKey,'prazo')}" onchange="saveFld('${kpi.replace(/'/g,"\\'")}','${unitKey}','prazo',this.value)"></td>
+  </tr>`;
+  // Plan
+  h+=`<tr><td class="per">Plan</td><td><span class="cell plan">—</span></td>${series.plan.map(planCell).join('')}<td>${planCell(avg(series.plan))}</td></tr>`;
+  // 2026
+  const cells=series.real.map((v,m)=>`<td>${cell(v,series.plan[m],dir)}</td>`).join('');
+  h+=`<tr><td class="per p2026">2026</td><td>${cell(ytd(series.real),null,dir,'kpi-tot')}</td>${cells}<td>${cell(lefy(series.real),null,dir,'kpi-tot')}</td></tr>`;
+  return h;
+}
+
+function render(){
+  KPI_SEL=new Set(getMsValues('ms-kpi')); GEO_SEL=new Set(getMsValues('ms-geo'));
+  const kpis=KPIS.filter(k=>!KPI_SEL.size||KPI_SEL.has(k.key));
+  const geos=Object.keys(GEOS).filter(g=>!GEO_SEL.size||GEO_SEL.has(g));
+  let h=`<table class="mpr"><thead><tr>
+    <th style="text-align:left">Unidade / GEO</th><th>Data MTD</th><th>Ref</th>
+    <th>YTD</th>${MESES.map(m=>`<th>${m}</th>`).join('')}<th>LE FY</th>
+    <th>Causa</th><th>Ação</th><th>Responsável</th><th>Prazo</th>
+  </tr></thead><tbody>`;
+  kpis.forEach(k=>{
+    const dirLabel=k.dir==='maior'?'▲ maior é melhor':'▼ menor é melhor';
+    h+=`<tr class="kpi-row"><td colspan="${NCOLS}"><span class="kpi-name">${k.key}</span><span class="kpi-dir">${dirLabel}</span></td></tr>`;
+    geos.forEach(g=>{
+      h+=groupRows(k.key,g,'GEO:'+g,geoSeries(k.key,g),true,g);
+      if(EXPANDED.has(k.key+'||'+g)){
+        GEOS[g].forEach(u=>{ h+=groupRows(k.key,u,u,{plan:DATA[k.key][u].plan,real:DATA[k.key][u].real},false); });
+      }
+    });
+  });
+  h+='</tbody></table>';
+  document.getElementById('tbl').innerHTML=h;
+}
+function toggleGeo(kpi,geo){const id=kpi+'||'+geo;if(EXPANDED.has(id))EXPANDED.delete(id);else EXPANDED.add(id);render();}
+
+// ── tema ──
+const _sun=`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>`;
+const _moon=`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>`;
+function applyTheme(t){document.body.classList.toggle('light-mode',t==='light');localStorage.setItem('bi_theme',t);const b=document.getElementById('themeBtn');if(b)b.innerHTML=t==='light'?_moon:_sun;}
+applyTheme(localStorage.getItem('bi_theme')||'dark');
+document.getElementById('themeBtn').addEventListener('click',()=>applyTheme(document.body.classList.contains('light-mode')?'dark':'light'));
+
+// ── init ──
+(async function(){
+  await loadData();
+  buildMs('ms-kpi',KPIS.map(k=>k.key),new Set());
+  buildMs('ms-geo',Object.keys(GEOS),new Set());
+  Object.keys(GEOS).forEach(g=>EXPANDED.add(KPIS[0].key+'||'+g)); // abre o 1º KPI por padrão
+  render();
+  const now=new Date();
+  document.getElementById('status-badge').textContent='Exemplo · '+now.toLocaleDateString('pt-BR');
+})();
+</script>
+</body>
+</html>
