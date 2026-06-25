@@ -6,7 +6,7 @@
 <title>MPR — Monthly Performance Review</title>
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
-:root{--bg:#0C1017;--card:#141B26;--card2:#1A2335;--border:#1E2D40;--orange:#F97316;--blue:#38BDF8;--text:#F1F5F9;--text2:#94A3B8;--text3:#475569;--green:#3BB33B;--red:#FF6666;--grid:rgba(255,255,255,.08);}
+:root{--bg:#0C1017;--card:#141B26;--card2:#1A2335;--border:#1E2D40;--orange:#F97316;--blue:#38BDF8;--text:#F1F5F9;--text2:#94A3B8;--text3:#475569;--green:#3BB33B;--red:#FF6666;--grid:rgba(255,255,255,.10);}
 *{box-sizing:border-box;margin:0;padding:0;}
 body{background:radial-gradient(ellipse at 10% 25%,rgba(249,115,22,.06) 0%,transparent 50%),radial-gradient(ellipse at 90% 75%,rgba(56,189,248,.05) 0%,transparent 50%),var(--bg);color:var(--text);font-family:'Montserrat',-apple-system,sans-serif;font-size:13px;min-height:100vh;}
 
@@ -77,15 +77,20 @@ tr.grp-end td{border-bottom:1px solid rgba(255,255,255,.07);}
 .plan-col{text-align:center;}
 .plan-val{font-weight:700;color:var(--text);font-size:13px;}
 
-/* campos livres — célula INTEIRA digitável, com espaço de sobra p/ texto */
-td.fldc{padding:0;vertical-align:top;border-left:1px solid rgba(255,255,255,.08);}
+/* Causa/Ação — célula INTEIRA digitável, grandes e iguais */
+td.fldc{padding:0;vertical-align:top;border-left:1px solid var(--grid);}
 .fld{display:block;width:100%;height:100%;background:transparent;border:none;color:var(--text);font-family:'Montserrat',sans-serif;font-size:12px;padding:10px;resize:none;outline:none;line-height:1.5;}
 textarea.fld{min-height:150px;}
-input.fld{min-height:0;}
 .fld:focus{background:rgba(249,115,22,.06);}
+/* Responsável/Prazo — caixinhas menores */
+td.smc{padding:8px;vertical-align:middle;border-left:1px solid var(--grid);}
+.sml{width:100%;background:#0a0f18;border:1px solid #243349;border-radius:6px;color:var(--text);font-family:'Montserrat',sans-serif;font-size:12px;padding:7px 8px;outline:none;cursor:text;}
+.sml[type=date]{cursor:pointer;}
+.sml:focus{border-color:var(--orange);}
+body.light-mode .sml{background:#f4f6fa;border-color:#d3dae6;color:#1a1a1a;}
 col.c-plan{width:90px;}
-col.c-causa,col.c-acao{width:260px;}
-col.c-resp{width:150px;}
+col.c-causa,col.c-acao{width:360px;}
+col.c-resp{width:140px;}
 col.c-prazo{width:130px;}
 
 /* light mode (padrão visao-financeira) */
@@ -273,16 +278,16 @@ function buildMs(id,items){
 document.addEventListener('click',e=>{if(!e.target.closest('.ms-wrap'))document.querySelectorAll('.ms-panel.open').forEach(p=>p.classList.remove('open'));});
 
 // ── render ──
-const NCOLS=1+1+1+1+12+1+4;   // uni, plan, ano, ytd, 12, lefy, 4 campos
+const NCOLS=1+1+1+1+12+4;   // uni, plan, ano, ytd, 12, 4 campos (sem LE FY)
 function valCard(num,pts,kind,extra){
   if(num==null&&pts==null)return `<span class="cell v-na ${extra||''}">—</span>`;
   return `<span class="cell ${bandPts(pts)} ${extra||''}">${fmtKind(num,kind)}</span>`;
 }
 function colgroup(){
-  return `<colgroup><col><col class="c-plan"><col><col>${MESES.map(()=>'<col>').join('')}<col><col class="c-causa"><col class="c-acao"><col class="c-resp"><col class="c-prazo"></colgroup>`;
+  return `<colgroup><col><col class="c-plan"><col><col>${MESES.map(()=>'<col>').join('')}<col class="c-causa"><col class="c-acao"><col class="c-resp"><col class="c-prazo"></colgroup>`;
 }
 function headerRow(){
-  return `<tr class="hdr"><th class="l">Unidade / GEO</th><th>Plan</th><th>Ano</th><th>YTD</th>${MESES.map(m=>`<th>${m}</th>`).join('')}<th>LE FY</th><th class="l">Causa</th><th class="l">Ação</th><th class="l">Responsável</th><th class="l">Prazo</th></tr>`;
+  return `<tr class="hdr"><th class="l">Unidade / GEO</th><th>Plan</th><th>Ano</th><th>YTD</th>${MESES.map(m=>`<th>${m}</th>`).join('')}<th class="l">Causa</th><th class="l">Ação</th><th class="l">Responsável</th><th class="l">Prazo</th></tr>`;
 }
 function dashCells(n){let h='';for(let i=0;i<n;i++)h+='<td><span class="cell dash">—</span></td>';return h;}
 
@@ -304,16 +309,16 @@ function group(ind,label,unitKey,isGeo,monthsFn){
   h+=`<tr class="${isGeo?'geo-start':''}">
     <td rowspan="2" class="${cls}" ${onclick}>${tog}${disp}</td>
     <td rowspan="2" class="plan-col">${planCell}</td>
-    <td class="per">2025</td><td><span class="cell dash">—</span></td>${dashCells(12)}<td><span class="cell dash">—</span></td>
+    <td class="per">2025</td><td><span class="cell dash">—</span></td>${dashCells(12)}
     <td rowspan="2" class="fldc"><textarea class="fld" placeholder="Causa…" oninput="lset(fkey('${ie}','${unitKey}','causa'),this.value)">${lget(fkey(ind,unitKey,'causa'))}</textarea></td>
     <td rowspan="2" class="fldc"><textarea class="fld" placeholder="Ação…" oninput="lset(fkey('${ie}','${unitKey}','acao'),this.value)">${lget(fkey(ind,unitKey,'acao'))}</textarea></td>
-    <td rowspan="2" class="fldc"><input class="fld" placeholder="Responsável" value="${lget(fkey(ind,unitKey,'resp'))}" oninput="lset(fkey('${ie}','${unitKey}','resp'),this.value)"></td>
-    <td rowspan="2" class="fldc"><input type="date" class="fld" value="${lget(fkey(ind,unitKey,'prazo'))}" onchange="lset(fkey('${ie}','${unitKey}','prazo'),this.value)"></td>
+    <td rowspan="2" class="smc"><input class="sml" placeholder="Responsável" value="${lget(fkey(ind,unitKey,'resp'))}" oninput="lset(fkey('${ie}','${unitKey}','resp'),this.value)"></td>
+    <td rowspan="2" class="smc"><input type="date" class="sml" value="${lget(fkey(ind,unitKey,'prazo'))}" onclick="this.showPicker&&this.showPicker()" onchange="lset(fkey('${ie}','${unitKey}','prazo'),this.value)"></td>
   </tr>`;
   // 2026 (resultado da Q2; cor na fonte pela pontuação do termômetro)
   h+=`<tr class="grp-end"><td class="per p2026">2026</td><td>${valCard(ytdNum,ytdPts,kind,'tot')}</td>`;
   cells2026.forEach(c=>{h+=`<td>${valCard(c.num,c.pts,kind)}</td>`;});
-  h+=`<td>${valCard(ytdNum,ytdPts,kind,'tot')}</td></tr>`;
+  h+=`</tr>`;
   return h;
 }
 
