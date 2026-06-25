@@ -385,9 +385,19 @@ const _VIG_MESES=['','JAN','FEV','MAR','ABR','MAI','JUN','JUL','AGO','SET','OUT'
 function vigLabel(mq){const k=vigKey(mq);const p=k.split('_');const m=+p[0],q=+p[1];const nome=_VIG_MESES[m]||p[0];return `${nome} Q${q}`;}
 // Lista FIXA de todas as 24 quinzenas do ano (01_01 … 12_02), ordenada — eixo completo p/ matriz e gráfico.
 const ALL_VIGS=(()=>{const a=[];for(let m=2;m<=12;m++){const mm=String(m).padStart(2,'0');a.push(mm+'_01',mm+'_02');}return a;})();
+// vigência por MÊS (filtro): "MM"; rótulo "FEV/2026"
+const vmonth=v=>String(v).split('_')[0].padStart(2,'0');
+const vq=v=>+(String(v).split('_')[1])||0;
+const monthLabel=mm=>`${_VIG_MESES[+mm]||mm}/2026`;
 
 // ════════ ESTADO ════════
-let allRows=[], chLine=null, activeInd='__total__';
+let allRows=[], EFFROWS=[], chLine=null, activeInd='__total__';
+// Linha efetiva por (tier|unidade|mês) = a Q2 (mês fechado); se não houver Q2, a Q1. Rege hero/cards/ranking.
+function buildEffective(){
+  const best={};
+  allRows.forEach(r=>{const mm=vmonth(r.raw[COL.vig]),q=vq(r.raw[COL.vig]);const k=r.tier+'|'+r.raw[COL.uni]+'|'+mm;const ex=best[k];if(!ex||q>ex._q)best[k]={tier:r.tier,raw:r.raw,_q:q,_month:mm};});
+  EFFROWS=Object.values(best);
+}
 
 // ════════ MULTI-SELECT ════════
 function _buildMs(wrap, items, labelFn){
@@ -471,6 +481,7 @@ async function atualizar(){
   try{
     const [parts,reg]=await Promise.all([Promise.all(TIERS.map(fetchTier)),fetchRegras()]);
     allRows=parts.flat();
+    buildEffective();
     if(reg) REGRAS_ROWS=reg;
     computeMaxTotal();
     buildFilters();
@@ -487,23 +498,24 @@ function uniq(arr){return [...new Set(arr)];}
 function buildFilters(){
   const unis=uniq(allRows.map(r=>r.raw[COL.uni])).filter(Boolean).sort();
   const tiers=TIERS.filter(t=>allRows.some(r=>r.tier===t));
-  const vigs=uniq(allRows.map(r=>r.raw[COL.vig])).filter(Boolean).sort(vigSort);
+  const vmeses=uniq(allRows.map(r=>vmonth(r.raw[COL.vig]))).filter(Boolean).sort();
   const geos=uniq(allRows.map(r=>r.raw[COL.geo])).filter(Boolean).sort();
-  // Vigência inicia com a ÚLTIMA marcada (só na 1ª carga; refresh preserva a seleção do usuário)
+  // Vigência (por MÊS) inicia com o ÚLTIMO mês marcado (só na 1ª carga; refresh preserva a seleção)
   const vw=document.getElementById('ms-vig');
-  if(!vw._init){vw._init=true;if(vigs.length){vw._sel=new Set([vigs[vigs.length-1]]);}}
+  if(!vw._init){vw._init=true;if(vmeses.length){vw._sel=new Set([vmeses[vmeses.length-1]]);}}
   _buildMs(document.getElementById('ms-uni'),unis);
   _buildMs(document.getElementById('ms-tier'),tiers);
-  _buildMs(vw,vigs,vigLabel);
+  _buildMs(vw,vmeses,monthLabel);
   _buildMs(document.getElementById('ms-geo'),geos);
 }
 function selOrAll(id,all){const s=getMs(id);return s.length?new Set(s):new Set(all);}
 function getFiltered(){
-  const fU=selOrAll('ms-uni',uniq(allRows.map(r=>r.raw[COL.uni])));
+  // hero/cards/ranking usam a LINHA EFETIVA (Q2 do mês, ou Q1 se não houver), filtrada por MÊS
+  const fU=selOrAll('ms-uni',uniq(EFFROWS.map(r=>r.raw[COL.uni])));
   const fT=selOrAll('ms-tier',TIERS);
-  const fV=selOrAll('ms-vig',uniq(allRows.map(r=>r.raw[COL.vig])));
-  const fG=selOrAll('ms-geo',uniq(allRows.map(r=>r.raw[COL.geo])));
-  return allRows.filter(r=>fU.has(r.raw[COL.uni])&&fT.has(r.tier)&&fV.has(r.raw[COL.vig])&&fG.has(r.raw[COL.geo]));
+  const fV=selOrAll('ms-vig',uniq(EFFROWS.map(r=>r._month)));
+  const fG=selOrAll('ms-geo',uniq(EFFROWS.map(r=>r.raw[COL.geo])));
+  return EFFROWS.filter(r=>fU.has(r.raw[COL.uni])&&fT.has(r.tier)&&fV.has(r._month)&&fG.has(r.raw[COL.geo]));
 }
 
 function applyFilters(){
@@ -531,7 +543,7 @@ function renderHero(rows){
   set('h-score',num1(avgTotal(rows)));
   const hv=document.querySelector('.hero-value');if(hv){const c=bandFg(band(avgPct(rows)));hv.style.color=c==='var(--text3)'?'var(--orange)':c;}
   set('h-uni',uniq(rows.map(r=>r.raw[COL.uni])).length||'—');
-  set('h-vig',uniq(rows.map(r=>r.raw[COL.vig])).length||'—');
+  set('h-vig',uniq(rows.map(r=>r._month)).length||'—');
   // melhor unidade: média de total por unidade
   const byU={};
   rows.forEach(r=>{const u=r.raw[COL.uni];(byU[u]=byU[u]||[]).push(+r.raw[COL.total]||0);});
@@ -606,6 +618,14 @@ const getTickC=()=>document.body.classList.contains('light-mode')?'#444':'#94A3B
 const getGridC=()=>document.body.classList.contains('light-mode')?'rgba(0,0,0,.08)':'rgba(255,255,255,.06)';
 // Plugin de datalabel: rotula só as barras marcadas em ds._on (vigência selecionada).
 const barLabels={id:'bl',afterDatasetsDraw(c){const ds=c.data.datasets[0],m=c.getDatasetMeta(0),ctx=c.ctx;ctx.save();ctx.font='700 11px Montserrat';ctx.fillStyle=document.body.classList.contains('light-mode')?'#1a1a1a':'#F1F5F9';ctx.textAlign='center';ctx.textBaseline='bottom';m.data.forEach((b,i)=>{const v=ds.data[i];if(v==null)return;if(ds._on&&!ds._on[i])return;ctx.fillText(num1(v),b.x,b.y-4);});ctx.restore();}};
+// padrão diagonal tracejado p/ as barras da 1ª quinzena (Q1)
+function hatchPattern(rgb,a){
+  const c=document.createElement('canvas');c.width=7;c.height=7;const x=c.getContext('2d');
+  x.fillStyle=`rgba(${rgb},${a*0.30})`;x.fillRect(0,0,7,7);
+  x.strokeStyle=`rgba(${rgb},${a})`;x.lineWidth=1.6;
+  x.beginPath();x.moveTo(0,7);x.lineTo(7,0);x.moveTo(-3,4);x.lineTo(4,-3);x.moveTo(3,10);x.lineTo(10,3);x.stroke();
+  return x.createPattern(c,'repeat');
+}
 function renderChart(){
   // evolução temporal ignora o filtro de Vigência (só Unid/Tier/GEO): todos os meses aparecem,
   // a vigência selecionada fica destacada e rotulada; as demais esmaecidas.
@@ -632,11 +652,11 @@ function renderChart(){
       const pts=rs.map(r=>indPointsForRow(r,ind)).filter(x=>x!=null);
       if(pts.length){val=Math.round(pts.reduce((a,b)=>a+b,0)/pts.length*10)/10;pct=val/20*100;}
     }
-    data.push(val);pcts.push(pct);on.push(selVig.length===0||selVig.includes(v));
+    data.push(val);pcts.push(pct);on.push(selVig.length===0||selVig.includes(vmonth(v)));   // destaque por MÊS
   });
   set('ch-sub', ind==='__total__'?'Pontuação total média por quinzena (ano completo)':`Pontos médios · ${ind}`);
-  // cores por faixa do valor; vigência selecionada cheia, demais esmaecidas
-  const bg=data.map((v,i)=>{if(v==null)return 'transparent';const a=hasFocus?(on[i]?.95:.20):.85;const hex=bandHex(band(pcts[i]));const rgb=hex==='#3BB33B'?'59,179,59':hex==='#EAB308'?'234,179,8':hex==='#F97316'?'249,115,22':'255,102,102';return `rgba(${rgb},${a})`;});
+  // cores por faixa do valor; mês selecionado cheio, demais esmaecidos; 1ª quinzena (Q1) vem TRACEJADA
+  const bg=data.map((v,i)=>{if(v==null)return 'transparent';const a=hasFocus?(on[i]?.95:.20):.85;const hex=bandHex(band(pcts[i]));const rgb=hex==='#3BB33B'?'59,179,59':hex==='#EAB308'?'234,179,8':hex==='#F97316'?'249,115,22':'255,102,102';return vq(vigs[i])===1?hatchPattern(rgb,a):`rgba(${rgb},${a})`;});
   const bc=data.map((v,i)=>v==null?'transparent':bandFg(band(pcts[i])));
   const isLight=document.body.classList.contains('light-mode');
   const refC=isLight?'#000':'#F1F5F9';
