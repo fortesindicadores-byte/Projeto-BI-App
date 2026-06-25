@@ -44,12 +44,13 @@ body{background:radial-gradient(ellipse at 10% 25%,rgba(249,115,22,.06) 0%,trans
 .tbl-title{font-size:16px;font-weight:800;color:var(--text);margin-bottom:3px;}
 .tbl-sub{font-size:10px;color:var(--text2);margin-bottom:14px;}
 
-table.mpr{border-collapse:collapse;width:100%;table-layout:fixed;font-size:12px;min-width:1800px;}
+table.mpr{border-collapse:collapse;width:100%;table-layout:fixed;font-size:12px;border:1px solid var(--grid);}
 table.mpr td{padding:8px 6px;border:1px solid var(--grid);color:var(--text);white-space:nowrap;text-align:center;vertical-align:middle;overflow:hidden;text-overflow:ellipsis;}
-/* dentro dos indicadores (Ano/YTD/meses): só linha horizontal, sem verticais */
-td.vc{border-left:none;border-right:none;}
+/* dentro dos indicadores (Ano/YTD/meses): SÓ linha horizontal, sem nenhuma vertical.
+   precisa de especificidade >= 'table.mpr td' p/ sobrescrever a borda. */
+table.mpr td.vc{border-left:none!important;border-right:none!important;}
 /* larguras fixas — meses todos iguais */
-col.c-uni{width:150px;}col.c-plan{width:76px;}col.c-ano{width:46px;}col.c-val{width:56px;}col.c-mes{width:50px;}
+col.c-uni{width:130px;}col.c-plan{width:62px;}col.c-ano{width:40px;}col.c-val{width:50px;}col.c-mes{width:46px;}
 /* linha mais grossa separando cada GEO */
 tr.geo-start td{border-top:2px solid rgba(255,255,255,.16);}
 body.light-mode tr.geo-start td{border-top-color:rgba(0,0,0,.22);}
@@ -95,9 +96,9 @@ td.smc{padding:8px;vertical-align:middle;border-left:1px solid var(--grid);}
 .sml[type=date]{cursor:pointer;}
 .sml:focus{border-color:var(--orange);}
 body.light-mode .sml{background:#f4f6fa;border-color:#d3dae6;color:#1a1a1a;}
-col.c-causa,col.c-acao{width:300px;}
-col.c-resp{width:130px;}
-col.c-prazo{width:120px;}
+col.c-causa,col.c-acao{width:200px;}
+col.c-resp{width:110px;}
+col.c-prazo{width:96px;}
 
 /* light mode (padrão visao-financeira) */
 body.light-mode .main{background:#F0F0F0;--text:#1a1a1a;--text2:#444444;--text3:#666666;}
@@ -215,7 +216,7 @@ function fmtRaw(v){
   if(typeof v==='number'){if(v>0&&v<=1.0001)return Math.round(v*100)+'%';if(Number.isInteger(v))return String(v);return (Math.round(v*100)/100).toLocaleString('pt-BR');}
   return String(v);}
 const round1=v=>(Math.round(v*10)/10).toLocaleString('pt-BR',{maximumFractionDigits:1});
-function durFmt(h){if(h==null||!isFinite(h))return '—';const tot=Math.round(h*3600);const H=Math.floor(tot/3600),M=Math.floor((tot%3600)/60),S=tot%60;return H+':'+String(M).padStart(2,'0')+':'+String(S).padStart(2,'0');}
+function durFmt(h){if(h==null||!isFinite(h))return '—';const tot=Math.round(h*60);const H=Math.floor(tot/60),M=tot%60;return H+':'+String(M).padStart(2,'0');}  // H:MM (sem segundos)
 function fmtKind(num,kind){if(num==null||!isFinite(num))return '—';
   if(kind==='pct'){const p=num<=1.5?num*100:num;return round1(p)+'%';}     // % sempre em %
   if(kind==='dur')return durFmt(num);                                       // hora em H:MM:SS
@@ -305,7 +306,7 @@ function colgroup(){
 function headerRow(){
   return `<tr class="hdr"><th class="l">Unidade / GEO</th><th>Plan</th><th>Ano</th><th>YTD</th>${MESES.map(m=>`<th>${m}</th>`).join('')}<th class="l">Causa</th><th class="l">Ação</th><th class="l">Responsável</th><th class="l">Prazo</th></tr>`;
 }
-function dashCells(n){let h='';for(let i=0;i<n;i++)h+='<td class="vc"><span class="cell dash">—</span></td>';return h;}
+function dashCells(n){let h='';for(let i=0;i<n;i++)h+='<td class="vc'+(i===0?' vc-first':'')+(i===n-1?' vc-last':'')+'"><span class="cell dash">—</span></td>';return h;}
 
 function group(ind,label,unitKey,isGeo,monthsFn){
   const kind=fmtOf(ind);
@@ -333,7 +334,7 @@ function group(ind,label,unitKey,isGeo,monthsFn){
   </tr>`;
   // 2026 (resultado da Q2; cor na fonte pela pontuação do termômetro)
   h+=`<tr class="grp-end"><td class="per p2026 vc">2026</td><td class="vc">${valCard(ytdNum,ytdPts,kind,'tot')}</td>`;
-  cells2026.forEach(c=>{h+=`<td class="vc">${valCard(c.num,c.pts,kind)}</td>`;});
+  cells2026.forEach((c,i)=>{h+=`<td class="vc${i===0?' vc-first':''}${i===11?' vc-last':''}">${valCard(c.num,c.pts,kind)}</td>`;});
   h+=`</tr>`;
   return h;
 }
