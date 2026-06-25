@@ -64,23 +64,26 @@ tr.grp-end td{border-bottom:1px solid rgba(255,255,255,.07);}
 .per.p2026{color:var(--text);}
 .sep-l{border-left:1px solid rgba(255,255,255,.13);}
 
-/* valores — texto colorido pela pontuação (cg/cr padrão) com leve realce */
-.cell{display:inline-block;min-width:42px;border-radius:6px;padding:4px 8px;font-weight:700;font-size:13px;}
-.cell.v-green{background:rgba(59,179,59,.16);color:var(--green);}
-.cell.v-amber{background:rgba(234,179,8,.16);color:#EAB308;}
-.cell.v-red{background:rgba(255,102,102,.14);color:var(--red);}
-.cell.v-na,.cell.dash{background:transparent;color:var(--text3);font-weight:500;}
+/* valores — COR NA FONTE (padrão visao-financeira), do termômetro */
+.cell{font-weight:700;font-size:13px;}
+.cell.v-green{color:var(--green);}
+.cell.v-amber{color:#EAB308;}
+.cell.v-red{color:var(--red);}
+.cell.v-na,.cell.dash{color:var(--text3);font-weight:500;}
 .cell.tot{font-weight:800;}
-.plan-val{font-weight:700;color:var(--text2);font-size:12px;}
+.plan-col{text-align:center;}
+.plan-val{font-weight:700;color:var(--text);font-size:13px;}
 
-/* campos livres — célula INTEIRA digitável (preenche o quadrado todo) */
+/* campos livres — célula INTEIRA digitável, com espaço de sobra p/ texto */
 td.fldc{padding:0;vertical-align:top;border-left:1px solid rgba(255,255,255,.08);}
-.fld{display:block;width:100%;height:100%;min-height:96px;background:transparent;border:none;color:var(--text);font-family:'Montserrat',sans-serif;font-size:12px;padding:10px;resize:none;outline:none;line-height:1.45;}
-.fld:focus{background:rgba(249,115,22,.06);}
+.fld{display:block;width:100%;height:100%;background:transparent;border:none;color:var(--text);font-family:'Montserrat',sans-serif;font-size:12px;padding:10px;resize:none;outline:none;line-height:1.5;}
+textarea.fld{min-height:150px;}
 input.fld{min-height:0;}
-col.c-causa,col.c-acao{width:240px;}
-col.c-resp{width:160px;}
-col.c-prazo{width:140px;}
+.fld:focus{background:rgba(249,115,22,.06);}
+col.c-plan{width:90px;}
+col.c-causa,col.c-acao{width:260px;}
+col.c-resp{width:150px;}
+col.c-prazo{width:130px;}
 
 /* light mode (padrão visao-financeira) */
 body.light-mode .main{background:#F0F0F0;--text:#1a1a1a;--text2:#444444;--text3:#666666;}
@@ -214,8 +217,8 @@ function build(rows){
       if(raw==null&&pts==null)return;
       if(!INDKIND[ind]){const k=kindOf(raw);if(k)INDKIND[ind]=k;}
       MODEL[ind]=MODEL[ind]||{};MODEL[ind][uni]=MODEL[ind][uni]||{};
-      const cur=MODEL[ind][uni][month];
-      if(!cur||q>=cur.q)MODEL[ind][uni][month]={raw,pts,q};
+      const cell=MODEL[ind][uni][month]=MODEL[ind][uni][month]||{};
+      cell['q'+q]={raw,pts};   // guarda cada quinzena; o mês usa a Q2 (mês fechado)
     });
   });
   // indicadores na ordem das famílias (união)
@@ -224,8 +227,8 @@ function build(rows){
   GEOS={};UNITS.forEach(u=>{const g=GEO_OF[u]||'(sem GEO)';(GEOS[g]=GEOS[g]||[]).push(u);});
 }
 
-// ── valores por célula ──
-function unitMonth(ind,uni,m){return (MODEL[ind]&&MODEL[ind][uni]&&MODEL[ind][uni][m])||null;}
+// ── valores por célula — sempre a Q2 (mês fechado) ──
+function unitMonth(ind,uni,m){const o=MODEL[ind]&&MODEL[ind][uni]&&MODEL[ind][uni][m];return o&&o.q2?o.q2:null;}
 function geoMonth(ind,geo,m){
   const us=GEOS[geo]||[];const vals=[],pts=[];
   us.forEach(u=>{const c=unitMonth(ind,u,m);if(c){const n=toNum(c.raw);if(n!=null)vals.push(n);if(c.pts!=null)pts.push(c.pts);}});
@@ -260,16 +263,16 @@ function buildMs(id,items){
 document.addEventListener('click',e=>{if(!e.target.closest('.ms-wrap'))document.querySelectorAll('.ms-panel.open').forEach(p=>p.classList.remove('open'));});
 
 // ── render ──
-const NCOLS=1+1+1+12+1+4;   // uni, ref, ytd, 12, lefy, 4 campos
+const NCOLS=1+1+1+1+12+1+4;   // uni, plan, ano, ytd, 12, lefy, 4 campos
 function valCard(num,pts,kind,extra){
   if(num==null&&pts==null)return `<span class="cell v-na ${extra||''}">—</span>`;
   return `<span class="cell ${bandPts(pts)} ${extra||''}">${fmtKind(num,kind)}</span>`;
 }
 function colgroup(){
-  return `<colgroup><col><col><col>${MESES.map(()=>'<col>').join('')}<col><col class="c-causa"><col class="c-acao"><col class="c-resp"><col class="c-prazo"></colgroup>`;
+  return `<colgroup><col><col class="c-plan"><col><col>${MESES.map(()=>'<col>').join('')}<col><col class="c-causa"><col class="c-acao"><col class="c-resp"><col class="c-prazo"></colgroup>`;
 }
 function headerRow(){
-  return `<tr class="hdr"><th class="l">Unidade / GEO</th><th>Ref</th><th>YTD</th>${MESES.map(m=>`<th>${m}</th>`).join('')}<th>LE FY</th><th class="l">Causa</th><th class="l">Ação</th><th class="l">Responsável</th><th class="l">Prazo</th></tr>`;
+  return `<tr class="hdr"><th class="l">Unidade / GEO</th><th>Plan</th><th>Ano</th><th>YTD</th>${MESES.map(m=>`<th>${m}</th>`).join('')}<th>LE FY</th><th class="l">Causa</th><th class="l">Ação</th><th class="l">Responsável</th><th class="l">Prazo</th></tr>`;
 }
 function dashCells(n){let h='';for(let i=0;i<n;i++)h+='<td><span class="cell dash">—</span></td>';return h;}
 
@@ -283,23 +286,20 @@ function group(ind,label,unitKey,isGeo,monthsFn){
   for(let m=1;m<=12;m++){const c=monthsFn(m);const num=c?(c.num!=null?c.num:toNum(c.raw)):null;const pts=c?c.pts:null;cells2026.push({num,pts,raw:c?c.raw:null});if(num!=null)numArr.push(num);if(pts!=null)ptsArr.push(pts);}
   const ytdNum=avg(numArr), ytdPts=avg(ptsArr);
   const meta=metaFor(ind);
-  const planDisp=meta?`<span class="plan-val">${meta}</span>`:`<span class="cell dash">—</span>`;
+  const planCell=meta?`<span class="plan-val">${meta}</span>`:`<span class="cell dash">—</span>`;
   const ie=ind.replace(/'/g,"\\'");
   let h='';
-  // 2025 (vazio) — campos livres preenchem a célula inteira (rowspan 3)
+  // 2025 (vazio) — Unidade/Plan/campos livres em rowspan (2 linhas: 2025 e 2026)
   h+=`<tr>
-    <td rowspan="3" class="${cls}" ${onclick}>${tog}${label}</td>
+    <td rowspan="2" class="${cls}" ${onclick}>${tog}${label}</td>
+    <td rowspan="2" class="plan-col">${planCell}</td>
     <td class="per">2025</td><td><span class="cell dash">—</span></td>${dashCells(12)}<td><span class="cell dash">—</span></td>
-    <td rowspan="3" class="fldc"><textarea class="fld" placeholder="Causa…" oninput="lset(fkey('${ie}','${unitKey}','causa'),this.value)">${lget(fkey(ind,unitKey,'causa'))}</textarea></td>
-    <td rowspan="3" class="fldc"><textarea class="fld" placeholder="Ação…" oninput="lset(fkey('${ie}','${unitKey}','acao'),this.value)">${lget(fkey(ind,unitKey,'acao'))}</textarea></td>
-    <td rowspan="3" class="fldc"><textarea class="fld" placeholder="Responsável" oninput="lset(fkey('${ie}','${unitKey}','resp'),this.value)">${lget(fkey(ind,unitKey,'resp'))}</textarea></td>
-    <td rowspan="3" class="fldc"><input type="date" class="fld" value="${lget(fkey(ind,unitKey,'prazo'))}" onchange="lset(fkey('${ie}','${unitKey}','prazo'),this.value)"></td>
+    <td rowspan="2" class="fldc"><textarea class="fld" placeholder="Causa…" oninput="lset(fkey('${ie}','${unitKey}','causa'),this.value)">${lget(fkey(ind,unitKey,'causa'))}</textarea></td>
+    <td rowspan="2" class="fldc"><textarea class="fld" placeholder="Ação…" oninput="lset(fkey('${ie}','${unitKey}','acao'),this.value)">${lget(fkey(ind,unitKey,'acao'))}</textarea></td>
+    <td rowspan="2" class="fldc"><input class="fld" placeholder="Responsável" value="${lget(fkey(ind,unitKey,'resp'))}" oninput="lset(fkey('${ie}','${unitKey}','resp'),this.value)"></td>
+    <td rowspan="2" class="fldc"><input type="date" class="fld" value="${lget(fkey(ind,unitKey,'prazo'))}" onchange="lset(fkey('${ie}','${unitKey}','prazo'),this.value)"></td>
   </tr>`;
-  // Plan (meta da regra do termômetro; preenche toda a linha)
-  h+=`<tr><td class="per">Plan</td><td>${planDisp}</td>`;
-  for(let m=0;m<12;m++)h+=`<td>${planDisp}</td>`;
-  h+=`<td>${planDisp}</td></tr>`;
-  // 2026 (resultado, cor pela pontuação)
+  // 2026 (resultado da Q2; cor na fonte pela pontuação do termômetro)
   h+=`<tr class="grp-end"><td class="per p2026">2026</td><td>${valCard(ytdNum,ytdPts,kind,'tot')}</td>`;
   cells2026.forEach(c=>{h+=`<td>${valCard(c.num,c.pts,kind)}</td>`;});
   h+=`<td>${valCard(ytdNum,ytdPts,kind,'tot')}</td></tr>`;
