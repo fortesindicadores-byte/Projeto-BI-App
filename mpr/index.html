@@ -34,6 +34,9 @@ body{background:radial-gradient(ellipse at 10% 25%,rgba(249,115,22,.06) 0%,trans
 .ms-opt:hover{background:rgba(255,255,255,.05);color:var(--text);}
 .ms-opt.all-opt{border-bottom:1px solid #1e2d40;color:var(--text);font-weight:700;}
 .ms-opt input[type=checkbox]{accent-color:var(--orange);cursor:pointer;width:14px;height:14px;}
+.ms-only{margin-left:auto;font-size:8px;color:var(--orange);padding:1px 5px;border-radius:2px;cursor:pointer;white-space:nowrap;flex-shrink:0;opacity:0;transition:opacity .12s;}
+.ms-opt:hover .ms-only{opacity:1;}
+.ms-only:hover{background:rgba(249,115,22,.2);}
 
 /* MAIN */
 .main{padding:20px 24px 80px;}
@@ -41,8 +44,12 @@ body{background:radial-gradient(ellipse at 10% 25%,rgba(249,115,22,.06) 0%,trans
 .tbl-title{font-size:16px;font-weight:800;color:var(--text);margin-bottom:3px;}
 .tbl-sub{font-size:10px;color:var(--text2);margin-bottom:14px;}
 
-table.mpr{border-collapse:collapse;width:100%;font-size:13px;min-width:1700px;}
-table.mpr td{padding:9px 8px;border:1px solid var(--grid);color:var(--text);white-space:nowrap;text-align:center;vertical-align:middle;}
+table.mpr{border-collapse:collapse;width:100%;table-layout:fixed;font-size:12px;min-width:1800px;}
+table.mpr td{padding:8px 6px;border:1px solid var(--grid);color:var(--text);white-space:nowrap;text-align:center;vertical-align:middle;overflow:hidden;text-overflow:ellipsis;}
+/* dentro dos indicadores (Ano/YTD/meses): só linha horizontal, sem verticais */
+td.vc{border-left:none;border-right:none;}
+/* larguras fixas — meses todos iguais */
+col.c-uni{width:150px;}col.c-plan{width:76px;}col.c-ano{width:46px;}col.c-val{width:56px;}col.c-mes{width:50px;}
 /* linha mais grossa separando cada GEO */
 tr.geo-start td{border-top:2px solid rgba(255,255,255,.16);}
 body.light-mode tr.geo-start td{border-top-color:rgba(0,0,0,.22);}
@@ -68,7 +75,7 @@ tr.grp-end td{border-bottom:1px solid rgba(255,255,255,.07);}
 .sep-l{border-left:1px solid rgba(255,255,255,.13);}
 
 /* valores — COR NA FONTE (padrão visao-financeira), do termômetro */
-.cell{font-weight:700;font-size:13px;}
+.cell{font-weight:700;font-size:12px;}
 .cell.v-green{color:var(--green);}
 .cell.v-amber{color:#EAB308;}
 .cell.v-red{color:var(--red);}
@@ -88,10 +95,9 @@ td.smc{padding:8px;vertical-align:middle;border-left:1px solid var(--grid);}
 .sml[type=date]{cursor:pointer;}
 .sml:focus{border-color:var(--orange);}
 body.light-mode .sml{background:#f4f6fa;border-color:#d3dae6;color:#1a1a1a;}
-col.c-plan{width:90px;}
-col.c-causa,col.c-acao{width:360px;}
-col.c-resp{width:140px;}
-col.c-prazo{width:130px;}
+col.c-causa,col.c-acao{width:300px;}
+col.c-resp{width:130px;}
+col.c-prazo{width:120px;}
 
 /* light mode (padrão visao-financeira) */
 body.light-mode .main{background:#F0F0F0;--text:#1a1a1a;--text2:#444444;--text3:#666666;}
@@ -119,6 +125,7 @@ body.light-mode .cell.v-red{color:#cc0000;}
     <span class="status-badge" id="status-badge">Carregando…</span>
   </div>
   <div class="header-filters">
+    <div class="ms-wrap" id="ms-tier"><button class="ms-btn" onclick="toggleMs('ms-tier')"><span class="ms-lbl">Tier</span><span class="ms-cnt"></span><svg width="10" height="6" viewBox="0 0 10 6"><path d="M0 0l5 6 5-6z" fill="#F97316"/></svg></button><div class="ms-panel"><div class="ms-search"><input type="text" placeholder="Pesquisar…"></div><div class="ms-list"></div></div></div>
     <div class="ms-wrap" id="ms-kpi"><button class="ms-btn" onclick="toggleMs('ms-kpi')"><span class="ms-lbl">KPI</span><span class="ms-cnt"></span><svg width="10" height="6" viewBox="0 0 10 6"><path d="M0 0l5 6 5-6z" fill="#F97316"/></svg></button><div class="ms-panel"><div class="ms-search"><input type="text" placeholder="Pesquisar…"></div><div class="ms-list"></div></div></div>
     <div class="ms-wrap" id="ms-geo"><button class="ms-btn" onclick="toggleMs('ms-geo')"><span class="ms-lbl">GEO</span><span class="ms-cnt"></span><svg width="10" height="6" viewBox="0 0 10 6"><path d="M0 0l5 6 5-6z" fill="#F97316"/></svg></button><div class="ms-panel"><div class="ms-search"><input type="text" placeholder="Pesquisar…"></div><div class="ms-list"></div></div></div>
   </div>
@@ -170,6 +177,7 @@ const metaFor=ind=>shortMeta(METAS[canonInd(ind)]||'');
 const MESES=['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
 // normaliza GEO: "GEO CO" e "CO" viram a mesma GEO (igual ao termômetro)
 const gNorm=g=>String(g||'').toUpperCase().replace(/^GEO\s+/,'').trim();
+function esc(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
 
 // ── fetch gviz (igual ao termômetro) ──
 function fetchTier(tier){
@@ -194,7 +202,7 @@ function fetchTier(tier){
 }
 
 // ── modelo: indicador → unidade → mês → {raw, pts} (última quinzena do mês) ──
-let MODEL={}, UNITS=[], INDS=[], GEOS={}, GEO_OF={}, INDKIND={};
+let MODEL={}, UNITS=[], INDS=[], GEOS={}, GEO_OF={}, INDKIND={}, UNIT_TIERS={};
 function kindOf(raw){if(raw==null||raw==='')return null;if(raw instanceof Date)return 'dur';if(typeof raw==='string'&&/^Date\(/.test(raw))return 'dur';if(typeof raw==='number'&&raw>0&&raw<=1.0001)return 'pct';return 'num';}
 function toNum(v){if(v==null||v==='')return null;
   if(v instanceof Date)return v.getHours()+v.getMinutes()/60+v.getSeconds()/3600;
@@ -218,39 +226,46 @@ const fmtOf=ind=>FORMAT[canonInd(ind)]||INDKIND[ind]||'num';
 function bandPts(pts){if(pts==null||!isFinite(pts))return 'v-na';return pts>=10?'v-green':(pts>=5?'v-amber':'v-red');}
 
 function build(rows){
-  MODEL={};GEO_OF={};INDKIND={};
+  MODEL={};GEO_OF={};INDKIND={};UNIT_TIERS={};
   rows.forEach(r=>{
     const vig=String(r.raw[COL.vig]).trim();const mm=vig.split('_');const month=+mm[0],q=+mm[1];
     if(!month||month<1||month>12)return;
-    const uni=r.raw[COL.uni], geo=gNorm(r.raw[COL.geo])||'(sem GEO)';
-    GEO_OF[uni]=geo;
-    const names=indNames(r.tier);
+    const uni=r.raw[COL.uni], geo=gNorm(r.raw[COL.geo])||'(sem GEO)', tier=r.tier;
+    GEO_OF[uni]=geo;(UNIT_TIERS[uni]=UNIT_TIERS[uni]||new Set()).add(tier);
+    const names=indNames(tier);
     names.forEach((nm,i)=>{
       const ind=canonInd(nm);
       const raw=r.raw[IND_PAIRS[i][0]]; let pts=r.raw[IND_PAIRS[i][1]];
       pts=(pts==null||isNaN(+pts))?null:+pts;
       if(raw==null&&pts==null)return;
       if(!INDKIND[ind]){const k=kindOf(raw);if(k)INDKIND[ind]=k;}
-      MODEL[ind]=MODEL[ind]||{};MODEL[ind][uni]=MODEL[ind][uni]||{};
-      const cell=MODEL[ind][uni][month]=MODEL[ind][uni][month]||{};
-      cell['q'+q]={raw,pts};   // guarda cada quinzena; o mês usa a Q2 (mês fechado)
+      MODEL[ind]=MODEL[ind]||{};MODEL[ind][uni]=MODEL[ind][uni]||{};MODEL[ind][uni][tier]=MODEL[ind][uni][tier]||{};
+      const cell=MODEL[ind][uni][tier][month]=MODEL[ind][uni][tier][month]||{};
+      cell['q'+q]={raw,pts};   // guarda cada quinzena por tier; o mês usa a Q2 (mês fechado)
     });
   });
-  // indicadores na ordem das famílias (união)
   INDS=[];[...IND_NAMES['Transportes'],...IND_NAMES['WH']].forEach(n=>{const c=canonInd(n);if(MODEL[c]&&!INDS.includes(c))INDS.push(c);});
   UNITS=[...new Set(rows.map(r=>r.raw[COL.uni]))].filter(Boolean).sort();
   GEOS={};UNITS.forEach(u=>{const g=GEO_OF[u]||'(sem GEO)';(GEOS[g]=GEOS[g]||[]).push(u);});
 }
-
-// ── valores por célula — sempre a Q2 (mês fechado) ──
-function unitMonth(ind,uni,m){const o=MODEL[ind]&&MODEL[ind][uni]&&MODEL[ind][uni][m];return o&&o.q2?o.q2:null;}
-function geoMonth(ind,geo,m){
-  const us=GEOS[geo]||[];const vals=[],pts=[];
-  us.forEach(u=>{const c=unitMonth(ind,u,m);if(c){const n=toNum(c.raw);if(n!=null)vals.push(n);if(c.pts!=null)pts.push(c.pts);}});
+const inTier=(t,ts)=>!ts||ts.has(t);
+// a unidade TEM o indicador (dentro do tier filtrado)?
+function unitHasInd(ind,uni,ts){const o=MODEL[ind]&&MODEL[ind][uni];return !!o&&Object.keys(o).some(t=>inTier(t,ts));}
+// ── valor por célula — Q2 (mês fechado), agregando os tiers filtrados ──
+function unitMonth(ind,uni,m,ts){
+  const o=MODEL[ind]&&MODEL[ind][uni];if(!o)return null;
+  const vals=[],pts=[];
+  Object.keys(o).forEach(t=>{if(!inTier(t,ts))return;const c=o[t][m];if(c&&c.q2){const n=toNum(c.q2.raw);if(n!=null)vals.push(n);if(c.q2.pts!=null)pts.push(c.q2.pts);}});
   if(!vals.length&&!pts.length)return null;
-  return {num:vals.length?vals.reduce((a,b)=>a+b,0)/vals.length:null, pts:pts.length?pts.reduce((a,b)=>a+b,0)/pts.length:null};
+  return {num:vals.length?avg(vals):null, pts:pts.length?avg(pts):null};
 }
-const avg=a=>{const v=a.filter(x=>x!=null&&isFinite(x));return v.length?v.reduce((s,x)=>s+x,0)/v.length:null;};
+function geoMonth(ind,units,m,ts){
+  const vals=[],pts=[];
+  units.forEach(u=>{const c=unitMonth(ind,u,m,ts);if(c){if(c.num!=null)vals.push(c.num);if(c.pts!=null)pts.push(c.pts);}});
+  if(!vals.length&&!pts.length)return null;
+  return {num:vals.length?avg(vals):null, pts:pts.length?avg(pts):null};
+}
+function avg(a){const v=a.filter(x=>x!=null&&isFinite(x));return v.length?v.reduce((s,x)=>s+x,0)/v.length:null;}
 
 // ── persistência local (campos livres + plan) ──
 function lget(k){try{return localStorage.getItem(k)||'';}catch(e){return '';}}
@@ -265,13 +280,14 @@ function buildMs(id,items){
   const w=document.getElementById(id);if(!(w._sel instanceof Set))w._sel=new Set();const sel=w._sel;
   const list=w.querySelector('.ms-list'),srch=w.querySelector('.ms-search input');
   w._render=(q='')=>{const f=(q||'').toLowerCase(),shown=items.filter(v=>String(v).toLowerCase().includes(f)),all=sel.size===0;
-    list.innerHTML=(!q?`<label class="ms-opt all-opt"><input type="checkbox" class="ms-all" ${all?'checked':''}> Todos</label>`:'')+shown.map(v=>`<label class="ms-opt"><input type="checkbox" data-v="${v}" ${all||sel.has(v)?'checked':''}> ${v}</label>`).join('');
+    list.innerHTML=(!q?`<label class="ms-opt all-opt"><input type="checkbox" class="ms-all" ${all?'checked':''}> Todos</label>`:'')+shown.map(v=>`<label class="ms-opt"><input type="checkbox" data-v="${esc(v)}" ${all||sel.has(v)?'checked':''}> ${esc(v)}<span class="ms-only" data-v="${esc(v)}">só</span></label>`).join('');
     const c=w.querySelector('.ms-cnt');c.textContent=sel.size;c.style.display=sel.size?'':'none';};
   list.onchange=e=>{const b=e.target;if(!b.matches('input[type=checkbox]'))return;
     if(b.classList.contains('ms-all')){sel.clear();}
     else if(sel.size===0){if(!b.checked)items.forEach(v=>{if(v!==b.dataset.v)sel.add(v);});}
     else{if(b.checked)sel.add(b.dataset.v);else sel.delete(b.dataset.v);if(items.every(v=>sel.has(v)))sel.clear();}
     w._render(srch.value);render();};
+  list.onclick=e=>{const o=e.target.closest('.ms-only');if(!o)return;e.preventDefault();e.stopPropagation();sel.clear();sel.add(o.dataset.v);w._render(srch.value);render();};
   srch.oninput=()=>w._render(srch.value);srch.onclick=e=>e.stopPropagation();
   w._render();
 }
@@ -284,12 +300,12 @@ function valCard(num,pts,kind,extra){
   return `<span class="cell ${bandPts(pts)} ${extra||''}">${fmtKind(num,kind)}</span>`;
 }
 function colgroup(){
-  return `<colgroup><col><col class="c-plan"><col><col>${MESES.map(()=>'<col>').join('')}<col class="c-causa"><col class="c-acao"><col class="c-resp"><col class="c-prazo"></colgroup>`;
+  return `<colgroup><col class="c-uni"><col class="c-plan"><col class="c-ano"><col class="c-val">${MESES.map(()=>'<col class="c-mes">').join('')}<col class="c-causa"><col class="c-acao"><col class="c-resp"><col class="c-prazo"></colgroup>`;
 }
 function headerRow(){
   return `<tr class="hdr"><th class="l">Unidade / GEO</th><th>Plan</th><th>Ano</th><th>YTD</th>${MESES.map(m=>`<th>${m}</th>`).join('')}<th class="l">Causa</th><th class="l">Ação</th><th class="l">Responsável</th><th class="l">Prazo</th></tr>`;
 }
-function dashCells(n){let h='';for(let i=0;i<n;i++)h+='<td><span class="cell dash">—</span></td>';return h;}
+function dashCells(n){let h='';for(let i=0;i<n;i++)h+='<td class="vc"><span class="cell dash">—</span></td>';return h;}
 
 function group(ind,label,unitKey,isGeo,monthsFn){
   const kind=fmtOf(ind);
@@ -298,7 +314,7 @@ function group(ind,label,unitKey,isGeo,monthsFn){
   const onclick=isGeo?`onclick="toggleGeo('${ind.replace(/'/g,"\\'")}','${label.replace(/'/g,"\\'")}')"`:'';
   // séries do mês
   const cells2026=[],ptsArr=[],numArr=[];
-  for(let m=1;m<=12;m++){const c=monthsFn(m);const num=c?(c.num!=null?c.num:toNum(c.raw)):null;const pts=c?c.pts:null;cells2026.push({num,pts,raw:c?c.raw:null});if(num!=null)numArr.push(num);if(pts!=null)ptsArr.push(pts);}
+  for(let m=1;m<=12;m++){const c=monthsFn(m);const num=c?c.num:null;const pts=c?c.pts:null;cells2026.push({num,pts});if(num!=null)numArr.push(num);if(pts!=null)ptsArr.push(pts);}
   const ytdNum=avg(numArr), ytdPts=avg(ptsArr);
   const meta=metaFor(ind);
   const planCell=meta?`<span class="plan-val">${meta}</span>`:`<span class="cell dash">—</span>`;
@@ -309,38 +325,45 @@ function group(ind,label,unitKey,isGeo,monthsFn){
   h+=`<tr class="${isGeo?'geo-start':''}">
     <td rowspan="2" class="${cls}" ${onclick}>${tog}${disp}</td>
     <td rowspan="2" class="plan-col">${planCell}</td>
-    <td class="per">2025</td><td><span class="cell dash">—</span></td>${dashCells(12)}
+    <td class="per vc">2025</td><td class="vc"><span class="cell dash">—</span></td>${dashCells(12)}
     <td rowspan="2" class="fldc"><textarea class="fld" placeholder="Causa…" oninput="lset(fkey('${ie}','${unitKey}','causa'),this.value)">${lget(fkey(ind,unitKey,'causa'))}</textarea></td>
     <td rowspan="2" class="fldc"><textarea class="fld" placeholder="Ação…" oninput="lset(fkey('${ie}','${unitKey}','acao'),this.value)">${lget(fkey(ind,unitKey,'acao'))}</textarea></td>
     <td rowspan="2" class="smc"><input class="sml" placeholder="Responsável" value="${lget(fkey(ind,unitKey,'resp'))}" oninput="lset(fkey('${ie}','${unitKey}','resp'),this.value)"></td>
     <td rowspan="2" class="smc"><input type="date" class="sml" value="${lget(fkey(ind,unitKey,'prazo'))}" onclick="this.showPicker&&this.showPicker()" onchange="lset(fkey('${ie}','${unitKey}','prazo'),this.value)"></td>
   </tr>`;
   // 2026 (resultado da Q2; cor na fonte pela pontuação do termômetro)
-  h+=`<tr class="grp-end"><td class="per p2026">2026</td><td>${valCard(ytdNum,ytdPts,kind,'tot')}</td>`;
-  cells2026.forEach(c=>{h+=`<td>${valCard(c.num,c.pts,kind)}</td>`;});
+  h+=`<tr class="grp-end"><td class="per p2026 vc">2026</td><td class="vc">${valCard(ytdNum,ytdPts,kind,'tot')}</td>`;
+  cells2026.forEach(c=>{h+=`<td class="vc">${valCard(c.num,c.pts,kind)}</td>`;});
   h+=`</tr>`;
   return h;
 }
 
 function render(){
   if(!INDS.length){document.getElementById('tbl').innerHTML='<div class="loading">Sem dados do termômetro.</div>';return;}
-  const kpiSel=new Set(getMsValues('ms-kpi')), geoSel=new Set(getMsValues('ms-geo'));
+  const kpiSel=new Set(getMsValues('ms-kpi')), geoSel=new Set(getMsValues('ms-geo')), tierSel=getMsValues('ms-tier');
+  const ts=tierSel.length?new Set(tierSel):null;                                   // tier filtrado (cascata)
   const inds=INDS.filter(i=>!kpiSel.size||kpiSel.has(indShort(i)));
-  const geos=Object.keys(GEOS).sort().filter(g=>!geoSel.size||geoSel.has(g));
   let h=`<table class="mpr">${colgroup()}<tbody>`;
+  let any=false;
   inds.forEach(ind=>{
+    // só GEOs/unidades que TÊM esse indicador no(s) tier(s) filtrado(s)
+    const geoUnits={};
+    Object.keys(GEOS).sort().forEach(g=>{ if(geoSel.size&&!geoSel.has(g))return;
+      const us=GEOS[g].filter(u=>unitHasInd(ind,u,ts)); if(us.length)geoUnits[g]=us; });
+    const geos=Object.keys(geoUnits); if(!geos.length)return; any=true;
     const dir=DIR_MENOR.has(ind)?'▼ menor é melhor':'▲ maior é melhor';
     h+=`<tr class="kpi-row"><td colspan="${NCOLS}"><span class="kpi-name">${indShort(ind)}</span><span class="kpi-dir">${dir}</span></td></tr>`;
     h+=headerRow();
     geos.forEach(g=>{
-      h+=group(ind,g,'GEO:'+g,true,(m)=>geoMonth(ind,g,m));
+      const us=geoUnits[g];
+      h+=group(ind,g,'GEO:'+g,true,(m)=>geoMonth(ind,us,m,ts));
       if(EXPANDED.has(ind+'||'+g)){
-        (GEOS[g]||[]).forEach(u=>{ h+=group(ind,u,u,false,(m)=>{const c=unitMonth(ind,u,m);return c?{num:toNum(c.raw),pts:c.pts,raw:c.raw}:null;}); });
+        us.forEach(u=>{ h+=group(ind,u,u,false,(m)=>unitMonth(ind,u,m,ts)); });
       }
     });
   });
   h+='</tbody></table>';
-  document.getElementById('tbl').innerHTML=h;
+  document.getElementById('tbl').innerHTML=any?h:'<div class="loading">Nenhum dado para os filtros selecionados.</div>';
 }
 function toggleGeo(ind,geo){const id=ind+'||'+geo;if(EXPANDED.has(id))EXPANDED.delete(id);else EXPANDED.add(id);render();}
 
@@ -359,6 +382,7 @@ async function atualizar(){
     const rows=parts.flat();
     if(!rows.length){document.getElementById('tbl').innerHTML='<div class="loading">Sem dados — verifique a planilha do termômetro.</div>';document.getElementById('status-badge').textContent='Sem dados';return;}
     build(rows);
+    buildMs('ms-tier',TIERS.filter(t=>rows.some(r=>r.tier===t)));
     buildMs('ms-kpi',INDS.map(indShort));
     buildMs('ms-geo',Object.keys(GEOS).sort());
     if(!EXPANDED.size&&INDS.length){Object.keys(GEOS).sort().forEach(g=>EXPANDED.add(INDS[0]+'||'+g));}  // abre o 1º KPI
