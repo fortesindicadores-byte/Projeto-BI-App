@@ -42,7 +42,10 @@ body{background:radial-gradient(ellipse at 10% 25%,rgba(249,115,22,.06) 0%,trans
 .tbl-sub{font-size:10px;color:var(--text2);margin-bottom:14px;}
 
 table.mpr{border-collapse:collapse;width:100%;font-size:13px;min-width:1700px;}
-table.mpr td{padding:9px 8px;border:none;color:var(--text);white-space:nowrap;text-align:center;vertical-align:middle;}
+table.mpr td{padding:9px 8px;border:1px solid var(--grid);color:var(--text);white-space:nowrap;text-align:center;vertical-align:middle;}
+/* linha mais grossa separando cada GEO */
+tr.geo-start td{border-top:2px solid rgba(255,255,255,.16);}
+body.light-mode tr.geo-start td{border-top-color:rgba(0,0,0,.22);}
 
 /* cabeçalho de colunas (padrão visao-financeira) — repetido sob cada indicador */
 tr.hdr th{background:var(--card);color:var(--text);font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;padding:8px 8px 12px;border-bottom:1px solid rgba(255,255,255,.10);white-space:nowrap;text-align:center;}
@@ -160,6 +163,8 @@ REGRAS.forEach(r=>{const meta=(r.l||[]).find(x=>x&&x!=='—')||'';METAS[canonInd
 function shortMeta(t){if(!t)return '';const m=t.match(/[<>]\s*\d+\s*%?|\b\d+\s*%/);if(m)return m[0].replace(/\s+/g,'');if(/quartil/i.test(t))return t.replace(/Melhor que /i,'≥ ');return t;}
 const metaFor=ind=>shortMeta(METAS[canonInd(ind)]||'');
 const MESES=['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+// normaliza GEO: "GEO CO" e "CO" viram a mesma GEO (igual ao termômetro)
+const gNorm=g=>String(g||'').toUpperCase().replace(/^GEO\s+/,'').trim();
 
 // ── fetch gviz (igual ao termômetro) ──
 function fetchTier(tier){
@@ -196,10 +201,15 @@ function fmtRaw(v){
   if(typeof v==='string'){const m=v.match(/^Date\((\d+),(\d+),(\d+),(\d+),(\d+),(\d+)\)$/);if(m){const h=+m[4]+(+m[5])/60+(+m[6])/3600;return h.toFixed(2)+'h';}return v;}
   if(typeof v==='number'){if(v>0&&v<=1.0001)return Math.round(v*100)+'%';if(Number.isInteger(v))return String(v);return (Math.round(v*100)/100).toLocaleString('pt-BR');}
   return String(v);}
+const round1=v=>(Math.round(v*10)/10).toLocaleString('pt-BR',{maximumFractionDigits:1});
+function durFmt(h){if(h==null||!isFinite(h))return '—';const tot=Math.round(h*3600);const H=Math.floor(tot/3600),M=Math.floor((tot%3600)/60),S=tot%60;return H+':'+String(M).padStart(2,'0')+':'+String(S).padStart(2,'0');}
 function fmtKind(num,kind){if(num==null||!isFinite(num))return '—';
-  if(kind==='pct')return Math.round(num*100)+'%';
-  if(kind==='dur')return num.toFixed(2)+'h';
-  return (Math.round(num*10)/10).toLocaleString('pt-BR');}
+  if(kind==='pct'){const p=num<=1.5?num*100:num;return round1(p)+'%';}     // % sempre em %
+  if(kind==='dur')return durFmt(num);                                       // hora em H:MM:SS
+  return round1(num);}                                                      // número
+// formato por indicador (regra do termômetro): % / contagem / duração
+const FORMAT={'ADERÊNCIA PREVENTIVA':'pct','ADERÊNCIA CHECK DE CONFORMIDADE':'pct','MILIMETRAGEM PNEU':'pct','BLITZ DE SEGURANÇA':'pct','ADERÊNCIA CHECKLIST':'pct','STRESS TEST':'pct','INDISP. MANUTENÇÃO':'pct','DISPONIBILIDADE CONTRATADA':'pct','ORDENS DE SERVIÇO VENCIDAS':'num','MTTR':'dur','MTBF':'dur'};
+const fmtOf=ind=>FORMAT[canonInd(ind)]||INDKIND[ind]||'num';
 function bandPts(pts){if(pts==null||!isFinite(pts))return 'v-na';return pts>=10?'v-green':(pts>=5?'v-amber':'v-red');}
 
 function build(rows){
@@ -207,7 +217,7 @@ function build(rows){
   rows.forEach(r=>{
     const vig=String(r.raw[COL.vig]).trim();const mm=vig.split('_');const month=+mm[0],q=+mm[1];
     if(!month||month<1||month>12)return;
-    const uni=r.raw[COL.uni], geo=r.raw[COL.geo]||'(sem GEO)';
+    const uni=r.raw[COL.uni], geo=gNorm(r.raw[COL.geo])||'(sem GEO)';
     GEO_OF[uni]=geo;
     const names=indNames(r.tier);
     names.forEach((nm,i)=>{
@@ -277,7 +287,7 @@ function headerRow(){
 function dashCells(n){let h='';for(let i=0;i<n;i++)h+='<td><span class="cell dash">—</span></td>';return h;}
 
 function group(ind,label,unitKey,isGeo,monthsFn){
-  const kind=INDKIND[ind]||'num';
+  const kind=fmtOf(ind);
   const tog=isGeo?`<span class="toggle">${EXPANDED.has(ind+'||'+label)?'−':'+'}</span>`:'';
   const cls=isGeo?'uni-cell geo':'uni-cell unit';
   const onclick=isGeo?`onclick="toggleGeo('${ind.replace(/'/g,"\\'")}','${label.replace(/'/g,"\\'")}')"`:'';
@@ -288,10 +298,11 @@ function group(ind,label,unitKey,isGeo,monthsFn){
   const meta=metaFor(ind);
   const planCell=meta?`<span class="plan-val">${meta}</span>`:`<span class="cell dash">—</span>`;
   const ie=ind.replace(/'/g,"\\'");
+  const disp=isGeo?('GEO '+label):label;
   let h='';
-  // 2025 (vazio) — Unidade/Plan/campos livres em rowspan (2 linhas: 2025 e 2026)
-  h+=`<tr>
-    <td rowspan="2" class="${cls}" ${onclick}>${tog}${label}</td>
+  // 2025 (vazio) — Unidade/Plan/campos livres em rowspan (2 linhas: 2025 e 2026); GEO inicia bloco (linha grossa)
+  h+=`<tr class="${isGeo?'geo-start':''}">
+    <td rowspan="2" class="${cls}" ${onclick}>${tog}${disp}</td>
     <td rowspan="2" class="plan-col">${planCell}</td>
     <td class="per">2025</td><td><span class="cell dash">—</span></td>${dashCells(12)}<td><span class="cell dash">—</span></td>
     <td rowspan="2" class="fldc"><textarea class="fld" placeholder="Causa…" oninput="lset(fkey('${ie}','${unitKey}','causa'),this.value)">${lget(fkey(ind,unitKey,'causa'))}</textarea></td>
