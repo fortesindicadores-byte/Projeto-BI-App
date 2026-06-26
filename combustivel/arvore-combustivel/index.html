@@ -645,43 +645,56 @@ function _buildMs(wrap, renderFn, getAllItemsFn){
   const sel=wrap._sel;
   const list=wrap.querySelector('.ms-list');
   const srch=wrap.querySelector('.ms-search input');
-  const render=(q='')=>{ renderFn(list,sel,q); syncBadge(wrap); };
-  list.addEventListener('change',e=>{
-    const box=e.target;
-    if(box.classList.contains('ms-all')){
-      sel.clear();
-    } else if(sel.size===0){
-      if(!box.checked){ const all=getAllItemsFn?getAllItemsFn():[]; all.forEach(v=>{ if(v!==box.dataset.v) sel.add(v); }); }
-    } else {
-      box.checked ? sel.add(box.dataset.v) : sel.delete(box.dataset.v);
-      if(getAllItemsFn){
-        const all=getAllItemsFn();
-        if(all.length>0&&all.every(v=>sel.has(v))) sel.clear();
+  const render=(q)=>{ renderFn(list,sel, q!==undefined?q:(srch.value||'')); syncBadge(wrap); };
+  wrap._render=render;            // p/ atualização em cascata (re-render sem religar listeners)
+  if(!wrap._wired){               // listeners apenas 1x por filtro
+    wrap._wired=true;
+    list.addEventListener('change',e=>{
+      const box=e.target;
+      if(box.classList.contains('ms-all')){
+        sel.clear();
+      } else if(sel.size===0){
+        if(!box.checked){ const all=getAllItemsFn?getAllItemsFn():[]; all.forEach(v=>{ if(v!==box.dataset.v) sel.add(v); }); }
+      } else {
+        box.checked ? sel.add(box.dataset.v) : sel.delete(box.dataset.v);
+        if(getAllItemsFn){
+          const all=getAllItemsFn();
+          if(all.length>0&&all.every(v=>sel.has(v))) sel.clear();
+        }
       }
-    }
-    render(srch.value); onFilterChange();
-  });
-  list.addEventListener('click',e=>{
-    const only=e.target.closest('.ms-only');
-    if(!only) return;
-    e.preventDefault(); e.stopPropagation();
-    sel.clear(); sel.add(only.dataset.v);
-    render(srch.value); onFilterChange();
-  });
-  srch.addEventListener('input',()=>render(srch.value));
-  srch.addEventListener('click',e=>e.stopPropagation());
+      render(srch.value); onFilterChange();
+    });
+    list.addEventListener('click',e=>{
+      const only=e.target.closest('.ms-only');
+      if(!only) return;
+      e.preventDefault(); e.stopPropagation();
+      sel.clear(); sel.add(only.dataset.v);
+      render(srch.value); onFilterChange();
+    });
+    srch.addEventListener('input',()=>render(srch.value));
+    srch.addEventListener('click',e=>e.stopPropagation());
+  }
   render();
 }
 function buildMsFilter(id, items){
   const wrap=document.getElementById(id); if(!wrap) return;
+  wrap._items=items;                       // opções atuais (atualizadas pela cascata via setMsOptions)
   _buildMs(wrap,(list,sel,q)=>{
+    const it=wrap._items||[];
     const f=q.toLowerCase();
-    const shown=items.filter(v=>v.toLowerCase().includes(f));
+    const shown=it.filter(v=>v.toLowerCase().includes(f));
     const allChk=sel.size===0;
     list.innerHTML=
       (!q?`<label class="ms-opt all-opt"><input type="checkbox" class="ms-all" ${allChk?'checked':''}> Todos</label>`:'')+
       shown.map(v=>`<label class="ms-opt"><input type="checkbox" data-v="${v}" ${allChk||sel.has(v)?'checked':''}> ${v}<span class="ms-only" data-v="${v}">only</span></label>`).join('');
-  }, ()=>items);
+  }, ()=>wrap._items||[]);
+}
+// Atualiza as opções de um filtro (cascata) e remove seleções que não existem mais
+function setMsOptions(id, items){
+  const wrap=document.getElementById(id); if(!wrap) return;
+  wrap._items=items;
+  if(wrap._sel&&wrap._sel.size){ [...wrap._sel].forEach(v=>{ if(!items.includes(v)) wrap._sel.delete(v); }); }
+  if(wrap._render) wrap._render();
 }
 function buildVigMsFilter(items){
   const wrap=document.getElementById('ms-vig'); if(!wrap) return;
@@ -710,7 +723,35 @@ document.addEventListener('click',e=>{
   if(!e.target.closest('.ms-wrap'))
     document.querySelectorAll('.ms-panel.open').forEach(p=>p.classList.remove('open'));
 });
+// ── FILTROS DEPENDENTES (cascata) ──────────────────────────────
+// linha passa por todos os filtros MENOS o indicado em `except`
+function rowPassesExcept(r, f, except){
+  if(except!=='ano'      && f.ano.length      && !f.ano.includes(String(r.vigencia).slice(-4)))            return false;
+  if(except!=='vigencia' && f.vigencia.length && !f.vigencia.includes(String(r.vigencia)))                 return false;
+  if(except!=='unidade'  && f.unidade.length  && !f.unidade.includes(getNv3Suffix(String(r.nivel3))))      return false;
+  if(except!=='nivel3'   && f.nivel3.length   && !f.nivel3.includes(getNv3Prefix(String(r.nivel3))))       return false;
+  return true;
+}
+let _cascVigKey='';
+function refreshCascade(){
+  const f=getFilters();
+  // ANO
+  const anos=[...new Set(allRows.filter(r=>rowPassesExcept(r,f,'ano')).map(r=>String(r.vigencia).slice(-4)).filter(Boolean))].sort().reverse();
+  setMsOptions('ms-ano',anos);
+  // UNIDADE (sufixo de nivel 3)
+  const unis=[...new Set(allRows.filter(r=>rowPassesExcept(r,f,'unidade')).map(r=>getNv3Suffix(String(r.nivel3))).filter(Boolean))].sort();
+  setMsOptions('ms-uni',unis);
+  // NÍVEL 3 / PROJETO (prefixo de nivel 3)
+  const nv3s=[...new Set(allRows.filter(r=>rowPassesExcept(r,f,'nivel3')).map(r=>getNv3Prefix(String(r.nivel3))).filter(Boolean))].sort();
+  setMsOptions('ms-nv3',nv3s);
+  // VIGÊNCIA (rebuild só quando a lista muda, p/ não resetar o dropdown à toa)
+  const vigs=[...new Set(allRows.filter(r=>rowPassesExcept(r,f,'vigencia')).map(r=>String(r.vigencia)).filter(Boolean))].sort();
+  const vkey=vigs.join(',');
+  if(vkey!==_cascVigKey){ _cascVigKey=vkey; setMsOptions('ms-vig',vigs); }
+}
+
 function onFilterChange(){
+  refreshCascade();        // recalcula opções de todos os filtros conforme a seleção atual (cascata)
   if(allRows.length>0){
     const k=calcular(filtrarRows(allRows));
     if(k){ renderKPIs(k); setTimeout(fitAndDraw,60); }

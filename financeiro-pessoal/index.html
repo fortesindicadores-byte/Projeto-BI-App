@@ -560,36 +560,56 @@ recomputeCumInv();
 function paidTotal(m){ if(!m.cs) return m.c; let s=0; for(const [k,v] of Object.entries(m.ci)) if(m.cs[k]) s+=v; return s; }
 
 // ── MULTI-SELECT ─────────────────────────────────────────────
-function _buildMs(wrap,renderFn){
+function _buildMs(wrap,renderFn,getAllItemsFn){
   if(!(wrap._sel instanceof Set)) wrap._sel=new Set();
   const sel=wrap._sel;
   const list=wrap.querySelector('.ms-list');
   const srch=wrap.querySelector('.ms-search input');
-  const render=(q='')=>{ renderFn(list,sel,q); syncBadge(wrap); };
-  list.addEventListener('change',e=>{
-    const box=e.target;
-    if(box.classList.contains('ms-all')){
-      sel.clear();
-    } else if(sel.size===0){
-      if(!box.checked){ [...list.querySelectorAll('input:not(.ms-all)')].forEach(b=>{ if(b.dataset.v!==box.dataset.v) sel.add(b.dataset.v); }); }
-    } else {
-      box.checked?sel.add(box.dataset.v):sel.delete(box.dataset.v);
-    }
-    render(srch.value); renderAll();
-  });
-  srch.addEventListener('input',()=>render(srch.value));
-  srch.addEventListener('click',e=>e.stopPropagation());
+  const render=(q)=>{ renderFn(list,sel, q!==undefined?q:(srch.value||'')); syncBadge(wrap); };
+  wrap._render=render;            // p/ atualização em cascata (re-render sem religar listeners)
+  if(!wrap._wired){               // listeners apenas 1x por filtro
+    wrap._wired=true;
+    list.addEventListener('change',e=>{
+      const box=e.target;
+      if(box.classList.contains('ms-all')){
+        sel.clear();
+      } else if(sel.size===0){
+        if(!box.checked){
+          const all=getAllItemsFn?getAllItemsFn():[];
+          all.forEach(v=>{ if(v!==box.dataset.v) sel.add(v); });
+        }
+      } else {
+        box.checked?sel.add(box.dataset.v):sel.delete(box.dataset.v);
+        if(getAllItemsFn){
+          const all=getAllItemsFn();
+          if(all.length>0&&all.every(v=>sel.has(v))) sel.clear();
+        }
+      }
+      render(srch.value); renderAll();
+    });
+    srch.addEventListener('input',()=>render(srch.value));
+    srch.addEventListener('click',e=>e.stopPropagation());
+  }
   render();
 }
 function buildMsFilter(id,items){
   const wrap=document.getElementById(id); if(!wrap) return;
+  wrap._items=items;                       // opções atuais (atualizadas pela cascata via setMsOptions)
   _buildMs(wrap,(list,sel,q)=>{
+    const it=wrap._items||[];
     const f=q.toLowerCase();
-    const shown=items.filter(v=>v.toLowerCase().includes(f));
+    const shown=it.filter(v=>v.toLowerCase().includes(f));
     list.innerHTML=
       (!q?`<label class="ms-opt all-opt"><input type="checkbox" class="ms-all" ${sel.size===0?'checked':''}> Todos</label>`:'')+
       shown.map(v=>`<label class="ms-opt"><input type="checkbox" data-v="${v}" ${sel.has(v)?'checked':''}> ${v}</label>`).join('');
-  });
+  }, ()=>wrap._items||[]);
+}
+// Atualiza as opções de um filtro (cascata) e remove seleções que não existem mais
+function setMsOptions(id,items){
+  const wrap=document.getElementById(id); if(!wrap) return;
+  wrap._items=items;
+  if(wrap._sel&&wrap._sel.size){ [...wrap._sel].forEach(v=>{ if(!items.includes(v)) wrap._sel.delete(v); }); }
+  if(wrap._render) wrap._render();
 }
 function syncBadge(wrap){
   const cnt=wrap.querySelector('.ms-cnt'),n=wrap._sel?wrap._sel.size:0;
@@ -756,8 +776,26 @@ function buildClusterCharts(m){
   barPctChart=mkBar('barPctChart',pcts,v=>Math.round(v)+'%',v=>Math.round(v)+'%',v=>Math.round(v)+'%');
 }
 
+// ── FILTROS DEPENDENTES (cascata) ──────────────────────────────
+// um mês passa por todos os filtros MENOS o indicado em `except`
+function rowPassesExcept(m,f,except){
+  if(except!=='ano' && f.ano.length && !f.ano.includes('20'+m.lb.slice(-2))) return false;
+  if(except!=='vig' && f.vig.length && !f.vig.includes(m.lb)) return false;
+  return true;
+}
+function refreshCascade(){
+  const f={ano:getMsValues('ms-ano'), vig:getMsValues('ms-vig')};
+  // ANO
+  const anos=[...new Set(M.filter(m=>rowPassesExcept(m,f,'ano')).map(m=>'20'+m.lb.slice(-2)))].sort().reverse();
+  setMsOptions('ms-ano',anos);
+  // VIGÊNCIA
+  const vigs=M.filter(m=>rowPassesExcept(m,f,'vig')).map(m=>m.lb);
+  setMsOptions('ms-vig',vigs);
+}
+
 // ── RENDER ────────────────────────────────────────────────────
 function renderAll(){
+  refreshCascade();        // recalcula opções dos filtros conforme a seleção atual (cascata)
   const visible=getVisibleMonths();
   const m0=visible[0]; // mês mais antigo selecionado
 

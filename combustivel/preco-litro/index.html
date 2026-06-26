@@ -383,25 +383,64 @@ let veiSort={col:'imp',asc:false}, veiCache=[];
 function _buildMs(wrap,renderFn,getAllFn){
   if(!(wrap._sel instanceof Set))wrap._sel=new Set();
   const sel=wrap._sel,list=wrap.querySelector('.ms-list'),srch=wrap.querySelector('.ms-search input');
-  const render=(q='')=>{renderFn(list,sel,q);syncBadge(wrap);};
-  list.addEventListener('change',e=>{
-    const box=e.target;
-    if(box.classList.contains('ms-all')){sel.clear();}
-    else if(sel.size===0){if(!box.checked){const all=getAllFn?getAllFn():[];all.forEach(v=>{if(v!==box.dataset.v)sel.add(v);});}}
-    else{if(box.checked)sel.add(box.dataset.v);else sel.delete(box.dataset.v);if(getAllFn){const all=getAllFn();if(all.length>0&&all.every(v=>sel.has(v)))sel.clear();}}
-    render(srch.value);atualizar();
-  });
-  list.addEventListener('click',e=>{const only=e.target.closest('.ms-only');if(!only)return;e.preventDefault();e.stopPropagation();sel.clear();sel.add(only.dataset.v);render(srch.value);atualizar();});
-  srch.addEventListener('input',()=>render(srch.value));
-  srch.addEventListener('click',e=>e.stopPropagation());
+  const render=(q)=>{renderFn(list,sel,q!==undefined?q:(srch.value||''));syncBadge(wrap);};
+  wrap._render=render;
+  if(!wrap._wired){
+    wrap._wired=true;
+    list.addEventListener('change',e=>{
+      const box=e.target;
+      if(box.classList.contains('ms-all')){sel.clear();}
+      else if(sel.size===0){if(!box.checked){const all=getAllFn?getAllFn():[];all.forEach(v=>{if(v!==box.dataset.v)sel.add(v);});}}
+      else{if(box.checked)sel.add(box.dataset.v);else sel.delete(box.dataset.v);if(getAllFn){const all=getAllFn();if(all.length>0&&all.every(v=>sel.has(v)))sel.clear();}}
+      render(srch.value);atualizar();
+    });
+    list.addEventListener('click',e=>{const only=e.target.closest('.ms-only');if(!only)return;e.preventDefault();e.stopPropagation();sel.clear();sel.add(only.dataset.v);render(srch.value);atualizar();});
+    srch.addEventListener('input',()=>render(srch.value));
+    srch.addEventListener('click',e=>e.stopPropagation());
+  }
   render();
 }
 function buildMsFilter(id,items){
   const wrap=document.getElementById(id);if(!wrap)return;
+  wrap._items=items;
   _buildMs(wrap,(list,sel,q)=>{
-    const f=q.toLowerCase(),shown=items.filter(v=>String(v).toLowerCase().includes(f)),allChk=sel.size===0;
+    const it=wrap._items||[];
+    const f=q.toLowerCase(),shown=it.filter(v=>String(v).toLowerCase().includes(f)),allChk=sel.size===0;
     list.innerHTML=(!q?`<label class="ms-opt all-opt"><input type="checkbox" class="ms-all" ${allChk?'checked':''}> Todos</label>`:'')+shown.map(v=>`<label class="ms-opt"><input type="checkbox" data-v="${v}" ${allChk||sel.has(v)?'checked':''}> ${v}<span class="ms-only" data-v="${v}">only</span></label>`).join('');
-  },()=>items);
+  },()=>wrap._items||[]);
+}
+function setMsOptions(id,items){
+  const wrap=document.getElementById(id);if(!wrap)return;
+  wrap._items=items;
+  if(wrap._sel&&wrap._sel.size){[...wrap._sel].forEach(v=>{if(!items.includes(v))wrap._sel.delete(v);});}
+  if(wrap._render)wrap._render();
+}
+// ── FILTROS DEPENDENTES (cascata) ──
+function rowPassesExcept(r,f,except){
+  const d=parseVig(r[CL.vig]);if(!d)return false;
+  if(except!=='ano'    && f.ano.length    && !f.ano.includes(String(d.getFullYear())))                          return false;
+  if(except!=='vig'    && f.vig.length    && !f.vig.includes(vigKey(d)))                                        return false;
+  if(except!=='uni'    && f.uni.length    && !f.uni.includes(getUni(r)))                                        return false;
+  if(except!=='proj'   && f.proj.length   && !f.proj.includes(getProj(r)))                                      return false;
+  if(except!=='modelo' && f.modelo.length && !(r[CL.modelo]&&f.modelo.includes(String(r[CL.modelo]).trim())))   return false;
+  if(except!=='tipo'   && f.tipo.length   && !(r[CL.tipoVei]&&f.tipo.includes(abbrTipo(r[CL.tipoVei]))))        return false;
+  if(except!=='ativo'  && f.ativo.length  && !(r[CL.ativo]&&f.ativo.includes(String(r[CL.ativo]).trim())))      return false;
+  return true;
+}
+function refreshCascade(){
+  const f=getF();
+  const anos=[...new Set(allRows.filter(r=>rowPassesExcept(r,f,'ano')).map(r=>{const d=parseVig(r[CL.vig]);return d?String(d.getFullYear()):'';}).filter(Boolean))].sort().reverse();
+  setMsOptions('ms-ano',anos);
+  const unis=[...new Set(allRows.filter(r=>rowPassesExcept(r,f,'uni')).map(r=>getUni(r)).filter(Boolean))].sort();
+  setMsOptions('ms-uni',unis);
+  const projs=[...new Set(allRows.filter(r=>rowPassesExcept(r,f,'proj')).map(r=>getProj(r)).filter(Boolean))].sort();
+  setMsOptions('ms-proj',projs);
+  const modelos=[...new Set(allRows.filter(r=>rowPassesExcept(r,f,'modelo')).map(r=>r[CL.modelo]?String(r[CL.modelo]).trim():'').filter(Boolean))].sort();
+  setMsOptions('ms-modelo',modelos);
+  const tipos=[...new Set(allRows.filter(r=>rowPassesExcept(r,f,'tipo')).map(r=>r[CL.tipoVei]?abbrTipo(r[CL.tipoVei]):'').filter(Boolean))].sort();
+  setMsOptions('ms-tipo',tipos);
+  const ativos=[...new Set(allRows.filter(r=>rowPassesExcept(r,f,'ativo')).map(r=>r[CL.ativo]?String(r[CL.ativo]).trim():'').filter(Boolean))].sort();
+  setMsOptions('ms-ativo',ativos);
 }
 function buildVigMsFilter(vigList){
   const wrap=document.getElementById('ms-vig');if(!wrap)return;
@@ -789,6 +828,7 @@ function setDim(dim){
 
 // ── ATUALIZAR ──
 function atualizar(){
+  refreshCascade();
   const f=getF();syncVigByAno(f.ano);const f2=getF();lastF=f2;
   const active=filterRows(allRows,f2);
   const ytdVigs=getYtdVigs(f2);

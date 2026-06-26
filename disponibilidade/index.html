@@ -780,6 +780,7 @@ function toggleDetCols(){
 }
 
 function renderAll(){
+  refreshCascade();
   const f=filtrar(dispRows);
   renderHero(f);
   renderCharts(f);
@@ -790,36 +791,76 @@ function renderAll(){
 function _buildMs(wrap,renderFn,getAllFn){
   if(!(wrap._sel instanceof Set)) wrap._sel=new Set();
   const sel=wrap._sel, list=wrap.querySelector('.ms-list'), srch=wrap.querySelector('.ms-search input');
-  const render=(q='')=>{ renderFn(list,sel,q); syncBadge(wrap); };
-  list.addEventListener('change',e=>{
-    const box=e.target;
-    if(box.classList.contains('ms-all')){
-      sel.clear();
-    } else if(sel.size===0){
-      if(!box.checked){ const all=getAllFn?getAllFn():[]; all.forEach(v=>{ if(v!==box.dataset.v) sel.add(v); }); }
-    } else {
-      if(box.checked) sel.add(box.dataset.v); else sel.delete(box.dataset.v);
-      if(getAllFn){ const all=getAllFn(); if(all.length>0&&all.every(v=>sel.has(v))) sel.clear(); }
-    }
-    render(srch.value); onFilterChange();
-  });
-  list.addEventListener('click',e=>{
-    const only=e.target.closest('.ms-only'); if(!only) return;
-    e.preventDefault(); e.stopPropagation();
-    sel.clear(); sel.add(only.dataset.v);
-    render(srch.value); onFilterChange();
-  });
-  srch.addEventListener('input',()=>render(srch.value));
-  srch.addEventListener('click',e=>e.stopPropagation());
+  const render=(q)=>{ renderFn(list,sel, q!==undefined?q:(srch.value||'')); syncBadge(wrap); };
+  wrap._render=render;            // p/ re-render em cascata sem religar listeners
+  if(!wrap._wired){               // listeners apenas 1x por filtro
+    wrap._wired=true;
+    list.addEventListener('change',e=>{
+      const box=e.target;
+      if(box.classList.contains('ms-all')){
+        sel.clear();
+      } else if(sel.size===0){
+        if(!box.checked){ const all=getAllFn?getAllFn():[]; all.forEach(v=>{ if(v!==box.dataset.v) sel.add(v); }); }
+      } else {
+        if(box.checked) sel.add(box.dataset.v); else sel.delete(box.dataset.v);
+        if(getAllFn){ const all=getAllFn(); if(all.length>0&&all.every(v=>sel.has(v))) sel.clear(); }
+      }
+      render(srch.value); onFilterChange();
+    });
+    list.addEventListener('click',e=>{
+      const only=e.target.closest('.ms-only'); if(!only) return;
+      e.preventDefault(); e.stopPropagation();
+      sel.clear(); sel.add(only.dataset.v);
+      render(srch.value); onFilterChange();
+    });
+    srch.addEventListener('input',()=>render(srch.value));
+    srch.addEventListener('click',e=>e.stopPropagation());
+  }
   render();
 }
 function buildMs(id_,items){
   const wrap=$(id_); if(!wrap) return;
+  wrap._items=items;                       // opções atuais (atualizadas pela cascata via setMsOptions)
   _buildMs(wrap,(list,sel,q)=>{
-    const f=q.toLowerCase(), shown=items.filter(v=>String(v).toLowerCase().includes(f)), allChk=sel.size===0;
+    const it=wrap._items||[];
+    const f=q.toLowerCase(), shown=it.filter(v=>String(v).toLowerCase().includes(f)), allChk=sel.size===0;
     list.innerHTML=(!q?`<label class="ms-opt all-opt"><input type="checkbox" class="ms-all" ${allChk?'checked':''}> Todos</label>`:'')+
       shown.map(v=>`<label class="ms-opt"><input type="checkbox" data-v="${v}" ${allChk||sel.has(v)?'checked':''}> ${v}<span class="ms-only" data-v="${v}">only</span></label>`).join('');
-  },()=>items);
+  },()=>wrap._items||[]);
+}
+// Atualiza as opções de um filtro (cascata) e remove seleções que não existem mais
+function setMsOptions(id_,items){
+  const wrap=$(id_); if(!wrap) return;
+  wrap._items=items;
+  if(wrap._sel&&wrap._sel.size){ [...wrap._sel].forEach(v=>{ if(!items.includes(v)) wrap._sel.delete(v); }); }
+  if(wrap._render) wrap._render();
+}
+// Uma linha (dispRow) passa por todos os filtros, exceto o indicado em `except`
+function rowPassesExcept(r,f,except){
+  return (except==='tipo'||!f.tipo.length||f.tipo.includes(r.tipoVeiculo))&&
+         (except==='uni' ||!f.uni.length ||f.uni.includes(r.uniMap))&&
+         (except==='proj'||!f.proj.length||f.proj.includes(r.projMap))&&
+         (except==='vig' ||!f.vig.length ||f.vig.includes(r.vigencia))&&
+         (except==='data'||!f.data.length||f.data.includes(r.data));
+}
+// Recalcula as opções de cada filtro com base nas linhas que passam pelos demais filtros
+function refreshCascade(){
+  if(!dispRows.length) return;
+  const f=getF();
+  const optTipo=new Set(),optUni=new Set(),optProj=new Set(),optVig=new Set(),optData=new Set();
+  for(const r of dispRows){
+    if(rowPassesExcept(r,f,'tipo')&&r.tipoVeiculo) optTipo.add(r.tipoVeiculo);
+    if(rowPassesExcept(r,f,'uni') &&r.uniMap)      optUni.add(r.uniMap);
+    if(rowPassesExcept(r,f,'proj')&&r.projMap)     optProj.add(r.projMap);
+    if(rowPassesExcept(r,f,'vig') &&r.vigencia)    optVig.add(r.vigencia);
+    if(rowPassesExcept(r,f,'data')&&r.data)        optData.add(r.data);
+  }
+  const vigSort=a=>{const [m,y]=String(a).split('/');return +y*100+ +m;};
+  setMsOptions('ms-tipo',[...optTipo].sort());
+  setMsOptions('ms-uni', [...optUni].sort());
+  setMsOptions('ms-proj',[...optProj].sort());
+  setMsOptions('ms-vig', [...optVig].sort((a,b)=>vigSort(a)-vigSort(b)));
+  setMsOptions('ms-data',[...optData].sort());
 }
 function buildVigMs(items){
   const wrap=$('ms-vig'); if(!wrap) return;

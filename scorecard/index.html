@@ -261,7 +261,26 @@ function _buildMs(wrap,renderFn,getAllFn){
   }
   wrap._render();
 }
-function buildMsFilter(id,items){const wrap=document.getElementById(id);if(!wrap)return;_buildMs(wrap,(list,sel,q)=>{const f=q.toLowerCase(),shown=items.filter(v=>String(v).toLowerCase().includes(f)),allChk=sel.size===0;list.innerHTML=(!q?`<label class="ms-opt all-opt"><input type="checkbox" class="ms-all" ${allChk?'checked':''}> Todas</label>`:'')+shown.map(v=>{const ve=String(v).replace(/"/g,'&quot;');return `<label class="ms-opt"><input type="checkbox" data-v="${ve}" ${allChk||sel.has(v)?'checked':''}> ${v}<span class="ms-only" data-v="${ve}">only</span></label>`;}).join('');},()=>items);}
+function buildMsFilter(id,items){const wrap=document.getElementById(id);if(!wrap)return;wrap._items=items;_buildMs(wrap,(list,sel,q)=>{const it=wrap._items||[],f=q.toLowerCase(),shown=it.filter(v=>String(v).toLowerCase().includes(f)),allChk=sel.size===0;list.innerHTML=(!q?`<label class="ms-opt all-opt"><input type="checkbox" class="ms-all" ${allChk?'checked':''}> Todas</label>`:'')+shown.map(v=>{const ve=String(v).replace(/"/g,'&quot;');return `<label class="ms-opt"><input type="checkbox" data-v="${ve}" ${allChk||sel.has(v)?'checked':''}> ${v}<span class="ms-only" data-v="${ve}">only</span></label>`;}).join('');},()=>wrap._items||[]);}
+// Atualiza opções de um filtro (cascata) e remove seleções que não existem mais
+function setMsOptions(id,items){const wrap=document.getElementById(id);if(!wrap)return;wrap._items=items;if(wrap._sel&&wrap._sel.size){[...wrap._sel].forEach(v=>{if(!items.includes(v))wrap._sel.delete(v);});}if(wrap._render)wrap._render(wrap.querySelector('.ms-search input').value||'');}
+// ── Cascata: cada filtro mostra só opções existentes nas linhas que passam pelos DEMAIS ──
+// Predicado de uma linha ICS para um filtro, ignorando o próprio (except).
+function rowPassesExcept(o,except){
+  if(except!=='vig'){const selVig=getMsValues('ms-vig');if(selVig.length&&!selVig.includes(vigLbl(o.vigD)))return false;}
+  if(except!=='uni'){const selUni=getMsValues('ms-uni');if(selUni.length&&!selUni.includes(o.unidade))return false;}
+  return true;
+}
+function refreshCascade(){
+  if(!ICS.length)return;
+  // Vigência: opções nas linhas que passam por Unidade (preserva ordem cronológica de VIGS)
+  const vigOk=ICS.filter(o=>rowPassesExcept(o,'vig'));
+  const vigKeys=new Set(vigOk.map(o=>vigLbl(o.vigD)));
+  setMsOptions('ms-vig',VIGS.map(d=>vigLbl(d)).filter(v=>vigKeys.has(v)));
+  // Unidade: opções nas linhas que passam por Vigência
+  const uniOk=ICS.filter(o=>rowPassesExcept(o,'uni'));
+  setMsOptions('ms-uni',[...new Set(uniOk.map(o=>o.unidade))].sort());
+}
 function syncBadge(wrap){const cnt=wrap.querySelector('.ms-cnt'),n=wrap._sel?wrap._sel.size:0;if(cnt){cnt.textContent=n;cnt.style.display=n?'':'none';}}
 function toggleMs(id){document.querySelectorAll('.ms-panel.open').forEach(p=>{if(p.closest('.ms-wrap').id!==id)p.classList.remove('open');});const panel=document.querySelector(`#${id} .ms-panel`);panel.classList.toggle('open');if(panel.classList.contains('open')){const inp=panel.querySelector('input[type=text]');if(inp)setTimeout(()=>inp.focus(),50);}}
 function getMsValues(id){const wrap=document.getElementById(id);if(!wrap)return[];return wrap._sel?[...wrap._sel]:[];}
@@ -321,6 +340,7 @@ function fcaConsol(recs,year,monthIdx){const sel=recs.filter(r=>Math.floor(r.k/1
 
 function atualizar(){
   if(!ICS.length)return;
+  refreshCascade();
   const selVig=getMsValues('ms-vig'),selUni=getMsValues('ms-uni');
   const cands=(selVig.length?VIGS.filter(d=>selVig.includes(vigLbl(d))):VIGS.slice()).sort((a,b)=>vigKeyN(a)-vigKeyN(b));
   const selD=cands.length?cands[cands.length-1]:(VIGS[VIGS.length-1]||null);

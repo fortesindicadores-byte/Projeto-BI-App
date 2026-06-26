@@ -565,49 +565,99 @@ function _buildMs(wrap, renderFn, getAllItemsFn, onChange){
   const sel=wrap._sel;
   const list=wrap.querySelector('.ms-list');
   const srch=wrap.querySelector('.ms-search input');
-  const renderList=(q='')=>{ renderFn(list,sel,q); syncBadge(wrap); };
-  list.addEventListener('change',e=>{
-    const box=e.target;
-    if(box.classList.contains('ms-all')){
-      sel.clear();
-    } else if(sel.size===0){
-      if(!box.checked){
-        const all=getAllItemsFn?getAllItemsFn():[];
-        all.forEach(v=>{ if(v!==box.dataset.v) sel.add(v); });
+  const renderList=(q)=>{ renderFn(list,sel, q!==undefined?q:(srch.value||'')); syncBadge(wrap); };
+  wrap._render=renderList;          // p/ atualização em cascata (re-render sem religar listeners)
+  if(!wrap._wired){                 // listeners apenas 1x por filtro
+    wrap._wired=true;
+    list.addEventListener('change',e=>{
+      const box=e.target;
+      if(box.classList.contains('ms-all')){
+        sel.clear();
+      } else if(sel.size===0){
+        if(!box.checked){
+          const all=wrap._getAll?wrap._getAll():[];
+          all.forEach(v=>{ if(v!==box.dataset.v) sel.add(v); });
+        }
+      } else {
+        if(box.checked) sel.add(box.dataset.v);
+        else sel.delete(box.dataset.v);
+        if(wrap._getAll){
+          const all=wrap._getAll();
+          if(all.length>0&&all.every(v=>sel.has(v))) sel.clear();
+        }
       }
-    } else {
-      if(box.checked) sel.add(box.dataset.v);
-      else sel.delete(box.dataset.v);
-      if(getAllItemsFn){
-        const all=getAllItemsFn();
-        if(all.length>0&&all.every(v=>sel.has(v))) sel.clear();
-      }
-    }
-    renderList(srch.value); if(onChange) onChange();
-  });
-  list.addEventListener('click',e=>{
-    const only=e.target.closest('.ms-only');
-    if(!only) return;
-    e.preventDefault(); e.stopPropagation();
-    sel.clear(); sel.add(only.dataset.v);
-    renderList(srch.value); if(onChange) onChange();
-  });
-  srch.addEventListener('input',()=>renderList(srch.value));
-  srch.addEventListener('click',e=>e.stopPropagation());
+      renderList(srch.value); if(wrap._onChange) wrap._onChange();
+    });
+    list.addEventListener('click',e=>{
+      const only=e.target.closest('.ms-only');
+      if(!only) return;
+      e.preventDefault(); e.stopPropagation();
+      sel.clear(); sel.add(only.dataset.v);
+      renderList(srch.value); if(wrap._onChange) wrap._onChange();
+    });
+    srch.addEventListener('input',()=>renderList(srch.value));
+    srch.addEventListener('click',e=>e.stopPropagation());
+  }
+  wrap._getAll=getAllItemsFn;
+  wrap._onChange=onChange;
   renderList();
 }
 
 function buildMsFilter(id, items, label, displayFn, afterChange){
   const wrap=document.getElementById(id); if(!wrap) return;
-  const disp=displayFn||(v=>v);
+  wrap._items=items;                // opções atuais (atualizadas pela cascata via setMsOptions)
+  wrap._disp=displayFn||(v=>v);
   _buildMs(wrap,(list,sel,q)=>{
+    const it=wrap._items||[];
+    const disp=wrap._disp;
     const f=q.toLowerCase();
-    const shown=items.filter(v=>String(disp(v)).toLowerCase().includes(f));
+    const shown=it.filter(v=>String(disp(v)).toLowerCase().includes(f));
     const allChk=sel.size===0;
     list.innerHTML=
-      (!q?`<label class="ms-opt all-opt"><input type="checkbox" class="ms-all" ${allChk?'checked':''}> Todos (${items.length})</label>`:'')+
+      (!q?`<label class="ms-opt all-opt"><input type="checkbox" class="ms-all" ${allChk?'checked':''}> Todos (${it.length})</label>`:'')+
       shown.map(v=>`<label class="ms-opt"><input type="checkbox" data-v="${v}" ${allChk||sel.has(v)?'checked':''}> ${disp(v)}<span class="ms-only" data-v="${v}">only</span></label>`).join('');
-  }, ()=>items, afterChange||render);
+  }, ()=>wrap._items||[], afterChange||render);
+}
+// Atualiza as opções de um filtro (cascata) e remove seleções que não existem mais
+function setMsOptions(id, items){
+  const wrap=document.getElementById(id); if(!wrap) return;
+  wrap._items=items;
+  if(wrap._sel&&wrap._sel.size){ [...wrap._sel].forEach(v=>{ if(!items.includes(v)) wrap._sel.delete(v); }); }
+  if(wrap._render) wrap._render();
+}
+
+// ── Cascata: opções de cada filtro = valores existentes nas linhas que passam pelos OUTROS filtros ──
+function rowPassesExcept(r, except){
+  const anos  = getSel('ms-ano');
+  const vigs  = getSel('ms-vig');
+  const unds  = getSel('ms-und');
+  const projs = getSel('ms-proj');
+  if(except!=='ano'  && anos.length  && !anos.includes(r.ano))   return false;
+  if(except!=='vig'  && vigs.length  && !vigs.includes(r.vig))   return false;
+  if(except!=='und'  && unds.length  && !unds.includes(r.und))   return false;
+  if(except!=='proj' && projs.length && !projs.includes(r.proj)) return false;
+  return true;
+}
+let _cascVigKey='';
+function refreshCascade(){
+  // ANO
+  const anos=[...new Set(ALL.filter(r=>rowPassesExcept(r,'ano')).map(r=>r.ano))].filter(Boolean).sort().reverse();
+  setMsOptions('ms-ano',anos);
+  // UNIDADE
+  const unds=[...new Set(ALL.filter(r=>rowPassesExcept(r,'und')).map(r=>r.und))].filter(Boolean).sort();
+  setMsOptions('ms-und',unds);
+  // PROJETO
+  const projs=[...new Set(ALL.filter(r=>rowPassesExcept(r,'proj')).map(r=>r.proj))].filter(Boolean).sort();
+  setMsOptions('ms-proj',projs);
+  // VIGÊNCIA (rebuild só quando a lista muda, p/ não resetar o dropdown à toa)
+  const vigs=[...new Set(ALL.filter(r=>rowPassesExcept(r,'vig')).map(r=>r.vig))].filter(Boolean).sort(sortVig).reverse();
+  const vkey=vigs.join(',');
+  if(vkey!==_cascVigKey){
+    _cascVigKey=vkey;
+    const vigWrap=document.getElementById('ms-vig');
+    if(vigWrap&&vigWrap._sel&&vigWrap._sel.size){ [...vigWrap._sel].forEach(v=>{ if(!vigs.includes(v)) vigWrap._sel.delete(v); }); }
+    setMsOptions('ms-vig',vigs);
+  }
 }
 
 let kmColsVisible = false;
@@ -647,6 +697,7 @@ function repopulateVig() {
     if(vigWrap) vigWrap._sel=new Set();
   }
   buildMsFilter('ms-vig', vigs, 'Vigência', vigLabel);
+  _cascVigKey=vigs.join(',');   // sincroniza com a cascata p/ evitar rebuild duplo
   render();
 }
 
@@ -700,6 +751,7 @@ function getYTDRows(F) {
 }
 
 function render() {
+  refreshCascade();        // recalcula opções de todos os filtros conforme a seleção atual (cascata)
   const F = getFiltered();
 
   if(!F.length) {

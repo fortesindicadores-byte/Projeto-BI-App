@@ -518,7 +518,26 @@ function getFiltered(){
   return EFFROWS.filter(r=>fU.has(r.raw[COL.uni])&&fT.has(r.tier)&&fV.has(r._month)&&fG.has(r.raw[COL.geo]));
 }
 
+// ── FILTROS DEPENDENTES (cascata): cada filtro só mostra opções existentes na seleção dos demais
+function rowPassExcept(r,except){
+  if(except!=='uni'){const s=getMs('ms-uni'); if(s.length&&!s.includes(r.raw[COL.uni])) return false;}
+  if(except!=='tier'){const s=getMs('ms-tier');if(s.length&&!s.includes(r.tier)) return false;}
+  if(except!=='vig'){const s=getMs('ms-vig'); if(s.length&&!s.includes(vmonth(r.raw[COL.vig]))) return false;}
+  if(except!=='geo'){const s=getMs('ms-geo'); if(s.length&&!s.includes(r.raw[COL.geo])) return false;}
+  return true;
+}
+function refreshFilters(){
+  const unis=uniq(allRows.filter(r=>rowPassExcept(r,'uni')).map(r=>r.raw[COL.uni])).filter(Boolean).sort();
+  const tiers=TIERS.filter(t=>allRows.some(r=>r.tier===t&&rowPassExcept(r,'tier')));
+  const vmeses=uniq(allRows.filter(r=>rowPassExcept(r,'vig')).map(r=>vmonth(r.raw[COL.vig]))).filter(Boolean).sort();
+  const geos=uniq(allRows.filter(r=>rowPassExcept(r,'geo')).map(r=>r.raw[COL.geo])).filter(Boolean).sort();
+  _buildMs(document.getElementById('ms-uni'),unis);
+  _buildMs(document.getElementById('ms-tier'),tiers);
+  _buildMs(document.getElementById('ms-vig'),vmeses,monthLabel);
+  _buildMs(document.getElementById('ms-geo'),geos);
+}
 function applyFilters(){
+  refreshFilters();
   const rows=getFiltered();
   renderHero(rows);
   renderTierCards(rows);
