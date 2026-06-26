@@ -158,6 +158,7 @@ body{
 /* ══ CHARTS ══ */
 .charts-row{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:24px;}
 .chart-card{
+  position:relative;
   background:rgba(20,27,38,.55);border:1px solid rgba(255,255,255,.07);border-radius:8px;
   padding:18px 18px 14px;
   backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);
@@ -171,10 +172,19 @@ body{
 .chart-leg .leg-solid{height:3px;border-radius:2px;}
 .chart-leg .leg-dash{border-top:2px dashed;}
 .chart-leg .leg-sq{display:inline-block;width:10px;height:10px;border:1.5px solid var(--text2);border-radius:1px;vertical-align:middle;margin-right:1px;}
-.leg-orc-dash{border-color:#38BDF8;}
+.leg-orc-dash{border-color:#2563EB;}
 .leg-rem-dash{border-color:#F1F5F9;}
+.chart-leg .leg-dash{border-top-width:3px;}
 body.light-mode .leg-rem-dash{border-color:#000000;}
 body.light-mode .leg-orc-dash{border-color:#1D4ED8;}
+/* botão de referência (REM/ORÇ) no canto sup. direito dos gráficos temporais */
+.ref-toggle{position:absolute;top:14px;right:16px;z-index:5;display:flex;align-items:center;gap:5px;
+  background:rgba(249,115,22,.15);border:1px solid rgba(249,115,22,.35);border-radius:6px;
+  padding:3px 8px;cursor:pointer;font-family:'Montserrat',sans-serif;font-size:10px;font-weight:800;
+  color:var(--orange);text-transform:uppercase;letter-spacing:.5px;}
+.ref-toggle:hover{background:rgba(249,115,22,.3);}
+.ref-toggle .rt-lbl{color:var(--text2);font-weight:700;}
+body.light-mode .ref-toggle{background:rgba(29,78,216,.10);border-color:rgba(29,78,216,.35);color:#1D4ED8;}
 .chart-wrap{position:relative;height:230px;}
 
 /* ══ TABLES ══ */
@@ -497,11 +507,13 @@ body.light-mode table.dre tbody tr{border-bottom:1px solid rgba(0,0,0,.06);}
 
   <div class="charts-row">
     <div class="chart-card">
+      <button class="ref-toggle" id="ref-brl" onclick="toggleRef('brl')" title="Referência das cores: comparar Realizado vs Remunerado ou vs Orçado"><span class="rt-lbl">vs</span> <span id="ref-brl-v">REM</span></button>
       <div class="chart-title">Custo Nominal Mensal (BRL)</div>
       <div class="chart-leg"><span><i class="leg-sq"></i>Realizado</span><span><i class="leg-dash leg-rem-dash"></i>Remunerado</span><span><i class="leg-dash leg-orc-dash"></i>Orçado</span></div>
       <div class="chart-wrap"><canvas id="ch-receita"></canvas></div>
     </div>
     <div class="chart-card">
+      <button class="ref-toggle" id="ref-av" onclick="toggleRef('av')" title="Referência das cores: comparar Realizado vs Remunerado ou vs Orçado"><span class="rt-lbl">vs</span> <span id="ref-av-v">REM</span></button>
       <div class="chart-title">AV Custo Mensal (%)</div>
       <div class="chart-leg"><span><i class="leg-sq"></i>Realizado</span><span><i class="leg-dash leg-rem-dash"></i>AV Remunerado</span><span><i class="leg-dash leg-orc-dash"></i>AV Orçado</span></div>
       <div class="chart-wrap"><canvas id="ch-av"></canvas></div>
@@ -1124,7 +1136,7 @@ function renderCharts(f){
     return {type:'bar',label:label,data:data,backgroundColor:bg,borderColor:bc,borderWidth:1,borderRadius:3,order:2};
   }
   const dsRem=(data,label)=>({type:'line',label,data,borderColor:remC,borderWidth:3,tension:.3,fill:false,borderDash:[5,3],pointRadius:mkR(data),pointBackgroundColor:mkBg(data,remC),pointBorderColor:mkBc(data,remC),pointBorderWidth:mkBw(data),order:1});
-  const orcC=isLight?'#1D4ED8':'#38BDF8';
+  const orcC=isLight?'#1D4ED8':'#2563EB';
   const dsOrc=(data,label)=>({type:'line',label,data,borderColor:orcC,borderWidth:3,tension:.3,fill:false,borderDash:[5,3],pointRadius:mkR(data),pointBackgroundColor:mkBg(data,orcC),pointBorderColor:mkBc(data,orcC),pointBorderWidth:mkBw(data),order:1});
   const grid={color:isLight?'rgba(0,0,0,.08)':'rgba(255,255,255,.06)'};
   const tick={color:isLight?'#444444':'#94A3B8',font:{family:'Montserrat',size:14}};
@@ -1151,9 +1163,21 @@ function renderCharts(f){
   var scAv={x:{grid,ticks:tick},y:{beginAtZero:false,grid,ticks:{...tickY,callback:cbPct}}};
   var chartOpts=function(sc){return {responsive:true,maintainAspectRatio:false,layout:{padding:{top:28}},plugins:{legend:{display:false},tooltip},scales:sc};};
   if(chReceita) chReceita.destroy();
-  chReceita=new Chart(document.getElementById('ch-receita'),{type:'line',data:{labels:lbls,datasets:[dsReal(dReal,'REALIZADO',dRem),dsRem(dRem,'REMUNERADO'),dsOrc(dOrc,'ORÇADO')]},plugins:[mkLabelPlugin(cbFmt,hlIdxs)],options:chartOpts(scBrl)});
+  // referência das condicionais (cor das barras): Remunerado (padrão) ou Orçado, por gráfico
+  const refBrlData = REF_BRL==='orc'?dOrc:dRem;
+  const refAvData  = REF_AV ==='orc'?dAvOrc:dAvRem;
+  const setRefBtn=(id,mode)=>{const e=document.getElementById(id);if(e)e.textContent=mode==='orc'?'ORÇ':'REM';};
+  setRefBtn('ref-brl-v',REF_BRL); setRefBtn('ref-av-v',REF_AV);
+  chReceita=new Chart(document.getElementById('ch-receita'),{type:'line',data:{labels:lbls,datasets:[dsReal(dReal,'REALIZADO',refBrlData),dsRem(dRem,'REMUNERADO'),dsOrc(dOrc,'ORÇADO')]},plugins:[mkLabelPlugin(cbFmt,hlIdxs)],options:chartOpts(scBrl)});
   if(chAV) chAV.destroy();
-  chAV=new Chart(document.getElementById('ch-av'),{type:'line',data:{labels:lbls,datasets:[dsReal(dAvReal,'AV REALIZADO',dAvRem),dsRem(dAvRem,'AV REMUNERADO'),dsOrc(dAvOrc,'AV ORÇADO')]},plugins:[mkLabelPlugin(cbPct,hlIdxs)],options:chartOpts(scAv)});
+  chAV=new Chart(document.getElementById('ch-av'),{type:'line',data:{labels:lbls,datasets:[dsReal(dAvReal,'AV REALIZADO',refAvData),dsRem(dAvRem,'AV REMUNERADO'),dsOrc(dAvOrc,'AV ORÇADO')]},plugins:[mkLabelPlugin(cbPct,hlIdxs)],options:chartOpts(scAv)});
+}
+// estado da referência das condicionais por gráfico ('rem' = vs Remunerado | 'orc' = vs Orçado)
+let REF_BRL='rem', REF_AV='rem';
+function toggleRef(which){
+  if(which==='brl') REF_BRL = REF_BRL==='rem'?'orc':'rem';
+  else              REF_AV  = REF_AV ==='rem'?'orc':'rem';
+  if(typeof lastF!=='undefined' && lastF) renderCharts(lastF);
 }
 
 // ═══════════════════════════════════
