@@ -2187,7 +2187,7 @@ function reconstructTires(insps) {
   const cadastro = {};
   DATA.tires.forEach(x => { cadastro[x.id] = x; });
 
-  return Object.entries(porPneu).map(([tid, arr]) => {
+  const lista = Object.entries(porPneu).map(([tid, arr]) => {
     const c = cadastro[tid] || {};
     const avg = f => { const v = arr.map(f).filter(x => typeof x === 'number' && !isNaN(x)); return v.length ? v.reduce((a, b) => a + b, 0) / v.length : 0; };
     const recente = arr.reduce((a, b) => new Date(b.dataInspecao) > new Date(a.dataInspecao) ? b : a); // p/ campos não-numéricos
@@ -2210,9 +2210,21 @@ function reconstructTires(insps) {
       pressaoIdeal: avg(i => i.pressaoIdeal),
       pressaoAtual: avg(i => i.pressaoMedida),
       desvioPressao: desvio,
-      pressaoNOK: Math.abs(desvio) > 15
+      pressaoNOK: Math.abs(desvio) > 15,
+      _ultimaAfericao: recente.dataInspecao
     };
   });
+  // Por POSIÇÃO (veículo+posição) manter só o pneu da aferição MAIS RECENTE —
+  // descarta o pneu trocado/removido no período (senão o antigo "ressuscita" junto do novo,
+  // ex.: FXF3514 pos.312 mostrava 932614 0,64 Bloquear + 932784 12,1 ao mesmo tempo).
+  const porPos = {};
+  lista.forEach(t => {
+    if (t.veiculoId == null || t.posicao == null) { porPos['sem|' + t.id] = t; return; }
+    const k = t.veiculoId + '|' + t.posicao;
+    const cur = porPos[k];
+    if (!cur || new Date(t._ultimaAfericao) > new Date(cur._ultimaAfericao)) porPos[k] = t;
+  });
+  return Object.values(porPos);
 }
 
 function getFilteredTires() {
