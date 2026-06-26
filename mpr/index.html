@@ -228,6 +228,27 @@ function fmtKind(num,kind){if(num==null||!isFinite(num))return '—';
 const FORMAT={'ADERÊNCIA PREVENTIVA':'pct','ADERÊNCIA CHECK DE CONFORMIDADE':'pct','MILIMETRAGEM PNEU':'pct','BLITZ DE SEGURANÇA':'pct','ADERÊNCIA CHECKLIST':'pct','STRESS TEST':'pct','INDISP. MANUTENÇÃO':'pct','DISPONIBILIDADE CONTRATADA':'pct','ORDENS DE SERVIÇO VENCIDAS':'num','MTTR':'dur','MTBF':'dur'};
 const fmtOf=ind=>FORMAT[canonInd(ind)]||INDKIND[ind]||'num';
 function bandPts(pts){if(pts==null||!isFinite(pts))return 'v-na';return pts>=10?'v-green':(pts>=5?'v-amber':'v-red');}
+// COR pelas REGRAS do indicador (aba Regras do termômetro), aplicadas ao VALOR. dir '+' = maior melhor, '-' = menor melhor.
+const CRULE={
+  'ADERÊNCIA PREVENTIVA':{dir:'+',g:95,y:90},
+  'ADERÊNCIA CHECK DE CONFORMIDADE':{dir:'+',g:95,y:90},
+  'MILIMETRAGEM PNEU':{dir:'+',g:95,y:90},
+  'BLITZ DE SEGURANÇA':{dir:'+',g:100,y:95},
+  'ADERÊNCIA CHECKLIST':{dir:'+',g:95,y:90},
+  'STRESS TEST':{dir:'+',g:100,y:95},
+  'DISPONIBILIDADE CONTRATADA':{dir:'+',g:95,y:90},
+  'ORDENS DE SERVIÇO VENCIDAS':{dir:'-',g:10,y:20},   // <10 verde · 10–20 amarelo · >20 vermelho
+  'INDISP. MANUTENÇÃO':{dir:'-',g:5,y:10},             // <5% verde · 5–10% amarelo · >10% vermelho
+};
+// banda de cor pela regra do indicador; MTTR/MTBF (quartil, sem nº fixo) caem na pontuação do termômetro
+function bandVal(ind,num,pts,kind){
+  const cr=CRULE[canonInd(ind)];
+  if(cr&&num!=null&&isFinite(num)){let v=num;if(kind==='pct'&&v<=1.5)v*=100;
+    const c=cr.dir==='+'?(v>=cr.g?'green':v>=cr.y?'amber':'red'):(v<cr.g?'green':v<=cr.y?'amber':'red');return 'v-'+c;}
+  return bandPts(pts);
+}
+const BANDHEX={'v-green':'#3BB33B','v-amber':'#EAB308','v-red':'#FF6666'};
+const bandValHex=(ind,num,pts,kind)=>BANDHEX[bandVal(ind,num,pts,kind)]||null;
 
 function build(rows){
   MODEL={};GEO_OF={};INDKIND={};UNIT_TIERS={};
@@ -299,11 +320,10 @@ document.addEventListener('click',e=>{if(!e.target.closest('.ms-wrap'))document.
 
 // ── render ──
 const NCOLS=1+1+1+1+12+4;   // uni, plan, ano, ytd, 12, 4 campos (sem LE FY)
-function bandPtsHex(p){if(p==null||!isFinite(p))return null;return p>=10?'#3BB33B':p>=5?'#EAB308':'#FF6666';}
-function valCard(num,pts,kind,extra){
+function valCard(ind,num,pts,kind,extra){
   if(num==null&&pts==null)return `<span class="cell v-na ${extra||''}">—</span>`;
-  if(extra&&extra.indexOf('tot')>=0){const hex=bandPtsHex(pts);if(hex)return `<span class="cell pill" style="background:${hex}">${fmtKind(num,kind)}</span>`;}
-  return `<span class="cell ${bandPts(pts)} ${extra||''}">${fmtKind(num,kind)}</span>`;
+  if(extra&&extra.indexOf('tot')>=0){const hex=bandValHex(ind,num,pts,kind);if(hex)return `<span class="cell pill" style="background:${hex}">${fmtKind(num,kind)}</span>`;}
+  return `<span class="cell ${bandVal(ind,num,pts,kind)} ${extra||''}">${fmtKind(num,kind)}</span>`;
 }
 function colgroup(){
   return `<colgroup><col class="c-uni"><col class="c-plan"><col class="c-ano"><col class="c-val">${MESES.map(()=>'<col class="c-mes">').join('')}<col class="c-causa"><col class="c-acao"><col class="c-resp"><col class="c-prazo"></colgroup>`;
@@ -338,8 +358,8 @@ function group(ind,label,unitKey,isGeo,monthsFn){
     <td rowspan="2" class="smc"><input type="date" class="sml" value="${lget(fkey(ind,unitKey,'prazo'))}" onclick="this.showPicker&&this.showPicker()" onchange="lset(fkey('${ie}','${unitKey}','prazo'),this.value)"></td>
   </tr>`;
   // 2026 (resultado da Q2; cor na fonte pela pontuação do termômetro)
-  h+=`<tr class="grp-end"><td class="per p2026 vc">2026</td><td class="vc">${valCard(ytdNum,ytdPts,kind,'tot')}</td>`;
-  cells2026.forEach((c,i)=>{h+=`<td class="vc${i===0?' vc-first':''}${i===11?' vc-last':''}">${valCard(c.num,c.pts,kind)}</td>`;});
+  h+=`<tr class="grp-end"><td class="per p2026 vc">2026</td><td class="vc">${valCard(ind,ytdNum,ytdPts,kind,'tot')}</td>`;
+  cells2026.forEach((c,i)=>{h+=`<td class="vc${i===0?' vc-first':''}${i===11?' vc-last':''}">${valCard(ind,c.num,c.pts,kind)}</td>`;});
   h+=`</tr>`;
   return h;
 }
