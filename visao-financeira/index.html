@@ -1272,6 +1272,10 @@ async function exportarPDF(mode){
     const W=pdf.internal.pageSize.getWidth(), H=pdf.internal.pageSize.getHeight();
     const m=8, uw=W-2*m, uh=H-2*m, gap=4;
     const bg=claro?'#FFFFFF':'#0C1017';
+    const RGB=claro?[255,255,255]:[12,16,23];
+    // pinta a página inteira na cor do tema (evita borda branca no modo escuro)
+    const paintBg=()=>{ pdf.setFillColor(RGB[0],RGB[1],RGB[2]); pdf.rect(0,0,W,H,'F'); };
+    paintBg();
     // 1 imagem por bloco (cabeçalho, hero, cards, gráficos, cada tabela); cada bloco escalado
     // p/ caber na página (sem cortar). Pula divisórias. Empilha; nova página quando não couber.
     const blocos=[...document.querySelectorAll('main.main > *')]
@@ -1281,7 +1285,7 @@ async function exportarPDF(mode){
       const canvas=await html2canvas(b,{scale:2,backgroundColor:bg,useCORS:true,logging:false,windowWidth:b.scrollWidth});
       let w=uw, h=canvas.height*uw/canvas.width;
       if(h>uh){ h=uh; w=canvas.width*uh/canvas.height; }   // bloco mais alto que a página: encolhe p/ caber inteiro
-      if(y>m && y+h>m+uh){ pdf.addPage(); y=m; }            // não cabe no resto da página → nova página
+      if(y>m && y+h>m+uh){ pdf.addPage(); paintBg(); y=m; } // não cabe no resto da página → nova página
       pdf.addImage(canvas.toDataURL('image/jpeg',0.95),'JPEG', m+(uw-w)/2, y, w, h);
       y+=h+gap;
     }
