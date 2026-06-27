@@ -251,9 +251,20 @@ table.dre tr.total td.imp-cell{font-size:15px;}
 .pdf-btn{display:flex;align-items:center;gap:5px;background:rgba(249,115,22,.15);border:1px solid rgba(249,115,22,.3);border-radius:4px;padding:5px 9px;cursor:pointer;color:var(--orange);font-family:'Montserrat',sans-serif;font-size:11px;font-weight:800;letter-spacing:.5px;}
 .pdf-btn:hover{background:rgba(249,115,22,.32);}
 .pdf-btn:disabled{opacity:.55;cursor:default;}
-/* Cabeçalho do relatório PDF — só visível durante a exportação */
+.pdf-wrap{position:relative;}
+.pdf-menu{display:none;position:absolute;top:calc(100% + 4px);right:0;z-index:600;flex-direction:column;
+  background:#0f1824;border:1px solid #2a3a50;border-radius:6px;overflow:hidden;box-shadow:0 8px 24px rgba(0,0,0,.7);min-width:118px;}
+.pdf-menu.open{display:flex;}
+.pdf-menu button{background:none;border:none;color:var(--text);font-family:'Montserrat',sans-serif;font-size:11px;font-weight:700;
+  text-align:left;padding:8px 12px;cursor:pointer;}
+.pdf-menu button:hover{background:rgba(249,115,22,.18);color:var(--orange);}
+/* Cabeçalho do relatório PDF — só visível durante a exportação (adapta ao tema escolhido) */
 #pdf-report-head{display:none;}
 body.exporting #pdf-report-head{display:block;background:#FFFFFF;color:#111;padding:0 0 14px;margin-bottom:14px;border-bottom:2px solid #F97316;}
+body.exporting:not(.light-mode) #pdf-report-head{background:#0C1017;color:#F1F5F9;}
+body.exporting:not(.light-mode) #pdf-report-head .rh-title{color:#FFFFFF;}
+body.exporting:not(.light-mode) #pdf-report-head .rh-sub,body.exporting:not(.light-mode) #pdf-report-head .rh-meta{color:#94A3B8;}
+body.exporting:not(.light-mode) #pdf-report-head .rh-filtros{color:#CBD5E1;}
 #pdf-report-head .rh-top{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;}
 #pdf-report-head .rh-title{font-size:20px;font-weight:800;color:#0C1017;letter-spacing:.3px;}
 #pdf-report-head .rh-sub{font-size:11px;color:#555;margin-top:2px;font-weight:600;}
@@ -369,10 +380,16 @@ body.light-mode table.dre tbody tr{border-bottom:1px solid rgba(0,0,0,.06);}
   </div>
   <div class="header-right">
     <a href="../" class="back-btn" title="Voltar ao Hub"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg></a>
-    <button class="pdf-btn" id="pdfBtn" onclick="exportarPDF()" title="Exportar relatório PDF (estado filtrado)">
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><polyline points="9 15 12 18 15 15"/></svg>
-      <span>PDF</span>
-    </button>
+    <div class="pdf-wrap">
+      <button class="pdf-btn" id="pdfBtn" onclick="togglePdfMenu(event)" title="Exportar relatório PDF (estado filtrado)">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><polyline points="9 15 12 18 15 15"/></svg>
+        <span>PDF</span>
+      </button>
+      <div class="pdf-menu" id="pdfMenu">
+        <button onclick="exportarPDF('light')">☀ Claro</button>
+        <button onclick="exportarPDF('dark')">🌙 Escuro</button>
+      </div>
+    </div>
     <button class="theme-btn" id="themeBtn" title="Modo claro/escuro"></button>
     <button class="refresh-btn" onclick="recarregar()" title="Atualizar dados">
       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
@@ -1218,8 +1235,15 @@ function _fmtFiltro(label, arr){
   if(!arr || !arr.length) return `<b>${label}:</b> Todos`;
   return `<b>${label}:</b> ${arr.join(', ')}`;
 }
-async function exportarPDF(){
+function togglePdfMenu(e){
+  if(e) e.stopPropagation();
+  document.getElementById('pdfMenu').classList.toggle('open');
+}
+document.addEventListener('click',e=>{ if(!e.target.closest('.pdf-wrap')){const m=document.getElementById('pdfMenu'); if(m)m.classList.remove('open');} });
+async function exportarPDF(mode){
+  const mn=document.getElementById('pdfMenu'); if(mn)mn.classList.remove('open');
   if(typeof html2pdf==='undefined'){ alert('Biblioteca de PDF ainda carregando — tente de novo em instantes.'); return; }
+  const claro = mode!=='dark';   // padrão claro; 'dark' = relatório escuro
   const btn=document.getElementById('pdfBtn');
   const f=getF();
   const vigTxt=(f.vig&&f.vig.length)?f.vig.map(vk=>{const d=vigs.find(x=>vigKey(x)===vk);return d?vigLabel(d).toUpperCase():vk;}):null;
@@ -1229,19 +1253,20 @@ async function exportarPDF(){
   ].join(' &nbsp;·&nbsp; ');
   const now=new Date();
   document.getElementById('rh-meta').innerHTML=`Gerado em ${now.toLocaleDateString('pt-BR')} ${now.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})}<br>Gestão em Movimento · BI Frota`;
-  const eraDark=!document.body.classList.contains('light-mode');
-  if(eraDark) applyTheme('light');
+  const temaOriginal=document.body.classList.contains('light-mode')?'light':'dark';
+  const temaAlvo=claro?'light':'dark';
+  if(temaOriginal!==temaAlvo) applyTheme(temaAlvo);
   document.body.classList.add('exporting');
   if(btn){ btn.disabled=true; const s=btn.querySelector('span'); if(s)s.textContent='Gerando…'; }
   window.scrollTo(0,0);
-  await new Promise(r=>setTimeout(r,500));   // espera gráficos re-renderizarem no claro
+  await new Promise(r=>setTimeout(r,500));   // espera gráficos re-renderizarem no tema escolhido
   const el=document.querySelector('main.main');
   try{
     await html2pdf().set({
       margin:[8,8,10,8],
-      filename:`Visao-Financeira_${now.toISOString().slice(0,10)}.pdf`,
+      filename:`Visao-Financeira_${claro?'claro':'escuro'}_${now.toISOString().slice(0,10)}.pdf`,
       image:{type:'jpeg',quality:0.96},
-      html2canvas:{scale:2,backgroundColor:'#FFFFFF',useCORS:true,scrollX:0,scrollY:0,windowWidth:el.scrollWidth},
+      html2canvas:{scale:2,backgroundColor:claro?'#FFFFFF':'#0C1017',useCORS:true,scrollX:0,scrollY:0,windowWidth:el.scrollWidth},
       jsPDF:{unit:'mm',format:'a4',orientation:'landscape'},
       pagebreak:{mode:['css','legacy']}
     }).from(el).save();
@@ -1249,7 +1274,7 @@ async function exportarPDF(){
   finally{
     document.body.classList.remove('exporting');
     if(btn){ btn.disabled=false; const s=btn.querySelector('span'); if(s)s.textContent='PDF'; }
-    if(eraDark) applyTheme('dark');
+    if(temaOriginal!==temaAlvo) applyTheme(temaOriginal);
   }
 }
 
