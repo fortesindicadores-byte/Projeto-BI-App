@@ -26,10 +26,10 @@
 #pdf-overlay .pdf-ov-spin{width:34px;height:34px;border:3px solid rgba(249,115,22,.25);border-top-color:#F97316;border-radius:50%;animation:pdfspin .8s linear infinite;}
 @keyframes pdfspin{to{transform:rotate(360deg);}}
 #pdf-report-head{display:none;}
-body.exporting #pdf-report-head{display:block;background:#FFFFFF;color:#111;padding:0 0 14px;margin-bottom:14px;border-bottom:2px solid #F97316;font-family:'Montserrat',sans-serif;}
+body.exporting #pdf-report-head{display:block;background:#FFFFFF;color:#111;padding:0 0 6px;margin-bottom:10px;font-family:'Montserrat',sans-serif;}
 body.exporting:not(.light-mode) #pdf-report-head{background:#0C1017;color:#F1F5F9;}
 #pdf-report-head .rh-top{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;}
-#pdf-report-head .rh-title{font-size:22px;font-weight:800;color:#0C1017;letter-spacing:.3px;}
+#pdf-report-head .rh-title{font-size:30px;font-weight:800;color:#0C1017;letter-spacing:.3px;}
 #pdf-report-head .rh-sub{font-size:11px;color:#555;margin-top:2px;font-weight:600;}
 #pdf-report-head .rh-meta{font-size:10px;color:#555;text-align:right;font-weight:600;line-height:1.5;}
 #pdf-report-head .rh-filtros{margin-top:10px;font-size:10.5px;color:#222;line-height:1.6;}
@@ -126,7 +126,7 @@ body.exporting:not(.light-mode) #pdf-report-head .rh-filtros{color:#CBD5E1;}
       // captura: blocos comuns AO VIVO (gráficos lado a lado sem cortar); tabelas mais largas p/ preencher
       const topoEls=[head, ...nonT].filter(Boolean);
       const topoItems=[];
-      for(const el of topoEls){ const c=await html2canvas(el,baseOpts); topoItems.push({url:c.toDataURL('image/jpeg',0.95), nat:c.height*uw/c.width}); }
+      for(const el of topoEls){ const c=await html2canvas(el,baseOpts); topoItems.push({url:c.toDataURL('image/jpeg',0.95), nat:c.height*uw/c.width, head: el===head}); }
       const tblItems=[];
       for(const el of tbls){ const c=await html2canvas(el,Object.assign({},baseOpts,{windowWidth:1560})); tblItems.push({url:c.toDataURL('image/jpeg',0.95), nat:c.height*uw/c.width}); }
       // monta slides: empacota blocos do topo (cabe ~1.3 slide e escala p/ caber); cada tabela um slide
@@ -140,11 +140,12 @@ body.exporting:not(.light-mode) #pdf-report-head .rh-filtros{color:#CBD5E1;}
         const sf=Math.min(1, uh/natTotal);
         const drawW=uw*sf, x=m+(uw-drawW)/2, g=gap*sf;
         const grpH=slide.reduce((a,im)=>a+im.nat*sf,0)+g*(slide.length-1);
-        let y=m+(uh-grpH)/2;
+        const hasHead=slide.some(im=>im.head);
+        let y=hasHead?m:m+(uh-grpH)/2;   // slide do título: topo; demais: centralizado
         if(!pdf) pdf=new jsPDF({unit:'mm',orientation:'landscape',format:[PW,PH]});
         else pdf.addPage([PW,PH],'landscape');
         pdf.setFillColor(RGB[0],RGB[1],RGB[2]); pdf.rect(0,0,PW,PH,'F');
-        pdf.setFillColor(249,115,22); pdf.rect(PW*0.62,0,PW*0.38,6.5,'F');   // faixa laranja padrão
+        pdf.setFillColor(249,115,22); pdf.rect(PW*0.55,0,PW*0.45,5,'F');   // faixa laranja padrão
         for(const im of slide){ const h=im.nat*sf; pdf.addImage(im.url,'JPEG',x,y,drawW,h); y+=h+g; }
       }
       const fb=CFG.fileBase || slug((document.querySelector('.brand h1')||{}).textContent || document.title);

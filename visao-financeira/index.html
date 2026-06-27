@@ -265,7 +265,7 @@ table.dre tr.total td.imp-cell{font-size:15px;}
 @keyframes pdfspin{to{transform:rotate(360deg);}}
 /* Cabeçalho do relatório PDF — só visível durante a exportação (adapta ao tema escolhido) */
 #pdf-report-head{display:none;}
-body.exporting #pdf-report-head{display:block;background:#FFFFFF;color:#111;padding:0 0 14px;margin-bottom:14px;border-bottom:2px solid #F97316;}
+body.exporting #pdf-report-head{display:block;background:#FFFFFF;color:#111;padding:0 0 6px;margin-bottom:10px;}
 body.exporting:not(.light-mode) #pdf-report-head{background:#0C1017;color:#F1F5F9;}
 body.exporting:not(.light-mode) #pdf-report-head .rh-title{color:#FFFFFF;}
 body.exporting:not(.light-mode) #pdf-report-head .rh-sub,body.exporting:not(.light-mode) #pdf-report-head .rh-meta{color:#94A3B8;}
@@ -276,7 +276,7 @@ body.exporting:not(.light-mode) .kpi-card,
 body.exporting:not(.light-mode) .chart-card,
 body.exporting:not(.light-mode) .tbl-section{background:#141B26!important;backdrop-filter:none!important;-webkit-backdrop-filter:none!important;}
 #pdf-report-head .rh-top{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;}
-#pdf-report-head .rh-title{font-size:20px;font-weight:800;color:#0C1017;letter-spacing:.3px;}
+#pdf-report-head .rh-title{font-size:30px;font-weight:800;color:#0C1017;letter-spacing:.3px;}
 #pdf-report-head .rh-sub{font-size:11px;color:#555;margin-top:2px;font-weight:600;}
 #pdf-report-head .rh-meta{font-size:10px;color:#555;text-align:right;font-weight:600;line-height:1.5;}
 #pdf-report-head .rh-filtros{margin-top:10px;font-size:10.5px;color:#222;line-height:1.6;}
@@ -1302,11 +1302,12 @@ async function exportarPDF(mode){
       const sf=Math.min(1, uh/natTotal);   // NUNCA aumenta (>1 estouraria a largura e cortaria); só encolhe p/ caber
       const drawW=uw*sf, x=m+(uw-drawW)/2, g=gap*sf;
       const grpH=imgs.reduce((a,im)=>a+im.nat*sf,0)+g*(imgs.length-1);
-      let y=m+(uh-grpH)/2;                                              // centraliza verticalmente
+      const hasHead=slide.some(b=>b.id==='pdf-report-head');
+      let y=hasHead?m:m+(uh-grpH)/2;                                   // slide do título: topo; demais: centralizado
       if(!pdf) pdf=new jsPDF({unit:'mm',orientation:'landscape',format:[PW,PH]});
       else pdf.addPage([PW,PH],'landscape');
       pdf.setFillColor(RGB[0],RGB[1],RGB[2]); pdf.rect(0,0,PW,PH,'F');
-      pdf.setFillColor(249,115,22); pdf.rect(PW*0.62,0,PW*0.38,6.5,'F'); // faixa laranja (padrão, claro e escuro)
+      pdf.setFillColor(249,115,22); pdf.rect(PW*0.55,0,PW*0.45,5,'F'); // faixa laranja (padrão, claro e escuro)
       for(const im of imgs){ const h=im.nat*sf; pdf.addImage(im.url,'JPEG',x,y,drawW,h); y+=h+g; }
     }
     pdf.save(`Visao-Financeira_${claro?'claro':'escuro'}_${now.toISOString().slice(0,10)}.pdf`);
