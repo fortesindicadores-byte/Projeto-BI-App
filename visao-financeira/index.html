@@ -1283,18 +1283,17 @@ async function exportarPDF(mode){
     const opts={scale:2,backgroundColor:bg,useCORS:true,logging:false,windowWidth:winW,ignoreElements:el=>el.id==='pdf-overlay'};
     const main=document.querySelector('main.main');
     const qa=s=>[...main.querySelectorAll(s)];
-    // grupos de blocos = slides
+    // grupos de blocos = slides. Slide 1 = resumo (título+hero+cards+gráficos), igual ao slide do conselho.
     const slides=[];
-    const topo=[main.querySelector('#pdf-report-head'),main.querySelector('.hero'),...qa('.cards-row')].filter(Boolean);
+    const topo=[main.querySelector('#pdf-report-head'),main.querySelector('.hero'),...qa('.cards-row'),main.querySelector('.charts-row')].filter(Boolean);
     if(topo.length) slides.push(topo);
-    const charts=main.querySelector('.charts-row'); if(charts) slides.push([charts]);
     qa('.tbl-section').forEach(t=>slides.push([t]));
     let pdf=null;
     for(const slide of slides){
       const imgs=[];
       for(const b of slide){ const c=await html2canvas(b,opts); imgs.push({url:c.toDataURL('image/jpeg',0.95), nat:c.height*uw/c.width}); }
       const natTotal=imgs.reduce((a,im)=>a+im.nat,0)+gap*(imgs.length-1);
-      const sf=natTotal>uh ? uh/natTotal : Math.min(1.3, uh/natTotal); // encolhe se passar; cresce um pouco p/ preencher
+      const sf=Math.min(1, uh/natTotal);   // NUNCA aumenta (>1 estouraria a largura e cortaria); só encolhe p/ caber
       const drawW=uw*sf, x=m+(uw-drawW)/2, g=gap*sf;
       const grpH=imgs.reduce((a,im)=>a+im.nat*sf,0)+g*(imgs.length-1);
       let y=m+(uh-grpH)/2;                                              // centraliza verticalmente
