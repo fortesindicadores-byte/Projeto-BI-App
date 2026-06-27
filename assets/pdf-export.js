@@ -135,7 +135,7 @@ body.exporting:not(.light-mode) #pdf-report-head .rh-filtros{color:#CBD5E1;}
         } else topoEls.push(e);
       }
       // captura: topo AO VIVO; tabelas mais largas (windowWidth) p/ preencher; títulos ao vivo
-      const cap=async(el)=>{ const wide=el.classList.contains('tbl-section'); const c=await html2canvas(el, wide?Object.assign({},baseOpts,{windowWidth:1560}):baseOpts); return {url:c.toDataURL('image/jpeg',0.95), nat:c.height*uw/c.width, head: el===head}; };
+      const cap=async(el)=>{ const wide=el.classList.contains('tbl-section'); const c=await html2canvas(el, wide?Object.assign({},baseOpts,{windowWidth:1560}):baseOpts); return {canvas:c, nat:c.height*uw/c.width, head: el===head}; };
       const topoItems=[]; for(const el of topoEls) topoItems.push(await cap(el));
       const tableSlides=[]; for(const g of tableGroups){ const its=[]; for(const el of g) its.push(await cap(el)); tableSlides.push(its); }
       // monta slides: empacota blocos do topo (cabe ~1.3 slide e escala p/ caber); cada grupo de tabela = 1 slide
@@ -143,6 +143,9 @@ body.exporting:not(.light-mode) #pdf-report-head .rh-filtros{color:#CBD5E1;}
       for(const it of topoItems){ if(grp.length && (sum+gap+it.nat)>1.3*uh){ slides.push(grp); grp=[]; sum=0; } if(grp.length) sum+=gap; sum+=it.nat; grp.push(it); }
       if(grp.length) slides.push(grp);
       for(const ts of tableSlides) slides.push(ts);
+      // cada slide é composto num ÚNICO canvas (fundo + blocos + faixa) → 1 imagem por página,
+      // sem emendas (o problema da "sombra" retangular vinha de mesclar JPEGs separados com o fundo).
+      const COMP_W=2000, COMP_H=Math.round(COMP_W*PH/PW), ppm=COMP_W/PW;
       let pdf=null;
       for(const slide of slides){
         const natTotal=slide.reduce((a,im)=>a+im.nat,0)+gap*(slide.length-1);
@@ -151,11 +154,14 @@ body.exporting:not(.light-mode) #pdf-report-head .rh-filtros{color:#CBD5E1;}
         const grpH=slide.reduce((a,im)=>a+im.nat*sf,0)+g*(slide.length-1);
         const hasHead=slide.some(im=>im.head);
         let y=hasHead?m:m+(uh-grpH)/2;   // slide do título: topo; demais: centralizado
+        const cv=document.createElement('canvas'); cv.width=COMP_W; cv.height=COMP_H;
+        const cx=cv.getContext('2d');
+        cx.fillStyle=bg; cx.fillRect(0,0,COMP_W,COMP_H);
+        for(const im of slide){ const h=im.nat*sf; cx.drawImage(im.canvas, x*ppm, y*ppm, drawW*ppm, h*ppm); y+=h+g; }
+        cx.fillStyle='#F97316'; cx.fillRect(PW*0.55*ppm, 0, PW*0.45*ppm, 5*ppm);   // faixa laranja padrão
         if(!pdf) pdf=new jsPDF({unit:'mm',orientation:'landscape',format:[PW,PH]});
         else pdf.addPage([PW,PH],'landscape');
-        pdf.setFillColor(RGB[0],RGB[1],RGB[2]); pdf.rect(0,0,PW,PH,'F');
-        pdf.setFillColor(249,115,22); pdf.rect(PW*0.55,0,PW*0.45,5,'F');   // faixa laranja padrão
-        for(const im of slide){ const h=im.nat*sf; pdf.addImage(im.url,'JPEG',x,y,drawW,h); y+=h+g; }
+        pdf.addImage(cv.toDataURL('image/jpeg',0.92),'JPEG',0,0,PW,PH);
       }
       const fb=CFG.fileBase || slug((document.querySelector('.brand h1')||{}).textContent || document.title);
       pdf.save(fb+'_'+(claro?'claro':'escuro')+'_'+new Date().toISOString().slice(0,10)+'.pdf');

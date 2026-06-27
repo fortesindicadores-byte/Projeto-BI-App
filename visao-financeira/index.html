@@ -1289,26 +1289,30 @@ async function exportarPDF(mode){
     const topo=[main.querySelector('#pdf-report-head'),main.querySelector('.hero'),...qa('.cards-row'),main.querySelector('.charts-row')].filter(Boolean);
     if(topo.length) slides.push(topo);
     qa('.tbl-section').forEach(t=>slides.push([t]));
+    // cada slide é composto num ÚNICO canvas (fundo + blocos + faixa) → 1 imagem por página, sem emendas
+    const COMP_W=2000, COMP_H=Math.round(COMP_W*PH/PW), ppm=COMP_W/PW;
     let pdf=null;
     for(const slide of slides){
       const imgs=[];
       for(const b of slide){
-        // tabelas: renderiza mais largas (sem canvas, é seguro) p/ espalharem e preencherem a largura do slide
         const o=b.classList.contains('tbl-section')?Object.assign({},opts,{windowWidth:1560}):opts;
         const c=await html2canvas(b,o);
-        imgs.push({url:c.toDataURL('image/jpeg',0.95), nat:c.height*uw/c.width});
+        imgs.push({canvas:c, nat:c.height*uw/c.width});
       }
       const natTotal=imgs.reduce((a,im)=>a+im.nat,0)+gap*(imgs.length-1);
-      const sf=Math.min(1, uh/natTotal);   // NUNCA aumenta (>1 estouraria a largura e cortaria); só encolhe p/ caber
+      const sf=Math.min(1, uh/natTotal);
       const drawW=uw*sf, x=m+(uw-drawW)/2, g=gap*sf;
       const grpH=imgs.reduce((a,im)=>a+im.nat*sf,0)+g*(imgs.length-1);
       const hasHead=slide.some(b=>b.id==='pdf-report-head');
-      let y=hasHead?m:m+(uh-grpH)/2;                                   // slide do título: topo; demais: centralizado
+      let y=hasHead?m:m+(uh-grpH)/2;
+      const cv=document.createElement('canvas'); cv.width=COMP_W; cv.height=COMP_H;
+      const cx=cv.getContext('2d');
+      cx.fillStyle=bg; cx.fillRect(0,0,COMP_W,COMP_H);
+      for(const im of imgs){ const h=im.nat*sf; cx.drawImage(im.canvas, x*ppm, y*ppm, drawW*ppm, h*ppm); y+=h+g; }
+      cx.fillStyle='#F97316'; cx.fillRect(PW*0.55*ppm, 0, PW*0.45*ppm, 5*ppm);
       if(!pdf) pdf=new jsPDF({unit:'mm',orientation:'landscape',format:[PW,PH]});
       else pdf.addPage([PW,PH],'landscape');
-      pdf.setFillColor(RGB[0],RGB[1],RGB[2]); pdf.rect(0,0,PW,PH,'F');
-      pdf.setFillColor(249,115,22); pdf.rect(PW*0.55,0,PW*0.45,5,'F'); // faixa laranja (padrão, claro e escuro)
-      for(const im of imgs){ const h=im.nat*sf; pdf.addImage(im.url,'JPEG',x,y,drawW,h); y+=h+g; }
+      pdf.addImage(cv.toDataURL('image/jpeg',0.92),'JPEG',0,0,PW,PH);
     }
     pdf.save(`Visao-Financeira_${claro?'claro':'escuro'}_${now.toISOString().slice(0,10)}.pdf`);
   }catch(e){ console.error(e); alert('Erro ao gerar PDF: '+(e&&e.message||e)); }
