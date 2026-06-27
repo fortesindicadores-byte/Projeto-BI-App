@@ -6,6 +6,7 @@
 <title>Visão Financeira — DRE Frota</title>
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/html2pdf.js@0.10.1/dist/html2pdf.bundle.min.js"></script>
 <style>
 :root {
   --bg:      #0C1017;
@@ -247,6 +248,21 @@ table.dre tr.total td.imp-cell{font-size:15px;}
   transition:background .15s;
 }
 .refresh-btn:hover{background:rgba(249,115,22,.32);}
+.pdf-btn{display:flex;align-items:center;gap:5px;background:rgba(249,115,22,.15);border:1px solid rgba(249,115,22,.3);border-radius:4px;padding:5px 9px;cursor:pointer;color:var(--orange);font-family:'Montserrat',sans-serif;font-size:11px;font-weight:800;letter-spacing:.5px;}
+.pdf-btn:hover{background:rgba(249,115,22,.32);}
+.pdf-btn:disabled{opacity:.55;cursor:default;}
+/* Cabeçalho do relatório PDF — só visível durante a exportação */
+#pdf-report-head{display:none;}
+body.exporting #pdf-report-head{display:block;background:#FFFFFF;color:#111;padding:0 0 14px;margin-bottom:14px;border-bottom:2px solid #F97316;}
+#pdf-report-head .rh-top{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;}
+#pdf-report-head .rh-title{font-size:20px;font-weight:800;color:#0C1017;letter-spacing:.3px;}
+#pdf-report-head .rh-sub{font-size:11px;color:#555;margin-top:2px;font-weight:600;}
+#pdf-report-head .rh-meta{font-size:10px;color:#555;text-align:right;font-weight:600;line-height:1.5;}
+#pdf-report-head .rh-filtros{margin-top:10px;font-size:10.5px;color:#222;line-height:1.6;}
+#pdf-report-head .rh-filtros b{color:#F97316;}
+/* Durante a exportação: esconder controles e evitar cortar blocos no meio */
+body.exporting .ref-toggle{display:none!important;}
+body.exporting .chart-card,body.exporting .tbl-section,body.exporting .cards-row,body.exporting .charts-row{break-inside:avoid;page-break-inside:avoid;}
 .refresh-btn svg{display:block;}
 .theme-btn{background:rgba(249,115,22,.15);border:1px solid rgba(249,115,22,.3);border-radius:4px;padding:4px 6px;cursor:pointer;color:var(--orange);display:flex;align-items:center;}
 .theme-btn:hover{background:rgba(249,115,22,.32);}
@@ -353,6 +369,10 @@ body.light-mode table.dre tbody tr{border-bottom:1px solid rgba(0,0,0,.06);}
   </div>
   <div class="header-right">
     <a href="../" class="back-btn" title="Voltar ao Hub"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg></a>
+    <button class="pdf-btn" id="pdfBtn" onclick="exportarPDF()" title="Exportar relatório PDF (estado filtrado)">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><polyline points="9 15 12 18 15 15"/></svg>
+      <span>PDF</span>
+    </button>
     <button class="theme-btn" id="themeBtn" title="Modo claro/escuro"></button>
     <button class="refresh-btn" onclick="recarregar()" title="Atualizar dados">
       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
@@ -436,6 +456,17 @@ body.light-mode table.dre tbody tr{border-bottom:1px solid rgba(0,0,0,.06);}
 
 <!-- ╮╮╮╮╮╮ MAIN ╮╮╮╮╮╮ -->
 <main class="main">
+
+  <div id="pdf-report-head">
+    <div class="rh-top">
+      <div>
+        <div class="rh-title">Gestão em Movimento · Visão Financeira</div>
+        <div class="rh-sub">DRE Consolidado — Frota</div>
+      </div>
+      <div class="rh-meta" id="rh-meta"></div>
+    </div>
+    <div class="rh-filtros" id="rh-filtros"></div>
+  </div>
 
   <section class="hero">
     <div class="hero-main">
@@ -1178,6 +1209,48 @@ function toggleRef(which){
   if(which==='brl') REF_BRL = REF_BRL==='rem'?'orc':'rem';
   else              REF_AV  = REF_AV ==='rem'?'orc':'rem';
   if(typeof lastF!=='undefined' && lastF) renderCharts(lastF);
+}
+
+// ═══════════════════════════════════
+// EXPORTAR PDF (relatório do estado filtrado)
+// ═══════════════════════════════════
+function _fmtFiltro(label, arr){
+  if(!arr || !arr.length) return `<b>${label}:</b> Todos`;
+  return `<b>${label}:</b> ${arr.join(', ')}`;
+}
+async function exportarPDF(){
+  if(typeof html2pdf==='undefined'){ alert('Biblioteca de PDF ainda carregando — tente de novo em instantes.'); return; }
+  const btn=document.getElementById('pdfBtn');
+  const f=getF();
+  const vigTxt=(f.vig&&f.vig.length)?f.vig.map(vk=>{const d=vigs.find(x=>vigKey(x)===vk);return d?vigLabel(d).toUpperCase():vk;}):null;
+  document.getElementById('rh-filtros').innerHTML='Filtros aplicados &nbsp; '+[
+    _fmtFiltro('Ano',f.ano),_fmtFiltro('Vigência',vigTxt),_fmtFiltro('Unidade',f.uni),
+    _fmtFiltro('Projeto',f.nv3),_fmtFiltro('Pacote',f.pac),_fmtFiltro('Conta',f.cta)
+  ].join(' &nbsp;·&nbsp; ');
+  const now=new Date();
+  document.getElementById('rh-meta').innerHTML=`Gerado em ${now.toLocaleDateString('pt-BR')} ${now.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})}<br>Gestão em Movimento · BI Frota`;
+  const eraDark=!document.body.classList.contains('light-mode');
+  if(eraDark) applyTheme('light');
+  document.body.classList.add('exporting');
+  if(btn){ btn.disabled=true; const s=btn.querySelector('span'); if(s)s.textContent='Gerando…'; }
+  window.scrollTo(0,0);
+  await new Promise(r=>setTimeout(r,500));   // espera gráficos re-renderizarem no claro
+  const el=document.querySelector('main.main');
+  try{
+    await html2pdf().set({
+      margin:[8,8,10,8],
+      filename:`Visao-Financeira_${now.toISOString().slice(0,10)}.pdf`,
+      image:{type:'jpeg',quality:0.96},
+      html2canvas:{scale:2,backgroundColor:'#FFFFFF',useCORS:true,scrollX:0,scrollY:0,windowWidth:el.scrollWidth},
+      jsPDF:{unit:'mm',format:'a4',orientation:'landscape'},
+      pagebreak:{mode:['css','legacy']}
+    }).from(el).save();
+  }catch(e){ console.error(e); alert('Erro ao gerar PDF: '+(e&&e.message||e)); }
+  finally{
+    document.body.classList.remove('exporting');
+    if(btn){ btn.disabled=false; const s=btn.querySelector('span'); if(s)s.textContent='PDF'; }
+    if(eraDark) applyTheme('dark');
+  }
 }
 
 // ═══════════════════════════════════
