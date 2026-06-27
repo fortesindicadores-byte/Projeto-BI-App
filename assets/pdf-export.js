@@ -62,7 +62,7 @@ body.exporting:not(.light-mode) #pdf-report-head .rh-filtros{color:#CBD5E1;}
     }
 
     // cabeçalho do relatório no topo do main
-    const main=document.querySelector(CFG.main || 'main');
+    const main=getMain();
     if(main && !document.getElementById('pdf-report-head')){
       const title = CFG.title || (document.querySelector('.brand h1')||{}).textContent || document.title;
       const sub   = CFG.subtitle!=null ? CFG.subtitle : ((document.querySelector('.brand p')||{}).textContent || '');
@@ -75,6 +75,7 @@ body.exporting:not(.light-mode) #pdf-report-head .rh-filtros{color:#CBD5E1;}
     }
   };
 
+  function getMain(){ return (CFG.main&&document.querySelector(CFG.main)) || document.querySelector('main') || document.querySelector('.main'); }
   function esc(s){return String(s==null?'':s).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));}
   function slug(s){return String(s||'relatorio').normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^a-zA-Z0-9]+/g,'-').replace(/^-|-$/g,'');}
 
@@ -97,7 +98,7 @@ body.exporting:not(.light-mode) #pdf-report-head .rh-filtros{color:#CBD5E1;}
     if(typeof html2canvas==='undefined' || !window.jspdf){ alert('Biblioteca de PDF ainda carregando — tente de novo em instantes.'); return; }
     const claro = mode!=='dark';
     const btn=document.getElementById('pdfBtn');
-    const main=document.querySelector(CFG.main || 'main');
+    const main=getMain();
     const head=document.getElementById('pdf-report-head');
     if(head){
       const fr=document.getElementById('rh-filtros'); if(fr) fr.innerHTML=filtrosResumo();
