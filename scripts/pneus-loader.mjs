@@ -81,7 +81,8 @@ function fetchAllTires(branchId) {
       veiculoId: p.installed?.vehicleId || null, placa: p.installed?.licensePlate || '',
       frota: p.installed?.fleetId || '', posicao: p.installed?.installedPosition || null,
       nomePosicao: p.installed?.installedPositionName || '', direcional: p.installed?.isOnSteeringAxle || false,
-      criadoEm: p.createdAt || ''
+      criadoEm: p.createdAt || '',
+      motivoDescarte: p.disposal?.disposalReasonDescription || '', motivoDescarteId: p.disposal?.disposalReasonId || null
     };
   }));
 }
