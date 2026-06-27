@@ -121,19 +121,28 @@ body.exporting:not(.light-mode) #pdf-report-head .rh-filtros{color:#CBD5E1;}
       const bg=claro?'#FFFFFF':'#0C1017', RGB=claro?[255,255,255]:[12,16,23];
       const baseOpts={scale:2,backgroundColor:bg,useCORS:true,logging:false,ignoreElements:el=>el.id==='pdf-overlay'};
       const kids=[...main.children].filter(e=>e.id!=='pdf-report-head' && !e.classList.contains('divider') && e.offsetHeight>2 && getComputedStyle(e).display!=='none');
-      const tbls=kids.filter(e=>e.classList.contains('tbl-section'));
-      const nonT=kids.filter(e=>!e.classList.contains('tbl-section'));
-      // captura: blocos comuns AO VIVO (gráficos lado a lado sem cortar); tabelas mais largas p/ preencher
-      const topoEls=[head, ...nonT].filter(Boolean);
-      const topoItems=[];
-      for(const el of topoEls){ const c=await html2canvas(el,baseOpts); topoItems.push({url:c.toDataURL('image/jpeg',0.95), nat:c.height*uw/c.width, head: el===head}); }
-      const tblItems=[];
-      for(const el of tbls){ const c=await html2canvas(el,Object.assign({},baseOpts,{windowWidth:1560})); tblItems.push({url:c.toDataURL('image/jpeg',0.95), nat:c.height*uw/c.width}); }
-      // monta slides: empacota blocos do topo (cabe ~1.3 slide e escala p/ caber); cada tabela um slide
+      const isTitle=e=>e.classList.contains('sec-title')||['H1','H2','H3','H4'].includes(e.tagName);
+      // separa em: blocos do topo (empacotados) e grupos de tabela (cada tabela leva junto o título de seção que vem antes)
+      const topoEls=[head].filter(Boolean);
+      const tableGroups=[];
+      for(const e of kids){
+        if(e.classList.contains('tbl-section')){
+          const g=[];
+          const last=topoEls[topoEls.length-1];
+          if(last && last!==head && isTitle(last)) g.push(topoEls.pop()); // puxa o título de seção p/ junto da tabela
+          g.push(e);
+          tableGroups.push(g);
+        } else topoEls.push(e);
+      }
+      // captura: topo AO VIVO; tabelas mais largas (windowWidth) p/ preencher; títulos ao vivo
+      const cap=async(el)=>{ const wide=el.classList.contains('tbl-section'); const c=await html2canvas(el, wide?Object.assign({},baseOpts,{windowWidth:1560}):baseOpts); return {url:c.toDataURL('image/jpeg',0.95), nat:c.height*uw/c.width, head: el===head}; };
+      const topoItems=[]; for(const el of topoEls) topoItems.push(await cap(el));
+      const tableSlides=[]; for(const g of tableGroups){ const its=[]; for(const el of g) its.push(await cap(el)); tableSlides.push(its); }
+      // monta slides: empacota blocos do topo (cabe ~1.3 slide e escala p/ caber); cada grupo de tabela = 1 slide
       const slides=[]; let grp=[], sum=0;
       for(const it of topoItems){ if(grp.length && (sum+gap+it.nat)>1.3*uh){ slides.push(grp); grp=[]; sum=0; } if(grp.length) sum+=gap; sum+=it.nat; grp.push(it); }
       if(grp.length) slides.push(grp);
-      for(const it of tblItems) slides.push([it]);
+      for(const ts of tableSlides) slides.push(ts);
       let pdf=null;
       for(const slide of slides){
         const natTotal=slide.reduce((a,im)=>a+im.nat,0)+gap*(slide.length-1);
