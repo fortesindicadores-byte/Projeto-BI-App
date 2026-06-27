@@ -1268,14 +1268,15 @@ async function exportarPDF(mode){
   await new Promise(r=>setTimeout(r,500));   // espera gráficos re-renderizarem no tema escolhido
   try{
     const { jsPDF }=window.jspdf;
-    const PW=297, m=8, uw=PW-2*m, gap=5, MAXH=200;   // largura A4 paisagem; altura da página adapta ao conteúdo
+    const PW=297, m=8, uw=PW-2*m, gap=5, MAXH=250;   // largura A4 paisagem; altura da página adapta ao conteúdo
     const bg=claro?'#FFFFFF':'#0C1017';
     const RGB=claro?[255,255,255]:[12,16,23];
     // renderiza cada bloco em LARGURA CHEIA (sem encolher); guarda imagem + altura
     const blocos=[...document.querySelectorAll('main.main > *')]
       .filter(e=>!e.classList.contains('divider') && e.offsetHeight>2);
-    // força layout desktop na captura (evita o media-query empilhar gráficos em janela estreita)
-    const winW=Math.max(window.innerWidth, 1200);
+    // captura num layout desktop "compacto" (logo acima do breakpoint 900 que empilha os gráficos):
+    // largura menor => conteúdo escala MAIOR na página (texto mais legível), gráficos ainda lado a lado.
+    const winW=1040;
     const items=[];
     for(const b of blocos){
       const c=await html2canvas(b,{scale:2,backgroundColor:bg,useCORS:true,logging:false,windowWidth:winW});
