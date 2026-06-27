@@ -135,7 +135,15 @@ body.exporting:not(.light-mode) #pdf-report-head .rh-filtros{color:#CBD5E1;}
         } else topoEls.push(e);
       }
       // captura: topo AO VIVO; tabelas mais largas (windowWidth) p/ preencher; títulos ao vivo
-      const cap=async(el)=>{ const wide=el.classList.contains('tbl-section'); const c=await html2canvas(el, wide?Object.assign({},baseOpts,{windowWidth:1560}):baseOpts); return {canvas:c, nat:c.height*uw/c.width, head: el===head}; };
+      const cap=async(el)=>{
+        let o=baseOpts;
+        if(el.classList.contains('tbl-section')){ // tabela: captura na largura natural (sem cortar colunas), min 1560, teto 2800
+          const t=el.querySelector('table')||el; const ww=Math.max(1560, Math.min(2800, (t.scrollWidth||1560)+60));
+          o=Object.assign({},baseOpts,{windowWidth:ww});
+        }
+        const c=await html2canvas(el,o);
+        return {canvas:c, nat:c.height*uw/c.width, head: el===head};
+      };
       const topoItems=[]; for(const el of topoEls) topoItems.push(await cap(el));
       const tableSlides=[]; for(const g of tableGroups){ const its=[]; for(const el of g) its.push(await cap(el)); tableSlides.push(its); }
       // monta slides: empacota blocos do topo (cabe ~1.3 slide e escala p/ caber); cada grupo de tabela = 1 slide
