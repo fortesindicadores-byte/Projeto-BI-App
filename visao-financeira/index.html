@@ -6,7 +6,8 @@
 <title>Visão Financeira — DRE Frota</title>
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/html2pdf.js@0.10.1/dist/html2pdf.bundle.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.2/dist/jspdf.umd.min.js"></script>
 <style>
 :root {
   --bg:      #0C1017;
@@ -1247,7 +1248,7 @@ function togglePdfMenu(e){
 document.addEventListener('click',e=>{ if(!e.target.closest('.pdf-wrap')){const m=document.getElementById('pdfMenu'); if(m)m.classList.remove('open');} });
 async function exportarPDF(mode){
   const mn=document.getElementById('pdfMenu'); if(mn)mn.classList.remove('open');
-  if(typeof html2pdf==='undefined'){ alert('Biblioteca de PDF ainda carregando — tente de novo em instantes.'); return; }
+  if(typeof html2canvas==='undefined' || !window.jspdf){ alert('Biblioteca de PDF ainda carregando — tente de novo em instantes.'); return; }
   const claro = mode!=='dark';   // padrão claro; 'dark' = relatório escuro
   const btn=document.getElementById('pdfBtn');
   const f=getF();
@@ -1265,16 +1266,26 @@ async function exportarPDF(mode){
   if(btn){ btn.disabled=true; const s=btn.querySelector('span'); if(s)s.textContent='Gerando…'; }
   window.scrollTo(0,0);
   await new Promise(r=>setTimeout(r,500));   // espera gráficos re-renderizarem no tema escolhido
-  const el=document.querySelector('main.main');
   try{
-    await html2pdf().set({
-      margin:[8,8,10,8],
-      filename:`Visao-Financeira_${claro?'claro':'escuro'}_${now.toISOString().slice(0,10)}.pdf`,
-      image:{type:'jpeg',quality:0.96},
-      html2canvas:{scale:2,backgroundColor:claro?'#FFFFFF':'#0C1017',useCORS:true,scrollX:0,scrollY:0,windowWidth:el.scrollWidth},
-      jsPDF:{unit:'mm',format:'a4',orientation:'landscape'},
-      pagebreak:{mode:['css','legacy']}
-    }).from(el).save();
+    const { jsPDF }=window.jspdf;
+    const pdf=new jsPDF({orientation:'landscape',unit:'mm',format:'a4'});
+    const W=pdf.internal.pageSize.getWidth(), H=pdf.internal.pageSize.getHeight();
+    const m=8, uw=W-2*m, uh=H-2*m, gap=4;
+    const bg=claro?'#FFFFFF':'#0C1017';
+    // 1 imagem por bloco (cabeçalho, hero, cards, gráficos, cada tabela); cada bloco escalado
+    // p/ caber na página (sem cortar). Pula divisórias. Empilha; nova página quando não couber.
+    const blocos=[...document.querySelectorAll('main.main > *')]
+      .filter(e=>!e.classList.contains('divider') && e.offsetHeight>2);
+    let y=m;
+    for(const b of blocos){
+      const canvas=await html2canvas(b,{scale:2,backgroundColor:bg,useCORS:true,logging:false,windowWidth:b.scrollWidth});
+      let w=uw, h=canvas.height*uw/canvas.width;
+      if(h>uh){ h=uh; w=canvas.width*uh/canvas.height; }   // bloco mais alto que a página: encolhe p/ caber inteiro
+      if(y>m && y+h>m+uh){ pdf.addPage(); y=m; }            // não cabe no resto da página → nova página
+      pdf.addImage(canvas.toDataURL('image/jpeg',0.95),'JPEG', m+(uw-w)/2, y, w, h);
+      y+=h+gap;
+    }
+    pdf.save(`Visao-Financeira_${claro?'claro':'escuro'}_${now.toISOString().slice(0,10)}.pdf`);
   }catch(e){ console.error(e); alert('Erro ao gerar PDF: '+(e&&e.message||e)); }
   finally{
     document.body.classList.remove('exporting');
