@@ -1292,7 +1292,12 @@ async function exportarPDF(mode){
     let pdf=null;
     for(const slide of slides){
       const imgs=[];
-      for(const b of slide){ const c=await html2canvas(b,opts); imgs.push({url:c.toDataURL('image/jpeg',0.95), nat:c.height*uw/c.width}); }
+      for(const b of slide){
+        // tabelas: renderiza mais largas (sem canvas, é seguro) p/ espalharem e preencherem a largura do slide
+        const o=b.classList.contains('tbl-section')?Object.assign({},opts,{windowWidth:1560}):opts;
+        const c=await html2canvas(b,o);
+        imgs.push({url:c.toDataURL('image/jpeg',0.95), nat:c.height*uw/c.width});
+      }
       const natTotal=imgs.reduce((a,im)=>a+im.nat,0)+gap*(imgs.length-1);
       const sf=Math.min(1, uh/natTotal);   // NUNCA aumenta (>1 estouraria a largura e cortaria); só encolhe p/ caber
       const drawW=uw*sf, x=m+(uw-drawW)/2, g=gap*sf;
