@@ -61,21 +61,23 @@ body.exporting:not(.light-mode) #pdf-report-head .rh-filtros{color:#CBD5E1;}
       document.addEventListener('click',e=>{ if(!e.target.closest('.pdf-wrap')){const m=document.getElementById('pdfMenu'); if(m)m.classList.remove('open');} });
     }
 
-    // cabeçalho do relatório no topo do main
-    const main=getMain();
-    if(main && !document.getElementById('pdf-report-head')){
-      const title = CFG.title || (document.querySelector('.brand h1')||{}).textContent || document.title;
-      const sub   = CFG.subtitle!=null ? CFG.subtitle : ((document.querySelector('.brand p')||{}).textContent || '');
-      const head=document.createElement('div'); head.id='pdf-report-head';
-      head.innerHTML =
-        '<div class="rh-top"><div><div class="rh-title">'+esc(title)+'</div>'+
-        (sub?'<div class="rh-sub">'+esc(sub)+'</div>':'')+'</div><div class="rh-meta" id="rh-meta"></div></div>'+
-        '<div class="rh-filtros" id="rh-filtros"></div>';
-      main.insertBefore(head, main.firstChild);
-    }
+    // o cabeçalho do relatório é criado/movido no momento da exportação (suporta painéis SPA por página)
   };
 
-  function getMain(){ return (CFG.main&&document.querySelector(CFG.main)) || document.querySelector('main') || document.querySelector('.main'); }
+  function getMain(){ const s=CFG.main; let el=null; if(typeof s==='function'){try{el=s();}catch(_){}} else if(s) el=document.querySelector(s); return el || document.querySelector('main') || document.querySelector('.main'); }
+  function isTableBlock(e){ return e.classList.contains('tbl-section') || e.classList.contains('adh-table-wrap') || !!(e.querySelector && e.querySelector('table')); }
+  function resolveTitle(){ const t=CFG.title; const v=(typeof t==='function')?t():t; return v || (document.querySelector('.brand h1')||{}).textContent || document.title; }
+  function resolveSub(){ const s=CFG.subtitle; const v=(typeof s==='function')?s():s; return v!=null?v:((document.querySelector('.brand p')||{}).textContent||''); }
+  // garante o cabeçalho como 1º filho do main atual (cria/move; atualiza título dinâmico)
+  function ensureHead(main){
+    let head=document.getElementById('pdf-report-head');
+    if(!head){ head=document.createElement('div'); head.id='pdf-report-head';
+      head.innerHTML='<div class="rh-top"><div><div class="rh-title"></div><div class="rh-sub"></div></div><div class="rh-meta" id="rh-meta"></div></div><div class="rh-filtros" id="rh-filtros"></div>'; }
+    if(main && main.firstChild!==head) main.insertBefore(head, main.firstChild);
+    head.querySelector('.rh-title').textContent=resolveTitle();
+    const sub=resolveSub(), se=head.querySelector('.rh-sub'); se.textContent=sub; se.style.display=sub?'':'none';
+    return head;
+  }
   function esc(s){return String(s==null?'':s).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));}
   function slug(s){return String(s||'relatorio').normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^a-zA-Z0-9]+/g,'-').replace(/^-|-$/g,'');}
 
@@ -99,15 +101,15 @@ body.exporting:not(.light-mode) #pdf-report-head .rh-filtros{color:#CBD5E1;}
     const claro = mode!=='dark';
     const btn=document.getElementById('pdfBtn');
     const main=getMain();
-    const head=document.getElementById('pdf-report-head');
-    if(head){
-      const fr=document.getElementById('rh-filtros'); if(fr) fr.innerHTML=filtrosResumo();
-      const now=new Date(), rm=document.getElementById('rh-meta');
-      if(rm) rm.innerHTML='Gerado em '+now.toLocaleDateString('pt-BR')+' '+now.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})+'<br>Gestão em Movimento · BI Frota';
-    }
+    if(!main){ alert('Não encontrei o conteúdo para exportar.'); return; }
+    const head=ensureHead(main);
+    const fr=document.getElementById('rh-filtros'); if(fr) fr.innerHTML=filtrosResumo();
+    const now=new Date(), rm=document.getElementById('rh-meta');
+    if(rm) rm.innerHTML='Gerado em '+now.toLocaleDateString('pt-BR')+' '+now.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})+'<br>Gestão em Movimento · BI Frota';
+    const setTheme=CFG.setTheme||window.applyTheme;
     const temaOrig=document.body.classList.contains('light-mode')?'light':'dark';
     const temaAlvo=claro?'light':'dark';
-    if(temaOrig!==temaAlvo && typeof window.applyTheme==='function') window.applyTheme(temaAlvo);
+    if(temaOrig!==temaAlvo && typeof setTheme==='function') setTheme(temaAlvo);
     document.body.classList.add('exporting');
     if(btn){ btn.disabled=true; const s=btn.querySelector('span'); if(s)s.textContent='Gerando…'; }
     const ov=document.createElement('div'); ov.id='pdf-overlay';
@@ -120,13 +122,14 @@ body.exporting:not(.light-mode) #pdf-report-head .rh-filtros{color:#CBD5E1;}
       const PW=338.67, PH=190.5, m=9, uw=PW-2*m, uh=PH-2*m, gap=6;   // 16:9 widescreen (PowerPoint)
       const bg=claro?'#FFFFFF':'#0C1017', RGB=claro?[255,255,255]:[12,16,23];
       const baseOpts={scale:2,backgroundColor:bg,useCORS:true,logging:false,ignoreElements:el=>el.id==='pdf-overlay'};
-      const kids=[...main.children].filter(e=>e.id!=='pdf-report-head' && !e.classList.contains('divider') && e.offsetHeight>2 && getComputedStyle(e).display!=='none');
+      const SKIP=/(^|\s)(topbar|toolbar|header|header-filters|filters|sidebar|no-pdf)(\s|$)/;
+      const kids=[...main.children].filter(e=>e.id!=='pdf-report-head' && e.tagName!=='HEADER' && !SKIP.test(e.className) && !e.classList.contains('divider') && e.offsetHeight>2 && getComputedStyle(e).display!=='none');
       const isTitle=e=>e.classList.contains('sec-title')||['H1','H2','H3','H4'].includes(e.tagName);
       // separa em: blocos do topo (empacotados) e grupos de tabela (cada tabela leva junto o título de seção que vem antes)
       const topoEls=[head].filter(Boolean);
       const tableGroups=[];
       for(const e of kids){
-        if(e.classList.contains('tbl-section')){
+        if(isTableBlock(e)){
           const g=[];
           const last=topoEls[topoEls.length-1];
           if(last && last!==head && isTitle(last)) g.push(topoEls.pop()); // puxa o título de seção p/ junto da tabela
@@ -137,7 +140,7 @@ body.exporting:not(.light-mode) #pdf-report-head .rh-filtros{color:#CBD5E1;}
       // captura: topo AO VIVO; tabelas mais largas (windowWidth) p/ preencher; títulos ao vivo
       const cap=async(el)=>{
         let o=baseOpts;
-        if(el.classList.contains('tbl-section')){ // tabela: captura na largura natural (sem cortar colunas), min 1560, teto 2800
+        if(isTableBlock(el)){ // tabela: captura na largura natural (sem cortar colunas), min 1560, teto 2800
           const t=el.querySelector('table')||el; const ww=Math.max(1560, Math.min(2800, (t.scrollWidth||1560)+60));
           o=Object.assign({},baseOpts,{windowWidth:ww});
         }
@@ -171,14 +174,14 @@ body.exporting:not(.light-mode) #pdf-report-head .rh-filtros{color:#CBD5E1;}
         else pdf.addPage([PW,PH],'landscape');
         pdf.addImage(cv.toDataURL('image/jpeg',0.92),'JPEG',0,0,PW,PH);
       }
-      const fb=CFG.fileBase || slug((document.querySelector('.brand h1')||{}).textContent || document.title);
+      const fb=CFG.fileBase || slug(resolveTitle());
       pdf.save(fb+'_'+(claro?'claro':'escuro')+'_'+new Date().toISOString().slice(0,10)+'.pdf');
     }catch(e){ console.error(e); alert('Erro ao gerar PDF: '+(e&&e.message||e)); }
     finally{
       ov.remove();
       document.body.classList.remove('exporting');
       if(btn){ btn.disabled=false; const s=btn.querySelector('span'); if(s)s.textContent='PDF'; }
-      if(temaOrig!==temaAlvo && typeof window.applyTheme==='function') window.applyTheme(temaOrig);
+      if(temaOrig!==temaAlvo && typeof setTheme==='function') setTheme(temaOrig);
     }
   }
   window.exportarPDF = exportar;   // permite chamada externa
