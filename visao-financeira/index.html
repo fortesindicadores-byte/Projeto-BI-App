@@ -1268,27 +1268,39 @@ async function exportarPDF(mode){
   await new Promise(r=>setTimeout(r,500));   // espera gráficos re-renderizarem no tema escolhido
   try{
     const { jsPDF }=window.jspdf;
-    const pdf=new jsPDF({orientation:'landscape',unit:'mm',format:'a4'});
-    const W=pdf.internal.pageSize.getWidth(), H=pdf.internal.pageSize.getHeight();
-    const m=8, uw=W-2*m, uh=H-2*m, gap=4;
+    const PW=297, m=8, uw=PW-2*m, gap=5, MAXH=200;   // largura A4 paisagem; altura da página adapta ao conteúdo
     const bg=claro?'#FFFFFF':'#0C1017';
     const RGB=claro?[255,255,255]:[12,16,23];
-    // pinta a página inteira na cor do tema (evita borda branca no modo escuro)
-    const paintBg=()=>{ pdf.setFillColor(RGB[0],RGB[1],RGB[2]); pdf.rect(0,0,W,H,'F'); };
-    paintBg();
-    // 1 imagem por bloco (cabeçalho, hero, cards, gráficos, cada tabela); cada bloco escalado
-    // p/ caber na página (sem cortar). Pula divisórias. Empilha; nova página quando não couber.
+    // renderiza cada bloco em LARGURA CHEIA (sem encolher); guarda imagem + altura
     const blocos=[...document.querySelectorAll('main.main > *')]
       .filter(e=>!e.classList.contains('divider') && e.offsetHeight>2);
-    let y=m;
+    // força layout desktop na captura (evita o media-query empilhar gráficos em janela estreita)
+    const winW=Math.max(window.innerWidth, 1200);
+    const items=[];
     for(const b of blocos){
-      const canvas=await html2canvas(b,{scale:2,backgroundColor:bg,useCORS:true,logging:false,windowWidth:b.scrollWidth});
-      let w=uw, h=canvas.height*uw/canvas.width;
-      if(h>uh){ h=uh; w=canvas.width*uh/canvas.height; }   // bloco mais alto que a página: encolhe p/ caber inteiro
-      if(y>m && y+h>m+uh){ pdf.addPage(); paintBg(); y=m; } // não cabe no resto da página → nova página
-      pdf.addImage(canvas.toDataURL('image/jpeg',0.95),'JPEG', m+(uw-w)/2, y, w, h);
-      y+=h+gap;
+      const c=await html2canvas(b,{scale:2,backgroundColor:bg,useCORS:true,logging:false,windowWidth:winW});
+      items.push({url:c.toDataURL('image/jpeg',0.95), h:c.height*uw/c.width});
     }
+    // empacota blocos por página; a ALTURA da página = conteúdo (sem espaço sobrando).
+    // bloco maior que MAXH ganha página própria com a altura que precisar (continua em largura cheia).
+    let pdf=null, page=[], used=0;
+    const flush=()=>{
+      if(!page.length) return;
+      const PH=used+2*m, orient=PH>=PW?'p':'l';
+      if(!pdf) pdf=new jsPDF({unit:'mm',orientation:orient,format:[PW,PH]});
+      else pdf.addPage([PW,PH],orient);
+      pdf.setFillColor(RGB[0],RGB[1],RGB[2]);
+      pdf.rect(0,0,pdf.internal.pageSize.getWidth(),pdf.internal.pageSize.getHeight(),'F');
+      let y=m;
+      for(const it of page){ pdf.addImage(it.url,'JPEG',m,y,uw,it.h); y+=it.h+gap; }
+      page=[]; used=0;
+    };
+    for(const it of items){
+      if(page.length>0 && (used+gap+it.h)>MAXH) flush();
+      if(page.length>0) used+=gap;
+      used+=it.h; page.push(it);
+    }
+    flush();
     pdf.save(`Visao-Financeira_${claro?'claro':'escuro'}_${now.toISOString().slice(0,10)}.pdf`);
   }catch(e){ console.error(e); alert('Erro ao gerar PDF: '+(e&&e.message||e)); }
   finally{
