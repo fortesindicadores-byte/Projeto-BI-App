@@ -1295,25 +1295,16 @@
           <div class="adh-label">Descarte de Pneus (Acumulado)</div>
           <div class="adh-value" id="descValue">—</div>
           <div class="adh-deltas">
-            <div class="adh-delta">Total em uso<b id="descTotalUso">—</b></div>
+            <div class="adh-delta">Total de pneus<b id="descTotalUso">—</b></div>
             <div class="adh-delta">Descartados<b id="descTotalDesc" style="color:var(--red-soft)">—</b></div>
           </div>
         </div>
       </div>
 
-      <!-- GRÁFICO PARETO POR MOTIVO -->
-      <div class="card" style="margin:0 0 24px">
-        <div class="card-title" style="margin-bottom:6px">DESCARTES POR MOTIVO</div>
-        <div style="position:relative;height:340px">
-          <canvas id="chartDescMotivoQtd"></canvas>
-        </div>
-        <div id="motivoQtdEmpty" style="display:none;padding:24px 8px;color:var(--text-muted);font-size:12px;text-align:center"></div>
-      </div>
-
       <!-- TABELA POR DIMENSÃO -->
       <div class="adh-table-wrap">
-        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;padding:14px 18px 4px">
-          <div class="adh-table-title" id="descTableTitle" style="padding:0">DESCARTE POR UNIDADE</div>
+        <div style="padding:14px 18px 4px">
+          <div class="adh-table-title" style="padding:0 0 8px">DESCARTES</div>
           <div class="chart-chips" id="descDimToggle">
             <button class="chip active" data-dim="unidade" onclick="setDescDim('unidade')">UNIDADE</button>
             <button class="chip" data-dim="motivo" onclick="setDescDim('motivo')">MOTIVO</button>
@@ -1573,74 +1564,16 @@ function setDescDim(dim){
 function renderDescarte() {
   if (!DATA.tires || !DATA.tires.length) return;
   const tires = getFilteredTires();
-  const emUso = tires.filter(EM_USO);
-  const descartados = tires.filter(DESCARTADO);
-  const nUso = emUso.length;
-  const nDesc = descartados.length;
-  const pct = nUso ? (nDesc / nUso) * 100 : 0;
+  const nTotal = tires.length;                       // total de pneus que a seleção TEVE (todos os status)
+  const nDesc = tires.filter(DESCARTADO).length;
+  const pct = nTotal ? (nDesc / nTotal) * 100 : 0;
 
   // HERO
   const heroEl = document.getElementById('descValue');
   heroEl.textContent = pct.toFixed(1).replace('.', ',') + '%';
   heroEl.style.color = corCluster(clusterPct(pct));
-  document.getElementById('descTotalUso').textContent = nUso.toLocaleString('pt-BR');
+  document.getElementById('descTotalUso').textContent = nTotal.toLocaleString('pt-BR');
   document.getElementById('descTotalDesc').textContent = nDesc.toLocaleString('pt-BR');
-
-  // GRÁFICO PARETO POR MOTIVO (barras verticais + linha de % acumulado)
-  const porMotivo = {};
-  descartados.forEach(t => { const m = motivoCurto(t.motivoDescarte); porMotivo[m] = (porMotivo[m] || 0) + 1; });
-  const temMotivoReal = descartados.some(t => t.motivoDescarte && String(t.motivoDescarte).trim());
-
-  const qtdWrap = document.getElementById('chartDescMotivoQtd');
-  const qtdEmpty = document.getElementById('motivoQtdEmpty');
-
-  if (charts.qtd) { charts.qtd.destroy(); charts.qtd = null; }
-
-  if (!temMotivoReal) {
-    qtdWrap.style.display = 'none';
-    qtdEmpty.style.display = '';
-    qtdEmpty.textContent = 'Motivos serão exibidos após a próxima carga do loader';
-  } else {
-    qtdWrap.style.display = '';
-    qtdEmpty.style.display = 'none';
-
-    const entries = Object.entries(porMotivo).sort((a, b) => b[1] - a[1]);
-    const labels = entries.map(e => e[0]);
-    const valsQtd = entries.map(e => e[1]);
-    const totalDesc = valsQtd.reduce((s, v) => s + v, 0) || 1;
-    let acc = 0;
-    const valsAcum = valsQtd.map(v => { acc += v; return (acc / totalDesc) * 100; });
-    const isLight = document.body.classList.contains('light-mode');
-    const labelColor = isLight ? '#1a1a1a' : '#F1F5F9';
-    const tooltip = { backgroundColor:'#141B26', titleColor:'#F97316', bodyColor:'#F1F5F9', borderColor:'#1E2D40', borderWidth:1, titleFont:{family:'Montserrat'}, bodyFont:{family:'Montserrat'} };
-
-    charts.qtd = new Chart(qtdWrap.getContext('2d'), {
-      data: {
-        labels: labels,
-        datasets: [
-          { type: 'bar', label: 'Qtd', data: valsQtd, backgroundColor: '#F97316', borderRadius: 4, maxBarThickness: 46, yAxisID: 'y', order: 2 },
-          { type: 'line', label: '% acumulado', data: valsAcum, borderColor: '#38BDF8', backgroundColor: '#38BDF8', borderWidth: 2, tension: 0.25, pointRadius: 3, pointBackgroundColor: '#38BDF8', yAxisID: 'y1', order: 1 }
-        ]
-      },
-      options: {
-        responsive: true, maintainAspectRatio: false,
-        plugins: {
-          legend: { display: false }, tooltip: tooltip,
-          datalabels: {
-            color: labelColor, font:{ family:'Montserrat', weight:'700', size:10 },
-            anchor:'end', align:'end',
-            formatter: (v, ctx) => ctx.dataset.type === 'line' ? '' : v
-          }
-        },
-        scales: {
-          x: { grid: { display:false }, ticks: { color: getTick(10).color, font: getTick(10).font, maxRotation: 55, minRotation: 45, autoSkip: false } },
-          y:  { position: 'left', grid: getGrid(), ticks: getTick(10), beginAtZero: true },
-          y1: { position: 'right', grid: { display:false }, min: 0, max: 100, ticks: { color: getTick(10).color, font: getTick(10).font, callback: v => v + '%' } }
-        }
-      },
-      plugins: [ChartDataLabels]
-    });
-  }
 
   // TABELA (dimensão atual)
   renderDescarteTable();
@@ -1652,15 +1585,12 @@ function renderDescarte() {
 function renderDescarteTable() {
   if (!DATA.tires || !DATA.tires.length) return;
   const tires = getFilteredTires();
-  const emUso = tires.filter(EM_USO);
   const descartados = tires.filter(DESCARTADO);
 
-  const titleEl = document.getElementById('descTableTitle');
   const theadEl = document.getElementById('theadDesc');
   const tbodyEl = document.getElementById('tbodyDescUnidade');
 
   if (descDim === 'motivo') {
-    titleEl.textContent = 'DESCARTE POR MOTIVO';
     theadEl.innerHTML = '<tr><th>Motivo</th><th class="col-dias"># Descartados</th><th class="col-dias">% do Total</th></tr>';
     const tot = descartados.length || 1;
     const grp = {};
@@ -1677,29 +1607,27 @@ function renderDescarteTable() {
     return;
   }
 
-  // UNIDADE / MARCA / MODELO
-  const dimLabel = { unidade: 'UNIDADE', marca: 'MARCA', modelo: 'MODELO' }[descDim];
+  // UNIDADE / MARCA / MODELO — TT Pneus = total que a dimensão TEVE (todos os status)
+  const dimLabel = { unidade: 'Unidade', marca: 'Marca', modelo: 'Modelo' }[descDim];
   const dimGet = { unidade: t => t.unidade || '—', marca: t => t.marca || '—', modelo: t => t.modelo || '—' }[descDim];
-  titleEl.textContent = 'DESCARTE POR ' + dimLabel;
-  theadEl.innerHTML = '<tr><th>' + dimLabel.charAt(0) + dimLabel.slice(1).toLowerCase()
-    + '</th><th class="col-dias">TT Pneus</th><th class="col-dias"># Descartados</th><th class="col-dias">% Descarte</th></tr>';
+  theadEl.innerHTML = '<tr><th>' + dimLabel + '</th><th class="col-dias">TT Pneus</th><th class="col-dias"># Descartados</th><th class="col-dias">% Descarte</th></tr>';
 
   const grp = {};
-  emUso.forEach(t => {
+  tires.forEach(t => {
     const k = dimGet(t);
-    if (!grp[k]) grp[k] = { uso: 0, desc: 0 };
-    grp[k].uso++;
+    if (!grp[k]) grp[k] = { total: 0, desc: 0 };
+    grp[k].total++;
     if (DESCARTADO(t)) grp[k].desc++;
   });
   const rows = Object.entries(grp).map(([k, o]) => ({
-    k, uso: o.uso, desc: o.desc, pct: o.uso ? (o.desc / o.uso) * 100 : 0
+    k, total: o.total, desc: o.desc, pct: o.total ? (o.desc / o.total) * 100 : 0
   })).sort((a, b) => b.pct - a.pct);
 
   tbodyEl.innerHTML = rows.map(r => {
     const cor = corCluster(clusterPct(r.pct));
     return '<tr>'
       + '<td>' + r.k + '</td>'
-      + '<td class="col-dias" style="text-align:right">' + r.uso.toLocaleString('pt-BR') + '</td>'
+      + '<td class="col-dias" style="text-align:right">' + r.total.toLocaleString('pt-BR') + '</td>'
       + '<td class="col-dias" style="text-align:right">' + r.desc.toLocaleString('pt-BR') + '</td>'
       + '<td class="col-dias" style="text-align:right"><span class="td-dias" style="color:' + cor + '">' + r.pct.toFixed(1).replace('.', ',') + '%</span></td>'
       + '</tr>';
