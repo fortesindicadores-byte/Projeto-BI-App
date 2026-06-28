@@ -476,25 +476,37 @@ function fetchTier(tier){
     };
     s.onerror=()=>{ if(!done){resolve([]); delete window[fn]; s.remove();} };
     s.src=url; document.head.appendChild(s);
-    setTimeout(()=>{ if(!done){resolve([]); try{delete window[fn];s.remove();}catch(e){}} },15000);
+    setTimeout(()=>{ if(!done){resolve([]); try{delete window[fn];s.remove();}catch(e){}} },10000);
   });
 }
+// tenta de novo se a aba voltar vazia (gviz às vezes falha/timeout)
+async function fetchTierRetry(tier,tries){ for(let i=0;i<(tries||2);i++){ const r=await fetchTier(tier); if(r&&r.length) return r; } return []; }
+
+const CACHE_KEY='bi_cache_termometro_v1';
+function renderTudo(){ buildEffective(); computeMaxTotal(); buildFilters(); renderRegras(); applyFilters(); }
 
 async function atualizar(){
-  set('status-badge','Carregando…');
+  // 1) mostra o último dado bom na hora (cache) — evita matriz meia-carregada / tela vazia
+  let temCache=false;
   try{
-    const [parts,reg]=await Promise.all([Promise.all(TIERS.map(fetchTier)),fetchRegras()]);
-    allRows=parts.flat();
-    buildEffective();
-    if(reg) REGRAS_ROWS=reg;
-    computeMaxTotal();
-    buildFilters();
-    renderRegras();
-    applyFilters();
-    const now=new Date();
-    set('status-badge',`Atualizado ${now.toLocaleDateString('pt-BR')} ${now.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})}`);
-    if(!allRows.length) set('status-badge','Sem dados — verifique a planilha');
-  }catch(e){ console.error(e); set('status-badge','Erro ao carregar dados'); }
+    const c=JSON.parse(localStorage.getItem(CACHE_KEY)||'null');
+    if(c&&c.rows&&c.rows.length){ allRows=c.rows; if(c.reg)REGRAS_ROWS=c.reg; renderTudo(); temCache=true; set('status-badge','Atualizando…'); }
+  }catch(e){}
+  if(!temCache) set('status-badge','Carregando…');
+  // 2) busca fresca (com retry); só substitui se vier dado de verdade
+  try{
+    const [parts,reg]=await Promise.all([Promise.all(TIERS.map(t=>fetchTierRetry(t,2))),fetchRegras()]);
+    const rows=parts.flat();
+    if(rows.length){
+      allRows=rows; if(reg) REGRAS_ROWS=reg;
+      renderTudo();
+      try{ localStorage.setItem(CACHE_KEY,JSON.stringify({t:Date.now(),rows,reg:REGRAS_ROWS})); }catch(e){}
+      const now=new Date();
+      set('status-badge',`Atualizado ${now.toLocaleDateString('pt-BR')} ${now.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})}`);
+    } else {
+      set('status-badge', temCache?'Falha ao atualizar — exibindo último dado':'Sem dados — verifique a planilha');
+    }
+  }catch(e){ console.error(e); set('status-badge', temCache?'Falha ao atualizar — exibindo último dado':'Erro ao carregar dados'); }
 }
 
 // ════════ FILTROS ════════
