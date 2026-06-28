@@ -1301,48 +1301,28 @@
         </div>
       </div>
 
-      <!-- CARDS -->
-      <div class="adh-cards" style="grid-template-columns:repeat(2,1fr)">
-        <div class="adh-card">
-          <div class="adh-card-label">TT Pneus</div>
-          <div class="adh-card-value" id="cardTotalUso">—</div>
-          <div class="adh-card-sub">Pneus em uso (instalados + descartados)</div>
+      <!-- GRÁFICO PARETO POR MOTIVO -->
+      <div class="card" style="margin:0 0 24px">
+        <div class="card-title" style="margin-bottom:6px">DESCARTES POR MOTIVO</div>
+        <div style="position:relative;height:340px">
+          <canvas id="chartDescMotivoQtd"></canvas>
         </div>
-        <div class="adh-card">
-          <div class="adh-card-label"># Descartados</div>
-          <div class="adh-card-value" id="cardDescartados">—</div>
-          <div class="adh-card-sub">Pneus com status de descarte</div>
-        </div>
+        <div id="motivoQtdEmpty" style="display:none;padding:24px 8px;color:var(--text-muted);font-size:12px;text-align:center"></div>
       </div>
 
-      <!-- GRÁFICOS LADO A LADO -->
-      <div class="adh-charts">
-        <div class="card" style="margin:0">
-          <div class="card-title" style="margin-bottom:6px">Descartes por Motivo (Qtd)</div>
-          <div style="position:relative;height:320px">
-            <canvas id="chartDescMotivoQtd"></canvas>
-          </div>
-          <div id="motivoQtdEmpty" style="display:none;padding:24px 8px;color:var(--text-muted);font-size:12px;text-align:center"></div>
-        </div>
-        <div class="card" style="margin:0">
-          <div class="card-title" style="margin-bottom:6px">Descartes por Motivo (%)</div>
-          <div style="position:relative;height:320px">
-            <canvas id="chartDescMotivoPct"></canvas>
-          </div>
-          <div id="motivoPctEmpty" style="display:none;padding:24px 8px;color:var(--text-muted);font-size:12px;text-align:center"></div>
-        </div>
-      </div>
-
-      <!-- TABELA POR UNIDADE -->
+      <!-- TABELA POR DIMENSÃO -->
       <div class="adh-table-wrap">
-        <div class="adh-table-title">Descarte por Unidade</div>
+        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;padding:14px 18px 4px">
+          <div class="adh-table-title" id="descTableTitle" style="padding:0">DESCARTE POR UNIDADE</div>
+          <div class="chart-chips" id="descDimToggle">
+            <button class="chip active" data-dim="unidade" onclick="setDescDim('unidade')">UNIDADE</button>
+            <button class="chip" data-dim="motivo" onclick="setDescDim('motivo')">MOTIVO</button>
+            <button class="chip" data-dim="marca" onclick="setDescDim('marca')">MARCA</button>
+            <button class="chip" data-dim="modelo" onclick="setDescDim('modelo')">MODELO</button>
+          </div>
+        </div>
         <table class="adh-table">
-          <thead><tr>
-            <th>Unidade</th>
-            <th class="col-dias">TT Pneus</th>
-            <th class="col-dias"># Descartados</th>
-            <th class="col-dias">% Descarte</th>
-          </tr></thead>
+          <thead id="theadDesc"></thead>
           <tbody id="tbodyDescUnidade"></tbody>
         </table>
       </div>
@@ -1555,6 +1535,38 @@ const motivoDe = t => (t.motivoDescarte && String(t.motivoDescarte).trim()) ? St
 function clusterPct(p) { return p < 20 ? 'green' : p <= 40 ? 'yellow' : 'red'; }
 function corCluster(c) { return c === 'green' ? '#3BB33B' : c === 'yellow' ? '#f39c12' : '#FF6666'; }
 
+// de-para de motivos -> categorias curtas/agrupadas (MAIÚSCULAS)
+function motivoCurto(m){
+  const s=(m||'').toUpperCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/\s+/g,' ').trim();
+  if(!s) return 'SEM MOTIVO';
+  const has=(...ks)=>ks.some(k=>s.includes(k));
+  if(has('BAIXA PRESS','VAZIO','SOBRECARGA')) return 'BAIXA PRESSÃO/SOBRECARGA';
+  if(has('SUPERAQUEC','CALOR','QUEIMAD')) return 'SUPERAQUECIMENTO';
+  if(has('FADIGA','DOT')) return 'FADIGA/DOT';
+  if(has('INFILTRA')) return 'INFILTRAÇÃO';
+  if(has('PICOTA')) return 'PICOTAGEM';
+  if(has('LINER','BOLHA')) return 'LINER/BOLHA';
+  if(has('CADASTRO','VENDID','DEVOLVID','VENDA','EXTRAVIO','RECOLHIDO','TERCEIROS','EMPILHADEIRA')) return 'ADMINISTRATIVO';
+  if(has('IMPACTO','ACIDENTE','MANOBRA','FRENAGEM','ATRITO','BURACO','TRAVAMENTO')) return 'IMPACTO/ACIDENTE';
+  if(has('ESTOURO','RUPTURA','ZIPER')) return 'RUPTURA/ESTOURO';
+  if(has('CONSERTO','MANCHOES','MANCHÕES','REPARO','REPARADA','COBERTURA')) return 'CONSERTO/REPARO';
+  if(has('VIDA UTIL','DESGASTE','APARENTES','PREVISAO')) return 'DESGASTE/VIDA ÚTIL';
+  if(has('CORTE','OBJETO CORTANTE','PENETR','PERFUR')) return 'CORTE/PERFURAÇÃO';
+  if(has('CINTA','LONA','DESLOCAMENTO','SEPARA','DESAGREGA','OXIDA')) return 'CINTAS/LONAS';
+  if(has('TALAO')) return 'TALÃO';
+  if(has('FLANCO','LATERAL')) return 'FLANCO/LATERAL';
+  if(has('BANDA DE RODAGEM','ARRANCAMENTO','SOLTURA','OMBRO')) return 'BANDA DE RODAGEM';
+  return s.length>20 ? s.slice(0,20)+'…' : s;
+}
+
+// dimensão atual da tabela de descarte
+let descDim = 'unidade';
+function setDescDim(dim){
+  descDim = dim;
+  document.querySelectorAll('#descDimToggle .chip').forEach(c => c.classList.toggle('active', c.dataset.dim === dim));
+  renderDescarteTable();
+}
+
 // ============================================================
 // RENDER DESCARTE
 // ============================================================
@@ -1574,92 +1586,119 @@ function renderDescarte() {
   document.getElementById('descTotalUso').textContent = nUso.toLocaleString('pt-BR');
   document.getElementById('descTotalDesc').textContent = nDesc.toLocaleString('pt-BR');
 
-  // CARDS
-  document.getElementById('cardTotalUso').textContent = nUso.toLocaleString('pt-BR');
-  document.getElementById('cardDescartados').textContent = nDesc.toLocaleString('pt-BR');
-
-  // GRÁFICOS POR MOTIVO
+  // GRÁFICO PARETO POR MOTIVO (barras verticais + linha de % acumulado)
   const porMotivo = {};
-  descartados.forEach(t => { const m = motivoDe(t); porMotivo[m] = (porMotivo[m] || 0) + 1; });
+  descartados.forEach(t => { const m = motivoCurto(t.motivoDescarte); porMotivo[m] = (porMotivo[m] || 0) + 1; });
   const temMotivoReal = descartados.some(t => t.motivoDescarte && String(t.motivoDescarte).trim());
 
   const qtdWrap = document.getElementById('chartDescMotivoQtd');
-  const pctWrap = document.getElementById('chartDescMotivoPct');
   const qtdEmpty = document.getElementById('motivoQtdEmpty');
-  const pctEmpty = document.getElementById('motivoPctEmpty');
 
   if (charts.qtd) { charts.qtd.destroy(); charts.qtd = null; }
-  if (charts.pct) { charts.pct.destroy(); charts.pct = null; }
 
   if (!temMotivoReal) {
-    const msg = 'Motivos serão exibidos após a próxima carga do loader';
-    qtdWrap.style.display = 'none'; pctWrap.style.display = 'none';
-    qtdEmpty.style.display = ''; pctEmpty.style.display = '';
-    qtdEmpty.textContent = msg; pctEmpty.textContent = msg;
+    qtdWrap.style.display = 'none';
+    qtdEmpty.style.display = '';
+    qtdEmpty.textContent = 'Motivos serão exibidos após a próxima carga do loader';
   } else {
-    qtdWrap.style.display = ''; pctWrap.style.display = '';
-    qtdEmpty.style.display = 'none'; pctEmpty.style.display = 'none';
+    qtdWrap.style.display = '';
+    qtdEmpty.style.display = 'none';
 
     const entries = Object.entries(porMotivo).sort((a, b) => b[1] - a[1]);
     const labels = entries.map(e => e[0]);
     const valsQtd = entries.map(e => e[1]);
-    const totalDesc = nDesc || 1;
-    const valsPct = entries.map(e => (e[1] / totalDesc) * 100);
+    const totalDesc = valsQtd.reduce((s, v) => s + v, 0) || 1;
+    let acc = 0;
+    const valsAcum = valsQtd.map(v => { acc += v; return (acc / totalDesc) * 100; });
     const isLight = document.body.classList.contains('light-mode');
     const labelColor = isLight ? '#1a1a1a' : '#F1F5F9';
     const tooltip = { backgroundColor:'#141B26', titleColor:'#F97316', bodyColor:'#F1F5F9', borderColor:'#1E2D40', borderWidth:1, titleFont:{family:'Montserrat'}, bodyFont:{family:'Montserrat'} };
 
     charts.qtd = new Chart(qtdWrap.getContext('2d'), {
-      type: 'bar',
-      data: { labels: labels, datasets: [{ data: valsQtd, backgroundColor: '#F97316', borderRadius: 4, maxBarThickness: 26 }] },
-      options: {
-        indexAxis: 'y', responsive: true, maintainAspectRatio: false,
-        plugins: {
-          legend: { display: false }, tooltip: tooltip,
-          datalabels: { anchor:'end', align:'end', color: labelColor, font:{ family:'Montserrat', weight:'700', size:11 }, formatter: v => v }
-        },
-        scales: {
-          x: { grid: getGrid(), ticks: getTick(10), beginAtZero: true },
-          y: { grid: { display:false }, ticks: getTick(11) }
-        }
+      data: {
+        labels: labels,
+        datasets: [
+          { type: 'bar', label: 'Qtd', data: valsQtd, backgroundColor: '#F97316', borderRadius: 4, maxBarThickness: 46, yAxisID: 'y', order: 2 },
+          { type: 'line', label: '% acumulado', data: valsAcum, borderColor: '#38BDF8', backgroundColor: '#38BDF8', borderWidth: 2, tension: 0.25, pointRadius: 3, pointBackgroundColor: '#38BDF8', yAxisID: 'y1', order: 1 }
+        ]
       },
-      plugins: [ChartDataLabels]
-    });
-
-    charts.pct = new Chart(pctWrap.getContext('2d'), {
-      type: 'bar',
-      data: { labels: labels, datasets: [{ data: valsPct, backgroundColor: '#38BDF8', borderRadius: 4, maxBarThickness: 26 }] },
       options: {
-        indexAxis: 'y', responsive: true, maintainAspectRatio: false,
+        responsive: true, maintainAspectRatio: false,
         plugins: {
           legend: { display: false }, tooltip: tooltip,
-          datalabels: { anchor:'end', align:'end', color: labelColor, font:{ family:'Montserrat', weight:'700', size:11 }, formatter: v => v.toFixed(1).replace('.', ',') + '%' }
+          datalabels: {
+            color: labelColor, font:{ family:'Montserrat', weight:'700', size:10 },
+            anchor:'end', align:'end',
+            formatter: (v, ctx) => ctx.dataset.type === 'line' ? '' : v
+          }
         },
         scales: {
-          x: { grid: getGrid(), ticks: { color: getTick(10).color, font: getTick(10).font, callback: v => v + '%' }, beginAtZero: true },
-          y: { grid: { display:false }, ticks: getTick(11) }
+          x: { grid: { display:false }, ticks: { color: getTick(10).color, font: getTick(10).font, maxRotation: 55, minRotation: 45, autoSkip: false } },
+          y:  { position: 'left', grid: getGrid(), ticks: getTick(10), beginAtZero: true },
+          y1: { position: 'right', grid: { display:false }, min: 0, max: 100, ticks: { color: getTick(10).color, font: getTick(10).font, callback: v => v + '%' } }
         }
       },
       plugins: [ChartDataLabels]
     });
   }
 
-  // TABELA POR UNIDADE
-  const porUni = {};
+  // TABELA (dimensão atual)
+  renderDescarteTable();
+}
+
+// ============================================================
+// TABELA DE DESCARTE POR DIMENSÃO (toggle UNIDADE/MOTIVO/MARCA/MODELO)
+// ============================================================
+function renderDescarteTable() {
+  if (!DATA.tires || !DATA.tires.length) return;
+  const tires = getFilteredTires();
+  const emUso = tires.filter(EM_USO);
+  const descartados = tires.filter(DESCARTADO);
+
+  const titleEl = document.getElementById('descTableTitle');
+  const theadEl = document.getElementById('theadDesc');
+  const tbodyEl = document.getElementById('tbodyDescUnidade');
+
+  if (descDim === 'motivo') {
+    titleEl.textContent = 'DESCARTE POR MOTIVO';
+    theadEl.innerHTML = '<tr><th>Motivo</th><th class="col-dias"># Descartados</th><th class="col-dias">% do Total</th></tr>';
+    const tot = descartados.length || 1;
+    const grp = {};
+    descartados.forEach(t => { const m = motivoCurto(t.motivoDescarte); grp[m] = (grp[m] || 0) + 1; });
+    const rows = Object.entries(grp).map(([k, n]) => ({ k, desc: n, share: (n / tot) * 100 }))
+      .sort((a, b) => b.desc - a.desc);
+    tbodyEl.innerHTML = rows.map(r =>
+      '<tr>'
+      + '<td>' + r.k + '</td>'
+      + '<td class="col-dias" style="text-align:right">' + r.desc.toLocaleString('pt-BR') + '</td>'
+      + '<td class="col-dias" style="text-align:right">' + r.share.toFixed(1).replace('.', ',') + '%</td>'
+      + '</tr>'
+    ).join('') || '<tr><td colspan="3" style="text-align:center;color:var(--text-muted);padding:20px">Sem dados</td></tr>';
+    return;
+  }
+
+  // UNIDADE / MARCA / MODELO
+  const dimLabel = { unidade: 'UNIDADE', marca: 'MARCA', modelo: 'MODELO' }[descDim];
+  const dimGet = { unidade: t => t.unidade || '—', marca: t => t.marca || '—', modelo: t => t.modelo || '—' }[descDim];
+  titleEl.textContent = 'DESCARTE POR ' + dimLabel;
+  theadEl.innerHTML = '<tr><th>' + dimLabel.charAt(0) + dimLabel.slice(1).toLowerCase()
+    + '</th><th class="col-dias">TT Pneus</th><th class="col-dias"># Descartados</th><th class="col-dias">% Descarte</th></tr>';
+
+  const grp = {};
   emUso.forEach(t => {
-    const u = t.unidade || '—';
-    if (!porUni[u]) porUni[u] = { uso: 0, desc: 0 };
-    porUni[u].uso++;
-    if (DESCARTADO(t)) porUni[u].desc++;
+    const k = dimGet(t);
+    if (!grp[k]) grp[k] = { uso: 0, desc: 0 };
+    grp[k].uso++;
+    if (DESCARTADO(t)) grp[k].desc++;
   });
-  const rows = Object.entries(porUni).map(([u, o]) => ({
-    unidade: u, uso: o.uso, desc: o.desc, pct: o.uso ? (o.desc / o.uso) * 100 : 0
+  const rows = Object.entries(grp).map(([k, o]) => ({
+    k, uso: o.uso, desc: o.desc, pct: o.uso ? (o.desc / o.uso) * 100 : 0
   })).sort((a, b) => b.pct - a.pct);
 
-  document.getElementById('tbodyDescUnidade').innerHTML = rows.map(r => {
+  tbodyEl.innerHTML = rows.map(r => {
     const cor = corCluster(clusterPct(r.pct));
     return '<tr>'
-      + '<td>' + r.unidade + '</td>'
+      + '<td>' + r.k + '</td>'
       + '<td class="col-dias" style="text-align:right">' + r.uso.toLocaleString('pt-BR') + '</td>'
       + '<td class="col-dias" style="text-align:right">' + r.desc.toLocaleString('pt-BR') + '</td>'
       + '<td class="col-dias" style="text-align:right"><span class="td-dias" style="color:' + cor + '">' + r.pct.toFixed(1).replace('.', ',') + '%</span></td>'
