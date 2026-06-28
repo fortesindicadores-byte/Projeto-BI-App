@@ -1281,6 +1281,16 @@
           <div id="opts-modelo"></div>
         </div>
       </div>
+      <div class="ms-wrap" id="wrap-motivo">
+        <button class="ms-btn" onclick="toggleMs('motivo')">
+          MOTIVO <span class="ms-count" id="cnt-motivo" style="display:none"></span><span class="ms-arrow">▾</span>
+        </button>
+        <div class="ms-panel" id="panel-motivo">
+          <input class="ms-search" placeholder="Buscar..." oninput="filterMs(this,'panel-motivo')">
+          <div class="ms-option select-all"><label><input type="checkbox" onchange="selectAll('panel-motivo',this)"> Todos</label></div>
+          <div id="opts-motivo"></div>
+        </div>
+      </div>
     </div>
   </header>
 
@@ -1297,6 +1307,11 @@
           <div class="adh-deltas">
             <div class="adh-delta">Total de pneus<b id="descTotalUso">—</b></div>
             <div class="adh-delta">Descartados<b id="descTotalDesc" style="color:var(--red-soft)">—</b></div>
+          </div>
+          <div style="display:flex;gap:16px;flex-wrap:wrap;margin-top:12px;font-size:11px;font-weight:600;color:var(--text-muted)">
+            <span style="display:flex;align-items:center;gap:6px"><i style="width:10px;height:10px;border-radius:50%;background:#3BB33B;display:inline-block"></i> &lt; 20% descarte</span>
+            <span style="display:flex;align-items:center;gap:6px"><i style="width:10px;height:10px;border-radius:50%;background:#f39c12;display:inline-block"></i> 20–40%</span>
+            <span style="display:flex;align-items:center;gap:6px"><i style="width:10px;height:10px;border-radius:50%;background:#FF6666;display:inline-block"></i> &gt; 40%</span>
           </div>
         </div>
       </div>
@@ -1353,7 +1368,7 @@ const UNIDADE_MAP = {
 // ============================================================
 let DATA = { vehicles: [], tires: [], inspections: [] };
 let charts = {};
-let FILTERS = { branch: [], marca: [], modelo: [] };
+let FILTERS = { branch: [], marca: [], modelo: [], motivo: [] };
 
 // ============================================================
 // TEMA
@@ -1411,8 +1426,8 @@ function filterMs(input, panelId) {
 //   SEL[key] = Set    -> subconjunto explícito marcado
 //   As opções de um filtro vêm dos pneus já filtrados pelos OUTROS (cascata).
 // ============================================================
-const FILTER_KEYS = ['branch','marca','modelo'];
-let SEL = { branch:'all', marca:'all', modelo:'all' };
+const FILTER_KEYS = ['branch','marca','modelo','motivo'];
+let SEL = { branch:'all', marca:'all', modelo:'all', motivo:'all' };
 
 function distinctSorted(arr) {
   return [...new Set(arr.filter(v => v !== null && v !== undefined && v !== ''))].sort();
@@ -1432,6 +1447,7 @@ function optionsFor(key) {
   if (key === 'branch') return distinctSorted(ok.map(t => t.unidade));
   if (key === 'marca')  return distinctSorted(ok.map(t => t.marca || '—'));
   if (key === 'modelo') return distinctSorted(ok.map(t => t.modelo || '—'));
+  if (key === 'motivo') return distinctSorted(DATA.tires.filter(t => t.status==='DISPOSAL' && tirePass(t,'motivo')).map(t => motivoCurto(t.motivoDescarte)));
   return [];
 }
 
@@ -1492,7 +1508,7 @@ function selectAll(panelId, cb) {
 }
 
 function populateFilters() {
-  SEL = { branch:'all', marca:'all', modelo:'all' };
+  SEL = { branch:'all', marca:'all', modelo:'all', motivo:'all' };
   syncFiltersFromSel();
   FILTER_KEYS.forEach(renderFilterOptions);
 }
@@ -1547,8 +1563,12 @@ function motivoCurto(m){
   if(has('TALAO')) return 'TALÃO';
   if(has('FLANCO','LATERAL')) return 'FLANCO/LATERAL';
   if(has('BANDA DE RODAGEM','ARRANCAMENTO','SOLTURA','OMBRO')) return 'BANDA DE RODAGEM';
-  return s.length>20 ? s.slice(0,20)+'…' : s;
+  // motivo novo sem palavra-chave conhecida => vira seu PRÓPRIO cluster (identificável p/ depois virar regra)
+  return s;
 }
+
+// filtro de MOTIVO: aplica-se SÓ aos descartados (não ao total, p/ não distorcer o %)
+function motivoPass(t){ return !FILTERS.motivo.length || FILTERS.motivo.includes(motivoCurto(t.motivoDescarte)); }
 
 // dimensão atual da tabela de descarte
 let descDim = 'unidade';
@@ -1565,7 +1585,7 @@ function renderDescarte() {
   if (!DATA.tires || !DATA.tires.length) return;
   const tires = getFilteredTires();
   const nTotal = tires.length;                       // total de pneus que a seleção TEVE (todos os status)
-  const nDesc = tires.filter(DESCARTADO).length;
+  const nDesc = tires.filter(t => DESCARTADO(t) && motivoPass(t)).length;  // descartados (respeita filtro de motivo)
   const pct = nTotal ? (nDesc / nTotal) * 100 : 0;
 
   // HERO
@@ -1585,7 +1605,7 @@ function renderDescarte() {
 function renderDescarteTable() {
   if (!DATA.tires || !DATA.tires.length) return;
   const tires = getFilteredTires();
-  const descartados = tires.filter(DESCARTADO);
+  const descartados = tires.filter(t => DESCARTADO(t) && motivoPass(t));
 
   const theadEl = document.getElementById('theadDesc');
   const tbodyEl = document.getElementById('tbodyDescUnidade');
@@ -1617,7 +1637,7 @@ function renderDescarteTable() {
     const k = dimGet(t);
     if (!grp[k]) grp[k] = { total: 0, desc: 0 };
     grp[k].total++;
-    if (DESCARTADO(t)) grp[k].desc++;
+    if (DESCARTADO(t) && motivoPass(t)) grp[k].desc++;
   });
   const rows = Object.entries(grp).map(([k, o]) => ({
     k, total: o.total, desc: o.desc, pct: o.total ? (o.desc / o.total) * 100 : 0
