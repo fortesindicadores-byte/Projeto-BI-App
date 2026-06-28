@@ -1243,6 +1243,10 @@
           </svg>
         </button>
         <span class="status-badge" id="lastUpdate">—</span>
+        <button class="nav-item" onclick="navigate('descarte')" title="Descarte de Pneus"
+          style="display:inline-flex;width:auto;border-left:none;padding:6px 10px;border-radius:4px;background:rgba(249,115,22,.12);border:1px solid rgba(249,115,22,.3);color:var(--red);font-weight:700;font-size:11px;text-transform:uppercase;letter-spacing:.5px">
+          <span class="icon">🗑️</span> Descarte
+        </button>
         <a href="./" class="icon-btn back-btn" title="Voltar ao Hub" style="text-decoration:none">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
             <polyline points="15 18 9 12 15 6"/>
@@ -1514,6 +1518,71 @@
               <th class="col-dias">Dias ↓</th>
             </tr></thead>
             <tbody id="tbodyAdhCalib"></tbody>
+          </table>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- ========== DESCARTE DE PNEUS ========== -->
+    <div class="page" id="page-descarte">
+
+      <!-- HERO DESCARTE -->
+      <div class="adh-hero">
+        <div class="adh-hero-left">
+          <div class="adh-label">Descarte de Pneus (Acumulado)</div>
+          <div class="adh-value" id="descValue">—</div>
+          <div class="adh-deltas">
+            <div class="adh-delta">Total em uso<b id="descTotal">—</b></div>
+            <div class="adh-delta">Descartados<b id="descQtd" style="color:var(--red-soft)">—</b></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- CARDS -->
+      <div class="adh-cards" style="grid-template-columns:repeat(2,1fr)">
+        <div class="adh-card">
+          <div class="adh-card-label">TT Pneus</div>
+          <div class="adh-card-value" id="descCardTotal">—</div>
+          <div class="adh-card-sub">Em uso (instalados + descartados)</div>
+        </div>
+        <div class="adh-card">
+          <div class="adh-card-label"># Descartados</div>
+          <div class="adh-card-value" id="descCardQtd">—</div>
+          <div class="adh-card-sub">Pneus em descarte</div>
+        </div>
+      </div>
+
+      <!-- GRÁFICOS: MOTIVO QTD + MOTIVO % -->
+      <div class="adh-charts">
+        <div class="card" style="margin:0">
+          <div class="card-title" style="margin-bottom:6px">Descartes por Motivo (qtd)</div>
+          <div style="position:relative;height:320px">
+            <canvas id="chartDescMotivoQtd"></canvas>
+            <div id="descMotivoQtdEmpty" class="empty" style="display:none;position:absolute;inset:0;align-items:center;justify-content:center;text-align:center;padding:0 16px"></div>
+          </div>
+        </div>
+        <div class="card" style="margin:0">
+          <div class="card-title" style="margin-bottom:6px">% por Motivo (sobre total de descartes)</div>
+          <div style="position:relative;height:320px">
+            <canvas id="chartDescMotivoPct"></canvas>
+            <div id="descMotivoPctEmpty" class="empty" style="display:none;position:absolute;inset:0;align-items:center;justify-content:center;text-align:center;padding:0 16px"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- TABELA POR UNIDADE -->
+      <div class="adh-tables" style="grid-template-columns:1fr">
+        <div class="adh-table-wrap">
+          <div class="adh-table-title">Descarte por Unidade</div>
+          <table class="adh-table">
+            <thead><tr>
+              <th>Unidade</th>
+              <th class="col-dias">TT Pneus</th>
+              <th class="col-dias"># Descartados</th>
+              <th class="col-dias">% Descarte ↓</th>
+            </tr></thead>
+            <tbody id="tbodyDescUnidade"></tbody>
           </table>
         </div>
       </div>
@@ -2300,6 +2369,7 @@ function mediaSobreMeses(aggFn) {
 const PAGE_RENDER = {
   saude: () => renderSaude(),
   painel: () => renderPainel(),
+  descarte: () => renderDescarte(),
   milimetragem: () => renderMilimetragem(),
   pressao: () => renderPressao(),
   cpk: () => renderCPK(),
@@ -2328,6 +2398,7 @@ function navigate(page) {
   const titles = {
     saude: 'Saúde dos Pneus',
     painel: 'Aderência às Aferições',
+    descarte: 'Descarte de Pneus',
     milimetragem: 'Milimetragem',
     pressao: 'Pressão dos Pneus',
     cpk: 'CPK — Custo por Km',
@@ -3794,6 +3865,217 @@ function renderUnidadeChart(porUni) {
       scales: {
         y: { beginAtZero: true, max: 100, grid: { color: gridColor }, ticks: { color: tickColor, font: { family: 'Montserrat', size: 10 }, callback: v => v + '%' } },
         x: { grid: { display: false }, ticks: { color: tickColor, font: { family: 'Montserrat', size: 12 }, maxRotation: 45, minRotation: 45, autoSkip: false } }
+      }
+    }
+  });
+}
+
+// ============================================================
+// DESCARTE DE PNEUS
+// ============================================================
+// Cor por cluster de % descarte: 🟢 <20 | 🟡 20–40 | 🔴 >40
+function clusterColor(pct) {
+  return pct < 20 ? 'var(--green)' : pct <= 40 ? 'var(--yellow)' : 'var(--red-soft)';
+}
+
+// Pneus EM USO (INSTALLED + DISPOSAL) a partir de DATA.tires, aplicando os
+// filtros de unidade(branch)/marca/modelo manualmente (espelha getFilteredTires/
+// getFilteredVehicles). NÃO reconstrói por inspeção: precisamos dos DISPOSAL,
+// que não têm aferição. Não usa dimensão tipo de veículo (DISPOSAL não tem).
+function getDescarteTires() {
+  return (DATA.tires || []).filter(t => {
+    if (t.status !== 'INSTALLED' && t.status !== 'DISPOSAL') return false;
+    if (FILTERS.branch.length && !FILTERS.branch.includes(t.unidade)) return false;
+    if (FILTERS.marca.length  && !FILTERS.marca.includes(t.marca))   return false;
+    if (FILTERS.modelo.length && !FILTERS.modelo.includes(t.modelo)) return false;
+    return true;
+  });
+}
+
+const MOTIVO_VAZIO = 'Sem motivo informado';
+
+function renderDescarte() {
+  const tires = getDescarteTires();
+  const emUso       = tires.length;
+  const descartados = tires.filter(t => t.status === 'DISPOSAL');
+  const qtdDesc     = descartados.length;
+  const pct         = emUso ? (qtdDesc / emUso * 100) : 0;
+
+  const pctStr = pct.toFixed(1).replace('.', ',') + (window.innerWidth < 480 ? '' : '%');
+  const corPct = clusterColor(pct);
+
+  const elVal = document.getElementById('descValue');
+  if (!elVal) return;
+  elVal.textContent = pctStr;
+  elVal.style.color = corPct;
+
+  document.getElementById('descTotal').textContent     = emUso;
+  document.getElementById('descQtd').textContent       = qtdDesc;
+  document.getElementById('descCardTotal').textContent = emUso;
+  document.getElementById('descCardQtd').textContent   = qtdDesc;
+
+  // Agrega motivos dos descartados
+  const porMotivo = {};
+  descartados.forEach(t => {
+    const m = (t.motivoDescarte && String(t.motivoDescarte).trim()) ? String(t.motivoDescarte).trim() : MOTIVO_VAZIO;
+    porMotivo[m] = (porMotivo[m] || 0) + 1;
+  });
+  const motivos = Object.entries(porMotivo)
+    .map(([motivo, qtd]) => ({ motivo, qtd }))
+    .sort((a, b) => b.qtd - a.qtd); // maior -> menor
+
+  // Há motivo "real" preenchido (algum diferente de "Sem motivo informado")?
+  const temMotivoReal = motivos.some(m => m.motivo !== MOTIVO_VAZIO && m.qtd > 0);
+
+  renderDescMotivoQtdChart(motivos, temMotivoReal);
+  renderDescMotivoPctChart(motivos, qtdDesc, temMotivoReal);
+
+  // Tabela por unidade
+  const porUni = {};
+  tires.forEach(t => {
+    const u = t.unidade || '—';
+    (porUni[u] = porUni[u] || { tot: 0, desc: 0 });
+    porUni[u].tot++;
+    if (t.status === 'DISPOSAL') porUni[u].desc++;
+  });
+  const linhas = Object.entries(porUni)
+    .map(([uni, o]) => ({ uni, tot: o.tot, desc: o.desc, pct: o.tot ? (o.desc / o.tot * 100) : 0 }))
+    .sort((a, b) => b.pct - a.pct);
+
+  const tbody = document.getElementById('tbodyDescUnidade');
+  if (linhas.length) {
+    tbody.innerHTML = linhas.map(l => `<tr>
+      <td><strong>${l.uni}</strong></td>
+      <td style="text-align:right">${l.tot}</td>
+      <td style="text-align:right">${l.desc}</td>
+      <td style="text-align:right"><span style="color:${clusterColor(l.pct)};font-weight:700">${l.pct.toFixed(1).replace('.', ',')}%</span></td>
+    </tr>`).join('');
+  } else {
+    tbody.innerHTML = '<tr><td colspan="4" class="empty">Sem pneus para os filtros selecionados</td></tr>';
+  }
+}
+
+function _descChartTheme() {
+  const isLight = document.body.classList.contains('light-mode');
+  return {
+    isLight,
+    grid: isLight ? 'rgba(0,0,0,.08)' : 'rgba(255,255,255,.06)',
+    tick: isLight ? '#444444' : '#94A3B8'
+  };
+}
+
+function _descToggleEmpty(canvasId, emptyId, show, msg) {
+  const cv = document.getElementById(canvasId);
+  const em = document.getElementById(emptyId);
+  if (cv) cv.style.display = show ? 'none' : '';
+  if (em) { em.style.display = show ? 'flex' : 'none'; if (show && msg) em.textContent = msg; }
+}
+
+// Gráfico 1: QUANTIDADE de descartes por motivo (barras horizontais, maior -> menor)
+function renderDescMotivoQtdChart(motivos, temMotivoReal) {
+  destroyChart('chartDescMotivoQtd');
+  if (!motivos.length || !temMotivoReal) {
+    _descToggleEmpty('chartDescMotivoQtd', 'descMotivoQtdEmpty', true,
+      motivos.length ? 'Motivos serão exibidos após a próxima carga do loader' : 'Sem descartes para os filtros selecionados');
+    return;
+  }
+  _descToggleEmpty('chartDescMotivoQtd', 'descMotivoQtdEmpty', false);
+
+  const { isLight, grid, tick } = _descChartTheme();
+  const labels = motivos.map(m => m.motivo);
+  const data   = motivos.map(m => m.qtd);
+
+  charts.chartDescMotivoQtd = new Chart(document.getElementById('chartDescMotivoQtd'), {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [{
+        label: 'Descartes',
+        data,
+        backgroundColor: 'rgba(234,88,12,0.7)',
+        borderColor: 'rgba(234,88,12,1)',
+        borderWidth: 1.5,
+        borderRadius: 3,
+        datalabels: {
+          anchor: 'end', align: 'end', offset: 2,
+          color: isLight ? '#111' : '#fff',
+          font: { family: 'Montserrat', size: 12, weight: '700' },
+          formatter: v => v
+        }
+      }]
+    },
+    plugins: [ChartDataLabels],
+    options: {
+      indexAxis: 'y',
+      responsive: true, maintainAspectRatio: false,
+      layout: { padding: { right: 24 } },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          backgroundColor: '#141B26', titleColor: '#F97316', bodyColor: '#F1F5F9',
+          borderColor: '#1E2D40', borderWidth: 1,
+          titleFont: { family: 'Montserrat' }, bodyFont: { family: 'Montserrat' },
+          callbacks: { label: ctx => 'Descartes: ' + ctx.parsed.x }
+        }
+      },
+      scales: {
+        x: { beginAtZero: true, grid: { color: grid }, ticks: { color: tick, font: { family: 'Montserrat', size: 10 }, precision: 0 } },
+        y: { grid: { display: false }, ticks: { color: tick, font: { family: 'Montserrat', size: 11 } } }
+      }
+    }
+  });
+}
+
+// Gráfico 2: % de cada motivo sobre o total de descartes (barras horizontais)
+function renderDescMotivoPctChart(motivos, totalDesc, temMotivoReal) {
+  destroyChart('chartDescMotivoPct');
+  if (!motivos.length || !temMotivoReal || !totalDesc) {
+    _descToggleEmpty('chartDescMotivoPct', 'descMotivoPctEmpty', true,
+      motivos.length ? 'Motivos serão exibidos após a próxima carga do loader' : 'Sem descartes para os filtros selecionados');
+    return;
+  }
+  _descToggleEmpty('chartDescMotivoPct', 'descMotivoPctEmpty', false);
+
+  const { isLight, grid, tick } = _descChartTheme();
+  const labels = motivos.map(m => m.motivo);
+  const data   = motivos.map(m => parseFloat((m.qtd / totalDesc * 100).toFixed(1)));
+
+  charts.chartDescMotivoPct = new Chart(document.getElementById('chartDescMotivoPct'), {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [{
+        label: '% dos descartes',
+        data,
+        backgroundColor: 'rgba(243,156,18,0.7)',
+        borderColor: 'rgba(243,156,18,1)',
+        borderWidth: 1.5,
+        borderRadius: 3,
+        datalabels: {
+          anchor: 'end', align: 'end', offset: 2,
+          color: isLight ? '#111' : '#fff',
+          font: { family: 'Montserrat', size: 12, weight: '700' },
+          formatter: v => v.toFixed(1).replace('.', ',') + '%'
+        }
+      }]
+    },
+    plugins: [ChartDataLabels],
+    options: {
+      indexAxis: 'y',
+      responsive: true, maintainAspectRatio: false,
+      layout: { padding: { right: 36 } },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          backgroundColor: '#141B26', titleColor: '#F97316', bodyColor: '#F1F5F9',
+          borderColor: '#1E2D40', borderWidth: 1,
+          titleFont: { family: 'Montserrat' }, bodyFont: { family: 'Montserrat' },
+          callbacks: { label: ctx => ctx.parsed.x.toFixed(1).replace('.', ',') + '%' }
+        }
+      },
+      scales: {
+        x: { beginAtZero: true, max: 100, grid: { color: grid }, ticks: { color: tick, font: { family: 'Montserrat', size: 10 }, callback: v => v + '%' } },
+        y: { grid: { display: false }, ticks: { color: tick, font: { family: 'Montserrat', size: 11 } } }
       }
     }
   });
