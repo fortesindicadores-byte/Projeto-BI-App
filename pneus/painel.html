@@ -504,6 +504,11 @@
 
   .adh-table thead tr { background: rgba(20,28,40,0.65); }
 
+  /* rolagem vertical com cabeçalho fixo (Previsão e Milimetragem) */
+  .adh-table-scroll { max-height: 72vh; overflow-y: auto; overflow-x: auto; }
+  .adh-table-scroll thead th { position: sticky; top: 0; z-index: 2; background: #141B26; }
+  body.light-mode .adh-table-scroll thead th { background: #FFFFFF; }
+
   .adh-table thead th {
     padding: 8px 18px; text-align: left;
     font-weight: 600; font-size: 11px;
@@ -1600,7 +1605,7 @@
           <span>Bottom — Menor Sulco</span>
           <input class="search-box" type="text" placeholder="Buscar placa, serial..." id="searchMM" oninput="filtrarMM()" style="width:220px">
         </div>
-        <div style="overflow-x:auto">
+        <div class="adh-table-scroll">
         <table class="adh-table">
           <thead><tr>
             <th>#</th><th>Serial</th><th class="dcol">Placa</th><th class="dcol">Frota</th><th class="dcol">Posição</th>
@@ -1854,7 +1859,7 @@
           <span>Bottom — Pneus por Urgência</span>
           <input class="search-box" type="text" placeholder="Buscar placa, serial..." id="searchPrev" oninput="filtrarPrev()" style="width:220px">
         </div>
-        <div style="overflow-x:auto">
+        <div class="adh-table-scroll">
         <table class="adh-table">
           <thead><tr>
             <th>#</th><th>Serial</th><th class="dcol">Placa</th><th class="dcol">Posição</th>
@@ -1863,6 +1868,11 @@
           </tr></thead>
           <tbody id="tbodyPrev"></tbody>
         </table>
+        </div>
+        <div style="font-size:10px;color:var(--text-muted);margin:8px 18px 14px;line-height:1.6">
+          Taxa de desgaste própria é usada quando confiável (≥3 leituras, ≥2.000 km no intervalo e ≤2,5 mm/1.000km).
+          Quando não confiável, aplica-se cascata de fallback: placa·similar → placa·eixo → placa → frota·similar → frota·eixo → mediana da frota
+          (cada nível exige ≥3 pneus confiáveis no grupo). <span style="color:var(--orange);font-weight:700">*</span> = taxa estimada (passe o mouse para ver o nível).
         </div>
       </div>
     </div>
@@ -2805,7 +2815,18 @@ function kmDiaVeiculo(tire) {
   return 0;
 }
 
-// Calcula projeção por pneu (1ª vs última inspeção, robusto a ruído)
+// mediana de um array de números (>0 retornados pelo chamador)
+function _mediana(arr) {
+  const a = arr.filter(v => isFinite(v)).slice().sort((x, y) => x - y);
+  if (!a.length) return 0;
+  const m = Math.floor(a.length / 2);
+  return a.length % 2 ? a[m] : (a[m - 1] + a[m]) / 2;
+}
+
+// Calcula projeção por pneu com CASCATA de fallback de taxa de desgaste.
+// 1ª passada: taxa própria + confiabilidade de cada pneu (monta pool de confiáveis).
+// 2ª passada: confiável usa a própria; senão aplica cascata placa·similar→…→mediana frota.
+// TODO pneu recebe previsão (sem "sem base").
 function calcPrevisao() {
   const tires = getFilteredTires().filter(t => t.status === 'INSTALLED' && t.menorMM > 0);
 
@@ -2818,38 +2839,99 @@ function calcPrevisao() {
   Object.values(hist).forEach(arr => arr.sort((a, b) => new Date(a.dataInspecao) - new Date(b.dataInspecao)));
 
   const hoje = new Date();
-  const linhas = [];
+
+  // chaves de agrupamento p/ similaridade
+  const _placa = t => _norm(t.placa) || '';
+  const _eixo  = t => eixoDoNome(t) || '';
+  const _vida  = t => String(t.cicloVida != null ? t.cicloVida : '');
+  const _banda = t => _norm(t.banda) || '';
+  const _marca = t => _norm(t.marca) || '';
+
+  // ===== 1ª PASSADA: taxa própria + confiabilidade =====
+  const calc = []; // { t, wearProprio, kmDiaProprio, confiavel }
   tires.forEach(t => {
     const h = hist[t.id];
-    if (!h || h.length < 2) { linhas.push({ t, semBase: true }); return; }
+    let wearProprio = 0, kmDiaOdo = 0, confiavel = false;
+    if (h && h.length >= 3) {
+      const pts = h.map(i => ({ km: i.odometro, mm: i.menorMM }));
+      const kmDistintos = new Set(pts.map(p => p.km)).size;
+      const a = h[0], b = h[h.length - 1];
+      const dKm = b.odometro - a.odometro;
+      const dDia = (new Date(b.dataInspecao) - new Date(a.dataInspecao)) / 86400000;
+      kmDiaOdo = (dKm > 0 && dDia > 0) ? dKm / dDia : 0;
+      if (kmDistintos >= 3 && dKm >= 2000) {
+        const n = pts.length;
+        const sx = pts.reduce((s, p) => s + p.km, 0);
+        const sy = pts.reduce((s, p) => s + p.mm, 0);
+        const sxx = pts.reduce((s, p) => s + p.km * p.km, 0);
+        const sxy = pts.reduce((s, p) => s + p.km * p.mm, 0);
+        const den = n * sxx - sx * sx;
+        const slope = den !== 0 ? (n * sxy - sx * sy) / den : 0; // mm por km
+        if (slope < 0) {
+          const w = -slope * 1000; // mm/1.000km
+          // confiável: taxa ≤ 2,5 mm/1000km e km/dia plausível (>0 e ≤2000)
+          if (w <= 2.5) {
+            wearProprio = w;
+            const kd = kmDiaVeiculo(t) || kmDiaOdo;
+            if (kd > 0 && kd <= 2000) { confiavel = true; }
+          }
+        }
+      }
+    }
+    calc.push({ t, wearProprio, kmDiaOdo, confiavel });
+  });
 
-    // Regressão linear mm = a + b·km (robusto a ruído de leitura)
-    const pts = h.map(i => ({ km: i.odometro, mm: i.menorMM }));
-    const kmDistintos = new Set(pts.map(p => p.km)).size;
-    if (kmDistintos < 2) { linhas.push({ t, semBase: true }); return; }
-    const n = pts.length;
-    const sx = pts.reduce((s, p) => s + p.km, 0);
-    const sy = pts.reduce((s, p) => s + p.mm, 0);
-    const sxx = pts.reduce((s, p) => s + p.km * p.km, 0);
-    const sxy = pts.reduce((s, p) => s + p.km * p.mm, 0);
-    const slope = (n * sxy - sx * sy) / (n * sxx - sx * sx); // mm por km (negativo = desgaste)
-    if (!(slope < 0)) { linhas.push({ t, semBase: true }); return; } // não desgastou no período
+  // pool de confiáveis (com taxa própria válida)
+  const pool = calc.filter(c => c.confiavel && c.wearProprio > 0);
+  const medianaFrota = _mediana(pool.map(c => c.wearProprio)) || 1.0; // sempre existe (default 1.0)
 
-    const wear1000 = -slope * 1000;  // mm por 1.000 km
-    const a = h[0], b = h[h.length - 1];
-    const dKm  = b.odometro - a.odometro;
-    const dDia = (new Date(b.dataInspecao) - new Date(a.dataInspecao)) / 86400000;
-    const kmDiaOdo = (dKm > 0 && dDia > 0) ? dKm / dDia : 0; // método antigo (odômetro) — fallback
-    // km/dia vindo do combustível (placa->modelo->cidade->empilhadeira); se nada bater, cai no odômetro
-    const kmDia = kmDiaVeiculo(t) || kmDiaOdo;
-    if (!(kmDia > 0)) { linhas.push({ t, semBase: true }); return; }
+  // taxa de grupo = mediana das taxas próprias confiáveis; null se <3 no grupo
+  const taxaGrupo = (pred) => {
+    const g = pool.filter(c => pred(c.t));
+    if (g.length < 3) return null;
+    return _mediana(g.map(c => c.wearProprio));
+  };
+
+  // km/dia mediano da frota (fallback final)
+  const kmDiaFrota = _mediana(
+    calc.map(c => kmDiaVeiculo(c.t) || c.kmDiaOdo).filter(v => v > 0 && v <= 2000)
+  ) || 100; // default razoável 100 km/dia
+
+  // ===== 2ª PASSADA: cascata =====
+  const linhas = [];
+  calc.forEach(c => {
+    const t = c.t;
+    let wear1000, nivel;
+    if (c.confiavel) {
+      wear1000 = c.wearProprio; nivel = 'próprio';
+    } else {
+      const tentativas = [
+        ['placa·similar', cc => _placa(cc) === _placa(t) && _marca(cc) === _marca(t) && _vida(cc) === _vida(t) && _banda(cc) === _banda(t) && _eixo(cc) === _eixo(t)],
+        ['placa·eixo',    cc => _placa(cc) === _placa(t) && _eixo(cc) === _eixo(t)],
+        ['placa',         cc => _placa(cc) === _placa(t)],
+        ['frota·similar', cc => _marca(cc) === _marca(t) && _vida(cc) === _vida(t) && _banda(cc) === _banda(t) && _eixo(cc) === _eixo(t)],
+        ['frota·eixo',    cc => _eixo(cc) === _eixo(t)],
+      ];
+      let achou = null;
+      for (const [nm, pred] of tentativas) {
+        const tx = taxaGrupo(pred);
+        if (tx != null && tx > 0) { achou = { nivel: nm, wear1000: tx }; break; }
+      }
+      if (achou) { wear1000 = achou.wear1000; nivel = achou.nivel; }
+      else { wear1000 = medianaFrota; nivel = 'frota'; }
+    }
+
+    // km/dia: veículo → mediana frota → default; nunca 0
+    let kmDia = kmDiaVeiculo(t) || c.kmDiaOdo;
+    if (!(kmDia > 0) || kmDia > 2000) kmDia = kmDiaFrota;
+    if (!(kmDia > 0)) kmDia = 100;
 
     const mmAtual = t.menorMM;
-    const kmAteRecape = Math.max(0, mmAtual - PULL_POINT) / (wear1000 / 1000);
-    const diasAteRecape = kmAteRecape / kmDia;
-    const dataPrev = new Date(hoje.getTime() + diasAteRecape * 86400000);
+    const kmAteRecape = wear1000 > 0 ? Math.max(0, mmAtual - PULL_POINT) / (wear1000 / 1000) : Infinity;
+    const diasAteRecape = kmDia > 0 ? kmAteRecape / kmDia : Infinity;
+    const dataPrev = isFinite(diasAteRecape) ? new Date(hoje.getTime() + diasAteRecape * 86400000) : new Date(hoje.getTime());
 
-    linhas.push({ t, semBase: false, wear1000, kmDia, mmAtual, dias: diasAteRecape, dataPrev });
+    linhas.push({ t, semBase: false, wear1000, kmDia, mmAtual, dias: diasAteRecape, dataPrev, estimado: nivel !== 'próprio', nivel });
   });
   return linhas;
 }
@@ -2867,6 +2949,7 @@ function renderPrevisao() {
   const linhas = calcPrevisao();
   const comBase = linhas.filter(l => !l.semBase);
   const semBase = linhas.length - comBase.length;
+  const nEstim = comBase.filter(l => l.estimado).length;
 
   const ja  = comBase.filter(l => l.mmAtual <= PULL_POINT).length;
   const d30 = comBase.filter(l => l.mmAtual > PULL_POINT && l.dias <= 30).length;
@@ -2889,7 +2972,7 @@ function renderPrevisao() {
   // Cards
   const setC = (id, v, cor) => { const e = document.getElementById(id); e.textContent = v; if (cor) e.style.color = cor; };
   setC('prevCardProj', comBase.length, 'var(--text)');
-  document.getElementById('prevCardProjSub').textContent = `de ${linhas.length} instalados · ${semBase} sem base`;
+  document.getElementById('prevCardProjSub').textContent = `de ${linhas.length} instalados · ${nEstim} estimados`;
   setC('prevCardJa', ja, ja > 0 ? 'var(--red-soft)' : 'var(--green)');
   setC('prevCard30', ja + d30, (ja + d30) > 0 ? 'var(--orange)' : 'var(--green)');
   setC('prevCard90', em90, em90 > 0 ? 'var(--yellow)' : 'var(--green)');
@@ -2929,7 +3012,7 @@ function filtrarPrev() {
           <td class="dcol">${l.t.placa || '—'}</td>
           <td class="dcol">${l.t.nomePosicao || l.t.posicao || '—'}</td>
           <td style="color:${l.mmAtual > 6 ? 'var(--green)' : l.mmAtual > 3 ? 'var(--yellow)' : 'var(--red-soft)'};font-weight:700">${fmt(l.mmAtual)} mm</td>
-          <td class="dcol">${fmtBR(l.wear1000, 2)} mm/1.000km</td>
+          <td class="dcol"${l.estimado ? ` title="Estimado por ${l.nivel}"` : ''}>${fmtBR(l.wear1000, 2)} mm/1.000km${l.estimado ? ' <span style="color:var(--orange);font-weight:700">*</span>' : ''}</td>
           <td class="dcol">${fmtBR(l.kmDia, 0)} km</td>
           <td class="dcol">${fmtData(l)}</td>
           <td style="text-align:right;white-space:nowrap">
@@ -2941,7 +3024,7 @@ function filtrarPrev() {
           <span>Placa: <b>${l.t.placa || '—'}</b></span>
           <span>Posição: <b>${l.t.nomePosicao || l.t.posicao || '—'}</b></span>
           <span>MM Atual: <b>${fmt(l.mmAtual)} mm</b></span>
-          <span>Desgaste: <b>${fmtBR(l.wear1000, 2)} mm/1.000km</b></span>
+          <span>Desgaste: <b>${fmtBR(l.wear1000, 2)} mm/1.000km${l.estimado ? ` <span style="color:var(--orange)">*</span> (${l.nivel})` : ''}</b></span>
           <span>Km/dia: <b>${fmtBR(l.kmDia, 0)} km</b></span>
           <span>Recape em: <b style="color:${cor}">${fmtDias(l)}</b> (${fmtData(l)})</span>
         </div></td></tr>`;
