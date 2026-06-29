@@ -181,6 +181,8 @@ body.light-mode .kcard{background:#F7F7F7;border-color:rgba(0,0,0,.10);}
     <div class="hfilter"><label>Projeto</label><div class="ms-wrap" id="ms-proj"><button class="ms-btn" onclick="toggleMs('ms-proj')"><span class="ms-lbl">Projeto</span><span class="ms-cnt"></span><svg width="10" height="6" viewBox="0 0 10 6"><path d="M0 0l5 6 5-6z" fill="#F97316"/></svg></button><div class="ms-panel"><div class="ms-search"><input type="text" placeholder="Pesquisar…"></div><div class="ms-list"></div></div></div></div>
     <div class="hfilter"><label>Origem</label><div class="ms-wrap" id="ms-org"><button class="ms-btn" onclick="toggleMs('ms-org')"><span class="ms-lbl">Origem</span><span class="ms-cnt"></span><svg width="10" height="6" viewBox="0 0 10 6"><path d="M0 0l5 6 5-6z" fill="#F97316"/></svg></button><div class="ms-panel"><div class="ms-search"><input type="text" placeholder="Pesquisar…"></div><div class="ms-list"></div></div></div></div>
     <div class="hfilter"><label>Status</label><div class="ms-wrap" id="ms-st"><button class="ms-btn" onclick="toggleMs('ms-st')"><span class="ms-lbl">Status</span><span class="ms-cnt"></span><svg width="10" height="6" viewBox="0 0 10 6"><path d="M0 0l5 6 5-6z" fill="#F97316"/></svg></button><div class="ms-panel"><div class="ms-search"><input type="text" placeholder="Pesquisar…"></div><div class="ms-list"></div></div></div></div>
+    <div class="hfilter"><label>Causa</label><div class="ms-wrap" id="ms-causa"><button class="ms-btn" onclick="toggleMs('ms-causa')"><span class="ms-lbl">Causa</span><span class="ms-cnt"></span><svg width="10" height="6" viewBox="0 0 10 6"><path d="M0 0l5 6 5-6z" fill="#F97316"/></svg></button><div class="ms-panel"><div class="ms-search"><input type="text" placeholder="Pesquisar…"></div><div class="ms-list"></div></div></div></div>
+    <div class="hfilter"><label>Ação</label><div class="ms-wrap" id="ms-acao"><button class="ms-btn" onclick="toggleMs('ms-acao')"><span class="ms-lbl">Ação</span><span class="ms-cnt"></span><svg width="10" height="6" viewBox="0 0 10 6"><path d="M0 0l5 6 5-6z" fill="#F97316"/></svg></button><div class="ms-panel"><div class="ms-search"><input type="text" placeholder="Pesquisar…"></div><div class="ms-list"></div></div></div></div>
   </div>
 </header>
 <main class="main">
@@ -346,8 +348,9 @@ function rowHTML(r){
 function render(){
   const c=document.getElementById('content');
   if(!_ROWS.length){c.innerHTML=summaryHTML([])+'<div class="tbl-section"><div class="empty">Nenhuma ação cadastrada ainda. Assim que as unidades preencherem o FCA, os registros aparecem aqui.</div></div>';return;}
-  const fu=getMsValues('ms-uni'),fv=getMsValues('ms-vig'),fo=getMsValues('ms-org'),fs=getMsValues('ms-st'),fp=getMsValues('ms-proj');
-  const vis=_ROWS.filter(r=>(!fu.length||fu.includes(r.unidade))&&(!fv.length||fv.includes(r.vigencia))&&(!fo.length||fo.includes(r.origem))&&(!fs.length||fs.includes(r.status||DEFAULT_STATUS))&&(!fp.length||fp.includes(projLabel(r.projeto))));
+  const fu=getMsValues('ms-uni'),fv=getMsValues('ms-vig'),fo=getMsValues('ms-org'),fs=getMsValues('ms-st'),fp=getMsValues('ms-proj'),fc=getMsValues('ms-causa'),fa=getMsValues('ms-acao');
+  const fillState=v=>String(v||'').trim()?'Preenchida':'Em branco';
+  const vis=_ROWS.filter(r=>(!fu.length||fu.includes(r.unidade))&&(!fv.length||fv.includes(r.vigencia))&&(!fo.length||fo.includes(r.origem))&&(!fs.length||fs.includes(r.status||DEFAULT_STATUS))&&(!fp.length||fp.includes(projLabel(r.projeto)))&&(!fc.length||fc.includes(fillState(r.causa)))&&(!fa.length||fa.includes(fillState(r.acao))));
   vis.sort((a,b)=>String(a.unidade||'').localeCompare(String(b.unidade||''))||(vigNum(b.vigencia)-vigNum(a.vigencia))||String(a.projeto||'').localeCompare(String(b.projeto||''))||String(a.fato||'').localeCompare(String(b.fato||'')));  // unidade A→Z, vigência recente, projeto, fato
   let body;
   if(!vis.length){body='<div class="tbl-section"><div class="empty">Nenhuma ação para os filtros selecionados.</div></div>';}
@@ -443,6 +446,9 @@ _buildMs(document.getElementById('ms-vig'),()=>VIG_OPTS);
 _buildMs(document.getElementById('ms-org'),()=>ORG_OPTS);
 _buildMs(document.getElementById('ms-st'),()=>ST_OPTS);
 _buildMs(document.getElementById('ms-proj'),projItems);
+const FILL_OPTS=['Preenchida','Em branco'];
+_buildMs(document.getElementById('ms-causa'),()=>FILL_OPTS);
+_buildMs(document.getElementById('ms-acao'),()=>FILL_OPTS);
 document.addEventListener('click',e=>{if(!e.target.closest('.ms-wrap'))document.querySelectorAll('.ms-panel.open').forEach(p=>p.classList.remove('open'));});
 
 // ── Início: exige login + admin (mesmo fluxo do fca-preenchimento) ──
