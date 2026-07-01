@@ -590,12 +590,14 @@ function renderKPIs(d) {
   set('v-rsLPct',   pct(d.dRsL, d.rsLRem));
   color(q('v-rsLDelta'), d.dRsL < 0); colorText(q('v-rsLPct'), d.dRsL < 0);
 
-  // ── Km/L — Δ = Real − Rem (negativo = real pior = vermelho) ──
-  set('v-kmLRem',   f2(d.kmLRem));
-  set('v-kmLReal',  f2(d.kmLReal));
-  set('v-kmLDelta', f2(d.dKmL));
-  set('v-kmLPct',   (d.dKmL < 0 ? '-' : '') + pct(d.dKmL, d.kmLRem));
-  color(q('v-kmLDelta'), d.dKmL < 0); colorText(q('v-kmLPct'), d.dKmL < 0);
+  // ── Km/L — mesma fonte/lógica do painel Eficiência Km/L (com fallback) ──
+  // Δ = Real − Rem (negativo = real pior = vermelho)
+  const km = kmlCard() || {kmLRem:d.kmLRem, kmLReal:d.kmLReal, dKmL:d.dKmL};
+  set('v-kmLRem',   f2(km.kmLRem));
+  set('v-kmLReal',  f2(km.kmLReal));
+  set('v-kmLDelta', f2(km.dKmL));
+  set('v-kmLPct',   (km.dKmL < 0 ? '-' : '') + pct(km.dKmL, km.kmLRem));
+  color(q('v-kmLDelta'), km.dKmL < 0); colorText(q('v-kmLPct'), km.dKmL < 0);
 
   // ── Km Rodado — Δ = Rem − Real (negativo = andou mais = vermelho) ──
   set('v-kmRem',   fmt(d.kmRem));
@@ -646,6 +648,68 @@ function filtrarRows(rows) {
     (f.unidade.length ===0 || f.unidade.includes(getNv3Suffix(String(r.nivel3))))  &&
     (f.nivel3.length  ===0 || f.nivel3.includes(getNv3Prefix(String(r.nivel3))))
   );
+}
+// ══════════════════════════════════════════════════════════════════
+// Card KM/L — usa a MESMA aba ("Km/L") e a MESMA lógica do painel
+// Eficiência Km/L (Rem = média das linhas com rem>0; Real = ΣKm/ΣLitros),
+// respeitando os filtros da Árvore (ano, vigência, unidade, projeto).
+// ══════════════════════════════════════════════════════════════════
+const KML_ID='1ZZdvG_RK5cTBLdPl3TWCbNeqw-Y4fTYwWsQV4w-e__A', KML_TAB='Km/L';
+let KML_ROWS=[], KCL=null;
+const _KMMAP={jan:0,fev:1,mar:2,abr:3,mai:4,jun:5,jul:6,ago:7,set:8,out:9,nov:10,dez:11};
+function kParseVig(v){
+  if(!v)return null;
+  if(v instanceof Date)return new Date(v.getFullYear(),v.getMonth(),1);
+  if(typeof v==='string'){
+    const g=v.match(/^Date\((\d+),(\d+)/);if(g)return new Date(+g[1],+g[2],1);
+    const m1=v.match(/^([a-záéíóúâêôãõç]+)\.?\/(\d{4})$/i);if(m1){const mo=_KMMAP[m1[1].toLowerCase().slice(0,3)];if(mo!==undefined)return new Date(+m1[2],mo,1);}
+    const m2=v.match(/^(\d{1,2})\/(\d{4})$/);if(m2)return new Date(+m2[2],+m2[1]-1,1);
+  }
+  if(typeof v==='number'){const d=new Date(1899,11,30);d.setDate(d.getDate()+Math.round(v));return new Date(d.getFullYear(),d.getMonth(),1);}
+  return null;
+}
+function kDetectCols(cols){
+  const fi=tests=>{for(let i=0;i<cols.length;i++){const lc=String(cols[i]).toLowerCase();if(tests.some(t=>lc.includes(t)))return i;}return -1;};
+  const fb=(idx,def)=>idx>=0?idx:def;
+  return {vig:fb(fi(['vigência','vigencia']),0),rem:fb(fi(['rem médio','rem medio']),4),real:fb(fi(['km/l real']),6),proj:fb(fi(['projeto']),14),kmRod:fb(fi(['km rodado','km_rodado','kmrodado']),22),litros:fb(fi(['litro','qtd total','qtd_total','qtd litro']),23)};
+}
+const _kSplit=r=>{const v=(KCL&&r[KCL.proj]!=null)?String(r[KCL.proj]):'';const i=v.indexOf('-');return i>=0?[v.slice(0,i).trim(),v.slice(i+1).trim()]:[v.trim(),''];};
+const kGetProj=r=>_kSplit(r)[0];
+const kGetUni =r=>_kSplit(r)[1];
+function gvFetchSheet(id,tab){
+  return new Promise((resolve,reject)=>{
+    const fn='_gk'+Date.now();
+    const s=document.createElement('script');
+    const clean=()=>{try{delete window[fn];s.remove();}catch(e){}};
+    window[fn]=resp=>{clean();try{
+      if(resp.status!=='ok')throw new Error(resp.errors?.[0]?.message||'Erro gviz');
+      const cols=resp.table.cols.map(c=>c.label||c.id);
+      const rows=resp.table.rows.map(r=>(r.c||[]).map(c=>c?.v??null));
+      resolve({cols,rows});
+    }catch(e){reject(e);}};
+    s.onerror=()=>reject(new Error('Sem acesso à aba Km/L.'));
+    s.src=`https://docs.google.com/spreadsheets/d/${id}/gviz/tq?sheet=${encodeURIComponent(tab)}&tqx=out:json;responseHandler:${fn}`;
+    document.head.appendChild(s);
+  });
+}
+// Retorna {kmLRem,kmLReal,dKmL} da aba Km/L filtrada pelos filtros da Árvore, ou null se indisponível.
+function kmlCard(){
+  if(!KCL||!KML_ROWS.length)return null;
+  const f=getFilters();
+  let sumRem=0,cntRem=0,sumKm=0,sumLit=0;
+  for(const r of KML_ROWS){
+    const d=kParseVig(r[KCL.vig]);if(!d)continue;
+    if(f.ano.length      && !f.ano.includes(String(d.getFullYear())))continue;
+    if(f.vigencia.length && !f.vigencia.includes(String(d.getMonth()+1).padStart(2,'0')+'/'+d.getFullYear()))continue;
+    if(f.unidade.length  && !f.unidade.includes(kGetUni(r)))continue;
+    if(f.nivel3.length   && !f.nivel3.includes(kGetProj(r)))continue;
+    const rem=+r[KCL.rem]||0,km=+r[KCL.kmRod]||0,lit=+r[KCL.litros]||0;
+    if(rem>0){sumRem+=rem;cntRem++;}
+    sumKm+=km;sumLit+=lit;
+  }
+  if(cntRem===0||sumLit<=0)return null;
+  const kmLRem=sumRem/cntRem, kmLReal=sumKm/sumLit;
+  return {kmLRem,kmLReal,dKmL:kmLReal-kmLRem};
 }
 function _buildMs(wrap, renderFn, getAllItemsFn){
   if(!(wrap._sel instanceof Set)) wrap._sel=new Set();
@@ -875,7 +939,15 @@ async function atualizar() {
   }
 }
 
+// Carrega a aba "Km/L" (fonte do painel Eficiência) p/ o card KM/L bater — independente do cache do resto da árvore
+function loadKmlSheet(){
+  gvFetchSheet(KML_ID, KML_TAB).then(({cols,rows})=>{
+    KCL=kDetectCols(cols); KML_ROWS=rows;
+    if(allRows.length){ const k=calcular(filtrarRows(allRows)); if(k){ renderKPIs(k); setTimeout(fitAndDraw,60); } }
+  }).catch(e=>console.warn('Km/L (card):', e.message));
+}
 function initData(){
+  loadKmlSheet();
   try{
     const c=JSON.parse(localStorage.getItem(CACHE_KEY));
     if(c&&c.json&&Date.now()-c.t<CACHE_TTL){ useJson(c.json,c.t); return; }
