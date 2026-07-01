@@ -98,15 +98,19 @@
     ensureH2C(err=>{ if(err){ alert('Não foi possível carregar o componente de imagem. Verifique a conexão.'); return; }
       const hi = chart ? chartHiRes(chart) : null;
       if(hi && chart) chart.canvas.setAttribute('data-hires-tgt','1');
+      // html2canvas 1.4.1 NÃO resolve var(--x) em 'color'/'background' (pinta preto).
+      // Solução: grava a cor/fundo COMPUTADOS num atributo p/ reaplicar como valor concreto no clone.
+      const nodes=[el].concat([].slice.call(el.querySelectorAll('*')));
+      nodes.forEach(n=>{ try{ const cs=getComputedStyle(n); n.setAttribute('data-h2c-c',cs.color); n.setAttribute('data-h2c-bg',cs.backgroundColor); }catch(e){} });
       html2canvas(el,{scale:SCALE,backgroundColor:bgDe(el),useCORS:true,logging:false,scrollX:0,scrollY:-window.scrollY,
         onclone:(doc)=>{
-          if(!hi) return;
-          const c=doc.querySelector('canvas[data-hires-tgt="1"]')||doc.querySelector('canvas');
-          if(c&&c.parentNode){ const img=doc.createElement('img'); img.src=hi.url; img.style.width=hi.cssW+'px'; img.style.height=hi.cssH+'px'; img.style.display='block'; c.parentNode.replaceChild(img,c); }
+          doc.querySelectorAll('[data-h2c-c]').forEach(n=>{ n.style.color=n.getAttribute('data-h2c-c'); const bg=n.getAttribute('data-h2c-bg'); if(bg&&bg!=='rgba(0, 0, 0, 0)'&&bg!=='transparent') n.style.backgroundColor=bg; });
+          if(hi){ const c=doc.querySelector('canvas[data-hires-tgt="1"]')||doc.querySelector('canvas');
+            if(c&&c.parentNode){ const img=doc.createElement('img'); img.src=hi.url; img.style.width=hi.cssW+'px'; img.style.height=hi.cssH+'px'; img.style.display='block'; c.parentNode.replaceChild(img,c); } }
         }
       }).then(cv=>{ baixarPNG(cv, nome); })
         .catch(e=>{ console.error(e); alert('Erro ao gerar imagem: '+(e.message||e)); })
-        .finally(()=>{ if(chart) chart.canvas.removeAttribute('data-hires-tgt'); });
+        .finally(()=>{ if(chart) chart.canvas.removeAttribute('data-hires-tgt'); nodes.forEach(n=>{ n.removeAttribute('data-h2c-c'); n.removeAttribute('data-h2c-bg'); }); });
     });
   }
   // bloco "exportável como imagem" mais próximo do clique
