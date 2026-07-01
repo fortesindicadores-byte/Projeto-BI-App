@@ -77,20 +77,36 @@
     while(e){ const c=getComputedStyle(e).backgroundColor; if(c && c!=='rgba(0, 0, 0, 0)' && c!=='transparent') return c; e=e.parentElement; }
     return getComputedStyle(document.body).backgroundColor||'#0C1017';
   }
+  const SCALE=3; // resolução do PNG (3× = nítido p/ PowerPoint, sem pesar demais)
+  // Chart.js resiste a mudar DPI em runtime; então re-renderiza o gráfico num canvas temporário
+  // em alta DPI (3×) e devolve um dataURL nítido p/ trocar no clone do html2canvas.
+  function chartHiRes(chart){
+    try{
+      const cv=chart.canvas, r=cv.getBoundingClientRect();
+      const cssW=Math.round(r.width), cssH=Math.round(r.height);
+      if(!cssW||!cssH||!window.Chart) return null;
+      const tmp=document.createElement('canvas'); tmp.style.width=cssW+'px'; tmp.style.height=cssH+'px';
+      const host=document.createElement('div'); host.style.cssText='position:fixed;left:-99999px;top:0;width:'+cssW+'px;height:'+cssH+'px;'; host.appendChild(tmp); document.body.appendChild(host);
+      const cfg=chart.config;
+      const t=new window.Chart(tmp,{type:cfg.type,data:cfg.data,options:Object.assign({},cfg.options,{responsive:false,animation:false,devicePixelRatio:SCALE}),plugins:cfg.plugins});
+      const url=tmp.toDataURL('image/png');
+      t.destroy(); host.remove();
+      return {url,cssW,cssH};
+    }catch(e){ console.warn('chartHiRes',e); return null; }
+  }
   function capturaImagem(el, nome, chart){
     ensureH2C(err=>{ if(err){ alert('Não foi possível carregar o componente de imagem. Verifique a conexão.'); return; }
-      const SCALE=3;
-      const restore=[];
-      // gráfico: re-renderiza em alta DPI antes de capturar, p/ ficar nítido (não borrado)
-      if(chart){ try{ const old=chart.options.devicePixelRatio; restore.push(()=>{ try{ chart.options.devicePixelRatio=old; chart.resize(); }catch(e){} }); chart.options.devicePixelRatio=SCALE; chart.resize(); }catch(e){} }
-      const go=()=>{
-        html2canvas(el,{scale:SCALE,backgroundColor:bgDe(el),useCORS:true,logging:false,scrollX:0,scrollY:-window.scrollY})
-          .then(cv=>{ baixarPNG(cv, nome); })
-          .catch(e=>{ console.error(e); alert('Erro ao gerar imagem: '+(e.message||e)); })
-          .finally(()=>{ restore.forEach(fn=>fn()); });
-      };
-      // dá um tempinho p/ o Chart re-renderizar em alta DPI
-      chart ? setTimeout(go,150) : go();
+      const hi = chart ? chartHiRes(chart) : null;
+      if(hi && chart) chart.canvas.setAttribute('data-hires-tgt','1');
+      html2canvas(el,{scale:SCALE,backgroundColor:bgDe(el),useCORS:true,logging:false,scrollX:0,scrollY:-window.scrollY,
+        onclone:(doc)=>{
+          if(!hi) return;
+          const c=doc.querySelector('canvas[data-hires-tgt="1"]')||doc.querySelector('canvas');
+          if(c&&c.parentNode){ const img=doc.createElement('img'); img.src=hi.url; img.style.width=hi.cssW+'px'; img.style.height=hi.cssH+'px'; img.style.display='block'; c.parentNode.replaceChild(img,c); }
+        }
+      }).then(cv=>{ baixarPNG(cv, nome); })
+        .catch(e=>{ console.error(e); alert('Erro ao gerar imagem: '+(e.message||e)); })
+        .finally(()=>{ if(chart) chart.canvas.removeAttribute('data-hires-tgt'); });
     });
   }
   // bloco "exportável como imagem" mais próximo do clique
