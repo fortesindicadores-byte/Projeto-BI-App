@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Termômetro · Teste de Regras (paralelo)</title>
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#0C1017;--card:#141B26;--border:#1E2D40;--orange:#F97316;--blue:#38BDF8;--text:#F1F5F9;--text2:#94A3B8;--text3:#475569;--green:#3BB33B;--red:#FF6666;--amber:#EAB308;}
+*{margin:0;padding:0;box-sizing:border-box;}
+body{background:radial-gradient(ellipse at 10% 25%,rgba(249,115,22,.06) 0%,transparent 50%),radial-gradient(ellipse at 90% 75%,rgba(56,189,248,.05) 0%,transparent 50%),var(--bg);color:var(--text);font-family:'Montserrat',-apple-system,sans-serif;font-size:13px;min-height:100vh;}
+.header{background:rgba(12,16,23,.75);border-bottom:1px solid rgba(255,255,255,.07);padding:10px 24px 12px;display:flex;flex-wrap:wrap;align-items:center;position:sticky;top:0;z-index:100;backdrop-filter:blur(20px);box-shadow:0 2px 12px rgba(0,0,0,.3);}
+.brand{flex:1;}
+.brand h1{font-size:16px;font-weight:700;color:var(--orange);}
+.brand p{font-size:10px;color:var(--text2);margin-top:2px;}
+.status-badge{font-size:10px;color:var(--text);background:rgba(249,115,22,.15);border:1px solid rgba(249,115,22,.3);border-radius:4px;padding:3px 10px;white-space:nowrap;}
+.main{padding:20px 24px 80px;}
+.note{background:rgba(56,189,248,.08);border:1px solid rgba(56,189,248,.25);border-radius:8px;padding:12px 16px;font-size:12px;color:var(--text2);line-height:1.6;margin-bottom:16px;}
+.note b{color:var(--text);}
+.cards{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px;}
+.kpi-card{background:rgba(20,27,38,.55);border:1px solid rgba(255,255,255,.07);border-radius:8px;padding:14px 16px;backdrop-filter:blur(16px);box-shadow:0 2px 12px rgba(0,0,0,.25);}
+.card-label{font-size:10px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.5px;}
+.card-value{font-size:26px;font-weight:800;margin-top:4px;}
+.tbl-section{background:rgba(20,27,38,.55);border:1px solid rgba(255,255,255,.07);border-radius:8px;padding:18px 20px 16px;margin-bottom:16px;backdrop-filter:blur(16px);box-shadow:0 2px 12px rgba(0,0,0,.25);overflow-x:auto;}
+.tbl-title{font-size:16px;font-weight:800;color:var(--text);margin-bottom:3px;}
+.tbl-sub{font-size:11px;color:var(--text2);margin-bottom:14px;}
+table{width:100%;border-collapse:collapse;font-size:12px;}
+thead th{color:var(--text);font-size:11px;font-weight:700;padding:8px 8px 10px;border-bottom:1px solid rgba(255,255,255,.10);text-transform:uppercase;letter-spacing:.5px;white-space:nowrap;text-align:left;}
+td{padding:8px;border-bottom:1px solid rgba(255,255,255,.05);white-space:nowrap;}
+tbody tr:hover{background:rgba(255,255,255,.035);}
+.num{text-align:right;}
+th.num{text-align:right;}
+.g{color:var(--green);font-weight:700;}
+.r{color:var(--red);font-weight:700;}
+.y{color:var(--amber);font-weight:700;}
+.mut{color:var(--text3);}
+.pill{display:inline-block;min-width:36px;text-align:center;padding:2px 8px;border-radius:5px;font-weight:800;color:#0C1017;}
+.loading{text-align:center;color:var(--text3);padding:50px;font-size:13px;}
+.tag{display:inline-block;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);border-radius:4px;padding:1px 7px;font-size:10px;color:var(--text2);}
+@media(max-width:768px){.cards{grid-template-columns:repeat(2,1fr);}.main{padding:14px;}}
+</style>
+</head>
+<body>
+<header class="header">
+  <div class="brand"><h1>Termômetro · Teste de Regras (paralelo)</h1><p>Pontos CALCULADOS pela aba Regras × pontos da planilha — página de conferência, não afeta o painel oficial</p></div>
+  <span class="status-badge" id="status">Carregando…</span>
+</header>
+<main class="main">
+  <div class="note">
+    <b>Como ler:</b> para cada linha da base (unidade × tier × quinzena), cada indicador é repontuado aplicando o texto da aba <b>Regras</b> ao valor bruto
+    (ex.: "&gt;95%" → 10 pts). <b>MTTR/MTBF</b> ("melhor que 3º/2º quartil"): quartis calculados entre as unidades do <b>mesmo tier na mesma quinzena</b> —
+    top 25% = 10 pts · top 50% = 5 pts · resto 0 (MTTR: menor é melhor · MTBF: maior é melhor).
+    Regra ilegível → usa o ponto da planilha (fallback, marcado como "—" na coluna Regra).
+  </div>
+  <div class="cards">
+    <div class="kpi-card"><div class="card-label">Comparações (indicador)</div><div class="card-value" id="c-tot">—</div></div>
+    <div class="kpi-card"><div class="card-label">Iguais</div><div class="card-value g" id="c-eq">—</div></div>
+    <div class="kpi-card"><div class="card-label">Divergências</div><div class="card-value r" id="c-df">—</div></div>
+    <div class="kpi-card"><div class="card-label">% de espelhamento</div><div class="card-value" id="c-pct">—</div></div>
+  </div>
+  <div class="tbl-section"><div class="tbl-title">Impacto no ranking</div><div class="tbl-sub">Média da pontuação total por unidade × tier (todas as quinzenas) — planilha × calculado, e a posição em cada um</div><div id="rk"><div class="loading">Carregando…</div></div></div>
+  <div class="tbl-section"><div class="tbl-title">Divergências por indicador</div><div class="tbl-sub">Onde o cálculo pela regra mais discorda da planilha (aponta regra mal interpretada OU fórmula da planilha diferente do texto da regra)</div><div id="byind"></div></div>
+  <div class="tbl-section"><div class="tbl-title">Detalhe das divergências</div><div class="tbl-sub" id="det-sub">—</div><div id="det"></div></div>
+</main>
+<script>
+const SHEET_ID='10LRn3jrXEemqFiFAMbO8_bOLk98xrWTVXVUNDeQqLac';
+const TIERS=['Transportes T1','Transportes T2','WH T1','WH T2'];
+const COL={vig:0, uni:1, geo:3, total:4, rank:5};
+const IND_PAIRS=[[8,9],[10,11],[12,13],[14,15],[16,17],[18,19],[20,21],[22,23],[24,25]];
+const IND_NAMES={
+  'Transportes':['ADERÊNCIA PREVENTIVA','ADERÊNCIA CHECK DE CONFORMIDADE','BLITZ DE SEGURANÇA','ADERÊNCIA CHECKLIST','ORDENS DE SERVIÇO VENCIDAS','STRESS TEST','INDISP. MANUTENÇÃO','MTTR','MTBF'],
+  'WH':['ADERÊNCIA PREVENTIVA','ADERÊNCIA CHECK CONFORMIDADE','MILIMETRAGEM PNEU','ADERÊNCIA CHECKLIST','ORDENS DE SERVIÇO VENCIDA','STRESS TEST','DISPONIBILIDADE CONTRATADA','MTTR','MTBF'],
+};
+const fam=t=>t.startsWith('WH')?'WH':'Transportes';
+const indNames=t=>IND_NAMES[fam(t)];
+function canonInd(name){const s=String(name||'').toUpperCase().replace(/\s+/g,' ').trim();
+  const M={'ADERÊNCIA CHECK CONFORMIDADE':'ADERÊNCIA CHECK DE CONFORMIDADE','ORDENS DE SERVIÇO VENCIDA':'ORDENS DE SERVIÇO VENCIDAS'};return M[s]||s;}
+const IND_SHORT={'ADERÊNCIA PREVENTIVA':'Preventiva','ADERÊNCIA CHECK DE CONFORMIDADE':'Conformidade','BLITZ DE SEGURANÇA':'Segurança','ADERÊNCIA CHECKLIST':'Checklist','ORDENS DE SERVIÇO VENCIDAS':'OS Vencidas','STRESS TEST':'Stress Test','INDISP. MANUTENÇÃO':'Manutenção','MTTR':'MTTR','MTBF':'MTBF','MILIMETRAGEM PNEU':'MM Pneus','DISPONIBILIDADE CONTRATADA':'Disponibilidade'};
+const indShort=n=>IND_SHORT[canonInd(n)]||n;
+function tierLabel(t){const T=String(t||'').toUpperCase();if(T==='TRANSPORTES T1')return 'T1 TRANSP.';if(T==='TRANSPORTES T2')return 'T2 TRANSP.';if(T==='WH T1')return 'T1 WH';if(T==='WH T2')return 'T2 WH';return t;}
+const REG_COL={kpi:0,p20:9,p10:10,p5:11,p0:12};
+const QUARTIL_DIR={'MTTR':'menor','MTBF':'maior'};   // menor=asc é melhor
+const num1=v=>v==null||!isFinite(v)?'—':(Math.round(v*10)/10).toLocaleString('pt-BR');
+
+// ── fetch (idêntico ao painel) ──
+function fetchTier(tier){return new Promise(resolve=>{
+  const fn='gv_'+Math.random().toString(36).slice(2);const s=document.createElement('script');let done=false;
+  window[fn]=resp=>{done=true;try{
+    const rows=(resp.table.rows||[]).map(r=>r.c.map(c=>c&&c.v!=null?c.v:null));
+    const out=[];rows.forEach(r=>{const vig=r[COL.vig],uni=r[COL.uni],total=r[COL.total];
+      if(vig==null||uni==null)return;if(!/^\d+_\d+$/.test(String(vig).trim()))return;if(total==null||isNaN(+total))return;
+      out.push({tier,raw:r});});
+    resolve(out);}catch(e){resolve([]);}delete window[fn];s.remove();};
+  s.onerror=()=>{if(!done){resolve([]);delete window[fn];s.remove();}};
+  s.src=`https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?sheet=${encodeURIComponent(tier)}&tqx=out:json;responseHandler:${fn}`;
+  document.head.appendChild(s);
+  setTimeout(()=>{if(!done){resolve([]);try{delete window[fn];s.remove();}catch(e){}}},15000);});}
+function fetchRegras(){return new Promise(resolve=>{
+  const fn='gvr_'+Math.random().toString(36).slice(2);const s=document.createElement('script');let done=false;
+  window[fn]=resp=>{done=true;try{
+    const rows=(resp.table.rows||[]).map(r=>r.c.map(c=>c&&c.v!=null?c.v:null));
+    resolve(rows.filter(r=>{const k=String(r[REG_COL.kpi]||'').trim().toUpperCase();return k&&k!=='KPIS';}));
+  }catch(e){resolve(null);}delete window[fn];s.remove();};
+  s.onerror=()=>{if(!done){resolve(null);delete window[fn];s.remove();}};
+  s.src=`https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?sheet=Regras&headers=0&tqx=out:json;responseHandler:${fn}`;
+  document.head.appendChild(s);
+  setTimeout(()=>{if(!done){resolve(null);try{delete window[fn];s.remove();}catch(e){}}},15000);});}
+
+// ── valores ──
+// extrai TODOS os números de um valor bruto (número, "Date(…)"=duração em h, "100% | 43%", "0,85"…)
+function valNums(v){
+  if(v==null||v==='')return [];
+  if(typeof v==='number')return [v];
+  const s=String(v);
+  const md=s.match(/^Date\((\d+),(\d+),(\d+),(\d+),(\d+),(\d+)\)$/);
+  if(md)return [+md[4]+(+md[5])/60+(+md[6])/3600];
+  const ms=s.match(/-?\d+(?:[.,]\d+)?/g);
+  return ms?ms.map(x=>parseFloat(x.replace(',','.'))):[];
+}
+// normaliza p/ comparar com limiar em %: valor 0..1 vira 0..100 quando a regra fala em % (limiar>1.5)
+const scale=(v,thr)=>(v!=null&&v<=1.5&&thr>1.5)?v*100:v;
+
+// ── parser da regra (texto da aba Regras → condições) ──
+function parseRule(txt){
+  const s=String(txt==null?'':txt).trim();
+  if(!s||s==='—'||s==='-')return null;
+  const low=s.toLowerCase();
+  if(low.includes('quartil'))return {quartil: low.includes('3º')||low.includes('3o')||low.includes('3 ')?3:2, txt:s};
+  // condições: operador opcional + número (+% opcional). Sem operador = ">=" (ex.: "100%", "90% aderência")
+  const conds=[];const re=/([<>]=?)?\s*(\d+(?:[.,]\d+)?)\s*%?/g;let m;
+  while((m=re.exec(s))!==null){conds.push({op:m[1]||'>=',thr:parseFloat(m[2].replace(',','.'))});}
+  if(!conds.length)return null;
+  return {conds, txt:s};
+}
+const cmp={'>':(a,b)=>a>b,'>=':(a,b)=>a>=b,'<':(a,b)=>a<b,'<=':(a,b)=>a<=b};
+// avalia condições contra os números do valor: 2 conds + 2 valores → pareia; senão todas no 1º valor (E lógico)
+function passes(rule,nums){
+  if(!rule||!rule.conds||!nums.length)return false;
+  const cs=rule.conds;
+  if(cs.length>1&&nums.length>=cs.length)
+    return cs.every((c,i)=>{const v=scale(nums[i],c.thr);return v!=null&&cmp[c.op](v,c.thr);});
+  return cs.every(c=>{const v=scale(nums[0],c.thr);return v!=null&&cmp[c.op](v,c.thr);});
+}
+
+// ── quartis (MTTR/MTBF): rank entre unidades do mesmo tier+vigência ──
+let QRANK={}; // key tier|vig|ind|uni -> {r, n}
+function buildQuartis(rows){
+  QRANK={};const groups={};
+  rows.forEach(row=>{
+    indNames(row.tier).forEach((nm,i)=>{
+      const ind=canonInd(nm);if(!QUARTIL_DIR[ind])return;
+      const nums=valNums(row.raw[IND_PAIRS[i][0]]);if(!nums.length)return;
+      const k=row.tier+'|'+row.raw[COL.vig]+'|'+ind;
+      (groups[k]=groups[k]||[]).push({uni:row.raw[COL.uni],v:nums[0]});
+    });
+  });
+  Object.keys(groups).forEach(k=>{
+    const ind=k.split('|')[2];const asc=QUARTIL_DIR[ind]==='menor';
+    const arr=groups[k].slice().sort((a,b)=>asc?a.v-b.v:b.v-a.v);
+    arr.forEach((o,r)=>{QRANK[k+'|'+o.uni]={r,n:arr.length};});
+  });
+}
+function quartilPass(rule,tier,vig,ind,uni){
+  const q=QRANK[tier+'|'+vig+'|'+ind+'|'+uni];if(!q)return false;
+  const frac=rule.quartil===3?0.25:0.5;
+  return q.r < q.n*frac;
+}
+
+// ── pontuação pela regra ──
+let RULES={}; // canonInd -> {p20,p10,p5}
+function buildRules(regras){
+  RULES={};
+  (regras||[]).forEach(r=>{
+    const k=canonInd(r[REG_COL.kpi]);
+    RULES[k]={p20:parseRule(r[REG_COL.p20]),p10:parseRule(r[REG_COL.p10]),p5:parseRule(r[REG_COL.p5])};
+  });
+}
+// devolve {pts, ruleTxt} ou null (sem regra interpretável → fallback)
+function calcPts(ind,rawVal,tier,vig,uni){
+  const R=RULES[ind];if(!R)return null;
+  const nums=valNums(rawVal);
+  const evalLevel=(rule,pts)=>{
+    if(!rule)return null;
+    if(rule.quartil)return quartilPass(rule,tier,vig,ind,uni)?{pts,ruleTxt:rule.txt}:false;
+    return passes(rule,nums)?{pts,ruleTxt:rule.txt}:false;
+  };
+  if(!R.p20&&!R.p10&&!R.p5)return null;
+  if(!nums.length&&!(R.p10&&R.p10.quartil))return null;   // sem valor não dá p/ pontuar
+  for(const [rule,pts] of [[R.p20,20],[R.p10,10],[R.p5,5]]){
+    const res=evalLevel(rule,pts);
+    if(res)return res;
+  }
+  return {pts:0,ruleTxt:'(nenhum nível atingido)'};
+}
+function fmtVal(v){
+  if(v==null||v==='')return '—';
+  if(typeof v==='number'){if(v>0&&v<=1.0001)return Math.round(v*1000)/10+'%';return String(v);}
+  const md=String(v).match(/^Date\((\d+),(\d+),(\d+),(\d+),(\d+),(\d+)\)$/);
+  if(md){const h=+md[4]+(+md[5])/60+(+md[6])/3600;return h.toFixed(2)+'h';}
+  return String(v);
+}
+const pillC=d=>d===0?'#3BB33B':Math.abs(d)<=5?'#EAB308':'#FF6666';
+const set=(id,v)=>{document.getElementById(id).textContent=v;};
+
+(async function(){
+  const [parts,regras]=await Promise.all([Promise.all(TIERS.map(fetchTier)),fetchRegras()]);
+  const rows=parts.flat();
+  if(!rows.length||!regras){set('status','Erro ao carregar planilha/Regras');return;}
+  buildRules(regras);buildQuartis(rows);
+  let tot=0,eq=0;const divs=[],byInd={},totals={};
+  rows.forEach(row=>{
+    const uni=row.raw[COL.uni],vig=row.raw[COL.vig],tier=row.tier;
+    const key=uni+'||'+tier;
+    totals[key]=totals[key]||{uni,tier,sheet:[],calc:[]};
+    let calcTotal=0,usedFallback=false;
+    indNames(tier).forEach((nm,i)=>{
+      const ind=canonInd(nm);
+      const rawVal=row.raw[IND_PAIRS[i][0]];
+      const sp=row.raw[IND_PAIRS[i][1]];
+      const sheetPts=(sp==null||isNaN(+sp))?null:+sp;
+      const c=calcPts(ind,rawVal,tier,vig,uni);
+      const calcVal=c?c.pts:sheetPts;               // fallback: planilha
+      if(calcVal!=null)calcTotal+=calcVal;
+      if(!c)usedFallback=true;
+      if(sheetPts==null&&c==null)return;
+      tot++;
+      const same=(sheetPts!=null&&c!=null&&sheetPts===c.pts)||(c==null);
+      if(same)eq++;
+      else{
+        divs.push({vig,uni,tier,ind,val:fmtVal(rawVal),sheet:sheetPts,calc:c?c.pts:null,rule:c?c.ruleTxt:'—'});
+        byInd[ind]=(byInd[ind]||0)+1;
+      }
+    });
+    totals[key].sheet.push(+row.raw[COL.total]||0);
+    totals[key].calc.push(calcTotal);
+  });
+  set('c-tot',tot.toLocaleString('pt-BR'));set('c-eq',eq.toLocaleString('pt-BR'));
+  set('c-df',(tot-eq).toLocaleString('pt-BR'));
+  set('c-pct',tot?Math.round(eq/tot*1000)/10+'%':'—');
+  set('status','Comparação concluída · '+rows.length+' linhas da base');
+
+  // ranking antes × depois (média de todas as quinzenas)
+  const avg=a=>a.length?a.reduce((x,y)=>x+y,0)/a.length:0;
+  const list=Object.values(totals).map(t=>({uni:t.uni,tier:t.tier,s:avg(t.sheet),c:avg(t.calc)}));
+  const bySheet=list.slice().sort((a,b)=>b.s-a.s), byCalc=list.slice().sort((a,b)=>b.c-a.c);
+  const posS={},posC={};bySheet.forEach((o,i)=>posS[o.uni+'||'+o.tier]=i+1);byCalc.forEach((o,i)=>posC[o.uni+'||'+o.tier]=i+1);
+  document.getElementById('rk').innerHTML='<table><thead><tr><th>Unidade</th><th>Tier</th><th class="num">Pts planilha</th><th class="num">Pts pela regra</th><th class="num">Δ</th><th class="num">Posição planilha</th><th class="num">Posição regra</th><th class="num">Mudança</th></tr></thead><tbody>'+
+    bySheet.map(o=>{const k=o.uni+'||'+o.tier;const d=Math.round((o.c-o.s)*10)/10;const mv=posS[k]-posC[k];
+      return `<tr><td><b>${o.uni}</b></td><td><span class="tag">${tierLabel(o.tier)}</span></td>`+
+        `<td class="num">${num1(o.s)}</td><td class="num"><span class="pill" style="background:${pillC(d)}">${num1(o.c)}</span></td>`+
+        `<td class="num ${d===0?'mut':d>0?'g':'r'}">${d>0?'+':''}${num1(d)}</td>`+
+        `<td class="num mut">${posS[k]}º</td><td class="num">${posC[k]}º</td>`+
+        `<td class="num ${mv===0?'mut':mv>0?'g':'r'}">${mv===0?'=':(mv>0?'▲ +':'▼ ')+mv}</td></tr>`;}).join('')+'</tbody></table>';
+
+  // por indicador
+  const bi=Object.entries(byInd).sort((a,b)=>b[1]-a[1]);
+  document.getElementById('byind').innerHTML=bi.length?'<table><thead><tr><th>Indicador</th><th class="num">Divergências</th></tr></thead><tbody>'+
+    bi.map(([k,v])=>`<tr><td>${indShort(k)}</td><td class="num r">${v}</td></tr>`).join('')+'</tbody></table>':'<div class="loading">Nenhuma divergência 🎉</div>';
+
+  // detalhe
+  const MAX=400;
+  set('det-sub',divs.length+' divergência(s)'+(divs.length>MAX?' — mostrando as primeiras '+MAX:''));
+  document.getElementById('det').innerHTML=divs.length?'<table><thead><tr><th>Vig.</th><th>Unidade</th><th>Tier</th><th>Indicador</th><th class="num">Valor</th><th class="num">Planilha</th><th class="num">Regra</th><th>Regra aplicada</th></tr></thead><tbody>'+
+    divs.slice(0,MAX).map(d=>`<tr><td class="mut">${d.vig}</td><td><b>${d.uni}</b></td><td><span class="tag">${tierLabel(d.tier)}</span></td><td>${indShort(d.ind)}</td>`+
+      `<td class="num">${d.val}</td><td class="num y">${d.sheet==null?'—':d.sheet}</td><td class="num ${d.calc>(d.sheet||0)?'g':'r'}">${d.calc==null?'—':d.calc}</td><td class="mut" style="white-space:normal;max-width:280px">${d.rule}</td></tr>`).join('')+'</tbody></table>':'<div class="loading">Nenhuma divergência 🎉</div>';
+})();
+</script>
+</body>
+</html>
