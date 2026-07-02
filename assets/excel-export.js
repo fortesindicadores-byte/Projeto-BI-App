@@ -72,10 +72,14 @@
     },'image/png');
   }
   function bgDe(el){
-    // usa o fundo real do elemento; se transparente, usa o fundo do body (mantém claro/escuro)
+    // Fundo p/ o PNG: precisa ser OPACO. Cards têm fundo semi-transparente (rgba .14/.55) que,
+    // pintado sobre preto, escurece a imagem no modo claro — então pulamos e subimos até achar
+    // um fundo opaco (o .main = #F0F0F0 no claro / var(--bg) no escuro).
+    const alpha=c=>{const m=String(c).match(/rgba?\(([^)]+)\)/);if(!m)return 1;const p=m[1].split(',');return p.length>3?parseFloat(p[3]):1;};
     let e=el;
-    while(e){ const c=getComputedStyle(e).backgroundColor; if(c && c!=='rgba(0, 0, 0, 0)' && c!=='transparent') return c; e=e.parentElement; }
-    return getComputedStyle(document.body).backgroundColor||'#0C1017';
+    while(e){ const c=getComputedStyle(e).backgroundColor; if(c && c!=='transparent' && alpha(c)>=0.9) return c; e=e.parentElement; }
+    const body=getComputedStyle(document.body).backgroundColor;
+    return (body && alpha(body)>=0.9) ? body : (document.body.classList.contains('light-mode')?'#F0F0F0':'#0C1017');
   }
   const SCALE=3; // resolução do PNG (3× = nítido p/ PowerPoint, sem pesar demais)
   // Chart.js resiste a mudar DPI em runtime; então re-renderiza o gráfico num canvas temporário
