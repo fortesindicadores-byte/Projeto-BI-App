@@ -137,11 +137,32 @@ Leitura via `https://docs.google.com/spreadsheets/d/{ID}/gviz/tq?...&tqx=out:jso
 
 ---
 
-## 8. Pneus (integração Conlog)
+## 8. Pneus (integração Conlog via API Prolog)
 
-- Front (`pneus/`) lê o Supabase **Conlog** (`https://ewbzeqsneeylwkxtcpme.supabase.co`, tabela `snapshot`: PK endpoint+branch_id, payload jsonb).
-- Carga: **GitHub Actions** `pneus-loader.yml` roda `scripts/pneus-loader.mjs` 2×/dia (09h/21h UTC), lendo a API Prolog (endpoints `vehicles`, `tires`, `inspections`). Credenciais via **secrets** do Actions.
+Único fluxo do projeto com **carga de dados** (ETL): o painel Pneus não lê a Prolog diretamente — um loader agendado copia os dados para o Supabase, e o front lê o Supabase.
+
+```
+Prolog API ──(loader Node, 2×/dia)──► Supabase Conlog (snapshot) ──► pneus/ (navegador)
+```
+
+### 8.1 Leitura da API Prolog (`scripts/pneus-loader.mjs`)
+- **Base URL:** `https://prologapp.com/prolog/api/v3` · autenticação por header **`x-prolog-api-token`** (secret `PROLOG_TOKEN`).
+- **Endpoints consumidos** (por unidade/filial — `branchOfficesId`):
+  - `GET /vehicles` (`includeInactive=false`) → frota ativa (placa, modelo, km…);
+  - `GET /tires` → pneus (sulcos interno/central/externo, menor sulco, amplitude, pressão atual × recomendada com % de desvio, ciclo de vida/recapagens);
+  - `GET /tire-inspections/vehicles` → aferições, **janela de 01/01 do ano corrente até hoje** (jsonb enxuto — evita timeout/500 no Supabase free).
+- **Paginação:** `pageSize=100` + `pageNumber` incremental até vir página vazia.
+- **Rate limit:** a Prolog aceita ~10 req/min → o loader espera **6,5 s entre requisições**; em HTTP `429` aguarda 61 s e repete; em erro, até **6 retries** por página antes de abortar a unidade.
+- **Unidades:** 14 `BRANCH_IDS` fixos no script (1676, 1677, 37, 1906, 1907, 1878, 20, 30, 24, 2517, 26, 38, 2277, 2550). Nova filial na Prolog ⇒ incluir o id nessa lista.
+- **Proteção:** se uma unidade retornar 0 veículos, o loader **pula** a unidade (mantém o snapshot anterior em vez de gravar vazio).
+
+### 8.2 Gravação e consumo
+- Upsert via REST no Supabase Conlog: `POST /rest/v1/snapshot?on_conflict=endpoint,branch_id` — 1 linha por (endpoint, filial) com payload **jsonb** já transformado (campos calculados: menor sulco, amplitude, % desvio de pressão etc.) + `updated_at`.
+- **Agendamento:** GitHub Actions `pneus-loader.yml` — cron `0 9,21 * * *` (06h/18h BRT), execução manual via *Run workflow*, `concurrency` p/ não rodar 2 cargas ao mesmo tempo, timeout 350 min.
+- **Secrets do Actions:** `PROLOG_TOKEN`, `SUPABASE_URL`, `SUPABASE_SERVICE_KEY` (o loader usa service key porque roda no servidor do Actions — **jamais** no front).
+- Front (`pneus/`) lê a tabela `snapshot` (`https://ewbzeqsneeylwkxtcpme.supabase.co`) com chave anon.
 - Pendência de segurança conhecida: **rotacionar a service_role do Conlog** que já apareceu em prints.
+- Diagnóstico "Pneus sem dados/desatualizado": aba **Actions → Pneus Loader (Conlog)** — checar último run e logs (429/erros por unidade).
 
 ---
 
