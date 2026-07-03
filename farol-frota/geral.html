@@ -18,7 +18,15 @@
     <span class="status-badge" id="status">Carregando…</span>
   </div>
   <div class="header-filters" id="filters" style="display:none">
-    <div class="ms-wrap" id="fwrap-uni"></div>
+    <div class="filter-group">
+      <div class="ms-wrap" id="ms-uni">
+        <button class="ms-btn" onclick="toggleMs('ms-uni')">
+          <span class="ms-lbl">Unidade</span><span class="ms-cnt"></span>
+          <svg width="10" height="6" viewBox="0 0 10 6"><path d="M0 0l5 6 5-6z" fill="#F97316"/></svg>
+        </button>
+        <div class="ms-panel"><div class="ms-search"><svg width="12" height="12" viewBox="0 0 12 12"><circle cx="5" cy="5" r="4" stroke="#94A3B8" stroke-width="1.5" fill="none"/><line x1="8.5" y1="8.5" x2="11" y2="11" stroke="#94A3B8" stroke-width="1.5"/></svg><input type="text" placeholder="Digite para pesquisar…"></div><div class="ms-list"></div></div>
+      </div>
+    </div>
   </div>
 </header>
 <main class="main">
@@ -39,7 +47,9 @@
   document.getElementById('content').innerHTML='<div class="loading">Lendo as abas do Farol…</div>';
   try{
     await farolLoad();
-    buildUniFilter(paint);
+    document.getElementById('filters').style.display='';
+    buildMsFilter('ms-uni', Object.keys(UNIDADES).sort());
+    _farolRepaint=()=>{const v=getMsValues('ms-uni');FILT.uni=v.length?new Set(v):null;paint();};
     const now=new Date();
     document.getElementById('status').textContent='Atualizado '+now.toLocaleDateString('pt-BR')+' '+now.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
     paint();
@@ -54,29 +64,6 @@ function paint(){
   const stats=renderHeroDots(document.getElementById('hero-resumo'),null);
   const score=avgA([stats.sv,stats.se,stats.cf,stats.pv,stats.al,stats.os,stats.dp]);
   document.getElementById('hero-farois').innerHTML=score==null?'—':`<span class="${clsPctMeta(score,97,90)}">${pct1(score)}</span>`;
-}
-// filtro de unidades (multi-select padrão da casa)
-function buildUniFilter(onChange){
-  const codes=Object.keys(UNIDADES).sort();
-  const wrap=document.getElementById('fwrap-uni');
-  wrap.innerHTML=`<button class="ms-btn" id="uniBtn"><span class="ms-lbl">Unidade</span><span class="ms-cnt" id="uniCnt"></span>
-      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="6 9 12 15 18 9"/></svg></button>
-    <div class="ms-panel" id="uniPanel">
-      <label class="ms-opt all-opt"><input type="checkbox" id="uniAll" checked> Todas as unidades</label>
-      ${codes.map(c=>`<label class="ms-opt"><input type="checkbox" class="uOpt" value="${c}" checked> ${c} · ${UNIDADES[c]}</label>`).join('')}
-    </div>`;
-  document.getElementById('filters').style.display='';
-  const btn=document.getElementById('uniBtn'),panel=document.getElementById('uniPanel');
-  btn.onclick=()=>{const o=panel.classList.toggle('open');if(o){setTimeout(()=>document.addEventListener('click',function h(e){if(!wrap.contains(e.target)){panel.classList.remove('open');document.removeEventListener('click',h);}}),0);}};
-  const opts=[...panel.querySelectorAll('.uOpt')],all=document.getElementById('uniAll'),cnt=document.getElementById('uniCnt');
-  const apply=()=>{
-    const on=opts.filter(o=>o.checked).map(o=>o.value);
-    FILT.uni=(on.length===opts.length||on.length===0)?null:new Set(on);
-    if(!FILT.uni){cnt.style.display='none';}else{cnt.style.display='';cnt.textContent=on.length;}
-    onChange();
-  };
-  all.onchange=()=>{opts.forEach(o=>o.checked=all.checked);apply();};
-  opts.forEach(o=>o.onchange=()=>{all.checked=opts.every(x=>x.checked);apply();});
 }
 const _sun=`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>`;
 const _moon=`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>`;

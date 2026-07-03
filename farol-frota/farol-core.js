@@ -215,6 +215,13 @@ function heroAder(p,meta,extra){
   const cls=p==null?'mut':p>=meta?'cg':p>=meta-7?'cy':'cr';
   return `<div class="mini-hero"><div class="mh-label">ADERÊNCIA</div><div class="mh-val ${cls}">${pct1(p)}</div><div class="mh-meta">Meta: ${meta}%${extra||''}</div></div>`;
 }
+// aderência por projeto como deltas pequenos (rótulo + valor), padrão visão-financeira
+function projDeltas(titulo,pairs){
+  const ps=pairs.filter(x=>x&&x[1]!=null);
+  if(!ps.length)return '';
+  return `<div class="hero-deltas" style="margin:2px 0 16px;flex-wrap:wrap">`+
+    ps.map(([lb,v])=>`<div class="hero-delta"><span>${escF(lb)}</span><b class="${clsPctMeta(v)}">${pct1(v)}</b></div>`).join('')+`</div>`;
+}
 let _chartSeq=0;
 function mkBar(holder,labels,values,meta,fmt){
   const id='ch'+(++_chartSeq);
@@ -301,14 +308,11 @@ function renderStressV(el,cod){
   const rs=byCod(DATA.stressV,cod);
   if(!rs.length){el.innerHTML='<div class="loading">Sem dados para o recorte.</div>';return;}
   const p=stressVPct(rs);
-  let h=heroAder(p,100);
-  // bottom por projeto
   const projs=[...new Set(rs.map(r=>r.proj))].filter(Boolean).sort();
-  // descontos
   const desc=rs.filter(r=>r.desc>0).sort((a,b)=>b.desc-a.desc);
   const totDesc=sumA(desc.map(r=>r.desc));
-  h+=`<div class="mini-card"><div class="blk-t">Aderência por projeto</div><div id="stv-ch"></div></div>`+
-     `<div class="blk-t">Descontos Stress Test ${totDesc>0?`<span class="cr">· ${brl(totDesc)}</span>`:''}</div>`+
+  let h=heroAder(p,100)+projDeltas('Aderência por projeto',projs.map(pj=>[pj,stressVPct(rs.filter(r=>r.proj===pj))]));
+  h+=`<div class="blk-t">Descontos Stress Test ${totDesc>0?`<span class="cr">· ${brl(totDesc)}</span>`:''}</div>`+
       wrapT('<table>'+th(cod?'Placa':'Unidade · Placa','Projeto','Saída','Saída na Filial','Viagens','Desconto R$')+'<tbody>'+
         rs.slice().sort((a,b)=>b.desc-a.desc||String(a.placa).localeCompare(b.placa)).slice(0,60).map(r=>
           `<tr><td><b>${cod?escF(r.placa):escF(r.fil)+' · '+escF(r.placa)}</b></td><td>${escF(r.proj)}</td>
@@ -316,8 +320,6 @@ function renderStressV(el,cod){
            <td>${escF(r.saidaF||'—')}</td><td class="num">${r.viagens==null?'—':r.viagens}</td>
            <td class="num ${r.desc>0?'cr':'mut'}">${r.desc>0?brlFull(r.desc):'—'}</td></tr>`).join('')+'</tbody></table>');
   el.innerHTML=h;
-  const vals=projs.map(pj=>stressVPct(rs.filter(r=>r.proj===pj)));
-  mkBar(el.querySelector('#stv-ch'),projs,vals,100);
 }
 
 // ── STRESS TEST EMPILHADEIRAS ──
@@ -344,12 +346,11 @@ function renderCIFV(el,cod){
   const rs=byCod(DATA.cifv,cod);
   if(!rs.length){el.innerHTML='<div class="loading">Sem dados para o recorte.</div>';return;}
   const p=avgA(rs.map(r=>r.ad))*100;
-  let h=heroAder(p,100);
   const projs=[...new Set(rs.map(r=>r.proj))].filter(Boolean).sort();
   const nc=rs.filter(r=>r.dt>0||r.ad===0).sort((a,b)=>b.dt-a.dt);
   const tot=sumA(rs.map(r=>r.dt));
-  h+=`<div class="mini-card"><div class="blk-t">Aderência por projeto</div><div id="cifv-ch"></div></div>`+
-     `<div class="blk-t">Descontos ${tot>0?`<span class="cr">· ${brl(tot)}</span>`:''}</div>`+
+  let h=heroAder(p,100)+projDeltas('Aderência por projeto',projs.map(pj=>{const q=rs.filter(r=>r.proj===pj);return [pj,avgA(q.map(r=>r.ad))*100];}));
+  h+=`<div class="blk-t">Descontos ${tot>0?`<span class="cr">· ${brl(tot)}</span>`:''}</div>`+
       wrapT('<table>'+th(cod?'Veículo':'Filial · Veículo','Projeto','Status','Manutenção R$','Lavagem R$','Total R$')+'<tbody>'+
         (nc.length?nc:rs.slice(0,20)).slice(0,60).map(r=>
         `<tr><td><b>${cod?escF(r.placa):escF(r.fil)+' · '+escF(r.placa)}</b></td><td>${escF(r.proj)}</td>
@@ -358,8 +359,6 @@ function renderCIFV(el,cod){
          <td class="num ${r.dl>0?'cr':'mut'}">${r.dl>0?brlFull(r.dl):'—'}</td>
          <td class="num ${r.dt>0?'cr':'mut'}">${r.dt>0?brlFull(r.dt):'—'}</td></tr>`).join('')+'</tbody></table>');
   el.innerHTML=h;
-  const vals=projs.map(pj=>{const q=rs.filter(r=>r.proj===pj);return avgA(q.map(r=>r.ad))*100;});
-  mkBar(el.querySelector('#cifv-ch'),projs,vals,100);
 }
 
 // ── PREVENTIVAS ──
@@ -369,12 +368,11 @@ function renderPrev(el,cod){
   const rs=byCod(DATA.prev,cod);
   if(!rs.length){el.innerHTML='<div class="loading">Sem dados para o recorte.</div>';return;}
   const p=avgA(rs.map(r=>r.ad))*100;
-  let h=heroAder(p,100);
   const projs=[...new Set(rs.map(r=>r.proj))].filter(Boolean).sort();
   const ord={'VENCIDA':0,'EM ATENCAO':1,'EM ATENÇÃO':1,'NO PRAZO':2};
   const worst=rs.slice().sort((a,b)=>(ord[_n(a.st)]??3)-(ord[_n(b.st)]??3)||(a.dias??999)-(b.dias??999));
-  h+=`<div class="mini-card"><div class="blk-t">Aderência por projeto</div><div id="prev-ch"></div></div>`+
-     `<div class="blk-t">Bottom | Placas</div>`+
+  let h=heroAder(p,100)+projDeltas('Aderência por projeto',projs.map(pj=>{const q=rs.filter(r=>r.proj===pj);return [pj,avgA(q.map(r=>r.ad))*100];}));
+  h+=`<div class="blk-t">Bottom | Placas</div>`+
       wrapT('<table>'+th(cod?'Placa':'Unidade · Placa','Projeto','Marca','Modelo','OS','Status','Dias','Km')+'<tbody>'+
         worst.slice(0,60).map(r=>{
           const sc=_n(r.st)==='VENCIDA'?'cr':_n(r.st).startsWith('EM ATEN')?'cy':'cg';
@@ -383,8 +381,6 @@ function renderPrev(el,cod){
           <td class="num ${clsDias(r.dias)}">${r.dias==null?'—':Math.round(r.dias)}</td>
           <td class="num ${clsKm(r.km)}">${r.km==null?'—':Math.round(r.km).toLocaleString('pt-BR')}</td></tr>`;}).join('')+'</tbody></table>');
   el.innerHTML=h;
-  const vals=projs.map(pj=>{const q=rs.filter(r=>r.proj===pj);return avgA(q.map(r=>r.ad))*100;});
-  mkBar(el.querySelector('#prev-ch'),projs,vals,100);
 }
 
 // ── ALINHAMENTO ──
@@ -451,7 +447,8 @@ function renderRanking(el){
   }).sort((a,b)=>(b.score??-1)-(a.score??-1));
   const cell=(v,cls)=>`<td class="num ${cls}">${pct1(v)}</td>`;
   const cCu=v=>v==null?'mut':v<=0?'cg':v<=5?'cy':'cr';
-  el.innerHTML=wrapT('<table>'+th('#','Unidade','Média','Stress Veíc.','Stress Emp.','CIFV','Preventivas','Alinhamento','OS no prazo','Disponib.','Custos Δ Orç %')+'<tbody>'+
+  const rkHead='<thead><tr>'+['#','Unidade','Média','Stress Veíc.','Stress Emp.','CIFV','Preventivas','Alinhamento','OS no prazo','Disponib.','Custos Δ Orç %'].map((h,i)=>`<th${i>=2?' class="num"':''}>${h}</th>`).join('')+'</tr></thead>';
+  el.innerHTML=wrapT('<table>'+rkHead+'<tbody>'+
     list.map((u,i)=>{
       const sc=u.score==null?'mut':u.score>=97?'#3BB33B':u.score>=90?'#EAB308':'#FF6666';
       return `<tr><td class="mut">${i+1}</td><td><b>${u.cod}</b></td>
@@ -608,3 +605,43 @@ function renderHeroDots(el,cod){
     `<div class="hero-delta"><span>Custos Δ Orç</span><b class="${stats.cu==null?'mut':stats.cu<=0?'cg':stats.cu<=5?'cy':'cr'}">${stats.cu==null?'—':(stats.cu>0?'+':'')+pct1(stats.cu)}</b></div>`;
   return stats;
 }
+
+// ═══════════════ FILTRO MULTI-SELECT (idêntico ao visão-financeira) ═══════════════
+// wrap._sel = Set; VAZIO = "Todas". _farolRepaint() é definido pela página.
+let _farolRepaint=()=>{};
+function syncBadge(wrap){const cnt=wrap.querySelector('.ms-cnt'),n=wrap._sel?wrap._sel.size:0;if(cnt){cnt.textContent=n;cnt.style.display=n?'':'none';}}
+function toggleMs(id){
+  document.querySelectorAll('.ms-panel.open').forEach(p=>{if(p.closest('.ms-wrap').id!==id)p.classList.remove('open');});
+  const panel=document.querySelector(`#${id} .ms-panel`);panel.classList.toggle('open');
+  if(panel.classList.contains('open')){const inp=panel.querySelector('input[type=text]');if(inp)setTimeout(()=>inp.focus(),50);}
+}
+function getMsValues(id){const wrap=document.getElementById(id);return wrap&&wrap._sel?[...wrap._sel]:[];}
+function _buildMs(wrap,renderFn,getAll){
+  if(!(wrap._sel instanceof Set))wrap._sel=new Set();
+  const sel=wrap._sel,list=wrap.querySelector('.ms-list'),srch=wrap.querySelector('.ms-search input');
+  const render=q=>{renderFn(list,sel,q!==undefined?q:(srch.value||''));syncBadge(wrap);};
+  wrap._render=render;
+  if(!wrap._wired){
+    wrap._wired=true;
+    list.addEventListener('change',e=>{
+      const box=e.target;
+      if(box.classList.contains('ms-all')){sel.clear();}
+      else if(sel.size===0){if(!box.checked){const all=getAll?getAll():[];all.forEach(v=>{if(v!==box.dataset.v)sel.add(v);});}}
+      else{if(box.checked)sel.add(box.dataset.v);else sel.delete(box.dataset.v);if(getAll){const all=getAll();if(all.length>0&&all.every(v=>sel.has(v)))sel.clear();}}
+      render(srch.value);_farolRepaint();
+    });
+    list.addEventListener('click',e=>{const only=e.target.closest('.ms-only');if(!only)return;e.preventDefault();e.stopPropagation();sel.clear();sel.add(only.dataset.v);render(srch.value);_farolRepaint();});
+    srch.addEventListener('input',()=>render(srch.value));
+    srch.addEventListener('click',e=>e.stopPropagation());
+  }
+  render();
+}
+function buildMsFilter(id,items){
+  const wrap=document.getElementById(id);if(!wrap)return;wrap._items=items;
+  _buildMs(wrap,(list,sel,q)=>{
+    const it=wrap._items||[],f=q.toLowerCase(),shown=it.filter(v=>v.toLowerCase().includes(f)),allChk=sel.size===0;
+    list.innerHTML=(!q?`<label class="ms-opt all-opt"><input type="checkbox" class="ms-all" ${allChk?'checked':''}> Todas</label>`:'')+
+      shown.map(v=>`<label class="ms-opt"><input type="checkbox" data-v="${escF(v)}" ${allChk||sel.has(v)?'checked':''}> ${escF(v)}<span class="ms-only" data-v="${escF(v)}">só</span></label>`).join('');
+  },()=>wrap._items||[]);
+}
+document.addEventListener('click',e=>{if(!e.target.closest('.ms-wrap'))document.querySelectorAll('.ms-panel.open').forEach(p=>p.classList.remove('open'));});
