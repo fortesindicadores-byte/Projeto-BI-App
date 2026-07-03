@@ -6,6 +6,14 @@
 const SUPABASE_URL='https://lozwipoeacpvplgkrxkq.supabase.co';
 const SUPABASE_KEY='sb_publishable_ggKEEebc5zjgQDVsF92Upw_6uoLmKe9';
 const FAROL_SHEET_ID='1xOv7OJzErGV3vNCMOY_5O6px7vFvC990CW-1vGul5sY';
+// Disponibilidade — mesma planilha do painel /disponibilidade/
+const DISP_SHEET_ID='1oW3mss0pXVI6gaDU2z5cDAKvW40LWHCQXpanqSvb12o';
+const DISP_META=93, DISP_SONHO=97;   // <93 vermelho · 93–97 amarelo · ≥97 verde
+// Pneus — mesmo Supabase (Conlog) do painel /pneus/
+const PNEUS_SB_URL='https://ewbzeqsneeylwkxtcpme.supabase.co';
+const PNEUS_SB_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImV3YnplcXNuZWV5bHdreHRjcG1lIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE4NzY2MTcsImV4cCI6MjA5NzQ1MjYxN30.W8W6Yunt6Z8NB73qpOD8eqYlrsgMRgEG-siYsJFwDwE';
+// branch_id (Prolog) → [código Farol, tier]  (2550 ANG fora do escopo Farol)
+const PNEUS_BRANCH={1676:['MCC','T1'],1677:['MCC','T2'],37:['CGR',''],1906:['CBA','T1 WH'],1907:['CBA','T1'],1878:['CBA','T2'],20:['FLP',''],30:['GRL',''],24:['BLC',''],2517:['NFR',''],26:['PLT',''],38:['PIR',''],2277:['RON','']};
 
 // ── unidades (código do portal → nome exibido) ──
 const UNIDADES={
@@ -40,7 +48,7 @@ const clsPctMeta=(p,g=99.95,y=95)=>p==null?'mut':p>=g?'cg':p>=y?'cy':'cr';
 const avgA=a=>{const v=a.filter(x=>x!=null&&isFinite(x));return v.length?v.reduce((s,x)=>s+x,0)/v.length:null;};
 const sumA=a=>a.reduce((s,x)=>s+(isFinite(x)?x:0),0);
 
-function gvizT(sheet){
+function gvizAny(sheetId,sheet){
   return new Promise((res,rej)=>{
     const fn='_fv'+Math.floor(Math.random()*1e9);const s=document.createElement('script');
     const clr=()=>{try{delete window[fn];s.remove();}catch(e){}};
@@ -50,11 +58,12 @@ function gvizT(sheet){
       if(cols.every(c=>!c)&&rows.length){cols=rows[0].map(v=>String(v==null?'':v));rows=rows.slice(1);}
       res({cols,rows});}catch(e){rej(e);}};
     s.onerror=()=>{clr();rej(0);};
-    s.src=`https://docs.google.com/spreadsheets/d/${FAROL_SHEET_ID}/gviz/tq?sheet=${encodeURIComponent(sheet)}&headers=1&tqx=out:json;responseHandler:${fn}`;
+    s.src=`https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?sheet=${encodeURIComponent(sheet)}&headers=1&tqx=out:json;responseHandler:${fn}`;
     document.head.appendChild(s);
     setTimeout(()=>{clr();rej('timeout');},20000);
   });
 }
+const gvizT=sheet=>gvizAny(FAROL_SHEET_ID,sheet);
 function idxDe(cols,...names){const N=cols.map(_n);for(const nm of names){const i=N.indexOf(_n(nm));if(i>=0)return i;}for(const nm of names){const t=_n(nm);const i=N.findIndex(c=>c.includes(t));if(i>=0)return i;}return -1;}
 
 // ── gate de admin ──
@@ -117,7 +126,59 @@ async function farolLoad(){
     const i={dias:idxDe(c,'Dias em Aberto'),os:idxDe(c,'N° OS','Nº OS','No OS'),fil:idxDe(c,'Filial'),ori:idxDe(c,'Origem'),tip:idxDe(c,'Tipo'),cri:idxDe(c,'Criticidade'),seg:idxDe(c,'Segmento'),forn:idxDe(c,'Fornecedor'),mec:idxDe(c,'Mecânico','Mecanico'),pla:idxDe(c,'Placa'),obs:idxDe(c,'Observação','Observacao')};
     DATA.os=T.os.rows.map(r=>({dias:num(r[i.dias]),os:String(r[i.os]||'').trim(),cod:codDe(r[i.fil]),fil:String(r[i.fil]||'').trim(),ori:String(r[i.ori]||'').trim(),tipo:String(r[i.tip]||'').trim(),crit:String(r[i.cri]||'').trim(),seg:_seg(r[i.seg]),forn:String(r[i.forn]||'').trim(),mec:String(r[i.mec]||'').trim(),placa:String(r[i.pla]||'').trim(),obs:String(r[i.obs]||'').trim()})).filter(r=>r.os);
   }
+  await loadDisp();
   return DATA;
+}
+// nome da unidade na planilha de Disponibilidade → [código Farol, tier]
+const DISP2CT={
+  'CUIABA EMPURRADA':['CBA','T1'],'CUIABA':['CBA','T1 WH'],'CDD CUIABA':['CBA','T2'],
+  'MACACU EMPURRADA':['MCC','T1'],'CDI MACACU':['MCC','T2'],'CACHOEIRAS DE MACACU':['MCC','T2'],
+  'CDD FLORIANOPOLIS':['FLP',''],'CDD RONDONOPOLIS':['RON',''],'CDD RIO DE JANEIRO':['CGR',''],
+  'CDD GUARULHOS':['GRL',''],'CDD PELOTAS':['PLT',''],'PIRAI EMPURRADA':['PIR',''],
+  'CDD NOVA FRIBURGO':['NFR',''],'CDD CAMBORIU':['BLC','']
+};
+const dispCls=p=>p==null?'mut':p>=DISP_SONHO?'cg':p>=DISP_META?'cy':'cr';
+// carrega Disponibilidade (última vigência) — 1 linha por (cod,tier)
+async function loadDisp(){
+  let T;try{T=await gvizAny(DISP_SHEET_ID,'Disponibilidade');}catch(e){DATA.disp=null;return;}
+  const c=T.cols;
+  const i={dt:idxDe(c,'Data'),uni:idxDe(c,'Unidade'),proj:idxDe(c,'Projeto'),tipo:idxDe(c,'Tipo Veículo','Tipo'),at:idxDe(c,'Ativos'),ind:idxDe(c,'Indisponíveis','Indisponiveis','Indisp')};
+  const vigDe=v=>{const s=String(v||'');const m=s.match(/Date\((\d+),(\d+),(\d+)/);if(m)return +m[1]*100+(+m[2]+1);const p=s.split('/');return p.length>=3?+p[2]*100+ +p[1]:0;};
+  let rs=T.rows.map(r=>{const ct=DISP2CT[_n(r[i.uni])]||[codDe(r[i.uni]),''];return {vig:vigDe(r[i.dt]),cod:ct[0],tier:ct[1],ativos:num(r[i.at])||0,indisp:num(r[i.ind])||0};}).filter(r=>r.cod);
+  const mx=Math.max(...rs.map(r=>r.vig));
+  rs=rs.filter(r=>r.vig===mx);
+  const g={};rs.forEach(r=>{const k=r.cod+'|'+r.tier;(g[k]=g[k]||{cod:r.cod,tier:r.tier,ativos:0,indisp:0}).ativos+=r.ativos;g[k].indisp+=r.indisp;});
+  DATA.disp=Object.values(g).map(o=>({...o,pct:o.ativos>0?(o.ativos-o.indisp)/o.ativos*100:null}));
+  DATA.dispVig=mx;
+}
+// ── PNEUS (Supabase Conlog) — foto atual, carga sob demanda ──
+async function loadPneus(){
+  if(DATA.pneus)return DATA.pneus;
+  const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+  const bids=Object.keys(PNEUS_BRANCH);
+  const merged={vehicles:[],tires:[],inspections:[]};let ult=0;
+  const fetchB=bid=>fetch(`${PNEUS_SB_URL}/rest/v1/snapshot?branch_id=eq.${bid}&select=endpoint,branch_id,data,updated_at`,{headers:{apikey:PNEUS_SB_KEY,Authorization:'Bearer '+PNEUS_SB_KEY}}).then(r=>r.ok?r.json():null).catch(()=>null);
+  for(let k=0;k<bids.length;k+=3){
+    const batch=bids.slice(k,k+3);
+    const res=await Promise.all(batch.map(async bid=>{for(let a=0;a<5;a++){const o=await fetchB(bid);if(o!==null)return o;await sleep(700);}return [];}));
+    res.flat().forEach(r=>{const ct=PNEUS_BRANCH[r.branch_id];if(!ct||!merged[r.endpoint])return;if(r.updated_at)ult=Math.max(ult,new Date(r.updated_at).getTime());(Array.isArray(r.data)?r.data:[]).forEach(rec=>{rec._cod=ct[0];rec._tier=ct[1];merged[r.endpoint].push(rec);}); });
+  }
+  // reconstrói pneu atual: 1 por (veículo+posição), aferição mais recente
+  const porPos={};
+  merged.inspections.forEach(i=>{
+    if(i.veiculoId==null||i.posicao==null)return;
+    const k=i.veiculoId+'|'+i.posicao,cur=porPos[k];
+    if(!cur||new Date(i.dataInspecao)>new Date(cur.dataInspecao))porPos[k]=i;
+  });
+  const tires=Object.values(porPos).map(i=>{
+    const menor=num(i.menorMM);const st=menor==null?null:menor<2?'Bloquear':menor<=3?'Recapar':menor<=6?'Regular':'Bom';
+    const desv=num(i.desvioPressao);const pIdeal=num(i.pressaoIdeal);
+    return {cod:i._cod,tier:i._tier||'',placa:i.placa||'',posicao:i.posicao,serial:i.serial||'',menor,st,desv,pIdeal,dt:i.dataInspecao};
+  });
+  // aferição por veículo (última data) p/ aderência
+  const veic={};merged.inspections.forEach(i=>{if(i.veiculoId==null)return;const d=new Date(i.dataInspecao);const cur=veic[i.veiculoId];if(!cur||d>cur.dt)veic[i.veiculoId]={cod:i._cod,tier:i._tier||'',dt:d};});
+  DATA.pneus={tires,veic:Object.values(veic),ult:ult||Date.now()};
+  return DATA.pneus;
 }
 // normaliza segmento (MECANICA/MECÂNICA_, QUALIDADE_, etc.)
 function _seg(v){return _n(v).replace(/_+$/,'').trim();}
@@ -147,7 +208,7 @@ function mkBar(holder,labels,values,meta,fmt){
       scales:{x:{grid,ticks:{...tick,autoSkip:false,maxRotation:0}},y:{grid,ticks:tick,beginAtZero:true}}}
   });
 }
-const th=(...hs)=>'<thead><tr>'+hs.map(h=>`<th${/R\$|Dias|Km|Viagens|%|Desc|1Q|2Q|Total/i.test(h)?' class="num"':''}>${h}</th>`).join('')+'</tr></thead>';
+const th=(...hs)=>'<thead><tr>'+hs.map(h=>`<th${/R\$|Dias|Km|Viagens|%|Desc|1Q|2Q|Total|Orç|Rem|Real|Ativos|Indispon|Sulco|Desvio|Média/i.test(h)?' class="num"':''}>${h}</th>`).join('')+'</tr></thead>';
 function wrapT(html){return `<div style="overflow-x:auto">${html}</div>`;}
 
 // ═══════════════ SEÇÕES ═══════════════
@@ -338,25 +399,26 @@ function unitStats(cod){
   const al=(()=>{const a=byCod(DATA.alinh,cod);return a.length?a.filter(r=>_n(r.st)!=='VENCIDO').length/a.length*100:null;})();
   const os=(()=>{const a=byCod(DATA.os,cod);return a.length?a.filter(r=>(r.dias??0)<=OS_META).length/a.length*100:100;})();
   const cu=(()=>{const a=byCod(DATA.custos,cod);if(!a.length)return null;const o=sumA(a.map(r=>r.orc)),re=sumA(a.map(r=>r.rea));return Math.abs(o)>0?(Math.abs(re)-Math.abs(o))/Math.abs(o)*100:null;})();
-  return {sv,se,cf,pv,al,os,cu};
+  const dp=(()=>{const a=(DATA.disp||[]).filter(r=>r.cod===cod);if(!a.length)return null;const at=sumA(a.map(r=>r.ativos)),ind=sumA(a.map(r=>r.indisp));return at>0?(at-ind)/at*100:null;})();
+  return {sv,se,cf,pv,al,os,cu,dp};
 }
 function renderRanking(el){
   const list=Object.keys(UNIDADES).map(cod=>{
     const s=unitStats(cod);
-    const score=avgA([s.sv,s.se,s.cf,s.pv,s.al,s.os]);
+    const score=avgA([s.sv,s.se,s.cf,s.pv,s.al,s.os,s.dp]);
     return {cod,...s,score};
   }).sort((a,b)=>(b.score??-1)-(a.score??-1));
   const cell=(v,cls)=>`<td class="num ${cls}">${pct1(v)}</td>`;
   const cCu=v=>v==null?'mut':v<=0?'cg':v<=5?'cy':'cr';
-  el.innerHTML=wrapT('<table>'+th('#','Unidade','Média','Stress Veíc.','Stress Emp.','CIFV','Preventivas','Alinhamento','OS no prazo','Custos Δ Orç %')+'<tbody>'+
+  el.innerHTML=wrapT('<table>'+th('#','Unidade','Média','Stress Veíc.','Stress Emp.','CIFV','Preventivas','Alinhamento','OS no prazo','Disponib.','Custos Δ Orç %')+'<tbody>'+
     list.map((u,i)=>{
       const sc=u.score==null?'mut':u.score>=97?'#3BB33B':u.score>=90?'#EAB308':'#FF6666';
       return `<tr><td class="mut">${i+1}</td><td><b>${u.cod}</b> <span class="mut">${escF(UNIDADES[u.cod])}</span></td>
       <td class="num">${u.score==null?'—':`<span class="pill" style="background:${sc}">${pct1(u.score)}</span>`}</td>
       ${cell(u.sv,clsPctMeta(u.sv))}${cell(u.se,clsPctMeta(u.se))}${cell(u.cf,clsPctMeta(u.cf))}${cell(u.pv,clsPctMeta(u.pv))}
-      ${cell(u.al,u.al==null?'mut':u.al>=80?'cg':'cr')}${cell(u.os,u.os==null?'mut':u.os>=90?'cg':u.os>=70?'cy':'cr')}
+      ${cell(u.al,u.al==null?'mut':u.al>=80?'cg':'cr')}${cell(u.os,u.os==null?'mut':u.os>=90?'cg':u.os>=70?'cy':'cr')}${cell(u.dp,dispCls(u.dp))}
       <td class="num ${cCu(u.cu)}">${u.cu==null?'—':(u.cu>0?'+':'')+pct1(u.cu)}</td></tr>`;}).join('')+'</tbody></table>')+
-    '<div class="tbl-sub" style="margin-top:8px">Média = aderências (Stress V/E, CIFV, Preventivas, Alinhamento, OS no prazo). Custos é informativo (Δ Real vs Orç do mês).</div>';
+    '<div class="tbl-sub" style="margin-top:8px">Média = aderências (Stress V/E, CIFV, Preventivas, Alinhamento, OS no prazo, Disponibilidade). Custos é informativo (Δ Real vs Orç do mês). Pneus tem seção própria (foto Prolog).</div>';
 }
 
 // ── RESUMO EXECUTIVO (geral) ──
@@ -384,6 +446,71 @@ function renderResumo(el){
   el.innerHTML=`<div class="quads">${quad('✅ Positivos',pos.slice(0,6),'q-pos')}${quad('🔴 Críticos',neg,'q-neg')}${quad('🟡 Atenção',aten,'q-at')}${quad('🎯 Próximos passos',acao,'q-ac')}</div>`;
 }
 
+// ── DISPONIBILIDADE (foto da última vigência) ──
+function renderDisp(el,cod){
+  const rs=(DATA.disp||[]).filter(r=>cod?r.cod===cod:true);
+  if(!rs.length){el.innerHTML='<div class="loading">Sem dados de disponibilidade para o recorte.</div>';return;}
+  const at=sumA(rs.map(r=>r.ativos)),ind=sumA(rs.map(r=>r.indisp));
+  const p=at>0?(at-ind)/at*100:null;
+  let h=`<div class="mini-hero"><div class="mh-label">DISPONIBILIDADE</div><div class="mh-val ${dispCls(p)}">${pct1(p)}</div>
+    <div class="mh-meta">Meta ${DISP_META}% · Sonho ${DISP_SONHO}% · <b>${Math.round(at)}</b> ativos · <b class="${ind?'cr':'mut'}">${Math.round(ind)}</b> indisponíveis</div></div>`;
+  // tabela por unidade (geral) ou por tier (unidade)
+  const key=cod?'tier':'cod';
+  const g={};rs.forEach(r=>{const k=(cod?(r.tier||'—'):r.cod);(g[k]=g[k]||{ativos:0,indisp:0}).ativos+=r.ativos;g[k].indisp+=r.indisp;});
+  h+=wrapT('<table>'+th(cod?'Tier':'Unidade','Ativos','Indisponíveis','Disponib. %')+'<tbody>'+
+    Object.keys(g).sort().map(k=>{const o=g[k];const pc=o.ativos>0?(o.ativos-o.indisp)/o.ativos*100:null;
+      return `<tr><td><b>${cod?escF(k):escF(k)+' <span class="mut">'+escF(UNIDADES[k]||'')+'</span>'}</b></td>
+        <td class="num">${Math.round(o.ativos)}</td><td class="num ${o.indisp?'cr':'mut'}">${Math.round(o.indisp)}</td>
+        <td class="num ${dispCls(pc)}">${pct1(pc)}</td></tr>`;}).join('')+'</tbody></table>');
+  el.innerHTML=h;
+}
+// ── PNEUS (foto Prolog — gestão à vista) ──
+async function renderPneus(el,cod){
+  el.innerHTML='<div class="loading">Lendo a base de Pneus (Prolog/Conlog)…</div>';
+  let P;try{P=await loadPneus();}catch(e){el.innerHTML='<div class="loading">Não consegui ler a base de Pneus agora. Tente atualizar.</div>';return;}
+  const tires=P.tires.filter(t=>cod?t.cod===cod:true);
+  if(!tires.length){el.innerHTML='<div class="loading">Sem pneus no recorte.</div>';return;}
+  // aferições: % da frota aferida nos últimos 30 dias
+  const veic=P.veic.filter(v=>cod?v.cod===cod:true);
+  const ref=P.ult;const afer=veic.length?veic.filter(v=>(ref-v.dt.getTime())<=30*864e5).length/veic.length*100:null;
+  // milimetragem
+  const cnt={Bloquear:0,Recapar:0,Regular:0,Bom:0};
+  tires.forEach(t=>{if(t.st)cnt[t.st]++;});
+  const totMM=tires.filter(t=>t.st).length;
+  const crit=cnt.Bloquear+cnt.Recapar;
+  const mmOk=totMM?(totMM-crit)/totMM*100:null;
+  // calibragem
+  const comP=tires.filter(t=>t.pIdeal>0&&t.desv!=null);
+  const calOk=comP.length?comP.filter(t=>Math.abs(t.desv)<=15).length/comP.length*100:null;
+  const card=(lb,val,cls,sub)=>`<div class="ch-min"><span>${lb}</span><b class="${cls}">${val}</b>${sub?`<small class="mut">${sub}</small>`:''}</div>`;
+  let h=`<div class="custos-hero">
+    ${card('Aferições (30d)',pct1(afer),clsPctMeta(afer,95,85),veic.length+' veículos')}
+    ${card('Milimetragem OK',pct1(mmOk),clsPctMeta(mmOk,90,75),totMM+' pneus')}
+    ${card('Calibragem OK',pct1(calOk),clsPctMeta(calOk,90,75),'±15% ideal')}
+    ${card('Críticos',String(crit),crit?'cr':'cg','bloquear+recapar')}
+  </div>`;
+  // distribuição milimetragem
+  h+=`<div class="blk-t">Milimetragem · sulco (menor)</div>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px">
+      <span class="pill" style="background:#FF6666">${cnt.Bloquear} Bloquear</span>
+      <span class="pill" style="background:#EAB308">${cnt.Recapar} Recapar</span>
+      <span class="pill" style="background:#38BDF8">${cnt.Regular} Regular</span>
+      <span class="pill" style="background:#3BB33B">${cnt.Bom} Bom</span></div>`;
+  // piores pneus
+  const worst=tires.filter(t=>t.menor!=null).sort((a,b)=>a.menor-b.menor).slice(0,50);
+  const stCls=s=>s==='Bloquear'?'cr':s==='Recapar'?'cy':s==='Regular'?'':'cg';
+  h+=`<div class="blk-t">Bottom | Pneus críticos</div>`+
+    wrapT('<table>'+th(cod?'Placa':'Unidade · Placa','Posição','Serial','Sulco mm','Status','Desvio pressão')+'<tbody>'+
+    worst.map(t=>`<tr><td><b>${cod?escF(t.placa):escF(t.cod)+(t.tier?' '+escF(t.tier):'')+' · '+escF(t.placa)}</b></td>
+      <td>${escF(String(t.posicao))}</td><td>${escF(t.serial||'—')}</td>
+      <td class="num ${t.menor<2?'cr':t.menor<=3?'cy':'cg'}">${t.menor==null?'—':t.menor.toFixed(1)}</td>
+      <td class="${stCls(t.st)}">${escF(t.st||'—')}</td>
+      <td class="num ${t.desv==null?'mut':Math.abs(t.desv)>15?'cr':'cg'}">${t.desv==null?'—':(t.desv>0?'+':'')+Math.round(t.desv)+'%'}</td></tr>`).join('')+'</tbody></table>');
+  const dt=new Date(P.ult);
+  h+=`<div class="tbl-sub" style="margin-top:8px">Foto Prolog de ${dt.toLocaleDateString('pt-BR')} ${dt.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})} · 1 leitura por posição (aferição mais recente). Milimetragem: &lt;2 Bloquear · ≤3 Recapar · ≤6 Regular · &gt;6 Bom. Calibragem OK = ±15% da ideal.</div>`;
+  el.innerHTML=h;
+}
+
 // ═══════════════ MONTAGEM DAS PÁGINAS ═══════════════
 function renderFarol(el,cod){
   const S=[];
@@ -395,15 +522,15 @@ function renderFarol(el,cod){
   S.push(['cifv','CIFV','Aderência das fotos da frota vs 100% · descontos por veículo']);
   S.push(['alinh','Alinhamento','No prazo vs vencidos · placas por próximo evento']);
   S.push(['os','Gestão de OS','% no prazo (≤8 dias) · OSs em aberto']);
-  S.push(['pneus','Pneus <span class="sec-badge pan">próxima etapa — painel Conlog</span>','Aferições · Milimetragem · Pressão (base Conlog, como no painel Pneus)']);
-  S.push(['disp','Disponibilidade <span class="sec-badge pan">próxima etapa — painel existente</span>','% vs meta/atenção · S-1 · aberturas de indisponibilidade']);
+  S.push(['disp','Disponibilidade','% vs Meta 93% / Sonho 97% (foto da última vigência)']);
+  S.push(['pneus','Pneus','Aferições · Milimetragem · Calibragem (foto Prolog, como no painel Pneus)']);
   el.innerHTML=S.map(([id,t,sub])=>secBox(id,t,sub)).join('');
   const put=(id,fn)=>{const b=document.getElementById('body-'+id);try{fn(b,cod);}catch(e){console.error(id,e);b.innerHTML='<div class="loading">Erro ao montar esta seção.</div>';}};
   if(!cod){put('resumo',el2=>renderResumo(el2));put('ranking',el2=>renderRanking(el2));}
   put('custos',renderCustos);put('stressv',renderStressV);put('stresse',renderStressE);
   put('prev',renderPrev);put('cifv',renderCIFV);put('alinh',renderAlinh);put('os',renderOS);
-  document.getElementById('body-pneus').innerHTML='<div class="loading">Entra na próxima etapa (mesma base do painel Pneus).</div>';
-  document.getElementById('body-disp').innerHTML='<div class="loading">Entra na próxima etapa (mesma lógica do painel Disponibilidade).</div>';
+  put('disp',renderDisp);
+  renderPneus(document.getElementById('body-pneus'),cod).catch(e=>{console.error('pneus',e);});
 }
 
 // hero da página: dots por indicador
@@ -411,7 +538,7 @@ function renderHeroDots(el,cod){
   const stats=cod?unitStats(cod):(()=>{ // geral = média das unidades
     const all=Object.keys(UNIDADES).map(unitStats);
     const m=k=>avgA(all.map(a=>a[k]));
-    return {sv:m('sv'),se:m('se'),cf:m('cf'),pv:m('pv'),al:m('al'),os:m('os'),cu:m('cu')};
+    return {sv:m('sv'),se:m('se'),cf:m('cf'),pv:m('pv'),al:m('al'),os:m('os'),cu:m('cu'),dp:m('dp')};
   })();
   const dot=(v,cls)=>`<span class="dot ${cls==='cg'?'g':cls==='cy'?'y':cls==='cr'?'r':''}" style="${cls==='mut'?'background:#475569':''}"></span>`;
   const item=(lb,v,cls)=>`<div class="hero-delta"><span>${lb}</span><b class="${cls}">${dot(v,cls)} ${pct1(v)}</b></div>`;
@@ -422,6 +549,7 @@ function renderHeroDots(el,cod){
     item('Preventivas',stats.pv,clsPctMeta(stats.pv))+
     item('Alinhamento',stats.al,stats.al==null?'mut':stats.al>=80?'cg':'cr')+
     item('OS no prazo',stats.os,stats.os==null?'mut':stats.os>=90?'cg':stats.os>=70?'cy':'cr')+
+    item('Disponib.',stats.dp,dispCls(stats.dp))+
     `<div class="hero-delta"><span>Custos Δ Orç</span><b class="${stats.cu==null?'mut':stats.cu<=0?'cg':stats.cu<=5?'cy':'cr'}">${stats.cu==null?'—':(stats.cu>0?'+':'')+pct1(stats.cu)}</b></div>`;
   return stats;
 }
