@@ -294,14 +294,14 @@ function renderCustos(el,cod){
     rows.forEach((r,i)=>{
       const dO=Math.abs(r.rea)-Math.abs(r.orc), dR=Math.abs(r.rea)-Math.abs(r.rem);
       const pO=Math.abs(r.orc)>0?dO/Math.abs(r.orc)*100:null, pR=Math.abs(r.rem)>0?dR/Math.abs(r.rem)*100:null;
-      h+=`<tr>${i===0?`<td rowspan="${rows.length+1}" style="font-weight:800;vertical-align:top">${escF(g)}</td>`:''}
+      h+=`<tr>${i===0?`<td rowspan="${rows.length}" style="font-weight:800;vertical-align:top">${escF(g)}</td>`:''}
         <td>${escF(r.conta)}</td><td class="num">${brlFull(r.orc)}</td><td class="num">${brlFull(r.rem)}</td><td class="num">${brlFull(r.rea)}</td>
         <td class="num ${dcls(dO)}">${brlFull(dO)}</td><td class="num ${dcls(dR)}">${brlFull(dR)}</td>
         <td class="num ${dcls(dO)}">${pct1(pO)}</td><td class="num ${dcls(dR)}">${pct1(pR)}</td></tr>`;
     });
     const t={orc:sumA(rows.map(r=>r.orc)),rem:sumA(rows.map(r=>r.rem)),rea:sumA(rows.map(r=>r.rea))};
     const dO=Math.abs(t.rea)-Math.abs(t.orc), dR=Math.abs(t.rea)-Math.abs(t.rem);
-    h+=`<tr class="tot-row"><td>Total</td><td class="num">${brlFull(t.orc)}</td><td class="num">${brlFull(t.rem)}</td><td class="num">${brlFull(t.rea)}</td>
+    h+=`<tr class="tot-row"><td></td><td>Total</td><td class="num">${brlFull(t.orc)}</td><td class="num">${brlFull(t.rem)}</td><td class="num">${brlFull(t.rea)}</td>
       <td class="num ${dcls(dO)}">${brlFull(dO)}</td><td class="num ${dcls(dR)}">${brlFull(dR)}</td>
       <td class="num ${dcls(dO)}">${pct1(Math.abs(t.orc)>0?dO/Math.abs(t.orc)*100:null)}</td><td class="num ${dcls(dR)}">${pct1(Math.abs(t.rem)>0?dR/Math.abs(t.rem)*100:null)}</td></tr>`;
   });
