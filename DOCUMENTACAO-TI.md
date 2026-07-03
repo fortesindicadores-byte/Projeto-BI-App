@@ -1,7 +1,7 @@
 # Gestão em Movimento — Documentação Técnica (Handoff para TI)
 
 > Portal de BI da frota (Fortes Indicadores · operação Conlog/Ambev), em substituição ao Looker Studio.
-> **Última atualização:** jun/2026 · Docs complementares: `CLAUDE.md` (design system), `PAINEIS.md` (catálogo de painéis), `HANDOFF.md` (histórico).
+> **Última atualização:** jul/2026 · Docs complementares: `CLAUDE.md` (design system), `PAINEIS.md` (catálogo de painéis), `HANDOFF.md` (histórico).
 
 ---
 
@@ -15,7 +15,7 @@
 | Stack | HTML + CSS + JavaScript **puro** — sem framework, sem backend próprio, sem build step |
 | Bibliotecas (CDN) | Chart.js 4.4.0 · chartjs-plugin-datalabels 2.2.0 · Supabase JS v2 · Google Fonts (Montserrat) |
 | Autenticação | Supabase Auth (`https://lozwipoeacpvplgkrxkq.supabase.co`) |
-| Banco de dados | Supabase Postgres (tabelas `fca`, `fca_profiles`) + Supabase Conlog (`snapshot`, para Pneus) |
+| Banco de dados | Supabase Postgres (tabelas `fca`, `fca_profiles`, `access_log`) + Supabase Conlog (`snapshot`, para Pneus) |
 | Fontes de dados | Google Sheets (leitura via gviz JSONP **no navegador**) + Supabase |
 
 **Princípio de arquitetura:** cada painel é **um único `index.html` autocontido** (CSS e JS inline). Cada pasta do repo = um painel = uma URL. Não há servidor de aplicação: o navegador do usuário lê as planilhas/DB diretamente.
@@ -23,11 +23,13 @@
 ```
 Navegador ──► GitHub Pages (HTML estático)
    │
-   ├──► Google Sheets (gviz JSONP, leitura)      ← indicadores, DRE, Gerot, termômetro…
-   ├──► Supabase lozwipo… (auth + tabela fca)    ← login, FCA (leitura/escrita, RLS)
-   └──► Supabase ewbzeq…  (tabela snapshot)      ← Pneus (dados Conlog via loader)
+   ├──► Google Sheets (gviz JSONP, leitura)      ← indicadores, DRE, Gerot, termômetro, Farol…
+   ├──► Supabase lozwipo… (auth + fca + access_log) ← login, FCA (RLS), auditoria de acessos
+   └──► Supabase ewbzeq…  (tabela snapshot)      ← Pneus / Farol (dados Conlog via loader)
                     ▲
-        GitHub Actions (pneus-loader.mjs, 2×/dia) ── Prolog API
+        GitHub Actions:
+          • pneus-loader.mjs  (cron 2×/dia)  ── Prolog API ──► snapshot
+          • farol-mailer.mjs  (cron seg 14h) ── lê Sheets/Supabase ──► Resend (e-mail aos gestores)
 ```
 
 ---
@@ -40,13 +42,20 @@ gestao-em-movimento/
 ├── CLAUDE.md                   → Design system + convenções (LEITURA OBRIGATÓRIA p/ manutenção)
 ├── PAINEIS.md / HANDOFF.md / DOCUMENTACAO-TI.md → documentação
 ├── _template/                  → esqueleto p/ novos painéis
-├── .github/workflows/pneus-loader.yml → carga Conlog→Supabase (cron 2×/dia)
+├── .github/workflows/
+│   ├── pneus-loader.yml        → carga Conlog→Supabase (cron 2×/dia)
+│   └── farol-mailer.yml        → envio do Farol por e-mail (Resend; segunda 14h BRT)
 ├── scripts/
 │   ├── pneus-loader.mjs        → loader Node (Prolog API → Supabase snapshot)
-│   └── fca-supabase.sql        → DDL/RLS das tabelas fca e fca_profiles
+│   ├── farol-mailer.mjs        → envio do Farol por e-mail (Resend)
+│   ├── fca-supabase.sql        → DDL/RLS das tabelas fca e fca_profiles
+│   ├── acessos-supabase.sql    → DDL/RLS da tabela access_log (auditoria de acessos)
+│   └── farol-acessos.sql       → coluna fca_profiles.farol_unidades (destinatários do Farol)
 │
 │  ── PAINÉIS (pasta = URL) ──
 ├── visao-financeira/           → DRE consolidado (REFERÊNCIA de layout)
+├── farol-frota/                → Farol Frota (hub admin + Farol Geral + por unidade; envio por e-mail)
+├── acessos/                    → Auditoria de acessos ao portal (admin)
 ├── painel-km/                  → Painel KM
 ├── rs-por-km/                  → R$/KM
 ├── combustivel/                → sub-hub (arvore-combustivel, eficiencia-kml, preco-litro, co2)
@@ -81,10 +90,12 @@ gestao-em-movimento/
 
 - **Supabase Auth** no hub (`index.html`): login e-mail/senha, cadastro com confirmação por e-mail (SMTP Resend), "esqueci a senha" e redefinição (`PASSWORD_RECOVERY`).
 - Chave usada no client: **publishable/anon** (`sb_publishable_…`) — segura para exposição pública **desde que o RLS esteja ativo** nas tabelas.
-- **`fca_profiles`**: perfil por usuário → `user_id`, `unidade` (código, ex.: CGR), `is_admin`.
+- **`fca_profiles`**: perfil por usuário → `user_id`, `unidade` (código, ex.: CGR), `is_admin`, `farol_unidades`.
   - Usuário comum: enxerga/edita **apenas a sua unidade** (RLS).
   - Admin: todas as unidades + rotinas de geração.
-- Gestão de acessos: card **Gerenciar Acessos** no hub (cluster Administração, só admin).
+  - `farol_unidades` (texto): quem recebe o Farol por e-mail — `null`=nenhuma, `TODAS`, ou lista de códigos (`CGR,BLC`). Migração: `scripts/farol-acessos.sql`.
+- **`access_log`**: auditoria de acessos ao portal (1 linha por acesso: `user_id` default `auth.uid()`, `email`, `painel`, `created_at`). RLS: cada um insere o seu; **só admin lê**. Migração: `scripts/acessos-supabase.sql`. Consumido pelo painel **Acessos** (KPIs, gráfico de acessos/dia, tabelas por usuário e por painel).
+- Gestão de acessos: card **Gerenciar Acessos** no hub (cluster Administração, só admin) — aprova/bloqueia, define o **Acesso FCA** (unidade/admin) e o **Recebe Farol** (unidades que o usuário recebe por e-mail) de cada usuário.
 
 > ⚠️ **Nunca** usar/commitar `service_role` no front-end ou no repo. O loader do Pneus usa secrets do GitHub Actions.
 
@@ -100,8 +111,9 @@ Leitura via `https://docs.google.com/spreadsheets/d/{ID}/gviz/tq?...&tqx=out:jso
 | DRE | `1qcTy2ppLCGBKKqZCxCYWCTL9kTAuWfHBMyBfWJOyih8` | Visão Financeira, geração de Custos do FCA |
 | Km/L e R$/L | `1ZZdvG_RK5cTBLdPl3TWCbNeqw-Y4fTYwWsQV4w-e__A` | Combustível, causas automáticas do FCA, km/dia do Pneus |
 | Dispersão de km | `1wCoRGsvOgmIvfLW4F9Sxr-5AX9Go-aFlRVjrQ_B2ilM` | Painel KM, causas automáticas do FCA |
-| DPO / Demarco / Disponibilidade | `1oW3mss0pXVI6gaDU2z5cDAKvW40LWHCQXpanqSvb12o` | Auditorias, Disponibilidade (FCA Total = legado, não é mais fonte) |
+| DPO / Demarco / Disponibilidade | `1oW3mss0pXVI6gaDU2z5cDAKvW40LWHCQXpanqSvb12o` | Auditorias, Disponibilidade, **Farol Frota** (abas `Disponibilidade` e `Indisponibilidade`) |
 | Termômetro | `10LRn3jrXEemqFiFAMbO8_bOLk98xrWTVXVUNDeQqLac` | Termômetro e MPR (abas = tiers: Transportes T1/T2, WH T1/T2 + aba Regras) |
+| **Farol Frota** | `1xOv7OJzErGV3vNCMOY_5O6px7vFvC990CW-1vGul5sY` | Farol Frota — 8 abas: Custos, Stress Test (cadastro), Stress Test Veículos, Stress Test Empilhadeiras, CIFV, Preventivas, Alinhamentos, OS em aberto |
 
 **Regra de performance:** planilhas grandes (DRE ~18k linhas) devem ser filtradas **no servidor** com `&tq=` (ex.: `select * where K = 'CAMPO GRANDE'`) — sem isso o JSONP estoura no navegador.
 
@@ -166,7 +178,45 @@ Prolog API ──(loader Node, 2×/dia)──► Supabase Conlog (snapshot) ─�
 
 ---
 
-## 9. Design system (resumo — detalhes no `CLAUDE.md`)
+## 9. Farol Frota (retrato semanal da frota + envio por e-mail)
+
+Painel **admin-only** que consolida os indicadores operacionais da frota numa "foto" semanal (segunda, 14h BRT) e envia por e-mail para os gestores das unidades. Os gestores **não acessam pelo portal** — recebem só o e-mail; a liberação é feita no **Gerenciar Acessos** (campo Recebe Farol).
+
+### 9.1 Estrutura (`farol-frota/`)
+- `index.html` — hub do Farol (gate de admin): card **Farol Geral** + um card por unidade.
+- `geral.html` — Farol Geral (todas as unidades) com **filtro de Unidade** (multi-select padrão), **Resumo Executivo** (4 quadrantes) e **Ranking das Unidades**.
+- `unidade.html?u=COD` — Farol de uma unidade (recorte por projeto/tier).
+- `farol-core.js` — **núcleo compartilhado**: carga/normalização das fontes, cálculo dos indicadores e render das seções (evita duplicar código entre geral e unidade).
+- `farol.css` — estilo compartilhado (segue o padrão visão-financeira).
+- `abas.html` — página de diagnóstico (lê as abas ao vivo e mostra colunas + amostra) — usada para mapear/remapear colunas.
+
+### 9.2 Fontes e seções
+Mapeamento **por nome de coluna** (nunca por posição). Todas as seções são um retrato do momento da carga.
+
+| Seção | Fonte | Indicador |
+|---|---|---|
+| Custos | Planilha Farol · aba `Custos` (última vigência) | Realizado × Remunerado × Orçado, Δ vs Orç/Rem, por unidade (geral) / projeto (unidade) |
+| Stress Test — Veículos | aba `Stress Test Veículos` (último período) | Aderência (% com saída) vs 100%, descontos por placa |
+| Stress Test — Empilhadeiras | aba `Stress Test Empilhadeiras` | Aderência 1ª/2ª quinzena (% equip. contratado sem desconto), descontos |
+| CIFV | aba `CIFV` | Aderência das fotos vs 100%, descontos |
+| Preventivas | aba `Preventivas` | Aderência; dias (<0 vermelho, ≤30 amarelo, >30 verde) e km (≤0/≤2000/>2000) |
+| Alinhamento | aba `Alinhamentos` | % no prazo (≠ vencido) vs meta 80%, placas por próximo evento |
+| Gestão de OS | aba `OS em aberto` | % no prazo (≤8 dias), OSs abertas; geral: por unidade/segmento/fornecedor |
+| **Disponibilidade** | Planilha DPO/Demarco · abas `Disponibilidade` + `Indisponibilidade` | % disponível vs Meta 93% / Sonho 97% + placas indisponíveis (dias parado = hoje − data da parada) |
+| **Pneus** | Supabase Conlog (`snapshot`, mesma fonte do painel Pneus) | Foto atual: aferições (30d), milimetragem OK, calibragem (±15%), pneus críticos |
+
+- **Ranking / Resumo (geral):** média das aderências (Stress V/E, CIFV, Preventivas, Alinhamento, OS no prazo, Disponibilidade). Custos entra como informativo (Δ Real vs Orç). Pneus tem seção própria (carga sob demanda, ~13 filiais).
+- **De-para de unidades:** nomes das abas (CDD/CDI, cidades, `EMPURRADA`) → códigos do portal (`FAROL2COD`); Pneus/Disponibilidade separam por **tier** (T1/T1 WH/T2) quando a unidade tem mais de uma filial.
+
+### 9.3 Envio por e-mail (segunda, 14h BRT)
+- `scripts/farol-mailer.mjs` — envia via **Resend** (API). Destinatários = usuários com `fca_profiles.farol_unidades` preenchido (`TODAS` ou lista).
+- `.github/workflows/farol-mailer.yml` — agendamento (cron `0 17 * * 1` = 14h BRT) + execução manual (`workflow_dispatch`, inputs `to`/`from`).
+- **Secrets do Actions:** `RESEND_API_KEY` (+ `FAROL_FROM`/`FAROL_TO` opcionais).
+- **Pendência para ativar o envio real:** verificar um **domínio no Resend** (ex.: `fortesindicadores.com.br`). Sem domínio verificado, a Resend só envia para o e-mail dono da conta — por isso o envio para destinatários arbitrários está **bloqueado até a verificação do domínio**. Enquanto isso, o cadastro de destinatários e o conteúdo já estão prontos.
+
+---
+
+## 10. Design system (resumo — detalhes no `CLAUDE.md`)
 
 - Paleta: fundo `#0C1017`, cards `rgba(20,27,38,.55)`, laranja `#F97316` (primária), azul `#38BDF8`, verde `#3BB33B`, vermelho `#FF6666`. Fonte **Montserrat**.
 - **Visão Financeira é a referência de layout** (header sticky 2 linhas, hero fora de card, KPI-cards, tabelas clean).
@@ -178,22 +228,27 @@ Prolog API ──(loader Node, 2×/dia)──► Supabase Conlog (snapshot) ─�
 
 ---
 
-## 10. Segurança — resumo
+## 11. Segurança — resumo
 
 | Item | Estado |
 |---|---|
-| Chave anon/publishable no front | OK **com RLS ativo** (fca/fca_profiles) |
-| service_role | **Nunca** no front/repo; só em secrets do Actions |
+| Chave anon/publishable no front | OK **com RLS ativo** (fca/fca_profiles/access_log) |
+| service_role | **Nunca** no front/repo; só em secrets do Actions (loaders/mailer) |
 | Planilhas Google | Públicas por link (leitura) — não colocar dado sensível |
 | Repo público | Sim (Pages grátis + Actions ilimitado) — não commitar tokens |
-| Pendência | Rotacionar service_role Conlog exposta em prints |
+| `RESEND_API_KEY` | Só em secret do Actions (farol-mailer). Enviar sem domínio verificado limita ao e-mail dono da conta |
+| Pendência | Rotacionar service_role Conlog exposta em prints; verificar domínio no Resend p/ ligar o envio do Farol |
 
 ---
 
-## 11. Rotina operacional mensal (resumo executivo)
+## 12. Rotina operacional (resumo executivo)
 
+**Mensal (FCA):**
 1. Mês fecha → planilhas de origem atualizadas (DRE, Gerot/Base RPM, termômetro).
 2. Admin abre **FCA · Admin** → **Gerar Custos** e **Gerar RPM**.
 3. Unidades abrem **FCA · Preenchimento** → tratam os desvios (Causa/Ação/Responsável/Prazo) → **Salvar**.
 4. Gestão acompanha em **FCA** (consolidado), **Aderência ao FCA**, **Termômetro** e **MPR**.
-5. Pneus atualiza sozinho (Actions 2×/dia); demais painéis leem as planilhas em tempo real ao abrir.
+
+**Semanal (Farol):** segunda 14h BRT o Actions (`farol-mailer`) monta a foto e envia por e-mail aos gestores liberados no Gerenciar Acessos (Recebe Farol). Admins consultam pelo `farol-frota/` a qualquer momento.
+
+**Contínuo:** Pneus atualiza sozinho (Actions 2×/dia); demais painéis leem as planilhas em tempo real ao abrir; acessos são registrados em `access_log` e auditados no painel **Acessos** (admin).
