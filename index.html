@@ -111,6 +111,17 @@ body{background:radial-gradient(ellipse at 15% 20%,rgba(249,115,22,.07) 0%,trans
 .user-date{font-size:10px;color:var(--text3);margin-top:4px;}
 .user-fca{margin-top:8px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
 .user-fca label{font-size:10px;font-weight:700;color:var(--orange);text-transform:uppercase;letter-spacing:.5px;}
+.user-farol{margin-top:8px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;position:relative;}
+.user-farol>label{font-size:10px;font-weight:700;color:#38BDF8;text-transform:uppercase;letter-spacing:.5px;}
+.farol-btn{background:#0a0f18;color:var(--text);border:1px solid #2a3a50;border-radius:6px;font-family:'Montserrat',sans-serif;font-size:11px;font-weight:700;padding:5px 10px;cursor:pointer;outline:none;display:flex;align-items:center;gap:7px;min-width:150px;}
+.farol-btn:hover{border-color:#38BDF8;}
+.farol-btn .fcnt{background:#38BDF8;color:#08121c;border-radius:10px;padding:1px 7px;font-size:9px;font-weight:800;}
+.farol-panel{display:none;position:absolute;top:calc(100% + 4px);left:0;z-index:60;background:#0f1824;border:1px solid #2a3a50;border-radius:8px;min-width:210px;max-height:260px;overflow:auto;box-shadow:0 10px 28px rgba(0,0,0,.6);padding:4px;}
+.farol-panel.open{display:block;}
+.farol-opt{display:flex;align-items:center;gap:8px;padding:6px 10px;cursor:pointer;font-size:11px;color:var(--text2);border-radius:5px;}
+.farol-opt:hover{background:rgba(255,255,255,.05);color:var(--text);}
+.farol-opt.all-opt{border-bottom:1px solid #1e2d40;color:var(--text);font-weight:700;margin-bottom:2px;}
+.farol-opt input{accent-color:#38BDF8;width:14px;height:14px;cursor:pointer;}
 .user-fca select{background:#0a0f18;color:var(--text);border:1px solid #2a3a50;border-radius:6px;font-family:'Montserrat',sans-serif;font-size:11px;font-weight:700;padding:5px 9px;cursor:pointer;outline:none;}
 .user-fca select:hover{border-color:var(--orange);}
 .user-actions{display:flex;gap:8px;flex-shrink:0;}
@@ -628,7 +639,7 @@ async function loadAdminData() {
   const { data } = await sb.from('user_approvals').select('*').order('created_at', { ascending: false });
   allApprovals = data || [];
   try {
-    const { data: profs } = await sb.from('fca_profiles').select('user_id,unidade,is_admin');
+    const { data: profs } = await sb.from('fca_profiles').select('user_id,unidade,is_admin,farol_unidades');
     _fcaProf = {}; (profs || []).forEach(p => { _fcaProf[p.user_id] = p; });
   } catch (e) { _fcaProf = {}; }
   renderAdminUsers();
@@ -649,6 +660,64 @@ async function setUserUnit(userId, value, nome) {
       _fcaProf[userId] = row;
     }
   } catch (e) { alert('Erro ao salvar acesso FCA: ' + (e.message || e)); }
+}
+
+// ── Recebe Farol (segunda, 14h) — seleção múltipla de unidades + "Todas" ──
+function farolSummary(v) {
+  if (!v) return 'Não recebe';
+  if (v === 'TODAS') return 'Todas as unidades';
+  const n = v.split(',').filter(Boolean).length;
+  return n + (n === 1 ? ' unidade' : ' unidades');
+}
+function renderFarolPicker(userId, cur, nm) {
+  cur = cur || '';
+  const isTodas = cur === 'TODAS';
+  const set = new Set(isTodas ? [] : cur.split(',').map(s => s.trim().toUpperCase()).filter(Boolean));
+  const cnt = isTodas ? FCA_UNITS.length : set.size;
+  const opts = `<label class="farol-opt all-opt">
+      <input type="checkbox" class="f-all" ${isTodas ? 'checked' : ''} onchange="onFarolChange('${userId}','${nm}','all')"> Todas as unidades</label>` +
+    FCA_UNITS.map(c => `<label class="farol-opt">
+      <input type="checkbox" class="f-unit" value="${c}" ${set.has(c) ? 'checked' : ''} ${isTodas ? 'disabled' : ''} onchange="onFarolChange('${userId}','${nm}','unit')"> ${c}</label>`).join('');
+  return `<div class="user-farol">
+    <label>Recebe Farol:</label>
+    <button type="button" class="farol-btn" onclick="toggleFarolPanel('${userId}')">
+      <span id="fsum-${userId}">${farolSummary(cur)}</span>
+      <span class="fcnt" id="fcnt-${userId}" style="${cnt ? '' : 'display:none'}">${cnt}</span>
+    </button>
+    <div class="farol-panel" id="fpanel-${userId}">${opts}</div>
+  </div>`;
+}
+function toggleFarolPanel(userId) {
+  const panel = document.getElementById('fpanel-' + userId);
+  const open = panel.classList.toggle('open');
+  if (open) {
+    setTimeout(() => document.addEventListener('click', function h(e) {
+      if (!panel.parentElement.contains(e.target)) { panel.classList.remove('open'); document.removeEventListener('click', h); }
+    }), 0);
+  }
+}
+function onFarolChange(userId, nm, changed) {
+  const panel = document.getElementById('fpanel-' + userId);
+  const todas = panel.querySelector('.f-all');
+  const units = [...panel.querySelectorAll('.f-unit')];
+  if (changed === 'all' && todas.checked) units.forEach(u => u.checked = false);
+  if (changed === 'unit' && units.some(u => u.checked)) todas.checked = false;
+  units.forEach(u => u.disabled = todas.checked);
+  const val = todas.checked ? 'TODAS' : units.filter(u => u.checked).map(u => u.value).join(',');
+  const cnt = todas.checked ? FCA_UNITS.length : units.filter(u => u.checked).length;
+  document.getElementById('fsum-' + userId).textContent = farolSummary(val);
+  const badge = document.getElementById('fcnt-' + userId);
+  badge.textContent = cnt; badge.style.display = cnt ? '' : 'none';
+  setUserFarol(userId, val, nm);
+}
+async function setUserFarol(userId, value, nome) {
+  if (!userId) return;
+  try {
+    const row = { user_id: userId, nome: nome || null, farol_unidades: value || null };
+    const { error } = await sb.from('fca_profiles').upsert(row, { onConflict: 'user_id' });
+    if (error) throw error;
+    _fcaProf[userId] = { ..._fcaProf[userId], ...row };
+  } catch (e) { alert('Erro ao salvar Recebe Farol: ' + (e.message || e)); }
 }
 
 async function loadAdminBadge() {
@@ -699,7 +768,7 @@ function renderAdminUsers() {
       actions = `<button class="btn-remove" onclick="removeUser(${idx})">Remover</button>
                  <button class="btn-unblock" onclick="unblockUser(${idx})">Desbloquear</button>`;
     }
-    let fcaSel = '';
+    let fcaSel = '', farolSel = '';
     if (u.status === 'approved' && u.user_id) {
       const p = _fcaProf[u.user_id] || {};
       const cur = p.is_admin ? '__ADMIN__' : (p.unidade ? String(p.unidade).toUpperCase() : '');
@@ -710,6 +779,7 @@ function renderAdminUsers() {
           <option value="__ADMIN__" ${cur === '__ADMIN__' ? 'selected' : ''}>Admin (todas)</option>
           ${FCA_UNITS.map(c => `<option value="${c}" ${cur === c ? 'selected' : ''}>${c}</option>`).join('')}
         </select></div>`;
+      farolSel = renderFarolPicker(u.user_id, p.farol_unidades, nm);
     }
     return `<div class="user-card">
       <div class="user-avatar">${initial}</div>
@@ -719,6 +789,7 @@ function renderAdminUsers() {
         <div class="user-phone">${u.phone || '—'}</div>
         <div class="user-date">Cadastro: ${dt}</div>
         ${fcaSel}
+        ${farolSel}
       </div>
       <div class="user-actions">${actions}</div>
     </div>`;
