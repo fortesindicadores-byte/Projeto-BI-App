@@ -150,6 +150,32 @@ async function loadDisp(){
   const g={};rs.forEach(r=>{const k=r.cod+'|'+r.tier;(g[k]=g[k]||{cod:r.cod,tier:r.tier,ativos:0,indisp:0}).ativos+=r.ativos;g[k].indisp+=r.indisp;});
   DATA.disp=Object.values(g).map(o=>({...o,pct:o.ativos>0?(o.ativos-o.indisp)/o.ativos*100:null}));
   DATA.dispVig=mx;
+  await loadInd();
+}
+// mapeia unidade da aba Indisponibilidade → [cod, tier] (mesma lógica do painel Disponibilidade)
+const IND_CITY={'RONDONOPOLIS':'RON','GUARULHOS':'GRL','FLORIANOPOLIS':'FLP','PELOTAS':'PLT','NOVA FRIBURGO':'NFR','BALNEARIO CAMBORIU':'BLC','CAMPO GRANDE':'CGR','PIRAI':'PIR'};
+function mapIndCT(uni,proj,tipo){
+  const u=_n(uni),p=_n(proj),t=_n(tipo);
+  if(u==='CUIABA'){ if(p==='APOIO'||t.includes('EMPILHADEIRA'))return['CBA','T1 WH']; if(p==='EMPURRADA')return['CBA','T1']; return['CBA','T2']; }
+  if(u==='CACHOEIRAS DE MACACU'||u==='MACACU'){ return p==='EMPURRADA'?['MCC','T1']:['MCC','T2']; }
+  return [IND_CITY[u]||codDe(uni),''];
+}
+// placas indisponíveis (cenário atual = última data do relatório)
+async function loadInd(){
+  let T;try{T=await gvizAny(DISP_SHEET_ID,'Indisponibilidade');}catch(e){DATA.dispInd=null;return;}
+  const c=T.cols;
+  const i={dt:idxDe(c,'Data'),uni:idxDe(c,'Unidade'),proj:idxDe(c,'Projeto'),tipo:idxDe(c,'Tipo Veículo','Tipo'),plaM:idxDe(c,'Placa Mercosul'),pla:idxDe(c,'Placa'),grp:idxDe(c,'Grupo'),desc:idxDe(c,'Descrição do Problema','Descrição Problema','Descricao do Problema','Problema'),obs:idxDe(c,'Observação','Observacao'),dPar:idxDe(c,'Data Parada','Data da Parada'),prev:idxDe(c,'Previsão Retorno','Previsão de Retorno','Retorno'),st:idxDe(c,'Status'),dias:idxDe(c,'Dias Parado','Dias Indisponível','Dias Indisponivel','Dias')};
+  const dnum=v=>{const s=String(v||'');const m=s.match(/Date\((\d+),(\d+),(\d+)/);if(m)return +m[1]*1e4+(+m[2]+1)*100+ +m[3];const p=s.split('/');return p.length>=3?+p[2]*1e4+ +p[1]*100+ +p[0]:0;};
+  let rs=T.rows.map(r=>{const ct=mapIndCT(r[i.uni],r[i.proj],r[i.tipo]);return {
+    dt:dnum(r[i.dt]),cod:ct[0],tier:ct[1],
+    placa:String((i.plaM>=0&&r[i.plaM])||r[i.pla]||'').trim(),
+    proj:String(r[i.proj]||'').trim(),grupo:String(r[i.grp]||'').trim(),
+    desc:String((r[i.desc]!=null?r[i.desc]:r[i.obs])||'').trim(),
+    prev:fmtD(parseD(r[i.prev]))!=='—'?fmtD(parseD(r[i.prev])):String(r[i.prev]||'').trim(),
+    st:String(r[i.st]||'').trim(),dias:num(r[i.dias])};
+  }).filter(r=>r.cod&&r.placa);
+  const mx=Math.max(0,...rs.map(r=>r.dt));
+  DATA.dispInd=mx>0?rs.filter(r=>r.dt===mx):rs;
 }
 // ── PNEUS (Supabase Conlog) — foto atual, carga sob demanda ──
 async function loadPneus(){
@@ -462,6 +488,20 @@ function renderDisp(el,cod){
       return `<tr><td><b>${cod?escF(k):escF(k)+' <span class="mut">'+escF(UNIDADES[k]||'')+'</span>'}</b></td>
         <td class="num">${Math.round(o.ativos)}</td><td class="num ${o.indisp?'cr':'mut'}">${Math.round(o.indisp)}</td>
         <td class="num ${dispCls(pc)}">${pct1(pc)}</td></tr>`;}).join('')+'</tbody></table>');
+  // placas indisponíveis
+  const indL=(DATA.dispInd||[]).filter(r=>cod?r.cod===cod:true).sort((a,b)=>(b.dias??0)-(a.dias??0));
+  if(indL.length){
+    const dCls=d=>d==null?'mut':d>7?'cr':d>3?'cy':'cg';
+    h+=`<div class="blk-t" style="margin-top:14px">Placas indisponíveis <span class="cr">· ${indL.length}</span></div>`+
+      wrapT('<table>'+th(cod?'Placa':'Unidade · Placa','Projeto','Grupo','Problema','Status','Previsão','Dias parado')+'<tbody>'+
+      indL.slice(0,80).map(r=>`<tr><td><b>${cod?escF(r.placa):(escF(r.cod)+(r.tier?' '+escF(r.tier):'')+' · '+escF(r.placa))}</b></td>
+        <td>${escF(r.proj||'—')}</td><td>${escF(r.grupo||'—')}</td>
+        <td style="white-space:normal;max-width:280px">${escF((r.desc||'—').slice(0,110))}</td>
+        <td>${escF(r.st||'—')}</td><td>${escF(r.prev||'—')}</td>
+        <td class="num ${dCls(r.dias)}">${r.dias==null?'—':Math.round(r.dias)}</td></tr>`).join('')+'</tbody></table>');
+  }else if(DATA.dispInd){
+    h+=`<div class="tbl-sub" style="margin-top:12px">Nenhuma placa indisponível no recorte. ✓</div>`;
+  }
   el.innerHTML=h;
 }
 // ── PNEUS (foto Prolog — gestão à vista) ──
