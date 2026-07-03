@@ -39,6 +39,7 @@ const escF=s=>String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').re
 const _n=s=>String(s==null?'':s).normalize('NFD').replace(/[̀-ͯ]/g,'').toUpperCase().replace(/\s+/g,' ').trim();
 const codDe=nome=>FAROL2COD[_n(nome)]||null;
 function parseD(v){if(v==null)return null;const m=String(v).match(/Date\((\d+),(\d+),(\d+)/);return m?new Date(+m[1],+m[2],+m[3]):null;}
+function parseAnyD(v){const d=parseD(v);if(d)return d;const p=String(v||'').trim().split(/[\/\-]/);if(p.length>=3){const dd=+p[0]>31?new Date(+p[0],+p[1]-1,+p[2]):new Date(+p[2],+p[1]-1,+p[0]);if(!isNaN(dd))return dd;}return null;}
 const fmtD=d=>d?d.toLocaleDateString('pt-BR'):'—';
 const num=v=>{if(v==null||v==='')return null;if(typeof v==='number')return v;const f=parseFloat(String(v).replace(/\./g,'').replace(',','.'));return isNaN(f)?null:f;};
 const brl=v=>{if(v==null||!isFinite(v))return '—';const a=Math.abs(v),s=v<0?'-':'';if(a>=1e6)return s+'R$ '+(a/1e6).toFixed(2).replace('.',',')+' mi';if(a>=1e3)return s+'R$ '+Math.round(a/1e3).toLocaleString('pt-BR')+'k';return s+'R$ '+Math.round(a).toLocaleString('pt-BR');};
@@ -166,13 +167,19 @@ async function loadInd(){
   const c=T.cols;
   const i={dt:idxDe(c,'Data'),uni:idxDe(c,'Unidade'),proj:idxDe(c,'Projeto'),tipo:idxDe(c,'Tipo Veículo','Tipo'),plaM:idxDe(c,'Placa Mercosul'),pla:idxDe(c,'Placa'),grp:idxDe(c,'Grupo'),desc:idxDe(c,'Descrição do Problema','Descrição Problema','Descricao do Problema','Problema'),obs:idxDe(c,'Observação','Observacao'),dPar:idxDe(c,'Data Parada','Data da Parada'),prev:idxDe(c,'Previsão Retorno','Previsão de Retorno','Retorno'),st:idxDe(c,'Status'),dias:idxDe(c,'Dias Parado','Dias Indisponível','Dias Indisponivel','Dias')};
   const dnum=v=>{const s=String(v||'');const m=s.match(/Date\((\d+),(\d+),(\d+)/);if(m)return +m[1]*1e4+(+m[2]+1)*100+ +m[3];const p=s.split('/');return p.length>=3?+p[2]*1e4+ +p[1]*100+ +p[0]:0;};
-  let rs=T.rows.map(r=>{const ct=mapIndCT(r[i.uni],r[i.proj],r[i.tipo]);return {
+  const hoje=Date.now();
+  let rs=T.rows.map(r=>{const ct=mapIndCT(r[i.uni],r[i.proj],r[i.tipo]);
+    const par=parseAnyD(r[i.dPar]);
+    const dias=par?Math.max(0,Math.floor((hoje-par.getTime())/864e5)):num(r[i.dias]);
+    const pv=parseAnyD(r[i.prev]);
+    return {
     dt:dnum(r[i.dt]),cod:ct[0],tier:ct[1],
     placa:String((i.plaM>=0&&r[i.plaM])||r[i.pla]||'').trim(),
     proj:String(r[i.proj]||'').trim(),grupo:String(r[i.grp]||'').trim(),
     desc:String((r[i.desc]!=null?r[i.desc]:r[i.obs])||'').trim(),
-    prev:fmtD(parseD(r[i.prev]))!=='—'?fmtD(parseD(r[i.prev])):String(r[i.prev]||'').trim(),
-    st:String(r[i.st]||'').trim(),dias:num(r[i.dias])};
+    dPar:par?fmtD(par):'—',
+    prev:pv?fmtD(pv):String(r[i.prev]||'').trim(),
+    st:String(r[i.st]||'').trim(),dias};
   }).filter(r=>r.cod&&r.placa);
   const mx=Math.max(0,...rs.map(r=>r.dt));
   DATA.dispInd=mx>0?rs.filter(r=>r.dt===mx):rs;
@@ -505,11 +512,11 @@ function renderDisp(el,cod){
   if(indL.length){
     const dCls=d=>d==null?'mut':d>7?'cr':d>3?'cy':'cg';
     h+=`<div class="blk-t" style="margin-top:14px">Placas indisponíveis <span class="cr">· ${indL.length}</span></div>`+
-      wrapT('<table>'+th(cod?'Placa':'Unidade · Placa','Projeto','Grupo','Problema','Status','Previsão','Dias parado')+'<tbody>'+
+      wrapT('<table>'+th(cod?'Placa':'Unidade · Placa','Projeto','Grupo','Problema','Status','Parada em','Previsão','Dias parado')+'<tbody>'+
       indL.slice(0,80).map(r=>`<tr><td><b>${cod?escF(r.placa):(escF(r.cod)+(r.tier?' '+escF(r.tier):'')+' · '+escF(r.placa))}</b></td>
         <td>${escF(r.proj||'—')}</td><td>${escF(r.grupo||'—')}</td>
         <td style="white-space:normal;max-width:280px">${escF((r.desc||'—').slice(0,110))}</td>
-        <td>${escF(r.st||'—')}</td><td>${escF(r.prev||'—')}</td>
+        <td>${escF(r.st||'—')}</td><td>${escF(r.dPar||'—')}</td><td>${escF(r.prev||'—')}</td>
         <td class="num ${dCls(r.dias)}">${r.dias==null?'—':Math.round(r.dias)}</td></tr>`).join('')+'</tbody></table>');
   }else if(DATA.dispInd){
     h+=`<div class="tbl-sub" style="margin-top:12px">Nenhuma placa indisponível no recorte. ✓</div>`;
@@ -574,7 +581,7 @@ function renderFarol(el,cod){
   S.push(['cifv','CIFV','Aderência das fotos da frota vs 100% · descontos por veículo']);
   S.push(['alinh','Alinhamento','No prazo vs vencidos · placas por próximo evento']);
   S.push(['os','Gestão de OS','% no prazo (≤8 dias) · OSs em aberto']);
-  S.push(['disp','Disponibilidade','% vs Meta 93% / Sonho 97% (foto da última vigência)']);
+  S.push(['disp','Disponibilidade','Foto da última vigência — veículos disponíveis da frota']);
   S.push(['pneus','Pneus','Aferições · Milimetragem · Calibragem (foto Prolog, como no painel Pneus)']);
   el.innerHTML=S.map(([id,t,sub])=>secBox(id,t,sub)).join('');
   const put=(id,fn)=>{const b=document.getElementById('body-'+id);try{fn(b,cod);}catch(e){console.error(id,e);b.innerHTML='<div class="loading">Erro ao montar esta seção.</div>';}};
