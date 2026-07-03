@@ -249,13 +249,17 @@ function renderCustos(el,cod){
   const dOrc=Math.abs(tot.rea)-Math.abs(tot.orc), dRem=Math.abs(tot.rea)-Math.abs(tot.rem);
   const pOrc=Math.abs(tot.orc)>0?dOrc/Math.abs(tot.orc)*100:null, pRem=Math.abs(tot.rem)>0?dRem/Math.abs(tot.rem)*100:null;
   const dcls=v=>v==null?'mut':v>0?'cr':'cg';
-  let h=`<div class="custos-hero">
-    <div><div class="mh-label">REALIZADO${DATA.custosVig?' · '+DATA.custosVig.toLocaleDateString('pt-BR',{month:'short',year:'2-digit'}).toUpperCase():''}</div><div class="mh-big">${brl(tot.rea)}</div></div>
-    <div class="ch-min"><span>Remunerado</span><b>${brl(tot.rem)}</b></div>
-    <div class="ch-min"><span>Orçado</span><b>${brl(tot.orc)}</b></div>
-    <div class="ch-min"><span>▲ vs Orç.</span><b class="${dcls(dOrc)}">${brlFull(dOrc)}</b><small class="${dcls(dOrc)}">${pct1(pOrc)}</small></div>
-    <div class="ch-min"><span>▲ vs Rem.</span><b class="${dcls(dRem)}">${brlFull(dRem)}</b><small class="${dcls(dRem)}">${pct1(pRem)}</small></div>
-  </div>`;
+  const vigTx=DATA.custosVig?' · '+DATA.custosVig.toLocaleDateString('pt-BR',{month:'short',year:'2-digit'}).toUpperCase():'';
+  let h=`<div class="hero" style="margin-bottom:16px"><div class="hero-main" style="padding:0 0 4px">
+    <div class="hero-label">REALIZADO${vigTx}</div>
+    <div class="hero-value">${brl(tot.rea)}</div>
+    <div class="hero-deltas">
+      <div class="hero-delta"><span>Remunerado</span><b>${brl(tot.rem)}</b></div>
+      <div class="hero-delta"><span>Orçado</span><b>${brl(tot.orc)}</b></div>
+      <div class="hero-delta"><span>▲ vs Orç.</span><b class="${dcls(dOrc)}">${brlFull(dOrc)} <small style="font-weight:600">(${pct1(pOrc)})</small></b></div>
+      <div class="hero-delta"><span>▲ vs Rem.</span><b class="${dcls(dRem)}">${brlFull(dRem)} <small style="font-weight:600">(${pct1(pRem)})</small></b></div>
+    </div>
+  </div></div>`;
   // tabela agrupada: geral → por UNIDADE; unidade → por NÍVEL 3 (projeto)
   const key=cod?'n3':'uni';
   const grupos={};rs.forEach(r=>{(grupos[r[key]]=grupos[r[key]]||[]).push(r);});
