@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Diagnóstico das abas — Farol Frota</title>
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<link rel="stylesheet" href="farol.css">
+<style>
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0 10px;}
+.chip{background:rgba(249,115,22,.12);border:1px solid rgba(249,115,22,.35);color:var(--orange);border-radius:5px;padding:3px 9px;font-size:11px;font-weight:700;}
+.chip.idx{background:rgba(255,255,255,.05);border-color:rgba(255,255,255,.12);color:var(--text3);font-weight:600;}
+.mini td{font-size:11px;padding:6px 8px;max-width:220px;overflow:hidden;text-overflow:ellipsis;}
+.mini th{font-size:10px;padding:6px 8px;}
+.ok{color:var(--green);font-weight:800;}
+.err{color:var(--red);font-weight:800;}
+.wrapx{overflow-x:auto;}
+</style>
+</head>
+<body>
+<header class="header">
+  <div class="brand"><h1>Diagnóstico das abas do Farol</h1><p>Cabeçalho + primeiras linhas de cada aba, lidos ao vivo da planilha — tire UM print desta página inteira</p></div>
+  <div class="header-right"><a href="./" class="back-btn" title="Voltar"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg></a><span class="status-badge" id="status">Carregando…</span></div>
+</header>
+<main class="main">
+  <div id="content"><div class="loading">Verificando acesso…</div></div>
+</main>
+<script src="farol-core.js"></script>
+<script>
+const ABAS=['Custos','Stress Test','Stress Test Veículos','Stress Test Empilhadeiras','CIFV','Preventivas','Alinhamentos','OS em aberto'];
+const fmtCell=v=>{
+  if(v==null||v==='')return '<span class="mut">—</span>';
+  if(typeof v==='string'&&/^Date\(/.test(v)){const m=v.match(/^Date\((\d+),(\d+),(\d+)/);if(m)return `${m[3].padStart?m[3]:m[3]}/${+m[2]+1}/${m[1]} <span class="mut">(data)</span>`;}
+  const s=String(v);return escF(s.length>34?s.slice(0,34)+'…':s);
+};
+(async function(){
+  const r=await farolGate();
+  if(!r.ok){document.getElementById('content').innerHTML=`<div class="gate"><h2>Acesso restrito</h2><p>${r.msg}</p></div>`;document.getElementById('status').textContent='—';return;}
+  const el=document.getElementById('content');el.innerHTML='';
+  let ok=0;
+  for(const aba of ABAS){
+    const box=document.createElement('div');box.className='tbl-section';
+    box.innerHTML=`<div class="tbl-title">${escF(aba)}</div><div class="loading">Lendo…</div>`;
+    el.appendChild(box);
+    try{
+      const t=await gvizT(aba);
+      ok++;
+      let cols=t.cols||[], rows=(t.rows||[]);
+      // se o gviz não detectou cabeçalho (labels vazios), usa a 1ª linha como cabeçalho
+      const semLabel=cols.every(c=>!c);
+      if(semLabel&&rows.length){cols=rows[0].map(v=>String(v==null?'':v));rows=rows.slice(1);}
+      const amostra=rows.slice(0,3);
+      const chips=cols.map((c,i)=>`<span class="chip">${escF(c||'(vazio)')}</span><span class="chip idx">col ${i}</span>`).join(' ');
+      const head='<tr>'+cols.map(c=>`<th>${escF(c||'—')}</th>`).join('')+'</tr>';
+      const body=amostra.map(rw=>'<tr>'+cols.map((_,i)=>`<td>${fmtCell(rw[i])}</td>`).join('')+'</tr>').join('');
+      box.innerHTML=`<div class="tbl-title">${escF(aba)} <span class="ok">✓ ${rows.length} linha(s)</span>${semLabel?' <span class="sec-badge pen">cabeçalho lido da 1ª linha</span>':''}</div>
+        <div class="tbl-sub">Colunas detectadas (nome + posição):</div>
+        <div class="chips">${chips}</div>
+        <div class="wrapx"><table class="mini"><thead>${head}</thead><tbody>${body||'<tr><td class="mut">sem linhas de dados</td></tr>'}</tbody></table></div>`;
+    }catch(e){
+      box.innerHTML=`<div class="tbl-title">${escF(aba)} <span class="err">✗ erro</span></div>
+        <div class="tbl-sub">Não consegui ler esta aba. Confira: (1) o nome é exatamente "${escF(aba)}"? (2) a planilha está compartilhada como "qualquer pessoa com o link — leitor"?</div>`;
+    }
+  }
+  document.getElementById('status').textContent=ok+'/'+ABAS.length+' abas lidas';
+})();
+</script>
+</body>
+</html>
