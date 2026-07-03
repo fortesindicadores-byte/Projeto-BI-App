@@ -1,62 +1,63 @@
 // ═══════════════════════════════════════════════════════════════════════════
-// Farol Frota — núcleo compartilhado (geral.html e unidade.html)
-// Fonte: planilha do Farol (abas por indicador) + painéis Pneus/Disponibilidade.
-// As seções de planilha são ligadas por MAPEAMENTO DE COLUNAS (SECOES abaixo)
-// preenchido a partir dos cabeçalhos reais das abas — nada de adivinhar índice.
+// Farol Frota — núcleo (dados + render). Mapeamento por NOME de coluna,
+// conforme o diagnóstico das abas (farol-frota/abas.html) de jul/2026.
 // ═══════════════════════════════════════════════════════════════════════════
 
 const SUPABASE_URL='https://lozwipoeacpvplgkrxkq.supabase.co';
 const SUPABASE_KEY='sb_publishable_ggKEEebc5zjgQDVsF92Upw_6uoLmKe9';
 const FAROL_SHEET_ID='1xOv7OJzErGV3vNCMOY_5O6px7vFvC990CW-1vGul5sY';
 
-// unidades do portal (código → nome exibido). O de-para p/ o nome usado na
-// planilha do Farol (ex.: "CDD RIO DE JANEIRO") entra quando mapearmos as abas.
+// ── unidades (código do portal → nome exibido) ──
 const UNIDADES={
   'BLC':'Balneário Camboriú','CBA':'Cuiabá','CGR':'Campo Grande','FLP':'Florianópolis','GRL':'Guarulhos',
   'MCC':'Cachoeiras de Macacu','NFR':'Nova Friburgo','PIR':'Piraí','PLT':'Pelotas','RON':'Rondonópolis'
 };
+// nomes usados nas abas do Farol → código do portal (CDD/CDI, cidades e variações)
+const FAROL2COD={
+  'CDD CAMBORIU':'BLC','BALNEARIO CAMBORIU':'BLC',
+  'CDD CUIABA':'CBA','CUIABA':'CBA','CUIABA EMPURRADA':'CBA',
+  'CDD RIO DE JANEIRO':'CGR','CAMPO GRANDE':'CGR',
+  'CDD FLORIANOPOLIS':'FLP','FLORIANOPOLIS':'FLP',
+  'CDD GUARULHOS':'GRL','GUARULHOS':'GRL',
+  'CDI MACACU':'MCC','MACACU EMPURRADA':'MCC','CACHOEIRAS DE MACACU':'MCC',
+  'CDD NOVA FRIBURGO':'NFR','NOVA FRIBURGO':'NFR',
+  'PIRAI EMPURRADA':'PIR','PIRAI':'PIR',
+  'CDD PELOTAS':'PLT','PELOTAS':'PLT',
+  'CDD RONDONOPOLIS':'RON','RONDONOPOLIS':'RON'
+};
 
-// ── Seções do Farol (ordem de exibição). status:'pendente' = aguardando o
-//    print do cabeçalho da aba p/ mapear as colunas; 'painel' = reusa painel existente.
-const SECOES=[
-  {id:'custos',        titulo:'Custos',                    aba:'Custos',                    status:'pendente',
-   desc:'Orç. × Rem × Real por conta gerencial — deltas com condicional (geral: por unidade · unidade: por projeto).'},
-  {id:'stress',        titulo:'Stress Test — Veículos',    aba:'Stress Test / Stress Test Veículos', status:'pendente',
-   desc:'Aderência vs meta 100% + bottom por projeto + descontos por placa (saída/sem saída, viagens, R$).'},
-  {id:'stress-emp',    titulo:'Stress Test — Empilhadeiras', aba:'Stress Test Empilhadeiras', status:'pendente',
-   desc:'Aderência 1ª/2ª quinzena e total + descontos por equipamento (placa Ginfo).'},
-  {id:'cifv',          titulo:'CIFV',                      aba:'CIFV',                      status:'pendente',
-   desc:'Aderência das fotos da frota vs 100% + descontos (lavagem/manutenção) + detalhe por veículo (Conforme/Rejeitado).'},
-  {id:'preventivas',   titulo:'Preventivas',               aba:'Preventivas',               status:'pendente',
-   desc:'Aderência + estratificação por placa (status, dias e km até vencer — dias <0 vermelho · 0–30 amarelo · >30 verde).'},
-  {id:'alinhamento',   titulo:'Alinhamento',               aba:'Alinhamentos',              status:'pendente',
-   desc:'Aderência + status dos alinhamentos + placas com próximo evento e dias.'},
-  {id:'os',            titulo:'Gestão de OS',              aba:'OS em aberto',              status:'pendente',
-   desc:'Média de dias em aberto vs meta 8 + bottom por segmento e fornecedor + OSs abertas (unidade).'},
-  {id:'pneus',         titulo:'Pneus',                     aba:null,                        status:'painel',
-   desc:'Fonte: base Conlog (API Prolog) — milimetragem, aferições, pneus críticos. Reusa o painel Pneus.'},
-  {id:'disponibilidade',titulo:'Disponibilidade',          aba:null,                        status:'painel',
-   desc:'Fonte: painel Disponibilidade — % vs meta/atenção, S-1 e aberturas de indisponibilidade.'},
-];
+// ── helpers ──
+const escF=s=>String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+const _n=s=>String(s==null?'':s).normalize('NFD').replace(/[̀-ͯ]/g,'').toUpperCase().replace(/\s+/g,' ').trim();
+const codDe=nome=>FAROL2COD[_n(nome)]||null;
+function parseD(v){if(v==null)return null;const m=String(v).match(/Date\((\d+),(\d+),(\d+)/);return m?new Date(+m[1],+m[2],+m[3]):null;}
+const fmtD=d=>d?d.toLocaleDateString('pt-BR'):'—';
+const num=v=>{if(v==null||v==='')return null;if(typeof v==='number')return v;const f=parseFloat(String(v).replace(/\./g,'').replace(',','.'));return isNaN(f)?null:f;};
+const brl=v=>{if(v==null||!isFinite(v))return '—';const a=Math.abs(v),s=v<0?'-':'';if(a>=1e6)return s+'R$ '+(a/1e6).toFixed(2).replace('.',',')+' mi';if(a>=1e3)return s+'R$ '+Math.round(a/1e3).toLocaleString('pt-BR')+'k';return s+'R$ '+Math.round(a).toLocaleString('pt-BR');};
+const brlFull=v=>v==null||!isFinite(v)?'—':(v<0?'-':'')+Math.round(Math.abs(v)).toLocaleString('pt-BR');
+const pct1=v=>v==null||!isFinite(v)?'—':(Math.round(v*10)/10).toLocaleString('pt-BR')+'%';
+const clsPctMeta=(p,g=99.95,y=95)=>p==null?'mut':p>=g?'cg':p>=y?'cy':'cr';
+const avgA=a=>{const v=a.filter(x=>x!=null&&isFinite(x));return v.length?v.reduce((s,x)=>s+x,0)/v.length:null;};
+const sumA=a=>a.reduce((s,x)=>s+(isFinite(x)?x:0),0);
 
-// ── infra comum ──
-function gvizT(sheet){ // lê aba da planilha do Farol com cabeçalhos
+function gvizT(sheet){
   return new Promise((res,rej)=>{
     const fn='_fv'+Math.floor(Math.random()*1e9);const s=document.createElement('script');
     const clr=()=>{try{delete window[fn];s.remove();}catch(e){}};
     window[fn]=r=>{clr();try{if(r.status!=='ok')throw 0;
-      const cols=(r.table.cols||[]).map(c=>String((c&&(c.label||c.id))||'').trim());
-      const rows=(r.table.rows||[]).map(x=>(x.c||[]).map(c=>c?c.v:null));
+      let cols=(r.table.cols||[]).map(c=>String((c&&(c.label||c.id))||'').trim());
+      let rows=(r.table.rows||[]).map(x=>(x.c||[]).map(c=>c?c.v:null));
+      if(cols.every(c=>!c)&&rows.length){cols=rows[0].map(v=>String(v==null?'':v));rows=rows.slice(1);}
       res({cols,rows});}catch(e){rej(e);}};
     s.onerror=()=>{clr();rej(0);};
     s.src=`https://docs.google.com/spreadsheets/d/${FAROL_SHEET_ID}/gviz/tq?sheet=${encodeURIComponent(sheet)}&headers=1&tqx=out:json;responseHandler:${fn}`;
     document.head.appendChild(s);
-    setTimeout(()=>{clr();rej('timeout');},15000);
+    setTimeout(()=>{clr();rej('timeout');},20000);
   });
 }
-const escF=s=>String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+function idxDe(cols,...names){const N=cols.map(_n);for(const nm of names){const i=N.indexOf(_n(nm));if(i>=0)return i;}for(const nm of names){const t=_n(nm);const i=N.findIndex(c=>c.includes(t));if(i>=0)return i;}return -1;}
 
-// gate de admin (mesmo padrão dos demais painéis)
+// ── gate de admin ──
 async function farolGate(){
   let sb;
   try{ sb=supabase.createClient(SUPABASE_URL,SUPABASE_KEY); }catch(e){ return {ok:false,msg:'Falha ao iniciar o Supabase.'}; }
@@ -67,16 +68,360 @@ async function farolGate(){
   return {ok:true,sb,session};
 }
 
-// render das seções (esqueleto — cada seção vira conteúdo real conforme o mapeamento entra)
-function renderSecoes(el,escopo){
-  el.innerHTML=SECOES.map(s=>{
-    const badge=s.status==='painel'
-      ?'<span class="sec-badge pan">liga no painel existente</span>'
-      :'<span class="sec-badge pen">aguardando mapeamento da aba</span>';
-    return `<div class="tbl-section" id="sec-${s.id}">
-      <div class="tbl-title">${escF(s.titulo)} ${badge}</div>
-      <div class="tbl-sub">${escF(s.desc)}${s.aba?` · Aba: <b>${escF(s.aba)}</b>`:''}</div>
-      <div class="sec-body"><div class="loading">Estrutura pronta — os dados entram quando a aba for mapeada${escopo?' (recorte: '+escF(escopo)+')':''}.</div></div>
-    </div>`;
-  }).join('');
+// ═══════════════ CARGA E NORMALIZAÇÃO ═══════════════
+const DATA={};
+async function farolLoad(){
+  const abas={custos:'Custos',stressV:'Stress Test Veículos',stressE:'Stress Test Empilhadeiras',cifv:'CIFV',prev:'Preventivas',alinh:'Alinhamentos',os:'OS em aberto'};
+  const out=await Promise.all(Object.entries(abas).map(async([k,aba])=>{
+    try{return [k,await gvizT(aba)];}catch(e){return [k,null];}
+  }));
+  const T={};out.forEach(([k,v])=>T[k]=v);
+
+  // Custos: Δ ORÇ. | Δ FCT | Vigência | ESTRUTURA | UNIDADE | NÍVEL 3 | CONTA GERENCIAL | MÊS | ANO | ORÇADO | REMUNERADO | REALIZADO
+  if(T.custos){const c=T.custos.cols;
+    const i={vig:idxDe(c,'Vigência'),uni:idxDe(c,'UNIDADE'),n3:idxDe(c,'NÍVEL 3','NIVEL 3'),cta:idxDe(c,'CONTA GERENCIAL'),orc:idxDe(c,'ORÇADO','ORCADO'),rem:idxDe(c,'REMUNERADO'),rea:idxDe(c,'REALIZADO')};
+    let rs=T.custos.rows.map(r=>({vig:parseD(r[i.vig]),cod:codDe(r[i.uni]),uni:String(r[i.uni]||'').trim(),n3:String(r[i.n3]||'').trim(),conta:String(r[i.cta]||'').trim(),orc:num(r[i.orc])||0,rem:num(r[i.rem])||0,rea:num(r[i.rea])||0})).filter(r=>r.conta);
+    const mx=Math.max(...rs.map(r=>r.vig?r.vig.getTime():0));
+    DATA.custos=rs.filter(r=>!r.vig||r.vig.getTime()===mx);
+    DATA.custosVig=mx>0?new Date(mx):null;
+  }
+  // Stress Test Veículos: Período | Empresa | Filial Freightech | Placa Freightech | Freightech | Projeto | Pallets | Última Saída | Saída | Saída na FIlial | Total Viagens | Justificativa | Status | Desconto
+  if(T.stressV){const c=T.stressV.cols;
+    const i={per:idxDe(c,'Período','Periodo'),fil:idxDe(c,'Filial Freightech'),pla:idxDe(c,'Placa Freightech'),proj:idxDe(c,'Projeto'),sai:idxDe(c,'Saída','Saida'),saiF:idxDe(c,'Saída na FIlial','Saida na Filial'),via:idxDe(c,'Total Viagens'),jus:idxDe(c,'Justificativa'),des:idxDe(c,'Desconto')};
+    let rs=T.stressV.rows.map(r=>({per:parseD(r[i.per]),cod:codDe(r[i.fil]),fil:String(r[i.fil]||'').trim(),placa:String(r[i.pla]||'').trim(),proj:String(r[i.proj]||'').trim(),saida:_n(r[i.sai]),saidaF:String(r[i.saiF]||'').trim(),viagens:num(r[i.via]),jus:String(r[i.jus]||'').trim(),desc:num(r[i.des])||0})).filter(r=>r.placa);
+    const mx=Math.max(...rs.map(r=>r.per?r.per.getTime():0));
+    DATA.stressV=rs.filter(r=>!r.per||r.per.getTime()===mx);
+  }
+  // Stress Test Empilhadeiras
+  if(T.stressE){const c=T.stressE.cols;
+    const i={fil:idxDe(c,'Filial GINFO','Filial FT'),pla:idxDe(c,'Placa Ginfo'),emp:idxDe(c,'Empresa FT'),ctr:idxDe(c,'Contratada'),p1:idxDe(c,'Parada 1Q?','Parada 1Q'),d1:idxDe(c,'Desconto 1Q'),p2:idxDe(c,'Parada 2Q?','Parada 2Q'),d2:idxDe(c,'Desconto 2Q'),dt:idxDe(c,'Desc. Total','Desc Total')};
+    DATA.stressE=T.stressE.rows.map(r=>({cod:codDe(r[i.fil]),fil:String(r[i.fil]||'').trim(),placa:String(r[i.pla]||'').trim(),empresa:String(r[i.emp]||'').trim(),contratada:_n(r[i.ctr])==='SIM',d1:num(r[i.d1])||0,d2:num(r[i.d2])||0,dt:num(r[i.dt])||0})).filter(r=>r.placa);
+  }
+  // CIFV: Aderência | Filial Freightech | Veículo | Projeto | Data CIVF | Status | ... | Desconto Manutenção | Desconto Lavagem | Desconto Total
+  if(T.cifv){const c=T.cifv.cols;
+    const i={ad:idxDe(c,'Aderência','Aderencia'),fil:idxDe(c,'Filial Freightech'),vei:idxDe(c,'Veículo','Veiculo'),proj:idxDe(c,'Projeto'),st:idxDe(c,'Status'),dm:idxDe(c,'Desconto Manutenção','Desconto Manutencao'),dl:idxDe(c,'Desconto Lavagem'),dt:idxDe(c,'Desconto Total')};
+    DATA.cifv=T.cifv.rows.map(r=>({ad:num(r[i.ad]),cod:codDe(r[i.fil]),fil:String(r[i.fil]||'').trim(),placa:String(r[i.vei]||'').trim(),proj:String(r[i.proj]||'').trim(),st:String(r[i.st]||'').trim(),dm:num(r[i.dm])||0,dl:num(r[i.dl])||0,dt:num(r[i.dt])||0})).filter(r=>r.placa);
+  }
+  // Preventivas: Aderência | Placa Mercosul | Projeto | Unidade | Placa | Marca | Modelo | ... | DIAS P/ Próxima | KM/HR P/ Próxima | Status | N° OS Aberta
+  if(T.prev){const c=T.prev.cols;
+    const i={ad:idxDe(c,'Aderência','Aderencia'),uni:idxDe(c,'Unidade'),proj:idxDe(c,'Projeto'),pla:idxDe(c,'Placa'),mar:idxDe(c,'Marca'),mod:idxDe(c,'Modelo'),dias:idxDe(c,'DIAS P/ Próxima','DIAS P/ Proxima'),km:idxDe(c,'KM / HR P/ Próxima','KM/HR P/ Proxima'),st:idxDe(c,'Status'),os:idxDe(c,'N° OS Aberta','Nº OS Aberta','No OS Aberta')};
+    DATA.prev=T.prev.rows.map(r=>({ad:num(r[i.ad]),cod:codDe(r[i.uni]),fil:String(r[i.uni]||'').trim(),proj:String(r[i.proj]||'').trim(),placa:String(r[i.pla]||'').trim(),marca:String(r[i.mar]||'').trim(),modelo:String(r[i.mod]||'').trim(),dias:num(r[i.dias]),km:num(r[i.km]),st:String(r[i.st]||'').trim(),os:String(r[i.os]||'').trim()})).filter(r=>r.placa);
+  }
+  // Alinhamentos: Filial | Placa | Próx. Evento | Status | Dias | Documento
+  if(T.alinh){const c=T.alinh.cols;
+    const i={fil:idxDe(c,'Filial'),pla:idxDe(c,'Placa'),ev:idxDe(c,'Próx. Evento','Prox. Evento'),st:idxDe(c,'Status'),dias:idxDe(c,'Dias'),doc:idxDe(c,'Documento')};
+    DATA.alinh=T.alinh.rows.map(r=>({cod:codDe(r[i.fil]),fil:String(r[i.fil]||'').trim(),placa:String(r[i.pla]||'').trim(),ev:parseD(r[i.ev]),st:String(r[i.st]||'').trim(),dias:num(r[i.dias]),doc:String(r[i.doc]||'').trim()})).filter(r=>r.placa);
+  }
+  // OS em aberto: Dias em Aberto | N° OS | Data | Status | Filial | Origem | Tipo | Criticidade | ... | Segmento | Fornecedor | Mecânico | ... | Placa | ... | Observação
+  if(T.os){const c=T.os.cols;
+    const i={dias:idxDe(c,'Dias em Aberto'),os:idxDe(c,'N° OS','Nº OS','No OS'),fil:idxDe(c,'Filial'),ori:idxDe(c,'Origem'),tip:idxDe(c,'Tipo'),cri:idxDe(c,'Criticidade'),seg:idxDe(c,'Segmento'),forn:idxDe(c,'Fornecedor'),mec:idxDe(c,'Mecânico','Mecanico'),pla:idxDe(c,'Placa'),obs:idxDe(c,'Observação','Observacao')};
+    DATA.os=T.os.rows.map(r=>({dias:num(r[i.dias]),os:String(r[i.os]||'').trim(),cod:codDe(r[i.fil]),fil:String(r[i.fil]||'').trim(),ori:String(r[i.ori]||'').trim(),tipo:String(r[i.tip]||'').trim(),crit:String(r[i.cri]||'').trim(),seg:_seg(r[i.seg]),forn:String(r[i.forn]||'').trim(),mec:String(r[i.mec]||'').trim(),placa:String(r[i.pla]||'').trim(),obs:String(r[i.obs]||'').trim()})).filter(r=>r.os);
+  }
+  return DATA;
+}
+// normaliza segmento (MECANICA/MECÂNICA_, QUALIDADE_, etc.)
+function _seg(v){return _n(v).replace(/_+$/,'').trim();}
+
+// ═══════════════ COMPONENTES DE UI ═══════════════
+function secBox(id,titulo,sub){return `<div class="tbl-section" id="sec-${id}"><div class="tbl-title">${titulo}</div><div class="tbl-sub">${sub||''}</div><div class="sec-body" id="body-${id}"></div></div>`;}
+function heroAder(p,meta,extra){
+  const cls=p==null?'mut':p>=meta?'cg':p>=meta-7?'cy':'cr';
+  return `<div class="mini-hero"><div class="mh-label">ADERÊNCIA</div><div class="mh-val ${cls}">${pct1(p)}</div><div class="mh-meta">Meta: ${meta}%${extra||''}</div></div>`;
+}
+let _chartSeq=0;
+function mkBar(holder,labels,values,meta,fmt){
+  const id='ch'+(++_chartSeq);
+  holder.innerHTML=`<div class="chart-wrap"><canvas id="${id}"></canvas></div>`;
+  const isL=document.body.classList.contains('light-mode');
+  const grid={color:isL?'rgba(0,0,0,.08)':'rgba(255,255,255,.06)'};
+  const tick={color:isL?'#444':'#94A3B8',font:{family:'Montserrat',size:10}};
+  const bg=values.map(v=>v==null?'transparent':(v>=meta?'rgba(59,179,59,.8)':(v>=meta-7?'rgba(234,179,8,.85)':'rgba(255,102,102,.8)')));
+  new Chart(document.getElementById(id),{
+    data:{labels,datasets:[
+      {type:'bar',data:values,backgroundColor:bg,borderRadius:4,maxBarThickness:70,
+       datalabels:undefined},
+      {type:'line',data:labels.map(()=>meta),borderColor:isL?'#333':'#F1F5F9',borderWidth:1.5,borderDash:[6,4],pointRadius:0,fill:false,label:'Meta'}
+    ]},
+    options:{responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{display:false},tooltip:{backgroundColor:'#141B26',titleColor:'#F97316',bodyColor:'#F1F5F9',borderColor:'#1E2D40',borderWidth:1,titleFont:{family:'Montserrat'},bodyFont:{family:'Montserrat'},callbacks:{label:c=>' '+(c.parsed.y==null?'—':(fmt?fmt(c.parsed.y):pct1(c.parsed.y)))}}},
+      scales:{x:{grid,ticks:{...tick,autoSkip:false,maxRotation:0}},y:{grid,ticks:tick,beginAtZero:true}}}
+  });
+}
+const th=(...hs)=>'<thead><tr>'+hs.map(h=>`<th${/R\$|Dias|Km|Viagens|%|Desc|1Q|2Q|Total/i.test(h)?' class="num"':''}>${h}</th>`).join('')+'</tr></thead>';
+function wrapT(html){return `<div style="overflow-x:auto">${html}</div>`;}
+
+// ═══════════════ SEÇÕES ═══════════════
+// filtra pelas linhas da unidade (cod) ou todas (null)
+const byCod=(rows,cod)=>cod?(rows||[]).filter(r=>r.cod===cod):(rows||[]);
+
+// ── CUSTOS ──
+function renderCustos(el,cod){
+  const rs=byCod(DATA.custos,cod);
+  if(!rs.length){el.innerHTML='<div class="loading">Sem dados de custos para o recorte.</div>';return;}
+  const tot={orc:sumA(rs.map(r=>r.orc)),rem:sumA(rs.map(r=>r.rem)),rea:sumA(rs.map(r=>r.rea))};
+  const dOrc=Math.abs(tot.rea)-Math.abs(tot.orc), dRem=Math.abs(tot.rea)-Math.abs(tot.rem);
+  const pOrc=Math.abs(tot.orc)>0?dOrc/Math.abs(tot.orc)*100:null, pRem=Math.abs(tot.rem)>0?dRem/Math.abs(tot.rem)*100:null;
+  const dcls=v=>v==null?'mut':v>0?'cr':'cg';
+  let h=`<div class="custos-hero">
+    <div><div class="mh-label">REALIZADO${DATA.custosVig?' · '+DATA.custosVig.toLocaleDateString('pt-BR',{month:'short',year:'2-digit'}).toUpperCase():''}</div><div class="mh-big">${brl(tot.rea)}</div></div>
+    <div class="ch-min"><span>Remunerado</span><b>${brl(tot.rem)}</b></div>
+    <div class="ch-min"><span>Orçado</span><b>${brl(tot.orc)}</b></div>
+    <div class="ch-min"><span>▲ vs Orç.</span><b class="${dcls(dOrc)}">${brlFull(dOrc)}</b><small class="${dcls(dOrc)}">${pct1(pOrc)}</small></div>
+    <div class="ch-min"><span>▲ vs Rem.</span><b class="${dcls(dRem)}">${brlFull(dRem)}</b><small class="${dcls(dRem)}">${pct1(pRem)}</small></div>
+  </div>`;
+  // tabela agrupada: geral → por UNIDADE; unidade → por NÍVEL 3 (projeto)
+  const key=cod?'n3':'uni';
+  const grupos={};rs.forEach(r=>{(grupos[r[key]]=grupos[r[key]]||[]).push(r);});
+  h+='<table>'+th(cod?'Projeto':'Unidade','Conta Gerencial','Orç.','Rem','Real','Δ Orç.','Δ Rem','Δ Orç %','Δ Rem %')+'<tbody>';
+  Object.keys(grupos).sort().forEach(g=>{
+    const rows=grupos[g].slice().sort((a,b)=>a.orc-b.orc);
+    rows.forEach((r,i)=>{
+      const dO=Math.abs(r.rea)-Math.abs(r.orc), dR=Math.abs(r.rea)-Math.abs(r.rem);
+      const pO=Math.abs(r.orc)>0?dO/Math.abs(r.orc)*100:null, pR=Math.abs(r.rem)>0?dR/Math.abs(r.rem)*100:null;
+      h+=`<tr>${i===0?`<td rowspan="${rows.length+1}" style="font-weight:800;vertical-align:top">${escF(g)}</td>`:''}
+        <td>${escF(r.conta)}</td><td class="num">${brlFull(r.orc)}</td><td class="num">${brlFull(r.rem)}</td><td class="num">${brlFull(r.rea)}</td>
+        <td class="num ${dcls(dO)}">${brlFull(dO)}</td><td class="num ${dcls(dR)}">${brlFull(dR)}</td>
+        <td class="num ${dcls(dO)}">${pct1(pO)}</td><td class="num ${dcls(dR)}">${pct1(pR)}</td></tr>`;
+    });
+    const t={orc:sumA(rows.map(r=>r.orc)),rem:sumA(rows.map(r=>r.rem)),rea:sumA(rows.map(r=>r.rea))};
+    const dO=Math.abs(t.rea)-Math.abs(t.orc), dR=Math.abs(t.rea)-Math.abs(t.rem);
+    h+=`<tr class="tot-row"><td>Total</td><td class="num">${brlFull(t.orc)}</td><td class="num">${brlFull(t.rem)}</td><td class="num">${brlFull(t.rea)}</td>
+      <td class="num ${dcls(dO)}">${brlFull(dO)}</td><td class="num ${dcls(dR)}">${brlFull(dR)}</td>
+      <td class="num ${dcls(dO)}">${pct1(Math.abs(t.orc)>0?dO/Math.abs(t.orc)*100:null)}</td><td class="num ${dcls(dR)}">${pct1(Math.abs(t.rem)>0?dR/Math.abs(t.rem)*100:null)}</td></tr>`;
+  });
+  h+='</tbody></table>';
+  el.innerHTML=wrapT(h);
+}
+
+// ── STRESS TEST VEÍCULOS ──
+function stressVPct(rows){if(!rows.length)return null;return rows.filter(r=>r.saida==='COM SAIDA').length/rows.length*100;}
+function renderStressV(el,cod){
+  const rs=byCod(DATA.stressV,cod);
+  if(!rs.length){el.innerHTML='<div class="loading">Sem dados para o recorte.</div>';return;}
+  const p=stressVPct(rs);
+  let h=heroAder(p,100);
+  // bottom por projeto
+  const projs=[...new Set(rs.map(r=>r.proj))].filter(Boolean).sort();
+  // descontos
+  const desc=rs.filter(r=>r.desc>0).sort((a,b)=>b.desc-a.desc);
+  const totDesc=sumA(desc.map(r=>r.desc));
+  h+=`<div class="split"><div class="split-l"><div class="blk-t">Bottom | Projetos</div><div id="stv-ch"></div></div>
+      <div class="split-r"><div class="blk-t">Descontos Stress Test ${totDesc>0?`<span class="cr">· ${brl(totDesc)}</span>`:''}</div>
+      ${wrapT('<table>'+th(cod?'Placa':'Unidade · Placa','Projeto','Saída','Saída na Filial','Viagens','Desconto R$')+'<tbody>'+
+        rs.slice().sort((a,b)=>b.desc-a.desc||String(a.placa).localeCompare(b.placa)).slice(0,60).map(r=>
+          `<tr><td><b>${cod?escF(r.placa):escF(r.fil)+' · '+escF(r.placa)}</b></td><td>${escF(r.proj)}</td>
+           <td class="${r.saida==='COM SAIDA'?'cg':'cr'}">${escF(r.saida==='COM SAIDA'?'Com saída':'Sem saída')}</td>
+           <td>${escF(r.saidaF||'—')}</td><td class="num">${r.viagens==null?'—':r.viagens}</td>
+           <td class="num ${r.desc>0?'cr':'mut'}">${r.desc>0?brlFull(r.desc):'—'}</td></tr>`).join('')+'</tbody></table>')}</div></div>`;
+  el.innerHTML=h;
+  const vals=projs.map(pj=>stressVPct(rs.filter(r=>r.proj===pj)));
+  mkBar(el.querySelector('#stv-ch'),projs,vals,100);
+}
+
+// ── STRESS TEST EMPILHADEIRAS ──
+function renderStressE(el,cod){
+  const all=byCod(DATA.stressE,cod).filter(r=>r.contratada);
+  if(!all.length){el.innerHTML='<div class="loading">Sem equipamentos contratados no recorte.</div>';return;}
+  const a1=all.filter(r=>!(r.d1>0)).length/all.length*100;
+  const a2=all.filter(r=>!(r.d2>0)).length/all.length*100;
+  const at=(a1+a2)/2;
+  let h=heroAder(at,100,` · 1ª Q: <b class="${clsPctMeta(a1)}">${pct1(a1)}</b> · 2ª Q: <b class="${clsPctMeta(a2)}">${pct1(a2)}</b>`);
+  const desc=all.slice().sort((a,b)=>b.dt-a.dt);
+  const tot=sumA(all.map(r=>r.dt));
+  h+=`<div class="blk-t">Descontos por Equipamento ${tot>0?`<span class="cr">· ${brl(tot)}</span>`:''}</div>`+
+    wrapT('<table>'+th(cod?'Placa Ginfo':'Filial · Placa','Empresa','Desconto 1Q','Desconto 2Q','Desc. Total')+'<tbody>'+
+    desc.slice(0,60).map(r=>`<tr><td><b>${cod?escF(r.placa):escF(r.fil)+' · '+escF(r.placa)}</b></td><td>${escF(r.empresa)}</td>
+      <td class="num ${r.d1>0?'cr':'mut'}">${r.d1>0?brlFull(r.d1):'—'}</td>
+      <td class="num ${r.d2>0?'cr':'mut'}">${r.d2>0?brlFull(r.d2):'—'}</td>
+      <td class="num ${r.dt>0?'cr':'mut'}">${r.dt>0?brlFull(r.dt):'—'}</td></tr>`).join('')+'</tbody></table>');
+  el.innerHTML=h;
+}
+
+// ── CIFV ──
+function renderCIFV(el,cod){
+  const rs=byCod(DATA.cifv,cod);
+  if(!rs.length){el.innerHTML='<div class="loading">Sem dados para o recorte.</div>';return;}
+  const p=avgA(rs.map(r=>r.ad))*100;
+  let h=heroAder(p,100);
+  const projs=[...new Set(rs.map(r=>r.proj))].filter(Boolean).sort();
+  const nc=rs.filter(r=>r.dt>0||r.ad===0).sort((a,b)=>b.dt-a.dt);
+  const tot=sumA(rs.map(r=>r.dt));
+  h+=`<div class="split"><div class="split-l"><div class="blk-t">Bottom | Projetos</div><div id="cifv-ch"></div></div>
+      <div class="split-r"><div class="blk-t">Descontos ${tot>0?`<span class="cr">· ${brl(tot)}</span>`:''}</div>
+      ${wrapT('<table>'+th(cod?'Veículo':'Filial · Veículo','Projeto','Status','Manutenção R$','Lavagem R$','Total R$')+'<tbody>'+
+        (nc.length?nc:rs.slice(0,20)).slice(0,60).map(r=>
+        `<tr><td><b>${cod?escF(r.placa):escF(r.fil)+' · '+escF(r.placa)}</b></td><td>${escF(r.proj)}</td>
+         <td class="${r.ad===1?'cg':'cr'}">${escF(r.st||'—')}</td>
+         <td class="num ${r.dm>0?'cr':'mut'}">${r.dm>0?brlFull(r.dm):'—'}</td>
+         <td class="num ${r.dl>0?'cr':'mut'}">${r.dl>0?brlFull(r.dl):'—'}</td>
+         <td class="num ${r.dt>0?'cr':'mut'}">${r.dt>0?brlFull(r.dt):'—'}</td></tr>`).join('')+'</tbody></table>')}</div></div>`;
+  el.innerHTML=h;
+  const vals=projs.map(pj=>{const q=rs.filter(r=>r.proj===pj);return avgA(q.map(r=>r.ad))*100;});
+  mkBar(el.querySelector('#cifv-ch'),projs,vals,100);
+}
+
+// ── PREVENTIVAS ──
+const clsDias=d=>d==null?'mut':d<0?'cr':d<=30?'cy':'cg';
+const clsKm=k=>k==null?'mut':k<=0?'cr':k<=2000?'cy':'cg';
+function renderPrev(el,cod){
+  const rs=byCod(DATA.prev,cod);
+  if(!rs.length){el.innerHTML='<div class="loading">Sem dados para o recorte.</div>';return;}
+  const p=avgA(rs.map(r=>r.ad))*100;
+  let h=heroAder(p,100);
+  const projs=[...new Set(rs.map(r=>r.proj))].filter(Boolean).sort();
+  const ord={'VENCIDA':0,'EM ATENCAO':1,'EM ATENÇÃO':1,'NO PRAZO':2};
+  const worst=rs.slice().sort((a,b)=>(ord[_n(a.st)]??3)-(ord[_n(b.st)]??3)||(a.dias??999)-(b.dias??999));
+  h+=`<div class="split"><div class="split-l"><div class="blk-t">Projetos</div><div id="prev-ch"></div></div>
+      <div class="split-r"><div class="blk-t">Bottom | Placas</div>
+      ${wrapT('<table>'+th(cod?'Placa':'Unidade · Placa','Projeto','Marca','Modelo','OS','Status','Dias','Km')+'<tbody>'+
+        worst.slice(0,60).map(r=>{
+          const sc=_n(r.st)==='VENCIDA'?'cr':_n(r.st).startsWith('EM ATEN')?'cy':'cg';
+          return `<tr><td><b>${cod?escF(r.placa):escF(r.fil)+' · '+escF(r.placa)}</b></td><td>${escF(r.proj)}</td><td>${escF(r.marca)}</td><td>${escF(r.modelo)}</td>
+          <td>${escF(r.os||'—')}</td><td class="${sc}">${escF(r.st||'—')}</td>
+          <td class="num ${clsDias(r.dias)}">${r.dias==null?'—':Math.round(r.dias)}</td>
+          <td class="num ${clsKm(r.km)}">${r.km==null?'—':Math.round(r.km).toLocaleString('pt-BR')}</td></tr>`;}).join('')+'</tbody></table>')}</div></div>`;
+  el.innerHTML=h;
+  const vals=projs.map(pj=>{const q=rs.filter(r=>r.proj===pj);return avgA(q.map(r=>r.ad))*100;});
+  mkBar(el.querySelector('#prev-ch'),projs,vals,100);
+}
+
+// ── ALINHAMENTO ──
+function renderAlinh(el,cod){
+  const rs=byCod(DATA.alinh,cod);
+  if(!rs.length){el.innerHTML='<div class="loading">Sem dados para o recorte.</div>';return;}
+  const noPrazo=rs.filter(r=>_n(r.st)!=='VENCIDO').length;
+  const p=noPrazo/rs.length*100;
+  const venc=rs.length-noPrazo;
+  let h=heroAder(p,80,` · <b class="cg">${noPrazo} no prazo</b> · <b class="${venc?'cr':'mut'}">${venc} vencido(s)</b>`);
+  const worst=rs.slice().sort((a,b)=>(a.dias??999)-(b.dias??999));
+  h+=`<div class="blk-t">Bottom | Placas</div>`+
+    wrapT('<table>'+th(cod?'Placa':'Filial · Placa','Próx. Evento','Status','Dias')+'<tbody>'+
+    worst.slice(0,60).map(r=>`<tr><td><b>${cod?escF(r.placa):escF(r.fil)+' · '+escF(r.placa)}</b></td>
+      <td>${fmtD(r.ev)}</td><td class="${_n(r.st)==='VENCIDO'?'cr':'cg'}">${escF(r.st||'—')}</td>
+      <td class="num ${clsDias(r.dias)}">${r.dias==null?'—':Math.round(r.dias)}</td></tr>`).join('')+'</tbody></table>');
+  el.innerHTML=h;
+}
+
+// ── GESTÃO DE OS ──
+const OS_META=8;
+function renderOS(el,cod){
+  const rs=byCod(DATA.os,cod);
+  if(!rs.length){el.innerHTML='<div class="loading">Sem OSs em aberto no recorte. ✓</div>';return;}
+  const noPrazo=rs.filter(r=>(r.dias??0)<=OS_META).length;
+  const p=noPrazo/rs.length*100;
+  const cls=p>=90?'cg':p>=70?'cy':'cr';
+  let h=`<div class="mini-hero"><div class="mh-label">OSs NO PRAZO (≤ ${OS_META} DIAS)</div><div class="mh-val ${cls}">${pct1(p)}</div>
+    <div class="mh-meta"><b>${rs.length}</b> OSs · <b class="cg">${noPrazo}</b> no prazo · <b class="${rs.length-noPrazo?'cr':'mut'}">${rs.length-noPrazo}</b> fora do prazo</div></div>`;
+  const worst=rs.slice().sort((a,b)=>(b.dias??0)-(a.dias??0));
+  const dCls=d=>d==null?'mut':d<OS_META?'cg':d<=OS_META+2?'cy':'cr';
+  if(!cod){
+    // geral: média de dias por filial + bottom segmentos/fornecedores
+    const gp=(key)=>{const m={};rs.forEach(r=>{const k=r[key]||'—';(m[k]=m[k]||[]).push(r.dias||0);});return Object.entries(m).map(([k,a])=>({k,v:avgA(a)})).sort((a,b)=>b.v-a.v);};
+    const mini=(tit,list)=>`<div><div class="blk-t">${tit}</div>${wrapT('<table>'+th('','Média dias')+'<tbody>'+list.slice(0,12).map(o=>`<tr><td>${escF(o.k)}</td><td class="num ${dCls(o.v)}">${o.v==null?'—':(Math.round(o.v*10)/10).toLocaleString('pt-BR')}</td></tr>`).join('')+'</tbody></table>')}</div>`;
+    h+=`<div class="tri">${mini('Por unidade',gp('fil'))}${mini('Bottom | Segmentos',gp('seg'))}${mini('Bottom | Fornecedores',gp('forn'))}</div>`;
+  }
+  h+=`<div class="blk-t">OSs em aberto</div>`+
+    wrapT('<table>'+th('Nº OS','Tipo','Placa',cod?'Origem':'Filial','Segmento','Fornecedor','Mecânico','Observação','Dias em Aberto')+'<tbody>'+
+    worst.slice(0,80).map(r=>`<tr><td><b>${escF(r.os)}</b></td><td>${escF(r.tipo)}</td><td>${escF(r.placa||'—')}</td>
+      <td>${escF(cod?r.ori:r.fil)}</td><td>${escF(r.seg||'—')}</td><td>${escF(r.forn||'—')}</td><td>${escF(r.mec||'—')}</td>
+      <td style="white-space:normal;max-width:260px">${escF((r.obs||'—').slice(0,90))}</td>
+      <td class="num ${dCls(r.dias)}">${r.dias==null?'—':(Math.round(r.dias*10)/10).toLocaleString('pt-BR')}</td></tr>`).join('')+'</tbody></table>');
+  el.innerHTML=h;
+}
+
+// ── RANKING DE UNIDADES (geral) ──
+function unitStats(cod){
+  const sv=stressVPct(byCod(DATA.stressV,cod));
+  const se=(()=>{const a=byCod(DATA.stressE,cod).filter(r=>r.contratada);if(!a.length)return null;return ((a.filter(r=>!(r.d1>0)).length+a.filter(r=>!(r.d2>0)).length)/(2*a.length))*100;})();
+  const cf=(()=>{const a=byCod(DATA.cifv,cod);return a.length?avgA(a.map(r=>r.ad))*100:null;})();
+  const pv=(()=>{const a=byCod(DATA.prev,cod);return a.length?avgA(a.map(r=>r.ad))*100:null;})();
+  const al=(()=>{const a=byCod(DATA.alinh,cod);return a.length?a.filter(r=>_n(r.st)!=='VENCIDO').length/a.length*100:null;})();
+  const os=(()=>{const a=byCod(DATA.os,cod);return a.length?a.filter(r=>(r.dias??0)<=OS_META).length/a.length*100:100;})();
+  const cu=(()=>{const a=byCod(DATA.custos,cod);if(!a.length)return null;const o=sumA(a.map(r=>r.orc)),re=sumA(a.map(r=>r.rea));return Math.abs(o)>0?(Math.abs(re)-Math.abs(o))/Math.abs(o)*100:null;})();
+  return {sv,se,cf,pv,al,os,cu};
+}
+function renderRanking(el){
+  const list=Object.keys(UNIDADES).map(cod=>{
+    const s=unitStats(cod);
+    const score=avgA([s.sv,s.se,s.cf,s.pv,s.al,s.os]);
+    return {cod,...s,score};
+  }).sort((a,b)=>(b.score??-1)-(a.score??-1));
+  const cell=(v,cls)=>`<td class="num ${cls}">${pct1(v)}</td>`;
+  const cCu=v=>v==null?'mut':v<=0?'cg':v<=5?'cy':'cr';
+  el.innerHTML=wrapT('<table>'+th('#','Unidade','Média','Stress Veíc.','Stress Emp.','CIFV','Preventivas','Alinhamento','OS no prazo','Custos Δ Orç %')+'<tbody>'+
+    list.map((u,i)=>{
+      const sc=u.score==null?'mut':u.score>=97?'#3BB33B':u.score>=90?'#EAB308':'#FF6666';
+      return `<tr><td class="mut">${i+1}</td><td><b>${u.cod}</b> <span class="mut">${escF(UNIDADES[u.cod])}</span></td>
+      <td class="num">${u.score==null?'—':`<span class="pill" style="background:${sc}">${pct1(u.score)}</span>`}</td>
+      ${cell(u.sv,clsPctMeta(u.sv))}${cell(u.se,clsPctMeta(u.se))}${cell(u.cf,clsPctMeta(u.cf))}${cell(u.pv,clsPctMeta(u.pv))}
+      ${cell(u.al,u.al==null?'mut':u.al>=80?'cg':'cr')}${cell(u.os,u.os==null?'mut':u.os>=90?'cg':u.os>=70?'cy':'cr')}
+      <td class="num ${cCu(u.cu)}">${u.cu==null?'—':(u.cu>0?'+':'')+pct1(u.cu)}</td></tr>`;}).join('')+'</tbody></table>')+
+    '<div class="tbl-sub" style="margin-top:8px">Média = aderências (Stress V/E, CIFV, Preventivas, Alinhamento, OS no prazo). Custos é informativo (Δ Real vs Orç do mês).</div>';
+}
+
+// ── RESUMO EXECUTIVO (geral) ──
+function renderResumo(el){
+  const stats=Object.keys(UNIDADES).map(cod=>({cod,...unitStats(cod)}));
+  const pos=[],neg=[],aten=[],acao=[];
+  const worstBy=(k,label,fmt)=>{const w=stats.filter(s=>s[k]!=null).sort((a,b)=>a[k]-b[k])[0];if(w)return `${label}: pior unidade <b>${w.cod}</b> (${fmt(w[k])})`;return null;};
+  const descV=sumA((DATA.stressV||[]).map(r=>r.desc));
+  const descE=sumA((DATA.stressE||[]).filter(r=>r.contratada).map(r=>r.dt));
+  const descC=sumA((DATA.cifv||[]).map(r=>r.dt));
+  const totDesc=descV+descE+descC;
+  const vencPrev=(DATA.prev||[]).filter(r=>_n(r.st)==='VENCIDA').length;
+  const vencAl=(DATA.alinh||[]).filter(r=>_n(r.st)==='VENCIDO').length;
+  const osFora=(DATA.os||[]).filter(r=>(r.dias??0)>OS_META).length;
+  stats.forEach(s=>{[['sv','Stress Veíc.'],['cf','CIFV'],['pv','Preventivas']].forEach(([k,lb])=>{if(s[k]!=null&&s[k]>=100)pos.push(`<b>${s.cod}</b> — ${lb} 100%`);});});
+  if(totDesc>0)neg.push(`Descontos da semana somam <b class="cr">${brl(totDesc)}</b> (Stress V ${brl(descV)} · Emp. ${brl(descE)} · CIFV ${brl(descC)})`);
+  if(vencPrev)neg.push(`<b class="cr">${vencPrev}</b> preventiva(s) VENCIDA(S)`);
+  if(vencAl)neg.push(`<b class="cr">${vencAl}</b> alinhamento(s) vencido(s)`);
+  if(osFora)aten.push(`<b class="cy">${osFora}</b> OS(s) acima de ${OS_META} dias em aberto`);
+  [ ['sv','Stress Veíc.'],['cf','CIFV'],['pv','Preventivas'],['al','Alinhamento'] ].forEach(([k,lb])=>{const w=worstBy(k,lb,pct1);if(w)aten.push(w);});
+  acao.push('Unidades com desconto: tratar placas SEM SAÍDA / não conformes antes da próxima janela.');
+  if(vencPrev)acao.push('Programar as preventivas vencidas (tabela Preventivas · piores primeiro).');
+  if(osFora)acao.push('Cobrar fornecedores das OSs mais antigas (tabela Gestão de OS).');
+  const quad=(t,items,cls)=>`<div class="quad ${cls}"><div class="quad-t">${t}</div>${items.length?'<ul>'+items.slice(0,6).map(i=>`<li>${i}</li>`).join('')+'</ul>':'<div class="mut" style="font-size:11px">—</div>'}</div>`;
+  el.innerHTML=`<div class="quads">${quad('✅ Positivos',pos.slice(0,6),'q-pos')}${quad('🔴 Críticos',neg,'q-neg')}${quad('🟡 Atenção',aten,'q-at')}${quad('🎯 Próximos passos',acao,'q-ac')}</div>`;
+}
+
+// ═══════════════ MONTAGEM DAS PÁGINAS ═══════════════
+function renderFarol(el,cod){
+  const S=[];
+  if(!cod){S.push(['resumo','Resumo Executivo','Leitura automática do farol da semana']);S.push(['ranking','Ranking das Unidades','Aderências por indicador — melhor → pior']);}
+  S.push(['custos','Custos','Realizado × Remunerado × Orçado — '+(cod?'por projeto':'por unidade')]);
+  S.push(['stressv','Stress Test — Veículos','Aderência (com saída) vs meta 100% · descontos por placa']);
+  S.push(['stresse','Stress Test — Empilhadeiras','Aderência 1ª/2ª quinzena · descontos por equipamento']);
+  S.push(['prev','Preventivas','Aderência vs 100% · placas por status, dias e km']);
+  S.push(['cifv','CIFV','Aderência das fotos da frota vs 100% · descontos por veículo']);
+  S.push(['alinh','Alinhamento','No prazo vs vencidos · placas por próximo evento']);
+  S.push(['os','Gestão de OS','% no prazo (≤8 dias) · OSs em aberto']);
+  S.push(['pneus','Pneus <span class="sec-badge pan">próxima etapa — painel Conlog</span>','Aferições · Milimetragem · Pressão (base Conlog, como no painel Pneus)']);
+  S.push(['disp','Disponibilidade <span class="sec-badge pan">próxima etapa — painel existente</span>','% vs meta/atenção · S-1 · aberturas de indisponibilidade']);
+  el.innerHTML=S.map(([id,t,sub])=>secBox(id,t,sub)).join('');
+  const put=(id,fn)=>{const b=document.getElementById('body-'+id);try{fn(b,cod);}catch(e){console.error(id,e);b.innerHTML='<div class="loading">Erro ao montar esta seção.</div>';}};
+  if(!cod){put('resumo',el2=>renderResumo(el2));put('ranking',el2=>renderRanking(el2));}
+  put('custos',renderCustos);put('stressv',renderStressV);put('stresse',renderStressE);
+  put('prev',renderPrev);put('cifv',renderCIFV);put('alinh',renderAlinh);put('os',renderOS);
+  document.getElementById('body-pneus').innerHTML='<div class="loading">Entra na próxima etapa (mesma base do painel Pneus).</div>';
+  document.getElementById('body-disp').innerHTML='<div class="loading">Entra na próxima etapa (mesma lógica do painel Disponibilidade).</div>';
+}
+
+// hero da página: dots por indicador
+function renderHeroDots(el,cod){
+  const stats=cod?unitStats(cod):(()=>{ // geral = média das unidades
+    const all=Object.keys(UNIDADES).map(unitStats);
+    const m=k=>avgA(all.map(a=>a[k]));
+    return {sv:m('sv'),se:m('se'),cf:m('cf'),pv:m('pv'),al:m('al'),os:m('os'),cu:m('cu')};
+  })();
+  const dot=(v,cls)=>`<span class="dot ${cls==='cg'?'g':cls==='cy'?'y':cls==='cr'?'r':''}" style="${cls==='mut'?'background:#475569':''}"></span>`;
+  const item=(lb,v,cls)=>`<div class="hero-delta"><span>${lb}</span><b class="${cls}">${dot(v,cls)} ${pct1(v)}</b></div>`;
+  el.innerHTML=
+    item('Stress Veíc.',stats.sv,clsPctMeta(stats.sv))+
+    item('Stress Emp.',stats.se,clsPctMeta(stats.se))+
+    item('CIFV',stats.cf,clsPctMeta(stats.cf))+
+    item('Preventivas',stats.pv,clsPctMeta(stats.pv))+
+    item('Alinhamento',stats.al,stats.al==null?'mut':stats.al>=80?'cg':'cr')+
+    item('OS no prazo',stats.os,stats.os==null?'mut':stats.os>=90?'cg':stats.os>=70?'cy':'cr')+
+    `<div class="hero-delta"><span>Custos Δ Orç</span><b class="${stats.cu==null?'mut':stats.cu<=0?'cg':stats.cu<=5?'cy':'cr'}">${stats.cu==null?'—':(stats.cu>0?'+':'')+pct1(stats.cu)}</b></div>`;
+  return stats;
 }

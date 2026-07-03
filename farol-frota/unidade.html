@@ -39,15 +39,26 @@
   if(!UNIDADES[u]) u=Object.keys(UNIDADES).sort()[0];
   document.getElementById('ttl').textContent='Farol · '+u;
   document.getElementById('sub').textContent=UNIDADES[u]+' — retrato semanal: ver e agir';
-  document.getElementById('hero-label').textContent='FAROL '+u+' — SEMANA ATUAL';
+  document.getElementById('hero-label').textContent='FAROL '+u+' — MÉDIA DAS ADERÊNCIAS DA SEMANA';
   // seletor de unidade (admin)
   const sel=document.getElementById('uniSel');
   sel.innerHTML=Object.keys(UNIDADES).sort().map(c=>`<option value="${c}" ${c===u?'selected':''}>${c}</option>`).join('');
   sel.style.display='';
   sel.onchange=()=>{location.href='unidade.html?u='+sel.value;};
-  renderSecoes(document.getElementById('content'),u+' · por tier quando houver (T1/T1 WH/T2)');
-  document.getElementById('hero-farois').innerHTML='<span class="mut" style="font-size:22px;font-weight:600">resumo entra com o mapeamento das abas</span>';
-  document.getElementById('status').textContent='Estrutura · aguardando mapeamento';
+  document.getElementById('content').innerHTML='<div class="loading">Lendo as abas do Farol…</div>';
+  try{
+    await farolLoad();
+    renderFarol(document.getElementById('content'),u);
+    const stats=renderHeroDots(document.getElementById('hero-resumo'),u);
+    const score=avgA([stats.sv,stats.se,stats.cf,stats.pv,stats.al,stats.os]);
+    document.getElementById('hero-farois').innerHTML=score==null?'—':`<span class="${clsPctMeta(score,97,90)}">${pct1(score)}</span>`;
+    const now=new Date();
+    document.getElementById('status').textContent='Atualizado '+now.toLocaleDateString('pt-BR')+' '+now.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
+  }catch(e){
+    console.error(e);
+    document.getElementById('content').innerHTML='<div class="gate"><h2>Erro ao carregar</h2><p>Não consegui ler a planilha do Farol. Confira o compartilhamento ("qualquer pessoa com o link — leitor") e recarregue.</p></div>';
+    document.getElementById('status').textContent='Erro ao carregar dados';
+  }
 })();
 const _sun=`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>`;
 const _moon=`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>`;
