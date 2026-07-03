@@ -224,6 +224,15 @@ body{background:radial-gradient(ellipse at 15% 20%,rgba(249,115,22,.07) 0%,trans
             <div class="card-desc">Aprove, bloqueie ou remova o acesso de usuários ao portal.</div>
             <span class="card-link">Abrir <svg viewBox="0 0 24 24" fill="none" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg></span>
           </div>
+          <div class="dash-card active">
+            <div class="card-top">
+              <div class="card-icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg></div>
+              <span class="badge on">Admin</span>
+            </div>
+            <div class="card-title">Acessos</div>
+            <div class="card-desc">Auditoria de uso do portal — quantidade de acessos por usuário, por painel e por dia.</div>
+            <a class="card-link" href="acessos/">Abrir <svg viewBox="0 0 24 24" fill="none" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg></a>
+          </div>
         </div>
       </div>
     </div>
@@ -342,6 +351,28 @@ function hideAll() {
     .forEach(id => document.getElementById(id).style.display = 'none');
 }
 
+// ── Log de acessos (tabela access_log; painel /acessos/ lê — só admin). Falha silenciosa se a tabela não existir. ──
+let _accTok = null, _hubLogged = false;
+async function logAcesso(painel, user) {
+  try {
+    if (!_accTok) { const r = await sb.auth.getSession(); _accTok = r.data.session && r.data.session.access_token; }
+    if (!_accTok) return;
+    const email = (user || currentUser || {}).email || null;
+    fetch(SUPABASE_URL + '/rest/v1/access_log', {
+      method: 'POST', keepalive: true,   // keepalive: sobrevive à navegação p/ o painel clicado
+      headers: { apikey: SUPABASE_KEY, Authorization: 'Bearer ' + _accTok, 'Content-Type': 'application/json', Prefer: 'return=minimal' },
+      body: JSON.stringify({ email, painel })
+    }).catch(() => {});
+  } catch (e) {}
+}
+// clique em qualquer card do hub → registra o painel de destino
+document.addEventListener('click', e => {
+  const a = e.target.closest && e.target.closest('a.card-link[href]');
+  if (!a) return;
+  const painel = (a.getAttribute('href') || '').replace(/^\.\//, '').replace(/\/?(index\.html)?$/, '').replace(/\/+$/, '') || 'hub';
+  logAcesso(painel);
+});
+
 // Roteamento por papel: gestor (perfil com unidade e não-admin) vai direto pro preenchimento.
 // Trava por sessão p/ não prender (ele pode voltar ao hub). Falha silenciosa se a tabela não existir.
 async function maybeRouteByRole(user) {
@@ -351,6 +382,7 @@ async function maybeRouteByRole(user) {
     if (prof && prof.unidade && !prof.is_admin) {
       sessionStorage.setItem('gem_routed', '1');
       sessionStorage.setItem('gem_hub', '1'); // libera acesso ao painel nesta sessão
+      await logAcesso('fca-preenchimento', user);   // gestor roteado direto não passa pelo hub
       location.href = 'fca-preenchimento/';
       return true;
     }
@@ -372,6 +404,7 @@ async function showHub(user) {
   const isAdmin = user.email === ADMIN_EMAIL;
   document.getElementById('admin-card-wrapper').style.display = isAdmin ? '' : 'none';
   if (isAdmin) loadAdminBadge();
+  if (!_hubLogged) { _hubLogged = true; logAcesso('hub', user); }   // 1 registro por entrada no hub
   syncCategoryLines();
 }
 

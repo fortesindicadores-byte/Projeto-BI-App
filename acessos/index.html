@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Acessos — Gestão em Movimento</title>
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+:root{--bg:#0C1017;--card:#141B26;--border:#1E2D40;--orange:#F97316;--blue:#38BDF8;--text:#F1F5F9;--text2:#94A3B8;--text3:#475569;--green:#3BB33B;--red:#FF6666;}
+*{margin:0;padding:0;box-sizing:border-box;}
+body{background:radial-gradient(ellipse at 10% 25%,rgba(249,115,22,.06) 0%,transparent 50%),radial-gradient(ellipse at 90% 75%,rgba(56,189,248,.05) 0%,transparent 50%),var(--bg);color:var(--text);font-family:'Montserrat',-apple-system,sans-serif;font-size:13px;min-height:100vh;}
+.header{background:rgba(12,16,23,.75);border-bottom:1px solid rgba(255,255,255,.07);padding:10px 24px 12px;display:flex;flex-wrap:wrap;align-items:center;position:sticky;top:0;z-index:100;backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);box-shadow:0 2px 12px rgba(0,0,0,.3);}
+.brand{flex:1;order:1;min-width:160px;}
+.brand h1{font-size:16px;font-weight:700;color:var(--orange);}
+.brand p{font-size:10px;color:var(--text2);margin-top:2px;}
+.header-right{flex-shrink:0;order:2;display:flex;align-items:center;gap:8px;}
+.back-btn,.theme-btn{background:rgba(249,115,22,.15);border:1px solid rgba(249,115,22,.3);border-radius:4px;padding:5px 7px;cursor:pointer;color:var(--orange);display:flex;align-items:center;text-decoration:none;}
+.back-btn:hover,.theme-btn:hover{background:rgba(249,115,22,.3);}
+.status-badge{font-size:9px;color:var(--text);background:rgba(249,115,22,.15);border:1px solid rgba(249,115,22,.3);border-radius:4px;padding:2px 8px;white-space:nowrap;}
+.header-filters{flex-basis:100%;order:3;margin-top:10px;display:flex;gap:10px;flex-wrap:wrap;align-items:flex-start;}
+.ms-wrap{position:relative;}
+.ms-btn{display:flex;align-items:center;gap:8px;background:#0a0f18;color:var(--text);border:1px solid #2a3a50;border-radius:4px;font-family:'Montserrat',sans-serif;font-size:11px;font-weight:700;padding:6px 12px;cursor:pointer;text-transform:uppercase;letter-spacing:.5px;white-space:nowrap;min-width:130px;}
+.ms-btn:hover{border-color:var(--orange);}
+.ms-lbl{flex:1;text-align:left;}
+.ms-cnt{background:var(--orange);color:#000;border-radius:10px;padding:1px 6px;font-size:9px;font-weight:800;display:none;}
+.ms-panel{display:none;flex-direction:column;position:absolute;top:calc(100% + 4px);left:0;z-index:500;background:#0f1824;border:1px solid #2a3a50;border-radius:4px;min-width:240px;max-height:320px;box-shadow:0 8px 24px rgba(0,0,0,.7);}
+.ms-panel.open{display:flex;}
+.ms-search{padding:7px 10px;border-bottom:1px solid #1e2d40;flex-shrink:0;}
+.ms-search input{width:100%;background:transparent;border:none;color:var(--text);font-family:'Montserrat',sans-serif;font-size:11px;outline:none;}
+.ms-list{overflow-y:auto;flex:1;}
+.ms-opt{display:flex;align-items:center;gap:8px;padding:7px 12px;cursor:pointer;font-size:11px;color:var(--text2);}
+.ms-opt:hover{background:rgba(255,255,255,.05);color:var(--text);}
+.ms-opt.all-opt{border-bottom:1px solid #1e2d40;color:var(--text);font-weight:700;}
+.ms-opt input[type=checkbox]{accent-color:var(--orange);cursor:pointer;width:14px;height:14px;flex-shrink:0;}
+.ms-only{margin-left:auto;font-size:8px;color:var(--orange);padding:1px 5px;border-radius:2px;cursor:pointer;flex-shrink:0;opacity:0;transition:opacity .12s;}
+.ms-opt:hover .ms-only{opacity:1;}
+.ms-only:hover{background:rgba(249,115,22,.2);}
+.main{padding:20px 24px 80px;}
+.cards-row{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px;}
+.kpi-card{background:rgba(20,27,38,.55);border:1px solid rgba(255,255,255,.07);border-radius:8px;padding:14px 16px;backdrop-filter:blur(16px);box-shadow:0 2px 12px rgba(0,0,0,.25);}
+.card-label{font-size:10px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.5px;}
+.card-value{font-size:26px;font-weight:800;color:var(--text);margin-top:4px;}
+.card-value.o{color:var(--orange);}
+.chart-card,.tbl-section{background:rgba(20,27,38,.55);border:1px solid rgba(255,255,255,.07);border-radius:8px;padding:18px 20px 16px;margin-bottom:16px;backdrop-filter:blur(16px);box-shadow:0 2px 12px rgba(0,0,0,.25);}
+.tbl-title{font-size:16px;font-weight:800;color:var(--text);margin-bottom:3px;}
+.tbl-sub{font-size:11px;color:var(--text2);margin-bottom:14px;}
+.chart-wrap{position:relative;height:220px;}
+.tables{display:grid;grid-template-columns:3fr 2fr;gap:16px;}
+table{width:100%;border-collapse:collapse;font-size:12px;}
+thead th{color:var(--text);font-size:11px;font-weight:700;padding:8px 8px 10px;border-bottom:1px solid rgba(255,255,255,.10);text-transform:uppercase;letter-spacing:.5px;white-space:nowrap;text-align:left;}
+td{padding:9px 8px;border-bottom:1px solid rgba(255,255,255,.05);white-space:nowrap;}
+tbody tr:hover{background:rgba(255,255,255,.035);}
+.num{text-align:right;}
+th.num{text-align:right;}
+.mut{color:var(--text3);}
+.pill{display:inline-block;min-width:34px;text-align:center;padding:2px 8px;border-radius:5px;font-weight:800;color:#0C1017;background:var(--orange);}
+.loading{text-align:center;color:var(--text3);padding:50px;font-size:13px;}
+.gate{max-width:560px;margin:80px auto;text-align:center;background:rgba(20,27,38,.55);border:1px solid rgba(255,255,255,.08);border-radius:14px;padding:38px 34px;backdrop-filter:blur(16px);}
+.gate h2{font-size:18px;font-weight:800;margin-bottom:10px;}
+.gate p{font-size:13px;color:var(--text2);line-height:1.6;margin-bottom:12px;}
+.gate code{background:rgba(249,115,22,.14);color:var(--orange);padding:2px 7px;border-radius:5px;font-size:12px;}
+body.light-mode .main{background:#F0F0F0;--text:#1a1a1a;--text2:#444444;--text3:#666666;}
+body.light-mode .kpi-card,body.light-mode .chart-card,body.light-mode .tbl-section{background:rgba(128,128,128,.14)!important;border:none!important;box-shadow:none!important;--text:#1a1a1a;--text2:#444;--text3:#555;}
+body.light-mode thead th{border-bottom-color:rgba(0,0,0,.10);}
+body.light-mode td{border-bottom-color:rgba(0,0,0,.06);color:var(--text);}
+@media(max-width:900px){.tables{grid-template-columns:1fr;}.cards-row{grid-template-columns:repeat(2,1fr);}}
+@media(max-width:768px){.main{padding:14px;}}
+</style>
+</head>
+<body>
+<header class="header">
+  <div class="brand"><h1>Acessos</h1><p>Auditoria de uso do portal — por usuário, painel e dia (somente admin)</p></div>
+  <div class="header-right">
+    <a href="../" class="back-btn" title="Voltar ao Hub"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg></a>
+    <button class="theme-btn" id="themeBtn" title="Modo claro/escuro"></button>
+    <span class="status-badge" id="status">Carregando…</span>
+  </div>
+  <div class="header-filters">
+    <div class="ms-wrap" id="ms-usr"><button class="ms-btn" onclick="toggleMs('ms-usr')"><span class="ms-lbl">Usuário</span><span class="ms-cnt"></span><svg width="10" height="6" viewBox="0 0 10 6"><path d="M0 0l5 6 5-6z" fill="#F97316"/></svg></button><div class="ms-panel"><div class="ms-search"><input type="text" placeholder="Pesquisar…"></div><div class="ms-list"></div></div></div>
+    <div class="ms-wrap" id="ms-pan"><button class="ms-btn" onclick="toggleMs('ms-pan')"><span class="ms-lbl">Painel</span><span class="ms-cnt"></span><svg width="10" height="6" viewBox="0 0 10 6"><path d="M0 0l5 6 5-6z" fill="#F97316"/></svg></button><div class="ms-panel"><div class="ms-search"><input type="text" placeholder="Pesquisar…"></div><div class="ms-list"></div></div></div>
+    <div class="ms-wrap" id="ms-mes"><button class="ms-btn" onclick="toggleMs('ms-mes')"><span class="ms-lbl">Mês</span><span class="ms-cnt"></span><svg width="10" height="6" viewBox="0 0 10 6"><path d="M0 0l5 6 5-6z" fill="#F97316"/></svg></button><div class="ms-panel"><div class="ms-search"><input type="text" placeholder="Pesquisar…"></div><div class="ms-list"></div></div></div>
+  </div>
+</header>
+<main class="main">
+  <div id="content"><div class="loading">Verificando acesso…</div></div>
+</main>
+<script>
+const SUPABASE_URL='https://lozwipoeacpvplgkrxkq.supabase.co';
+const SUPABASE_KEY='sb_publishable_ggKEEebc5zjgQDVsF92Upw_6uoLmKe9';
+let sb=null, ROWS=[], chDia=null;
+const NOMES={hub:'Hub (entrada)','visao-financeira':'Visão Financeira','painel-km':'Painel KM','rs-por-km':'R$/KM',combustivel:'Combustível','eficiencia-ativacao':'Ativação de Frota',disponibilidade:'Disponibilidade',pneus:'Pneus',termometro:'Termômetro',gerot:'Gerot',auditorias:'Auditorias',fca:'FCA','fca-preenchimento':'FCA · Preenchimento','fca-consolidado':'FCA · Admin','fca-gerencial':'Aderência ao FCA',mpr:'MPR',governanca:'Estratégia e Governança','papeis-responsabilidades':'Papéis e Responsabilidades',scorecard:'Scorecard',diagnostico:'Diagnóstico','resumo-executivo':'Resumo Executivo','programa-reconhecimento':'Programa de Reconhecimento','painel-metas':'Painel de Metas',acessos:'Acessos','financeiro-pessoal':'Financeiro Pessoal','missao-visao-valores':'Missão, Visão e Valores'};
+const nomePainel=p=>NOMES[p]||p||'—';
+const MESES_PT=['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
+const mesKey=d=>d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');
+const mesLbl=k=>{const [y,m]=k.split('-');return MESES_PT[+m-1]+'/'+y.slice(2);};
+const diaKey=d=>d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+const fmtDT=d=>d.toLocaleDateString('pt-BR')+' '+d.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
+const esc=s=>String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+const set=(id,v)=>{const e=document.getElementById(id);if(e)e.textContent=v;};
+
+// ── filtros multi-select (padrão do projeto) ──
+function getMsValues(id){const w=document.getElementById(id);return w&&w._sel?[...w._sel]:[];}
+function toggleMs(id){document.querySelectorAll('.ms-panel.open').forEach(p=>{if(p.closest('.ms-wrap').id!==id)p.classList.remove('open');});const p=document.querySelector('#'+id+' .ms-panel');if(p)p.classList.toggle('open');}
+function buildMs(id,items,lblFn){
+  const w=document.getElementById(id);if(!(w._sel instanceof Set))w._sel=new Set();const sel=w._sel;const lbl=lblFn||(v=>v);
+  const list=w.querySelector('.ms-list'),srch=w.querySelector('.ms-search input');
+  w._render=(q='')=>{const f=(q||'').toLowerCase(),shown=items.filter(v=>String(lbl(v)).toLowerCase().includes(f)),all=sel.size===0;
+    list.innerHTML=(!q?`<label class="ms-opt all-opt"><input type="checkbox" class="ms-all" ${all?'checked':''}> Todos</label>`:'')+shown.map(v=>`<label class="ms-opt"><input type="checkbox" data-v="${esc(v)}" ${all||sel.has(v)?'checked':''}> ${esc(lbl(v))}<span class="ms-only" data-v="${esc(v)}">só</span></label>`).join('');
+    const c=w.querySelector('.ms-cnt');c.textContent=sel.size;c.style.display=sel.size?'':'none';};
+  list.onchange=e=>{const b=e.target;if(!b.matches('input[type=checkbox]'))return;
+    if(b.classList.contains('ms-all')){sel.clear();}
+    else if(sel.size===0){if(!b.checked)items.forEach(v=>{if(String(v)!==b.dataset.v)sel.add(v);});}
+    else{const v=items.find(x=>String(x)===b.dataset.v);if(b.checked)sel.add(v);else sel.delete(v);if(items.every(x=>sel.has(x)))sel.clear();}
+    w._render(srch.value);render();};
+  list.onclick=e=>{const o=e.target.closest('.ms-only');if(!o)return;e.preventDefault();e.stopPropagation();sel.clear();sel.add(items.find(x=>String(x)===o.dataset.v));w._render(srch.value);render();};
+  srch.oninput=()=>w._render(srch.value);srch.onclick=e=>e.stopPropagation();
+  w._render();
+}
+document.addEventListener('click',e=>{if(!e.target.closest('.ms-wrap'))document.querySelectorAll('.ms-panel.open').forEach(p=>p.classList.remove('open'));});
+
+function gate(title,msg){document.getElementById('content').innerHTML=`<div class="gate"><h2>${title}</h2><p>${msg}</p></div>`;set('status','—');}
+
+function shell(){
+  document.getElementById('content').innerHTML=`
+  <div class="cards-row">
+    <div class="kpi-card"><div class="card-label">Total de acessos</div><div class="card-value o" id="k-tot">—</div></div>
+    <div class="kpi-card"><div class="card-label">Usuários ativos</div><div class="card-value" id="k-usr">—</div></div>
+    <div class="kpi-card"><div class="card-label">Acessos hoje</div><div class="card-value" id="k-hoje">—</div></div>
+    <div class="kpi-card"><div class="card-label">Últimos 7 dias</div><div class="card-value" id="k-7d">—</div></div>
+  </div>
+  <div class="chart-card"><div class="tbl-title">Acessos por dia</div><div class="tbl-sub">Últimos 30 dias (respeita os filtros)</div><div class="chart-wrap"><canvas id="ch-dia"></canvas></div></div>
+  <div class="tables">
+    <div class="tbl-section"><div class="tbl-title">Por usuário</div><div class="tbl-sub" id="sub-usr">—</div><div id="t-usr"></div></div>
+    <div class="tbl-section"><div class="tbl-title">Por painel</div><div class="tbl-sub" id="sub-pan">—</div><div id="t-pan"></div></div>
+  </div>`;
+}
+
+function filtered(){
+  const fu=new Set(getMsValues('ms-usr')),fp=new Set(getMsValues('ms-pan')),fm=new Set(getMsValues('ms-mes'));
+  return ROWS.filter(r=>(!fu.size||fu.has(r.email))&&(!fp.size||fp.has(r.painel))&&(!fm.size||fm.has(r.mes)));
+}
+const getGrid=()=>({color:document.body.classList.contains('light-mode')?'rgba(0,0,0,.08)':'rgba(255,255,255,.06)'});
+const getTick=(sz=10)=>({color:document.body.classList.contains('light-mode')?'#444444':'#94A3B8',font:{family:'Montserrat',size:sz}});
+
+function render(){
+  const rows=filtered();
+  const hoje=new Date();const hojeK=diaKey(hoje);
+  const d7=new Date(hoje);d7.setDate(d7.getDate()-6);
+  set('k-tot',rows.length.toLocaleString('pt-BR'));
+  set('k-usr',new Set(rows.map(r=>r.email)).size.toLocaleString('pt-BR'));
+  set('k-hoje',rows.filter(r=>r.dia===hojeK).length.toLocaleString('pt-BR'));
+  set('k-7d',rows.filter(r=>r.dt>=new Date(d7.getFullYear(),d7.getMonth(),d7.getDate())).length.toLocaleString('pt-BR'));
+
+  // gráfico: últimos 30 dias
+  const labels=[],data=[];
+  for(let i=29;i>=0;i--){const d=new Date(hoje);d.setDate(d.getDate()-i);const k=diaKey(d);labels.push(d.getDate()+'/'+String(d.getMonth()+1).padStart(2,'0'));data.push(rows.filter(r=>r.dia===k).length);}
+  if(chDia)chDia.destroy();
+  chDia=new Chart(document.getElementById('ch-dia'),{type:'bar',
+    data:{labels,datasets:[{label:'Acessos',data,backgroundColor:'rgba(249,115,22,.75)',borderColor:'#F97316',borderWidth:1,borderRadius:3,maxBarThickness:30}]},
+    options:{responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{display:false},tooltip:{backgroundColor:'#141B26',titleColor:'#F97316',bodyColor:'#F1F5F9',borderColor:'#1E2D40',borderWidth:1,titleFont:{family:'Montserrat'},bodyFont:{family:'Montserrat'}}},
+      scales:{x:{grid:getGrid(),ticks:{...getTick(9),autoSkip:true,maxRotation:0}},y:{beginAtZero:true,grid:getGrid(),ticks:{...getTick(),precision:0}}}}});
+
+  // por usuário
+  const byU={};
+  rows.forEach(r=>{const u=byU[r.email]=byU[r.email]||{email:r.email,tot:0,d7:0,last:null,pan:{}};
+    u.tot++;if(r.dt>=new Date(d7.getFullYear(),d7.getMonth(),d7.getDate()))u.d7++;
+    if(!u.last||r.dt>u.last)u.last=r.dt;u.pan[r.painel]=(u.pan[r.painel]||0)+1;});
+  const us=Object.values(byU).sort((a,b)=>b.tot-a.tot);
+  set('sub-usr',us.length+' usuário(s)');
+  document.getElementById('t-usr').innerHTML=us.length?'<table><thead><tr><th>#</th><th>Usuário</th><th class="num">Acessos</th><th class="num">Últimos 7d</th><th>Último acesso</th><th>Painel mais usado</th></tr></thead><tbody>'+
+    us.map((u,i)=>{const top=Object.entries(u.pan).sort((a,b)=>b[1]-a[1])[0];
+      return `<tr><td class="mut">${i+1}</td><td><b>${esc(u.email)}</b></td><td class="num"><span class="pill">${u.tot}</span></td><td class="num">${u.d7}</td><td class="mut">${fmtDT(u.last)}</td><td>${nomePainel(top[0])} <span class="mut">(${top[1]})</span></td></tr>`;}).join('')+'</tbody></table>':'<div class="loading">Sem registros para o filtro.</div>';
+
+  // por painel
+  const byP={};
+  rows.forEach(r=>{const p=byP[r.painel]=byP[r.painel]||{painel:r.painel,tot:0,users:new Set(),last:null};
+    p.tot++;p.users.add(r.email);if(!p.last||r.dt>p.last)p.last=r.dt;});
+  const ps=Object.values(byP).sort((a,b)=>b.tot-a.tot);
+  set('sub-pan',ps.length+' painel(éis)');
+  document.getElementById('t-pan').innerHTML=ps.length?'<table><thead><tr><th>Painel</th><th class="num">Acessos</th><th class="num">Usuários</th><th>Último acesso</th></tr></thead><tbody>'+
+    ps.map(p=>`<tr><td><b>${esc(nomePainel(p.painel))}</b></td><td class="num"><span class="pill">${p.tot}</span></td><td class="num">${p.users.size}</td><td class="mut">${fmtDT(p.last)}</td></tr>`).join('')+'</tbody></table>':'<div class="loading">Sem registros para o filtro.</div>';
+}
+
+async function initApp(){
+  try{ sb=supabase.createClient(SUPABASE_URL,SUPABASE_KEY); }
+  catch(e){ gate('Erro','Falha ao iniciar o Supabase.'); return; }
+  const {data:{session}}=await sb.auth.getSession();
+  if(!session){ gate('Login necessário','Entre pelo <b>hub</b> para acessar este painel.'); return; }
+  const {data:prof}=await sb.from('fca_profiles').select('is_admin').eq('user_id',session.user.id).maybeSingle();
+  if(!prof||!prof.is_admin){ gate('Apenas administradores','Este painel é restrito. Fale com o administrador do portal.'); return; }
+  // pagina de 1000 em 1000 (limite do PostgREST) até esgotar
+  let all=[],from=0;const STEP=1000;
+  while(true){
+    const {data,error}=await sb.from('access_log').select('email,painel,created_at').order('created_at',{ascending:false}).range(from,from+STEP-1);
+    if(error){
+      if(/relation .*access_log.* does not exist|could not find the table|schema cache/i.test(error.message||''))
+        gate('Tabela ainda não criada','Rode o SQL de <code>scripts/acessos-supabase.sql</code> no SQL Editor do Supabase (1 vez) e recarregue. O hub já está pronto para registrar os acessos.');
+      else gate('Erro ao carregar',esc(error.message));
+      return;
+    }
+    all=all.concat(data||[]);
+    if(!data||data.length<STEP||all.length>=50000)break;
+    from+=STEP;
+  }
+  ROWS=all.map(r=>{const dt=new Date(r.created_at);return {email:r.email||'(sem e-mail)',painel:r.painel||'hub',dt,dia:diaKey(dt),mes:mesKey(dt)};});
+  shell();
+  buildMs('ms-usr',[...new Set(ROWS.map(r=>r.email))].sort());
+  buildMs('ms-pan',[...new Set(ROWS.map(r=>r.painel))].sort((a,b)=>nomePainel(a).localeCompare(nomePainel(b))),nomePainel);
+  buildMs('ms-mes',[...new Set(ROWS.map(r=>r.mes))].sort().reverse(),mesLbl);
+  render();
+  const now=new Date();
+  set('status',ROWS.length.toLocaleString('pt-BR')+' registros · '+now.toLocaleDateString('pt-BR')+' '+now.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'}));
+}
+
+// tema
+const _sun=`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>`;
+const _moon=`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>`;
+function applyTheme(t){document.body.classList.toggle('light-mode',t==='light');localStorage.setItem('bi_theme',t);const b=document.getElementById('themeBtn');if(b)b.innerHTML=t==='light'?_moon:_sun;if(ROWS.length)render();}
+applyTheme(localStorage.getItem('bi_theme')||'dark');
+document.getElementById('themeBtn').addEventListener('click',()=>applyTheme(document.body.classList.contains('light-mode')?'dark':'light'));
+
+initApp();
+</script>
+</body>
+</html>
