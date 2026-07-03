@@ -1,0 +1,33 @@
+name: Farol Frota (e-mail)
+
+# Por enquanto SÓ manual (teste). Quando o farol real estiver pronto,
+# habilitar o cron de segunda 14h BRT (17h UTC):
+#   schedule:
+#     - cron: '0 17 * * 1'
+on:
+  workflow_dispatch:
+    inputs:
+      to:
+        description: 'Destinatário(s) do teste (separar por vírgula)'
+        required: true
+        default: 'renan.fortes@conlogsa.com.br'
+
+concurrency:
+  group: farol-mailer
+  cancel-in-progress: false
+
+jobs:
+  send:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Enviar e-mail
+        env:
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          FAROL_FROM: ${{ secrets.FAROL_FROM }}
+          FAROL_TO: ${{ github.event.inputs.to }}
+        run: node scripts/farol-mailer.mjs
