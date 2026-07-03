@@ -641,8 +641,11 @@ async function loadAdminData() {
   const { data } = await sb.from('user_approvals').select('*').order('created_at', { ascending: false });
   allApprovals = data || [];
   try {
-    const { data: profs } = await sb.from('fca_profiles').select('user_id,unidade,is_admin,farol_unidades');
-    _fcaProf = {}; (profs || []).forEach(p => { _fcaProf[p.user_id] = p; });
+    // farol_unidades pode ainda não existir (migração farol-acessos.sql não rodada) —
+    // se o select falhar por causa dela, cai no select sem a coluna p/ não zerar os acessos.
+    let res = await sb.from('fca_profiles').select('user_id,unidade,is_admin,farol_unidades');
+    if (res.error) res = await sb.from('fca_profiles').select('user_id,unidade,is_admin');
+    _fcaProf = {}; (res.data || []).forEach(p => { _fcaProf[p.user_id] = p; });
   } catch (e) { _fcaProf = {}; }
   renderAdminUsers();
   updateAdminCounts();
