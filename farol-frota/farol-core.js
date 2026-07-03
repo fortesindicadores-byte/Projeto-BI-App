@@ -238,8 +238,17 @@ const th=(...hs)=>'<thead><tr>'+hs.map(h=>`<th${/R\$|Dias|Km|Viagens|%|Desc|1Q|2
 function wrapT(html){return `<div style="overflow-x:auto">${html}</div>`;}
 
 // ═══════════════ SEÇÕES ═══════════════
-// filtra pelas linhas da unidade (cod) ou todas (null)
-const byCod=(rows,cod)=>cod?(rows||[]).filter(r=>r.cod===cod):(rows||[]);
+// filtro global do Farol Geral (Set de códigos selecionados; null = todas)
+let FILT={uni:null};
+const passU=cod=>!FILT.uni||FILT.uni.has(cod);
+// filtra pelas linhas da unidade (cod) ou, no geral, pelo filtro de unidades
+const byCod=(rows,cod)=>{
+  let r=rows||[];
+  if(cod) return r.filter(x=>x.cod===cod);
+  if(FILT.uni) return r.filter(x=>x.cod&&FILT.uni.has(x.cod));
+  return r;
+};
+const codsFiltrados=()=>Object.keys(UNIDADES).filter(passU);
 
 // ── CUSTOS ──
 function renderCustos(el,cod){
@@ -265,7 +274,9 @@ function renderCustos(el,cod){
   const grupos={};rs.forEach(r=>{(grupos[r[key]]=grupos[r[key]]||[]).push(r);});
   h+='<table>'+th(cod?'Projeto':'Unidade','Conta Gerencial','Orç.','Rem','Real','Δ Orç.','Δ Rem','Δ Orç %','Δ Rem %')+'<tbody>';
   Object.keys(grupos).sort().forEach(g=>{
-    const rows=grupos[g].slice().sort((a,b)=>a.orc-b.orc);
+    // soma por CONTA dentro do grupo (evita a mesma conta repetida por projeto/nível 3)
+    const byConta={};grupos[g].forEach(r=>{const a=byConta[r.conta]=byConta[r.conta]||{conta:r.conta,orc:0,rem:0,rea:0};a.orc+=r.orc;a.rem+=r.rem;a.rea+=r.rea;});
+    const rows=Object.values(byConta).sort((a,b)=>a.orc-b.orc);
     rows.forEach((r,i)=>{
       const dO=Math.abs(r.rea)-Math.abs(r.orc), dR=Math.abs(r.rea)-Math.abs(r.rem);
       const pO=Math.abs(r.orc)>0?dO/Math.abs(r.orc)*100:null, pR=Math.abs(r.rem)>0?dR/Math.abs(r.rem)*100:null;
@@ -296,14 +307,14 @@ function renderStressV(el,cod){
   // descontos
   const desc=rs.filter(r=>r.desc>0).sort((a,b)=>b.desc-a.desc);
   const totDesc=sumA(desc.map(r=>r.desc));
-  h+=`<div class="split"><div class="split-l"><div class="blk-t">Bottom | Projetos</div><div id="stv-ch"></div></div>
-      <div class="split-r"><div class="blk-t">Descontos Stress Test ${totDesc>0?`<span class="cr">· ${brl(totDesc)}</span>`:''}</div>
-      ${wrapT('<table>'+th(cod?'Placa':'Unidade · Placa','Projeto','Saída','Saída na Filial','Viagens','Desconto R$')+'<tbody>'+
+  h+=`<div class="mini-card"><div class="blk-t">Aderência por projeto</div><div id="stv-ch"></div></div>`+
+     `<div class="blk-t">Descontos Stress Test ${totDesc>0?`<span class="cr">· ${brl(totDesc)}</span>`:''}</div>`+
+      wrapT('<table>'+th(cod?'Placa':'Unidade · Placa','Projeto','Saída','Saída na Filial','Viagens','Desconto R$')+'<tbody>'+
         rs.slice().sort((a,b)=>b.desc-a.desc||String(a.placa).localeCompare(b.placa)).slice(0,60).map(r=>
           `<tr><td><b>${cod?escF(r.placa):escF(r.fil)+' · '+escF(r.placa)}</b></td><td>${escF(r.proj)}</td>
            <td class="${r.saida==='COM SAIDA'?'cg':'cr'}">${escF(r.saida==='COM SAIDA'?'Com saída':'Sem saída')}</td>
            <td>${escF(r.saidaF||'—')}</td><td class="num">${r.viagens==null?'—':r.viagens}</td>
-           <td class="num ${r.desc>0?'cr':'mut'}">${r.desc>0?brlFull(r.desc):'—'}</td></tr>`).join('')+'</tbody></table>')}</div></div>`;
+           <td class="num ${r.desc>0?'cr':'mut'}">${r.desc>0?brlFull(r.desc):'—'}</td></tr>`).join('')+'</tbody></table>');
   el.innerHTML=h;
   const vals=projs.map(pj=>stressVPct(rs.filter(r=>r.proj===pj)));
   mkBar(el.querySelector('#stv-ch'),projs,vals,100);
@@ -337,15 +348,15 @@ function renderCIFV(el,cod){
   const projs=[...new Set(rs.map(r=>r.proj))].filter(Boolean).sort();
   const nc=rs.filter(r=>r.dt>0||r.ad===0).sort((a,b)=>b.dt-a.dt);
   const tot=sumA(rs.map(r=>r.dt));
-  h+=`<div class="split"><div class="split-l"><div class="blk-t">Bottom | Projetos</div><div id="cifv-ch"></div></div>
-      <div class="split-r"><div class="blk-t">Descontos ${tot>0?`<span class="cr">· ${brl(tot)}</span>`:''}</div>
-      ${wrapT('<table>'+th(cod?'Veículo':'Filial · Veículo','Projeto','Status','Manutenção R$','Lavagem R$','Total R$')+'<tbody>'+
+  h+=`<div class="mini-card"><div class="blk-t">Aderência por projeto</div><div id="cifv-ch"></div></div>`+
+     `<div class="blk-t">Descontos ${tot>0?`<span class="cr">· ${brl(tot)}</span>`:''}</div>`+
+      wrapT('<table>'+th(cod?'Veículo':'Filial · Veículo','Projeto','Status','Manutenção R$','Lavagem R$','Total R$')+'<tbody>'+
         (nc.length?nc:rs.slice(0,20)).slice(0,60).map(r=>
         `<tr><td><b>${cod?escF(r.placa):escF(r.fil)+' · '+escF(r.placa)}</b></td><td>${escF(r.proj)}</td>
          <td class="${r.ad===1?'cg':'cr'}">${escF(r.st||'—')}</td>
          <td class="num ${r.dm>0?'cr':'mut'}">${r.dm>0?brlFull(r.dm):'—'}</td>
          <td class="num ${r.dl>0?'cr':'mut'}">${r.dl>0?brlFull(r.dl):'—'}</td>
-         <td class="num ${r.dt>0?'cr':'mut'}">${r.dt>0?brlFull(r.dt):'—'}</td></tr>`).join('')+'</tbody></table>')}</div></div>`;
+         <td class="num ${r.dt>0?'cr':'mut'}">${r.dt>0?brlFull(r.dt):'—'}</td></tr>`).join('')+'</tbody></table>');
   el.innerHTML=h;
   const vals=projs.map(pj=>{const q=rs.filter(r=>r.proj===pj);return avgA(q.map(r=>r.ad))*100;});
   mkBar(el.querySelector('#cifv-ch'),projs,vals,100);
@@ -362,15 +373,15 @@ function renderPrev(el,cod){
   const projs=[...new Set(rs.map(r=>r.proj))].filter(Boolean).sort();
   const ord={'VENCIDA':0,'EM ATENCAO':1,'EM ATENÇÃO':1,'NO PRAZO':2};
   const worst=rs.slice().sort((a,b)=>(ord[_n(a.st)]??3)-(ord[_n(b.st)]??3)||(a.dias??999)-(b.dias??999));
-  h+=`<div class="split"><div class="split-l"><div class="blk-t">Projetos</div><div id="prev-ch"></div></div>
-      <div class="split-r"><div class="blk-t">Bottom | Placas</div>
-      ${wrapT('<table>'+th(cod?'Placa':'Unidade · Placa','Projeto','Marca','Modelo','OS','Status','Dias','Km')+'<tbody>'+
+  h+=`<div class="mini-card"><div class="blk-t">Aderência por projeto</div><div id="prev-ch"></div></div>`+
+     `<div class="blk-t">Bottom | Placas</div>`+
+      wrapT('<table>'+th(cod?'Placa':'Unidade · Placa','Projeto','Marca','Modelo','OS','Status','Dias','Km')+'<tbody>'+
         worst.slice(0,60).map(r=>{
           const sc=_n(r.st)==='VENCIDA'?'cr':_n(r.st).startsWith('EM ATEN')?'cy':'cg';
           return `<tr><td><b>${cod?escF(r.placa):escF(r.fil)+' · '+escF(r.placa)}</b></td><td>${escF(r.proj)}</td><td>${escF(r.marca)}</td><td>${escF(r.modelo)}</td>
           <td>${escF(r.os||'—')}</td><td class="${sc}">${escF(r.st||'—')}</td>
           <td class="num ${clsDias(r.dias)}">${r.dias==null?'—':Math.round(r.dias)}</td>
-          <td class="num ${clsKm(r.km)}">${r.km==null?'—':Math.round(r.km).toLocaleString('pt-BR')}</td></tr>`;}).join('')+'</tbody></table>')}</div></div>`;
+          <td class="num ${clsKm(r.km)}">${r.km==null?'—':Math.round(r.km).toLocaleString('pt-BR')}</td></tr>`;}).join('')+'</tbody></table>');
   el.innerHTML=h;
   const vals=projs.map(pj=>{const q=rs.filter(r=>r.proj===pj);return avgA(q.map(r=>r.ad))*100;});
   mkBar(el.querySelector('#prev-ch'),projs,vals,100);
@@ -433,7 +444,7 @@ function unitStats(cod){
   return {sv,se,cf,pv,al,os,cu,dp};
 }
 function renderRanking(el){
-  const list=Object.keys(UNIDADES).map(cod=>{
+  const list=codsFiltrados().map(cod=>{
     const s=unitStats(cod);
     const score=avgA([s.sv,s.se,s.cf,s.pv,s.al,s.os,s.dp]);
     return {cod,...s,score};
@@ -443,7 +454,7 @@ function renderRanking(el){
   el.innerHTML=wrapT('<table>'+th('#','Unidade','Média','Stress Veíc.','Stress Emp.','CIFV','Preventivas','Alinhamento','OS no prazo','Disponib.','Custos Δ Orç %')+'<tbody>'+
     list.map((u,i)=>{
       const sc=u.score==null?'mut':u.score>=97?'#3BB33B':u.score>=90?'#EAB308':'#FF6666';
-      return `<tr><td class="mut">${i+1}</td><td><b>${u.cod}</b> <span class="mut">${escF(UNIDADES[u.cod])}</span></td>
+      return `<tr><td class="mut">${i+1}</td><td><b>${u.cod}</b></td>
       <td class="num">${u.score==null?'—':`<span class="pill" style="background:${sc}">${pct1(u.score)}</span>`}</td>
       ${cell(u.sv,clsPctMeta(u.sv))}${cell(u.se,clsPctMeta(u.se))}${cell(u.cf,clsPctMeta(u.cf))}${cell(u.pv,clsPctMeta(u.pv))}
       ${cell(u.al,u.al==null?'mut':u.al>=80?'cg':'cr')}${cell(u.os,u.os==null?'mut':u.os>=90?'cg':u.os>=70?'cy':'cr')}${cell(u.dp,dispCls(u.dp))}
@@ -453,7 +464,7 @@ function renderRanking(el){
 
 // ── RESUMO EXECUTIVO (geral) ──
 function renderResumo(el){
-  const stats=Object.keys(UNIDADES).map(cod=>({cod,...unitStats(cod)}));
+  const stats=codsFiltrados().map(cod=>({cod,...unitStats(cod)}));
   const pos=[],neg=[],aten=[],acao=[];
   const worstBy=(k,label,fmt)=>{const w=stats.filter(s=>s[k]!=null).sort((a,b)=>a[k]-b[k])[0];if(w)return `${label}: pior unidade <b>${w.cod}</b> (${fmt(w[k])})`;return null;};
   const descV=sumA((DATA.stressV||[]).map(r=>r.desc));
@@ -478,7 +489,7 @@ function renderResumo(el){
 
 // ── DISPONIBILIDADE (foto da última vigência) ──
 function renderDisp(el,cod){
-  const rs=(DATA.disp||[]).filter(r=>cod?r.cod===cod:true);
+  const rs=(DATA.disp||[]).filter(r=>cod?r.cod===cod:passU(r.cod));
   if(!rs.length){el.innerHTML='<div class="loading">Sem dados de disponibilidade para o recorte.</div>';return;}
   const at=sumA(rs.map(r=>r.ativos)),ind=sumA(rs.map(r=>r.indisp));
   const p=at>0?(at-ind)/at*100:null;
@@ -493,7 +504,7 @@ function renderDisp(el,cod){
         <td class="num">${Math.round(o.ativos)}</td><td class="num ${o.indisp?'cr':'mut'}">${Math.round(o.indisp)}</td>
         <td class="num ${dispCls(pc)}">${pct1(pc)}</td></tr>`;}).join('')+'</tbody></table>');
   // placas indisponíveis
-  const indL=(DATA.dispInd||[]).filter(r=>cod?r.cod===cod:true).sort((a,b)=>(b.dias??0)-(a.dias??0));
+  const indL=(DATA.dispInd||[]).filter(r=>cod?r.cod===cod:passU(r.cod)).sort((a,b)=>(b.dias??0)-(a.dias??0));
   if(indL.length){
     const dCls=d=>d==null?'mut':d>7?'cr':d>3?'cy':'cg';
     h+=`<div class="blk-t" style="margin-top:14px">Placas indisponíveis <span class="cr">· ${indL.length}</span></div>`+
@@ -579,8 +590,8 @@ function renderFarol(el,cod){
 
 // hero da página: dots por indicador
 function renderHeroDots(el,cod){
-  const stats=cod?unitStats(cod):(()=>{ // geral = média das unidades
-    const all=Object.keys(UNIDADES).map(unitStats);
+  const stats=cod?unitStats(cod):(()=>{ // geral = média das unidades (respeita o filtro)
+    const all=codsFiltrados().map(unitStats);
     const m=k=>avgA(all.map(a=>a[k]));
     return {sv:m('sv'),se:m('se'),cf:m('cf'),pv:m('pv'),al:m('al'),os:m('os'),cu:m('cu'),dp:m('dp')};
   })();
