@@ -677,16 +677,18 @@ function farolSummary(v) {
 function renderFarolPicker(userId, cur, nm) {
   cur = cur || '';
   const isTodas = cur === 'TODAS';
-  const set = new Set(isTodas ? [] : cur.split(',').map(s => s.trim().toUpperCase()).filter(Boolean));
-  const cnt = isTodas ? FCA_UNITS.length : set.size;
+  const set = new Set(isTodas ? FCA_UNITS : cur.split(',').map(s => s.trim().toUpperCase()).filter(Boolean));
+  const allChk = set.size === FCA_UNITS.length && FCA_UNITS.length > 0;
+  const cnt = set.size;
+  const sumVal = cnt === 0 ? '' : (allChk ? 'TODAS' : [...set].join(','));
   const opts = `<label class="farol-opt all-opt">
-      <input type="checkbox" class="f-all" ${isTodas ? 'checked' : ''} onchange="onFarolChange('${userId}','${nm}','all')"> Todas as unidades</label>` +
+      <input type="checkbox" class="f-all" ${allChk ? 'checked' : ''} onchange="onFarolChange('${userId}','${nm}','all')"> Todas as unidades</label>` +
     FCA_UNITS.map(c => `<label class="farol-opt">
-      <input type="checkbox" class="f-unit" value="${c}" ${set.has(c) ? 'checked' : ''} ${isTodas ? 'disabled' : ''} onchange="onFarolChange('${userId}','${nm}','unit')"> ${c}</label>`).join('');
+      <input type="checkbox" class="f-unit" value="${c}" ${set.has(c) ? 'checked' : ''} onchange="onFarolChange('${userId}','${nm}','unit')"> ${c}</label>`).join('');
   return `<div class="user-farol">
     <label>Recebe Farol:</label>
     <button type="button" class="farol-btn" onclick="toggleFarolPanel('${userId}')">
-      <span id="fsum-${userId}">${farolSummary(cur)}</span>
+      <span id="fsum-${userId}">${farolSummary(sumVal)}</span>
       <span class="fcnt" id="fcnt-${userId}" style="${cnt ? '' : 'display:none'}">${cnt}</span>
     </button>
     <div class="farol-panel" id="fpanel-${userId}">${opts}</div>
@@ -707,11 +709,11 @@ function onFarolChange(userId, nm, changed) {
   const panel = document.getElementById('fpanel-' + userId);
   const todas = panel.querySelector('.f-all');
   const units = [...panel.querySelectorAll('.f-unit')];
-  if (changed === 'all' && todas.checked) units.forEach(u => u.checked = false);
-  if (changed === 'unit' && units.some(u => u.checked)) todas.checked = false;
-  units.forEach(u => u.disabled = todas.checked);
-  const val = todas.checked ? 'TODAS' : units.filter(u => u.checked).map(u => u.value).join(',');
-  const cnt = todas.checked ? FCA_UNITS.length : units.filter(u => u.checked).length;
+  if (changed === 'all') units.forEach(u => u.checked = todas.checked);
+  else todas.checked = units.every(u => u.checked);
+  const checked = units.filter(u => u.checked).map(u => u.value);
+  const cnt = checked.length;
+  const val = cnt === 0 ? '' : (cnt === units.length ? 'TODAS' : checked.join(','));
   document.getElementById('fsum-' + userId).textContent = farolSummary(val);
   const badge = document.getElementById('fcnt-' + userId);
   badge.textContent = cnt; badge.style.display = cnt ? '' : 'none';
@@ -724,7 +726,11 @@ async function setUserFarol(userId, value, nome) {
     const { error } = await sb.from('fca_profiles').upsert(row, { onConflict: 'user_id' });
     if (error) throw error;
     _fcaProf[userId] = { ..._fcaProf[userId], ...row };
-  } catch (e) { alert('Erro ao salvar Recebe Farol: ' + (e.message || e)); }
+  } catch (e) {
+    const m = e.message || String(e);
+    if (/farol_unidades/.test(m)) alert('Para usar o campo "Recebe Farol", rode antes o script scripts/farol-acessos.sql no Supabase (SQL Editor). A coluna ainda não existe no banco.');
+    else alert('Erro ao salvar Recebe Farol: ' + m);
+  }
 }
 
 async function loadAdminBadge() {
