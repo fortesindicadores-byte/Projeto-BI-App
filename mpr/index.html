@@ -347,6 +347,26 @@ function acumGeo(ind,units,ts){
   if(!vals.length&&!pts.length)return null;
   return {num:vals.length?avg(vals):null, pts:pts.length?avg(pts):null};
 }
+// ── linhas SEPARADAS por tier (não mistura tiers de uma mesma unidade) ──
+function tierLabel(t){const T=String(t||'').toUpperCase().replace(/\s+/g,' ').trim();
+  if(T==='TRANSPORTES T1')return 'T1 TRANSP.';if(T==='TRANSPORTES T2')return 'T2 TRANSP.';
+  if(T==='WH T1')return 'T1 WH';if(T==='WH T2')return 'T2 WH';return t;}
+// tiers em que a unidade tem esse indicador (na ordem canônica), respeitando o filtro de tier
+function tiersOf(ind,uni,ts){const o=MODEL[ind]&&MODEL[ind][uni];if(!o)return [];return TIERS.filter(t=>o[t]&&inTier(t,ts));}
+// valor de um mês para (unidade + tier específico), sem média entre tiers
+function unitTierMonth(ind,uni,tier,m){
+  const c=MODEL[ind]&&MODEL[ind][uni]&&MODEL[ind][uni][tier]&&MODEL[ind][uni][tier][m];
+  if(!c||!c.q2)return null;const n=toNum(c.q2.raw);
+  if(n==null&&c.q2.pts==null)return null;
+  return {num:n, pts:c.q2.pts};
+}
+// YTD acumulado de (unidade + tier específico) direto da aba Acum
+function acumUnitTier(ind,uni,tier){
+  const c=ACUM[ind]&&ACUM[ind][uni]&&ACUM[ind][uni][tier];
+  if(!c)return null;const n=toNum(c.raw);
+  if(n==null&&c.pts==null)return null;
+  return {num:n, pts:c.pts};
+}
 
 // ── persistência local (campos livres + plan) ──
 function lget(k){try{return localStorage.getItem(k)||'';}catch(e){return '';}}
@@ -442,7 +462,11 @@ function render(){
       const us=geoUnits[g];
       h+=group(ind,g,'GEO:'+g,true,(m)=>geoMonth(ind,us,m,ts),()=>acumGeo(ind,us,ts));
       if(EXPANDED.has(ind+'||'+g)){
-        us.forEach(u=>{ h+=group(ind,u,u,false,(m)=>unitMonth(ind,u,m,ts),()=>acumUnit(ind,u,ts)); });
+        us.forEach(u=>{
+          tiersOf(ind,u,ts).forEach(t=>{
+            h+=group(ind, u+' · '+tierLabel(t), u+'|'+t, false, (m)=>unitTierMonth(ind,u,t,m), ()=>acumUnitTier(ind,u,t));
+          });
+        });
       }
     });
   });
