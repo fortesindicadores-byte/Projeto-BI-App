@@ -130,6 +130,7 @@ body.light-mode .cell.v-red{color:#cc0000;}
     <a href="../" class="back-btn" title="Voltar ao Hub"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg></a>
     <button class="theme-btn" id="themeBtn" title="Modo claro/escuro"></button>
     <button class="refresh-btn" onclick="atualizar()" title="Atualizar"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/></svg></button>
+    <button class="refresh-btn" onclick="exportExcel()" title="Exportar para Excel"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="13" x2="15" y2="19"/><line x1="15" y1="13" x2="9" y2="19"/></svg></button>
     <span class="status-badge" id="status-badge">Carregando…</span>
   </div>
   <div class="header-filters">
@@ -541,6 +542,38 @@ function render(){
   document.getElementById('tbl').innerHTML=any?h:'<div class="loading">Nenhum dado para os filtros selecionados.</div>';
 }
 function toggleGeo(ind,geo){const id=ind+'||'+geo;if(EXPANDED.has(id))EXPANDED.delete(id);else EXPANDED.add(id);render();}
+
+// ── exportar para Excel (.xls via HTML) — mesmas colunas do painel, respeita os filtros ──
+function exportExcel(){
+  if(!INDS.length){alert('Sem dados para exportar. Aguarde carregar.');return;}
+  const kpiSel=new Set(getMsValues('ms-kpi')), geoSel=new Set(getMsValues('ms-geo')), tierSel=getMsValues('ms-tier');
+  const ts=tierSel.length?new Set(tierSel):null;
+  const inds=INDS.filter(i=>!kpiSel.size||kpiSel.has(indShort(i)));
+  const vc=(c,kind)=>c&&c.num!=null?esc(fmtKind(c.num,kind)):'';
+  let body='';
+  inds.forEach(ind=>{
+    const kind=fmtOf(ind), meta=metaFor(ind)||'';
+    const geos=Object.keys(GEOS).sort().filter(g=>(!geoSel.size||geoSel.has(g))&&GEOS[g].some(u=>unitHasInd(ind,u,ts)));
+    if(!geos.length)return;
+    geos.forEach(g=>{
+      const us=GEOS[g].filter(u=>unitHasInd(ind,u,ts));
+      const gy=acumGeo(ind,us,ts), gm=[];for(let m=1;m<=12;m++)gm.push(geoMonth(ind,us,m,ts));
+      body+=`<tr><td>${esc(indShort(ind))}</td><td><b>GEO ${esc(g)}</b></td><td>${esc(meta)}</td><td>${gy&&gy.num!=null?esc(fmtKind(gy.num,kind)):''}</td>${gm.map(c=>`<td>${vc(c,kind)}</td>`).join('')}<td></td><td></td><td></td><td></td></tr>`;
+      us.forEach(u=>tiersOf(ind,u,ts).forEach(t=>{
+        const uk=u+'|'+t, yy=acumUnitTier(ind,u,t), mm=[];for(let m=1;m<=12;m++)mm.push(unitTierMonth(ind,u,t,m));
+        body+=`<tr><td>${esc(indShort(ind))}</td><td>${esc(u+' · '+tierLabel(t))}</td><td>${esc(meta)}</td><td>${yy&&yy.num!=null?esc(fmtKind(yy.num,kind)):''}</td>${mm.map(c=>`<td>${vc(c,kind)}</td>`).join('')}<td>${esc(getFld(ind,uk,'causa'))}</td><td>${esc(getFld(ind,uk,'acao'))}</td><td>${esc(getFld(ind,uk,'resp'))}</td><td>${esc(getFld(ind,uk,'prazo'))}</td></tr>`;
+      }));
+    });
+  });
+  if(!body){alert('Nada para exportar com os filtros atuais.');return;}
+  const head=`<tr><th>Indicador</th><th>Unidade / GEO</th><th>Plan</th><th>YTD</th>${MESES.map(m=>`<th>${m}</th>`).join('')}<th>Causa</th><th>Ação</th><th>Responsável</th><th>Prazo</th></tr>`;
+  const html='<html xmlns:x="urn:schemas-microsoft-com:office:excel"><head><meta charset="utf-8"><style>table{border-collapse:collapse;}td,th{border:1px solid #B0B0B0;padding:4px 7px;font-family:Calibri,Arial;font-size:11px;mso-number-format:"\\@";vertical-align:top;}th{background:#F97316;color:#fff;font-weight:bold;text-align:center;}</style></head><body><table>'+head+body+'</table></body></html>';
+  const now=new Date(), stamp=now.getFullYear()+String(now.getMonth()+1).padStart(2,'0')+String(now.getDate()).padStart(2,'0');
+  const a=document.createElement('a');
+  a.href='data:application/vnd.ms-excel;charset=utf-8,'+encodeURIComponent('﻿'+html);
+  a.download='MPR_'+stamp+'.xls';
+  document.body.appendChild(a);a.click();document.body.removeChild(a);
+}
 
 // ── tema ──
 const _sun=`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>`;
