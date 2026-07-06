@@ -395,7 +395,9 @@ const vq=v=>+(String(v).split('_')[1])||0;
 const monthLabel=mm=>`${_VIG_MESES[+mm]||mm}/2026`;
 
 // ════════ ESTADO ════════
-let allRows=[], EFFROWS=[], chLine=null, activeInd='__total__';
+let allRows=[], EFFROWS=[], ACUMROWS=[], chLine=null, activeInd='__total__';
+// abas de acumulado do ano (mesma estrutura das quinzenais, M_Q = ACUM)
+const ACUM_TIERS=TIERS.map(t=>t+' - Acum');
 // Linha efetiva por (tier|unidade|mês) = a Q2 (mês fechado); se não houver Q2, a Q1. Rege hero/cards/ranking.
 function buildEffective(){
   const best={};
@@ -482,6 +484,35 @@ function fetchTier(tier){
 // tenta de novo se a aba voltar vazia (gviz às vezes falha/timeout)
 async function fetchTierRetry(tier,tries){ for(let i=0;i<(tries||2);i++){ const r=await fetchTier(tier); if(r&&r.length) return r; } return []; }
 
+// Busca a aba de ACUMULADO ("<tier> - Acum") — mesma estrutura, mas 1 linha por unidade (M_Q=ACUM).
+// A linha é marcada com o tier BASE, p/ casar com os filtros de Tier.
+function fetchTierAcum(baseTier){
+  return new Promise((resolve)=>{
+    const fn='gv_'+Math.random().toString(36).slice(2);
+    const s=document.createElement('script');
+    const url=`https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?sheet=${encodeURIComponent(baseTier+' - Acum')}&tqx=out:json;responseHandler:${fn}`;
+    let done=false;
+    window[fn]=resp=>{ done=true;
+      try{
+        const rows=(resp.table.rows||[]).map(r=>r.c.map(c=>c&&c.v!=null?c.v:null));
+        const out=[];
+        rows.forEach(r=>{
+          const uni=r[COL.uni], total=r[COL.total];
+          if(uni==null) return;
+          if(total==null||isNaN(+total)) return;   // pula as linhas de cabeçalho (total não numérico)
+          out.push({tier:baseTier, raw:r, _month:'ACUM'});
+        });
+        resolve(out);
+      }catch(e){ resolve([]); }
+      delete window[fn]; s.remove();
+    };
+    s.onerror=()=>{ if(!done){resolve([]); delete window[fn]; s.remove();} };
+    s.src=url; document.head.appendChild(s);
+    setTimeout(()=>{ if(!done){resolve([]); try{delete window[fn];s.remove();}catch(e){}} },10000);
+  });
+}
+async function fetchTierAcumRetry(baseTier,tries){ for(let i=0;i<(tries||2);i++){ const r=await fetchTierAcum(baseTier); if(r&&r.length) return r; } return []; }
+
 const CACHE_KEY='bi_cache_termometro_v1';
 function renderTudo(){ buildEffective(); computeMaxTotal(); buildFilters(); renderRegras(); applyFilters(); }
 
@@ -490,17 +521,17 @@ async function atualizar(){
   let temCache=false;
   try{
     const c=JSON.parse(localStorage.getItem(CACHE_KEY)||'null');
-    if(c&&c.rows&&c.rows.length){ allRows=c.rows; if(c.reg)REGRAS_ROWS=c.reg; renderTudo(); temCache=true; set('status-badge','Atualizando…'); }
+    if(c&&c.rows&&c.rows.length){ allRows=c.rows; if(c.acum)ACUMROWS=c.acum; if(c.reg)REGRAS_ROWS=c.reg; renderTudo(); temCache=true; set('status-badge','Atualizando…'); }
   }catch(e){}
   if(!temCache) set('status-badge','Carregando…');
   // 2) busca fresca (com retry); só substitui se vier dado de verdade
   try{
-    const [parts,reg]=await Promise.all([Promise.all(TIERS.map(t=>fetchTierRetry(t,2))),fetchRegras()]);
-    const rows=parts.flat();
+    const [parts,acumParts,reg]=await Promise.all([Promise.all(TIERS.map(t=>fetchTierRetry(t,2))),Promise.all(TIERS.map(t=>fetchTierAcumRetry(t,2))),fetchRegras()]);
+    const rows=parts.flat(); const acum=acumParts.flat();
     if(rows.length){
-      allRows=rows; if(reg) REGRAS_ROWS=reg;
+      allRows=rows; ACUMROWS=acum; if(reg) REGRAS_ROWS=reg;
       renderTudo();
-      try{ localStorage.setItem(CACHE_KEY,JSON.stringify({t:Date.now(),rows,reg:REGRAS_ROWS})); }catch(e){}
+      try{ localStorage.setItem(CACHE_KEY,JSON.stringify({t:Date.now(),rows,acum,reg:REGRAS_ROWS})); }catch(e){}
       const now=new Date();
       set('status-badge',`Atualizado ${now.toLocaleDateString('pt-BR')} ${now.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})}`);
     } else {
@@ -525,7 +556,16 @@ function buildFilters(){
   _buildMs(document.getElementById('ms-geo'),geos);
 }
 function selOrAll(id,all){const s=getMs(id);return s.length?new Set(s):new Set(all);}
+// "Ano todo" = filtro de Vigência em "Todas" (nada marcado) E há dados de acumulado carregados.
+function isAnoTodo(){ return getMs('ms-vig').length===0 && ACUMROWS.length>0; }
 function getFiltered(){
+  // Ano todo → hero/cards/ranking vêm das abas ACUM (número fechado do ano, sem ser média das quinzenas)
+  if(isAnoTodo()){
+    const fU=selOrAll('ms-uni',uniq(ACUMROWS.map(r=>r.raw[COL.uni])));
+    const fT=selOrAll('ms-tier',TIERS);
+    const fG=selOrAll('ms-geo',uniq(ACUMROWS.map(r=>r.raw[COL.geo])));
+    return ACUMROWS.filter(r=>fU.has(r.raw[COL.uni])&&fT.has(r.tier)&&fG.has(r.raw[COL.geo]));
+  }
   // hero/cards/ranking usam a LINHA EFETIVA (Q2 do mês, ou Q1 se não houver), filtrada por MÊS
   const fU=selOrAll('ms-uni',uniq(EFFROWS.map(r=>r.raw[COL.uni])));
   const fT=selOrAll('ms-tier',TIERS);
