@@ -333,8 +333,11 @@ function buildAcum(rows){
 }
 function acumUnit(ind,uni,ts){
   const o=ACUM[ind]&&ACUM[ind][uni];if(!o)return null;
+  // usa SÓ os tiers em que a unidade tem esse indicador no dado quinzenal (alinha o YTD com as colunas de mês;
+  // evita misturar um tier que só existe na aba Acum e puxa a média p/ baixo)
+  const mo=MODEL[ind]&&MODEL[ind][uni];
   const vals=[],pts=[];
-  Object.keys(o).forEach(t=>{if(!inTier(t,ts))return;const c=o[t];if(c){const n=toNum(c.raw);if(n!=null)vals.push(n);if(c.pts!=null)pts.push(c.pts);}});
+  Object.keys(o).forEach(t=>{if(!inTier(t,ts))return;if(mo&&!mo[t])return;const c=o[t];if(c){const n=toNum(c.raw);if(n!=null)vals.push(n);if(c.pts!=null)pts.push(c.pts);}});
   if(!vals.length&&!pts.length)return null;
   return {num:vals.length?avg(vals):null, pts:pts.length?avg(pts):null};
 }
