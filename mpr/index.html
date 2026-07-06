@@ -255,6 +255,9 @@ function fmtKind(num,kind){if(num==null||!isFinite(num))return '—';
 // formato por indicador (regra do termômetro): % / contagem / duração
 const FORMAT={'ADERÊNCIA PREVENTIVA':'pct','ADERÊNCIA CHECK DE CONFORMIDADE':'pct','MILIMETRAGEM PNEU':'pct','BLITZ DE SEGURANÇA':'pct','ADERÊNCIA CHECKLIST':'pct','STRESS TEST':'pct','INDISP. MANUTENÇÃO':'pct','DISPONIBILIDADE CONTRATADA':'pct','ORDENS DE SERVIÇO VENCIDAS':'num','MTTR':'dur','MTBF':'dur'};
 const fmtOf=ind=>FORMAT[canonInd(ind)]||INDKIND[ind]||'num';
+// valor da célula já NORMALIZADO por indicador: % vira sempre fração (0–1), p/ não misturar
+// escala (100 vs 1,0) ao tirar médias de GEO/unidade. Duração e contagem passam direto.
+function cellNum(ind,raw){let n=toNum(raw);if(n==null)return null;if(fmtOf(ind)==='pct'&&n>1.5)n=n/100;return n;}
 function bandPts(pts){if(pts==null||!isFinite(pts))return 'v-na';return pts>=10?'v-green':(pts>=5?'v-amber':'v-red');}
 // COR pelas REGRAS do indicador (aba Regras do termômetro), aplicadas ao VALOR. dir '+' = maior melhor, '-' = menor melhor.
 const CRULE={
@@ -308,7 +311,7 @@ function unitHasInd(ind,uni,ts){const o=MODEL[ind]&&MODEL[ind][uni];return !!o&&
 function unitMonth(ind,uni,m,ts){
   const o=MODEL[ind]&&MODEL[ind][uni];if(!o)return null;
   const vals=[],pts=[];
-  Object.keys(o).forEach(t=>{if(!inTier(t,ts))return;const c=o[t][m];if(c&&c.q2){const n=toNum(c.q2.raw);if(n!=null)vals.push(n);if(c.q2.pts!=null)pts.push(c.q2.pts);}});
+  Object.keys(o).forEach(t=>{if(!inTier(t,ts))return;const c=o[t][m];if(c&&c.q2){const n=cellNum(ind,c.q2.raw);if(n!=null)vals.push(n);if(c.q2.pts!=null)pts.push(c.q2.pts);}});
   if(!vals.length&&!pts.length)return null;
   return {num:vals.length?avg(vals):null, pts:pts.length?avg(pts):null};
 }
@@ -341,7 +344,7 @@ function acumUnit(ind,uni,ts){
   // evita misturar um tier que só existe na aba Acum e puxa a média p/ baixo)
   const mo=MODEL[ind]&&MODEL[ind][uni];
   const vals=[],pts=[];
-  Object.keys(o).forEach(t=>{if(!inTier(t,ts))return;if(mo&&!mo[t])return;const c=o[t];if(c){const n=toNum(c.raw);if(n!=null)vals.push(n);if(c.pts!=null)pts.push(c.pts);}});
+  Object.keys(o).forEach(t=>{if(!inTier(t,ts))return;if(mo&&!mo[t])return;const c=o[t];if(c){const n=cellNum(ind,c.raw);if(n!=null)vals.push(n);if(c.pts!=null)pts.push(c.pts);}});
   if(!vals.length&&!pts.length)return null;
   return {num:vals.length?avg(vals):null, pts:pts.length?avg(pts):null};
 }
@@ -360,14 +363,14 @@ function tiersOf(ind,uni,ts){const o=MODEL[ind]&&MODEL[ind][uni];if(!o)return []
 // valor de um mês para (unidade + tier específico), sem média entre tiers
 function unitTierMonth(ind,uni,tier,m){
   const c=MODEL[ind]&&MODEL[ind][uni]&&MODEL[ind][uni][tier]&&MODEL[ind][uni][tier][m];
-  if(!c||!c.q2)return null;const n=toNum(c.q2.raw);
+  if(!c||!c.q2)return null;const n=cellNum(ind,c.q2.raw);
   if(n==null&&c.q2.pts==null)return null;
   return {num:n, pts:c.q2.pts};
 }
 // YTD acumulado de (unidade + tier específico) direto da aba Acum
 function acumUnitTier(ind,uni,tier){
   const c=ACUM[ind]&&ACUM[ind][uni]&&ACUM[ind][uni][tier];
-  if(!c)return null;const n=toNum(c.raw);
+  if(!c)return null;const n=cellNum(ind,c.raw);
   if(n==null&&c.pts==null)return null;
   return {num:n, pts:c.pts};
 }
