@@ -205,8 +205,32 @@ function fetchTier(tier){
   });
 }
 
+// busca a aba de acumulado "<tier> - Acum" (1 linha por unidade, M_Q=ACUM), marcada com o tier base
+function fetchTierAcum(baseTier){
+  return new Promise(resolve=>{
+    const fn='gv_'+Math.random().toString(36).slice(2);
+    const s=document.createElement('script');
+    const url=`https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?sheet=${encodeURIComponent(baseTier+' - Acum')}&tqx=out:json;responseHandler:${fn}`;
+    let done=false;
+    window[fn]=resp=>{done=true;try{
+      const rows=(resp.table.rows||[]).map(r=>r.c.map(c=>c&&c.v!=null?c.v:null));
+      const out=[];
+      rows.forEach(r=>{const uni=r[COL.uni],total=r[COL.total];
+        if(uni==null)return;
+        if(total==null||isNaN(+total))return;   // pula cabeçalhos
+        out.push({tier:baseTier,raw:r});});
+      resolve(out);
+    }catch(e){resolve([]);}delete window[fn];s.remove();};
+    s.onerror=()=>{if(!done){resolve([]);delete window[fn];s.remove();}};
+    s.src=url;document.head.appendChild(s);
+    setTimeout(()=>{if(!done){resolve([]);try{delete window[fn];s.remove();}catch(e){}}},15000);
+  });
+}
+
 // ── modelo: indicador → unidade → mês → {raw, pts} (última quinzena do mês) ──
 let MODEL={}, UNITS=[], INDS=[], GEOS={}, GEO_OF={}, INDKIND={}, UNIT_TIERS={};
+let ACUM={};   // acumulado do ano (abas "<tier> - Acum"): ind -> uni -> tier -> {raw,pts}
+const ACUM_TIERS=TIERS.map(t=>t+' - Acum');
 function kindOf(raw){if(raw==null||raw==='')return null;if(raw instanceof Date)return 'dur';if(typeof raw==='string'&&/^Date\(/.test(raw))return 'dur';if(typeof raw==='number'&&raw>0&&raw<=1.0001)return 'pct';return 'num';}
 function toNum(v){if(v==null||v==='')return null;
   if(v instanceof Date)return v.getHours()+v.getMinutes()/60+v.getSeconds()/3600;
@@ -292,6 +316,35 @@ function geoMonth(ind,units,m,ts){
 }
 function avg(a){const v=a.filter(x=>x!=null&&isFinite(x));return v.length?v.reduce((s,x)=>s+x,0)/v.length:null;}
 
+// ── acumulado do ano (abas Acum) → alimenta a coluna YTD ──
+function buildAcum(rows){
+  ACUM={};
+  rows.forEach(r=>{
+    const uni=r.raw[COL.uni], tier=r.tier, names=indNames(tier);
+    names.forEach((nm,i)=>{
+      const ind=canonInd(nm);
+      const raw=r.raw[IND_PAIRS[i][0]]; let pts=r.raw[IND_PAIRS[i][1]];
+      pts=(pts==null||isNaN(+pts))?null:+pts;
+      if(raw==null&&pts==null)return;
+      ACUM[ind]=ACUM[ind]||{};ACUM[ind][uni]=ACUM[ind][uni]||{};
+      ACUM[ind][uni][tier]={raw,pts};
+    });
+  });
+}
+function acumUnit(ind,uni,ts){
+  const o=ACUM[ind]&&ACUM[ind][uni];if(!o)return null;
+  const vals=[],pts=[];
+  Object.keys(o).forEach(t=>{if(!inTier(t,ts))return;const c=o[t];if(c){const n=toNum(c.raw);if(n!=null)vals.push(n);if(c.pts!=null)pts.push(c.pts);}});
+  if(!vals.length&&!pts.length)return null;
+  return {num:vals.length?avg(vals):null, pts:pts.length?avg(pts):null};
+}
+function acumGeo(ind,units,ts){
+  const vals=[],pts=[];
+  units.forEach(u=>{const c=acumUnit(ind,u,ts);if(c){if(c.num!=null)vals.push(c.num);if(c.pts!=null)pts.push(c.pts);}});
+  if(!vals.length&&!pts.length)return null;
+  return {num:vals.length?avg(vals):null, pts:pts.length?avg(pts):null};
+}
+
 // ── persistência local (campos livres + plan) ──
 function lget(k){try{return localStorage.getItem(k)||'';}catch(e){return '';}}
 function lset(k,v){try{localStorage.setItem(k,v);}catch(e){}}
@@ -333,7 +386,7 @@ function headerRow(){
 }
 function dashCells(n){let h='';for(let i=0;i<n;i++)h+='<td class="vc'+(i===0?' vc-first':'')+(i===n-1?' vc-last':'')+'"><span class="cell dash">—</span></td>';return h;}
 
-function group(ind,label,unitKey,isGeo,monthsFn){
+function group(ind,label,unitKey,isGeo,monthsFn,acumFn){
   const kind=fmtOf(ind);
   const tog=isGeo?`<span class="toggle">${EXPANDED.has(ind+'||'+label)?'−':'+'}</span>`:'';
   const cls=isGeo?'uni-cell geo':'uni-cell unit';
@@ -341,7 +394,9 @@ function group(ind,label,unitKey,isGeo,monthsFn){
   // séries do mês
   const cells2026=[],ptsArr=[],numArr=[];
   for(let m=1;m<=12;m++){const c=monthsFn(m);const num=c?c.num:null;const pts=c?c.pts:null;cells2026.push({num,pts});if(num!=null)numArr.push(num);if(pts!=null)ptsArr.push(pts);}
-  const ytdNum=avg(numArr), ytdPts=avg(ptsArr);
+  // YTD vem do ACUMULADO do ano (abas "<tier> - Acum"), não da média dos meses
+  const ytd=acumFn?acumFn():null;
+  const ytdNum=ytd?ytd.num:null, ytdPts=ytd?ytd.pts:null;
   const meta=metaFor(ind);
   const planCell=meta?`<span class="plan-val">${meta}</span>`:`<span class="cell dash">—</span>`;
   const ie=ind.replace(/'/g,"\\'");
@@ -382,9 +437,9 @@ function render(){
     h+=headerRow();
     geos.forEach(g=>{
       const us=geoUnits[g];
-      h+=group(ind,g,'GEO:'+g,true,(m)=>geoMonth(ind,us,m,ts));
+      h+=group(ind,g,'GEO:'+g,true,(m)=>geoMonth(ind,us,m,ts),()=>acumGeo(ind,us,ts));
       if(EXPANDED.has(ind+'||'+g)){
-        us.forEach(u=>{ h+=group(ind,u,u,false,(m)=>unitMonth(ind,u,m,ts)); });
+        us.forEach(u=>{ h+=group(ind,u,u,false,(m)=>unitMonth(ind,u,m,ts),()=>acumUnit(ind,u,ts)); });
       }
     });
   });
@@ -404,10 +459,11 @@ document.getElementById('themeBtn').addEventListener('click',()=>applyTheme(docu
 async function atualizar(){
   document.getElementById('status-badge').textContent='Carregando…';
   try{
-    const parts=await Promise.all(TIERS.map(fetchTier));
+    const [parts,acumParts]=await Promise.all([Promise.all(TIERS.map(fetchTier)),Promise.all(TIERS.map(fetchTierAcum))]);
     const rows=parts.flat();
     if(!rows.length){document.getElementById('tbl').innerHTML='<div class="loading">Sem dados — verifique a planilha do termômetro.</div>';document.getElementById('status-badge').textContent='Sem dados';return;}
     build(rows);
+    buildAcum(acumParts.flat());
     buildMs('ms-tier',TIERS.filter(t=>rows.some(r=>r.tier===t)));
     buildMs('ms-kpi',INDS.map(indShort));
     buildMs('ms-geo',Object.keys(GEOS).sort());
