@@ -358,8 +358,13 @@ function acumGeo(ind,units,ts){
 function tierLabel(t){const T=String(t||'').toUpperCase().replace(/\s+/g,' ').trim();
   if(T==='TRANSPORTES T1')return 'T1 TRANSP.';if(T==='TRANSPORTES T2')return 'T2 TRANSP.';
   if(T==='WH T1')return 'T1 WH';if(T==='WH T2')return 'T2 WH';return t;}
-// tiers em que a unidade tem esse indicador (na ordem canônica), respeitando o filtro de tier
-function tiersOf(ind,uni,ts){const o=MODEL[ind]&&MODEL[ind][uni];if(!o)return [];return TIERS.filter(t=>o[t]&&inTier(t,ts));}
+// tiers da unidade em que o indicador se aplica (mostra a linha mesmo se o mês vier vazio "—";
+// ex.: Stress Test aparece no T2 TRANSP e no T2 WH se a unidade opera nos dois tiers)
+function tiersOf(ind,uni,ts){
+  const set=UNIT_TIERS[uni];if(!set)return [];
+  const cn=canonInd(ind);
+  return TIERS.filter(t=>set.has(t)&&inTier(t,ts)&&indNames(t).some(n=>canonInd(n)===cn));
+}
 // valor de um mês para (unidade + tier específico), sem média entre tiers
 function unitTierMonth(ind,uni,tier,m){
   const c=MODEL[ind]&&MODEL[ind][uni]&&MODEL[ind][uni][tier]&&MODEL[ind][uni][tier][m];
