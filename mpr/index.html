@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>MPR — Monthly Performance Review</title>
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
 :root{--bg:#0C1017;--card:#141B26;--card2:#1A2335;--border:#1E2D40;--orange:#F97316;--blue:#38BDF8;--text:#F1F5F9;--text2:#94A3B8;--text3:#475569;--green:#3BB33B;--red:#FF6666;--grid:rgba(255,255,255,.10);}
 *{box-sizing:border-box;margin:0;padding:0;}
@@ -147,6 +148,11 @@ body.light-mode .cell.v-red{color:#cc0000;}
 
 <script>
 const SHEET_ID='10LRn3jrXEemqFiFAMbO8_bOLk98xrWTVXVUNDeQqLac';
+// Supabase (mesmo do hub/FCA) — campos Causa/Ação/Resp/Prazo COMPARTILHADOS
+const SUPABASE_URL='https://lozwipoeacpvplgkrxkq.supabase.co';
+const SUPABASE_KEY='sb_publishable_ggKEEebc5zjgQDVsF92Upw_6uoLmKe9';
+let SB=null, SB_USER=null;
+try{ SB=supabase.createClient(SUPABASE_URL,SUPABASE_KEY); }catch(e){ SB=null; }
 const TIERS=['Transportes T1','Transportes T2','WH T1','WH T2'];
 const COL={vig:0, uni:1, geo:3, total:4, rank:5};
 const IND_PAIRS=[[8,9],[10,11],[12,13],[14,15],[16,17],[18,19],[20,21],[22,23],[24,25]];
@@ -385,6 +391,54 @@ function lget(k){try{return localStorage.getItem(k)||'';}catch(e){return '';}}
 function lset(k,v){try{localStorage.setItem(k,v);}catch(e){}}
 const fkey=(ind,uni,f)=>'mpr|'+ind+'|'+uni+'|'+f;
 
+// ── campos livres COMPARTILHADOS (Supabase) — Causa/Ação/Responsável/Prazo ──
+let MFIELDS={};                       // "ind||uni" -> {causa,acao,resp,prazo}
+const mfk=(ind,uni)=>ind+'||'+uni;
+function getFld(ind,uni,f){
+  const r=MFIELDS[mfk(ind,uni)];
+  if(r&&r[f]!=null&&r[f]!=='') return r[f];
+  return lget(fkey(ind,uni,f));       // fallback local (offline / não logado)
+}
+const _saveT={};
+function saveFld(ind,uni,f,v){
+  const k=mfk(ind,uni); (MFIELDS[k]=MFIELDS[k]||{})[f]=v;
+  lset(fkey(ind,uni,f),v);            // backup local sempre
+  if(!SB||!SB_USER) return;           // sem login: só local
+  clearTimeout(_saveT[k+'|'+f]);
+  _saveT[k+'|'+f]=setTimeout(()=>{
+    const row={ind,uni,updated_by:SB_USER,updated_at:new Date().toISOString()}; row[f]=v;
+    SB.from('mpr_fields').upsert(row,{onConflict:'ind,uni'}).then(({error})=>{ if(error) console.error('MPR salvar',error.message||error); });
+  },600);
+}
+async function loadFields(){
+  if(!SB) return;
+  try{
+    const {data:{session}}=await SB.auth.getSession();
+    SB_USER = session? session.user.id : null;
+    if(!session) return;              // não logado → usa localStorage
+    const {data,error}=await SB.from('mpr_fields').select('ind,uni,causa,acao,resp,prazo');
+    if(error){ if(/mpr_fields|schema cache|does not exist/i.test(error.message||'')) window._mprNoTbl=true; return; }
+    MFIELDS={}; (data||[]).forEach(r=>{ MFIELDS[mfk(r.ind,r.uni)]={causa:r.causa||'',acao:r.acao||'',resp:r.resp||'',prazo:r.prazo||''}; });
+    await migrateLocal();             // sobe o que só existe no navegador (1ª vez)
+  }catch(e){ console.error(e); }
+}
+async function migrateLocal(){
+  if(!SB_USER) return;
+  const ups={};
+  for(let i=0;i<localStorage.length;i++){
+    const k=localStorage.key(i); if(!k||k.indexOf('mpr|')!==0) continue;
+    const p=k.split('|'); if(p.length<4) continue;
+    const ind=p[1], f=p[p.length-1], uni=p.slice(2,-1).join('|');
+    if(['causa','acao','resp','prazo'].indexOf(f)<0) continue;
+    const v=localStorage.getItem(k); if(!v) continue;
+    const cur=MFIELDS[mfk(ind,uni)]; if(cur&&cur[f]) continue;   // já existe no Supabase → não sobrescreve
+    const rk=mfk(ind,uni); (ups[rk]=ups[rk]||{ind,uni,updated_by:SB_USER})[f]=v;
+    (MFIELDS[rk]=MFIELDS[rk]||{})[f]=v;
+  }
+  const rows=Object.values(ups); if(!rows.length) return;
+  try{ await SB.from('mpr_fields').upsert(rows,{onConflict:'ind,uni'}); }catch(e){ console.error(e); }
+}
+
 // ── filtros ──
 let EXPANDED=new Set();
 function getMsValues(id){const w=document.getElementById(id);return w&&w._sel?[...w._sel]:[];}
@@ -435,6 +489,7 @@ function group(ind,label,unitKey,isGeo,monthsFn,acumFn){
   const meta=metaFor(ind);
   const planCell=meta?`<span class="plan-val">${meta}</span>`:`<span class="cell dash">—</span>`;
   const ie=ind.replace(/'/g,"\\'");
+  const uke=String(unitKey).replace(/'/g,"\\'");
   const disp=isGeo?('GEO '+label):label;
   let h='';
   // 2025 (vazio) — Unidade/Plan/campos livres em rowspan (2 linhas: 2025 e 2026); GEO inicia bloco (linha grossa)
@@ -442,10 +497,10 @@ function group(ind,label,unitKey,isGeo,monthsFn,acumFn){
     <td rowspan="2" class="${cls}" ${onclick}>${tog}${disp}</td>
     <td rowspan="2" class="plan-col">${planCell}</td>
     <td class="per vc">2025</td><td class="vc"><span class="cell dash">—</span></td>${dashCells(12)}
-    <td rowspan="2" class="fldc"><textarea class="fld" placeholder="Causa…" oninput="lset(fkey('${ie}','${unitKey}','causa'),this.value)">${lget(fkey(ind,unitKey,'causa'))}</textarea></td>
-    <td rowspan="2" class="fldc"><textarea class="fld" placeholder="Ação…" oninput="lset(fkey('${ie}','${unitKey}','acao'),this.value)">${lget(fkey(ind,unitKey,'acao'))}</textarea></td>
-    <td rowspan="2" class="smc"><input class="sml" placeholder="Responsável" value="${lget(fkey(ind,unitKey,'resp'))}" oninput="lset(fkey('${ie}','${unitKey}','resp'),this.value)"></td>
-    <td rowspan="2" class="smc"><input type="date" class="sml" value="${lget(fkey(ind,unitKey,'prazo'))}" onclick="this.showPicker&&this.showPicker()" onchange="lset(fkey('${ie}','${unitKey}','prazo'),this.value)"></td>
+    <td rowspan="2" class="fldc"><textarea class="fld" placeholder="Causa…" oninput="saveFld('${ie}','${uke}','causa',this.value)">${esc(getFld(ind,unitKey,'causa'))}</textarea></td>
+    <td rowspan="2" class="fldc"><textarea class="fld" placeholder="Ação…" oninput="saveFld('${ie}','${uke}','acao',this.value)">${esc(getFld(ind,unitKey,'acao'))}</textarea></td>
+    <td rowspan="2" class="smc"><input class="sml" placeholder="Responsável" value="${esc(getFld(ind,unitKey,'resp'))}" oninput="saveFld('${ie}','${uke}','resp',this.value)"></td>
+    <td rowspan="2" class="smc"><input type="date" class="sml" value="${esc(getFld(ind,unitKey,'prazo'))}" onclick="this.showPicker&&this.showPicker()" onchange="saveFld('${ie}','${uke}','prazo',this.value)"></td>
   </tr>`;
   // 2026 (resultado da Q2; cor na fonte pela pontuação do termômetro)
   h+=`<tr class="grp-end"><td class="per p2026 vc">2026</td><td class="vc">${valCard(ind,ytdNum,ytdPts,kind,'tot')}</td>`;
@@ -503,11 +558,13 @@ async function atualizar(){
     if(!rows.length){document.getElementById('tbl').innerHTML='<div class="loading">Sem dados — verifique a planilha do termômetro.</div>';document.getElementById('status-badge').textContent='Sem dados';return;}
     build(rows);
     buildAcum(acumParts.flat());
+    await loadFields();               // Causa/Ação/Resp/Prazo compartilhados (Supabase)
     buildMs('ms-tier',TIERS.filter(t=>rows.some(r=>r.tier===t)));
     buildMs('ms-kpi',INDS.map(indShort));
     buildMs('ms-geo',Object.keys(GEOS).sort());
     if(!EXPANDED.size&&INDS.length){Object.keys(GEOS).sort().forEach(g=>EXPANDED.add(INDS[0]+'||'+g));}  // abre o 1º KPI
     render();
+    if(window._mprNoTbl) document.getElementById('status-badge').textContent='⚠ Rode scripts/mpr-supabase.sql (campos ainda só locais)';
     const now=new Date();
     document.getElementById('status-badge').textContent='Atualizado '+now.toLocaleDateString('pt-BR')+' '+now.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
   }catch(e){console.error(e);document.getElementById('status-badge').textContent='Erro ao carregar';}
