@@ -157,8 +157,8 @@ function render(){
   const labels=[],data=[];
   for(let i=29;i>=0;i--){const d=new Date(hoje);d.setDate(d.getDate()-i);const k=diaKey(d);labels.push(d.getDate()+'/'+String(d.getMonth()+1).padStart(2,'0'));data.push(rows.filter(r=>r.dia===k).length);}
   if(chDia)chDia.destroy();
-  chDia=new Chart(document.getElementById('ch-dia'),{type:'bar',
-    data:{labels,datasets:[{label:'Acessos',data,backgroundColor:'rgba(249,115,22,.75)',borderColor:'#F97316',borderWidth:1,borderRadius:3,maxBarThickness:30}]},
+  chDia=new Chart(document.getElementById('ch-dia'),{type:'line',
+    data:{labels,datasets:[{label:'Acessos',data,borderColor:'#F97316',borderWidth:2,tension:.35,fill:true,backgroundColor:'rgba(249,115,22,.18)',pointStyle:'circle',pointRadius:3,pointHoverRadius:6,pointBackgroundColor:'#F97316',pointBorderColor:'#F97316'}]},
     options:{responsive:true,maintainAspectRatio:false,
       plugins:{legend:{display:false},tooltip:{backgroundColor:'#141B26',titleColor:'#F97316',bodyColor:'#F1F5F9',borderColor:'#1E2D40',borderWidth:1,titleFont:{family:'Montserrat'},bodyFont:{family:'Montserrat'}}},
       scales:{x:{grid:getGrid(),ticks:{...getTick(9),autoSkip:true,maxRotation:0}},y:{beginAtZero:true,grid:getGrid(),ticks:{...getTick(),precision:0}}}}});
@@ -205,7 +205,8 @@ async function initApp(){
     if(!data||data.length<STEP||all.length>=50000)break;
     from+=STEP;
   }
-  ROWS=all.map(r=>{const dt=new Date(r.created_at);return {email:r.email||'(sem e-mail)',painel:r.painel||'hub',dt,dia:diaKey(dt),mes:mesKey(dt)};});
+  // exclui o "Hub (entrada)" da contagem — é só a entrada no portal, não um painel
+  ROWS=all.map(r=>{const dt=new Date(r.created_at);return {email:r.email||'(sem e-mail)',painel:r.painel||'hub',dt,dia:diaKey(dt),mes:mesKey(dt)};}).filter(r=>r.painel!=='hub');
   shell();
   buildMs('ms-usr',[...new Set(ROWS.map(r=>r.email))].sort());
   buildMs('ms-pan',[...new Set(ROWS.map(r=>r.painel))].sort((a,b)=>nomePainel(a).localeCompare(nomePainel(b))),nomePainel);
