@@ -214,6 +214,7 @@ table.dre thead tr.cols th{
   background:var(--card);color:var(--text);font-size:12px;font-weight:700;
   padding:8px 8px 12px;border-bottom:1px solid rgba(255,255,255,.10);
   white-space:nowrap;text-transform:uppercase;letter-spacing:.5px;
+  vertical-align:bottom;
 }
 table.dre thead tr.cols th.num{text-align:right;}
 table.dre thead tr.cols th.w-conta{text-align:left;}
@@ -227,6 +228,13 @@ table.dre tr.total td{
   padding-top:14px;padding-bottom:8px;
 }
 table.dre tr.total td.conta{font-weight:800;}
+table.dre tr.ebitda-row td{
+  background:var(--card);color:var(--text);font-weight:800;font-size:13px;
+  padding-top:12px;padding-bottom:12px;
+  border-top:1px solid rgba(255,255,255,.10);
+}
+table.dre tr.ebitda-row td.conta{font-weight:800;}
+body.light-mode table.dre tr.ebitda-row td{background:#F0F0F0;}
 table.dre tr.ref-row td{border-bottom:1px solid rgba(255,255,255,.08);}
 table.dre tr.ref-row td.conta{color:var(--text2);font-weight:600;}
 table.dre td.imp-cell{font-size:14px;font-weight:800;padding-left:16px;padding-right:16px;}
@@ -676,6 +684,7 @@ body.light-mode table.dre tbody tr{border-bottom:1px solid rgba(0,0,0,.06);}
 // ═══════════════════════════════════
 const SHEET_ID  = '1qcTy2ppLCGBKKqZCxCYWCTL9kTAuWfHBMyBfWJOyih8';
 const SHEET_TAB = 'Consolidado DRE';
+const EBITDA_TAB = 'EBITDA';
 const C = { orc:0, rem:1, real:2, kmRem:5, kmReal:6, vig:9, uni:10, nv3:11, cta:12 };
 
 const PACOTES_MAP = {
@@ -908,6 +917,62 @@ async function fetchData(){
   const raw  = await res.text();
   const json = JSON.parse(raw.replace(/^[\s\S]*?\(/, '').replace(/\);?\s*$/, ''));
   return json.table.rows.map(r => r.c.map(c => c && c.v != null ? c.v : null));
+}
+
+// ═══════════════════════════════════
+// EBITDA (aba própria da mesma planilha)
+// ═══════════════════════════════════
+let EB = null;          // mapa de colunas {orc,rem,real,vig,nv3}
+let ebitdaRows = [];    // linhas de valores da aba EBITDA
+const _normEb = s => String(s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').trim();
+function ebIdx(header, ...names){
+  const nc = header.map(_normEb);
+  for(const n of names){ const nn=_normEb(n); const i=nc.indexOf(nn); if(i>=0) return i; }
+  for(const n of names){ const nn=_normEb(n); const i=nc.findIndex(c=>c.includes(nn)); if(i>=0) return i; }
+  return -1;
+}
+function setEbitda(header, rows){
+  ebitdaRows = rows || [];
+  const h = header || [];
+  EB = {
+    orc:  ebIdx(h,'orçado','orcado'),
+    rem:  ebIdx(h,'remunerado'),
+    real: ebIdx(h,'realizado'),
+    vig:  ebIdx(h,'vigência','vigencia'),
+    nv3:  ebIdx(h,'nível 3','nivel 3','nivel3'),
+    cta:  ebIdx(h,'conta gerencial','conta'),
+  };
+}
+async function fetchEbitda(){
+  const url = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:json&sheet=${encodeURIComponent(EBITDA_TAB)}`;
+  const res = await fetch(url);
+  const raw = await res.text();
+  const json = JSON.parse(raw.replace(/^[\s\S]*?\(/, '').replace(/\);?\s*$/, ''));
+  let header = (json.table.cols||[]).map(c => c && c.label ? c.label : '');
+  let rows   = json.table.rows.map(r => r.c.map(c => c && c.v != null ? c.v : null));
+  // se o gviz não reconheceu o cabeçalho, a 1ª linha de dados é o header
+  if(!header.some(x=>_normEb(x).includes('realizado')) && rows.length){
+    header = rows[0].map(x=>x==null?'':String(x)); rows = rows.slice(1);
+  }
+  return { header, rows };
+}
+// agrega EBITDA (orc/rem/real) respeitando ano/vig/uni/projeto do filtro ativo
+function aggEbitda(f){
+  if(!EB || EB.real<0 || !ebitdaRows.length) return null;
+  let o=0, rem=0, real=0, n=0;
+  ebitdaRows.forEach(r=>{
+    const d=parseVig(r[EB.vig]); if(!d) return;
+    if(EB.cta>=0 && !_normEb(r[EB.cta]).includes('ebitda')) return;
+    if(f&&f.ano&&f.ano.length>0 && !f.ano.includes(String(d.getFullYear()))) return;
+    if(f&&f.vig&&f.vig.length>0 && !f.vig.includes(vigKey(d))) return;
+    if(EB.nv3>=0){
+      if(f&&f.uni&&f.uni.length>0 && !f.uni.includes(getUniLabel(r[EB.nv3]))) return;
+      if(f&&f.nv3&&f.nv3.length>0 && !f.nv3.includes(getNv3Prefix(r[EB.nv3]))) return;
+    }
+    o+=+(r[EB.orc]||0); rem+=+(r[EB.rem]||0); real+=+(r[EB.real]||0); n++;
+  });
+  if(!n) return null;
+  return {orc:o, rem, real};
 }
 
 // ═══════════════════════════════════
@@ -1448,6 +1513,15 @@ function renderAnalise(rows, bodyId, vsOrc, dim){
   const totD=totRef-totReal, totAvRef=rlRef?(totRef/rlRef*100):0, totAvReal=rlReal?(totReal/rlReal*100):0;
   const totDPct=totRef?(totD/Math.abs(totRef)*100):null, totPp=totAvReal-totAvRef, totImp=totPp/100*rlReal, bTot=totD>0;
   html+=`<tr class="total"><td class="conta">Total</td><td class="num">${fmt(totRef)}</td><td class="num">${fmt(totReal)}</td><td class="num ${bTot?'cr':'cg'}">${fmt(totD)}</td><td class="num ${bTot?'cr-t':'cg-t'}">${pctInt(totDPct)}</td><td class="num sep-l">${totAvRef.toFixed(2)}%</td><td class="num">${totAvReal.toFixed(2)}%</td><td class="num ${bTot?'cr':'cg'}">${pp(totPp)}</td><td class="num imp-cell sep-l" style="color:${bTot?'var(--red)':'var(--green)'}">${fmt(totImp)}</td></tr>`;
+  // ── EBITDA (condicionais iguais à Receita: quanto maior, melhor) ──
+  const eb=aggEbitda(typeof lastF!=='undefined'?lastF:null);
+  if(eb){
+    const ebRef=vsOrc?eb.orc:eb.rem, ebReal=eb.real;
+    const ebD=ebReal-ebRef, ebDPct=ebRef?(ebD/Math.abs(ebRef)*100):null, ebBad=ebD<0;
+    const ebAvRef=rlRef?(ebRef/rlRef*100):0, ebAvReal=rlReal?(ebReal/rlReal*100):0;
+    const ebPp=ebAvReal-ebAvRef, ebImp=ebPp/100*rlReal, ebBadPp=ebPp<0;
+    html+=`<tr class="ebitda-row"><td class="conta">EBITDA</td><td class="num">${fmt(ebRef)}</td><td class="num">${fmt(ebReal)}</td><td class="num ${ebBad?'cr':'cg'}">${fmt(ebD)}</td><td class="num ${ebBad?'cr-t':'cg-t'}">${pctInt(ebDPct)}</td><td class="num sep-l">${ebAvRef.toFixed(2)}%</td><td class="num">${ebAvReal.toFixed(2)}%</td><td class="num ${ebBadPp?'cr':'cg'}">${pp(ebPp)}</td><td class="num imp-cell sep-l" style="color:${ebBadPp?'var(--red)':'var(--green)'}">${fmt(ebImp)}</td></tr>`;
+  }
   document.getElementById(bodyId).innerHTML=html;
 }
 
@@ -1494,7 +1568,7 @@ function atualizar(){
 // ═══════════════════════════════════
 // INIT
 // ═══════════════════════════════════
-const CACHE_KEY='bi_cache_vf_v2';
+const CACHE_KEY='bi_cache_vf_v3';
 const CACHE_TTL=60*60*1000; // 1 hora
 
 function loadCache(){
@@ -1504,18 +1578,19 @@ function loadCache(){
   }catch(e){ localStorage.removeItem(CACHE_KEY); }
   return null;
 }
-function useRows(rows){
+function useRows(rows, eb){
   allRows=rows;
   if(allRows[0]&&typeof allRows[0][C.orc]==='string') allRows.shift();
+  if(eb&&eb.header) setEbitda(eb.header, eb.rows);
   populateFilters(allRows);
   atualizar();
 }
 async function recarregar(){
   set('status-badge','Carregando…');
   try{
-    const rows=await fetchData();
-    try{ localStorage.setItem(CACHE_KEY,JSON.stringify({t:Date.now(),rows})); }catch(e){}
-    useRows(rows);
+    const [rows, eb]=await Promise.all([fetchData(), fetchEbitda().catch(()=>null)]);
+    try{ localStorage.setItem(CACHE_KEY,JSON.stringify({t:Date.now(),rows,eb})); }catch(e){}
+    useRows(rows, eb);
   }catch(e){
     console.error(e);
     set('status-badge','Erro ao carregar dados');
@@ -1524,7 +1599,7 @@ async function recarregar(){
 async function init(){
   const c=loadCache();
   if(c){
-    useRows(c.rows);
+    useRows(c.rows, c.eb);
     if(Date.now()-c.t<CACHE_TTL){
       const d=new Date(c.t);
       set('status-badge',`Atualizado ${d.toLocaleDateString('pt-BR')} ${d.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})} (cache)`);
