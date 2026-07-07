@@ -562,7 +562,11 @@ let dispRows=[], indRows=[], indCols=[];
 let chVig=null, chProj=null;
 
 // ── Filters ──
-function getMsV(id_){ const w=$(id_); return w&&w._sel?[...w._sel]:[]; }
+// ordena datas "dd/mm/aaaa" cronologicamente
+function dataSort(a){ const [d,m,y]=String(a).split('/'); return (+y)*10000+(+m)*100+(+d); }
+// sentinela para o estado "nenhum" (Todos desmarcado): faz o filtro não casar com nada
+const MS_NONE=' __NONE__';
+function getMsV(id_){ const w=$(id_); if(!w) return []; if(w._none&&(!w._sel||!w._sel.size)) return [MS_NONE]; return w._sel?[...w._sel]:[]; }
 function getF(){ return {tipo:getMsV('ms-tipo'),uni:getMsV('ms-uni'),proj:getMsV('ms-proj'),vig:getMsV('ms-vig'),data:getMsV('ms-data')}; }
 
 function filtrar(rows){
@@ -802,10 +806,12 @@ function _buildMs(wrap,renderFn,getAllFn){
     list.addEventListener('change',e=>{
       const box=e.target;
       if(box.classList.contains('ms-all')){
-        sel.clear();
-      } else if(sel.size===0){
+        // "Todos" marcado => todos (sel vazio, sem _none); desmarcado => nenhum
+        sel.clear(); wrap._none=!box.checked;
+      } else if(sel.size===0 && !wrap._none){
         if(!box.checked){ const all=getAllFn?getAllFn():[]; all.forEach(v=>{ if(v!==box.dataset.v) sel.add(v); }); }
       } else {
+        wrap._none=false;
         if(box.checked) sel.add(box.dataset.v); else sel.delete(box.dataset.v);
         if(getAllFn){ const all=getAllFn(); if(all.length>0&&all.every(v=>sel.has(v))) sel.clear(); }
       }
@@ -814,7 +820,7 @@ function _buildMs(wrap,renderFn,getAllFn){
     list.addEventListener('click',e=>{
       const only=e.target.closest('.ms-only'); if(!only) return;
       e.preventDefault(); e.stopPropagation();
-      sel.clear(); sel.add(only.dataset.v);
+      wrap._none=false; sel.clear(); sel.add(only.dataset.v);
       render(srch.value); onFilterChange();
     });
     srch.addEventListener('input',()=>render(srch.value));
@@ -827,7 +833,7 @@ function buildMs(id_,items){
   wrap._items=items;                       // opções atuais (atualizadas pela cascata via setMsOptions)
   _buildMs(wrap,(list,sel,q)=>{
     const it=wrap._items||[];
-    const f=q.toLowerCase(), shown=it.filter(v=>String(v).toLowerCase().includes(f)), allChk=sel.size===0;
+    const f=q.toLowerCase(), shown=it.filter(v=>String(v).toLowerCase().includes(f)), allChk=sel.size===0&&!wrap._none;
     list.innerHTML=(!q?`<label class="ms-opt all-opt"><input type="checkbox" class="ms-all" ${allChk?'checked':''}> Todos</label>`:'')+
       shown.map(v=>`<label class="ms-opt"><input type="checkbox" data-v="${v}" ${allChk||sel.has(v)?'checked':''}> ${v}<span class="ms-only" data-v="${v}">only</span></label>`).join('');
   },()=>wrap._items||[]);
@@ -864,7 +870,7 @@ function refreshCascade(){
   setMsOptions('ms-uni', [...optUni].sort());
   setMsOptions('ms-proj',[...optProj].sort());
   setMsOptions('ms-vig', [...optVig].sort((a,b)=>vigSort(a)-vigSort(b)));
-  setMsOptions('ms-data',[...optData].sort());
+  setMsOptions('ms-data',[...optData].sort((a,b)=>dataSort(a)-dataSort(b)));
 }
 function buildVigMs(items){
   const wrap=$('ms-vig'); if(!wrap) return;
@@ -898,7 +904,7 @@ function processData(rD,rI,fromCacheTime){
       const [ma,ya]=a.split('/');const [mb,yb]=b.split('/');
       return (+ya*100+ +ma)-(+yb*100+ +mb);
     });
-    const datas=[...new Set(dispRows.map(r=>r.data).filter(Boolean))].sort();
+    const datas=[...new Set(dispRows.map(r=>r.data).filter(Boolean))].sort((a,b)=>dataSort(a)-dataSort(b));
 
     buildMs('ms-tipo',tipos);
     buildMs('ms-uni', unis);
