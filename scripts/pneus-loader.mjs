@@ -76,7 +76,7 @@ function fetchAllTires(branchId) {
       cicloVida: p.currentLifeCycle || 1, maxCiclos: p.maxLifeCycles || 5,
       banda: p.currentRetread?.model?.name || '', bandaMarca: p.currentRetread?.make?.name || '',
       dot: p.dot || '', mm1, mm2, mm3, mm4, menorMM: menor, amplitude, statusMM,
-      pressaoIdeal: pIdeal, pressaoAtual: pAtual, desvioPressao: desvioPct, pressaoNOK: Math.abs(desvioPct) > 15,
+      pressaoIdeal: pIdeal, pressaoAtual: pAtual, desvioPressao: desvioPct, pressaoNOK: Math.abs(desvioPct) > 10,
       cpk: lc.cpk || 0, kmRodados: lc.totalDistanceDriven || 0, custo: p.purchaseCost || 0,
       veiculoId: p.installed?.vehicleId || null, placa: p.installed?.licensePlate || '',
       frota: p.installed?.fleetId || '', posicao: p.installed?.installedPosition || null,
