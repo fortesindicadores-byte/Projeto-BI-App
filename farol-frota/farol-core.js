@@ -540,12 +540,12 @@ async function renderPneus(el,cod){
   const mmOk=totMM?(totMM-crit)/totMM*100:null;
   // calibragem
   const comP=tires.filter(t=>t.pIdeal>0&&t.desv!=null);
-  const calOk=comP.length?comP.filter(t=>Math.abs(t.desv)<=15).length/comP.length*100:null;
+  const calOk=comP.length?comP.filter(t=>Math.abs(t.desv)<=10).length/comP.length*100:null;
   const card=(lb,val,cls,sub)=>`<div class="ch-min"><span>${lb}</span><b class="${cls}">${val}</b>${sub?`<small class="mut">${sub}</small>`:''}</div>`;
   let h=`<div class="custos-hero">
     ${card('Aferições (30d)',pct1(afer),clsPctMeta(afer,95,85),veic.length+' veículos')}
     ${card('Milimetragem OK',pct1(mmOk),clsPctMeta(mmOk,90,75),totMM+' pneus')}
-    ${card('Calibragem OK',pct1(calOk),clsPctMeta(calOk,90,75),'±15% ideal')}
+    ${card('Calibragem OK',pct1(calOk),clsPctMeta(calOk,90,75),'±10% ideal')}
     ${card('Críticos',String(crit),crit?'cr':'cg','bloquear+recapar')}
   </div>`;
   // distribuição milimetragem
@@ -564,9 +564,9 @@ async function renderPneus(el,cod){
       <td>${escF(String(t.posicao))}</td><td>${escF(t.serial||'—')}</td>
       <td class="num ${t.menor<2?'cr':t.menor<=3?'cy':'cg'}">${t.menor==null?'—':t.menor.toFixed(1)}</td>
       <td class="${stCls(t.st)}">${escF(t.st||'—')}</td>
-      <td class="num ${t.desv==null?'mut':Math.abs(t.desv)>15?'cr':'cg'}">${t.desv==null?'—':(t.desv>0?'+':'')+Math.round(t.desv)+'%'}</td></tr>`).join('')+'</tbody></table>');
+      <td class="num ${t.desv==null?'mut':Math.abs(t.desv)>10?'cr':'cg'}">${t.desv==null?'—':(t.desv>0?'+':'')+Math.round(t.desv)+'%'}</td></tr>`).join('')+'</tbody></table>');
   const dt=new Date(P.ult);
-  h+=`<div class="tbl-sub" style="margin-top:8px">Foto Prolog de ${dt.toLocaleDateString('pt-BR')} ${dt.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})} · 1 leitura por posição (aferição mais recente). Milimetragem: &lt;2 Bloquear · ≤3 Recapar · ≤6 Regular · &gt;6 Bom. Calibragem OK = ±15% da ideal.</div>`;
+  h+=`<div class="tbl-sub" style="margin-top:8px">Foto Prolog de ${dt.toLocaleDateString('pt-BR')} ${dt.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})} · 1 leitura por posição (aferição mais recente). Milimetragem: &lt;2 Bloquear · ≤3 Recapar · ≤6 Regular · &gt;6 Bom. Calibragem OK = ±10% da ideal.</div>`;
   el.innerHTML=h;
 }
 

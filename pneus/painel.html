@@ -1423,7 +1423,7 @@
           <div class="pesos-title">Distribuição dos Pesos</div>
           <div class="pesos-head"><span>Indicador</span><span class="ph-desc">Como pontua</span><span>Peso</span></div>
           <div class="pesos-row"><span>Milimetragem</span><span class="pr-desc">Linear: 2mm = 0 pts · 10mm = 100 pts</span><b>40%</b></div>
-          <div class="pesos-row"><span>Calibragem</span><span class="pr-desc">Pressão dentro de ±15% da ideal = 100 · fora = 0</span><b>25%</b></div>
+          <div class="pesos-row"><span>Calibragem</span><span class="pr-desc">Pressão dentro de ±10% da ideal = 100 · fora = 0</span><b>25%</b></div>
           <div class="pesos-row"><span>Amplitude</span><span class="pr-desc">Linear: 0mm = 100 pts · ≥5mm = 0 pts</span><b>20%</b></div>
           <div class="pesos-row"><span>Vida (DOT)</span><span class="pr-desc">Linear: novo = 100 pts · ≥5 anos = 0 pts</span><b>10%</b></div>
           <div class="pesos-row"><span>Recapes</span><span class="pr-desc">Vida 1 = 100 pts · última vida = 0 pts</span><b>5%</b></div>
@@ -1649,17 +1649,17 @@
         <div class="saude-card">
           <div class="sc-label">Pressão OK</div>
           <div class="sc-value" id="prCardOK">—</div>
-          <div class="sc-sub">entre 85% e 115% da ideal · Meta: ≥ 98%</div>
+          <div class="sc-sub">entre 90% e 110% da ideal · Meta: ≥ 98%</div>
         </div>
         <div class="saude-card">
           <div class="sc-label">Baixa Pressão</div>
           <div class="sc-value" id="prCardBaixa">—</div>
-          <div class="sc-sub">abaixo de 85% da ideal · Meta: 0</div>
+          <div class="sc-sub">abaixo de 90% da ideal · Meta: 0</div>
         </div>
         <div class="saude-card">
           <div class="sc-label">Alta Pressão</div>
           <div class="sc-value" id="prCardAlta">—</div>
-          <div class="sc-sub">acima de 115% da ideal · Meta: 0</div>
+          <div class="sc-sub">acima de 110% da ideal · Meta: 0</div>
         </div>
         <div class="saude-card">
           <div class="sc-label">Desvio Médio</div>
@@ -2236,7 +2236,7 @@ function reconstructTires(insps) {
       pressaoIdeal: avg(i => i.pressaoIdeal),
       pressaoAtual: avg(i => i.pressaoMedida),
       desvioPressao: desvio,
-      pressaoNOK: Math.abs(desvio) > 15,
+      pressaoNOK: Math.abs(desvio) > 10,
       _ultimaAfericao: recente.dataInspecao
     };
   });
@@ -4093,8 +4093,8 @@ function renderPressao() {
 
   const nok    = tires.filter(t => t.pressaoNOK);
   const ok     = tires.filter(t => !t.pressaoNOK);
-  const baixa  = tires.filter(t => t.desvioPressao < -15).length;
-  const alta   = tires.filter(t => t.desvioPressao > 15).length;
+  const baixa  = tires.filter(t => t.desvioPressao < -10).length;
+  const alta   = tires.filter(t => t.desvioPressao > 10).length;
   // Hero e desvio = média sobre os meses selecionados (= barras do gráfico); contagens por pneu.
   const pctOK  = mediaSobreMeses(ts => { const c = ts.filter(t => t.pressaoIdeal > 0); return c.length ? c.filter(t => !t.pressaoNOK).length / c.length * 100 : null; }) ?? 0;
   const desvioMedio = mediaSobreMeses(ts => { const c = ts.filter(t => t.pressaoIdeal > 0); return c.length ? c.reduce((s, t) => s + Math.abs(t.desvioPressao), 0) / c.length : null; }) ?? 0;
@@ -4170,7 +4170,7 @@ function filtrarPressao() {
   document.getElementById('tbodyPressao').innerHTML = lista.length === 0
     ? '<tr><td colspan="11" class="empty">Nenhum pneu encontrado</td></tr>'
     : lista.map((t, i) => {
-        const status = t.desvioPressao > 15 ? 'Alta Pressão' : t.desvioPressao < -15 ? 'Baixa Pressão' : 'OK';
+        const status = t.desvioPressao > 10 ? 'Alta Pressão' : t.desvioPressao < -10 ? 'Baixa Pressão' : 'OK';
         const cor    = status === 'Alta Pressão' ? 'var(--red-soft)' : status === 'Baixa Pressão' ? 'var(--yellow)' : 'var(--green)';
         return `
           <tr>
@@ -4225,8 +4225,8 @@ function renderPressaoMensalCharts() {
     return {
       ok: okM / medidas.length * 100,
       desv: desvM,
-      alta: medidas.filter(x => x.desvioPressao > 15).length,
-      baixa: medidas.filter(x => x.desvioPressao < -15).length
+      alta: medidas.filter(x => x.desvioPressao > 10).length,
+      baixa: medidas.filter(x => x.desvioPressao < -10).length
     };
   });
 
