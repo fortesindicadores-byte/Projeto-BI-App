@@ -960,9 +960,11 @@ async function fetchEbitda(){
 function aggEbitda(f){
   if(!EB || EB.real<0 || !ebitdaRows.length) return null;
   let o=0, rem=0, real=0, n=0;
+  const isAcum=!f||!f.vig||!f.vig.length;   // sem vigência específica = acumulado (ignora meses só-orçado)
   ebitdaRows.forEach(r=>{
     const d=parseVig(r[EB.vig]); if(!d) return;
     if(EB.cta>=0 && !_normEb(r[EB.cta]).includes('ebitda')) return;
+    if(isAcum && !(_cheia(r[EB.real])||_cheia(r[EB.rem]))) return;
     if(f&&f.ano&&f.ano.length>0 && !f.ano.includes(String(d.getFullYear()))) return;
     if(f&&f.vig&&f.vig.length>0 && !f.vig.includes(vigKey(d))) return;
     if(EB.nv3>=0){
@@ -1120,6 +1122,18 @@ function agg(rows){
   return m;
 }
 const rl = m => m['Receita Líquida']||{orc:0,rem:0,real:0};
+
+// ── ACUMULADO: só considera meses que já têm realizado ─────────────────────
+// Célula preenchida (0 conta; branco/null não). Linha "fechada" = tem realizado OU remunerado.
+const _cheia  = v => v!=null && v!=='';
+const temReal = r => _cheia(r[C.real]) || _cheia(r[C.rem]);
+// Recorta as linhas até o ÚLTIMO mês com realizado (meses futuros só-orçado ficam de fora dos acumulados).
+function ateUltimoReal(rows){
+  const ts=rows.filter(temReal).map(r=>parseVig(r[C.vig])).filter(Boolean).map(d=>d.getTime());
+  if(!ts.length) return [];
+  const cut=Math.max(...ts);
+  return rows.filter(r=>{ const d=parseVig(r[C.vig]); return d && d.getTime()<=cut; });
+}
 
 // ═══════════════════════════════════
 // RENDER HERO + CARDS
@@ -1423,7 +1437,7 @@ function aggByKey(rows, getDimKey){
 
 function renderPacote(rows,allRowsRef,f){
   const ytdVigs=getYtdVigs(f);
-  const ytdRows=filterMes(allRowsRef,{...f,vig:ytdVigs});
+  const ytdRows=ateUltimoReal(filterMes(allRowsRef,{...f,vig:ytdVigs}));
   let html='',totR=0,totX=0,totYR=0,totYX=0;
 
   if(pacoteDim==='conta'){
@@ -1464,7 +1478,7 @@ function setPacoteDim(dim){
   document.querySelectorAll('.dim-btn').forEach(b=>b.classList.toggle('active',b.dataset.dim===dim));
   const th=document.getElementById('th-pacote-dim');
   if(th) th.textContent=dim==='uni'?'UNIDADE':dim==='proj'?'PROJETO':'CONTA';
-  if(lastF){ const r=filterMes(allRows,lastF); renderPacote(r,allRows,lastF); }
+  if(lastF){ const isAc=!lastF.vig||lastF.vig.length===0; const r=isAc?ateUltimoReal(filterMes(allRows,lastF)):filterMes(allRows,lastF); renderPacote(r,allRows,lastF); }
 }
 
 // ═══════════════════════════════════
@@ -1530,7 +1544,7 @@ function setAvDim(which, dim){
   document.querySelectorAll(`.dim-av-${which}`).forEach(b=>b.classList.toggle('active',b.dataset.dim===dim));
   const th=document.getElementById(`th-${which}-dim`);
   if(th) th.textContent=dim==='conta'?'CONTA':dim==='uni'?'UNIDADE':'PROJETO';
-  if(lastF){ const ar=filterMes(allRows,lastF); renderAnalise(ar,which==='orc'?'body-orc':'body-rem',which==='orc',dim); }
+  if(lastF){ const isAc=!lastF.vig||lastF.vig.length===0; const ar=isAc?ateUltimoReal(filterMes(allRows,lastF)):filterMes(allRows,lastF); renderAnalise(ar,which==='orc'?'body-orc':'body-rem',which==='orc',dim); }
 }
 
 // ═══════════════════════════════════
@@ -1540,15 +1554,21 @@ function atualizar(){
   refreshCascade();        // recalcula opções de todos os filtros conforme a seleção atual (cascata)
   const f2=getF();
   lastF=f2;
+  // Acumulado (sem vigência específica) recorta até o último mês com realizado; meses futuros só-orçado
+  // ficam de fora dos acumulados (mas seguem nos gráficos, na linha de Orçado).
+  const isAcum=!f2.vig||f2.vig.length===0;
   const activeRows=filterMes(allRows,f2);
-  const activeAgg=agg(activeRows);
+  const accRows=isAcum?ateUltimoReal(activeRows):activeRows;
+  const activeAgg=agg(accRows);
+  const closedMonths=new Set(accRows.map(r=>parseVig(r[C.vig])).filter(Boolean).map(d=>d.getMonth()));
   let prevAgg={};
   if(f2.vig&&f2.vig.length>0){
     const prevVigs=f2.vig.map(vk=>{ const [y,m]=vk.split('-').map(Number); return `${y-1}-${String(m).padStart(2,'0')}`; });
     prevAgg=agg(filterMes(allRows,{...f2,vig:prevVigs}));
   } else if(f2.ano&&f2.ano.length>0){
     const prevAnos=f2.ano.map(y=>String(+y-1));
-    prevAgg=agg(filterMes(allRows,{...f2,ano:prevAnos,vig:[]}));
+    // YoY comparado ao MESMO período: só os meses que o ano atual já tem realizado.
+    prevAgg=agg(filterMes(allRows,{...f2,ano:prevAnos,vig:[]}).filter(r=>{const d=parseVig(r[C.vig]);return d&&closedMonths.has(d.getMonth());}));
   }
   let vigLbl;
   if(!f2.vig||f2.vig.length===0) vigLbl='TODAS';
@@ -1558,9 +1578,9 @@ function atualizar(){
   renderHeroCards(activeAgg,prevAgg);
   renderAVCards(activeAgg,prevAgg);
   renderCharts(f2);
-  renderPacote(activeRows,allRows,f2);
-  renderAnalise(activeRows,'body-orc',true,avOrcDim);
-  renderAnalise(activeRows,'body-rem',false,avRemDim);
+  renderPacote(accRows,allRows,f2);
+  renderAnalise(accRows,'body-orc',true,avOrcDim);
+  renderAnalise(accRows,'body-rem',false,avRemDim);
   const now=new Date();
   set('status-badge',`Atualizado ${now.toLocaleDateString('pt-BR')} ${now.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})}`);
 }
@@ -1568,7 +1588,7 @@ function atualizar(){
 // ═══════════════════════════════════
 // INIT
 // ═══════════════════════════════════
-const CACHE_KEY='bi_cache_vf_v3';
+const CACHE_KEY='bi_cache_vf_v4';
 const CACHE_TTL=60*60*1000; // 1 hora
 
 function loadCache(){
