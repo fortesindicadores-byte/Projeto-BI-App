@@ -72,8 +72,11 @@ body{
 .bridge-title{font-size:19px;font-weight:800;color:var(--text);margin-bottom:3px;}
 .bridge-sub{font-size:13px;color:var(--text2);margin-bottom:14px;}
 /* cascata */
-.wf-card{background:rgba(20,27,38,.55);border:1px solid rgba(255,255,255,.07);border-radius:8px;padding:18px 20px 14px;margin-bottom:26px;
+.wf-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin:12px 0 26px;}
+.wf-card{background:rgba(20,27,38,.55);border:1px solid rgba(255,255,255,.07);border-radius:8px;padding:16px 18px 12px;
   backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);box-shadow:0 2px 12px rgba(0,0,0,.25);}
+.wf-cap{display:flex;align-items:center;gap:8px;font-size:12px;font-weight:800;color:var(--text);margin-bottom:8px;}
+.wf-cap .cen-n{font-size:11px;font-weight:800;color:#000;background:var(--orange);border-radius:4px;padding:2px 8px;letter-spacing:.5px;}
 .wf-head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:8px;}
 .wf-wrap{position:relative;height:280px;}
 .wf-foot{display:flex;gap:22px;flex-wrap:wrap;margin-top:12px;padding-top:12px;border-top:1px solid rgba(255,255,255,.08);}
@@ -137,6 +140,7 @@ body.light-mode table.dre tbody tr{border-bottom:1px solid rgba(0,0,0,.06);}
   .main{padding:12px 10px;}
   .header{padding:8px 12px 10px;}
   .brand h1{font-size:14px;}.brand p{font-size:8px;}
+  .wf-grid{grid-template-columns:1fr;gap:12px;}
   .wf-wrap{height:230px;}
   .wf-head{flex-direction:column;gap:8px;}
   .wf-foot{gap:14px;}
@@ -186,21 +190,21 @@ body.light-mode table.dre tbody tr{border-bottom:1px solid rgba(0,0,0,.06);}
 
 <main class="main">
 
-  <!-- ── CASCATA DO REORÇAMENTO ── -->
-  <section class="wf-card">
-    <div class="wf-head">
-      <div>
-        <div class="bridge-title">Cascata do Reorçamento</div>
-        <div class="bridge-sub" id="wf-sub">—</div>
-      </div>
-      <div class="dim-toggle" id="wf-toggle">
-        <button class="dim-btn active" data-cen="3" onclick="setWfCen(3)">3 pacotes</button>
-        <button class="dim-btn" data-cen="2" onclick="setWfCen(2)">2 pacotes</button>
-      </div>
-    </div>
-    <div class="wf-wrap"><canvas id="ch-wf"></canvas></div>
-    <div class="wf-foot" id="wf-foot"></div>
-  </section>
+  <!-- ── CASCATA DO REORÇAMENTO (2 cenários lado a lado) ── -->
+  <div class="bridge-title">Cascata do Reorçamento</div>
+  <div class="bridge-sub" id="wf-sub">—</div>
+  <div class="wf-grid">
+    <section class="wf-card">
+      <div class="wf-cap"><span class="cen-n">CENÁRIO 1</span> 3 pacotes · Combustível + Manutenção + Pneus</div>
+      <div class="wf-wrap"><canvas id="ch-wf3"></canvas></div>
+      <div class="wf-foot" id="wf-foot3"></div>
+    </section>
+    <section class="wf-card">
+      <div class="wf-cap"><span class="cen-n">CENÁRIO 2</span> 2 pacotes · Manutenção + Pneus</div>
+      <div class="wf-wrap"><canvas id="ch-wf2"></canvas></div>
+      <div class="wf-foot" id="wf-foot2"></div>
+    </section>
+  </div>
 
   <!-- ── TABELAS (YTG / Economia / Forecast) ── -->
   <div id="tables"></div>
@@ -545,7 +549,7 @@ function computeCenario(model, cen){
 const contaLabel = cta => cta;   // exibe o nome cru da conta gerencial
 function monthCols(remMonths, year){ return remMonths.map(mo=>`${MESES[mo-1]}/${String(year).slice(2)}`); }
 
-let chWf=null, wfCen=3;
+const chWf={};   // {3:Chart, 2:Chart}
 // plugin: rótulo de valor no topo de cada barra da cascata
 const wfLabels={afterDatasetsDraw(chart){
   const meta=chart.getDatasetMeta(0), isLight=document.body.classList.contains('light-mode');
@@ -558,25 +562,28 @@ const wfLabels={afterDatasetsDraw(chart){
   ctx.restore();
 }};
 function renderWaterfall(model){
-  const {remMonths, pacs, year}=model;
-  const cc=computeCenario(model, wfCen);
-  // total YTG (todos os pacotes) e economia por pacote participante
+  const {remMonths, year}=model;
+  drawWf(model,3,'ch-wf3','wf-foot3');
+  drawWf(model,2,'ch-wf2','wf-foot2');
+  const sub=document.getElementById('wf-sub');
+  if(sub) sub.textContent=`Ano ${year} · orçado de ${MESES[remMonths[0]-1]}→dez reduzido pela economia distribuída. Mesmo alvo nos dois cenários, mudando os pacotes que absorvem o corte. R$ (custo em módulo).`;
+}
+function drawWf(model, cen, canvasId, footId){
+  const {pacs}=model, cc=computeCenario(model, cen);
   let totYTG=0; PAC_ORDER.forEach(p=>{ if(pacs[p]) totYTG+=pacs[p].orcRem; });
   const steps=cc.parts.map(p=>({name:p, eco:(cc.out[p]?cc.out[p].economia:0)}));
   const forecast=totYTG-cc.alvo;
-  // constrói barras flutuantes [lo,hi]
-  const labels=['Orçado YTG',...steps.map(s=>s.name),'Forecast Reorçado'];
+  const labels=['Orçado YTG',...steps.map(s=>s.name),'Forecast'];
   const bars=[], colors=[], meta=[]; let run=totYTG;
   bars.push([0,totYTG]); colors.push('#38BDF8'); meta.push({top:fmt(totYTG),hi:totYTG});
   steps.forEach(s=>{ const lo=run-s.eco; bars.push([lo,run]); colors.push('#3BB33B'); meta.push({top:fmt(s.eco),hi:run}); run=lo; });
   bars.push([0,forecast]); colors.push('#F97316'); meta.push({top:fmt(forecast),hi:forecast});
-  // eixo com ZOOM: sem começar do zero, para as barras de economia (pequenas vs o total) ficarem visíveis
   const span=Math.max(totYTG-forecast, totYTG*0.01);
   const ymin=Math.max(0, forecast-span*2), ymax=totYTG+span*0.5;
   const isLight=document.body.classList.contains('light-mode');
   const tick={color:isLight?'#444':'#94A3B8',font:{family:'Montserrat',size:11}};
-  if(chWf) chWf.destroy();
-  chWf=new Chart(document.getElementById('ch-wf'),{
+  if(chWf[cen]) chWf[cen].destroy();
+  chWf[cen]=new Chart(document.getElementById(canvasId),{
     type:'bar',
     data:{labels,datasets:[{data:bars,backgroundColor:colors,borderColor:colors,borderWidth:1,borderRadius:3,barPercentage:.72}]},
     options:{responsive:true,maintainAspectRatio:false,layout:{padding:{top:24}},
@@ -584,17 +591,15 @@ function renderWaterfall(model){
       scales:{x:{grid:{display:false},border:{display:false},ticks:tick},y:{min:ymin,max:ymax,grid:{display:false},border:{display:false},ticks:{...tick,callback:v=>fmt(v)}}}},
     plugins:[wfLabels]
   });
-  chWf.$wfMeta=meta; chWf.update();
-  const cenTxt=wfCen===3?'Combustíveis + Manutenção + Pneus':'Manutenção + Pneus';
-  document.getElementById('wf-sub').textContent=`Ano ${year} · orçado de ${MESES[remMonths[0]-1]}→dez reduzido pela economia distribuída em ${cenTxt}. R$ (custo em módulo).`;
-  document.getElementById('wf-foot').innerHTML=[
+  chWf[cen].$wfMeta=meta; chWf[cen].update();
+  const foot=document.getElementById(footId);
+  if(foot) foot.innerHTML=[
     {l:'Orçado a realizar (YTG)',v:fmt(totYTG)},
-    {l:'Economia total (alvo)',v:'-'+fmt(cc.alvo)},
+    {l:'Economia total (alvo)',v:fmt(cc.alvo)},
     {l:'Forecast reorçado',v:fmt(forecast)},
-    {l:'Redução',v:(totYTG?(-cc.alvo/totYTG*100).toFixed(1):'0')+'%'},
+    {l:'Redução',v:(totYTG?(cc.alvo/totYTG*100).toFixed(1):'0')+'%'},
   ].map(x=>`<div class="wf-item">${x.l}<b>${x.v}</b></div>`).join('');
 }
-function setWfCen(cen){ wfCen=cen; document.querySelectorAll('#wf-toggle .dim-btn').forEach(b=>b.classList.toggle('active',+b.dataset.cen===cen)); if(lastF) renderWaterfall(computeModel(lastF)); }
 
 // tabela YTG (orçado puro dos meses restantes) — 5 pacotes + total
 function tblYTG(model){
