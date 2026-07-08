@@ -1,0 +1,725 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>YTG + FCT — Reorçamento Frota</title>
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#0C1017;--card:#141B26;--card2:#1A2335;--border:#1E2D40;
+  --orange:#F97316;--blue:#38BDF8;--text:#F1F5F9;--text2:#94A3B8;--text3:#475569;
+  --green:#3BB33B;--red:#FF6666;
+}
+*{margin:0;padding:0;box-sizing:border-box;}
+body{
+  background:
+    radial-gradient(ellipse at 10% 25%, rgba(249,115,22,.06) 0%, transparent 50%),
+    radial-gradient(ellipse at 90% 75%, rgba(56,189,248,.05) 0%, transparent 50%),
+    var(--bg);
+  color:var(--text);font-family:'Montserrat',-apple-system,sans-serif;font-size:13px;min-height:100vh;
+}
+/* ══ HEADER ══ */
+.header{background:rgba(12,16,23,.75);border-bottom:1px solid rgba(255,255,255,.07);
+  padding:10px 24px 12px;display:flex;flex-wrap:wrap;align-items:center;
+  position:sticky;top:0;z-index:100;backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);
+  box-shadow:0 2px 12px rgba(0,0,0,.3);}
+.brand{flex:1;order:1;}
+.brand h1{font-size:16px;font-weight:700;color:var(--orange);}
+.brand p{font-size:10px;color:var(--text2);margin-top:2px;}
+.header-right{flex-shrink:0;order:2;display:flex;align-items:center;gap:8px;}
+.status-badge{font-size:9px;color:var(--text);background:rgba(249,115,22,.15);border:1px solid rgba(249,115,22,.3);border-radius:4px;padding:2px 8px;white-space:nowrap;}
+.access-badge{font-size:9px;color:var(--text2);background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);border-radius:4px;padding:2px 8px;white-space:nowrap;}
+.header-filters{flex-basis:100%;order:3;margin-top:10px;display:flex;gap:10px;flex-wrap:wrap;align-items:flex-start;}
+.filter-group{display:flex;flex-direction:column;gap:3px;}
+.filter-label{display:none;}
+/* ══ MULTI-SELECT ══ */
+.ms-wrap{position:relative;}
+.ms-btn{display:flex;align-items:center;gap:8px;background:#0a0f18;color:var(--text);
+  border:1px solid #2a3a50;border-radius:4px;font-family:'Montserrat',sans-serif;font-size:11px;font-weight:700;
+  padding:6px 12px;cursor:pointer;text-transform:uppercase;letter-spacing:.5px;white-space:nowrap;min-width:110px;}
+.ms-btn:hover{border-color:var(--orange);}
+.ms-lbl{flex:1;}
+.ms-cnt{background:var(--orange);color:#000;border-radius:10px;padding:1px 6px;font-size:9px;font-weight:800;display:none;}
+.ms-btn svg{flex-shrink:0;opacity:.8;}
+.ms-panel{display:none;flex-direction:column;position:absolute;top:calc(100% + 4px);left:0;z-index:500;
+  background:#0f1824;border:1px solid #2a3a50;border-radius:4px;min-width:230px;max-height:300px;box-shadow:0 8px 24px rgba(0,0,0,.7);}
+.ms-panel.open{display:flex;}
+.ms-search{padding:7px 10px;border-bottom:1px solid #1e2d40;display:flex;align-items:center;gap:6px;flex-shrink:0;}
+.ms-search svg{opacity:.4;flex-shrink:0;}
+.ms-search input{flex:1;background:transparent;border:none;color:var(--text);font-family:'Montserrat',sans-serif;font-size:11px;outline:none;}
+.ms-search input::placeholder{color:var(--text3);}
+.ms-list{overflow-y:auto;flex:1;}
+.ms-opt{display:flex;align-items:center;gap:8px;padding:7px 12px;cursor:pointer;font-size:11px;color:var(--text2);text-transform:uppercase;letter-spacing:.3px;}
+.ms-opt:hover{background:rgba(255,255,255,.05);color:var(--text);}
+.ms-opt.all-opt{border-bottom:1px solid #1e2d40;color:var(--text);font-weight:700;}
+.ms-opt input[type=checkbox]{accent-color:var(--orange);cursor:pointer;width:14px;height:14px;flex-shrink:0;}
+.ms-list::-webkit-scrollbar{width:4px;}
+.ms-list::-webkit-scrollbar-track{background:transparent;}
+.ms-list::-webkit-scrollbar-thumb{background:#2a3a50;border-radius:2px;}
+.ms-only{margin-left:auto;font-size:8px;color:var(--orange);padding:1px 5px;border-radius:2px;cursor:pointer;white-space:nowrap;flex-shrink:0;opacity:0;transition:opacity .12s;}
+.ms-opt:hover .ms-only{opacity:1;}
+.ms-only:hover{background:rgba(249,115,22,.2);}
+/* ══ BUTTONS ══ */
+.refresh-btn,.theme-btn{background:rgba(249,115,22,.15);border:1px solid rgba(249,115,22,.3);border-radius:4px;padding:4px 8px;cursor:pointer;color:var(--orange);display:flex;align-items:center;}
+.refresh-btn:hover,.theme-btn:hover{background:rgba(249,115,22,.32);}
+.back-btn{background:rgba(249,115,22,.15);border:1px solid rgba(249,115,22,.3);border-radius:4px;padding:4px 8px;display:flex;align-items:center;color:var(--orange);text-decoration:none;}
+.back-btn:hover{background:rgba(249,115,22,.32);}
+/* ══ MAIN ══ */
+.main{padding:20px 24px;}
+/* ══ BRIDGE (gap-to-target) ══ */
+.bridge-title{font-size:19px;font-weight:800;color:var(--text);margin-bottom:3px;}
+.bridge-sub{font-size:13px;color:var(--text2);margin-bottom:14px;}
+.bridge-row{display:grid;grid-template-columns:repeat(6,1fr);gap:10px;margin-bottom:26px;}
+.bridge-card{background:rgba(20,27,38,.55);border:1px solid rgba(255,255,255,.07);border-radius:8px;padding:14px 16px;
+  backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);box-shadow:0 2px 12px rgba(0,0,0,.25);position:relative;}
+.bridge-card.accent{border-color:rgba(249,115,22,.45);}
+.bridge-op{position:absolute;left:-9px;top:50%;transform:translateY(-50%);font-size:16px;font-weight:800;color:var(--text3);z-index:2;}
+.bc-label{font-size:9.5px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.5px;}
+.bc-value{font-size:22px;font-weight:800;color:var(--text);line-height:1.1;margin-top:4px;}
+.bc-meta{font-size:9.5px;color:var(--text2);margin-top:4px;}
+/* ══ TABLES ══ */
+.tbl-section{background:rgba(20,27,38,.55);border:1px solid rgba(255,255,255,.07);border-radius:8px;
+  padding:18px 20px 16px;margin-bottom:16px;backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);box-shadow:0 2px 12px rgba(0,0,0,.25);}
+.tbl-title{font-size:19px;font-weight:800;color:var(--text);margin-bottom:3px;}
+.tbl-title .tag{font-size:11px;font-weight:700;color:#000;background:var(--orange);border-radius:4px;padding:2px 8px;margin-left:8px;vertical-align:middle;text-transform:uppercase;letter-spacing:.5px;}
+.tbl-title .tag.blue{background:var(--blue);}
+.tbl-sub{font-size:13px;color:var(--text2);margin-bottom:16px;}
+.tbl-wrap{overflow-x:auto;}
+table.dre{width:100%;border-collapse:collapse;font-size:13px;}
+table.dre thead th{background:var(--card);color:var(--text);font-size:12px;font-weight:700;
+  padding:8px 8px 12px;border-bottom:1px solid rgba(255,255,255,.10);white-space:nowrap;text-transform:uppercase;letter-spacing:.5px;vertical-align:bottom;}
+table.dre thead th.num{text-align:right;}
+table.dre thead th.grp{color:var(--text2);font-size:10px;border-bottom:none;padding-bottom:2px;text-align:center;}
+table.dre td{padding:11px 8px;border:none;color:var(--text);white-space:nowrap;}
+table.dre tbody tr:hover{background:rgba(255,255,255,.035);}
+table.dre td.conta{color:var(--text);font-weight:600;min-width:190px;}
+table.dre td.num{text-align:right;}
+table.dre .sep-l{border-left:1px solid rgba(255,255,255,.13);padding-left:16px;}
+table.dre thead th.sep-l{border-left:1px solid rgba(255,255,255,.13);}
+table.dre tr.pac-row{cursor:pointer;}
+table.dre tr.pac-row td.conta::before{content:'+';display:inline-block;width:16px;color:var(--orange);font-weight:800;}
+table.dre tr.pac-row.open td.conta::before{content:'−';}
+table.dre tr.pac-row.no-drill td.conta::before{content:'';width:16px;}
+table.dre tr.sub-row{display:none;}
+table.dre tr.sub-row.show{display:table-row;}
+table.dre tr.sub-row td.conta{font-weight:400;color:var(--text2);padding-left:26px;font-size:12px;}
+table.dre tr.sub-row td{padding-top:7px;padding-bottom:7px;}
+table.dre tr.total td{color:var(--text);font-weight:800;font-size:13px;border-top:2px solid rgba(255,255,255,.12);padding-top:14px;padding-bottom:8px;}
+.cr{color:var(--red)!important;font-weight:700;}
+.cg{color:var(--green)!important;font-weight:700;}
+.muted{color:var(--text3)!important;}
+.eff-hi{color:var(--red)!important;font-weight:800;}
+.pill{font-size:10px;font-weight:700;padding:1px 7px;border-radius:10px;background:rgba(255,255,255,.06);color:var(--text2);}
+/* light mode */
+body.light-mode .main{background:#F0F0F0;--text:#1a1a1a;--text2:#444444;--text3:#666666;color:var(--text);--red:#ff0000;--green:#0E8C0E;}
+body.light-mode .tbl-section,body.light-mode .bridge-card{background:rgba(128,128,128,.14)!important;border:none!important;box-shadow:none!important;--text:#1a1a1a;--text2:#444444;--text3:#555555;}
+body.light-mode .bridge-card.accent{box-shadow:0 0 0 1px rgba(249,115,22,.45)!important;}
+body.light-mode table.dre thead th{border-bottom-color:rgba(0,0,0,.10);background:#F0F0F0;}
+body.light-mode table.dre tr.total td{border-top-color:rgba(0,0,0,.12);}
+body.light-mode table.dre .sep-l,body.light-mode table.dre thead th.sep-l{border-left-color:rgba(0,0,0,.10);}
+body.light-mode table.dre tbody tr{border-bottom:1px solid rgba(0,0,0,.06);}
+/* mobile */
+@media(max-width:768px){
+  .main{padding:12px 10px;}
+  .header{padding:8px 12px 10px;}
+  .brand h1{font-size:14px;}.brand p{font-size:8px;}
+  .bridge-row{grid-template-columns:repeat(2,1fr);gap:6px;}
+  .bridge-op{display:none;}
+  .bc-value{font-size:16px;}
+  .header-right{gap:4px;flex-wrap:wrap;justify-content:flex-end;}
+  .header-right .refresh-btn{display:none;}
+  .status-badge,.access-badge{font-size:8px;padding:2px 6px;}
+  .header-filters{gap:5px;}
+  .filter-group{flex:0 0 calc(33.333% - 4px);}
+  .ms-wrap{width:100%;}
+  .ms-btn{width:100%;min-width:0;font-size:8px;padding:3px 6px;gap:3px;}
+  .ms-btn svg{width:9px;height:9px;}
+  table.dre{font-size:11px;}
+  table.dre td,table.dre th{padding:6px 4px;}
+  table.dre td.conta{min-width:120px;}
+}
+</style>
+<script>try{if(!sessionStorage.getItem("gem_hub"))location.replace("../");}catch(e){}</script>
+</head>
+<body>
+
+<header class="header">
+  <div class="brand">
+    <h1>YTG + FCT — Reorçamento</h1>
+    <p>Year To Go &amp; Forecast — Frota</p>
+  </div>
+  <div class="header-right">
+    <a href="../visao-financeira/" class="back-btn" title="Voltar à Visão Financeira"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg></a>
+    <button class="theme-btn" id="themeBtn" title="Modo claro/escuro"></button>
+    <button class="refresh-btn" onclick="recarregar()" title="Atualizar dados">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+        <polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/>
+        <path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/>
+      </svg>
+    </button>
+    <span class="status-badge" id="status-badge">Carregando…</span>
+    <span class="access-badge" id="access-badge" style="display:none"></span>
+  </div>
+  <div class="header-filters">
+    <div class="filter-group"><div class="ms-wrap" id="ms-ano"><button class="ms-btn" onclick="toggleMs('ms-ano')"><span class="ms-lbl">Ano</span><span class="ms-cnt"></span><svg width="10" height="6" viewBox="0 0 10 6"><path d="M0 0l5 6 5-6z" fill="#F97316"/></svg></button><div class="ms-panel"><div class="ms-search"><svg width="12" height="12" viewBox="0 0 12 12"><circle cx="5" cy="5" r="4" stroke="#94A3B8" stroke-width="1.5" fill="none"/><line x1="8.5" y1="8.5" x2="11" y2="11" stroke="#94A3B8" stroke-width="1.5"/></svg><input type="text" placeholder="Pesquisar…"></div><div class="ms-list"></div></div></div></div>
+    <div class="filter-group"><div class="ms-wrap" id="ms-vig"><button class="ms-btn" onclick="toggleMs('ms-vig')"><span class="ms-lbl">Vigência</span><span class="ms-cnt"></span><svg width="10" height="6" viewBox="0 0 10 6"><path d="M0 0l5 6 5-6z" fill="#F97316"/></svg></button><div class="ms-panel"><div class="ms-search"><svg width="12" height="12" viewBox="0 0 12 12"><circle cx="5" cy="5" r="4" stroke="#94A3B8" stroke-width="1.5" fill="none"/><line x1="8.5" y1="8.5" x2="11" y2="11" stroke="#94A3B8" stroke-width="1.5"/></svg><input type="text" placeholder="Pesquisar…"></div><div class="ms-list"></div></div></div></div>
+    <div class="filter-group"><div class="ms-wrap" id="ms-uni"><button class="ms-btn" onclick="toggleMs('ms-uni')"><span class="ms-lbl">Unidade</span><span class="ms-cnt"></span><svg width="10" height="6" viewBox="0 0 10 6"><path d="M0 0l5 6 5-6z" fill="#F97316"/></svg></button><div class="ms-panel"><div class="ms-search"><svg width="12" height="12" viewBox="0 0 12 12"><circle cx="5" cy="5" r="4" stroke="#94A3B8" stroke-width="1.5" fill="none"/><line x1="8.5" y1="8.5" x2="11" y2="11" stroke="#94A3B8" stroke-width="1.5"/></svg><input type="text" placeholder="Pesquisar…"></div><div class="ms-list"></div></div></div></div>
+    <div class="filter-group"><div class="ms-wrap" id="ms-nv3"><button class="ms-btn" onclick="toggleMs('ms-nv3')"><span class="ms-lbl">Projeto</span><span class="ms-cnt"></span><svg width="10" height="6" viewBox="0 0 10 6"><path d="M0 0l5 6 5-6z" fill="#F97316"/></svg></button><div class="ms-panel"><div class="ms-search"><svg width="12" height="12" viewBox="0 0 12 12"><circle cx="5" cy="5" r="4" stroke="#94A3B8" stroke-width="1.5" fill="none"/><line x1="8.5" y1="8.5" x2="11" y2="11" stroke="#94A3B8" stroke-width="1.5"/></svg><input type="text" placeholder="Pesquisar…"></div><div class="ms-list"></div></div></div></div>
+    <div class="filter-group"><div class="ms-wrap" id="ms-pac"><button class="ms-btn" onclick="toggleMs('ms-pac')"><span class="ms-lbl">Pacotes</span><span class="ms-cnt"></span><svg width="10" height="6" viewBox="0 0 10 6"><path d="M0 0l5 6 5-6z" fill="#F97316"/></svg></button><div class="ms-panel"><div class="ms-search"><svg width="12" height="12" viewBox="0 0 12 12"><circle cx="5" cy="5" r="4" stroke="#94A3B8" stroke-width="1.5" fill="none"/><line x1="8.5" y1="8.5" x2="11" y2="11" stroke="#94A3B8" stroke-width="1.5"/></svg><input type="text" placeholder="Pesquisar…"></div><div class="ms-list"></div></div></div></div>
+    <div class="filter-group"><div class="ms-wrap" id="ms-cta"><button class="ms-btn" onclick="toggleMs('ms-cta')"><span class="ms-lbl">Conta</span><span class="ms-cnt"></span><svg width="10" height="6" viewBox="0 0 10 6"><path d="M0 0l5 6 5-6z" fill="#F97316"/></svg></button><div class="ms-panel"><div class="ms-search"><svg width="12" height="12" viewBox="0 0 12 12"><circle cx="5" cy="5" r="4" stroke="#94A3B8" stroke-width="1.5" fill="none"/><line x1="8.5" y1="8.5" x2="11" y2="11" stroke="#94A3B8" stroke-width="1.5"/></svg><input type="text" placeholder="Pesquisar…"></div><div class="ms-list"></div></div></div></div>
+  </div>
+</header>
+
+<main class="main">
+
+  <!-- ── PONTE GAP-TO-TARGET ── -->
+  <section>
+    <div class="bridge-title">Aterrissagem do Ano (Gap-to-Target)</div>
+    <div class="bridge-sub" id="bridge-sub">—</div>
+    <div class="bridge-row" id="bridge-row"></div>
+  </section>
+
+  <!-- ── TABELAS (YTG / Economia / Forecast) ── -->
+  <div id="tables"></div>
+
+</main>
+
+<script>
+// ═══════════════════════════════════ CONFIG (idêntico ao visao-financeira) ═══════════════════════════════════
+const SHEET_ID='1qcTy2ppLCGBKKqZCxCYWCTL9kTAuWfHBMyBfWJOyih8';
+const TAB_FROTA='Frota', TAB_RECEITA='Receita Líquida';
+const C={orc:0,rem:1,real:2,vig:9,uni:10,nv3:11,cta:12};
+
+// Pacotes do YTG — ICMS é pacote PRÓPRIO (5º), separado de Combustíveis.
+const PAC_YTG={
+  'Combustíveis Veiculos e Equipamentos':'Combustíveis','Combustíveis':'Combustíveis','Fluídos (Arla)':'Combustíveis','Arla':'Combustíveis',
+  'Manutenção de Veículos e Equipamentos':'Manutenção','Manutenção de Veículos e Equip.':'Manutenção','Materiais e Ferramentas de Oficina':'Manutenção',
+  'Lavação de Veículos':'Manutenção','Manutenção de Carrocerias':'Manutenção','Personalização/Padronização de Veículos':'Manutenção',
+  'Personalização/Padronização':'Manutenção','Personalização e Padronização de Veículos':'Manutenção','Contratos de Manutenção Fabricante':'Manutenção',
+  'Consertos e Recapagens de Pneus':'Pneus','Pneus e Camaras':'Pneus','Recapagens e Outros Serviços':'Pneus','Pneus Novos':'Pneus',
+  'IPVA e Licenciamento de Veículos':'Seguros e Licenças','IPVA e Licenciamento':'Seguros e Licenças','Seguro de Veículos e Equipamentos':'Seguros e Licenças','Seguros':'Seguros e Licenças',
+  'Estorno de ICMS não Aproveitado':'ICMS','ICMS Crédito Presumido':'ICMS',
+};
+const getPacYTG = r => PAC_YTG[r[C.cta]] || 'Outros';
+// Ordem de exibição dos pacotes e quais recebem rateio em cada cenário
+const PAC_ORDER=['Combustíveis','Manutenção','Pneus','Seguros e Licenças','ICMS','Outros'];
+const CEN={3:['Combustíveis','Manutenção','Pneus'], 2:['Manutenção','Pneus']};
+// pacotes que NUNCA entram no alvo nem no rateio
+const FIXOS=['Seguros e Licenças','ICMS','Outros'];
+
+const getNv3Prefix = v => v ? v.split('-')[0].trim() : v;
+const getUniLabel  = v => { if(!v) return ''; const i=v.indexOf('-'); const s=i>=0?v.slice(i+1).trim():v.trim(); return s.replace(/\s*\(INATIVO\)\s*/i,'').trim(); };
+
+// ═══════════════════════════════════ FORMATADORES ═══════════════════════════════════
+const fmt = v => { const neg=+v<0,a=Math.abs(+v); let s; if(a>=1e9) s=(a/1e9).toFixed(2)+' bi'; else if(a>=1e6) s=(a/1e6).toFixed(2)+' mi'; else if(a>=1e5) s=(a/1e3).toFixed(2)+'k'; else s=Math.round(a).toLocaleString('pt-BR'); return (neg?'-':'')+s; };
+const fmtD = v => (+v>0?'+':'')+fmt(v);
+const pp = v => v==null||!isFinite(v) ? '—' : (v>=0?'+':'')+v.toFixed(2)+' pp';
+const pctInt = v => v==null||!isFinite(v) ? '—' : (v>=0?'+':'')+Math.round(v)+'%';
+const set = (id,val)=>{ const e=document.getElementById(id); if(e) e.textContent=val; };
+
+// ═══════════════════════════════════ ESTADO ═══════════════════════════════════
+let allRows=[], vigs=[], lastF=null;
+
+// ═══════════════════════════════════ MULTI-SELECT (idêntico visao-financeira) ═══════════════════════════════════
+function _buildMs(wrap, renderFn, getAllItemsFn){
+  if(!(wrap._sel instanceof Set)) wrap._sel=new Set();
+  const sel=wrap._sel, list=wrap.querySelector('.ms-list'), srch=wrap.querySelector('.ms-search input');
+  const render=(q)=>{ renderFn(list,sel, q!==undefined?q:(srch.value||'')); syncBadge(wrap); };
+  wrap._render=render;
+  if(!wrap._wired){
+    wrap._wired=true;
+    list.addEventListener('change',e=>{
+      const box=e.target;
+      if(box.classList.contains('ms-all')){ sel.clear(); }
+      else if(sel.size===0){ if(!box.checked){ const all=getAllItemsFn?getAllItemsFn():[]; all.forEach(v=>{ if(v!==box.dataset.v) sel.add(v); }); } }
+      else { if(box.checked) sel.add(box.dataset.v); else sel.delete(box.dataset.v); if(getAllItemsFn){ const all=getAllItemsFn(); if(all.length>0&&all.every(v=>sel.has(v))) sel.clear(); } }
+      render(srch.value); atualizar();
+    });
+    list.addEventListener('click',e=>{ const only=e.target.closest('.ms-only'); if(!only) return; e.preventDefault(); e.stopPropagation(); sel.clear(); sel.add(only.dataset.v); render(srch.value); atualizar(); });
+    srch.addEventListener('input',()=>render(srch.value));
+    srch.addEventListener('click',e=>e.stopPropagation());
+  }
+  render();
+}
+function buildMsFilter(id, items){
+  const wrap=document.getElementById(id); if(!wrap) return;
+  wrap._items=items;
+  _buildMs(wrap,(list,sel,q)=>{
+    const it=wrap._items||[], f=q.toLowerCase(), shown=it.filter(v=>v.toLowerCase().includes(f)), allChk=sel.size===0;
+    list.innerHTML=(!q?`<label class="ms-opt all-opt"><input type="checkbox" class="ms-all" ${allChk?'checked':''}> Todos</label>`:'')+
+      shown.map(v=>`<label class="ms-opt"><input type="checkbox" data-v="${v}" ${allChk||sel.has(v)?'checked':''}> ${v}<span class="ms-only" data-v="${v}">only</span></label>`).join('');
+  }, ()=>wrap._items||[]);
+}
+function setMsOptions(id, items){
+  const wrap=document.getElementById(id); if(!wrap) return;
+  wrap._items=items;
+  if(wrap._sel&&wrap._sel.size){ [...wrap._sel].forEach(v=>{ if(!items.includes(v)) wrap._sel.delete(v); }); }
+  if(wrap._render) wrap._render();
+}
+let _vigM1Done=false;
+function buildVigMsFilter(vigList){
+  const wrap=document.getElementById('ms-vig'); if(!wrap) return;
+  if(!(wrap._sel instanceof Set)) wrap._sel=new Set();
+  const sel=wrap._sel, validKeys=new Set(vigList.map(d=>vigKey(d)));
+  [...sel].forEach(vk=>{ if(!validKeys.has(vk)) sel.delete(vk); });
+  if(!_vigM1Done&&sel.size===0&&vigList.length){ const lr=lastRealVigKey(); sel.add((lr&&validKeys.has(lr))?lr:vigKey(vigList[vigList.length-1])); _vigM1Done=true; }
+  const list=wrap.querySelector('.ms-list'), srch=wrap.querySelector('.ms-search input'), allVigKeys=()=>vigList.map(d=>vigKey(d));
+  const newList=list.cloneNode(false); list.parentNode.replaceChild(newList,list);
+  const newSrch=srch.cloneNode(true); srch.parentNode.replaceChild(newSrch,srch);
+  const lst=wrap.querySelector('.ms-list'), src=wrap.querySelector('.ms-search input');
+  const rerender=(q='')=>{
+    const f=q.toLowerCase(), shown=vigList.filter(d=>vigLabel(d).toLowerCase().includes(f)), allChk=sel.size===0;
+    lst.innerHTML=(!q?`<label class="ms-opt all-opt"><input type="checkbox" class="ms-all" ${allChk?'checked':''}> Todas</label>`:'')+
+      shown.map(d=>{ const vk=vigKey(d),vl=vigLabel(d).toUpperCase(); return `<label class="ms-opt"><input type="checkbox" data-v="${vk}" ${allChk||sel.has(vk)?'checked':''}> ${vl}<span class="ms-only" data-v="${vk}">only</span></label>`; }).join('');
+    syncBadge(wrap);
+  };
+  lst.addEventListener('change',e=>{
+    const box=e.target;
+    if(box.classList.contains('ms-all')){ sel.clear(); }
+    else if(sel.size===0){ if(!box.checked){ allVigKeys().forEach(vk=>{ if(vk!==box.dataset.v) sel.add(vk); }); } }
+    else { const vk=box.dataset.v; if(box.checked) sel.add(vk); else sel.delete(vk); const all=allVigKeys(); if(all.length>0&&all.every(k=>sel.has(k))) sel.clear(); }
+    rerender(src.value); atualizar();
+  });
+  lst.addEventListener('click',e=>{ const only=e.target.closest('.ms-only'); if(!only) return; e.preventDefault(); e.stopPropagation(); sel.clear(); sel.add(only.dataset.v); rerender(src.value); atualizar(); });
+  src.addEventListener('input',()=>rerender(src.value));
+  src.addEventListener('click',e=>e.stopPropagation());
+  rerender();
+}
+function syncBadge(wrap){ const cnt=wrap.querySelector('.ms-cnt'), n=wrap._sel?wrap._sel.size:0; if(cnt){cnt.textContent=n; cnt.style.display=n?'':'none';} }
+function toggleMs(id){
+  document.querySelectorAll('.ms-panel.open').forEach(p=>{ if(p.closest('.ms-wrap').id!==id) p.classList.remove('open'); });
+  const panel=document.querySelector(`#${id} .ms-panel`); panel.classList.toggle('open');
+  if(panel.classList.contains('open')){ const inp=panel.querySelector('input[type=text]'); if(inp) setTimeout(()=>inp.focus(),50); }
+}
+function getMsValues(id){ const wrap=document.getElementById(id); if(!wrap) return []; return wrap._sel ? [...wrap._sel] : []; }
+document.addEventListener('click',e=>{ if(!e.target.closest('.ms-wrap')) document.querySelectorAll('.ms-panel.open').forEach(p=>p.classList.remove('open')); });
+
+// ═══════════════════════════════════ FETCH GVIZ ═══════════════════════════════════
+const _normEb = s => String(s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').trim();
+function ebIdx(header, ...names){
+  const nc=header.map(_normEb);
+  for(const n of names){ const nn=_normEb(n); const i=nc.indexOf(nn); if(i>=0) return i; }
+  for(const n of names){ const nn=_normEb(n); const i=nc.findIndex(c=>c.includes(nn)); if(i>=0) return i; }
+  return -1;
+}
+async function fetchTab(tab){
+  const url=`https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:json&sheet=${encodeURIComponent(tab)}`;
+  const res=await fetch(url), raw=await res.text();
+  const json=JSON.parse(raw.replace(/^[\s\S]*?\(/,'').replace(/\);?\s*$/,''));
+  let header=(json.table.cols||[]).map(c=>c&&c.label?c.label:'');
+  let rows=json.table.rows.map(r=>r.c.map(c=>c&&c.v!=null?c.v:null));
+  if(!header.some(x=>_normEb(x).includes('realizado')) && rows.length){ header=rows[0].map(x=>x==null?'':String(x)); rows=rows.slice(1); }
+  return { header, rows };
+}
+const MESES=['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
+const _mesNum = m => { if(m==null) return null; if(typeof m==='number'&&m>=1&&m<=12) return m; const s=_normEb(m); const i=MESES.indexOf(s.slice(0,3)); if(i>=0) return i+1; const n=parseInt(s); return (n>=1&&n<=12)?n:null; };
+function mapTab(header){
+  return { orc:ebIdx(header,'orçado','orcado'), rem:ebIdx(header,'remunerado'), real:ebIdx(header,'realizado'),
+    vig:ebIdx(header,'vigência','vigencia'), nv3:ebIdx(header,'nível 3','nivel 3','nivel3'),
+    cta:ebIdx(header,'conta gerencial','conta'), mes:ebIdx(header,'mês','mes'), ano:ebIdx(header,'ano') };
+}
+const _numBR = v => { if(v==null||v==='') return null; if(typeof v==='number') return v; let s=String(v).replace(/\s|R\$/g,''); if(s.indexOf(',')>=0) s=s.replace(/\./g,'').replace(',','.'); const f=parseFloat(s); return isNaN(f)?null:f; };
+function tabToRows(header, rows, ctaFixo){
+  const m=mapTab(header), out=[];
+  (rows||[]).forEach(r=>{
+    let vig=''; const mn=m.mes>=0?_mesNum(r[m.mes]):null, an=m.ano>=0?parseInt(r[m.ano]):null;
+    if(mn&&an) vig=`01/${String(mn).padStart(2,'0')}/${an}`;
+    else if(m.vig>=0&&r[m.vig]!=null){ const d=parseVig(r[m.vig]); if(d) vig=`01/${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()}`; }
+    if(!vig) return;
+    const cta=ctaFixo||(m.cta>=0?(r[m.cta]||'Outros'):'Outros');
+    if(!ctaFixo && _normEb(cta).includes('receita liquida')) return;
+    const arr=[];
+    arr[C.orc]=m.orc>=0?_numBR(r[m.orc]):null; arr[C.rem]=m.rem>=0?_numBR(r[m.rem]):null; arr[C.real]=m.real>=0?_numBR(r[m.real]):null;
+    arr[C.vig]=vig; arr[C.nv3]=m.nv3>=0?(r[m.nv3]||''):''; arr[C.cta]=cta;
+    out.push(arr);
+  });
+  return out;
+}
+async function fetchData(){
+  const [frota,receita]=await Promise.all([fetchTab(TAB_FROTA), fetchTab(TAB_RECEITA)]);
+  const fr=tabToRows(frota.header,frota.rows,null), re=tabToRows(receita.header,receita.rows,'Receita Líquida');
+  return { rows:[...fr,...re] };
+}
+
+// ═══════════════════════════════════ VIGÊNCIA ═══════════════════════════════════
+function parseVig(v){
+  if(!v) return null;
+  if(v instanceof Date) return new Date(v.getFullYear(), v.getMonth(), 1);
+  if(typeof v==='string'){ const gviz=v.match(/^Date\((\d+),(\d+),\d+\)$/); if(gviz) return new Date(+gviz[1],+gviz[2],1); if(v.includes('/')){ const [d,m,y]=v.split('/'); return new Date(+y,+m-1,1); } }
+  return null;
+}
+const vigKey = d => d ? `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}` : '';
+const vigLabel = d => d ? `${MESES[d.getMonth()]}/${String(d.getFullYear()).slice(2)}` : '';
+
+// ═══════════════════════════════════ FILTROS + CASCATA ═══════════════════════════════════
+function populateFilters(rows){
+  const vMap=new Map(); rows.forEach(r=>{ const d=parseVig(r[C.vig]); if(d) vMap.set(vigKey(d),d); });
+  vigs=[...vMap.values()].sort((a,b)=>a-b);
+  const anos=[...new Set(vigs.map(d=>String(d.getFullYear())))].sort().reverse();
+  buildMsFilter('ms-ano', anos); buildVigMsFilter(vigs);
+  const hasVal=r=>Math.abs(+r[C.rem])>0||Math.abs(+r[C.real])>0;
+  const hasCost=r=>hasVal(r)&&r[C.cta]!=='Receita Líquida';
+  buildMsFilter('ms-uni', [...new Set(rows.filter(hasCost).map(r=>getUniLabel(r[C.nv3])).filter(Boolean))].sort());
+  buildMsFilter('ms-nv3', [...new Set(rows.filter(hasCost).map(r=>getNv3Prefix(r[C.nv3])).filter(Boolean))].sort());
+  buildMsFilter('ms-pac', [...new Set(rows.filter(hasVal).map(r=>getPacYTG(r)).filter(v=>v&&v!=='Outros'))].sort());
+  buildMsFilter('ms-cta', [...new Set(rows.filter(r=>hasVal(r)&&r[C.cta]!=='Receita Líquida').map(r=>r[C.cta]).filter(Boolean))].sort());
+}
+function getF(){ return { ano:getMsValues('ms-ano'), vig:getMsValues('ms-vig'), uni:getMsValues('ms-uni'), nv3:getMsValues('ms-nv3'), pac:getMsValues('ms-pac'), cta:getMsValues('ms-cta') }; }
+function applyFilters(r,f){
+  if(f.uni.length && !f.uni.includes(getUniLabel(r[C.nv3]))) return false;
+  if(f.nv3.length && !f.nv3.includes(getNv3Prefix(r[C.nv3]))) return false;
+  if(f.pac.length && r[C.cta]!=='Receita Líquida' && !f.pac.includes(getPacYTG(r))) return false;
+  if(f.cta.length && r[C.cta]!=='Receita Líquida' && !f.cta.includes(r[C.cta])) return false;
+  return true;
+}
+function rowPassesExcept(r,f,except){
+  const d=parseVig(r[C.vig]); if(!d) return false;
+  if(except!=='ano'&&f.ano.length&&!f.ano.includes(String(d.getFullYear()))) return false;
+  if(except!=='vig'&&f.vig.length&&!f.vig.includes(vigKey(d))) return false;
+  if(except!=='uni'&&f.uni.length&&!f.uni.includes(getUniLabel(r[C.nv3]))) return false;
+  if(except!=='nv3'&&f.nv3.length&&!f.nv3.includes(getNv3Prefix(r[C.nv3]))) return false;
+  if(except!=='pac'&&f.pac.length&&r[C.cta]!=='Receita Líquida'&&!f.pac.includes(getPacYTG(r))) return false;
+  if(except!=='cta'&&f.cta.length&&r[C.cta]!=='Receita Líquida'&&!f.cta.includes(r[C.cta])) return false;
+  return true;
+}
+let _cascVigKey='';
+function refreshCascade(){
+  const f=getF(), hasVal=r=>Math.abs(+r[C.rem])>0||Math.abs(+r[C.real])>0, hasCost=r=>hasVal(r)&&r[C.cta]!=='Receita Líquida';
+  setMsOptions('ms-ano',[...new Set(allRows.filter(r=>rowPassesExcept(r,f,'ano')).map(r=>{const d=parseVig(r[C.vig]);return d?String(d.getFullYear()):null;}).filter(Boolean))].sort().reverse());
+  setMsOptions('ms-uni',[...new Set(allRows.filter(r=>hasCost(r)&&rowPassesExcept(r,f,'uni')).map(r=>getUniLabel(r[C.nv3])).filter(Boolean))].sort());
+  setMsOptions('ms-nv3',[...new Set(allRows.filter(r=>hasCost(r)&&rowPassesExcept(r,f,'nv3')).map(r=>getNv3Prefix(r[C.nv3])).filter(Boolean))].sort());
+  setMsOptions('ms-pac',[...new Set(allRows.filter(r=>hasVal(r)&&rowPassesExcept(r,f,'pac')).map(r=>getPacYTG(r)).filter(v=>v&&v!=='Outros'))].sort());
+  setMsOptions('ms-cta',[...new Set(allRows.filter(r=>hasVal(r)&&r[C.cta]!=='Receita Líquida'&&rowPassesExcept(r,f,'cta')).map(r=>r[C.cta]).filter(Boolean))].sort());
+  const vmap=new Map(); allRows.filter(r=>rowPassesExcept(r,f,'vig')).forEach(r=>{const d=parseVig(r[C.vig]);if(d)vmap.set(vigKey(d),d);});
+  const fvigs=[...vmap.values()].sort((a,b)=>a-b), vkey=fvigs.map(d=>vigKey(d)).join(',');
+  if(vkey!==_cascVigKey){ _cascVigKey=vkey; buildVigMsFilter(fvigs); }
+}
+// linhas do estado atual, ignorando o filtro de vigência (o YTG define o próprio recorte de meses)
+function rowsForYear(f, year){
+  return allRows.filter(r=>{ const d=parseVig(r[C.vig]); if(!d||d.getFullYear()!==year) return false; return applyFilters(r,f); });
+}
+
+// ═══════════════════════════════════ ACUMULADO / MESES ═══════════════════════════════════
+const _cheia = v => v!=null && v!=='';
+const temReal = r => _cheia(r[C.real]) || _cheia(r[C.rem]);
+function lastRealVigKey(){
+  let best=null,bestT=-Infinity;
+  (allRows||[]).forEach(r=>{ if(!temReal(r)) return; const d=parseVig(r[C.vig]); if(!d) return; const t=d.getTime(); if(t>bestT){ bestT=t; best=vigKey(d); } });
+  return best;
+}
+// último mês com realizado dentro do recorte de filtros e do ano
+function lastRealMonth(f, year){
+  let best=0;
+  rowsForYear(f,year).forEach(r=>{ if(!temReal(r)) return; const d=parseVig(r[C.vig]); if(d&&d.getMonth()+1>best) best=d.getMonth()+1; });
+  return best;
+}
+
+// ═══════════════════════════════════ NÚCLEO DO CÁLCULO YTG ═══════════════════════════════════
+// Ano vigente = ano do último mês com realizado (respeita filtro de Ano se houver).
+function anoVigente(f){
+  if(f.ano&&f.ano.length) return Math.max(...f.ano.map(Number));
+  const lr=lastRealVigKey(); return lr?+lr.split('-')[0]:new Date().getFullYear();
+}
+// soma orc/real (abs) de um conjunto de linhas, por conta canônica e por pacote
+function sumBy(rows, keyFn){
+  const m={};
+  rows.forEach(r=>{ if((r[C.cta]||'')==='Receita Líquida') return; const k=keyFn(r); if(!k) return; if(!m[k]) m[k]={orc:0,real:0,rem:0}; m[k].orc+=+(r[C.orc]||0); m[k].real+=+(r[C.real]||0); m[k].rem+=+(r[C.rem]||0); });
+  return m;
+}
+function receitaOf(rows){ let o=0,rem=0,real=0; rows.forEach(r=>{ if((r[C.cta]||'')!=='Receita Líquida') return; o+=+(r[C.orc]||0); rem+=+(r[C.rem]||0); real+=+(r[C.real]||0); }); return {orc:o,rem,real}; }
+
+// Constrói toda a estrutura de dados do painel para o estado de filtros f.
+function computeModel(f){
+  const year=anoVigente(f);
+  const yrRows=rowsForYear(f,year);
+  const lrm=lastRealMonth(f,year);                       // último mês fechado (com realizado)
+  const remMonths=[]; for(let mo=lrm+1;mo<=12;mo++) remMonths.push(mo);   // meses que faltam
+  const closedMonths=[]; for(let mo=1;mo<=lrm;mo++) closedMonths.push(mo);
+
+  const isMonth = (r,mo) => { const d=parseVig(r[C.vig]); return d&&d.getMonth()+1===mo; };
+  const rowsMonth = mo => yrRows.filter(r=>isMonth(r,mo));
+  const rowsClosed = yrRows.filter(r=>{ const d=parseVig(r[C.vig]); return d&&d.getMonth()+1<=lrm; });
+
+  // ── Impacto acumulado (Análise vs Orçado), por conta canônica → agregado por pacote ──
+  const accByCta = sumBy(rowsClosed, r=>r[C.cta]);       // por conta gerencial crua
+  const rlAcc = receitaOf(rowsClosed);
+  const rlRefOrc=Math.abs(rlAcc.orc), rlReal=Math.abs(rlAcc.real);
+  // impacto por conta = Δpp/100 × ReceitaRealizada ; Δpp = AVreal − AVorc
+  const impByCta={};
+  Object.entries(accByCta).forEach(([cta,d])=>{
+    const avRef=rlRefOrc?d.orc/rlRefOrc*100:0, avReal=rlReal?d.real/rlReal*100:0;
+    impByCta[cta]={orcAcc:d.orc, realAcc:d.real, avRef, avReal, dPp:avReal-avRef, imp:(avReal-avRef)/100*rlReal};
+  });
+
+  // orçado por conta nos meses que faltam (para pesos) e por mês
+  const orcRemByCta={};   // conta → total orçado (abs) dos meses que faltam
+  const orcByCtaMonth={}; // conta → {mo: orçado abs}
+  remMonths.forEach(mo=>{
+    const mRows=rowsMonth(mo), byC=sumBy(mRows, r=>r[C.cta]);
+    Object.entries(byC).forEach(([cta,d])=>{
+      const a=Math.abs(d.orc);
+      orcRemByCta[cta]=(orcRemByCta[cta]||0)+a;
+      (orcByCtaMonth[cta]=orcByCtaMonth[cta]||{})[mo]=a;
+    });
+  });
+
+  // agrupa contas por pacote YTG
+  const ctaPac = cta => PAC_YTG[cta]||'Outros';
+  const pacs={};   // pacote → {imp, orcAcc, realAcc, avRef, avReal, dPp, contas:{cta:{...}}, orcRem, orcMonth:{mo}}
+  PAC_ORDER.forEach(p=>pacs[p]={imp:0,orcAcc:0,realAcc:0,contas:{},orcRem:0,orcMonth:{}});
+  // impacto/acumulado
+  Object.entries(impByCta).forEach(([cta,d])=>{
+    const p=ctaPac(cta); if(!pacs[p]) pacs[p]={imp:0,orcAcc:0,realAcc:0,contas:{},orcRem:0,orcMonth:{}};
+    pacs[p].imp+=d.imp; pacs[p].orcAcc+=d.orcAcc; pacs[p].realAcc+=d.realAcc;
+    const c=pacs[p].contas[cta]=pacs[p].contas[cta]||{imp:0,orcAcc:0,realAcc:0,orcRem:0,orcMonth:{}};
+    c.imp+=d.imp; c.orcAcc+=d.orcAcc; c.realAcc+=d.realAcc;
+  });
+  // orçado dos meses restantes (por pacote e conta)
+  Object.entries(orcRemByCta).forEach(([cta,a])=>{
+    const p=ctaPac(cta); if(!pacs[p]) pacs[p]={imp:0,orcAcc:0,realAcc:0,contas:{},orcRem:0,orcMonth:{}};
+    pacs[p].orcRem+=a; const c=pacs[p].contas[cta]=pacs[p].contas[cta]||{imp:0,orcAcc:0,realAcc:0,orcRem:0,orcMonth:{}}; c.orcRem+=a;
+    Object.entries(orcByCtaMonth[cta]||{}).forEach(([mo,v])=>{ pacs[p].orcMonth[mo]=(pacs[p].orcMonth[mo]||0)+v; c.orcMonth[mo]=(c.orcMonth[mo]||0)+v; });
+  });
+  // AV por pacote (para colunas AV Orçado / AV Real / Δpp)
+  Object.values(pacs).forEach(p=>{ p.avRef=rlRefOrc?p.orcAcc/rlRefOrc*100:0; p.avReal=rlReal?p.realAcc/rlReal*100:0; p.dPp=p.avReal-p.avRef; });
+
+  return { year, lrm, remMonths, closedMonths, pacs, rlAcc, rlRefOrc, rlReal, yrRows, rowsClosed };
+}
+
+// Distribui o alvo do cenário (cen=3 ou 2) entre as contas dos pacotes participantes.
+// alvo = |Σ impacto dos pacotes participantes| (decisão: só pacotes controláveis).
+function computeCenario(model, cen){
+  const parts=CEN[cen], {remMonths, pacs}=model;
+  // ALVO FIXO nos dois cenários = |impacto dos 3 pacotes controláveis| (Comb+Manut+Pneus).
+  // O cenário de 2 pacotes recupera o MESMO gap, apenas concentrando o corte em Manutenção+Pneus.
+  let alvo=0; CEN[3].forEach(p=>{ if(pacs[p]) alvo+=pacs[p].imp; });
+  alvo=-alvo; if(alvo<0) alvo=0;                 // impacto desfavorável (negativo) → alvo positivo a economizar
+  // pesos
+  let totOrcRem=0; parts.forEach(p=>{ if(pacs[p]) totOrcRem+=pacs[p].orcRem; });
+  const orcMonthTot={}; remMonths.forEach(mo=>{ let s=0; parts.forEach(p=>{ s+=(pacs[p]&&pacs[p].orcMonth[mo])||0; }); orcMonthTot[mo]=s; });
+  const totMonth=remMonths.reduce((a,mo)=>a+orcMonthTot[mo],0);
+  // economia por conta e por mês  = alvo × pesoConta × pesoMes
+  const out={};   // pacote → {economia, contas:{cta:{economia, econMonth:{mo}, orcMonth, orcRem}}}
+  parts.forEach(p=>{
+    const P=pacs[p]; if(!P) return;
+    const po={economia:0, econMonth:{}, orcMonth:P.orcMonth, orcRem:P.orcRem, contas:{}};
+    Object.entries(P.contas).forEach(([cta,c])=>{
+      const pesoConta=totOrcRem?c.orcRem/totOrcRem:0;
+      const co={economia:0, econMonth:{}, orcMonth:c.orcMonth, orcRem:c.orcRem};
+      remMonths.forEach(mo=>{
+        const pesoMes=totMonth?orcMonthTot[mo]/totMonth:0;
+        const e=alvo*pesoConta*pesoMes;
+        co.econMonth[mo]=e; co.economia+=e; po.econMonth[mo]=(po.econMonth[mo]||0)+e;
+      });
+      po.economia+=co.economia; po.contas[cta]=co;
+    });
+    out[p]=po;
+  });
+  return { alvo, parts, out, totOrcRem, orcMonthTot, totMonth };
+}
+
+// ═══════════════════════════════════ RENDER ═══════════════════════════════════
+const contaLabel = cta => cta;   // exibe o nome cru da conta gerencial
+function monthCols(remMonths, year){ return remMonths.map(mo=>`${MESES[mo-1]}/${String(year).slice(2)}`); }
+
+function renderBridge(model){
+  const {year, remMonths, pacs, rlRefOrc, rlReal, yrRows}=model;
+  // nominal: custo orçado ano, realizado acumulado, YTG (orçado restante), landing
+  let orcAno=0, realAcc=0, orcRem=0;
+  PAC_ORDER.forEach(p=>{ if(pacs[p]){ realAcc+=Math.abs(pacs[p].realAcc); orcRem+=pacs[p].orcRem; } });
+  // orçado ano inteiro (todas as contas de custo)
+  const byCtaYear=sumBy(yrRows, r=>r[C.cta]); Object.values(byCtaYear).forEach(d=>orcAno+=Math.abs(d.orc));
+  const landing=realAcc+orcRem, gap=landing-orcAno;
+  // alvo AVO (controláveis 3 pacotes) para referência
+  let alvo3=0; CEN[3].forEach(p=>{ if(pacs[p]) alvo3+=pacs[p].imp; }); alvo3=-alvo3;
+  const cards=[
+    {l:'Orçamento Custo Ano', v:fmt(orcAno), m:`${year}`, op:''},
+    {l:'Realizado Acumulado', v:fmt(realAcc), m:`até ${MESES[model.lrm-1]}/${String(year).slice(2)}`, op:'+'},
+    {l:'YTG (Orçado a Realizar)', v:fmt(orcRem), m:`${remMonths.length} meses`, op:'+'},
+    {l:'Landing Projetado', v:fmt(landing), m:'se nada mudar', op:'=', accent:true},
+    {l:'Gap vs Orçamento', v:fmtD(gap), m:gap>0?'acima do orçado':'dentro do orçado', op:'', cls:gap>0?'cr':'cg'},
+    {l:'Alvo Reorçam. (AVO)', v:fmt(alvo3), m:'impacto controlável a recuperar', op:'', accent:true},
+  ];
+  document.getElementById('bridge-sub').textContent=`Ano ${year} · fechado até ${MESES[model.lrm-1]}/${String(year).slice(2)} · ${remMonths.length} meses a reorçar. Valores de custo em módulo (R$).`;
+  document.getElementById('bridge-row').innerHTML=cards.map(c=>`
+    <div class="bridge-card ${c.accent?'accent':''}">
+      ${c.op?`<div class="bridge-op">${c.op}</div>`:''}
+      <div class="bc-label">${c.l}</div>
+      <div class="bc-value ${c.cls||''}">${c.v}</div>
+      <div class="bc-meta">${c.m}</div>
+    </div>`).join('');
+}
+
+// tabela YTG (orçado puro dos meses restantes) — 5 pacotes + total
+function tblYTG(model){
+  const {remMonths, year, pacs}=model;
+  const cols=monthCols(remMonths, year);
+  let rows='', tImp=0, tOrcRem=0, tMonth={}; remMonths.forEach(mo=>tMonth[mo]=0);
+  PAC_ORDER.forEach(p=>{
+    const P=pacs[p]; if(!P) return; if(P.orcRem===0 && P.orcAcc===0 && P.imp===0) return;
+    const fixo=FIXOS.includes(p);
+    rows+=pacRow(p, P, remMonths, null, fixo, false, p);
+    // contas (drill)
+    Object.entries(P.contas).sort((a,b)=>a[1].imp-b[1].imp).forEach(([cta,c])=>{
+      if(c.orcRem===0 && c.orcAcc===0 && c.imp===0) return;
+      rows+=ctaRow(p, cta, c, remMonths, null, fixo);
+    });
+    tImp+=P.imp; tOrcRem+=P.orcRem; remMonths.forEach(mo=>tMonth[mo]+=(P.orcMonth[mo]||0));
+  });
+  const totCells=remMonths.map(mo=>`<td class="num">${fmt(tMonth[mo])}</td>`).join('');
+  rows+=`<tr class="total"><td class="conta">Total Frota</td><td class="num">${pctAv(sumAvRef(model))}</td><td class="num">${pctAv(sumAvReal(model))}</td><td class="num">—</td><td class="num sep-l ${tImp<0?'cr':'cg'}">${fmt(tImp)}</td>${totCells.replace('<td class="num">','<td class="num sep-l">')}</tr>`;
+  return tableShell('YTG (Year To Go)', 'blue', 'Orçado puro dos meses a realizar — nenhum ajuste aplicado. AV / Impacto = acumulado do ano fechado.', cols, rows, false);
+}
+
+// tabela Economia OU Forecast de um cenário
+function tblCenario(model, cen, kind){   // kind: 'eco' | 'fct'
+  const {remMonths, year, pacs}=model;
+  const cc=computeCenario(model, cen);
+  const cols=monthCols(remMonths, year);
+  const partSet=new Set(cc.parts);
+  let rows='', tImp=0, tVal={}; remMonths.forEach(mo=>tVal[mo]=0); let tEco=0;
+  PAC_ORDER.forEach(p=>{
+    const P=pacs[p]; if(!P) return; if(P.orcRem===0 && P.orcAcc===0 && P.imp===0) return;
+    const participa=partSet.has(p), po=cc.out[p];
+    // valores por mês
+    const cells=remMonths.map(mo=>{
+      const orc=P.orcMonth[mo]||0, eco=(participa&&po)?(po.econMonth[mo]||0):0;
+      if(kind==='eco'){ tVal[mo]+=eco; return eco?`<td class="num cg">${fmt(-eco)}</td>`:`<td class="num muted">—</td>`; }
+      const nv=orc-eco; tVal[mo]+=nv; return `<td class="num">${fmt(nv)}</td>`;
+    }).join('');
+    const eco=(participa&&po)?po.economia:0; tEco+=eco; tImp+=P.imp;
+    const badge=participa?'':`<span class="pill">fixo</span>`;
+    const avRefC=pctAv(P.avRef), avRealC=pctAv(P.avReal);
+    // esforço médio do pacote (economia / orçado restante)
+    const esf=(participa&&P.orcRem)?eco/P.orcRem*100:null;
+    const impCell=`<td class="num sep-l ${P.imp<0?'cr':'cg'}">${fmt(P.imp)}</td>`;
+    rows+=`<tr class="pac-row ${Object.keys(P.contas).length?'':'no-drill'}" onclick="toggleDrill(this)">
+      <td class="conta">${p} ${badge}</td>
+      <td class="num">${avRefC}</td><td class="num">${avRealC}</td>
+      <td class="num ${esf!=null&&esf>15?'eff-hi':(esf!=null?'':'muted')}">${esf!=null?esf.toFixed(0)+'%':'—'}</td>
+      ${impCell}${cells.replace('<td class="num','<td class="num sep-l',1)}</tr>`;
+    // contas
+    Object.entries(P.contas).sort((a,b)=>a[1].imp-b[1].imp).forEach(([cta,c])=>{
+      if(c.orcRem===0 && c.orcAcc===0 && c.imp===0) return;
+      const co=(participa&&po)?po.contas[cta]:null;
+      const cc2=remMonths.map(mo=>{
+        const orc=c.orcMonth[mo]||0, e=co?(co.econMonth[mo]||0):0;
+        if(kind==='eco') return e?`<td class="num cg">${fmt(-e)}</td>`:`<td class="num muted">—</td>`;
+        return `<td class="num">${fmt(orc-e)}</td>`;
+      }).join('');
+      const ce=co?co.economia:0, cesf=(co&&c.orcRem)?ce/c.orcRem*100:null;
+      rows+=`<tr class="sub-row" data-pac="${p}">
+        <td class="conta">${contaLabel(cta)}</td>
+        <td class="num muted">${pctAv(c.orcAcc&&model.rlRefOrc?c.orcAcc/model.rlRefOrc*100:0)}</td>
+        <td class="num muted">${pctAv(c.realAcc&&model.rlReal?c.realAcc/model.rlReal*100:0)}</td>
+        <td class="num ${cesf!=null&&cesf>15?'eff-hi':'muted'}">${cesf!=null?cesf.toFixed(0)+'%':'—'}</td>
+        <td class="num sep-l ${c.imp<0?'cr':'cg'}">${fmt(c.imp)}</td>${cc2.replace('<td class="num','<td class="num sep-l',1)}</tr>`;
+    });
+  });
+  const totCells=remMonths.map(mo=>kind==='eco'?`<td class="num cg">${fmt(-tVal[mo])}</td>`:`<td class="num">${fmt(tVal[mo])}</td>`).join('');
+  const alvoNote = kind==='eco'
+    ? `<td class="num sep-l cg" colspan="1">${fmt(-cc.alvo)}</td>`
+    : `<td class="num sep-l ${tImp<0?'cr':'cg'}">${fmt(tImp)}</td>`;
+  rows+=`<tr class="total"><td class="conta">${kind==='eco'?'Economia Total (alvo)':'Total Reorçado'}</td><td class="num">—</td><td class="num">—</td><td class="num">—</td>${alvoNote}${totCells.replace('<td class="num','<td class="num sep-l',1)}</tr>`;
+  const cenTxt = cen===3?'Combustíveis + Manutenção + Pneus':'Manutenção + Pneus';
+  if(kind==='eco'){
+    return tableShell(`Economia Necessária — ${cen} pacotes`, 'orange',
+      `Corte a distribuir por conta × mês para recuperar o impacto AVO. Alvo = |impacto de ${cenTxt}| = ${fmt(cc.alvo)}. Rateio: alvo × peso da conta × peso do mês. Coluna % = esforço (corte ÷ orçado do período).`,
+      cols, rows, true);
+  }
+  return tableShell(`Forecast Reorçado — ${cen} pacotes`, 'orange',
+    `Novo orçamento dos meses a realizar = orçado original − economia. Pacotes ${cenTxt} absorvem o alvo; Seguros e Licenças e ICMS mantêm o orçado (fixos). Coluna % = esforço exigido.`,
+    cols, rows, true);
+}
+
+// helpers de render
+const pctAv = v => (v==null||!isFinite(v))?'—':v.toFixed(2)+'%';
+function sumAvRef(model){ let o=0; PAC_ORDER.forEach(p=>{ if(model.pacs[p]) o+=model.pacs[p].orcAcc; }); return model.rlRefOrc?o/model.rlRefOrc*100:0; }
+function sumAvReal(model){ let o=0; PAC_ORDER.forEach(p=>{ if(model.pacs[p]) o+=model.pacs[p].realAcc; }); return model.rlReal?o/model.rlReal*100:0; }
+
+function pacRow(p, P, remMonths, po, fixo, isEco, key){
+  const cells=remMonths.map(mo=>`<td class="num">${fmt(P.orcMonth[mo]||0)}</td>`).join('');
+  const badge=fixo?`<span class="pill">fixo</span>`:'';
+  return `<tr class="pac-row ${Object.keys(P.contas).length?'':'no-drill'}" onclick="toggleDrill(this)">
+    <td class="conta">${p} ${badge}</td>
+    <td class="num">${pctAv(P.avRef)}</td><td class="num">${pctAv(P.avReal)}</td>
+    <td class="num ${P.dPp<0?'cr':'cg'}">${pp(P.dPp)}</td>
+    <td class="num sep-l ${P.imp<0?'cr':'cg'}">${fmt(P.imp)}</td>${cells.replace('<td class="num','<td class="num sep-l',1)}</tr>`;
+}
+function ctaRow(p, cta, c, remMonths, po, fixo){
+  const cells=remMonths.map(mo=>`<td class="num">${fmt(c.orcMonth[mo]||0)}</td>`).join('');
+  const avRef=c.orcAcc&&window._rlRefOrc?c.orcAcc/window._rlRefOrc*100:0;
+  return `<tr class="sub-row" data-pac="${p}">
+    <td class="conta">${contaLabel(cta)}</td>
+    <td class="num muted">—</td><td class="num muted">—</td><td class="num muted">—</td>
+    <td class="num sep-l ${c.imp<0?'cr':'cg'}">${fmt(c.imp)}</td>${cells.replace('<td class="num','<td class="num sep-l',1)}</tr>`;
+}
+function tableShell(title, tag, sub, cols, rows, isCen){
+  const monthHead=cols.map(c=>`<th class="num">${c}</th>`).join('');
+  const firstMonth=monthHead.replace('<th class="num"','<th class="num sep-l"',1);
+  return `<div class="tbl-section">
+    <div class="tbl-title">Pacotes Frota <span class="tag ${tag==='blue'?'blue':''}">${title}</span></div>
+    <div class="tbl-sub">${sub}</div>
+    <div class="tbl-wrap"><table class="dre"><thead>
+      <tr><th class="conta">Pacotes</th><th class="num">AV Orçado</th><th class="num">AV Real</th><th class="num">${isCen?'% Esforço':'Δ pp'}</th><th class="num sep-l">Impacto</th>${firstMonth}</tr>
+    </thead><tbody>${rows}</tbody></table></div></div>`;
+}
+function toggleDrill(tr){
+  if(tr.classList.contains('no-drill')) return;
+  tr.classList.toggle('open');
+  let n=tr.nextElementSibling;
+  while(n && n.classList.contains('sub-row')){ n.classList.toggle('show'); n=n.nextElementSibling; }
+}
+
+// ═══════════════════════════════════ ATUALIZAR ═══════════════════════════════════
+function atualizar(){
+  refreshCascade();
+  const f=getF(); lastF=f;
+  const model=computeModel(f);
+  window._rlRefOrc=model.rlRefOrc;
+  renderBridge(model);
+  const html=[
+    tblYTG(model),
+    tblCenario(model,3,'eco'),
+    tblCenario(model,3,'fct'),
+    tblCenario(model,2,'eco'),
+    tblCenario(model,2,'fct'),
+  ].join('');
+  document.getElementById('tables').innerHTML=html;
+  const now=new Date();
+  set('status-badge',`Atualizado ${now.toLocaleDateString('pt-BR')} ${now.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})}`);
+}
+
+// ═══════════════════════════════════ INIT / CACHE ═══════════════════════════════════
+const CACHE_KEY='bi_cache_ytg_v1', CACHE_TTL=60*60*1000;
+function loadCache(){ try{ const c=JSON.parse(localStorage.getItem(CACHE_KEY)); if(c&&c.rows&&c.t) return c; }catch(e){ localStorage.removeItem(CACHE_KEY); } return null; }
+function useRows(rows){ allRows=rows; if(allRows[0]&&typeof allRows[0][C.orc]==='string') allRows.shift(); populateFilters(allRows); atualizar(); }
+async function recarregar(){
+  set('status-badge','Carregando…');
+  try{ const {rows}=await fetchData(); try{ localStorage.setItem(CACHE_KEY,JSON.stringify({t:Date.now(),rows})); }catch(e){} useRows(rows); }
+  catch(e){ console.error(e); set('status-badge','Erro ao carregar dados'); }
+}
+async function init(){
+  const c=loadCache();
+  if(c){ useRows(c.rows); if(Date.now()-c.t<CACHE_TTL){ const d=new Date(c.t); set('status-badge',`Atualizado ${d.toLocaleDateString('pt-BR')} ${d.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})} (cache)`); } else { await recarregar(); } }
+  else { await recarregar(); }
+  setInterval(recarregar,CACHE_TTL);
+}
+function initAccessLog(){
+  let name=localStorage.getItem('bi_user_name');
+  if(!name){ name=prompt('Qual é o seu nome?')||'Desconhecido'; localStorage.setItem('bi_user_name',name); }
+  const lastRaw=localStorage.getItem('bi_last_access');
+  if(lastRaw){ const d=new Date(lastRaw); const lastUser=localStorage.getItem('bi_last_user')||name; const badge=document.getElementById('access-badge');
+    if(badge){ badge.textContent=`Último acesso: ${d.toLocaleDateString('pt-BR')} ${d.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})} · ${lastUser}`; badge.style.display=''; } }
+  localStorage.setItem('bi_last_access',new Date().toISOString()); localStorage.setItem('bi_last_user',name);
+}
+document.addEventListener('DOMContentLoaded',()=>{initAccessLog();init();});
+// ── tema ──
+const _sun=`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>`;
+const _moon=`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>`;
+function applyTheme(t){ document.body.classList.toggle('light-mode',t==='light'); localStorage.setItem('bi_theme',t); const b=document.getElementById('themeBtn'); if(b) b.innerHTML=t==='light'?_moon:_sun; }
+(function(){ const t=localStorage.getItem('bi_theme')||'dark'; applyTheme(t); document.getElementById('themeBtn').addEventListener('click',()=>applyTheme(document.body.classList.contains('light-mode')?'dark':'light')); })();
+</script>
+</body>
+</html>
