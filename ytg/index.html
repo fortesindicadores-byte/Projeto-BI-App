@@ -570,9 +570,8 @@ const wfBracket={afterDatasetsDraw(chart){
   const first=meta.data[1], last=meta.data[b.n]; if(!first||!last) return;
   const xL=first.x-first.width/2, xR=last.x+last.width/2;
   const col=isLight?'#111111':'#FFFFFF';
-  // ancora acima da barra de economia MAIS ALTA, com folga dos rótulos
-  let minTop=Infinity; for(let i=1;i<=b.n;i++){ const el=meta.data[i]; if(el&&el.y<minTop) minTop=el.y; }
-  const tick=16, y=minTop-56;                // linha da chave; verticais descem em direção às barras
+  // posição fixa no topo (dentro do padding), independente da altura das barras → nunca corta
+  const tick=18, y=chart.chartArea.top-34;   // linha da chave; verticais descem em direção às barras
   const ctx=chart.ctx;
   ctx.save();
   ctx.strokeStyle=col; ctx.lineWidth=1.5;
@@ -622,7 +621,7 @@ function drawWf(model, cen, canvasId){
   chWf[cen]=new Chart(document.getElementById(canvasId),{
     type:'bar',
     data:{labels,datasets:[{data:bars,backgroundColor:colors,borderColor:colors,borderWidth:1,borderRadius:3,barPercentage:.72}]},
-    options:{responsive:true,maintainAspectRatio:false,layout:{padding:{top:30}},
+    options:{responsive:true,maintainAspectRatio:false,animation:false,layout:{padding:{top:64}},
       plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>{const v=c.raw;return 'R$ '+fmt(Math.abs(v[1]-v[0]));}},backgroundColor:'#141B26',titleColor:'#F97316',bodyColor:'#F1F5F9',borderColor:'#1E2D40',borderWidth:1,titleFont:{family:'Montserrat'},bodyFont:{family:'Montserrat'}}},
       scales:{x:{grid:{display:false},border:{display:false},ticks:tick},y:{min:ymin,max:ymax,grid:{display:false},border:{display:false},ticks:{...tick,callback:v=>fmt(v)}}}},
     plugins:[wfLabels,wfBracket]
