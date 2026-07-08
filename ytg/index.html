@@ -131,6 +131,8 @@ table.dre tr.total td{color:var(--text);font-weight:800;font-size:13px;border-to
 .muted{color:var(--text3)!important;}
 .eff-hi{color:var(--red)!important;font-weight:800;}
 .pill{font-size:10px;font-weight:700;padding:1px 7px;border-radius:10px;background:rgba(255,255,255,.06);color:var(--text2);}
+.esf-tag{font-size:9px;font-weight:800;color:var(--orange);background:rgba(249,115,22,.12);border:1px solid rgba(249,115,22,.3);border-radius:8px;padding:1px 6px;margin-left:4px;vertical-align:middle;white-space:nowrap;}
+.esf-tag.hi{color:var(--red);background:rgba(255,102,102,.10);border-color:rgba(255,102,102,.35);}
 /* célula empilhada: forecast|AV em cima, economia(pp) menor embaixo */
 table.dre td.mcell{text-align:right;line-height:1.2;white-space:nowrap;}
 table.dre td.mcell .p{display:block;font-weight:600;color:var(--text);}
@@ -722,53 +724,69 @@ function tblCenario(model, cen, kind){   // kind: 'eco' | 'fct'
     cols, rows, true);
 }
 
-// tabela ÚNICA por cenário: pacotes nas linhas (com drill de conta), meses nas colunas.
-// Célula: FCT | AV% em cima + economia (pp) menor embaixo. Nominais negativos (custo).
+// Cenário: título FORA do card + card único com DUAS tabelas (Economia e FCT).
+// Colunas iguais às do YTG (AV Orç/Real YTD, Δ pp, Impacto, meses) p/ alinhar; meses só nominal (negativo).
+// Esforço vira tag colada no nome do pacote.
 function tblCenarioMerged(model, cen, titulo, sub){
-  const {remMonths, year, pacs, yrRows}=model;
+  const {remMonths, year, pacs}=model;
   const cc=computeCenario(model, cen);
   const partSet=new Set(cc.parts);
-  const recMonth={};
-  remMonths.forEach(mo=>{ const rr=yrRows.filter(r=>{const d=parseVig(r[C.vig]);return d&&d.getMonth()+1===mo;}); recMonth[mo]=Math.abs(receitaOf(rr).orc); });
   const pctS = v => (v==null||!isFinite(v))?'—':v.toFixed(2)+'%';
-  const cell=(orcAbs, eco, mo)=>{
-    const fcAbs=orcAbs-eco;
-    const av=recMonth[mo]?fcAbs/recMonth[mo]*100:0;
-    const e = eco>0 ? `<span class="e">-${fmt(eco)}</span>` : `<span class="e muted">—</span>`;
-    return `<td class="num mcell"><span class="p">-${fmt(fcAbs)} <span class="avm">| -${av.toFixed(1)}%</span></span>${e}</td>`;
-  };
-  const cellsFor=(orcMonth, econMonth)=>remMonths.map(mo=>cell(orcMonth[mo]||0, econMonth?(econMonth[mo]||0):0, mo)).join('').replace('<td class="num','<td class="num sep-l',1);
-  let rows='', tOrc={}, tEco={}; remMonths.forEach(mo=>{tOrc[mo]=0;tEco[mo]=0;});
-  PAC_ORDER.forEach(p=>{
-    const P=pacs[p]; if(!P) return; if(P.orcRem===0&&P.orcAcc===0&&P.imp===0) return;
-    const participa=partSet.has(p), po=cc.out[p];
-    const eco=(participa&&po)?po.economia:0, esf=(participa&&P.orcRem)?eco/P.orcRem*100:null;
-    const badge=participa?'':`<span class="pill">fixo</span>`;
-    remMonths.forEach(mo=>{ tOrc[mo]+=(P.orcMonth[mo]||0); if(participa&&po) tEco[mo]+=(po.econMonth[mo]||0); });
-    rows+=`<tr class="pac-row ${Object.keys(P.contas).length?'':'no-drill'}" onclick="toggleDrill(this)">
-      <td class="conta">${p} ${badge}</td>
-      <td class="num">${pctS(P.avRef)}</td>
-      <td class="num ${esf!=null&&esf>15?'eff-hi':(esf!=null?'':'muted')}">${esf!=null?esf.toFixed(0)+'%':'—'}</td>${cellsFor(P.orcMonth, (participa&&po)?po.econMonth:null)}</tr>`;
-    Object.entries(P.contas).sort((a,b)=>a[1].imp-b[1].imp).forEach(([cta,c])=>{
-      if(c.orcRem===0&&c.orcAcc===0&&c.imp===0) return;
-      const co=(participa&&po)?po.contas[cta]:null, cesf=(co&&c.orcRem)?co.economia/c.orcRem*100:null;
-      rows+=`<tr class="sub-row" data-pac="${p}">
-        <td class="conta">${contaLabel(cta)}</td>
-        <td class="num muted">${pctS(c.orcAcc&&model.rlRefOrc?c.orcAcc/model.rlRefOrc*100:0)}</td>
-        <td class="num ${cesf!=null&&cesf>15?'eff-hi':'muted'}">${cesf!=null?cesf.toFixed(0)+'%':'—'}</td>${cellsFor(c.orcMonth, co?co.econMonth:null)}</tr>`;
-    });
-  });
-  let orcPart=0; cc.parts.forEach(p=>{ if(pacs[p]) orcPart+=pacs[p].orcRem; });
-  const esfTot=orcPart?cc.alvo/orcPart*100:0;
-  const totCells=remMonths.map(mo=>cell(tOrc[mo], tEco[mo], mo)).join('').replace('<td class="num','<td class="num sep-l',1);
-  rows+=`<tr class="total"><td class="conta">Total Frota</td><td class="num">${pctS(sumAvRef(model))}</td><td class="num">${esfTot.toFixed(0)}%</td>${totCells}</tr>`;
   const monthHead=remMonths.map(mo=>`<th class="num">${MESES[mo-1]}/${String(year).slice(2)}</th>`).join('').replace('<th class="num"','<th class="num sep-l"',1);
-  return `<div class="tbl-section">
-    <div class="tbl-title">${titulo}</div>
-    <div class="tbl-sub">${sub}</div>
-    <div class="tbl-wrap"><table class="dre"><thead>
-      <tr><th class="conta">Pacotes</th><th class="num">AV Orç</th><th class="num">% Esf.</th>${monthHead}</tr>
-    </thead><tbody>${rows}</tbody></table></div></div>`;
+  const head=`<tr><th class="conta">Pacotes</th><th class="num">AV Orç - YTD</th><th class="num">AV Real - YTD</th><th class="num">Δ pp</th><th class="num sep-l">Impacto</th>${monthHead}</tr>`;
+
+  const buildRows=(kind)=>{   // kind: 'eco' | 'fct'
+    let rows='', tM={}; remMonths.forEach(mo=>tM[mo]=0); let tImp=0;
+    PAC_ORDER.forEach(p=>{
+      const P=pacs[p]; if(!P) return; if(P.orcRem===0&&P.orcAcc===0&&P.imp===0) return;
+      const participa=partSet.has(p), po=participa?cc.out[p]:null;
+      const eco=po?po.economia:0, esf=(participa&&P.orcRem)?eco/P.orcRem*100:null;
+      const tag=participa?`<span class="esf-tag${esf>15?' hi':''}">esf. ${esf.toFixed(0)}%</span>`:`<span class="pill">fixo</span>`;
+      const cells=remMonths.map(mo=>{
+        const orc=P.orcMonth[mo]||0, e=po?(po.econMonth[mo]||0):0;
+        const v=kind==='eco'?e:(orc-e); tM[mo]+=v;
+        if(kind==='eco'&&!e) return `<td class="num muted">—</td>`;
+        return `<td class="num">-${fmt(v)}</td>`;
+      }).join('').replace('<td class="num','<td class="num sep-l',1);
+      tImp+=P.imp;
+      rows+=`<tr class="pac-row ${Object.keys(P.contas).length?'':'no-drill'}" onclick="toggleDrill(this)">
+        <td class="conta">${p} ${tag}</td>
+        <td class="num">${pctS(P.avRef)}</td><td class="num">${pctS(P.avReal)}</td>
+        <td class="num ${P.dPp<0?'cr':'cg'}">${pp(P.dPp)}</td>
+        <td class="num sep-l ${P.imp<0?'cr':'cg'}">${fmtA(P.imp)}</td>${cells}</tr>`;
+      Object.entries(P.contas).sort((a,b)=>a[1].imp-b[1].imp).forEach(([cta,c])=>{
+        if(c.orcRem===0&&c.orcAcc===0&&c.imp===0) return;
+        const co=po?po.contas[cta]:null;
+        const avR=model.rlRefOrc?c.orcAcc/model.rlRefOrc*100:0, avRe=model.rlReal?c.realAcc/model.rlReal*100:0, dp=avRe-avR;
+        const cc2=remMonths.map(mo=>{
+          const orc=c.orcMonth[mo]||0, e=co?(co.econMonth[mo]||0):0;
+          if(kind==='eco') return e?`<td class="num">-${fmt(e)}</td>`:`<td class="num muted">—</td>`;
+          return `<td class="num">-${fmt(orc-e)}</td>`;
+        }).join('').replace('<td class="num','<td class="num sep-l',1);
+        rows+=`<tr class="sub-row" data-pac="${p}">
+          <td class="conta">${contaLabel(cta)}</td>
+          <td class="num muted">${pctS(avR)}</td><td class="num muted">${pctS(avRe)}</td>
+          <td class="num ${dp<0?'cr':'cg'}">${pp(dp)}</td>
+          <td class="num sep-l ${c.imp<0?'cr':'cg'}">${fmtA(c.imp)}</td>${cc2}</tr>`;
+      });
+    });
+    let orcPart=0; cc.parts.forEach(p=>{ if(pacs[p]) orcPart+=pacs[p].orcRem; });
+    const esfTot=orcPart?cc.alvo/orcPart*100:0;
+    const dTot=sumAvReal(model)-sumAvRef(model);
+    const totCells=remMonths.map(mo=>`<td class="num">-${fmt(tM[mo])}</td>`).join('').replace('<td class="num','<td class="num sep-l',1);
+    rows+=`<tr class="total"><td class="conta">Total Frota <span class="esf-tag${esfTot>15?' hi':''}">esf. ${esfTot.toFixed(0)}%</span></td><td class="num">${pctS(sumAvRef(model))}</td><td class="num">${pctS(sumAvReal(model))}</td><td class="num ${dTot<0?'cr':'cg'}">${pp(dTot)}</td><td class="num sep-l ${tImp<0?'cr':'cg'}">${fmtA(tImp)}</td>${totCells}</tr>`;
+    return rows;
+  };
+
+  return `<div class="cen-title"><span class="cen-tx">${titulo}<small>${sub}</small></span></div>
+  <div class="tbl-section">
+    <div class="tbl-title">Economia Necessária</div>
+    <div class="tbl-sub">Corte por conta × mês para recuperar o alvo de ${fmt(cc.alvo)}. Rateio: alvo × peso da conta × peso do mês.</div>
+    <div class="tbl-wrap"><table class="dre"><thead>${head}</thead><tbody>${buildRows('eco')}</tbody></table></div>
+    <div class="tbl-title" style="margin-top:26px;">Forecast Reorçado</div>
+    <div class="tbl-sub">Novo orçamento dos meses a realizar = orçado original − economia. Fixos mantêm o orçado.</div>
+    <div class="tbl-wrap"><table class="dre"><thead>${head}</thead><tbody>${buildRows('fct')}</tbody></table></div>
+  </div>`;
 }
 
 // helpers de render — tudo em módulo (é custo); a COR indica favorável/desfavorável
@@ -820,8 +838,8 @@ function atualizar(){
   renderWaterfall(model);
   const html=[
     tblYTG(model),
-    tblCenarioMerged(model,3,'Cenário 1 · 3 pacotes — Combustível + Manutenção + Pneus','Corte absorvido pelos três pacotes controláveis. FCT | AV em cima, economia abaixo.'),
-    tblCenarioMerged(model,2,'Cenário 2 · 2 pacotes — Manutenção + Pneus','Mesmo alvo sem tocar no Combustível. FCT | AV em cima, economia abaixo.'),
+    tblCenarioMerged(model,3,'Cenário 1 · 3 pacotes — Combustível + Manutenção + Pneus','O alvo é distribuído entre os três pacotes controláveis.'),
+    tblCenarioMerged(model,2,'Cenário 2 · 2 pacotes — Manutenção + Pneus','O mesmo alvo sem tocar no Combustível — concentrado em Manutenção e Pneus.'),
   ].join('');
   document.getElementById('tables').innerHTML=html;
   const now=new Date();
