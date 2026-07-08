@@ -683,8 +683,10 @@ body.light-mode table.dre tbody tr{border-bottom:1px solid rgba(0,0,0,.06);}
 // CONFIG
 // ═══════════════════════════════════
 const SHEET_ID  = '1qcTy2ppLCGBKKqZCxCYWCTL9kTAuWfHBMyBfWJOyih8';
-const SHEET_TAB = 'Consolidado DRE';
-const EBITDA_TAB = 'EBITDA';
+// Painel montado direto das abas de origem (sem depender do "Consolidado DRE"):
+const TAB_FROTA   = 'Frota';           // custos por conta
+const TAB_RECEITA = 'Receita Líquida'; // receita líquida
+const EBITDA_TAB  = 'EBITDA';          // EBITDA (linha própria)
 const C = { orc:0, rem:1, real:2, kmRem:5, kmReal:6, vig:9, uni:10, nv3:11, cta:12 };
 
 const PACOTES_MAP = {
@@ -911,12 +913,64 @@ document.addEventListener('click',e=>{
 // ═══════════════════════════════════
 // FETCH GVIZ
 // ═══════════════════════════════════
-async function fetchData(){
-  const url = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:json&sheet=${encodeURIComponent(SHEET_TAB)}`;
+// Lê uma aba via gviz e devolve {header, rows} (valores crus).
+async function fetchTab(tab){
+  const url = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:json&sheet=${encodeURIComponent(tab)}`;
   const res  = await fetch(url);
   const raw  = await res.text();
   const json = JSON.parse(raw.replace(/^[\s\S]*?\(/, '').replace(/\);?\s*$/, ''));
-  return json.table.rows.map(r => r.c.map(c => c && c.v != null ? c.v : null));
+  let header = (json.table.cols||[]).map(c => c && c.label ? c.label : '');
+  let rows   = json.table.rows.map(r => r.c.map(c => c && c.v != null ? c.v : null));
+  // se o gviz não reconheceu o cabeçalho, a 1ª linha de dados é o header
+  if(!header.some(x=>_normEb(x).includes('realizado')) && rows.length){
+    header = rows[0].map(x=>x==null?'':String(x)); rows = rows.slice(1);
+  }
+  return { header, rows };
+}
+const _mesNum = m => {
+  if(m==null) return null;
+  if(typeof m==='number' && m>=1 && m<=12) return m;
+  const s=_normEb(m); const i=MESES.indexOf(s.slice(0,3)); if(i>=0) return i+1;
+  const n=parseInt(s); return (n>=1&&n<=12)?n:null;
+};
+// Converte as linhas de uma aba para o formato interno do painel (índices de C).
+// ctaFixo: se informado, força a conta (ex.: 'Receita Líquida' na aba de receita).
+function tabToRows(header, rows, ctaFixo){
+  const iOrc=ebIdx(header,'orçado','orcado'), iRem=ebIdx(header,'remunerado'), iReal=ebIdx(header,'realizado');
+  const iVig=ebIdx(header,'vigência','vigencia'), iNv3=ebIdx(header,'nível 3','nivel 3','nivel3');
+  const iCta=ebIdx(header,'conta gerencial','conta'), iMes=ebIdx(header,'mês','mes'), iAno=ebIdx(header,'ano');
+  const out=[];
+  (rows||[]).forEach(r=>{
+    // vigência a partir de MÊS+ANO (mais confiável); fallback na coluna VIGÊNCIA
+    let vig='';
+    const mn=iMes>=0?_mesNum(r[iMes]):null, an=iAno>=0?parseInt(r[iAno]):null;
+    if(mn && an) vig=`01/${String(mn).padStart(2,'0')}/${an}`;
+    else if(iVig>=0 && r[iVig]!=null){ const d=parseVig(r[iVig]); if(d) vig=`01/${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()}`; }
+    if(!vig) return;
+    const cta = ctaFixo || (iCta>=0 ? (r[iCta]||'Outros') : 'Outros');
+    // segurança: na aba de custos, ignora eventuais linhas de receita (evita dupla contagem)
+    if(!ctaFixo && _normEb(cta).includes('receita liquida')) return;
+    const arr=[];
+    arr[C.orc]  = iOrc>=0  ? r[iOrc]  : null;
+    arr[C.rem]  = iRem>=0  ? r[iRem]  : null;
+    arr[C.real] = iReal>=0 ? r[iReal] : null;
+    arr[C.vig]  = vig;
+    arr[C.nv3]  = iNv3>=0 ? (r[iNv3]||'') : '';
+    arr[C.cta]  = cta;
+    out.push(arr);
+  });
+  return out;
+}
+// Busca as 3 abas e monta allRows (Frota=custos + Receita) e ebitdaRows (EBITDA).
+async function fetchData(){
+  const [frota, receita, eb] = await Promise.all([
+    fetchTab(TAB_FROTA), fetchTab(TAB_RECEITA), fetchTab(EBITDA_TAB).catch(()=>null)
+  ]);
+  const rows = [
+    ...tabToRows(frota.header,   frota.rows,   null),
+    ...tabToRows(receita.header, receita.rows, 'Receita Líquida'),
+  ];
+  return { rows, eb: eb ? { header: eb.header, rows: eb.rows } : null };
 }
 
 // ═══════════════════════════════════
@@ -941,20 +995,14 @@ function setEbitda(header, rows){
     vig:  ebIdx(h,'vigência','vigencia'),
     nv3:  ebIdx(h,'nível 3','nivel 3','nivel3'),
     cta:  ebIdx(h,'conta gerencial','conta'),
+    mes:  ebIdx(h,'mês','mes'),
+    ano:  ebIdx(h,'ano'),
   };
 }
-async function fetchEbitda(){
-  const url = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:json&sheet=${encodeURIComponent(EBITDA_TAB)}`;
-  const res = await fetch(url);
-  const raw = await res.text();
-  const json = JSON.parse(raw.replace(/^[\s\S]*?\(/, '').replace(/\);?\s*$/, ''));
-  let header = (json.table.cols||[]).map(c => c && c.label ? c.label : '');
-  let rows   = json.table.rows.map(r => r.c.map(c => c && c.v != null ? c.v : null));
-  // se o gviz não reconheceu o cabeçalho, a 1ª linha de dados é o header
-  if(!header.some(x=>_normEb(x).includes('realizado')) && rows.length){
-    header = rows[0].map(x=>x==null?'':String(x)); rows = rows.slice(1);
-  }
-  return { header, rows };
+// vigência de uma linha da aba EBITDA (MÊS+ANO preferido; fallback coluna VIGÊNCIA)
+function ebVig(r){
+  if(EB.mes>=0 && EB.ano>=0){ const mn=_mesNum(r[EB.mes]), an=parseInt(r[EB.ano]); if(mn&&an) return new Date(an, mn-1, 1); }
+  return EB.vig>=0 ? parseVig(r[EB.vig]) : null;
 }
 // agrega EBITDA (orc/rem/real) respeitando ano/vig/uni/projeto do filtro ativo
 function aggEbitda(f){
@@ -962,7 +1010,7 @@ function aggEbitda(f){
   let o=0, rem=0, real=0, n=0;
   const isAcum=!f||!f.vig||!f.vig.length;   // sem vigência específica = acumulado (ignora meses só-orçado)
   ebitdaRows.forEach(r=>{
-    const d=parseVig(r[EB.vig]); if(!d) return;
+    const d=ebVig(r); if(!d) return;
     if(EB.cta>=0 && !_normEb(r[EB.cta]).includes('ebitda')) return;
     if(isAcum && !(_cheia(r[EB.real])||_cheia(r[EB.rem]))) return;
     if(f&&f.ano&&f.ano.length>0 && !f.ano.includes(String(d.getFullYear()))) return;
@@ -1588,7 +1636,7 @@ function atualizar(){
 // ═══════════════════════════════════
 // INIT
 // ═══════════════════════════════════
-const CACHE_KEY='bi_cache_vf_v4';
+const CACHE_KEY='bi_cache_vf_v5';
 const CACHE_TTL=60*60*1000; // 1 hora
 
 function loadCache(){
@@ -1608,7 +1656,7 @@ function useRows(rows, eb){
 async function recarregar(){
   set('status-badge','Carregando…');
   try{
-    const [rows, eb]=await Promise.all([fetchData(), fetchEbitda().catch(()=>null)]);
+    const {rows, eb}=await fetchData();   // lê Frota + Receita Líquida + EBITDA
     try{ localStorage.setItem(CACHE_KEY,JSON.stringify({t:Date.now(),rows,eb})); }catch(e){}
     useRows(rows, eb);
   }catch(e){
