@@ -95,6 +95,7 @@ body.light-mode .cr{color:#cc0000!important;}
     <div class="filter-group"><div class="ms-wrap" id="ms-uni"></div></div>
     <div class="filter-group"><div class="ms-wrap" id="ms-proj"></div></div>
     <div class="filter-group"><div class="ms-wrap" id="ms-cc"></div></div>
+    <div class="filter-group"><div class="ms-wrap" id="ms-forn"></div></div>
     <div class="filter-group"><div class="ms-wrap" id="ms-conta"></div></div>
     <div class="filter-group"><div class="ms-wrap" id="ms-doc"></div></div>
   </div>
@@ -185,11 +186,11 @@ function mapFooter(){
   document.getElementById('mapfoot').innerHTML='Colunas mapeadas: '+
     [nm('vig','Vigência'),nm('data','Data'),nm('uni','Unidade'),nm('n3','Nível 3'),nm('cc','Centro de Custo'),nm('conta','Conta'),nm('forn','Fornecedor'),nm('hist','Histórico'),nm('nat','Natureza'),nm('doc','Documento'),nm('real','Realizado')].join(' · ')+
     '<br>Valores distintos (Unidade/Projeto←Nível 3, Vigência←Data): '+
-    [nd('vig','Vigência'),nd('data','Data'),nd('uni','Unidade'),nd('proj','Projeto'),nd('cc','Centro de Custo'),nd('conta','Conta'),nd('doc','Documento')].join(' · ');
+    [nd('vig','Vigência'),nd('data','Data'),nd('uni','Unidade'),nd('proj','Projeto'),nd('cc','Centro de Custo'),nd('forn','Fornecedor'),nd('conta','Conta'),nd('doc','Documento')].join(' · ');
 }
 
 // ── filtros (multi-select padrão) ──
-const FILT={vig:'ms-vig',data:'ms-data',uni:'ms-uni',proj:'ms-proj',cc:'ms-cc',conta:'ms-conta',doc:'ms-doc'};
+const FILT={vig:'ms-vig',data:'ms-data',uni:'ms-uni',proj:'ms-proj',cc:'ms-cc',forn:'ms-forn',conta:'ms-conta',doc:'ms-doc'};
 const dataSort=a=>{const[d,m,y]=String(a).split('/');return(+y||0)*10000+(+m||0)*100+(+d||0);};   // dd/mm/aaaa → aaaammdd
 const vigSort=a=>{const[m,y]=String(a).split('/');return(+y||0)*100+(+m||0);};                      // mm/aaaa → aaaamm
 function buildFilters(){
@@ -199,6 +200,7 @@ function buildFilters(){
   mkFilter('ms-uni','Unidade',uniq(ROWS.map(r=>r.uni)));
   mkFilter('ms-proj','Projeto',uniq(ROWS.map(r=>r.proj)));
   mkFilter('ms-cc','Centro de Custo',uniq(ROWS.map(r=>r.cc)));
+  mkFilter('ms-forn','Fornecedor',uniq(ROWS.map(r=>r.forn)));
   mkFilter('ms-conta','Conta',uniq(ROWS.map(r=>r.conta)));
   mkFilter('ms-doc','Documento',uniq(ROWS.map(r=>r.doc)));
 }
@@ -207,9 +209,9 @@ const uniq=a=>[...new Set(a.filter(x=>x!=null&&x!==''))].sort();
 const MS_NONE=' __NONE__';
 function getMsV(id){const w=document.getElementById(id);if(!w)return[];if(w._none&&(!w._sel||!w._sel.size))return[MS_NONE];return w._sel?[...w._sel]:[];}
 function filtered(){
-  const fv=getMsV('ms-vig'),fd=getMsV('ms-data'),fu=getMsV('ms-uni'),fp=getMsV('ms-proj'),fc=getMsV('ms-cc'),fk=getMsV('ms-conta'),fo=getMsV('ms-doc');
+  const fv=getMsV('ms-vig'),fd=getMsV('ms-data'),fu=getMsV('ms-uni'),fp=getMsV('ms-proj'),fc=getMsV('ms-cc'),fn=getMsV('ms-forn'),fk=getMsV('ms-conta'),fo=getMsV('ms-doc');
   const has=(a,v)=>!a.length||a.includes(v);
-  return ROWS.filter(r=>has(fv,r.vig)&&has(fd,r.data)&&has(fu,r.uni)&&has(fp,r.proj)&&has(fc,r.cc)&&has(fk,r.conta)&&has(fo,r.doc));
+  return ROWS.filter(r=>has(fv,r.vig)&&has(fd,r.data)&&has(fu,r.uni)&&has(fp,r.proj)&&has(fc,r.cc)&&has(fn,r.forn)&&has(fk,r.conta)&&has(fo,r.doc));
 }
 
 // ── multi-select component ──
