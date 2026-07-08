@@ -568,10 +568,12 @@ function renderWaterfall(model){
   const labels=['Orçado YTG',...steps.map(s=>s.name),'Forecast Reorçado'];
   const bars=[], colors=[], meta=[]; let run=totYTG;
   bars.push([0,totYTG]); colors.push('#38BDF8'); meta.push({top:fmt(totYTG),hi:totYTG});
-  steps.forEach(s=>{ const lo=run-s.eco; bars.push([lo,run]); colors.push('#3BB33B'); meta.push({top:'-'+fmt(s.eco),hi:run}); run=lo; });
+  steps.forEach(s=>{ const lo=run-s.eco; bars.push([lo,run]); colors.push('#3BB33B'); meta.push({top:fmt(s.eco),hi:run}); run=lo; });
   bars.push([0,forecast]); colors.push('#F97316'); meta.push({top:fmt(forecast),hi:forecast});
+  // eixo com ZOOM: sem começar do zero, para as barras de economia (pequenas vs o total) ficarem visíveis
+  const span=Math.max(totYTG-forecast, totYTG*0.01);
+  const ymin=Math.max(0, forecast-span*2), ymax=totYTG+span*0.5;
   const isLight=document.body.classList.contains('light-mode');
-  const grid={color:isLight?'rgba(0,0,0,.08)':'rgba(255,255,255,.06)'};
   const tick={color:isLight?'#444':'#94A3B8',font:{family:'Montserrat',size:11}};
   if(chWf) chWf.destroy();
   chWf=new Chart(document.getElementById('ch-wf'),{
@@ -579,7 +581,7 @@ function renderWaterfall(model){
     data:{labels,datasets:[{data:bars,backgroundColor:colors,borderColor:colors,borderWidth:1,borderRadius:3,barPercentage:.72}]},
     options:{responsive:true,maintainAspectRatio:false,layout:{padding:{top:24}},
       plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>{const v=c.raw;return 'R$ '+fmt(Math.abs(v[1]-v[0]));}},backgroundColor:'#141B26',titleColor:'#F97316',bodyColor:'#F1F5F9',borderColor:'#1E2D40',borderWidth:1,titleFont:{family:'Montserrat'},bodyFont:{family:'Montserrat'}}},
-      scales:{x:{grid:{display:false},ticks:tick},y:{beginAtZero:true,grid,ticks:{...tick,callback:v=>fmt(v)}}}},
+      scales:{x:{grid:{display:false},border:{display:false},ticks:tick},y:{min:ymin,max:ymax,grid:{display:false},border:{display:false},ticks:{...tick,callback:v=>fmt(v)}}}},
     plugins:[wfLabels]
   });
   chWf.$wfMeta=meta; chWf.update();
@@ -610,8 +612,8 @@ function tblYTG(model){
     });
     tImp+=P.imp; tOrcRem+=P.orcRem; remMonths.forEach(mo=>tMonth[mo]+=(P.orcMonth[mo]||0));
   });
-  const totCells=remMonths.map(mo=>`<td class="num">${fmt(tMonth[mo])}</td>`).join('');
-  rows+=`<tr class="total"><td class="conta">Total Frota</td><td class="num">${pctAv(sumAvRef(model))}</td><td class="num">${pctAv(sumAvReal(model))}</td><td class="num">—</td><td class="num sep-l ${tImp<0?'cr':'cg'}">${fmt(tImp)}</td>${totCells.replace('<td class="num">','<td class="num sep-l">')}</tr>`;
+  const totCells=remMonths.map(mo=>`<td class="num">${fmtA(tMonth[mo])}</td>`).join('');
+  rows+=`<tr class="total"><td class="conta">Total Frota</td><td class="num">${pctAv(sumAvRef(model))}</td><td class="num">${pctAv(sumAvReal(model))}</td><td class="num">—</td><td class="num sep-l ${tImp<0?'cr':'cg'}">${fmtA(tImp)}</td>${totCells.replace('<td class="num">','<td class="num sep-l">')}</tr>`;
   return tableShell('YTG (Year To Go)', 'blue', 'Orçado puro dos meses a realizar — nenhum ajuste aplicado. AV / Impacto = acumulado do ano fechado.', cols, rows, false);
 }
 
@@ -628,15 +630,15 @@ function tblCenario(model, cen, kind){   // kind: 'eco' | 'fct'
     // valores por mês
     const cells=remMonths.map(mo=>{
       const orc=P.orcMonth[mo]||0, eco=(participa&&po)?(po.econMonth[mo]||0):0;
-      if(kind==='eco'){ tVal[mo]+=eco; return eco?`<td class="num cg">${fmt(-eco)}</td>`:`<td class="num muted">—</td>`; }
-      const nv=orc-eco; tVal[mo]+=nv; return `<td class="num">${fmt(nv)}</td>`;
+      if(kind==='eco'){ tVal[mo]+=eco; return eco?`<td class="num cg">${fmtA(eco)}</td>`:`<td class="num muted">—</td>`; }
+      const nv=orc-eco; tVal[mo]+=nv; return `<td class="num">${fmtA(nv)}</td>`;
     }).join('');
     const eco=(participa&&po)?po.economia:0; tEco+=eco; tImp+=P.imp;
     const badge=participa?'':`<span class="pill">fixo</span>`;
     const avRefC=pctAv(P.avRef), avRealC=pctAv(P.avReal);
     // esforço médio do pacote (economia / orçado restante)
     const esf=(participa&&P.orcRem)?eco/P.orcRem*100:null;
-    const impCell=`<td class="num sep-l ${P.imp<0?'cr':'cg'}">${fmt(P.imp)}</td>`;
+    const impCell=`<td class="num sep-l ${P.imp<0?'cr':'cg'}">${fmtA(P.imp)}</td>`;
     rows+=`<tr class="pac-row ${Object.keys(P.contas).length?'':'no-drill'}" onclick="toggleDrill(this)">
       <td class="conta">${p} ${badge}</td>
       <td class="num">${avRefC}</td><td class="num">${avRealC}</td>
@@ -648,8 +650,8 @@ function tblCenario(model, cen, kind){   // kind: 'eco' | 'fct'
       const co=(participa&&po)?po.contas[cta]:null;
       const cc2=remMonths.map(mo=>{
         const orc=c.orcMonth[mo]||0, e=co?(co.econMonth[mo]||0):0;
-        if(kind==='eco') return e?`<td class="num cg">${fmt(-e)}</td>`:`<td class="num muted">—</td>`;
-        return `<td class="num">${fmt(orc-e)}</td>`;
+        if(kind==='eco') return e?`<td class="num cg">${fmtA(e)}</td>`:`<td class="num muted">—</td>`;
+        return `<td class="num">${fmtA(orc-e)}</td>`;
       }).join('');
       const ce=co?co.economia:0, cesf=(co&&c.orcRem)?ce/c.orcRem*100:null;
       rows+=`<tr class="sub-row" data-pac="${p}">
@@ -657,13 +659,13 @@ function tblCenario(model, cen, kind){   // kind: 'eco' | 'fct'
         <td class="num muted">${pctAv(c.orcAcc&&model.rlRefOrc?c.orcAcc/model.rlRefOrc*100:0)}</td>
         <td class="num muted">${pctAv(c.realAcc&&model.rlReal?c.realAcc/model.rlReal*100:0)}</td>
         <td class="num ${cesf!=null&&cesf>15?'eff-hi':'muted'}">${cesf!=null?cesf.toFixed(0)+'%':'—'}</td>
-        <td class="num sep-l ${c.imp<0?'cr':'cg'}">${fmt(c.imp)}</td>${cc2.replace('<td class="num','<td class="num sep-l',1)}</tr>`;
+        <td class="num sep-l ${c.imp<0?'cr':'cg'}">${fmtA(c.imp)}</td>${cc2.replace('<td class="num','<td class="num sep-l',1)}</tr>`;
     });
   });
-  const totCells=remMonths.map(mo=>kind==='eco'?`<td class="num cg">${fmt(-tVal[mo])}</td>`:`<td class="num">${fmt(tVal[mo])}</td>`).join('');
+  const totCells=remMonths.map(mo=>kind==='eco'?`<td class="num cg">${fmtA(tVal[mo])}</td>`:`<td class="num">${fmtA(tVal[mo])}</td>`).join('');
   const alvoNote = kind==='eco'
-    ? `<td class="num sep-l cg" colspan="1">${fmt(-cc.alvo)}</td>`
-    : `<td class="num sep-l ${tImp<0?'cr':'cg'}">${fmt(tImp)}</td>`;
+    ? `<td class="num sep-l cg" colspan="1">${fmtA(cc.alvo)}</td>`
+    : `<td class="num sep-l ${tImp<0?'cr':'cg'}">${fmtA(tImp)}</td>`;
   rows+=`<tr class="total"><td class="conta">${kind==='eco'?'Economia Total (alvo)':'Total Reorçado'}</td><td class="num">—</td><td class="num">—</td><td class="num">—</td>${alvoNote}${totCells.replace('<td class="num','<td class="num sep-l',1)}</tr>`;
   const cenTxt = cen===3?'Combustíveis + Manutenção + Pneus':'Manutenção + Pneus';
   if(kind==='eco'){
@@ -676,8 +678,10 @@ function tblCenario(model, cen, kind){   // kind: 'eco' | 'fct'
     cols, rows, true);
 }
 
-// helpers de render
-const pctAv = v => (v==null||!isFinite(v))?'—':v.toFixed(2)+'%';
+// helpers de render — tudo em módulo (é custo); a COR indica favorável/desfavorável
+const pctAv = v => (v==null||!isFinite(v))?'—':Math.abs(v).toFixed(2)+'%';
+const fmtA  = v => fmt(Math.abs(+v||0));
+const ppA   = v => (v==null||!isFinite(v))?'—':Math.abs(v).toFixed(2)+' pp';
 function sumAvRef(model){ let o=0; PAC_ORDER.forEach(p=>{ if(model.pacs[p]) o+=model.pacs[p].orcAcc; }); return model.rlRefOrc?o/model.rlRefOrc*100:0; }
 function sumAvReal(model){ let o=0; PAC_ORDER.forEach(p=>{ if(model.pacs[p]) o+=model.pacs[p].realAcc; }); return model.rlReal?o/model.rlReal*100:0; }
 
@@ -687,16 +691,15 @@ function pacRow(p, P, remMonths, po, fixo, isEco, key){
   return `<tr class="pac-row ${Object.keys(P.contas).length?'':'no-drill'}" onclick="toggleDrill(this)">
     <td class="conta">${p} ${badge}</td>
     <td class="num">${pctAv(P.avRef)}</td><td class="num">${pctAv(P.avReal)}</td>
-    <td class="num ${P.dPp<0?'cr':'cg'}">${pp(P.dPp)}</td>
-    <td class="num sep-l ${P.imp<0?'cr':'cg'}">${fmt(P.imp)}</td>${cells.replace('<td class="num','<td class="num sep-l',1)}</tr>`;
+    <td class="num ${P.dPp<0?'cr':'cg'}">${ppA(P.dPp)}</td>
+    <td class="num sep-l ${P.imp<0?'cr':'cg'}">${fmtA(P.imp)}</td>${cells.replace('<td class="num','<td class="num sep-l',1)}</tr>`;
 }
 function ctaRow(p, cta, c, remMonths, po, fixo){
-  const cells=remMonths.map(mo=>`<td class="num">${fmt(c.orcMonth[mo]||0)}</td>`).join('');
-  const avRef=c.orcAcc&&window._rlRefOrc?c.orcAcc/window._rlRefOrc*100:0;
+  const cells=remMonths.map(mo=>`<td class="num">${fmtA(c.orcMonth[mo]||0)}</td>`).join('');
   return `<tr class="sub-row" data-pac="${p}">
     <td class="conta">${contaLabel(cta)}</td>
     <td class="num muted">—</td><td class="num muted">—</td><td class="num muted">—</td>
-    <td class="num sep-l ${c.imp<0?'cr':'cg'}">${fmt(c.imp)}</td>${cells.replace('<td class="num','<td class="num sep-l',1)}</tr>`;
+    <td class="num sep-l ${c.imp<0?'cr':'cg'}">${fmtA(c.imp)}</td>${cells.replace('<td class="num','<td class="num sep-l',1)}</tr>`;
 }
 function tableShell(title, tag, sub, cols, rows, isCen){
   const monthHead=cols.map(c=>`<th class="num">${c}</th>`).join('');
