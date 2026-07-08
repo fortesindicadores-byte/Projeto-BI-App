@@ -85,6 +85,12 @@ body{
 .dim-btn:not(.active):hover{background:rgba(255,255,255,.05);color:var(--text);}
 body.light-mode .wf-card{background:rgba(128,128,128,.14)!important;border:none!important;box-shadow:none!important;--text:#1a1a1a;--text2:#444444;}
 body.light-mode .wf-foot{border-top-color:rgba(0,0,0,.10);}
+/* ══ TÍTULO DE CENÁRIO (fora das tabelas) ══ */
+.cen-title{display:flex;align-items:center;gap:10px;margin:30px 0 12px;padding-bottom:8px;border-bottom:1px solid rgba(255,255,255,.10);}
+.cen-title .cen-n{font-size:12px;font-weight:800;color:#000;background:var(--orange);border-radius:4px;padding:3px 9px;letter-spacing:.5px;flex-shrink:0;}
+.cen-title .cen-tx{font-size:15px;font-weight:800;color:var(--text);}
+.cen-title .cen-tx small{display:block;font-size:11px;font-weight:600;color:var(--text2);margin-top:2px;text-transform:none;letter-spacing:0;}
+body.light-mode .cen-title{border-bottom-color:rgba(0,0,0,.12);}
 /* ══ TABLES ══ */
 .tbl-section{background:rgba(20,27,38,.55);border:1px solid rgba(255,255,255,.07);border-radius:8px;
   padding:18px 20px 16px;margin-bottom:16px;backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);box-shadow:0 2px 12px rgba(0,0,0,.25);}
@@ -153,8 +159,8 @@ body.light-mode table.dre tbody tr{border-bottom:1px solid rgba(0,0,0,.06);}
 
 <header class="header">
   <div class="brand">
-    <h1>YTG + FCT — Reorçamento</h1>
-    <p>Year To Go &amp; Forecast — Frota</p>
+    <h1>YTG + Rolling Forecast</h1>
+    <p>Year To Go &amp; Rolling Forecast — Frota</p>
   </div>
   <div class="header-right">
     <a href="../visao-financeira/" class="back-btn" title="Voltar à Visão Financeira"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg></a>
@@ -661,11 +667,11 @@ function tblCenario(model, cen, kind){   // kind: 'eco' | 'fct'
   rows+=`<tr class="total"><td class="conta">${kind==='eco'?'Economia Total (alvo)':'Total Reorçado'}</td><td class="num">—</td><td class="num">—</td><td class="num">—</td>${alvoNote}${totCells.replace('<td class="num','<td class="num sep-l',1)}</tr>`;
   const cenTxt = cen===3?'Combustíveis + Manutenção + Pneus':'Manutenção + Pneus';
   if(kind==='eco'){
-    return tableShell(`Economia Necessária — ${cen} pacotes`, 'orange',
+    return tableShell(`Economia Necessária`, 'orange',
       `Corte a distribuir por conta × mês para recuperar o impacto AVO. Alvo = |impacto de ${cenTxt}| = ${fmt(cc.alvo)}. Rateio: alvo × peso da conta × peso do mês. Coluna % = esforço (corte ÷ orçado do período).`,
       cols, rows, true);
   }
-  return tableShell(`Forecast Reorçado — ${cen} pacotes`, 'orange',
+  return tableShell(`Forecast Reorçado`, 'orange',
     `Novo orçamento dos meses a realizar = orçado original − economia. Pacotes ${cenTxt} absorvem o alvo; Seguros e Licenças e ICMS mantêm o orçado (fixos). Coluna % = esforço exigido.`,
     cols, rows, true);
 }
@@ -716,10 +722,13 @@ function atualizar(){
   const model=computeModel(f);
   window._rlRefOrc=model.rlRefOrc;
   renderWaterfall(model);
+  const cenTitle=(n,tx,sub)=>`<div class="cen-title"><span class="cen-n">CENÁRIO ${n}</span><span class="cen-tx">${tx}<small>${sub}</small></span></div>`;
   const html=[
     tblYTG(model),
+    cenTitle(1,'Considerando 3 pacotes: Combustível + Manutenção + Pneus','O impacto a recuperar é distribuído entre os três pacotes controláveis.'),
     tblCenario(model,3,'eco'),
     tblCenario(model,3,'fct'),
+    cenTitle(2,'Considerando 2 pacotes: Manutenção + Pneus','O mesmo alvo é recuperado sem tocar no Combustível — concentrado em Manutenção e Pneus.'),
     tblCenario(model,2,'eco'),
     tblCenario(model,2,'fct'),
   ].join('');
