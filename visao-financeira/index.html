@@ -386,11 +386,6 @@ body.light-mode table.dre tbody tr{border-bottom:1px solid rgba(0,0,0,.06);}
   table.dre{font-size:10px;}
   table.dre thead tr.cols th{font-size:10px;}
 }
-.datafoot{margin:22px 24px 40px;font-size:11px;line-height:1.6;color:var(--text3);border-top:1px solid rgba(255,255,255,.06);padding-top:12px;}
-.datafoot b{color:var(--text2);}
-.datafoot .ok{color:var(--green);}
-.datafoot .miss{color:var(--red);font-weight:700;}
-.datafoot code{color:var(--text2);background:rgba(255,255,255,.05);padding:1px 5px;border-radius:3px;}
 </style>
 <script>try{if(!sessionStorage.getItem("gem_hub"))location.replace("../");}catch(e){}</script>
 </head>
@@ -681,7 +676,6 @@ body.light-mode table.dre tbody tr{border-bottom:1px solid rgba(0,0,0,.06);}
     </div>
   </div>
 
-  <div class="datafoot" id="datafoot"></div>
 
 </main>
 
@@ -982,15 +976,6 @@ function tabToRows(header, rows, ctaFixo){
   });
   return out;
 }
-// Diagnóstico de leitura de uma aba (o que casou + totais lidos).
-let DATA_DIAG=null;
-function tabDiag(name, header, mapped){
-  const m=mapTab(header), col=i=>i>=0?String(header[i]):'(NÃO ACHOU)';
-  let sO=0,sM=0,sR=0,nReal=0;
-  mapped.forEach(r=>{ sO+=+(r[C.orc]||0); sM+=+(r[C.rem]||0); sR+=+(r[C.real]||0); if(_cheia(r[C.real])||_cheia(r[C.rem]))nReal++; });
-  return { name, nRows:mapped.length, nReal, sumOrc:sO, sumRem:sM, sumReal:sR, header:header.slice(),
-    cols:{ orc:col(m.orc), rem:col(m.rem), real:col(m.real), vig:col(m.vig), nv3:col(m.nv3), cta:col(m.cta), mes:col(m.mes), ano:col(m.ano) } };
-}
 // Busca as 3 abas e monta allRows (Frota=custos + Receita) e ebitdaRows (EBITDA).
 async function fetchData(){
   const [frota, receita, eb] = await Promise.all([
@@ -998,11 +983,6 @@ async function fetchData(){
   ]);
   const fr=tabToRows(frota.header,   frota.rows,   null);
   const re=tabToRows(receita.header, receita.rows, 'Receita Líquida');
-  DATA_DIAG={
-    frota:   tabDiag('Frota',   frota.header,   fr),
-    receita: tabDiag('Receita Líquida', receita.header, re),
-    ebitda:  eb ? { name:'EBITDA', header:eb.header.slice() } : null,
-  };
   return { rows: [...fr, ...re], eb: eb ? { header: eb.header, rows: eb.rows } : null };
 }
 
@@ -1678,7 +1658,7 @@ function atualizar(){
 // ═══════════════════════════════════
 // INIT
 // ═══════════════════════════════════
-const CACHE_KEY='bi_cache_vf_v7';
+const CACHE_KEY='bi_cache_vf_v8';
 const CACHE_TTL=60*60*1000; // 1 hora
 
 function loadCache(){
@@ -1694,22 +1674,6 @@ function useRows(rows, eb){
   if(eb&&eb.header) setEbitda(eb.header, eb.rows);
   populateFilters(allRows);
   atualizar();
-  renderDataFoot();
-}
-const _escH=s=>String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-function renderDataFoot(){
-  const el=document.getElementById('datafoot'); if(!el) return;
-  if(!DATA_DIAG){ el.innerHTML=''; return; }
-  const n=v=>Math.round(v).toLocaleString('pt-BR');
-  const cell=(lbl,val)=>`${lbl}=`+(/NÃO ACHOU/.test(val)?`<span class="miss">${_escH(val)}</span>`:`<code>${_escH(val)}</code>`);
-  const bloco=d=>{ if(!d) return '';
-    const linhaCols=[cell('ORÇADO',d.cols.orc),cell('REMUNERADO',d.cols.rem),cell('REALIZADO',d.cols.real),cell('VIGÊNCIA',d.cols.vig),cell('NÍVEL 3',d.cols.nv3),cell('CONTA',d.cols.cta),cell('MÊS',d.cols.mes),cell('ANO',d.cols.ano)].join(' · ');
-    return `<div style="margin-bottom:8px"><b>${_escH(d.name)}</b> — ${d.nRows} linhas (${d.nReal} c/ realizado) · Σ Orçado <b>${n(d.sumOrc)}</b> · Σ Remun <b>${n(d.sumRem)}</b> · Σ Realiz <b>${n(d.sumReal)}</b><br>${linhaCols}<br><span style="opacity:.6">cabeçalho lido: ${d.header.map(_escH).join(' | ')}</span></div>`;
-  };
-  let h='<b>Diagnóstico de leitura das abas</b> (temporário — confirme se REALIZADO/REMUNERADO acharam a coluna certa)<br>';
-  h+=bloco(DATA_DIAG.frota)+bloco(DATA_DIAG.receita);
-  if(DATA_DIAG.ebitda) h+=`<div><b>EBITDA</b> — cabeçalho lido: ${DATA_DIAG.ebitda.header.map(_escH).join(' | ')}</div>`;
-  el.innerHTML=h;
 }
 async function recarregar(){
   set('status-badge','Carregando…');
