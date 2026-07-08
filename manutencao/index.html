@@ -93,6 +93,7 @@ body.light-mode .cr{color:#cc0000!important;}
     <div class="filter-group"><div class="ms-wrap" id="ms-vig"></div></div>
     <div class="filter-group"><div class="ms-wrap" id="ms-data"></div></div>
     <div class="filter-group"><div class="ms-wrap" id="ms-uni"></div></div>
+    <div class="filter-group"><div class="ms-wrap" id="ms-proj"></div></div>
     <div class="filter-group"><div class="ms-wrap" id="ms-cc"></div></div>
     <div class="filter-group"><div class="ms-wrap" id="ms-conta"></div></div>
     <div class="filter-group"><div class="ms-wrap" id="ms-doc"></div></div>
@@ -124,6 +125,12 @@ const fmtD=d=>d?String(d.getDate()).padStart(2,'0')+'/'+String(d.getMonth()+1).p
 const brl=v=>v==null||!isFinite(v)?'—':(v<0?'-':'')+'R$ '+Math.round(Math.abs(v)).toLocaleString('pt-BR');
 const brlC=v=>v==null||!isFinite(v)?'—':(v<0?'-':'')+'R$ '+Math.abs(v).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
 function idxDe(cols,...names){const N=cols.map(_n);for(const nm of names){const i=N.indexOf(_n(nm));if(i>=0)return i;}for(const nm of names){const t=_n(nm);const i=N.findIndex(c=>c.includes(t));if(i>=0)return i;}return -1;}
+// Unidade derivada do "Nível 3" (igual visao-financeira): tudo após o primeiro "-", sem "(INATIVO)".
+const getUniLabel=v=>{if(!v)return '';const s=String(v);const i=s.indexOf('-');const t=(i>=0?s.slice(i+1):s).trim();return t.replace(/\s*\(INATIVO\)\s*/i,'').trim();};
+// Projeto derivado do "Nível 3": tudo ANTES do primeiro "-".
+const getProjLabel=v=>{if(!v)return '';const s=String(v);const i=s.indexOf('-');return (i>=0?s.slice(0,i):s).trim().replace(/\s*\(INATIVO\)\s*/i,'').trim();};
+// Vigência (MM/YYYY) derivada da data quando não há coluna própria.
+const vigDe=d=>d?String(d.getMonth()+1).padStart(2,'0')+'/'+d.getFullYear():'';
 
 function gviz(){
   return new Promise((res,rej)=>{
@@ -157,9 +164,12 @@ async function carregar(){
   MAP=i;
   ROWS=t.rows.map(r=>{
     const dt=i.data>=0?parseGD(r[i.data]):null;
+    const n3=i.n3>=0?String(r[i.n3]||'').trim():'';
+    const uniRaw=i.uni>=0?String(r[i.uni]||'').trim():'';
+    const vigRaw=i.vig>=0?String(r[i.vig]||'').trim():'';
     return {
-      vig:i.vig>=0?String(r[i.vig]||'').trim():'', dt, data:dt?fmtD(dt):(i.data>=0?String(r[i.data]||'').trim():''),
-      uni:i.uni>=0?String(r[i.uni]||'').trim():'', n3:i.n3>=0?String(r[i.n3]||'').trim():'',
+      vig:vigRaw||vigDe(dt), dt, data:dt?fmtD(dt):(i.data>=0?String(r[i.data]||'').trim():''),
+      uni:uniRaw||getUniLabel(n3), proj:getProjLabel(n3), n3,
       cc:i.cc>=0?String(r[i.cc]||'').trim():'', conta:i.conta>=0?String(r[i.conta]||'').trim():'',
       forn:i.forn>=0?String(r[i.forn]||'').trim():'', hist:i.hist>=0?String(r[i.hist]||'').trim():'',
       nat:i.nat>=0?String(r[i.nat]||'').trim():'', doc:i.doc>=0?String(r[i.doc]||'').trim():'',
@@ -171,26 +181,35 @@ async function carregar(){
 }
 function mapFooter(){
   const nm=(k,lbl)=>MAP[k]>=0?`<b>${lbl}</b>=${esc(COLS[MAP[k]])}`:`<span class="miss">${lbl}=(não achou)</span>`;
+  const nd=(k,lbl)=>{const n=uniq(ROWS.map(r=>r[k])).length;return `<b>${lbl}</b>: ${n}${n?'':' <span class="miss">(vazio!)</span>'}`;};
   document.getElementById('mapfoot').innerHTML='Colunas mapeadas: '+
-    [nm('vig','Vigência'),nm('data','Data'),nm('uni','Unidade'),nm('n3','Nível 3'),nm('cc','Centro de Custo'),nm('conta','Conta'),nm('forn','Fornecedor'),nm('hist','Histórico'),nm('nat','Natureza'),nm('doc','Documento'),nm('real','Realizado')].join(' · ');
+    [nm('vig','Vigência'),nm('data','Data'),nm('uni','Unidade'),nm('n3','Nível 3'),nm('cc','Centro de Custo'),nm('conta','Conta'),nm('forn','Fornecedor'),nm('hist','Histórico'),nm('nat','Natureza'),nm('doc','Documento'),nm('real','Realizado')].join(' · ')+
+    '<br>Valores distintos (Unidade/Projeto←Nível 3, Vigência←Data): '+
+    [nd('vig','Vigência'),nd('data','Data'),nd('uni','Unidade'),nd('proj','Projeto'),nd('cc','Centro de Custo'),nd('conta','Conta'),nd('doc','Documento')].join(' · ');
 }
 
 // ── filtros (multi-select padrão) ──
-const FILT={vig:'ms-vig',data:'ms-data',uni:'ms-uni',cc:'ms-cc',conta:'ms-conta',doc:'ms-doc'};
+const FILT={vig:'ms-vig',data:'ms-data',uni:'ms-uni',proj:'ms-proj',cc:'ms-cc',conta:'ms-conta',doc:'ms-doc'};
+const dataSort=a=>{const[d,m,y]=String(a).split('/');return(+y||0)*10000+(+m||0)*100+(+d||0);};   // dd/mm/aaaa → aaaammdd
+const vigSort=a=>{const[m,y]=String(a).split('/');return(+y||0)*100+(+m||0);};                      // mm/aaaa → aaaamm
 function buildFilters(){
   document.getElementById('filters').style.display='';
-  mkFilter('ms-vig','Vigência',uniq(ROWS.map(r=>r.vig)));
-  mkFilter('ms-data','Data',uniq(ROWS.map(r=>r.data)));
+  mkFilter('ms-vig','Vigência',uniq(ROWS.map(r=>r.vig)).sort((a,b)=>vigSort(a)-vigSort(b)));
+  mkFilter('ms-data','Data',uniq(ROWS.map(r=>r.data)).sort((a,b)=>dataSort(a)-dataSort(b)));
   mkFilter('ms-uni','Unidade',uniq(ROWS.map(r=>r.uni)));
+  mkFilter('ms-proj','Projeto',uniq(ROWS.map(r=>r.proj)));
   mkFilter('ms-cc','Centro de Custo',uniq(ROWS.map(r=>r.cc)));
   mkFilter('ms-conta','Conta',uniq(ROWS.map(r=>r.conta)));
   mkFilter('ms-doc','Documento',uniq(ROWS.map(r=>r.doc)));
 }
 const uniq=a=>[...new Set(a.filter(x=>x!=null&&x!==''))].sort();
-function selOf(id){const w=document.getElementById(id);return w&&w._sel?w._sel:new Set();}
+// sel vazio + _none=false ⇒ TODOS ; sel vazio + _none=true ⇒ NENHUM ; sel com itens ⇒ aqueles.
+const MS_NONE=' __NONE__';
+function getMsV(id){const w=document.getElementById(id);if(!w)return[];if(w._none&&(!w._sel||!w._sel.size))return[MS_NONE];return w._sel?[...w._sel]:[];}
 function filtered(){
-  const fv=selOf('ms-vig'),fd=selOf('ms-data'),fu=selOf('ms-uni'),fc=selOf('ms-cc'),fk=selOf('ms-conta'),fo=selOf('ms-doc');
-  return ROWS.filter(r=>(!fv.size||fv.has(r.vig))&&(!fd.size||fd.has(r.data))&&(!fu.size||fu.has(r.uni))&&(!fc.size||fc.has(r.cc))&&(!fk.size||fk.has(r.conta))&&(!fo.size||fo.has(r.doc)));
+  const fv=getMsV('ms-vig'),fd=getMsV('ms-data'),fu=getMsV('ms-uni'),fp=getMsV('ms-proj'),fc=getMsV('ms-cc'),fk=getMsV('ms-conta'),fo=getMsV('ms-doc');
+  const has=(a,v)=>!a.length||a.includes(v);
+  return ROWS.filter(r=>has(fv,r.vig)&&has(fd,r.data)&&has(fu,r.uni)&&has(fp,r.proj)&&has(fc,r.cc)&&has(fk,r.conta)&&has(fo,r.doc));
 }
 
 // ── multi-select component ──
@@ -200,16 +219,16 @@ function mkFilter(id,label,items){
   w.innerHTML=`<button class="ms-btn" onclick="toggleMs('${id}')"><span class="ms-lbl">${label}</span><span class="ms-cnt"></span><svg width="10" height="6" viewBox="0 0 10 6"><path d="M0 0l5 6 5-6z" fill="#F97316"/></svg></button>
     <div class="ms-panel"><div class="ms-search"><input type="text" placeholder="Pesquisar…"></div><div class="ms-list"></div></div>`;
   const list=w.querySelector('.ms-list'),srch=w.querySelector('.ms-search input'),cnt=w.querySelector('.ms-cnt');
-  const draw=(q='')=>{const f=q.toLowerCase(),sel=w._sel,all=sel.size===0,shown=w._items.filter(v=>String(v).toLowerCase().includes(f));
-    list.innerHTML=(!q?`<label class="ms-opt all-opt"><input type="checkbox" class="ms-all" ${all?'checked':''}> Todos</label>`:'')+
-      shown.map(v=>`<label class="ms-opt"><input type="checkbox" data-v="${esc(v)}" ${all||sel.has(v)?'checked':''}> ${esc(v)}<span class="ms-only" data-v="${esc(v)}">só</span></label>`).join('');
+  const draw=(q='')=>{const f=q.toLowerCase(),sel=w._sel,allChk=sel.size===0&&!w._none,shown=w._items.filter(v=>String(v).toLowerCase().includes(f));
+    list.innerHTML=(!q?`<label class="ms-opt all-opt"><input type="checkbox" class="ms-all" ${allChk?'checked':''}> Todos</label>`:'')+
+      shown.map(v=>`<label class="ms-opt"><input type="checkbox" data-v="${esc(v)}" ${allChk||sel.has(v)?'checked':''}> ${esc(v)}<span class="ms-only" data-v="${esc(v)}">só</span></label>`).join('');
     cnt.textContent=sel.size;cnt.style.display=sel.size?'':'none';};
   list.onchange=e=>{const b=e.target;if(!b.matches('input[type=checkbox]'))return;const sel=w._sel;
-    if(b.classList.contains('ms-all')){sel.clear();}
-    else if(sel.size===0){if(!b.checked)w._items.forEach(v=>{if(String(v)!==b.dataset.v)sel.add(v);});}
-    else{if(b.checked)sel.add(b.dataset.v);else sel.delete(b.dataset.v);if(w._items.every(v=>sel.has(String(v))))sel.clear();}
+    if(b.classList.contains('ms-all')){sel.clear();w._none=!b.checked;}
+    else if(sel.size===0&&!w._none){if(!b.checked)w._items.forEach(v=>{if(String(v)!==b.dataset.v)sel.add(v);});}
+    else{w._none=false;if(b.checked)sel.add(b.dataset.v);else sel.delete(b.dataset.v);if(w._items.length&&w._items.every(v=>sel.has(String(v))))sel.clear();}
     draw(srch.value);render();};
-  list.onclick=e=>{const o=e.target.closest('.ms-only');if(!o)return;e.preventDefault();e.stopPropagation();w._sel.clear();w._sel.add(o.dataset.v);draw(srch.value);render();};
+  list.onclick=e=>{const o=e.target.closest('.ms-only');if(!o)return;e.preventDefault();e.stopPropagation();w._none=false;w._sel.clear();w._sel.add(o.dataset.v);draw(srch.value);render();};
   srch.oninput=()=>draw(srch.value);srch.onclick=e=>e.stopPropagation();
   draw();
 }
