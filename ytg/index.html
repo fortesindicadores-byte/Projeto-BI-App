@@ -563,6 +563,21 @@ const wfLabels={afterDatasetsDraw(chart){
   });
   ctx.restore();
 }};
+// plugin: chave (bracket) sobre as barras de economia com "economia total · esforço %"
+const wfBracket={afterDatasetsDraw(chart){
+  const b=chart.$wfBracket; if(!b||!b.n) return;
+  const meta=chart.getDatasetMeta(0), isLight=document.body.classList.contains('light-mode');
+  const first=meta.data[1], last=meta.data[b.n]; if(!first||!last) return;
+  const xL=first.x-first.width/2, xR=last.x+last.width/2;
+  const ctx=chart.ctx, y=chart.chartArea.top+14, col=isLight?'#F97316':'#F97316';
+  ctx.save();
+  ctx.strokeStyle=col; ctx.lineWidth=1.5;
+  ctx.beginPath(); ctx.moveTo(xL,y+6); ctx.lineTo(xL,y); ctx.lineTo(xR,y); ctx.lineTo(xR,y+6); ctx.stroke();
+  ctx.font='800 12px Montserrat,sans-serif'; ctx.textAlign='center'; ctx.textBaseline='bottom';
+  ctx.fillStyle=isLight?'#111':'#F1F5F9';
+  ctx.fillText(b.text, (xL+xR)/2, y-4);
+  ctx.restore();
+}};
 function renderWaterfall(model){
   const {remMonths, year, pacs}=model;
   drawWf(model,3,'ch-wf3');
@@ -596,16 +611,21 @@ function drawWf(model, cen, canvasId){
   const ymin=Math.max(0, forecast-span*2), ymax=totYTG+span*0.5;
   const isLight=document.body.classList.contains('light-mode');
   const tick={color:isLight?'#444':'#94A3B8',font:{family:'Montserrat',size:11}};
+  // esforço = alvo ÷ orçado YTG dos pacotes que absorvem o corte (varia entre cenários)
+  let orcPart=0; cc.parts.forEach(p=>{ if(pacs[p]) orcPart+=pacs[p].orcRem; });
+  const esf=orcPart?cc.alvo/orcPart*100:0;
   if(chWf[cen]) chWf[cen].destroy();
   chWf[cen]=new Chart(document.getElementById(canvasId),{
     type:'bar',
     data:{labels,datasets:[{data:bars,backgroundColor:colors,borderColor:colors,borderWidth:1,borderRadius:3,barPercentage:.72}]},
-    options:{responsive:true,maintainAspectRatio:false,layout:{padding:{top:24}},
+    options:{responsive:true,maintainAspectRatio:false,layout:{padding:{top:44}},
       plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>{const v=c.raw;return 'R$ '+fmt(Math.abs(v[1]-v[0]));}},backgroundColor:'#141B26',titleColor:'#F97316',bodyColor:'#F1F5F9',borderColor:'#1E2D40',borderWidth:1,titleFont:{family:'Montserrat'},bodyFont:{family:'Montserrat'}}},
       scales:{x:{grid:{display:false},border:{display:false},ticks:tick},y:{min:ymin,max:ymax,grid:{display:false},border:{display:false},ticks:{...tick,callback:v=>fmt(v)}}}},
-    plugins:[wfLabels]
+    plugins:[wfLabels,wfBracket]
   });
-  chWf[cen].$wfMeta=meta; chWf[cen].update();
+  chWf[cen].$wfMeta=meta;
+  chWf[cen].$wfBracket={n:steps.length, text:`Economia ${fmt(cc.alvo)} · esforço ${esf.toFixed(1)}%`};
+  chWf[cen].update();
 }
 
 // tabela YTG (orçado puro dos meses restantes) — 5 pacotes + total
