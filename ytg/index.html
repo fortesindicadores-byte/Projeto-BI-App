@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>YTG + FCT — Reorçamento Frota</title>
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <style>
 :root{
   --bg:#0C1017;--card:#141B26;--card2:#1A2335;--border:#1E2D40;
@@ -70,14 +71,20 @@ body{
 /* ══ BRIDGE (gap-to-target) ══ */
 .bridge-title{font-size:19px;font-weight:800;color:var(--text);margin-bottom:3px;}
 .bridge-sub{font-size:13px;color:var(--text2);margin-bottom:14px;}
-.bridge-row{display:grid;grid-template-columns:repeat(6,1fr);gap:10px;margin-bottom:26px;}
-.bridge-card{background:rgba(20,27,38,.55);border:1px solid rgba(255,255,255,.07);border-radius:8px;padding:14px 16px;
-  backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);box-shadow:0 2px 12px rgba(0,0,0,.25);position:relative;}
-.bridge-card.accent{border-color:rgba(249,115,22,.45);}
-.bridge-op{position:absolute;left:-9px;top:50%;transform:translateY(-50%);font-size:16px;font-weight:800;color:var(--text3);z-index:2;}
-.bc-label{font-size:9.5px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.5px;}
-.bc-value{font-size:22px;font-weight:800;color:var(--text);line-height:1.1;margin-top:4px;}
-.bc-meta{font-size:9.5px;color:var(--text2);margin-top:4px;}
+/* cascata */
+.wf-card{background:rgba(20,27,38,.55);border:1px solid rgba(255,255,255,.07);border-radius:8px;padding:18px 20px 14px;margin-bottom:26px;
+  backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);box-shadow:0 2px 12px rgba(0,0,0,.25);}
+.wf-head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:8px;}
+.wf-wrap{position:relative;height:280px;}
+.wf-foot{display:flex;gap:22px;flex-wrap:wrap;margin-top:12px;padding-top:12px;border-top:1px solid rgba(255,255,255,.08);}
+.wf-foot .wf-item{font-size:11px;color:var(--text2);}
+.wf-foot .wf-item b{display:block;font-size:16px;font-weight:800;color:var(--text);margin-top:2px;}
+.dim-toggle{display:flex;border:1px solid #2a3a50;border-radius:4px;overflow:hidden;flex-shrink:0;}
+.dim-btn{background:transparent;color:var(--text2);border:none;font-family:'Montserrat',sans-serif;font-size:12px;font-weight:700;padding:5px 12px;cursor:pointer;text-transform:uppercase;letter-spacing:.5px;}
+.dim-btn.active{background:var(--orange);color:#000;}
+.dim-btn:not(.active):hover{background:rgba(255,255,255,.05);color:var(--text);}
+body.light-mode .wf-card{background:rgba(128,128,128,.14)!important;border:none!important;box-shadow:none!important;--text:#1a1a1a;--text2:#444444;}
+body.light-mode .wf-foot{border-top-color:rgba(0,0,0,.10);}
 /* ══ TABLES ══ */
 .tbl-section{background:rgba(20,27,38,.55);border:1px solid rgba(255,255,255,.07);border-radius:8px;
   padding:18px 20px 16px;margin-bottom:16px;backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);box-shadow:0 2px 12px rgba(0,0,0,.25);}
@@ -124,9 +131,9 @@ body.light-mode table.dre tbody tr{border-bottom:1px solid rgba(0,0,0,.06);}
   .main{padding:12px 10px;}
   .header{padding:8px 12px 10px;}
   .brand h1{font-size:14px;}.brand p{font-size:8px;}
-  .bridge-row{grid-template-columns:repeat(2,1fr);gap:6px;}
-  .bridge-op{display:none;}
-  .bc-value{font-size:16px;}
+  .wf-wrap{height:230px;}
+  .wf-head{flex-direction:column;gap:8px;}
+  .wf-foot{gap:14px;}
   .header-right{gap:4px;flex-wrap:wrap;justify-content:flex-end;}
   .header-right .refresh-btn{display:none;}
   .status-badge,.access-badge{font-size:8px;padding:2px 6px;}
@@ -173,11 +180,20 @@ body.light-mode table.dre tbody tr{border-bottom:1px solid rgba(0,0,0,.06);}
 
 <main class="main">
 
-  <!-- ── PONTE GAP-TO-TARGET ── -->
-  <section>
-    <div class="bridge-title">Aterrissagem do Ano (Gap-to-Target)</div>
-    <div class="bridge-sub" id="bridge-sub">—</div>
-    <div class="bridge-row" id="bridge-row"></div>
+  <!-- ── CASCATA DO REORÇAMENTO ── -->
+  <section class="wf-card">
+    <div class="wf-head">
+      <div>
+        <div class="bridge-title">Cascata do Reorçamento</div>
+        <div class="bridge-sub" id="wf-sub">—</div>
+      </div>
+      <div class="dim-toggle" id="wf-toggle">
+        <button class="dim-btn active" data-cen="3" onclick="setWfCen(3)">3 pacotes</button>
+        <button class="dim-btn" data-cen="2" onclick="setWfCen(2)">2 pacotes</button>
+      </div>
+    </div>
+    <div class="wf-wrap"><canvas id="ch-wf"></canvas></div>
+    <div class="wf-foot" id="wf-foot"></div>
   </section>
 
   <!-- ── TABELAS (YTG / Economia / Forecast) ── -->
@@ -523,33 +539,54 @@ function computeCenario(model, cen){
 const contaLabel = cta => cta;   // exibe o nome cru da conta gerencial
 function monthCols(remMonths, year){ return remMonths.map(mo=>`${MESES[mo-1]}/${String(year).slice(2)}`); }
 
-function renderBridge(model){
-  const {year, remMonths, pacs, rlRefOrc, rlReal, yrRows}=model;
-  // nominal: custo orçado ano, realizado acumulado, YTG (orçado restante), landing
-  let orcAno=0, realAcc=0, orcRem=0;
-  PAC_ORDER.forEach(p=>{ if(pacs[p]){ realAcc+=Math.abs(pacs[p].realAcc); orcRem+=pacs[p].orcRem; } });
-  // orçado ano inteiro (todas as contas de custo)
-  const byCtaYear=sumBy(yrRows, r=>r[C.cta]); Object.values(byCtaYear).forEach(d=>orcAno+=Math.abs(d.orc));
-  const landing=realAcc+orcRem, gap=landing-orcAno;
-  // alvo AVO (controláveis 3 pacotes) para referência
-  let alvo3=0; CEN[3].forEach(p=>{ if(pacs[p]) alvo3+=pacs[p].imp; }); alvo3=-alvo3;
-  const cards=[
-    {l:'Orçamento Custo Ano', v:fmt(orcAno), m:`${year}`, op:''},
-    {l:'Realizado Acumulado', v:fmt(realAcc), m:`até ${MESES[model.lrm-1]}/${String(year).slice(2)}`, op:'+'},
-    {l:'YTG (Orçado a Realizar)', v:fmt(orcRem), m:`${remMonths.length} meses`, op:'+'},
-    {l:'Landing Projetado', v:fmt(landing), m:'se nada mudar', op:'=', accent:true},
-    {l:'Gap vs Orçamento', v:fmtD(gap), m:gap>0?'acima do orçado':'dentro do orçado', op:'', cls:gap>0?'cr':'cg'},
-    {l:'Alvo Reorçam. (AVO)', v:fmt(alvo3), m:'impacto controlável a recuperar', op:'', accent:true},
-  ];
-  document.getElementById('bridge-sub').textContent=`Ano ${year} · fechado até ${MESES[model.lrm-1]}/${String(year).slice(2)} · ${remMonths.length} meses a reorçar. Valores de custo em módulo (R$).`;
-  document.getElementById('bridge-row').innerHTML=cards.map(c=>`
-    <div class="bridge-card ${c.accent?'accent':''}">
-      ${c.op?`<div class="bridge-op">${c.op}</div>`:''}
-      <div class="bc-label">${c.l}</div>
-      <div class="bc-value ${c.cls||''}">${c.v}</div>
-      <div class="bc-meta">${c.m}</div>
-    </div>`).join('');
+let chWf=null, wfCen=3;
+// plugin: rótulo de valor no topo de cada barra da cascata
+const wfLabels={afterDatasetsDraw(chart){
+  const meta=chart.getDatasetMeta(0), isLight=document.body.classList.contains('light-mode');
+  const ctx=chart.ctx; ctx.save(); ctx.font='800 11px Montserrat,sans-serif'; ctx.textAlign='center'; ctx.textBaseline='bottom';
+  (chart.$wfMeta||[]).forEach((info,i)=>{
+    const bar=meta.data[i]; if(!bar) return;
+    ctx.fillStyle=isLight?'#111':'#F1F5F9';
+    ctx.fillText(info.top, bar.x, Math.min(bar.y, chart.scales.y.getPixelForValue(info.hi))-5);
+  });
+  ctx.restore();
+}};
+function renderWaterfall(model){
+  const {remMonths, pacs, year}=model;
+  const cc=computeCenario(model, wfCen);
+  // total YTG (todos os pacotes) e economia por pacote participante
+  let totYTG=0; PAC_ORDER.forEach(p=>{ if(pacs[p]) totYTG+=pacs[p].orcRem; });
+  const steps=cc.parts.map(p=>({name:p, eco:(cc.out[p]?cc.out[p].economia:0)}));
+  const forecast=totYTG-cc.alvo;
+  // constrói barras flutuantes [lo,hi]
+  const labels=['Orçado YTG',...steps.map(s=>s.name),'Forecast Reorçado'];
+  const bars=[], colors=[], meta=[]; let run=totYTG;
+  bars.push([0,totYTG]); colors.push('#38BDF8'); meta.push({top:fmt(totYTG),hi:totYTG});
+  steps.forEach(s=>{ const lo=run-s.eco; bars.push([lo,run]); colors.push('#3BB33B'); meta.push({top:'-'+fmt(s.eco),hi:run}); run=lo; });
+  bars.push([0,forecast]); colors.push('#F97316'); meta.push({top:fmt(forecast),hi:forecast});
+  const isLight=document.body.classList.contains('light-mode');
+  const grid={color:isLight?'rgba(0,0,0,.08)':'rgba(255,255,255,.06)'};
+  const tick={color:isLight?'#444':'#94A3B8',font:{family:'Montserrat',size:11}};
+  if(chWf) chWf.destroy();
+  chWf=new Chart(document.getElementById('ch-wf'),{
+    type:'bar',
+    data:{labels,datasets:[{data:bars,backgroundColor:colors,borderColor:colors,borderWidth:1,borderRadius:3,barPercentage:.72}]},
+    options:{responsive:true,maintainAspectRatio:false,layout:{padding:{top:24}},
+      plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>{const v=c.raw;return 'R$ '+fmt(Math.abs(v[1]-v[0]));}},backgroundColor:'#141B26',titleColor:'#F97316',bodyColor:'#F1F5F9',borderColor:'#1E2D40',borderWidth:1,titleFont:{family:'Montserrat'},bodyFont:{family:'Montserrat'}}},
+      scales:{x:{grid:{display:false},ticks:tick},y:{beginAtZero:true,grid,ticks:{...tick,callback:v=>fmt(v)}}}},
+    plugins:[wfLabels]
+  });
+  chWf.$wfMeta=meta; chWf.update();
+  const cenTxt=wfCen===3?'Combustíveis + Manutenção + Pneus':'Manutenção + Pneus';
+  document.getElementById('wf-sub').textContent=`Ano ${year} · orçado de ${MESES[remMonths[0]-1]}→dez reduzido pela economia distribuída em ${cenTxt}. R$ (custo em módulo).`;
+  document.getElementById('wf-foot').innerHTML=[
+    {l:'Orçado a realizar (YTG)',v:fmt(totYTG)},
+    {l:'Economia total (alvo)',v:'-'+fmt(cc.alvo)},
+    {l:'Forecast reorçado',v:fmt(forecast)},
+    {l:'Redução',v:(totYTG?(-cc.alvo/totYTG*100).toFixed(1):'0')+'%'},
+  ].map(x=>`<div class="wf-item">${x.l}<b>${x.v}</b></div>`).join('');
 }
+function setWfCen(cen){ wfCen=cen; document.querySelectorAll('#wf-toggle .dim-btn').forEach(b=>b.classList.toggle('active',+b.dataset.cen===cen)); if(lastF) renderWaterfall(computeModel(lastF)); }
 
 // tabela YTG (orçado puro dos meses restantes) — 5 pacotes + total
 function tblYTG(model){
@@ -678,7 +715,7 @@ function atualizar(){
   const f=getF(); lastF=f;
   const model=computeModel(f);
   window._rlRefOrc=model.rlRefOrc;
-  renderBridge(model);
+  renderWaterfall(model);
   const html=[
     tblYTG(model),
     tblCenario(model,3,'eco'),
@@ -718,7 +755,7 @@ document.addEventListener('DOMContentLoaded',()=>{initAccessLog();init();});
 // ── tema ──
 const _sun=`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>`;
 const _moon=`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>`;
-function applyTheme(t){ document.body.classList.toggle('light-mode',t==='light'); localStorage.setItem('bi_theme',t); const b=document.getElementById('themeBtn'); if(b) b.innerHTML=t==='light'?_moon:_sun; }
+function applyTheme(t){ document.body.classList.toggle('light-mode',t==='light'); localStorage.setItem('bi_theme',t); const b=document.getElementById('themeBtn'); if(b) b.innerHTML=t==='light'?_moon:_sun; if(typeof lastF!=='undefined'&&lastF&&typeof renderWaterfall==='function') renderWaterfall(computeModel(lastF)); }
 (function(){ const t=localStorage.getItem('bi_theme')||'dark'; applyTheme(t); document.getElementById('themeBtn').addEventListener('click',()=>applyTheme(document.body.classList.contains('light-mode')?'dark':'light')); })();
 </script>
 </body>
