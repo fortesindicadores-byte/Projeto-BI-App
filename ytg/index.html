@@ -569,13 +569,17 @@ const wfBracket={afterDatasetsDraw(chart){
   const meta=chart.getDatasetMeta(0), isLight=document.body.classList.contains('light-mode');
   const first=meta.data[1], last=meta.data[b.n]; if(!first||!last) return;
   const xL=first.x-first.width/2, xR=last.x+last.width/2;
-  const ctx=chart.ctx, y=chart.chartArea.top+14, col=isLight?'#F97316':'#F97316';
+  const col=isLight?'#111111':'#FFFFFF';
+  // ancora acima da barra de economia MAIS ALTA, com folga dos rótulos
+  let minTop=Infinity; for(let i=1;i<=b.n;i++){ const el=meta.data[i]; if(el&&el.y<minTop) minTop=el.y; }
+  const tick=16, y=minTop-38;                // linha da chave; verticais descem em direção às barras
+  const ctx=chart.ctx;
   ctx.save();
   ctx.strokeStyle=col; ctx.lineWidth=1.5;
-  ctx.beginPath(); ctx.moveTo(xL,y+6); ctx.lineTo(xL,y); ctx.lineTo(xR,y); ctx.lineTo(xR,y+6); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(xL,y+tick); ctx.lineTo(xL,y); ctx.lineTo(xR,y); ctx.lineTo(xR,y+tick); ctx.stroke();
   ctx.font='800 12px Montserrat,sans-serif'; ctx.textAlign='center'; ctx.textBaseline='bottom';
-  ctx.fillStyle=isLight?'#111':'#F1F5F9';
-  ctx.fillText(b.text, (xL+xR)/2, y-4);
+  ctx.fillStyle=col;
+  ctx.fillText(b.text, (xL+xR)/2, y-5);
   ctx.restore();
 }};
 function renderWaterfall(model){
@@ -618,7 +622,7 @@ function drawWf(model, cen, canvasId){
   chWf[cen]=new Chart(document.getElementById(canvasId),{
     type:'bar',
     data:{labels,datasets:[{data:bars,backgroundColor:colors,borderColor:colors,borderWidth:1,borderRadius:3,barPercentage:.72}]},
-    options:{responsive:true,maintainAspectRatio:false,layout:{padding:{top:44}},
+    options:{responsive:true,maintainAspectRatio:false,layout:{padding:{top:30}},
       plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>{const v=c.raw;return 'R$ '+fmt(Math.abs(v[1]-v[0]));}},backgroundColor:'#141B26',titleColor:'#F97316',bodyColor:'#F1F5F9',borderColor:'#1E2D40',borderWidth:1,titleFont:{family:'Montserrat'},bodyFont:{family:'Montserrat'}}},
       scales:{x:{grid:{display:false},border:{display:false},ticks:tick},y:{min:ymin,max:ymax,grid:{display:false},border:{display:false},ticks:{...tick,callback:v=>fmt(v)}}}},
     plugins:[wfLabels,wfBracket]
