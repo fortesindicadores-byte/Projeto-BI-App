@@ -531,13 +531,14 @@ function computeModel(f){
 // alvo = |Σ impacto dos pacotes participantes| (decisão: só pacotes controláveis).
 function computeCenario(model, cen){
   const parts=CEN[cen], {remMonths, pacs}=model;
-  // ALVO = |impacto TOTAL da empresa| (todos os pacotes, líquido).
-  // Como os fixos (ICMS/Seguros) ficam iguais ao orçado no resto do ano, o crédito favorável
-  // já acumulado permanece e abate o buraco → o alvo é o líquido total (ex.: 907k), não o dos
-  // controláveis isolados. É o mesmo Total do "Análise vs Orçado" do visao-financeira.
-  // FIXO nos dois cenários; muda só quem absorve o corte (parts).
-  let alvo=0; PAC_ORDER.forEach(p=>{ if(pacs[p]) alvo+=pacs[p].imp; });
-  alvo=-alvo; if(alvo<0) alvo=0;                 // impacto desfavorável (negativo) → alvo positivo a economizar
+  // ALVO = economia que ZERA o impacto total projetado de 2026 (aterrissagem = AV orçado do ano).
+  // = |impacto 2026 do YTG| (bloco final da tabela YTG, gastando o orçado no restante).
+  // Base anual, não YTD: a receita acima do orçado dilui o AV, então o alvo anual difere do
+  // impacto YTD. Fixos mantêm o orçado. FIXO nos dois cenários; muda só quem absorve (parts).
+  let orcAccT=0, orcRemT=0, realAccT=0;
+  PAC_ORDER.forEach(p=>{ const P=pacs[p]; if(P){ orcAccT+=P.orcAcc; orcRemT+=P.orcRem; realAccT+=P.realAcc; } });
+  const fb0=fbCalc(model, orcAccT, orcRemT, realAccT, 0);
+  let alvo=-fb0.imp; if(alvo<0) alvo=0;          // impacto projetado desfavorável (negativo) → alvo positivo
   // pesos
   let totOrcRem=0; parts.forEach(p=>{ if(pacs[p]) totOrcRem+=pacs[p].orcRem; });
   const orcMonthTot={}; remMonths.forEach(mo=>{ let s=0; parts.forEach(p=>{ s+=(pacs[p]&&pacs[p].orcMonth[mo])||0; }); orcMonthTot[mo]=s; });
@@ -739,14 +740,12 @@ function tblCenarioMerged(model, cen, titulo, sub){
   const pctS = v => (v==null||!isFinite(v))?'—':v.toFixed(2)+'%';
   const monthHead=remMonths.map(mo=>`<th class="num">${MESES[mo-1]}/${String(year).slice(2)}</th>`).join('').replace('<th class="num"','<th class="num sep-l"',1);
   const head=`<tr><th class="conta">Pacotes</th><th class="num">AV Orç - YTD</th><th class="num">AV Real - YTD</th><th class="num">Δ pp</th><th class="num sep-l">Impacto</th>${monthHead}<th class="num sep-l">AV Orç - 2026</th><th class="num">AV Real - 2026</th><th class="num">Δ pp</th><th class="num">Impacto</th></tr>`;
-  // bloco final 2026 (com economia aplicada): farol verde quando aterrissa alinhado ao orçado
+  // bloco final 2026 (com economia aplicada): valores reais de Δpp/Impacto (Total fecha em 0)
   const fbCells=(orcAccS,orcRemAbs,realAccS,ecoAbs,muted)=>{
     const fb=fbCalc(model,orcAccS,orcRemAbs,realAccS,ecoAbs);
     const m=muted?' muted':'';
-    const tail=Math.abs(fb.d)<=0.1
-      ?`<td class="num"><span class="dot-ok" title="alinhado ao orçado 2026"></span></td><td class="num"><span class="dot-ok" title="alinhado ao orçado 2026"></span></td>`
-      :`<td class="num ${fb.d<0?'cr':'cg'}">${pp(fb.d)}</td><td class="num ${fb.d<0?'cr':'cg'}">${fmtA(fb.imp)}</td>`;
-    return `<td class="num sep-l${m}">${pctS(fb.avO)}</td><td class="num${m}">${pctS(fb.avL)}</td>${tail}`;
+    return `<td class="num sep-l${m}">${pctS(fb.avO)}</td><td class="num${m}">${pctS(fb.avL)}</td>`+
+      `<td class="num ${fb.d<0?'cr':'cg'}">${pp(fb.d)}</td><td class="num ${fb.d<0?'cr':'cg'}">${fmtA(fb.imp)}</td>`;
   };
 
   const buildRows=(kind)=>{   // kind: 'eco' | 'fct'
