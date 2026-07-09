@@ -131,6 +131,8 @@ body{
 .hero-side{padding:4px 28px 16px;display:flex;flex-direction:column;justify-content:flex-end;gap:10px;}
 .hero-side-item{font-size:11px;color:var(--text2);}
 .hero-side-item strong{color:var(--text);font-size:14px;font-weight:700;display:block;margin-top:1px;}
+.hero-ebitda{margin-left:auto;text-align:right;}
+.hero-ebitda .hero-deltas{justify-content:flex-end;}
 
 /* ══ CARDS ══ */
 .cards-row{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin-bottom:12px;}
@@ -323,6 +325,8 @@ body.light-mode table.dre tbody tr{border-bottom:1px solid rgba(0,0,0,.06);}
   .brand p{font-size:8px;}
   .hero{flex-direction:column;align-items:flex-start;gap:4px;margin-bottom:14px;}
   .hero-value{font-size:36px;}
+  .hero-ebitda{margin-left:0;text-align:left;}
+  .hero-ebitda .hero-deltas{justify-content:flex-start;}
   .hero-side{padding:0 0 8px;flex-direction:row;gap:20px;}
   .cards-row{grid-template-columns:repeat(5,1fr);gap:4px;margin-bottom:4px;}
   .kpi-card{padding:7px 5px;min-width:0;overflow:hidden;}
@@ -520,6 +524,15 @@ body.light-mode table.dre tbody tr{border-bottom:1px solid rgba(0,0,0,.06);}
         <div class="hero-delta">Δ Orç. %<b id="h-dorc">—</b></div>
         <div class="hero-delta">Δ Rem. %<b id="h-drem">—</b></div>
         <div class="hero-delta">YoY %<b id="h-yoy">—</b></div>
+      </div>
+    </div>
+    <div class="hero-main hero-ebitda">
+      <div class="hero-label">EBITDA</div>
+      <div class="hero-value" id="h-ebitda">—</div>
+      <div class="hero-deltas">
+        <div class="hero-delta">Δ Orç. %<b id="he-dorc">—</b></div>
+        <div class="hero-delta">Δ Rem. %<b id="he-drem">—</b></div>
+        <div class="hero-delta">YoY %<b id="he-yoy">—</b></div>
       </div>
     </div>
   </section>
@@ -1256,6 +1269,22 @@ function renderHeroCards(mes, prev){
 }
 
 // ═══════════════════════════════════
+// RENDER HERO EBITDA (canto direito)
+// ═══════════════════════════════════
+function renderEbitdaHero(cur, prev){
+  const S=id=>document.getElementById(id);
+  if(!cur){ set('h-ebitda','—'); ['he-dorc','he-drem','he-yoy'].forEach(id=>{const e=S(id);if(e){e.textContent='—';e.style.color='';}}); return; }
+  set('h-ebitda', fmt(cur.real));
+  const dOrc = cur.orc ? (cur.real-cur.orc)/Math.abs(cur.orc)*100 : null;
+  const dRem = cur.rem ? (cur.real-cur.rem)/Math.abs(cur.rem)*100 : null;
+  const yoy  = (prev&&prev.real) ? (cur.real-prev.real)/Math.abs(prev.real)*100 : null;
+  const eO=S('he-dorc'), eR=S('he-drem'), eY=S('he-yoy');
+  if(eO){eO.textContent=pct(dOrc);colI(eO,dOrc<0);}
+  if(eR){eR.textContent=pct(dRem);colI(eR,dRem<0);}
+  if(eY){eY.textContent=pct(yoy); colI(eY, yoy<0);}
+}
+
+// ═══════════════════════════════════
 // RENDER AV CARDS
 // ═══════════════════════════════════
 function renderAVCards(mes, prev){
@@ -1670,6 +1699,16 @@ function atualizar(){
   set('sub-pacote',vigLbl);
   renderHeroCards(activeAgg,prevAgg);
   renderAVCards(activeAgg,prevAgg);
+  // EBITDA no canto direito do hero — mesma lógica (Δ Orç/Rem e YoY do mesmo período)
+  let prevF=null;
+  if(f2.vig&&f2.vig.length>0){
+    prevF={...f2, vig:f2.vig.map(vk=>{const [y,m]=vk.split('-').map(Number);return `${y-1}-${String(m).padStart(2,'0')}`;})};
+  }else if(f2.ano&&f2.ano.length>0){
+    const prevAnos=f2.ano.map(y=>String(+y-1));
+    const prevVigs=[...closedMonths].flatMap(mi=>prevAnos.map(y=>`${y}-${String(mi+1).padStart(2,'0')}`));
+    prevF={...f2, ano:prevAnos, vig:prevVigs};
+  }
+  renderEbitdaHero(aggEbitda(f2), prevF?aggEbitda(prevF):null);
   renderCharts(f2);
   renderPacote(accRows,allRows,f2);
   renderAnalise(accRows,'body-orc',true,avOrcDim);
