@@ -55,17 +55,15 @@ async function main(){
   console.log('idx -> Vig',iVig,'Uni',iUni,'KPI',iKpi,'Ating',iAt);
   const canon=new Map(); SCORE_ORDER.forEach(k=>canon.set(normKey_(k),k));
 
-  console.log('\n--- DEBUG linhas cruas (unidade ~camboriu, vig 2026-01) ---');
-  let dbg=0;
-  for(const row of src.rows){
-    if(dbg>=25) break;
-    if(normKey_(row[iUni]).includes('camboriu') && vigKey(row[iVig])==='2026-01'){
-      const kraw=String(row[iKpi]||''); const kN=normKey_(kraw.trim());
-      console.log(`KPI="${kraw}" | IC?=${startsWithIC_(kraw)} | canon?=${canon.has(kN)} | ating="${row[iAt]}" (${typeof row[iAt]}) -> ${toNumber_(row[iAt])}`);
-      dbg++;
-    }
-  }
-  console.log(`--- fim debug (viu ${dbg} linhas) ---\n`);
+  console.log(`\n--- DEBUG: total de linhas do gviz = ${src.rows.length} ---`);
+  const totIC=src.rows.filter(r=>startsWithIC_(r[iKpi])).length;
+  const totAt=src.rows.filter(r=>startsWithIC_(r[iKpi])&&toNumber_(r[iAt])!==null).length;
+  console.log(`linhas com KPI "IC:" = ${totIC} · dessas com % de Ating preenchido = ${totAt}`);
+  console.log('primeiras 30 linhas [Uni | Vig | KPI | ating]:');
+  src.rows.slice(0,30).forEach((r,i)=>{
+    console.log(`  ${i}: uni="${r[iUni]}" vig="${r[iVig]}" kpi="${String(r[iKpi]||'').slice(0,42)}" at="${r[iAt]}"`);
+  });
+  console.log('--- fim debug ---\n');
 
   const pivot=new Map();
   for(const row of src.rows){
