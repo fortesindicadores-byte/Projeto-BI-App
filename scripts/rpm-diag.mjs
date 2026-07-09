@@ -35,13 +35,26 @@ function vigKey(v){ if(v==null)return ''; const s=String(v);
   m=s.match(/^(\d{4})-(\d{2})/); if(m)return `${m[1]}-${m[2]}`;
   return s.trim(); }
 
+// parser CSV (aspas, vírgulas e quebras de linha dentro de campos)
+function parseCSV(text){
+  const rows=[]; let row=[], cur='', q=false;
+  for(let i=0;i<text.length;i++){ const c=text[i];
+    if(q){ if(c==='"'){ if(text[i+1]==='"'){cur+='"';i++;} else q=false; } else cur+=c; }
+    else if(c==='"') q=true;
+    else if(c===','){ row.push(cur); cur=''; }
+    else if(c==='\n'){ row.push(cur); rows.push(row); row=[]; cur=''; }
+    else if(c!=='\r') cur+=c;
+  }
+  if(cur!==''||row.length){ row.push(cur); rows.push(row); }
+  return rows;
+}
+// lê a aba via CSV (o JSON do gviz trunca abas grandes; CSV traz tudo)
 async function gviz(tab){
-  const url=`https://docs.google.com/spreadsheets/d/${SID}/gviz/tq?tqx=out:json&sheet=${encodeURIComponent(tab)}`;
+  const url=`https://docs.google.com/spreadsheets/d/${SID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(tab)}`;
   const res=await fetch(url); const raw=await res.text();
-  const json=JSON.parse(raw.replace(/^[\s\S]*?\(/,'').replace(/\);?\s*$/,''));
-  let header=(json.table.cols||[]).map(c=>c&&c.label?c.label:'');
-  let rows=json.table.rows.map(r=>r.c.map(c=>c?(c.v):null));
-  if(!header.some(Boolean)&&rows.length){ header=rows[0].map(x=>x==null?'':String(x)); rows=rows.slice(1); }
+  const all=parseCSV(raw);
+  const header=(all[0]||[]).map(s=>String(s).trim());
+  const rows=all.slice(1);
   return {header,rows}; }
 function idxByHeader(header){ const idx={}; header.forEach((h,i)=>{ idx[normKey_(h)]=i; }); return idx; }
 function getIdx(idx,cands){ for(const c of cands){ const k=normKey_(c); if(k in idx)return idx[k]; } return -1; }
