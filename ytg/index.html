@@ -80,6 +80,7 @@ body{
 .wf-head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:8px;}
 .wf-wrap{position:relative;height:400px;min-width:0;}
 .wf-foot{display:flex;gap:22px;flex-wrap:wrap;margin-top:12px;padding-top:12px;border-top:1px solid rgba(255,255,255,.08);}
+.wf-summary{font-style:italic;}
 .wf-foot .wf-item{font-size:11px;color:var(--text2);}
 .wf-foot .wf-item b{display:block;font-size:16px;font-weight:800;color:var(--text);margin-top:2px;}
 .dim-toggle{display:flex;border:1px solid #2a3a50;border-radius:4px;overflow:hidden;flex-shrink:0;}
@@ -640,9 +641,9 @@ function drawWf(model, cen, canvasId){
   const labels=['Orçado YTG',...steps.map(s=>s.name),'Target'];
   const isLight0=document.body.classList.contains('light-mode');
   const bars=[], colors=[], meta=[]; let run=totYTG;
-  bars.push([0,totYTG]); colors.push(isLight0?'#111111':'#FFFFFF'); meta.push({top:fmt(totYTG),hi:totYTG});
+  bars.push([0,totYTG]); colors.push(isLight0?'#111111':'#FFFFFF'); meta.push({top:'-'+fmt(totYTG),hi:totYTG});
   steps.forEach(s=>{ const lo=run-s.eco; bars.push([lo,run]); colors.push('#3BB33B'); meta.push({top:fmt(s.eco),hi:run}); run=lo; });
-  bars.push([0,forecast]); colors.push('#F97316'); meta.push({top:fmt(forecast),hi:forecast});
+  bars.push([0,forecast]); colors.push('#F97316'); meta.push({top:'-'+fmt(forecast),hi:forecast});
   const span=Math.max(totYTG-forecast, totYTG*0.01);
   const ymin=Math.max(0, forecast-span*2), ymax=totYTG+span*0.5;
   const isLight=document.body.classList.contains('light-mode');
@@ -660,7 +661,7 @@ function drawWf(model, cen, canvasId){
     plugins:[wfLabels,wfBracket]
   });
   chWf[cen].$wfMeta=meta;
-  chWf[cen].$wfBracket={n:steps.length, text:`Economia ${fmt(cc.alvo)} · esforço ${esf.toFixed(1)}%`};
+  chWf[cen].$wfBracket={n:steps.length, text:`esforço ${esf.toFixed(1)}%`};
   chWf[cen].update();
 }
 
@@ -683,7 +684,7 @@ function tblYTG(model){
   });
   const totCells=remMonths.map(mo=>`<td class="num">-${fmtA(tMonth[mo])}</td>`).join('');
   const dTot=sumAvReal(model)-sumAvRef(model);
-  rows+=`<tr class="total"><td class="conta">Total Frota</td><td class="num">${pctN(sumAvRef(model))}</td><td class="num">${pctN(sumAvReal(model))}</td><td class="num ${dTot<0?'cr':'cg'}">${pp(dTot)}</td><td class="num sep-l ${tImp<0?'cr':'cg'}">${fmtA(tImp)}</td>${totCells.replace('<td class="num">','<td class="num sep-l">')}${fbCellsYtg(model,tOrcAcc,tOrcRemNet,tRealAcc,false)}</tr>`;
+  rows+=`<tr class="total"><td class="conta">Total Frota</td><td class="num">${pctN(sumAvRef(model))}</td><td class="num">${pctN(sumAvReal(model))}</td><td class="num ${dTot<0?'cr':'cg'}">${pp(-dTot)}</td><td class="num sep-l ${tImp<0?'cr':'cg'}">${fmtA(tImp)}</td>${totCells.replace('<td class="num">','<td class="num sep-l">')}${fbCellsYtg(model,tOrcAcc,tOrcRemNet,tRealAcc,false)}</tr>`;
   return tableShell('YTG (Year To Go)', 'blue', 'Orçado puro dos meses a realizar — nenhum ajuste aplicado. AV / Impacto = acumulado do ano fechado.', cols, rows, false);
 }
 
@@ -763,7 +764,7 @@ function tblCenarioMerged(model, cen, titulo, sub){
     const fb=fbCalc(model,orcAccS,orcRemAbs,realAccS,ecoAbs);
     const m=muted?' muted':'';
     return `<td class="num sep-l${m}">${pctS(fb.avO)}</td><td class="num${m}">${pctS(fb.avL)}</td>`+
-      `<td class="num ${fb.d<0?'cr':'cg'}">${pp(fb.d)}</td><td class="num ${fb.d<0?'cr':'cg'}">${fmtA(fb.imp)}</td>`;
+      `<td class="num ${fb.d<0?'cr':'cg'}">${pp(-fb.d)}</td><td class="num ${fb.d<0?'cr':'cg'}">${fmtA(fb.imp)}</td>`;
   };
 
   const buildRows=(kind)=>{   // kind: 'eco' | 'fct'
@@ -783,7 +784,7 @@ function tblCenarioMerged(model, cen, titulo, sub){
       rows+=`<tr class="pac-row ${Object.keys(P.contas).length?'':'no-drill'}" onclick="toggleDrill(this)">
         <td class="conta">${p} ${tag}</td>
         <td class="num">${pctS(P.avRef)}</td><td class="num">${pctS(P.avReal)}</td>
-        <td class="num ${P.dPp<0?'cr':'cg'}">${pp(P.dPp)}</td>
+        <td class="num ${P.dPp<0?'cr':'cg'}">${pp(-P.dPp)}</td>
         <td class="num sep-l ${P.imp<0?'cr':'cg'}">${fmtA(P.imp)}</td>${cells}${fbCells(P.orcAcc,P.orcRemNet,P.realAcc,eco,false)}</tr>`;
       Object.entries(P.contas).sort((a,b)=>a[1].imp-b[1].imp).forEach(([cta,c])=>{
         if(c.orcRem===0&&c.orcAcc===0&&c.imp===0) return;
@@ -797,7 +798,7 @@ function tblCenarioMerged(model, cen, titulo, sub){
         rows+=`<tr class="sub-row" data-pac="${p}">
           <td class="conta">${contaLabel(cta)}</td>
           <td class="num muted">${pctS(avR)}</td><td class="num muted">${pctS(avRe)}</td>
-          <td class="num ${dp<0?'cr':'cg'}">${pp(dp)}</td>
+          <td class="num ${dp<0?'cr':'cg'}">${pp(-dp)}</td>
           <td class="num sep-l ${c.imp<0?'cr':'cg'}">${fmtA(c.imp)}</td>${cc2}${fbCells(c.orcAcc,c.orcRemNet,c.realAcc,co?co.economia:0,true)}</tr>`;
       });
     });
@@ -805,7 +806,7 @@ function tblCenarioMerged(model, cen, titulo, sub){
     const esfTot=orcPart?cc.alvo/orcPart*100:0;
     const dTot=sumAvReal(model)-sumAvRef(model);
     const totCells=remMonths.map(mo=>`<td class="num">-${fmt(tM[mo])}</td>`).join('').replace('<td class="num','<td class="num sep-l',1);
-    rows+=`<tr class="total"><td class="conta">Total Frota <span class="esf-tag${esfTot>15?' hi':''}">esf. ${esfTot.toFixed(0)}%</span></td><td class="num">${pctS(sumAvRef(model))}</td><td class="num">${pctS(sumAvReal(model))}</td><td class="num ${dTot<0?'cr':'cg'}">${pp(dTot)}</td><td class="num sep-l ${tImp<0?'cr':'cg'}">${fmtA(tImp)}</td>${totCells}${fbCells(tOrcAcc,tOrcRemNet,tRealAcc,cc.alvo,false)}</tr>`;
+    rows+=`<tr class="total"><td class="conta">Total Frota <span class="esf-tag${esfTot>15?' hi':''}">esf. ${esfTot.toFixed(0)}%</span></td><td class="num">${pctS(sumAvRef(model))}</td><td class="num">${pctS(sumAvReal(model))}</td><td class="num ${dTot<0?'cr':'cg'}">${pp(-dTot)}</td><td class="num sep-l ${tImp<0?'cr':'cg'}">${fmtA(tImp)}</td>${totCells}${fbCells(tOrcAcc,tOrcRemNet,tRealAcc,cc.alvo,false)}</tr>`;
     return rows;
   };
 
@@ -842,7 +843,7 @@ function fbCellsYtg(model, orcAccS, orcRemAbs, realAccS, muted){
   const fb=fbCalc(model, orcAccS, orcRemAbs, realAccS, 0);
   const m=muted?' muted':'';
   return `<td class="num sep-l${m}">${pctN(fb.avO)}</td><td class="num${m}">${pctN(fb.avL)}</td>`+
-    `<td class="num ${fb.d<0?'cr':'cg'}">${pp(fb.d)}</td><td class="num ${fb.d<0?'cr':'cg'}">${fmtA(fb.imp)}</td>`;
+    `<td class="num ${fb.d<0?'cr':'cg'}">${pp(-fb.d)}</td><td class="num ${fb.d<0?'cr':'cg'}">${fmtA(fb.imp)}</td>`;
 }
 function pacRow(model, p, P, remMonths, fixo){
   const cells=remMonths.map(mo=>`<td class="num">-${fmt(P.orcMonth[mo]||0)}</td>`).join('');
@@ -850,7 +851,7 @@ function pacRow(model, p, P, remMonths, fixo){
   return `<tr class="pac-row ${Object.keys(P.contas).length?'':'no-drill'}" onclick="toggleDrill(this)">
     <td class="conta">${p} ${badge}</td>
     <td class="num">${pctN(P.avRef)}</td><td class="num">${pctN(P.avReal)}</td>
-    <td class="num ${P.dPp<0?'cr':'cg'}">${pp(P.dPp)}</td>
+    <td class="num ${P.dPp<0?'cr':'cg'}">${pp(-P.dPp)}</td>
     <td class="num sep-l ${P.imp<0?'cr':'cg'}">${fmtA(P.imp)}</td>${cells.replace('<td class="num','<td class="num sep-l',1)}${fbCellsYtg(model,P.orcAcc,P.orcRemNet,P.realAcc,false)}</tr>`;
 }
 function ctaRow(model, p, cta, c, remMonths, fixo){
@@ -859,7 +860,7 @@ function ctaRow(model, p, cta, c, remMonths, fixo){
   return `<tr class="sub-row" data-pac="${p}">
     <td class="conta">${contaLabel(cta)}</td>
     <td class="num muted">${pctN(avR)}</td><td class="num muted">${pctN(avRe)}</td>
-    <td class="num ${dp<0?'cr':'cg'}">${pp(dp)}</td>
+    <td class="num ${dp<0?'cr':'cg'}">${pp(-dp)}</td>
     <td class="num sep-l ${c.imp<0?'cr':'cg'}">${fmtA(c.imp)}</td>${cells.replace('<td class="num','<td class="num sep-l',1)}${fbCellsYtg(model,c.orcAcc,c.orcRemNet,c.realAcc,true)}</tr>`;
 }
 // colgroup ÚNICO de todas as tabelas (garante colunas alinhadas entre elas):
