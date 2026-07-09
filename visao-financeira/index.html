@@ -1686,7 +1686,8 @@ function atualizar(){
   let prevAgg={};
   if(f2.vig&&f2.vig.length>0){
     const prevVigs=f2.vig.map(vk=>{ const [y,m]=vk.split('-').map(Number); return `${y-1}-${String(m).padStart(2,'0')}`; });
-    prevAgg=agg(filterMes(allRows,{...f2,vig:prevVigs}));
+    // as prevVigs já fixam o ano anterior — não pode manter a trava de ANO (senão vira ano-atual + vig-ano-anterior = vazio)
+    prevAgg=agg(filterMes(allRows,{...f2,ano:[],vig:prevVigs}));
   } else if(f2.ano&&f2.ano.length>0){
     const prevAnos=f2.ano.map(y=>String(+y-1));
     // YoY comparado ao MESMO período: só os meses que o ano atual já tem realizado.
@@ -1702,7 +1703,7 @@ function atualizar(){
   // EBITDA no canto direito do hero — mesma lógica (Δ Orç/Rem e YoY do mesmo período)
   let prevF=null;
   if(f2.vig&&f2.vig.length>0){
-    prevF={...f2, vig:f2.vig.map(vk=>{const [y,m]=vk.split('-').map(Number);return `${y-1}-${String(m).padStart(2,'0')}`;})};
+    prevF={...f2, ano:[], vig:f2.vig.map(vk=>{const [y,m]=vk.split('-').map(Number);return `${y-1}-${String(m).padStart(2,'0')}`;})};
   }else if(f2.ano&&f2.ano.length>0){
     const prevAnos=f2.ano.map(y=>String(+y-1));
     const prevVigs=[...closedMonths].flatMap(mi=>prevAnos.map(y=>`${y}-${String(mi+1).padStart(2,'0')}`));
