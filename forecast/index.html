@@ -979,11 +979,11 @@ function toggleDrill(tr){
 
 // ═══════════════════════════════════ ATUALIZAR ═══════════════════════════════════
 // ═══════════════════════════════════ FORECAST EDITÁVEL ═══════════════════════════════════
-let OV={}, recOV={};                       // overrides: OV[cta][mo]=custo(sinal) · recOV[mo]=receita(mód.)
-const FC_KEY='forecast_draft_v1';
-function saveDraft(){ try{ localStorage.setItem(FC_KEY, JSON.stringify({OV,recOV})); }catch(e){} }
-function loadDraft(){ try{ const d=JSON.parse(localStorage.getItem(FC_KEY)); if(d){ OV=d.OV||{}; recOV=d.recOV||{}; } }catch(e){} }
-function resetAll(){ if(!confirm('Descartar todas as edições e voltar ao orçado?')) return; OV={}; recOV={}; saveDraft(); atualizar(); }
+let OV={}, recOVorc={}, recOVtrend={};      // custos (compartilhados) + receita por cenário (orçada / tendência)
+const FC_KEY='forecast_draft_v2';
+function saveDraft(){ try{ localStorage.setItem(FC_KEY, JSON.stringify({OV,recOVorc,recOVtrend})); }catch(e){} }
+function loadDraft(){ try{ const d=JSON.parse(localStorage.getItem(FC_KEY)); if(d){ OV=d.OV||{}; recOVorc=d.recOVorc||{}; recOVtrend=d.recOVtrend||{}; } }catch(e){} }
+function resetAll(){ if(!confirm('Descartar todas as edições e voltar ao orçado?')) return; OV={}; recOVorc={}; recOVtrend={}; saveDraft(); atualizar(); }
 // aceita "-2.87 mi", "566k", "-2.870.000", "1234,56"
 function parseNum(raw){
   if(raw==null) return null;
@@ -1001,14 +1001,15 @@ function parseNum(raw){
 const fcVal = (cta,c,mo)=>{ const o=OV[cta]; return (o&&o[mo]!=null)?+o[mo]:+(c.orcMonthNet[mo]||0); };
 // tendência de receita = orçado do mês × (receita realizada acum ÷ orçada acum) — respeita sazonalidade do orçado e o nível real
 const trendRec = (model,mo)=>{ const r=model.rlRefOrc? model.rlReal/model.rlRefOrc : 1; return (model.recByMonth[mo]||0)*r; };
-const recVal = (model,mo)=>{ return (recOV[mo]!=null)?+recOV[mo]:trendRec(model,mo); };
+const recOrc   = (model,mo)=> (recOVorc[mo]!=null)?+recOVorc[mo]:(model.recByMonth[mo]||0);   // cenário receita orçada
+const recTrend = (model,mo)=> (recOVtrend[mo]!=null)?+recOVtrend[mo]:trendRec(model,mo);       // cenário receita tendência
 const ctaChanged = (cta,mo)=> !!(OV[cta]&&OV[cta][mo]!=null);
 
-function computeForecast(model){
+function computeForecast(model, recFn){
   const {remMonths, pacs, rlReal, rlRefOrc, recRem}=model;
   let realAccCost=0, orcAccCost=0, orcRemNet=0;
   PAC_ORDER.forEach(p=>{const P=pacs[p];if(P){realAccCost+=P.realAcc;orcAccCost+=P.orcAcc;orcRemNet+=P.orcRemNet;}});
-  let recRemF=0; remMonths.forEach(mo=>recRemF+=recVal(model,mo));
+  let recRemF=0; remMonths.forEach(mo=>recRemF+=recFn(model,mo));
   const recOrcYear=rlRefOrc+recRem, recProj0=rlReal+recRem, recProjF=rlReal+recRemF;
   const AVo = x => recOrcYear? x/recOrcYear*100 : 0;   // AV do ano orçado
   const AVl = x => recProjF ? x/recProjF*100 : 0;      // AV de aterrissagem (com edições)
@@ -1030,14 +1031,14 @@ function computeForecast(model){
     recYtdOrc:rlRefOrc, recYtdReal:rlReal, recOrcYear, recProjF, recRemF };
 }
 
-function renderCompare(model, F){
-  const dN=F.avNada-F.avOrc, dF=F.avFc-F.avOrc;
-  document.getElementById('fc-sub').textContent=`Ano ${model.year} · fechado até ${MESES[model.lrm-1]}/${String(model.year).slice(2)}. AV de custo projetada para o ano. Edite os meses abaixo e veja a aterrissagem mudar.`;
+function renderCompare(model, Fo, Ft){
+  document.getElementById('fc-sub').textContent=`Ano ${model.year} · fechado até ${MESES[model.lrm-1]}/${String(model.year).slice(2)}. Mesmos custos, duas premissas de receita (orçada × tendência). Edite receita e custos e veja a aterrissagem mudar.`;
+  const impMeta = v => `impacto <span class="${v<0?'cr':'cg'}">${fmtA(v)}</span>`;
   const cards=[
-    {l:'Orçado 2026', v:pctN(F.avOrc), m:'meta orçamentária'},
-    {l:'Se nada mudar', v:pctN(F.avNada), m:`impacto <span class="${F.impNada<0?'cr':'cg'}">${fmtA(F.impNada)}</span>`, cls:dN<0?'cr':'cg'},
-    {l:'Seu Forecast', v:pctN(F.avFc), m:`impacto <span class="${F.impFc<0?'cr':'cg'}">${fmtA(F.impFc)}</span>`, hi:true},
-    {l:'Δ Forecast vs Orçado', v:pp(-dF), m:`impacto <span class="${F.impFc<0?'cr':'cg'}">${fmtA(F.impFc)}</span>`, cls:dF<0?'cr':'cg'},
+    {l:'Orçado 2026', v:pctN(Fo.avOrc), m:'meta orçamentária'},
+    {l:'Se nada mudar', v:pctN(Fo.avNada), m:impMeta(Fo.impNada), cls:(Fo.avNada-Fo.avOrc)<0?'cr':'cg'},
+    {l:'Forecast · Rec. Orçada', v:pctN(Fo.avFc), m:impMeta(Fo.impFc), cls:(Fo.avFc-Fo.avOrc)<0?'cr':'cg'},
+    {l:'Forecast · Rec. Tendência', v:pctN(Ft.avFc), m:impMeta(Ft.impFc), hi:true, cls:(Ft.avFc-Ft.avOrc)<0?'cr':'cg'},
   ];
   document.getElementById('cmp-grid').innerHTML=cards.map(c=>`
     <div class="cmp-card ${c.hi?'hi':''}">
@@ -1050,13 +1051,18 @@ function renderCompare(model, F){
 function ecell(key, mo, val, changed){
   return `<td class="num edit${changed?' changed':''}" data-k="${key}" data-mo="${mo}" data-raw="${Math.round(val)}" contenteditable="true">${fmt(val)}</td>`;
 }
-function tblForecast(model, F){
+// tabela completa de um cenário: RECEITA (topo, editável) + custos por pacote/conta.
+// opts: {title, sub, recKey:'rec|orc'|'rec|trend', recFn}
+function tblFull(model, F, opts){
   const {remMonths, year, pacs}=model; const yy=String(year).slice(2);
   const monthHead=remMonths.map(mo=>`<th class="num">${MESES[mo-1]}/${yy}</th>`).join('').replace('<th class="num"','<th class="num sep-l"',1);
   const dppImp = (dPp,imp)=>`<td class="num ${dPp<0?'cr':'cg'}">${pp(-dPp)}</td><td class="num ${imp<0?'cr':'cg'}">${fmtA(imp)}</td>`;
   const blockCols = (avO,avL,dPp,imp)=>`<td class="num sep-l">${pctN(avO)}</td><td class="num">${pctN(avL)}</td>${dppImp(dPp,imp)}`;
-  let rows='';
-  // PACOTES + contas
+  const recCh = mo => opts.recKey==='rec|orc'? recOVorc[mo]!=null : recOVtrend[mo]!=null;
+  const recCells=remMonths.map(mo=>ecell(opts.recKey, mo, opts.recFn(model,mo), recCh(mo))).join('').replace('<td class="num','<td class="num sep-l',1);
+  // RECEITA no topo
+  let rows=`<tr class="rec-row"><td class="conta">Receita Líquida</td><td class="num">${fmtA(F.recYtdOrc)}</td><td class="num">${fmtA(F.recYtdReal)}</td><td class="num muted">—</td><td class="num muted">—</td>${recCells}<td class="num sep-l">${fmtA(F.recOrcYear)}</td><td class="num">${fmtA(F.recProjF)}</td><td class="num muted">—</td><td class="num muted">—</td></tr>`;
+  // CUSTOS
   let tImpYtd=0; PAC_ORDER.forEach(p=>{ if(pacs[p]) tImpYtd+=pacs[p].imp; });
   PAC_ORDER.forEach(p=>{ const P=pacs[p]; if(!P||(P.orcRem===0&&P.orcAcc===0&&P.imp===0)) return; const po=F.per[p];
     const cells=remMonths.map(mo=>ecell('pac|'+p, mo, po.month[mo]||0, !!po.chMonth[mo])).join('').replace('<td class="num','<td class="num sep-l',1);
@@ -1072,27 +1078,10 @@ function tblForecast(model, F){
   const totSigned=remMonths.map(mo=>{ let s=0; PAC_ORDER.forEach(p=>{ if(F.per[p]) s+=(F.per[p].month[mo]||0); }); return `<td class="num">${fmt(s)}</td>`; }).join('').replace('<td class="num','<td class="num sep-l',1);
   rows+=`<tr class="total"><td class="conta">Total Frota</td><td class="num">${pctN(sumAvRef(model))}</td><td class="num">${pctN(sumAvReal(model))}</td>${dppImp(sumAvReal(model)-sumAvRef(model),tImpYtd)}${totSigned}${blockCols(F.avOrc,F.avFc,F.avFc-F.avOrc,F.impFc)}</tr>`;
   return `<div class="tbl-section">
-    <div class="tbl-title">Forecast por Pacote / Conta</div>
-    <div class="tbl-sub">Meses editáveis (custo negativo). Editar uma <b>conta</b> re-soma o pacote; editar um <b>pacote</b> rateia entre as contas. YTD = acumulado do ano fechado; à direita = aterrissagem 2026 (Δ pp positivo = pior).</div>
+    <div class="tbl-title">${opts.title}</div>
+    <div class="tbl-sub">${opts.sub}</div>
     <div class="tbl-wrap"><table class="dre" style="table-layout:auto;min-width:100%;"><thead>
-      <tr><th class="conta">Pacotes</th><th class="num">Orç - YTD</th><th class="num">Real - YTD</th><th class="num">Δ pp</th><th class="num">Impacto</th>${monthHead}<th class="num sep-l">Orç - ${year}</th><th class="num">FCT - ${year}</th><th class="num">Δ pp</th><th class="num">Impacto</th></tr>
-    </thead><tbody>${rows}</tbody></table></div></div>`;
-}
-// tabela de RECEITA — Orçado (ref) × Forecast (tendência, editável)
-function tblReceita(model, F){
-  const {remMonths, year}=model; const yy=String(year).slice(2);
-  const monthHead=remMonths.map(mo=>`<th class="num">${MESES[mo-1]}/${yy}</th>`).join('').replace('<th class="num"','<th class="num sep-l"',1);
-  const orcCells=remMonths.map(mo=>`<td class="num muted">${fmtA(model.recByMonth[mo]||0)}</td>`).join('').replace('<td class="num','<td class="num sep-l',1);
-  const fcCells=remMonths.map(mo=>ecell('rec', mo, recVal(model,mo), recOV[mo]!=null)).join('').replace('<td class="num','<td class="num sep-l',1);
-  const dPct = F.recOrcYear? (F.recProjF-F.recOrcYear)/F.recOrcYear*100 : 0;
-  const rows=`
-    <tr><td class="conta">Orçado</td>${orcCells}<td class="num sep-l muted">${fmtA(F.recOrcYear)}</td><td class="num muted">—</td></tr>
-    <tr class="total"><td class="conta">Forecast (tendência)</td>${fcCells}<td class="num sep-l">${fmtA(F.recProjF)}</td><td class="num ${dPct<0?'cr':'cg'}">${(dPct>=0?'+':'')+dPct.toFixed(1)}%</td></tr>`;
-  return `<div class="tbl-section">
-    <div class="tbl-title">Receita Líquida — Forecast</div>
-    <div class="tbl-sub">Meses restantes editáveis. O <b>Forecast</b> vem pré-preenchido pela <b>tendência</b> (orçado do mês × desempenho realizado no ano), não fixo no orçado — e alimenta a AV projetada lá em cima.</div>
-    <div class="tbl-wrap"><table class="dre" style="table-layout:auto;min-width:100%;"><thead>
-      <tr><th class="conta">Receita</th>${monthHead}<th class="num sep-l">2026 (ano)</th><th class="num">Δ vs Orç</th></tr>
+      <tr><th class="conta">Receita / Pacotes</th><th class="num">Orç - YTD</th><th class="num">Real - YTD</th><th class="num">Δ pp</th><th class="num">Impacto</th>${monthHead}<th class="num sep-l">Orç - ${year}</th><th class="num">FCT - ${year}</th><th class="num">Δ pp</th><th class="num">Impacto</th></tr>
     </thead><tbody>${rows}</tbody></table></div></div>`;
 }
 function drillClick(e,tr){ if(!e.target.closest('td.conta')) return; toggleDrill(tr); }
@@ -1105,7 +1094,8 @@ function distributePac(pac, mo, newTotal){
 function applyEdit(td){
   const k=td.dataset.k, mo=+td.dataset.mo, raw=+td.dataset.raw;
   const parsed=parseNum(td.textContent); const val=(parsed==null)?raw:parsed;
-  if(k==='rec') recOV[mo]=Math.abs(val);
+  if(k==='rec|orc') recOVorc[mo]=Math.abs(val);
+  else if(k==='rec|trend') recOVtrend[mo]=Math.abs(val);
   else if(k.slice(0,4)==='cta|') (OV[k.slice(4)]=OV[k.slice(4)]||{})[mo]=val;
   else if(k.slice(0,4)==='pac|') distributePac(k.slice(4), mo, val);
   saveDraft(); atualizar();
@@ -1135,7 +1125,7 @@ async function saveScenario(){
   if(!ME){ alert('Faça login no portal (hub) para salvar cenários.'); return; }
   const nome=((document.getElementById('fc-name')||{}).value||'').trim(); if(!nome){ alert('Dê um nome ao cenário.'); return; }
   const f=getF();
-  const row={nome, autor_email:ME, ano:(window._model?window._model.year:null), filtros:{uni:f.uni,nv3:f.nv3}, overrides:{OV,recOV}};
+  const row={nome, autor_email:ME, ano:(window._model?window._model.year:null), filtros:{uni:f.uni,nv3:f.nv3}, overrides:{OV,recOVorc,recOVtrend}};
   const {error}=await SB.from('forecast_scenarios').insert(row);
   if(error){ alert('Erro ao salvar: '+error.message); return; }
   document.getElementById('fc-name').value=''; await loadScenarios(); scenHint(`Cenário "${nome}" salvo.`);
@@ -1144,7 +1134,7 @@ async function loadScenario(){
   const sel=document.getElementById('fc-list'), id=sel&&sel.value; if(!id){ alert('Selecione um cenário.'); return; }
   const {data,error}=await SB.from('forecast_scenarios').select('overrides,nome').eq('id',id).single();
   if(error){ alert('Erro ao carregar: '+error.message); return; }
-  const ov=data.overrides||{}; OV=ov.OV||{}; recOV=ov.recOV||{}; saveDraft(); atualizar();
+  const ov=data.overrides||{}; OV=ov.OV||{}; recOVorc=ov.recOVorc||{}; recOVtrend=ov.recOVtrend||{}; saveDraft(); atualizar();
   const nm=document.getElementById('fc-name'); if(nm) nm.value=data.nome||''; scenHint(`Cenário "${data.nome}" carregado.`);
 }
 async function renameScenario(){
@@ -1175,9 +1165,12 @@ function atualizar(){
   refreshCascade();
   const f=getF(); lastF=f;
   const model=computeModel(f); window._model=model; window._rlRefOrc=model.rlRefOrc;
-  const F=computeForecast(model);
-  renderCompare(model,F);
-  document.getElementById('tables').innerHTML=tblForecast(model,F)+tblReceita(model,F);
+  const Fo=computeForecast(model, recOrc);    // cenário receita orçada
+  const Ft=computeForecast(model, recTrend);  // cenário receita tendência
+  renderCompare(model, Fo, Ft);
+  document.getElementById('tables').innerHTML=
+    tblFull(model, Fo, {title:'Cenário A · Receita Orçada', sub:'Receita fixa no orçado até dez. Custos editáveis abaixo; à direita, aterrissagem 2026.', recKey:'rec|orc', recFn:recOrc})
+   +tblFull(model, Ft, {title:'Cenário B · Receita Tendência', sub:'Receita projetada pela tendência (orçado × desempenho realizado). Mesmos custos, receita diferente → outra aterrissagem.', recKey:'rec|trend', recFn:recTrend});
   const now=new Date();
   set('status-badge',`Atualizado ${now.toLocaleDateString('pt-BR')} ${now.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})}`);
 }
