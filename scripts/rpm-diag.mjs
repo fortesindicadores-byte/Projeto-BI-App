@@ -53,11 +53,28 @@ async function fetchCSV(url){
   const all=parseCSV(raw);
   return {status:res.status,len:raw.length,all};
 }
-// gviz auto-detecta só o 1o bloco (para na 1a linha em branco → 156 linhas).
-// range=A1:M100000 força a leitura da grade inteira, ignorando o auto-detect.
+// gviz trunca a Base RPM no 1o bloco (156 linhas) mesmo com range → inútil.
+// O htmlview lista as abas como items.push({name: "X", pageUrl:"...gid=N", gid:"N", ...}).
+// Com o gid, /export?format=csv&gid=N traz a grade inteira.
+let _gids=null;
+async function loadGids(){
+  if(_gids)return _gids;
+  const res=await fetch(`https://docs.google.com/spreadsheets/d/${SID}/htmlview`);
+  const html=await res.text();
+  const map={};
+  const re=/items\.push\(\{name:\s*"((?:[^"\\]|\\.)*)"[^}]*?gid:\s*"(\d+)"/g;
+  let m;
+  while((m=re.exec(html))){
+    const name=m[1].replace(/\\u002f/gi,'/').replace(/\\"/g,'"').replace(/\\\\/g,'\\');
+    map[name]=m[2];
+  }
+  _gids=map; return map;
+}
 async function gviz(tab){
-  const base=`https://docs.google.com/spreadsheets/d/${SID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(tab)}`;
-  const r=await fetchCSV(`${base}&range=A1:M100000`);
+  const gids=await loadGids();
+  const gid=gids[tab];
+  if(gid==null) throw new Error(`gid de "${tab}" não encontrado no htmlview. Abas: ${JSON.stringify(gids)}`);
+  const r=await fetchCSV(`https://docs.google.com/spreadsheets/d/${SID}/export?format=csv&gid=${gid}`);
   const header=(r.all[0]||[]).map(s=>String(s).trim());
   const rows=r.all.slice(1);
   return {header,rows}; }
@@ -65,19 +82,11 @@ function idxByHeader(header){ const idx={}; header.forEach((h,i)=>{ idx[normKey_
 function getIdx(idx,cands){ for(const c of cands){ const k=normKey_(c); if(k in idx)return idx[k]; } return -1; }
 
 async function main(){
-  // ── PROBE: qual método traz a grade inteira? ──
-  const gb=`https://docs.google.com/spreadsheets/d/${SID}/gviz/tq?tqx=out:csv&sheet=Base%20RPM`;
-  const noRange=await fetchCSV(gb);
-  const wRange=await fetchCSV(`${gb}&range=A1:M100000`);
-  console.log(`PROBE gviz sem range: status=${noRange.status} linhas=${noRange.all.length}`);
-  console.log(`PROBE gviz com range A1:M100000: status=${wRange.status} linhas=${wRange.all.length}`);
-  const hv=await fetch(`https://docs.google.com/spreadsheets/d/${SID}/htmlview`);
-  const html=await hv.text();
-  console.log(`PROBE htmlview: status=${hv.status} len=${html.length} temBaseRPM=${html.includes('Base RPM')} temGid=${/gid[=":]/.test(html)}`);
-  const gidHits=[...html.matchAll(/gid["=: ]+"?(\d{2,})"?/g)].slice(0,10).map(m=>m[1]);
-  console.log(`PROBE gids no htmlview:`, gidHits.join(',')||'(nenhum)');
-  const bi=html.indexOf('Base RPM');
-  if(bi>=0) console.log(`PROBE trecho htmlview em torno de "Base RPM":`, html.slice(Math.max(0,bi-120),bi+80).replace(/\s+/g,' '));
+  // ── PROBE: abas descobertas e tamanho da grade via export ──
+  const gids=await loadGids();
+  console.log('PROBE abas→gid:', JSON.stringify(gids));
+  const exp=await fetchCSV(`https://docs.google.com/spreadsheets/d/${SID}/export?format=csv&gid=${gids['Base RPM']}`);
+  console.log(`PROBE export Base RPM: status=${exp.status} linhas=${exp.all.length}`);
   console.log('--- fim PROBE ---\n');
 
   const src=await gviz('Base RPM');
