@@ -54,6 +54,19 @@ async function main(){
   console.log('Base RPM cols:', src.header.join(' | '));
   console.log('idx -> Vig',iVig,'Uni',iUni,'KPI',iKpi,'Ating',iAt);
   const canon=new Map(); SCORE_ORDER.forEach(k=>canon.set(normKey_(k),k));
+
+  console.log('\n--- DEBUG linhas cruas (unidade ~camboriu, vig 2026-01) ---');
+  let dbg=0;
+  for(const row of src.rows){
+    if(dbg>=25) break;
+    if(normKey_(row[iUni]).includes('camboriu') && vigKey(row[iVig])==='2026-01'){
+      const kraw=String(row[iKpi]||''); const kN=normKey_(kraw.trim());
+      console.log(`KPI="${kraw}" | IC?=${startsWithIC_(kraw)} | canon?=${canon.has(kN)} | ating="${row[iAt]}" (${typeof row[iAt]}) -> ${toNumber_(row[iAt])}`);
+      dbg++;
+    }
+  }
+  console.log(`--- fim debug (viu ${dbg} linhas) ---\n`);
+
   const pivot=new Map();
   for(const row of src.rows){
     const kpiRaw=String(row[iKpi]||'').trim(); if(!startsWithIC_(kpiRaw))continue;
