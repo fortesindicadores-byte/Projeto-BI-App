@@ -28,10 +28,22 @@ function calcScore_(vals){ let num=0,den=0;
     v=toNumber_(v); if(v===null)v=0; if(CFG.CAP_AT_100&&v>1)v=1; num+=w*v; }
   if(den<=0)return 0; return (num/den)*100; }
 
-// chave de vigência comparável (aceita Date(...), número serial, dd/mm/aaaa, aaaa-mm)
-function vigKey(v){ if(v==null)return ''; const s=String(v);
+// chave de vigência comparável — aceita "jan./2026", "01/2026", "dd/mm/aaaa",
+// Date(a,m,d), número serial e "aaaa-mm". Normaliza tudo para "aaaa-mm".
+const _MESPT={jan:1,fev:2,mar:3,abr:4,mai:5,jun:6,jul:7,ago:8,set:9,out:10,nov:11,dez:12};
+function vigKey(v){ if(v==null)return ''; const s=String(v).trim();
   let m=s.match(/Date\((\d+),(\d+),(\d+)/); if(m)return `${m[1]}-${String(+m[2]+1).padStart(2,'0')}`;
-  if(s.includes('/')){ const p=s.split('/'); if(p.length>=3){ const y=p[2].length===4?p[2]:p[0]; const mo=p[1]; return `${y}-${String(+mo).padStart(2,'0')}`; } }
+  // "jan./2026", "janeiro 2026", "jan-2026" — mês por extenso/abreviado + ano
+  m=s.toLowerCase().match(/([a-zç]{3,})\.?[\s/\-]+(\d{4})/);
+  if(m && _MESPT[m[1].slice(0,3)]) return `${m[2]}-${String(_MESPT[m[1].slice(0,3)]).padStart(2,'0')}`;
+  if(s.includes('/')){ const p=s.split('/');
+    if(p.length>=3){ const y=p[2].length===4?p[2]:p[0]; const mo=p[1]; return `${y}-${String(+mo).padStart(2,'0')}`; }
+    if(p.length===2){ // "MM/AAAA" ou "AAAA/MM"
+      const a=p[0].trim(), b=p[1].trim();
+      if(b.length===4) return `${b}-${String(+a).padStart(2,'0')}`;
+      if(a.length===4) return `${a}-${String(+b).padStart(2,'0')}`;
+    }
+  }
   m=s.match(/^(\d{4})-(\d{2})/); if(m)return `${m[1]}-${m[2]}`;
   return s.trim(); }
 
@@ -125,12 +137,18 @@ async function main(){
   const ch=cons.header, cIdx=idxByHeader(ch);
   const cVig=getIdx(cIdx,['Vigência','Vigencia']), cUni=getIdx(cIdx,['Unidade']), cScore=getIdx(cIdx,['Pontuação Total','Pontuacao Total']);
   const icCols=SCORE_ORDER.map(ic=>getIdx(cIdx,[ic]));
+  console.log('Consolidado cols:', ch.join(' | '));
+  console.log('idx cons -> Vig',cVig,'Uni',cUni,'Score',cScore);
+  console.log('primeiras 5 vig cons [raw -> vigKey]:');
+  cons.rows.slice(0,5).forEach(r=>console.log(`  "${r[cVig]}" -> "${vigKey(r[cVig])}" | uni="${r[cUni]}"`));
+  console.log('primeiras 5 keys recomputado:', [...rec.keys()].slice(0,5).join(' ; '));
   const cur=new Map();
   for(const row of cons.rows){ if(row[cVig]==null&&row[cUni]==null)continue;
     const key=`${vigKey(row[cVig])}||${normKey_(row[cUni])}`;
     const vals=new Map(); SCORE_ORDER.forEach((ic,i)=>{ const c=icCols[i]; if(c>=0){ const n=toNumber_(row[c]); if(n!==null)vals.set(normKey_(ic),n);} });
     cur.set(key,{ score:cScore>=0?toNumber_(row[cScore]):null, vals });
   }
+  console.log('primeiras 5 keys consolidado:', [...cur.keys()].slice(0,5).join(' ; '));
 
   console.log(`\nlinhas: recomputado ${rec.size} · consolidado ${cur.size}`);
   // comparação
