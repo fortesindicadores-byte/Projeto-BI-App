@@ -999,7 +999,9 @@ function parseNum(raw){
   const n=parseFloat(t); if(isNaN(n)) return null; return (neg?-1:1)*n*mult;
 }
 const fcVal = (cta,c,mo)=>{ const o=OV[cta]; return (o&&o[mo]!=null)?+o[mo]:+(c.orcMonthNet[mo]||0); };
-const recVal = (model,mo)=>{ return (recOV[mo]!=null)?+recOV[mo]:+(model.recByMonth[mo]||0); };
+// tendência de receita = orçado do mês × (receita realizada acum ÷ orçada acum) — respeita sazonalidade do orçado e o nível real
+const trendRec = (model,mo)=>{ const r=model.rlRefOrc? model.rlReal/model.rlRefOrc : 1; return (model.recByMonth[mo]||0)*r; };
+const recVal = (model,mo)=>{ return (recOV[mo]!=null)?+recOV[mo]:trendRec(model,mo); };
 const ctaChanged = (cta,mo)=> !!(OV[cta]&&OV[cta][mo]!=null);
 
 function computeForecast(model){
@@ -1053,9 +1055,7 @@ function tblForecast(model, F){
   const monthHead=remMonths.map(mo=>`<th class="num">${MESES[mo-1]}/${yy}</th>`).join('').replace('<th class="num"','<th class="num sep-l"',1);
   const dppImp = (dPp,imp)=>`<td class="num ${dPp<0?'cr':'cg'}">${pp(-dPp)}</td><td class="num ${imp<0?'cr':'cg'}">${fmtA(imp)}</td>`;
   const blockCols = (avO,avL,dPp,imp)=>`<td class="num sep-l">${pctN(avO)}</td><td class="num">${pctN(avL)}</td>${dppImp(dPp,imp)}`;
-  // RECEITA no topo (valores em R$; AV/impacto não se aplicam)
-  const recMonths=remMonths.map(mo=>ecell('rec', mo, recVal(model,mo), recOV[mo]!=null)).join('').replace('<td class="num','<td class="num sep-l',1);
-  let rows=`<tr class="rec-row"><td class="conta">Receita Líquida</td><td class="num">${fmtA(F.recYtdOrc)}</td><td class="num">${fmtA(F.recYtdReal)}</td><td class="num muted">—</td><td class="num muted">—</td>${recMonths}<td class="num sep-l">${fmtA(F.recOrcYear)}</td><td class="num">${fmtA(F.recProjF)}</td><td class="num muted">—</td><td class="num muted">—</td></tr>`;
+  let rows='';
   // PACOTES + contas
   let tImpYtd=0; PAC_ORDER.forEach(p=>{ if(pacs[p]) tImpYtd+=pacs[p].imp; });
   PAC_ORDER.forEach(p=>{ const P=pacs[p]; if(!P||(P.orcRem===0&&P.orcAcc===0&&P.imp===0)) return; const po=F.per[p];
@@ -1076,6 +1076,23 @@ function tblForecast(model, F){
     <div class="tbl-sub">Meses editáveis (custo negativo). Editar uma <b>conta</b> re-soma o pacote; editar um <b>pacote</b> rateia entre as contas. YTD = acumulado do ano fechado; à direita = aterrissagem 2026 (Δ pp positivo = pior).</div>
     <div class="tbl-wrap"><table class="dre" style="table-layout:auto;min-width:100%;"><thead>
       <tr><th class="conta">Pacotes</th><th class="num">Orç - YTD</th><th class="num">Real - YTD</th><th class="num">Δ pp</th><th class="num">Impacto</th>${monthHead}<th class="num sep-l">Orç - ${year}</th><th class="num">FCT - ${year}</th><th class="num">Δ pp</th><th class="num">Impacto</th></tr>
+    </thead><tbody>${rows}</tbody></table></div></div>`;
+}
+// tabela de RECEITA — Orçado (ref) × Forecast (tendência, editável)
+function tblReceita(model, F){
+  const {remMonths, year}=model; const yy=String(year).slice(2);
+  const monthHead=remMonths.map(mo=>`<th class="num">${MESES[mo-1]}/${yy}</th>`).join('').replace('<th class="num"','<th class="num sep-l"',1);
+  const orcCells=remMonths.map(mo=>`<td class="num muted">${fmtA(model.recByMonth[mo]||0)}</td>`).join('').replace('<td class="num','<td class="num sep-l',1);
+  const fcCells=remMonths.map(mo=>ecell('rec', mo, recVal(model,mo), recOV[mo]!=null)).join('').replace('<td class="num','<td class="num sep-l',1);
+  const dPct = F.recOrcYear? (F.recProjF-F.recOrcYear)/F.recOrcYear*100 : 0;
+  const rows=`
+    <tr><td class="conta">Orçado</td>${orcCells}<td class="num sep-l muted">${fmtA(F.recOrcYear)}</td><td class="num muted">—</td></tr>
+    <tr class="total"><td class="conta">Forecast (tendência)</td>${fcCells}<td class="num sep-l">${fmtA(F.recProjF)}</td><td class="num ${dPct<0?'cr':'cg'}">${(dPct>=0?'+':'')+dPct.toFixed(1)}%</td></tr>`;
+  return `<div class="tbl-section">
+    <div class="tbl-title">Receita Líquida — Forecast</div>
+    <div class="tbl-sub">Meses restantes editáveis. O <b>Forecast</b> vem pré-preenchido pela <b>tendência</b> (orçado do mês × desempenho realizado no ano), não fixo no orçado — e alimenta a AV projetada lá em cima.</div>
+    <div class="tbl-wrap"><table class="dre" style="table-layout:auto;min-width:100%;"><thead>
+      <tr><th class="conta">Receita</th>${monthHead}<th class="num sep-l">2026 (ano)</th><th class="num">Δ vs Orç</th></tr>
     </thead><tbody>${rows}</tbody></table></div></div>`;
 }
 function drillClick(e,tr){ if(!e.target.closest('td.conta')) return; toggleDrill(tr); }
@@ -1160,7 +1177,7 @@ function atualizar(){
   const model=computeModel(f); window._model=model; window._rlRefOrc=model.rlRefOrc;
   const F=computeForecast(model);
   renderCompare(model,F);
-  document.getElementById('tables').innerHTML=tblForecast(model,F);
+  document.getElementById('tables').innerHTML=tblForecast(model,F)+tblReceita(model,F);
   const now=new Date();
   set('status-badge',`Atualizado ${now.toLocaleDateString('pt-BR')} ${now.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})}`);
 }
