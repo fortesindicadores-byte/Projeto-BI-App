@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>YTG + FCT — Reorçamento Frota</title>
+<title>YTG + Target — Frota</title>
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <style>
@@ -177,8 +177,8 @@ body.light-mode table.dre tbody tr{border-bottom:1px solid rgba(0,0,0,.06);}
 
 <header class="header">
   <div class="brand">
-    <h1>YTG + Rolling Forecast</h1>
-    <p>Year To Go &amp; Rolling Forecast — Frota</p>
+    <h1>YTG + Target</h1>
+    <p>Year To Go &amp; Target — Frota</p>
   </div>
   <div class="header-right">
     <a href="../visao-financeira/" class="back-btn" title="Voltar à Visão Financeira"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg></a>
@@ -628,7 +628,7 @@ function renderWaterfall(model){
   if(sum) sum.innerHTML=[
     {l:'Orçado a realizar (YTG)',v:fmt(totYTG)},
     {l:'Economia total (alvo)',v:fmt(cc.alvo)},
-    {l:'Forecast reorçado',v:fmt(forecast)},
+    {l:'Target reprojetado',v:fmt(forecast)},
     {l:'Redução',v:(totYTG?(cc.alvo/totYTG*100).toFixed(1):'0')+'%'},
   ].map(x=>`<div class="wf-item">${x.l}<b>${x.v}</b></div>`).join('');
 }
@@ -637,7 +637,7 @@ function drawWf(model, cen, canvasId){
   let totYTG=0; PAC_ORDER.forEach(p=>{ if(pacs[p]) totYTG+=pacs[p].orcRem; });
   const steps=cc.parts.map(p=>({name:p, eco:(cc.out[p]?cc.out[p].economia:0)}));
   const forecast=totYTG-cc.alvo;
-  const labels=['Orçado YTG',...steps.map(s=>s.name),'Forecast'];
+  const labels=['Orçado YTG',...steps.map(s=>s.name),'Target'];
   const isLight0=document.body.classList.contains('light-mode');
   const bars=[], colors=[], meta=[]; let run=totYTG;
   bars.push([0,totYTG]); colors.push(isLight0?'#111111':'#FFFFFF'); meta.push({top:fmt(totYTG),hi:totYTG});
@@ -757,7 +757,7 @@ function tblCenarioMerged(model, cen, titulo, sub){
   const partSet=new Set(cc.parts);
   const pctS = v => (v==null||!isFinite(v))?'—':v.toFixed(2)+'%';
   const monthHead=remMonths.map(mo=>`<th class="num">${MESES[mo-1]}/${String(year).slice(2)}</th>`).join('').replace('<th class="num"','<th class="num sep-l"',1);
-  const head=`<tr><th class="conta">Pacotes</th><th class="num">Orç - YTD</th><th class="num">Real - YTD</th><th class="num">Δ pp</th><th class="num sep-l">Impacto</th>${monthHead}<th class="num sep-l">Orç - 2026</th><th class="num">FCT - 2026</th><th class="num">Δ pp</th><th class="num">Impacto</th></tr>`;
+  const head=`<tr><th class="conta">Pacotes</th><th class="num">Orç - YTD</th><th class="num">Real - YTD</th><th class="num">Δ pp</th><th class="num sep-l">Impacto</th>${monthHead}<th class="num sep-l">Orç - 2026</th><th class="num">TGT - 2026</th><th class="num">Δ pp</th><th class="num">Impacto</th></tr>`;
   // bloco final 2026 (com economia aplicada): valores reais de Δpp/Impacto (Total fecha em 0)
   const fbCells=(orcAccS,orcRemAbs,realAccS,ecoAbs,muted)=>{
     const fb=fbCalc(model,orcAccS,orcRemAbs,realAccS,ecoAbs);
@@ -814,7 +814,7 @@ function tblCenarioMerged(model, cen, titulo, sub){
     <div class="tbl-title">Economia Necessária</div>
     <div class="tbl-sub">Corte por conta × mês para recuperar o alvo de ${fmt(cc.alvo)}. Rateio: alvo × peso da conta × peso do mês.</div>
     <div class="tbl-wrap"><table class="dre">${colGroup(remMonths.length)}<thead>${head}</thead><tbody>${buildRows('eco')}</tbody></table></div>
-    <div class="tbl-title" style="margin-top:26px;">Rolling Forecast</div>
+    <div class="tbl-title" style="margin-top:26px;">Target</div>
     <div class="tbl-sub">Novo orçamento dos meses a realizar = orçado original − economia. Fixos mantêm o orçado.</div>
     <div class="tbl-wrap"><table class="dre">${colGroup(remMonths.length)}<thead>${head}</thead><tbody>${buildRows('fct')}</tbody></table></div>
   </div>`;
