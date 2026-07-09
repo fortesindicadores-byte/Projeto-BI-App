@@ -94,11 +94,18 @@ function idxByHeader(header){ const idx={}; header.forEach((h,i)=>{ idx[normKey_
 function getIdx(idx,cands){ for(const c of cands){ const k=normKey_(c); if(k in idx)return idx[k]; } return -1; }
 
 async function main(){
-  // ── PROBE: abas descobertas e tamanho da grade via export ──
+  // ── PROBE: método de leitura + CORS (o painel roda no navegador) ──
   const gids=await loadGids();
+  const gid=gids['Base RPM'];
   console.log('PROBE abas→gid:', JSON.stringify(gids));
-  const exp=await fetchCSV(`https://docs.google.com/spreadsheets/d/${SID}/export?format=csv&gid=${gids['Base RPM']}`);
-  console.log(`PROBE export Base RPM: status=${exp.status} linhas=${exp.all.length}`);
+  const probe=async(nome,url)=>{
+    const r=await fetch(url); const raw=await r.text();
+    const rows=parseCSV(raw).length;
+    console.log(`PROBE ${nome}: status=${r.status} linhas=${rows} ACAO=${r.headers.get('access-control-allow-origin')||'(ausente)'}`);
+  };
+  await probe('gviz CSV por NOME', `https://docs.google.com/spreadsheets/d/${SID}/gviz/tq?tqx=out:csv&sheet=Base%20RPM`);
+  await probe('gviz CSV por GID ', `https://docs.google.com/spreadsheets/d/${SID}/gviz/tq?tqx=out:csv&gid=${gid}`);
+  await probe('export CSV por GID', `https://docs.google.com/spreadsheets/d/${SID}/export?format=csv&gid=${gid}`);
   console.log('--- fim PROBE ---\n');
 
   const src=await gviz('Base RPM');
