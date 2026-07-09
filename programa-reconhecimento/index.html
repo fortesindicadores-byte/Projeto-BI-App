@@ -427,7 +427,10 @@ Chart.register(ChartDataLabels);
 
 /* ── Configuração Google Sheets ── */
 const SHEET_ID  = '1xGl1Xrk2sPS9zWghEuecFMNBHwmeLiZ02U-QpO8cDPY';
-const SHEET_TAB = 'Consolidado ICs';
+// Lê a "Base RPM" (aba gid=0) direto e recalcula os ICs — dispensa a aba
+// "Consolidado ICs" e o Apps Script consolidarICs_RPM. O gviz trunca abas
+// grandes; por isso usamos /export?format=csv (grade inteira + CORS liberado).
+const BASE_RPM_GID = 0;
 
 /* ── Avatares por unidade ── */
 const AVATARES = {
@@ -462,23 +465,69 @@ const NOMES = {
   'CUIABA':            'Silvério',
 };
 
-/* ── Indicadores e colunas ── */
-const COLS = {
-  vig:      0,
-  unidade:  1,
-  disp:     2,
-  prev:     3,
-  comb:     4,
-  pneus:    5,
-  checkT:   6,
-  checkWH:  7,
-  conf:     8,
-  stVeic:   9,
-  stEmp:    10,
-  civf:     11,
-  sla:      12,
-  pontuacao:13,
+/* ── Cálculo dos ICs a partir da Base RPM (réplica do Apps Script) ── */
+// Pesos oficiais (somam 100%) — idênticos ao consolidarICs_RPM.
+const SCORE_WEIGHTS_PCT = {
+  'IC: % de Disponibilidade Equipamentos':20,'IC: % de Aderência às Preventivas':15,'IC: Consumo Km/l':10,
+  'IC: % de Aderência às Aferições':10,'IC: Aderência ao Checklist - T1 e T2':10,'IC: Aderência ao Checklist - Apoio':10,
+  'IC: % de conformidade da Frota':5,'IC: Aderência ao Stress Test - Caminhões':5,'IC: Aderência ao Stress Test - Empilhadeiras':5,
+  'IC: SLA de atendimento':5,'IC: Aderência à Conformidade':5
 };
+const SCORE_ORDER = Object.keys(SCORE_WEIGHTS_PCT);
+const RPM_CFG = { CAP_AT_100:true, MISSING_AS_ZERO:false };
+
+// IC → campo do painel. Mantém o mapeamento atual (col SLA→civf e col
+// Conformidade→sla), para o painel exibir exatamente o que exibia com a
+// aba Consolidado ICs. A troca não afeta a Pontuação (ambos pesam 5%).
+const IC_TO_FIELD_RAW = {
+  'IC: % de Disponibilidade Equipamentos':'disp',
+  'IC: % de Aderência às Preventivas':'prev',
+  'IC: Consumo Km/l':'comb',
+  'IC: % de Aderência às Aferições':'pneus',
+  'IC: Aderência ao Checklist - T1 e T2':'checkT',
+  'IC: Aderência ao Checklist - Apoio':'checkWH',
+  'IC: % de conformidade da Frota':'conf',
+  'IC: Aderência ao Stress Test - Caminhões':'stVeic',
+  'IC: Aderência ao Stress Test - Empilhadeiras':'stEmp',
+  'IC: SLA de atendimento':'civf',
+  'IC: Aderência à Conformidade':'sla',
+};
+
+// normaliza chave (sem acento, minúscula, espaços colapsados) — a Base RPM
+// tem espaços duplos em alguns KPIs ("Aderência  às Preventivas").
+function normKey_(s){ let str=String(s||''),cleaned='';
+  for(let i=0;i<str.length;i++){ const c=str.charCodeAt(i);
+    if(c>=0x200B&&c<=0x200D)continue; if(c===0xFEFF)continue; if(c===0x00A0){cleaned+=' ';continue;} cleaned+=str.charAt(i); }
+  const nfd=cleaned.trim().toLowerCase().normalize('NFD'); let res='';
+  for(let j=0;j<nfd.length;j++){ const cc=nfd.charCodeAt(j); if(cc>=0x0300&&cc<=0x036F)continue; if(cc===0xFF1A){res+=':';continue;} res+=nfd.charAt(j); }
+  return res.replace(/\s+/g,' '); }
+
+const IC_TO_FIELD = {}; Object.entries(IC_TO_FIELD_RAW).forEach(([k,v])=>IC_TO_FIELD[normKey_(k)]=v);
+const IC_CANON = {}; SCORE_ORDER.forEach(k=>IC_CANON[normKey_(k)]=k);
+
+// "95,7%" → 95.7 (escala 0-100). null se vazio.
+function toNum_(v){ if(v==null)return null; let s=String(v).trim();
+  if(!s||s==='—'||s==='-'||s==='null')return null;
+  s=s.replace('%','').trim().replace(/\./g,'').replace(',','.'); const n=parseFloat(s); return Number.isNaN(n)?null:n; }
+
+// média ponderada (0-100), redistribuindo o peso dos ICs ausentes.
+function calcScore_(icVals){ let num=0,den=0;
+  for(const icName of SCORE_ORDER){ const w=(SCORE_WEIGHTS_PCT[icName]||0)/100; const kN=normKey_(icName);
+    let v=icVals.get(kN);
+    if(v==null){ if(RPM_CFG.MISSING_AS_ZERO){v=0;den+=w;} else continue; } else den+=w;
+    let v01=v/100; if(RPM_CFG.CAP_AT_100&&v01>1)v01=1; num+=w*v01; }
+  if(den<=0)return null; return (num/den)*100; }
+
+// "jan./2026" → "2026/01/01" (formato esperado pelo resto do painel).
+const _MESPT_={jan:1,fev:2,mar:3,abr:4,mai:5,jun:6,jul:7,ago:8,set:9,out:10,nov:11,dez:12};
+function vigToYMD(v){ if(v==null)return null; const s=String(v).trim();
+  let m=s.match(/Date\((\d+),(\d+),(\d+)/); if(m)return `${m[1]}/${String(+m[2]+1).padStart(2,'0')}/01`;
+  m=s.toLowerCase().match(/([a-zç]{3,})\.?[\s/\-]+(\d{4})/); if(m&&_MESPT_[m[1].slice(0,3)])return `${m[2]}/${String(_MESPT_[m[1].slice(0,3)]).padStart(2,'0')}/01`;
+  if(s.includes('/')){ const p=s.split('/');
+    if(p.length>=3){ const y=p[2].length===4?p[2]:p[0]; const mo=p[1]; const d=p[2].length===4?p[0]:p[2]; return `${y}/${String(+mo).padStart(2,'0')}/${String(+d||1).padStart(2,'0')}`; }
+    if(p.length===2){ const a=p[0].trim(),b=p[1].trim(); if(b.length===4)return `${b}/${String(+a).padStart(2,'0')}/01`; if(a.length===4)return `${a}/${String(+b).padStart(2,'0')}/01`; } }
+  m=s.match(/^(\d{4})-(\d{2})/); if(m)return `${m[1]}/${m[2]}/01`;
+  return null; }
 
 const IND_LABELS = {
   media_geral: 'Média Geral',
@@ -502,14 +551,14 @@ let chartTemporal = null;
 let activeInd = 'media_geral';
 
 /* ── Fetch ── */
-const CACHE_KEY='bi_cache_reconhecimento';
+const CACHE_KEY='bi_cache_reconhecimento_v2';
 const CACHE_TTL=60*60*1000; // 1 hora
 
 async function fetchData() {
-  const url = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(SHEET_TAB)}`;
+  const url = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/export?format=csv&gid=${BASE_RPM_GID}`;
   const r = await fetch(url);
   const csv = await r.text();
-  RAW = parseCSV(csv);
+  RAW = pivotBaseRPM(parseCSV(csv));
   try{ localStorage.setItem(CACHE_KEY,JSON.stringify({t:Date.now(),rows:RAW})); }catch(e){}
   populateFilters();
   renderAll();
@@ -530,50 +579,53 @@ function initData(){
   atualizar();
 }
 
+// parser CSV robusto (aspas, vírgulas e quebras de linha dentro de campos —
+// a Base RPM tem colunas de texto livre como "Causa" e "Ação").
 function parseCSV(text) {
-  const lines = text.trim().split('\n');
-  const rows = [];
-  for (let i = 1; i < lines.length; i++) {
-    const cols = splitCSVLine(lines[i]);
-    if (cols.length < 14) continue;
-    const vig  = cols[COLS.vig]?.trim().replace(/"/g,'') || '';
-    const unit = cols[COLS.unidade]?.trim().replace(/"/g,'').toUpperCase() || '';
-    if (!vig || !unit) continue;
-    const parse = (v) => {
-      const s = v?.toString().replace(/"/g,'').replace('%','').replace(',','.').trim();
-      if (!s || s === '-' || s === '' || s === 'null') return null;
-      return parseFloat(s);
-    };
-    rows.push({
-      vig, unit,
-      disp:  parse(cols[COLS.disp]),
-      prev:  parse(cols[COLS.prev]),
-      comb:  parse(cols[COLS.comb]),
-      pneus: parse(cols[COLS.pneus]),
-      checkT:parse(cols[COLS.checkT]),
-      checkWH:parse(cols[COLS.checkWH]),
-      conf:  parse(cols[COLS.conf]),
-      stVeic:parse(cols[COLS.stVeic]),
-      stEmp: parse(cols[COLS.stEmp]),
-      civf:  parse(cols[COLS.civf]),
-      sla:   parse(cols[COLS.sla]),
-      pont:  parse(cols[COLS.pontuacao]),
-    });
+  const rows=[]; let row=[], cur='', q=false;
+  for (let i=0;i<text.length;i++){ const c=text[i];
+    if(q){ if(c==='"'){ if(text[i+1]==='"'){cur+='"';i++;} else q=false; } else cur+=c; }
+    else if(c==='"') q=true;
+    else if(c===','){ row.push(cur); cur=''; }
+    else if(c==='\n'){ row.push(cur); rows.push(row); row=[]; cur=''; }
+    else if(c!=='\r') cur+=c;
   }
+  if(cur!==''||row.length){ row.push(cur); rows.push(row); }
   return rows;
 }
 
-function splitCSVLine(line) {
-  const result = [];
-  let cur = '', inQ = false;
-  for (let i = 0; i < line.length; i++) {
-    const c = line[i];
-    if (c === '"') { inQ = !inQ; continue; }
-    if (c === ',' && !inQ) { result.push(cur); cur = ''; continue; }
-    cur += c;
+// pivota a Base RPM (uma linha por unidade/vigência/KPI) em uma linha por
+// unidade+vigência, com os 11 ICs e a Pontuação recalculada.
+function pivotBaseRPM(grid) {
+  if (!grid.length) return [];
+  const header = grid[0].map(s=>String(s).trim());
+  const H={}; header.forEach((h,i)=>{ H[normKey_(h)]=i; });
+  const col=(...names)=>{ for(const n of names){ const k=normKey_(n); if(k in H)return H[k]; } return -1; };
+  const iUni=col('Unidade'), iVig=col('Vigência','Vigencia'), iKpi=col('KPI'),
+        iAt=col('% de Ating.','% de Ating','% Ating.','% Ating');
+  if (iUni<0||iVig<0||iKpi<0||iAt<0) return [];
+
+  const combos=new Map();
+  for (let r=1;r<grid.length;r++){ const row=grid[r];
+    const kpiN=normKey_(row[iKpi]); if(!(kpiN in IC_CANON)) continue;
+    const at=toNum_(row[iAt]); if(at==null) continue;
+    const ymd=vigToYMD(row[iVig]); if(!ymd) continue;
+    const unit=String(row[iUni]||'').trim().toUpperCase(); if(!(unit in NOMES)) continue;
+    const key=ymd+'||'+unit;
+    if(!combos.has(key)) combos.set(key,{vig:ymd,unit,icVals:new Map(),fields:{}});
+    const o=combos.get(key); o.icVals.set(kpiN,at); o.fields[IC_TO_FIELD[kpiN]]=at;
   }
-  result.push(cur);
-  return result;
+
+  const g=(f,o)=> (o.fields[f]==null?null:o.fields[f]);
+  const out=[];
+  for (const o of combos.values()){
+    out.push({ vig:o.vig, unit:o.unit,
+      disp:g('disp',o), prev:g('prev',o), comb:g('comb',o), pneus:g('pneus',o),
+      checkT:g('checkT',o), checkWH:g('checkWH',o), conf:g('conf',o),
+      stVeic:g('stVeic',o), stEmp:g('stEmp',o), civf:g('civf',o), sla:g('sla',o),
+      pont:calcScore_(o.icVals) });
+  }
+  return out;
 }
 
 /* ── Filtros ── */
@@ -594,6 +646,7 @@ function populateFilters() {
     return (+yb*12 + +mb) - (+ya*12 + +ma);
   });
   buildMsFilter('vig', vigs);
+  // mostra todas as vigências que têm dados; abre na mais recente.
   if (selVig.length === 0 && vigs.length > 0) selVig = [vigs[0]];
   updateMsBtn('vig');
 }
