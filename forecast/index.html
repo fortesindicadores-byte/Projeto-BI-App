@@ -1033,9 +1033,9 @@ function renderCompare(model, F){
   document.getElementById('fc-sub').textContent=`Ano ${model.year} · fechado até ${MESES[model.lrm-1]}/${String(model.year).slice(2)}. AV de custo projetada para o ano. Edite os meses abaixo e veja a aterrissagem mudar.`;
   const cards=[
     {l:'Orçado 2026', v:pctN(F.avOrc), m:'meta orçamentária'},
-    {l:'Se nada mudar', v:pctN(F.avNada), m:`impacto ${fmtA(F.impNada)}`, cls:dN<0?'cr':'cg'},
-    {l:'Seu Forecast', v:pctN(F.avFc), m:'com suas edições', hi:true},
-    {l:'Δ Forecast vs Orçado', v:pp(-dF), m:`impacto ${fmtA(F.impFc)}`, cls:dF<0?'cr':'cg'},
+    {l:'Se nada mudar', v:pctN(F.avNada), m:`impacto <span class="${F.impNada<0?'cr':'cg'}">${fmtA(F.impNada)}</span>`, cls:dN<0?'cr':'cg'},
+    {l:'Seu Forecast', v:pctN(F.avFc), m:`impacto <span class="${F.impFc<0?'cr':'cg'}">${fmtA(F.impFc)}</span>`, hi:true},
+    {l:'Δ Forecast vs Orçado', v:pp(-dF), m:`impacto <span class="${F.impFc<0?'cr':'cg'}">${fmtA(F.impFc)}</span>`, cls:dF<0?'cr':'cg'},
   ];
   document.getElementById('cmp-grid').innerHTML=cards.map(c=>`
     <div class="cmp-card ${c.hi?'hi':''}">
@@ -1051,29 +1051,31 @@ function ecell(key, mo, val, changed){
 function tblForecast(model, F){
   const {remMonths, year, pacs}=model; const yy=String(year).slice(2);
   const monthHead=remMonths.map(mo=>`<th class="num">${MESES[mo-1]}/${yy}</th>`).join('').replace('<th class="num"','<th class="num sep-l"',1);
-  const blockCols = (avO,avL,dPp,imp)=>`<td class="num sep-l">${pctN(avO)}</td><td class="num">${pctN(avL)}</td><td class="num ${dPp<0?'cr':'cg'}">${pp(-dPp)}</td><td class="num ${imp<0?'cr':'cg'}">${fmtA(imp)}</td>`;
-  // RECEITA no topo (valores em R$; AV não se aplica)
+  const dppImp = (dPp,imp)=>`<td class="num ${dPp<0?'cr':'cg'}">${pp(-dPp)}</td><td class="num ${imp<0?'cr':'cg'}">${fmtA(imp)}</td>`;
+  const blockCols = (avO,avL,dPp,imp)=>`<td class="num sep-l">${pctN(avO)}</td><td class="num">${pctN(avL)}</td>${dppImp(dPp,imp)}`;
+  // RECEITA no topo (valores em R$; AV/impacto não se aplicam)
   const recMonths=remMonths.map(mo=>ecell('rec', mo, recVal(model,mo), recOV[mo]!=null)).join('').replace('<td class="num','<td class="num sep-l',1);
-  let rows=`<tr class="rec-row"><td class="conta">Receita Líquida</td><td class="num">${fmtA(F.recYtdOrc)}</td><td class="num">${fmtA(F.recYtdReal)}</td>${recMonths}<td class="num sep-l">${fmtA(F.recOrcYear)}</td><td class="num">${fmtA(F.recProjF)}</td><td class="num muted">—</td><td class="num muted">—</td></tr>`;
+  let rows=`<tr class="rec-row"><td class="conta">Receita Líquida</td><td class="num">${fmtA(F.recYtdOrc)}</td><td class="num">${fmtA(F.recYtdReal)}</td><td class="num muted">—</td><td class="num muted">—</td>${recMonths}<td class="num sep-l">${fmtA(F.recOrcYear)}</td><td class="num">${fmtA(F.recProjF)}</td><td class="num muted">—</td><td class="num muted">—</td></tr>`;
   // PACOTES + contas
+  let tImpYtd=0; PAC_ORDER.forEach(p=>{ if(pacs[p]) tImpYtd+=pacs[p].imp; });
   PAC_ORDER.forEach(p=>{ const P=pacs[p]; if(!P||(P.orcRem===0&&P.orcAcc===0&&P.imp===0)) return; const po=F.per[p];
     const cells=remMonths.map(mo=>ecell('pac|'+p, mo, po.month[mo]||0, !!po.chMonth[mo])).join('').replace('<td class="num','<td class="num sep-l',1);
     rows+=`<tr class="pac-row ${Object.keys(P.contas).length?'':'no-drill'}" onclick="drillClick(event,this)">
       <td class="conta">${p}</td>
-      <td class="num">${pctN(po.avYtdOrc)}</td><td class="num">${pctN(po.avYtdReal)}</td>${cells}${blockCols(po.avOrc,po.avLand,po.dPp,po.imp)}</tr>`;
+      <td class="num">${pctN(po.avYtdOrc)}</td><td class="num">${pctN(po.avYtdReal)}</td>${dppImp(P.dPp,P.imp)}${cells}${blockCols(po.avOrc,po.avLand,po.dPp,po.imp)}</tr>`;
     Object.entries(P.contas).sort((a,b)=>a[1].imp-b[1].imp).forEach(([cta,c])=>{
       if(c.orcRem===0&&c.orcAcc===0&&c.imp===0) return; const co=po.contas[cta];
       const cc=remMonths.map(mo=>ecell('cta|'+cta, mo, co.month[mo]||0, ctaChanged(cta,mo))).join('').replace('<td class="num','<td class="num sep-l',1);
-      rows+=`<tr class="sub-row" data-pac="${p}"><td class="conta">${contaLabel(cta)}</td><td class="num muted">${pctN(co.avYtdOrc)}</td><td class="num muted">${pctN(co.avYtdReal)}</td>${cc}${blockCols(co.avOrc,co.avLand,co.dPp,co.imp)}</tr>`;
+      rows+=`<tr class="sub-row" data-pac="${p}"><td class="conta">${contaLabel(cta)}</td><td class="num muted">${pctN(co.avYtdOrc)}</td><td class="num muted">${pctN(co.avYtdReal)}</td>${dppImp(co.avYtdReal-co.avYtdOrc,c.imp)}${cc}${blockCols(co.avOrc,co.avLand,co.dPp,co.imp)}</tr>`;
     });
   });
   const totSigned=remMonths.map(mo=>{ let s=0; PAC_ORDER.forEach(p=>{ if(F.per[p]) s+=(F.per[p].month[mo]||0); }); return `<td class="num">${fmt(s)}</td>`; }).join('').replace('<td class="num','<td class="num sep-l',1);
-  rows+=`<tr class="total"><td class="conta">Total Frota</td><td class="num">${pctN(sumAvRef(model))}</td><td class="num">${pctN(sumAvReal(model))}</td>${totSigned}${blockCols(F.avOrc,F.avFc,F.avFc-F.avOrc,F.impFc)}</tr>`;
+  rows+=`<tr class="total"><td class="conta">Total Frota</td><td class="num">${pctN(sumAvRef(model))}</td><td class="num">${pctN(sumAvReal(model))}</td>${dppImp(sumAvReal(model)-sumAvRef(model),tImpYtd)}${totSigned}${blockCols(F.avOrc,F.avFc,F.avFc-F.avOrc,F.impFc)}</tr>`;
   return `<div class="tbl-section">
     <div class="tbl-title">Forecast por Pacote / Conta</div>
-    <div class="tbl-sub">Meses editáveis (custo negativo). Editar uma <b>conta</b> re-soma o pacote; editar um <b>pacote</b> rateia entre as contas. À direita: aterrissagem 2026 (Δ pp positivo = pior, vermelho).</div>
+    <div class="tbl-sub">Meses editáveis (custo negativo). Editar uma <b>conta</b> re-soma o pacote; editar um <b>pacote</b> rateia entre as contas. YTD = acumulado do ano fechado; à direita = aterrissagem 2026 (Δ pp positivo = pior).</div>
     <div class="tbl-wrap"><table class="dre" style="table-layout:auto;min-width:100%;"><thead>
-      <tr><th class="conta">Pacotes</th><th class="num">Orç - YTD</th><th class="num">Real - YTD</th>${monthHead}<th class="num sep-l">Orç - ${year}</th><th class="num">FCT - ${year}</th><th class="num">Δ pp</th><th class="num">Impacto</th></tr>
+      <tr><th class="conta">Pacotes</th><th class="num">Orç - YTD</th><th class="num">Real - YTD</th><th class="num">Δ pp</th><th class="num">Impacto</th>${monthHead}<th class="num sep-l">Orç - ${year}</th><th class="num">FCT - ${year}</th><th class="num">Δ pp</th><th class="num">Impacto</th></tr>
     </thead><tbody>${rows}</tbody></table></div></div>`;
 }
 function drillClick(e,tr){ if(!e.target.closest('td.conta')) return; toggleDrill(tr); }
