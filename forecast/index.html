@@ -1,0 +1,1188 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Forecast Editável — Frota</title>
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.2/dist/jspdf.umd.min.js"></script>
+<script src="../assets/excel-export.js"></script>
+<style>
+:root{
+  --bg:#0C1017;--card:#141B26;--card2:#1A2335;--border:#1E2D40;
+  --orange:#F97316;--blue:#38BDF8;--text:#F1F5F9;--text2:#94A3B8;--text3:#475569;
+  --green:#3BB33B;--red:#FF6666;
+}
+*{margin:0;padding:0;box-sizing:border-box;}
+body{
+  background:
+    radial-gradient(ellipse at 10% 25%, rgba(249,115,22,.06) 0%, transparent 50%),
+    radial-gradient(ellipse at 90% 75%, rgba(56,189,248,.05) 0%, transparent 50%),
+    var(--bg);
+  color:var(--text);font-family:'Montserrat',-apple-system,sans-serif;font-size:13px;min-height:100vh;
+}
+/* ══ HEADER ══ */
+.header{background:rgba(12,16,23,.75);border-bottom:1px solid rgba(255,255,255,.07);
+  padding:10px 24px 12px;display:flex;flex-wrap:wrap;align-items:center;
+  position:sticky;top:0;z-index:100;backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);
+  box-shadow:0 2px 12px rgba(0,0,0,.3);}
+.brand{flex:1;order:1;}
+.brand h1{font-size:16px;font-weight:700;color:var(--orange);}
+.brand p{font-size:10px;color:var(--text2);margin-top:2px;}
+.header-right{flex-shrink:0;order:2;display:flex;align-items:center;gap:8px;}
+.status-badge{font-size:9px;color:var(--text);background:rgba(249,115,22,.15);border:1px solid rgba(249,115,22,.3);border-radius:4px;padding:2px 8px;white-space:nowrap;}
+.access-badge{font-size:9px;color:var(--text2);background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);border-radius:4px;padding:2px 8px;white-space:nowrap;}
+.header-filters{flex-basis:100%;order:3;margin-top:10px;display:flex;gap:10px;flex-wrap:wrap;align-items:flex-start;}
+.filter-group{display:flex;flex-direction:column;gap:3px;}
+.filter-label{display:none;}
+/* ══ MULTI-SELECT ══ */
+.ms-wrap{position:relative;}
+.ms-btn{display:flex;align-items:center;gap:8px;background:#0a0f18;color:var(--text);
+  border:1px solid #2a3a50;border-radius:4px;font-family:'Montserrat',sans-serif;font-size:11px;font-weight:700;
+  padding:6px 12px;cursor:pointer;text-transform:uppercase;letter-spacing:.5px;white-space:nowrap;min-width:110px;}
+.ms-btn:hover{border-color:var(--orange);}
+.ms-lbl{flex:1;}
+.ms-cnt{background:var(--orange);color:#000;border-radius:10px;padding:1px 6px;font-size:9px;font-weight:800;display:none;}
+.ms-btn svg{flex-shrink:0;opacity:.8;}
+.ms-panel{display:none;flex-direction:column;position:absolute;top:calc(100% + 4px);left:0;z-index:500;
+  background:#0f1824;border:1px solid #2a3a50;border-radius:4px;min-width:230px;max-height:300px;box-shadow:0 8px 24px rgba(0,0,0,.7);}
+.ms-panel.open{display:flex;}
+.ms-search{padding:7px 10px;border-bottom:1px solid #1e2d40;display:flex;align-items:center;gap:6px;flex-shrink:0;}
+.ms-search svg{opacity:.4;flex-shrink:0;}
+.ms-search input{flex:1;background:transparent;border:none;color:var(--text);font-family:'Montserrat',sans-serif;font-size:11px;outline:none;}
+.ms-search input::placeholder{color:var(--text3);}
+.ms-list{overflow-y:auto;flex:1;}
+.ms-opt{display:flex;align-items:center;gap:8px;padding:7px 12px;cursor:pointer;font-size:11px;color:var(--text2);text-transform:uppercase;letter-spacing:.3px;}
+.ms-opt:hover{background:rgba(255,255,255,.05);color:var(--text);}
+.ms-opt.all-opt{border-bottom:1px solid #1e2d40;color:var(--text);font-weight:700;}
+.ms-opt input[type=checkbox]{accent-color:var(--orange);cursor:pointer;width:14px;height:14px;flex-shrink:0;}
+.ms-list::-webkit-scrollbar{width:4px;}
+.ms-list::-webkit-scrollbar-track{background:transparent;}
+.ms-list::-webkit-scrollbar-thumb{background:#2a3a50;border-radius:2px;}
+.ms-only{margin-left:auto;font-size:8px;color:var(--orange);padding:1px 5px;border-radius:2px;cursor:pointer;white-space:nowrap;flex-shrink:0;opacity:0;transition:opacity .12s;}
+.ms-opt:hover .ms-only{opacity:1;}
+.ms-only:hover{background:rgba(249,115,22,.2);}
+/* ══ BUTTONS ══ */
+.refresh-btn,.theme-btn{background:rgba(249,115,22,.15);border:1px solid rgba(249,115,22,.3);border-radius:4px;padding:4px 8px;cursor:pointer;color:var(--orange);display:flex;align-items:center;}
+.refresh-btn:hover,.theme-btn:hover{background:rgba(249,115,22,.32);}
+.back-btn{background:rgba(249,115,22,.15);border:1px solid rgba(249,115,22,.3);border-radius:4px;padding:4px 8px;display:flex;align-items:center;color:var(--orange);text-decoration:none;}
+.back-btn:hover{background:rgba(249,115,22,.32);}
+/* ══ PDF EXPORT ══ */
+.pdf-btn{display:flex;align-items:center;gap:5px;background:rgba(249,115,22,.15);border:1px solid rgba(249,115,22,.3);border-radius:4px;padding:5px 9px;cursor:pointer;color:var(--orange);font-family:'Montserrat',sans-serif;font-size:11px;font-weight:800;letter-spacing:.5px;}
+.pdf-btn:hover{background:rgba(249,115,22,.32);}
+.pdf-btn:disabled{opacity:.55;cursor:default;}
+.pdf-wrap{position:relative;}
+.pdf-menu{display:none;position:absolute;top:calc(100% + 4px);right:0;z-index:600;flex-direction:column;background:#0f1824;border:1px solid #2a3a50;border-radius:6px;overflow:hidden;box-shadow:0 8px 24px rgba(0,0,0,.7);min-width:118px;}
+.pdf-menu.open{display:flex;}
+.pdf-menu button{background:none;border:none;color:var(--text);font-family:'Montserrat',sans-serif;font-size:11px;font-weight:700;text-align:left;padding:8px 12px;cursor:pointer;}
+.pdf-menu button:hover{background:rgba(249,115,22,.18);color:var(--orange);}
+#pdf-overlay{position:fixed;inset:0;z-index:9999;background:rgba(8,11,16,.82);backdrop-filter:blur(3px);display:flex;align-items:center;justify-content:center;}
+#pdf-overlay .pdf-ov-box{display:flex;flex-direction:column;align-items:center;gap:14px;color:#F1F5F9;font-family:'Montserrat',sans-serif;font-size:14px;font-weight:700;letter-spacing:.5px;}
+#pdf-overlay .pdf-ov-spin{width:34px;height:34px;border:3px solid rgba(249,115,22,.25);border-top-color:#F97316;border-radius:50%;animation:pdfspin .8s linear infinite;}
+@keyframes pdfspin{to{transform:rotate(360deg);}}
+#pdf-report-head{display:none;}
+body.exporting #pdf-report-head{display:block;background:#FFFFFF;color:#111;padding:0 0 6px;margin-bottom:10px;}
+body.exporting:not(.light-mode) #pdf-report-head{background:#0C1017;color:#F1F5F9;}
+body.exporting:not(.light-mode) #pdf-report-head .rh-title{color:#FFFFFF;}
+body.exporting:not(.light-mode) #pdf-report-head .rh-sub,body.exporting:not(.light-mode) #pdf-report-head .rh-meta{color:#94A3B8;}
+body.exporting:not(.light-mode) #pdf-report-head .rh-filtros{color:#CBD5E1;}
+body.exporting:not(.light-mode) main.main{background:#0C1017;padding:16px;border-radius:8px;}
+body.exporting:not(.light-mode) .wf-card,body.exporting:not(.light-mode) .tbl-section{background:#141B26!important;backdrop-filter:none!important;-webkit-backdrop-filter:none!important;}
+#pdf-report-head .rh-top{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;}
+#pdf-report-head .rh-title{font-size:30px;font-weight:800;color:#0C1017;letter-spacing:.3px;}
+#pdf-report-head .rh-sub{font-size:11px;color:#555;margin-top:2px;font-weight:600;}
+#pdf-report-head .rh-meta{font-size:10px;color:#555;text-align:right;font-weight:600;line-height:1.5;}
+#pdf-report-head .rh-filtros{margin-top:10px;font-size:10.5px;color:#222;line-height:1.6;}
+#pdf-report-head .rh-filtros b{color:#F97316;}
+body.exporting .wf-card,body.exporting .tbl-section,body.exporting .wf-grid,body.exporting .cen-grid{break-inside:avoid;page-break-inside:avoid;}
+/* ══ MAIN ══ */
+.main{padding:20px 24px;}
+/* ══ BRIDGE (gap-to-target) ══ */
+.bridge-title{font-size:19px;font-weight:800;color:var(--text);margin-bottom:3px;}
+.bridge-sub{font-size:13px;color:var(--text2);margin-bottom:14px;}
+/* cascata */
+.wf-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin:12px 0 26px;}
+.wf-card{min-width:0;background:rgba(20,27,38,.55);border:1px solid rgba(255,255,255,.07);border-radius:8px;padding:16px 18px 12px;
+  backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);box-shadow:0 2px 12px rgba(0,0,0,.25);}
+.wf-cap{display:flex;align-items:center;gap:8px;font-size:19px;font-weight:800;color:var(--text);margin-bottom:10px;}
+.wf-cap .cen-n{font-size:11px;font-weight:800;color:#000;background:var(--orange);border-radius:4px;padding:2px 8px;letter-spacing:.5px;}
+.wf-head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:8px;}
+.wf-wrap{position:relative;height:400px;min-width:0;}
+.wf-foot{display:flex;gap:22px;flex-wrap:wrap;margin-top:12px;padding-top:12px;border-top:1px solid rgba(255,255,255,.08);}
+.wf-summary{font-style:italic;}
+.wf-foot .wf-item{font-size:11px;color:var(--text2);}
+.wf-foot .wf-item b{display:block;font-size:16px;font-weight:800;color:var(--text);margin-top:2px;}
+.dim-toggle{display:flex;border:1px solid #2a3a50;border-radius:4px;overflow:hidden;flex-shrink:0;}
+.dim-btn{background:transparent;color:var(--text2);border:none;font-family:'Montserrat',sans-serif;font-size:12px;font-weight:700;padding:5px 12px;cursor:pointer;text-transform:uppercase;letter-spacing:.5px;}
+.dim-btn.active{background:var(--orange);color:#000;}
+.dim-btn:not(.active):hover{background:rgba(255,255,255,.05);color:var(--text);}
+body.light-mode .wf-card{background:rgba(128,128,128,.14)!important;border:none!important;box-shadow:none!important;--text:#1a1a1a;--text2:#444444;}
+body.light-mode .wf-foot{border-top-color:rgba(0,0,0,.10);}
+/* ══ CENÁRIOS LADO A LADO ══ */
+.cen-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;}
+.cen-grid .tbl-section{min-width:0;margin-bottom:0;}
+@media(max-width:1100px){.cen-grid{grid-template-columns:1fr;}}
+/* ══ TÍTULO DE CENÁRIO (fora das tabelas) ══ */
+.cen-title{display:flex;align-items:center;gap:10px;margin:30px 0 12px;padding-bottom:8px;border-bottom:1px solid rgba(255,255,255,.10);}
+.cen-title .cen-n{font-size:12px;font-weight:800;color:#000;background:var(--orange);border-radius:4px;padding:3px 9px;letter-spacing:.5px;flex-shrink:0;}
+.cen-title .cen-tx{font-size:15px;font-weight:800;color:var(--text);}
+.cen-title .cen-tx small{display:block;font-size:11px;font-weight:600;color:var(--text2);margin-top:2px;text-transform:none;letter-spacing:0;}
+body.light-mode .cen-title{border-bottom-color:rgba(0,0,0,.12);}
+/* ══ TABLES ══ */
+.tbl-section{background:rgba(20,27,38,.55);border:1px solid rgba(255,255,255,.07);border-radius:8px;
+  padding:18px 20px 16px;margin-bottom:16px;backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);box-shadow:0 2px 12px rgba(0,0,0,.25);}
+.tbl-title{font-size:19px;font-weight:800;color:var(--text);margin-bottom:3px;}
+.tbl-title .tag{font-size:11px;font-weight:700;color:#000;background:var(--orange);border-radius:4px;padding:2px 8px;margin-left:8px;vertical-align:middle;text-transform:uppercase;letter-spacing:.5px;}
+.tbl-title .tag.blue{background:var(--blue);}
+.tbl-sub{font-size:13px;color:var(--text2);margin-bottom:16px;}
+.tbl-wrap{overflow-x:auto;}
+table.dre{width:100%;border-collapse:collapse;font-size:13px;table-layout:fixed;}
+table.dre thead th{background:var(--card);color:var(--text);font-size:12px;font-weight:700;
+  padding:8px 8px 12px;border-bottom:1px solid rgba(255,255,255,.10);white-space:normal;text-transform:uppercase;letter-spacing:.5px;vertical-align:bottom;}
+table.dre thead th.num{text-align:right;}
+table.dre thead th.conta{text-align:left;}
+table.dre thead th.grp{color:var(--text2);font-size:10px;border-bottom:none;padding-bottom:2px;text-align:center;}
+table.dre td{padding:11px 8px;border:none;color:var(--text);white-space:nowrap;}
+table.dre tbody tr:hover{background:rgba(255,255,255,.035);}
+table.dre td.conta{color:var(--text);font-weight:600;overflow:hidden;text-overflow:ellipsis;}
+table.dre td.num{text-align:right;}
+table.dre .sep-l{border-left:1px solid rgba(255,255,255,.13);padding-left:16px;}
+table.dre thead th.sep-l{border-left:1px solid rgba(255,255,255,.13);}
+table.dre tr.pac-row{cursor:pointer;}
+table.dre tr.pac-row td.conta::before{content:'+';display:inline-block;width:16px;color:var(--orange);font-weight:800;}
+table.dre tr.pac-row.open td.conta::before{content:'−';}
+table.dre tr.pac-row.no-drill td.conta::before{content:'';width:16px;}
+table.dre tr.sub-row{display:none;}
+table.dre tr.sub-row.show{display:table-row;}
+table.dre tr.sub-row td.conta{font-weight:400;color:var(--text2);padding-left:26px;font-size:12px;}
+table.dre tr.sub-row td{padding-top:7px;padding-bottom:7px;}
+table.dre tr.total td{color:var(--text);font-weight:800;font-size:13px;background:var(--card);border-top:2px solid rgba(255,255,255,.12);padding-top:14px;padding-bottom:12px;}
+body.light-mode table.dre tr.total td{background:#F0F0F0;}
+.cr{color:var(--red)!important;font-weight:700;}
+.cg{color:var(--green)!important;font-weight:700;}
+.muted{color:var(--text3)!important;}
+.eff-hi{color:var(--red)!important;font-weight:800;}
+.pill{font-size:10px;font-weight:700;padding:1px 7px;border-radius:10px;background:rgba(255,255,255,.06);color:var(--text2);}
+.esf-tag{font-size:9px;font-weight:800;color:var(--orange);background:rgba(249,115,22,.12);border:1px solid rgba(249,115,22,.3);border-radius:8px;padding:1px 6px;margin-left:4px;vertical-align:middle;white-space:nowrap;}
+.esf-tag.hi{color:var(--red);background:rgba(255,102,102,.10);border-color:rgba(255,102,102,.35);}
+.dot-ok{display:inline-block;width:10px;height:10px;border-radius:50%;background:var(--green);box-shadow:0 0 6px rgba(59,179,59,.55);vertical-align:middle;}
+/* ══ FORECAST: comparação, toolbar, células editáveis ══ */
+.cmp-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin:10px 0 4px;}
+.cmp-card{background:rgba(20,27,38,.55);border:1px solid rgba(255,255,255,.07);border-radius:8px;padding:14px 16px;backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);box-shadow:0 2px 12px rgba(0,0,0,.25);}
+.cmp-card.hi{border-color:rgba(56,189,248,.5);}
+.cmp-label{font-size:10px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.5px;}
+.cmp-av{font-size:24px;font-weight:800;color:var(--text);line-height:1.1;margin-top:4px;}
+.cmp-meta{font-size:10px;color:var(--text2);margin-top:4px;}
+.fc-toolbar{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:16px 0 4px;flex-wrap:wrap;}
+.fc-hint{font-size:11px;color:var(--text3);font-style:italic;}
+.fc-btn{background:rgba(249,115,22,.15);border:1px solid rgba(249,115,22,.3);border-radius:4px;padding:5px 12px;cursor:pointer;color:var(--orange);font-family:'Montserrat',sans-serif;font-size:11px;font-weight:800;letter-spacing:.5px;}
+.fc-btn:hover{background:rgba(249,115,22,.32);}
+table.dre td.edit{cursor:text;}
+table.dre td.edit:hover{background:rgba(56,189,248,.08);}
+table.dre td.edit:focus{outline:1.5px solid var(--blue);background:rgba(56,189,248,.14);border-radius:2px;}
+table.dre td.edit.changed{color:var(--blue)!important;font-weight:700;}
+tr.rec-row td{border-top:1px solid rgba(255,255,255,.10);color:var(--text2);}
+tr.rec-row td.conta{font-weight:700;color:var(--text);}
+body.light-mode .cmp-card{background:rgba(128,128,128,.14)!important;border:none!important;box-shadow:none!important;--text:#1a1a1a;--text2:#444;}
+@media(max-width:768px){.cmp-grid{grid-template-columns:repeat(2,1fr);}}
+/* célula empilhada: forecast|AV em cima, economia(pp) menor embaixo */
+table.dre td.mcell{text-align:right;line-height:1.2;white-space:nowrap;}
+table.dre td.mcell .p{display:block;font-weight:600;color:var(--text);}
+table.dre td.mcell .p .avm{color:var(--text3);font-weight:500;}
+table.dre td.mcell .e{display:block;font-size:11px;margin-top:3px;color:var(--text3);font-weight:600;}
+/* light mode */
+body.light-mode .main{background:#F0F0F0;--text:#1a1a1a;--text2:#444444;--text3:#666666;color:var(--text);--red:#ff0000;--green:#0E8C0E;}
+body.light-mode .tbl-section,body.light-mode .bridge-card{background:rgba(128,128,128,.14)!important;border:none!important;box-shadow:none!important;--text:#1a1a1a;--text2:#444444;--text3:#555555;}
+body.light-mode .bridge-card.accent{box-shadow:0 0 0 1px rgba(249,115,22,.45)!important;}
+body.light-mode table.dre thead th{border-bottom-color:rgba(0,0,0,.10);background:#F0F0F0;}
+body.light-mode table.dre tr.total td{border-top-color:rgba(0,0,0,.12);}
+body.light-mode table.dre .sep-l,body.light-mode table.dre thead th.sep-l{border-left-color:rgba(0,0,0,.10);}
+body.light-mode table.dre tbody tr{border-bottom:1px solid rgba(0,0,0,.06);}
+/* mobile */
+@media(max-width:768px){
+  .main{padding:12px 10px;}
+  .header{padding:8px 12px 10px;}
+  .brand h1{font-size:14px;}.brand p{font-size:8px;}
+  .wf-grid{grid-template-columns:1fr;gap:12px;}
+  .wf-wrap{height:280px;}
+  .wf-head{flex-direction:column;gap:8px;}
+  .wf-foot{gap:14px;}
+  .header-right{gap:4px;flex-wrap:wrap;justify-content:flex-end;}
+  .header-right .refresh-btn{display:none;}
+  .status-badge,.access-badge{font-size:8px;padding:2px 6px;}
+  .header-filters{gap:5px;}
+  .filter-group{flex:0 0 calc(33.333% - 4px);}
+  .ms-wrap{width:100%;}
+  .ms-btn{width:100%;min-width:0;font-size:8px;padding:3px 6px;gap:3px;}
+  .ms-btn svg{width:9px;height:9px;}
+  table.dre{font-size:11px;}
+  table.dre td,table.dre th{padding:6px 4px;}
+  table.dre td.conta{min-width:120px;}
+}
+</style>
+<script>try{if(!sessionStorage.getItem("gem_hub"))location.replace("../");}catch(e){}</script>
+</head>
+<body>
+
+<header class="header">
+  <div class="brand">
+    <h1>Forecast Editável</h1>
+    <p>Forecast interativo — Frota</p>
+  </div>
+  <div class="header-right">
+    <a href="../visao-financeira/" class="back-btn" title="Voltar à Visão Financeira"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg></a>
+    <div class="pdf-wrap">
+      <button class="pdf-btn" id="pdfBtn" onclick="togglePdfMenu(event)" title="Exportar relatório PDF (estado filtrado)">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><polyline points="9 15 12 18 15 15"/></svg>
+        <span>PDF</span>
+      </button>
+      <div class="pdf-menu" id="pdfMenu">
+        <button onclick="exportarPDF('light')">☀ Claro</button>
+        <button onclick="exportarPDF('dark')">🌙 Escuro</button>
+      </div>
+    </div>
+    <button class="theme-btn" id="themeBtn" title="Modo claro/escuro"></button>
+    <button class="refresh-btn" onclick="recarregar()" title="Atualizar dados">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+        <polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/>
+        <path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/>
+      </svg>
+    </button>
+    <span class="status-badge" id="status-badge">Carregando…</span>
+    <span class="access-badge" id="access-badge" style="display:none"></span>
+  </div>
+  <div class="header-filters">
+    <div class="filter-group"><div class="ms-wrap" id="ms-uni"><button class="ms-btn" onclick="toggleMs('ms-uni')"><span class="ms-lbl">Unidade</span><span class="ms-cnt"></span><svg width="10" height="6" viewBox="0 0 10 6"><path d="M0 0l5 6 5-6z" fill="#F97316"/></svg></button><div class="ms-panel"><div class="ms-search"><svg width="12" height="12" viewBox="0 0 12 12"><circle cx="5" cy="5" r="4" stroke="#94A3B8" stroke-width="1.5" fill="none"/><line x1="8.5" y1="8.5" x2="11" y2="11" stroke="#94A3B8" stroke-width="1.5"/></svg><input type="text" placeholder="Pesquisar…"></div><div class="ms-list"></div></div></div></div>
+    <div class="filter-group"><div class="ms-wrap" id="ms-nv3"><button class="ms-btn" onclick="toggleMs('ms-nv3')"><span class="ms-lbl">Projeto</span><span class="ms-cnt"></span><svg width="10" height="6" viewBox="0 0 10 6"><path d="M0 0l5 6 5-6z" fill="#F97316"/></svg></button><div class="ms-panel"><div class="ms-search"><svg width="12" height="12" viewBox="0 0 12 12"><circle cx="5" cy="5" r="4" stroke="#94A3B8" stroke-width="1.5" fill="none"/><line x1="8.5" y1="8.5" x2="11" y2="11" stroke="#94A3B8" stroke-width="1.5"/></svg><input type="text" placeholder="Pesquisar…"></div><div class="ms-list"></div></div></div></div>
+  </div>
+</header>
+
+<main class="main">
+
+  <div id="pdf-report-head">
+    <div class="rh-top">
+      <div>
+        <div class="rh-title">Gestão em Movimento · Forecast Editável</div>
+        <div class="rh-sub">Forecast interativo — Frota</div>
+      </div>
+      <div class="rh-meta" id="rh-meta"></div>
+    </div>
+    <div class="rh-filtros" id="rh-filtros"></div>
+  </div>
+
+  <!-- ── COMPARAÇÃO / ATERRISSAGEM ── -->
+  <div class="bridge-title">Aterrissagem 2026</div>
+  <div class="bridge-sub" id="fc-sub">—</div>
+  <div class="cmp-grid" id="cmp-grid"></div>
+
+  <!-- ── TOOLBAR ── -->
+  <div class="fc-toolbar">
+    <span class="fc-hint" id="fc-hint">Edite os meses (jun→dez) por conta ou pacote. Rascunho salvo automaticamente neste navegador.</span>
+    <button class="fc-btn" onclick="resetAll()" title="Volta tudo ao orçado">↺ Resetar tudo</button>
+  </div>
+
+  <!-- ── TABELA EDITÁVEL ── -->
+  <div id="tables"></div>
+
+</main>
+
+<script>
+// ═══════════════════════════════════ CONFIG (idêntico ao visao-financeira) ═══════════════════════════════════
+const SHEET_ID='1qcTy2ppLCGBKKqZCxCYWCTL9kTAuWfHBMyBfWJOyih8';
+const TAB_FROTA='Frota', TAB_RECEITA='Receita Líquida';
+const C={orc:0,rem:1,real:2,vig:9,uni:10,nv3:11,cta:12};
+
+// Pacotes do YTG — ICMS é pacote PRÓPRIO (5º), separado de Combustíveis.
+const PAC_YTG={
+  'Combustíveis Veiculos e Equipamentos':'Combustíveis','Combustíveis':'Combustíveis','Fluídos (Arla)':'Combustíveis','Arla':'Combustíveis',
+  'Manutenção de Veículos e Equipamentos':'Manutenção','Manutenção de Veículos e Equip.':'Manutenção','Materiais e Ferramentas de Oficina':'Manutenção',
+  'Lavação de Veículos':'Manutenção','Manutenção de Carrocerias':'Manutenção','Personalização/Padronização de Veículos':'Manutenção',
+  'Personalização/Padronização':'Manutenção','Personalização e Padronização de Veículos':'Manutenção','Contratos de Manutenção Fabricante':'Manutenção',
+  'Consertos e Recapagens de Pneus':'Pneus','Pneus e Camaras':'Pneus','Recapagens e Outros Serviços':'Pneus','Pneus Novos':'Pneus',
+  'IPVA e Licenciamento de Veículos':'Seguros e Licenças','IPVA e Licenciamento':'Seguros e Licenças','Seguro de Veículos e Equipamentos':'Seguros e Licenças','Seguros':'Seguros e Licenças',
+  'Estorno de ICMS não Aproveitado':'ICMS','ICMS Crédito Presumido':'ICMS',
+};
+const getPacYTG = r => PAC_YTG[r[C.cta]] || 'Outros';
+// Ordem de exibição dos pacotes e quais recebem rateio em cada cenário
+const PAC_ORDER=['Combustíveis','Manutenção','Pneus','Seguros e Licenças','ICMS','Outros'];
+const CEN={3:['Combustíveis','Manutenção','Pneus'], 2:['Manutenção','Pneus']};
+// pacotes que NUNCA entram no alvo nem no rateio
+const FIXOS=['Seguros e Licenças','ICMS','Outros'];
+
+// de-para p/ encurtar o nome das contas no drill (igual ao visao-financeira)
+const CONTAS_ALIAS = {
+  'Combustíveis Veiculos e Equipamentos' : 'Combustíveis',
+  'Estorno de ICMS não Aproveitado'      : 'Estorno ICMS',
+  'Fluídos (Arla)'                       : 'Arla',
+  'IPVA e Licenciamento de Veículos'     : 'IPVA e Licenciamento',
+  'Seguro de Veículos e Equipamentos'    : 'Seguros',
+  'Personalização/Padronização de Veículos'   : 'Personalização/Padronização',
+  'Personalização e Padronização de Veículos' : 'Personalização/Padronização',
+  'Manutenção de Veículos e Equipamentos': 'Manutenção de Veículos e Equip.',
+  'Consertos e Recapagens de Pneus'      : 'Recapagens e Outros Serviços',
+  'Pneus e Camaras'                      : 'Pneus Novos',
+  'ICMS Crédito Presumido'               : 'ICMS Créd. Presumido',
+};
+const getNv3Prefix = v => v ? v.split('-')[0].trim() : v;
+const getUniLabel  = v => { if(!v) return ''; const i=v.indexOf('-'); const s=i>=0?v.slice(i+1).trim():v.trim(); return s.replace(/\s*\(INATIVO\)\s*/i,'').trim(); };
+
+// ═══════════════════════════════════ FORMATADORES ═══════════════════════════════════
+const fmt = v => { const neg=+v<0,a=Math.abs(+v); let s; if(a>=1e9) s=(a/1e9).toFixed(2)+' bi'; else if(a>=1e6) s=(a/1e6).toFixed(2)+' mi'; else if(a>=1e5) s=(a/1e3).toFixed(2)+'k'; else s=Math.round(a).toLocaleString('pt-BR'); return (neg?'-':'')+s; };
+const fmtD = v => (+v>0?'+':'')+fmt(v);
+const pp = v => v==null||!isFinite(v) ? '—' : (v>=0?'+':'')+v.toFixed(2)+' pp';
+const pctInt = v => v==null||!isFinite(v) ? '—' : (v>=0?'+':'')+Math.round(v)+'%';
+const set = (id,val)=>{ const e=document.getElementById(id); if(e) e.textContent=val; };
+
+// ═══════════════════════════════════ ESTADO ═══════════════════════════════════
+let allRows=[], vigs=[], lastF=null;
+
+// ═══════════════════════════════════ MULTI-SELECT (idêntico visao-financeira) ═══════════════════════════════════
+function _buildMs(wrap, renderFn, getAllItemsFn){
+  if(!(wrap._sel instanceof Set)) wrap._sel=new Set();
+  const sel=wrap._sel, list=wrap.querySelector('.ms-list'), srch=wrap.querySelector('.ms-search input');
+  const render=(q)=>{ renderFn(list,sel, q!==undefined?q:(srch.value||'')); syncBadge(wrap); };
+  wrap._render=render;
+  if(!wrap._wired){
+    wrap._wired=true;
+    list.addEventListener('change',e=>{
+      const box=e.target;
+      if(box.classList.contains('ms-all')){ sel.clear(); }
+      else if(sel.size===0){ if(!box.checked){ const all=getAllItemsFn?getAllItemsFn():[]; all.forEach(v=>{ if(v!==box.dataset.v) sel.add(v); }); } }
+      else { if(box.checked) sel.add(box.dataset.v); else sel.delete(box.dataset.v); if(getAllItemsFn){ const all=getAllItemsFn(); if(all.length>0&&all.every(v=>sel.has(v))) sel.clear(); } }
+      render(srch.value); atualizar();
+    });
+    list.addEventListener('click',e=>{ const only=e.target.closest('.ms-only'); if(!only) return; e.preventDefault(); e.stopPropagation(); sel.clear(); sel.add(only.dataset.v); render(srch.value); atualizar(); });
+    srch.addEventListener('input',()=>render(srch.value));
+    srch.addEventListener('click',e=>e.stopPropagation());
+  }
+  render();
+}
+function buildMsFilter(id, items){
+  const wrap=document.getElementById(id); if(!wrap) return;
+  wrap._items=items;
+  _buildMs(wrap,(list,sel,q)=>{
+    const it=wrap._items||[], f=q.toLowerCase(), shown=it.filter(v=>v.toLowerCase().includes(f)), allChk=sel.size===0;
+    list.innerHTML=(!q?`<label class="ms-opt all-opt"><input type="checkbox" class="ms-all" ${allChk?'checked':''}> Todos</label>`:'')+
+      shown.map(v=>`<label class="ms-opt"><input type="checkbox" data-v="${v}" ${allChk||sel.has(v)?'checked':''}> ${v}<span class="ms-only" data-v="${v}">only</span></label>`).join('');
+  }, ()=>wrap._items||[]);
+}
+function setMsOptions(id, items){
+  const wrap=document.getElementById(id); if(!wrap) return;
+  wrap._items=items;
+  if(wrap._sel&&wrap._sel.size){ [...wrap._sel].forEach(v=>{ if(!items.includes(v)) wrap._sel.delete(v); }); }
+  if(wrap._render) wrap._render();
+}
+let _vigM1Done=false;
+function buildVigMsFilter(vigList){
+  const wrap=document.getElementById('ms-vig'); if(!wrap) return;
+  if(!(wrap._sel instanceof Set)) wrap._sel=new Set();
+  const sel=wrap._sel, validKeys=new Set(vigList.map(d=>vigKey(d)));
+  [...sel].forEach(vk=>{ if(!validKeys.has(vk)) sel.delete(vk); });
+  if(!_vigM1Done&&sel.size===0&&vigList.length){ const lr=lastRealVigKey(); sel.add((lr&&validKeys.has(lr))?lr:vigKey(vigList[vigList.length-1])); _vigM1Done=true; }
+  const list=wrap.querySelector('.ms-list'), srch=wrap.querySelector('.ms-search input'), allVigKeys=()=>vigList.map(d=>vigKey(d));
+  const newList=list.cloneNode(false); list.parentNode.replaceChild(newList,list);
+  const newSrch=srch.cloneNode(true); srch.parentNode.replaceChild(newSrch,srch);
+  const lst=wrap.querySelector('.ms-list'), src=wrap.querySelector('.ms-search input');
+  const rerender=(q='')=>{
+    const f=q.toLowerCase(), shown=vigList.filter(d=>vigLabel(d).toLowerCase().includes(f)), allChk=sel.size===0;
+    lst.innerHTML=(!q?`<label class="ms-opt all-opt"><input type="checkbox" class="ms-all" ${allChk?'checked':''}> Todas</label>`:'')+
+      shown.map(d=>{ const vk=vigKey(d),vl=vigLabel(d).toUpperCase(); return `<label class="ms-opt"><input type="checkbox" data-v="${vk}" ${allChk||sel.has(vk)?'checked':''}> ${vl}<span class="ms-only" data-v="${vk}">only</span></label>`; }).join('');
+    syncBadge(wrap);
+  };
+  lst.addEventListener('change',e=>{
+    const box=e.target;
+    if(box.classList.contains('ms-all')){ sel.clear(); }
+    else if(sel.size===0){ if(!box.checked){ allVigKeys().forEach(vk=>{ if(vk!==box.dataset.v) sel.add(vk); }); } }
+    else { const vk=box.dataset.v; if(box.checked) sel.add(vk); else sel.delete(vk); const all=allVigKeys(); if(all.length>0&&all.every(k=>sel.has(k))) sel.clear(); }
+    rerender(src.value); atualizar();
+  });
+  lst.addEventListener('click',e=>{ const only=e.target.closest('.ms-only'); if(!only) return; e.preventDefault(); e.stopPropagation(); sel.clear(); sel.add(only.dataset.v); rerender(src.value); atualizar(); });
+  src.addEventListener('input',()=>rerender(src.value));
+  src.addEventListener('click',e=>e.stopPropagation());
+  rerender();
+}
+function syncBadge(wrap){ const cnt=wrap.querySelector('.ms-cnt'), n=wrap._sel?wrap._sel.size:0; if(cnt){cnt.textContent=n; cnt.style.display=n?'':'none';} }
+function toggleMs(id){
+  document.querySelectorAll('.ms-panel.open').forEach(p=>{ if(p.closest('.ms-wrap').id!==id) p.classList.remove('open'); });
+  const panel=document.querySelector(`#${id} .ms-panel`); panel.classList.toggle('open');
+  if(panel.classList.contains('open')){ const inp=panel.querySelector('input[type=text]'); if(inp) setTimeout(()=>inp.focus(),50); }
+}
+function getMsValues(id){ const wrap=document.getElementById(id); if(!wrap) return []; return wrap._sel ? [...wrap._sel] : []; }
+document.addEventListener('click',e=>{ if(!e.target.closest('.ms-wrap')) document.querySelectorAll('.ms-panel.open').forEach(p=>p.classList.remove('open')); });
+
+// ═══════════════════════════════════ FETCH GVIZ ═══════════════════════════════════
+const _normEb = s => String(s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').trim();
+function ebIdx(header, ...names){
+  const nc=header.map(_normEb);
+  for(const n of names){ const nn=_normEb(n); const i=nc.indexOf(nn); if(i>=0) return i; }
+  for(const n of names){ const nn=_normEb(n); const i=nc.findIndex(c=>c.includes(nn)); if(i>=0) return i; }
+  return -1;
+}
+async function fetchTab(tab){
+  const url=`https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:json&sheet=${encodeURIComponent(tab)}`;
+  const res=await fetch(url), raw=await res.text();
+  const json=JSON.parse(raw.replace(/^[\s\S]*?\(/,'').replace(/\);?\s*$/,''));
+  let header=(json.table.cols||[]).map(c=>c&&c.label?c.label:'');
+  let rows=json.table.rows.map(r=>r.c.map(c=>c&&c.v!=null?c.v:null));
+  if(!header.some(x=>_normEb(x).includes('realizado')) && rows.length){ header=rows[0].map(x=>x==null?'':String(x)); rows=rows.slice(1); }
+  return { header, rows };
+}
+const MESES=['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
+const _mesNum = m => { if(m==null) return null; if(typeof m==='number'&&m>=1&&m<=12) return m; const s=_normEb(m); const i=MESES.indexOf(s.slice(0,3)); if(i>=0) return i+1; const n=parseInt(s); return (n>=1&&n<=12)?n:null; };
+function mapTab(header){
+  return { orc:ebIdx(header,'orçado','orcado'), rem:ebIdx(header,'remunerado'), real:ebIdx(header,'realizado'),
+    vig:ebIdx(header,'vigência','vigencia'), nv3:ebIdx(header,'nível 3','nivel 3','nivel3'),
+    cta:ebIdx(header,'conta gerencial','conta'), mes:ebIdx(header,'mês','mes'), ano:ebIdx(header,'ano') };
+}
+const _numBR = v => { if(v==null||v==='') return null; if(typeof v==='number') return v; let s=String(v).replace(/\s|R\$/g,''); if(s.indexOf(',')>=0) s=s.replace(/\./g,'').replace(',','.'); const f=parseFloat(s); return isNaN(f)?null:f; };
+function tabToRows(header, rows, ctaFixo){
+  const m=mapTab(header), out=[];
+  (rows||[]).forEach(r=>{
+    let vig=''; const mn=m.mes>=0?_mesNum(r[m.mes]):null, an=m.ano>=0?parseInt(r[m.ano]):null;
+    if(mn&&an) vig=`01/${String(mn).padStart(2,'0')}/${an}`;
+    else if(m.vig>=0&&r[m.vig]!=null){ const d=parseVig(r[m.vig]); if(d) vig=`01/${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()}`; }
+    if(!vig) return;
+    const cta=ctaFixo||(m.cta>=0?(r[m.cta]||'Outros'):'Outros');
+    if(!ctaFixo && _normEb(cta).includes('receita liquida')) return;
+    const arr=[];
+    arr[C.orc]=m.orc>=0?_numBR(r[m.orc]):null; arr[C.rem]=m.rem>=0?_numBR(r[m.rem]):null; arr[C.real]=m.real>=0?_numBR(r[m.real]):null;
+    arr[C.vig]=vig; arr[C.nv3]=m.nv3>=0?(r[m.nv3]||''):''; arr[C.cta]=cta;
+    out.push(arr);
+  });
+  return out;
+}
+async function fetchData(){
+  const [frota,receita]=await Promise.all([fetchTab(TAB_FROTA), fetchTab(TAB_RECEITA)]);
+  const fr=tabToRows(frota.header,frota.rows,null), re=tabToRows(receita.header,receita.rows,'Receita Líquida');
+  return { rows:[...fr,...re] };
+}
+
+// ═══════════════════════════════════ VIGÊNCIA ═══════════════════════════════════
+function parseVig(v){
+  if(!v) return null;
+  if(v instanceof Date) return new Date(v.getFullYear(), v.getMonth(), 1);
+  if(typeof v==='string'){ const gviz=v.match(/^Date\((\d+),(\d+),\d+\)$/); if(gviz) return new Date(+gviz[1],+gviz[2],1); if(v.includes('/')){ const [d,m,y]=v.split('/'); return new Date(+y,+m-1,1); } }
+  return null;
+}
+const vigKey = d => d ? `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}` : '';
+const vigLabel = d => d ? `${MESES[d.getMonth()]}/${String(d.getFullYear()).slice(2)}` : '';
+
+// ═══════════════════════════════════ FILTROS + CASCATA ═══════════════════════════════════
+function populateFilters(rows){
+  const vMap=new Map(); rows.forEach(r=>{ const d=parseVig(r[C.vig]); if(d) vMap.set(vigKey(d),d); });
+  vigs=[...vMap.values()].sort((a,b)=>a-b);
+  const anos=[...new Set(vigs.map(d=>String(d.getFullYear())))].sort().reverse();
+  buildMsFilter('ms-ano', anos); buildVigMsFilter(vigs);
+  const hasVal=r=>Math.abs(+r[C.rem])>0||Math.abs(+r[C.real])>0;
+  const hasCost=r=>hasVal(r)&&r[C.cta]!=='Receita Líquida';
+  buildMsFilter('ms-uni', [...new Set(rows.filter(hasCost).map(r=>getUniLabel(r[C.nv3])).filter(Boolean))].sort());
+  buildMsFilter('ms-nv3', [...new Set(rows.filter(hasCost).map(r=>getNv3Prefix(r[C.nv3])).filter(Boolean))].sort());
+  buildMsFilter('ms-pac', [...new Set(rows.filter(hasVal).map(r=>getPacYTG(r)).filter(v=>v&&v!=='Outros'))].sort());
+  buildMsFilter('ms-cta', [...new Set(rows.filter(r=>hasVal(r)&&r[C.cta]!=='Receita Líquida').map(r=>r[C.cta]).filter(Boolean))].sort());
+}
+function getF(){ return { ano:getMsValues('ms-ano'), vig:getMsValues('ms-vig'), uni:getMsValues('ms-uni'), nv3:getMsValues('ms-nv3'), pac:getMsValues('ms-pac'), cta:getMsValues('ms-cta') }; }
+function applyFilters(r,f){
+  if(f.uni.length && !f.uni.includes(getUniLabel(r[C.nv3]))) return false;
+  if(f.nv3.length && !f.nv3.includes(getNv3Prefix(r[C.nv3]))) return false;
+  if(f.pac.length && r[C.cta]!=='Receita Líquida' && !f.pac.includes(getPacYTG(r))) return false;
+  if(f.cta.length && r[C.cta]!=='Receita Líquida' && !f.cta.includes(r[C.cta])) return false;
+  return true;
+}
+function rowPassesExcept(r,f,except){
+  const d=parseVig(r[C.vig]); if(!d) return false;
+  if(except!=='ano'&&f.ano.length&&!f.ano.includes(String(d.getFullYear()))) return false;
+  if(except!=='vig'&&f.vig.length&&!f.vig.includes(vigKey(d))) return false;
+  if(except!=='uni'&&f.uni.length&&!f.uni.includes(getUniLabel(r[C.nv3]))) return false;
+  if(except!=='nv3'&&f.nv3.length&&!f.nv3.includes(getNv3Prefix(r[C.nv3]))) return false;
+  if(except!=='pac'&&f.pac.length&&r[C.cta]!=='Receita Líquida'&&!f.pac.includes(getPacYTG(r))) return false;
+  if(except!=='cta'&&f.cta.length&&r[C.cta]!=='Receita Líquida'&&!f.cta.includes(r[C.cta])) return false;
+  return true;
+}
+let _cascVigKey='';
+function refreshCascade(){
+  const f=getF(), hasVal=r=>Math.abs(+r[C.rem])>0||Math.abs(+r[C.real])>0, hasCost=r=>hasVal(r)&&r[C.cta]!=='Receita Líquida';
+  setMsOptions('ms-ano',[...new Set(allRows.filter(r=>rowPassesExcept(r,f,'ano')).map(r=>{const d=parseVig(r[C.vig]);return d?String(d.getFullYear()):null;}).filter(Boolean))].sort().reverse());
+  setMsOptions('ms-uni',[...new Set(allRows.filter(r=>hasCost(r)&&rowPassesExcept(r,f,'uni')).map(r=>getUniLabel(r[C.nv3])).filter(Boolean))].sort());
+  setMsOptions('ms-nv3',[...new Set(allRows.filter(r=>hasCost(r)&&rowPassesExcept(r,f,'nv3')).map(r=>getNv3Prefix(r[C.nv3])).filter(Boolean))].sort());
+  setMsOptions('ms-pac',[...new Set(allRows.filter(r=>hasVal(r)&&rowPassesExcept(r,f,'pac')).map(r=>getPacYTG(r)).filter(v=>v&&v!=='Outros'))].sort());
+  setMsOptions('ms-cta',[...new Set(allRows.filter(r=>hasVal(r)&&r[C.cta]!=='Receita Líquida'&&rowPassesExcept(r,f,'cta')).map(r=>r[C.cta]).filter(Boolean))].sort());
+  const vmap=new Map(); allRows.filter(r=>rowPassesExcept(r,f,'vig')).forEach(r=>{const d=parseVig(r[C.vig]);if(d)vmap.set(vigKey(d),d);});
+  const fvigs=[...vmap.values()].sort((a,b)=>a-b), vkey=fvigs.map(d=>vigKey(d)).join(',');
+  if(vkey!==_cascVigKey){ _cascVigKey=vkey; buildVigMsFilter(fvigs); }
+}
+// linhas do estado atual, ignorando o filtro de vigência (o YTG define o próprio recorte de meses)
+function rowsForYear(f, year){
+  return allRows.filter(r=>{ const d=parseVig(r[C.vig]); if(!d||d.getFullYear()!==year) return false; return applyFilters(r,f); });
+}
+
+// ═══════════════════════════════════ ACUMULADO / MESES ═══════════════════════════════════
+const _cheia = v => v!=null && v!=='';
+const temReal = r => _cheia(r[C.real]) || _cheia(r[C.rem]);
+function lastRealVigKey(){
+  let best=null,bestT=-Infinity;
+  (allRows||[]).forEach(r=>{ if(!temReal(r)) return; const d=parseVig(r[C.vig]); if(!d) return; const t=d.getTime(); if(t>bestT){ bestT=t; best=vigKey(d); } });
+  return best;
+}
+// último mês com realizado dentro do recorte de filtros e do ano
+function lastRealMonth(f, year){
+  let best=0;
+  rowsForYear(f,year).forEach(r=>{ if(!temReal(r)) return; const d=parseVig(r[C.vig]); if(d&&d.getMonth()+1>best) best=d.getMonth()+1; });
+  return best;
+}
+
+// ═══════════════════════════════════ NÚCLEO DO CÁLCULO YTG ═══════════════════════════════════
+// Ano vigente = ano do último mês com realizado (respeita filtro de Ano se houver).
+function anoVigente(f){
+  if(f.ano&&f.ano.length) return Math.max(...f.ano.map(Number));
+  const lr=lastRealVigKey(); return lr?+lr.split('-')[0]:new Date().getFullYear();
+}
+// soma orc/real (abs) de um conjunto de linhas, por conta canônica e por pacote
+function sumBy(rows, keyFn){
+  const m={};
+  rows.forEach(r=>{ if((r[C.cta]||'')==='Receita Líquida') return; const k=keyFn(r); if(!k) return; if(!m[k]) m[k]={orc:0,real:0,rem:0}; m[k].orc+=+(r[C.orc]||0); m[k].real+=+(r[C.real]||0); m[k].rem+=+(r[C.rem]||0); });
+  return m;
+}
+function receitaOf(rows){ let o=0,rem=0,real=0; rows.forEach(r=>{ if((r[C.cta]||'')!=='Receita Líquida') return; o+=+(r[C.orc]||0); rem+=+(r[C.rem]||0); real+=+(r[C.real]||0); }); return {orc:o,rem,real}; }
+
+// Constrói toda a estrutura de dados do painel para o estado de filtros f.
+function computeModel(f){
+  const year=anoVigente(f);
+  const yrRows=rowsForYear(f,year);
+  const lrm=lastRealMonth(f,year);                       // último mês fechado (com realizado)
+  const remMonths=[]; for(let mo=lrm+1;mo<=12;mo++) remMonths.push(mo);   // meses que faltam
+  const closedMonths=[]; for(let mo=1;mo<=lrm;mo++) closedMonths.push(mo);
+
+  const isMonth = (r,mo) => { const d=parseVig(r[C.vig]); return d&&d.getMonth()+1===mo; };
+  const rowsMonth = mo => yrRows.filter(r=>isMonth(r,mo));
+  const rowsClosed = yrRows.filter(r=>{ const d=parseVig(r[C.vig]); return d&&d.getMonth()+1<=lrm; });
+
+  // ── Impacto acumulado (Análise vs Orçado), por conta canônica → agregado por pacote ──
+  const accByCta = sumBy(rowsClosed, r=>r[C.cta]);       // por conta gerencial crua
+  const rlAcc = receitaOf(rowsClosed);
+  const rlRefOrc=Math.abs(rlAcc.orc), rlReal=Math.abs(rlAcc.real);
+  // impacto por conta = Δpp/100 × ReceitaRealizada ; Δpp = AVreal − AVorc
+  const impByCta={};
+  Object.entries(accByCta).forEach(([cta,d])=>{
+    const avRef=rlRefOrc?d.orc/rlRefOrc*100:0, avReal=rlReal?d.real/rlReal*100:0;
+    impByCta[cta]={orcAcc:d.orc, realAcc:d.real, avRef, avReal, dPp:avReal-avRef, imp:(avReal-avRef)/100*rlReal};
+  });
+
+  // orçado por conta nos meses que faltam: abs (pesos/exibição) + net com sinal (projeção AV)
+  const orcRemByCta={};    // conta → total orçado (abs) dos meses que faltam
+  const orcRemNetByCta={}; // conta → total orçado (com sinal) dos meses que faltam
+  const orcByCtaMonth={};     // conta → {mo: orçado abs}
+  const orcByCtaMonthNet={};  // conta → {mo: orçado COM SINAL}  (forecast parte daqui)
+  remMonths.forEach(mo=>{
+    const mRows=rowsMonth(mo), byC=sumBy(mRows, r=>r[C.cta]);
+    Object.entries(byC).forEach(([cta,d])=>{
+      const a=Math.abs(d.orc);
+      orcRemByCta[cta]=(orcRemByCta[cta]||0)+a;
+      orcRemNetByCta[cta]=(orcRemNetByCta[cta]||0)+d.orc;
+      (orcByCtaMonth[cta]=orcByCtaMonth[cta]||{})[mo]=a;
+      (orcByCtaMonthNet[cta]=orcByCtaMonthNet[cta]||{})[mo]=d.orc;
+    });
+  });
+
+  // agrupa contas por pacote YTG
+  const ctaPac = cta => PAC_YTG[cta]||'Outros';
+  const mkP=()=>({imp:0,orcAcc:0,realAcc:0,contas:{},orcRem:0,orcRemNet:0,orcMonth:{},orcMonthNet:{}});
+  const mkC=()=>({imp:0,orcAcc:0,realAcc:0,orcRem:0,orcRemNet:0,orcMonth:{},orcMonthNet:{}});
+  const pacs={};   // pacote → {imp, orcAcc, realAcc, avRef, avReal, dPp, contas, orcRem(abs), orcRemNet(sinal), orcMonth}
+  PAC_ORDER.forEach(p=>pacs[p]=mkP());
+  // impacto/acumulado
+  Object.entries(impByCta).forEach(([cta,d])=>{
+    const p=ctaPac(cta); if(!pacs[p]) pacs[p]=mkP();
+    pacs[p].imp+=d.imp; pacs[p].orcAcc+=d.orcAcc; pacs[p].realAcc+=d.realAcc;
+    const c=pacs[p].contas[cta]=pacs[p].contas[cta]||mkC();
+    c.imp+=d.imp; c.orcAcc+=d.orcAcc; c.realAcc+=d.realAcc;
+  });
+  // orçado dos meses restantes (por pacote e conta)
+  Object.entries(orcRemByCta).forEach(([cta,a])=>{
+    const p=ctaPac(cta); if(!pacs[p]) pacs[p]=mkP();
+    pacs[p].orcRem+=a; pacs[p].orcRemNet+=orcRemNetByCta[cta];
+    const c=pacs[p].contas[cta]=pacs[p].contas[cta]||mkC(); c.orcRem+=a; c.orcRemNet+=orcRemNetByCta[cta];
+    Object.entries(orcByCtaMonth[cta]||{}).forEach(([mo,v])=>{ pacs[p].orcMonth[mo]=(pacs[p].orcMonth[mo]||0)+v; c.orcMonth[mo]=(c.orcMonth[mo]||0)+v; });
+    Object.entries(orcByCtaMonthNet[cta]||{}).forEach(([mo,v])=>{ pacs[p].orcMonthNet[mo]=(pacs[p].orcMonthNet[mo]||0)+v; c.orcMonthNet[mo]=(c.orcMonthNet[mo]||0)+v; });
+  });
+  // AV por pacote (para colunas AV Orçado / AV Real / Δpp)
+  Object.values(pacs).forEach(p=>{ p.avRef=rlRefOrc?p.orcAcc/rlRefOrc*100:0; p.avReal=rlReal?p.realAcc/rlReal*100:0; p.dPp=p.avReal-p.avRef; });
+
+  // receita orçada dos meses restantes (total + por mês) p/ projeção e AV mensal
+  let recRem=0; const recByMonth={};
+  remMonths.forEach(mo=>{ const v=Math.abs(receitaOf(rowsMonth(mo)).orc); recByMonth[mo]=v; recRem+=v; });
+
+  return { year, lrm, remMonths, closedMonths, pacs, rlAcc, rlRefOrc, rlReal, recRem, recByMonth, yrRows, rowsClosed };
+}
+
+// Distribui o alvo do cenário (cen=3 ou 2) entre as contas dos pacotes participantes.
+// alvo = |Σ impacto dos pacotes participantes| (decisão: só pacotes controláveis).
+function computeCenario(model, cen){
+  const parts=CEN[cen], {remMonths, pacs}=model;
+  // ALVO = economia que ZERA o impacto total projetado de 2026 (aterrissagem = AV orçado do ano).
+  // = |impacto 2026 do YTG| (bloco final da tabela YTG, gastando o orçado no restante).
+  // Base anual, não YTD: a receita acima do orçado dilui o AV, então o alvo anual difere do
+  // impacto YTD. Fixos mantêm o orçado. FIXO nos dois cenários; muda só quem absorve (parts).
+  let orcAccT=0, orcRemNetT=0, realAccT=0;
+  PAC_ORDER.forEach(p=>{ const P=pacs[p]; if(P){ orcAccT+=P.orcAcc; orcRemNetT+=P.orcRemNet; realAccT+=P.realAcc; } });
+  const fb0=fbCalc(model, orcAccT, orcRemNetT, realAccT, 0);
+  let alvo=-fb0.imp; if(alvo<0) alvo=0;          // impacto projetado desfavorável (negativo) → alvo positivo
+  // pesos
+  let totOrcRem=0; parts.forEach(p=>{ if(pacs[p]) totOrcRem+=pacs[p].orcRem; });
+  const orcMonthTot={}; remMonths.forEach(mo=>{ let s=0; parts.forEach(p=>{ s+=(pacs[p]&&pacs[p].orcMonth[mo])||0; }); orcMonthTot[mo]=s; });
+  const totMonth=remMonths.reduce((a,mo)=>a+orcMonthTot[mo],0);
+  // economia por conta e por mês  = alvo × pesoConta × pesoMes
+  const out={};   // pacote → {economia, contas:{cta:{economia, econMonth:{mo}, orcMonth, orcRem}}}
+  parts.forEach(p=>{
+    const P=pacs[p]; if(!P) return;
+    const po={economia:0, econMonth:{}, orcMonth:P.orcMonth, orcRem:P.orcRem, contas:{}};
+    Object.entries(P.contas).forEach(([cta,c])=>{
+      const pesoConta=totOrcRem?c.orcRem/totOrcRem:0;
+      const co={economia:0, econMonth:{}, orcMonth:c.orcMonth, orcRem:c.orcRem};
+      remMonths.forEach(mo=>{
+        const pesoMes=totMonth?orcMonthTot[mo]/totMonth:0;
+        const e=alvo*pesoConta*pesoMes;
+        co.econMonth[mo]=e; co.economia+=e; po.econMonth[mo]=(po.econMonth[mo]||0)+e;
+      });
+      po.economia+=co.economia; po.contas[cta]=co;
+    });
+    out[p]=po;
+  });
+  return { alvo, parts, out, totOrcRem, orcMonthTot, totMonth };
+}
+
+// ═══════════════════════════════════ RENDER ═══════════════════════════════════
+const contaLabel = cta => CONTAS_ALIAS[cta] || cta;   // nome curto (de-para)
+function monthCols(remMonths, year){ return remMonths.map(mo=>`${MESES[mo-1]}/${String(year).slice(2)}`); }
+
+const chWf={};   // {3:Chart, 2:Chart}
+// plugin: rótulo de valor no topo de cada barra da cascata
+const wfLabels={afterDatasetsDraw(chart){
+  const meta=chart.getDatasetMeta(0), isLight=document.body.classList.contains('light-mode');
+  const ctx=chart.ctx; ctx.save(); ctx.font='800 13px Montserrat,sans-serif'; ctx.textAlign='center'; ctx.textBaseline='bottom';
+  (chart.$wfMeta||[]).forEach((info,i)=>{
+    const bar=meta.data[i]; if(!bar) return;
+    ctx.fillStyle=isLight?'#111':'#F1F5F9';
+    ctx.fillText(info.top, bar.x, Math.min(bar.y, chart.scales.y.getPixelForValue(info.hi))-5);
+  });
+  ctx.restore();
+}};
+// plugin: chave (bracket) sobre as barras de economia com "economia total · esforço %"
+const wfBracket={afterDatasetsDraw(chart){
+  const b=chart.$wfBracket; if(!b||!b.n) return;
+  const meta=chart.getDatasetMeta(0), isLight=document.body.classList.contains('light-mode');
+  const first=meta.data[1], last=meta.data[b.n]; if(!first||!last) return;
+  const xL=first.x-first.width/2, xR=last.x+last.width/2;
+  const col=isLight?'#111111':'#FFFFFF';
+  // posição fixa no topo (dentro do padding), independente da altura das barras → nunca corta
+  const tick=18, y=chart.chartArea.top-34;   // linha da chave; verticais descem em direção às barras
+  const ctx=chart.ctx;
+  ctx.save();
+  ctx.strokeStyle=col; ctx.lineWidth=1.5;
+  ctx.beginPath(); ctx.moveTo(xL,y+tick); ctx.lineTo(xL,y); ctx.lineTo(xR,y); ctx.lineTo(xR,y+tick); ctx.stroke();
+  ctx.font='italic 500 14px Montserrat,sans-serif'; ctx.textAlign='center'; ctx.textBaseline='bottom';
+  ctx.fillStyle=col;
+  ctx.fillText(b.text, (xL+xR)/2, y-11);
+  ctx.restore();
+}};
+function renderWaterfall(model){
+  const {remMonths, year, pacs}=model;
+  drawWf(model,3,'ch-wf3');
+  drawWf(model,2,'ch-wf2');
+  const sub=document.getElementById('wf-sub');
+  if(sub) sub.textContent=`Ano ${year} · orçado de ${MESES[remMonths[0]-1]}→dez reduzido pela economia distribuída. Mesmo alvo nos dois cenários, mudando os pacotes que absorvem o corte. R$ (custo em módulo).`;
+  // resumo único (idêntico nos 2 cenários — só muda a distribuição)
+  const cc=computeCenario(model,3);
+  let totYTG=0; PAC_ORDER.forEach(p=>{ if(pacs[p]) totYTG+=pacs[p].orcRem; });
+  const forecast=totYTG-cc.alvo;
+  const sum=document.getElementById('wf-summary');
+  if(sum) sum.innerHTML=[
+    {l:'Orçado a realizar (YTG)',v:fmt(totYTG)},
+    {l:'Economia total (alvo)',v:fmt(cc.alvo)},
+    {l:'Target reprojetado',v:fmt(forecast)},
+    {l:'Redução',v:(totYTG?(cc.alvo/totYTG*100).toFixed(1):'0')+'%'},
+  ].map(x=>`<div class="wf-item">${x.l}<b>${x.v}</b></div>`).join('');
+}
+function drawWf(model, cen, canvasId){
+  const {pacs}=model, cc=computeCenario(model, cen);
+  let totYTG=0; PAC_ORDER.forEach(p=>{ if(pacs[p]) totYTG+=pacs[p].orcRem; });
+  const steps=cc.parts.map(p=>({name:p, eco:(cc.out[p]?cc.out[p].economia:0)}));
+  const forecast=totYTG-cc.alvo;
+  const labels=['Orçado YTG',...steps.map(s=>s.name),'Target'];
+  const isLight0=document.body.classList.contains('light-mode');
+  const bars=[], colors=[], meta=[]; let run=totYTG;
+  bars.push([0,totYTG]); colors.push(isLight0?'#111111':'#FFFFFF'); meta.push({top:'-'+fmt(totYTG),hi:totYTG});
+  steps.forEach(s=>{ const lo=run-s.eco; bars.push([lo,run]); colors.push('#3BB33B'); meta.push({top:fmt(s.eco),hi:run}); run=lo; });
+  bars.push([0,forecast]); colors.push('#F97316'); meta.push({top:'-'+fmt(forecast),hi:forecast});
+  const span=Math.max(totYTG-forecast, totYTG*0.01);
+  const ymin=Math.max(0, forecast-span*2), ymax=totYTG+span*0.5;
+  const isLight=document.body.classList.contains('light-mode');
+  const tick={color:isLight?'#444':'#94A3B8',font:{family:'Montserrat',size:12}};
+  // esforço = alvo ÷ orçado YTG dos pacotes que absorvem o corte (varia entre cenários)
+  let orcPart=0; cc.parts.forEach(p=>{ if(pacs[p]) orcPart+=pacs[p].orcRem; });
+  const esf=orcPart?cc.alvo/orcPart*100:0;
+  if(chWf[cen]) chWf[cen].destroy();
+  chWf[cen]=new Chart(document.getElementById(canvasId),{
+    type:'bar',
+    data:{labels,datasets:[{data:bars,backgroundColor:colors,borderColor:colors,borderWidth:1,borderRadius:3,barPercentage:.72}]},
+    options:{responsive:true,maintainAspectRatio:false,animation:false,layout:{padding:{top:64}},
+      plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>{const v=c.raw;return 'R$ '+fmt(Math.abs(v[1]-v[0]));}},backgroundColor:'#141B26',titleColor:'#F97316',bodyColor:'#F1F5F9',borderColor:'#1E2D40',borderWidth:1,titleFont:{family:'Montserrat'},bodyFont:{family:'Montserrat'}}},
+      scales:{x:{grid:{display:false},border:{display:false},ticks:tick},y:{display:false,min:ymin,max:ymax}}},
+    plugins:[wfLabels,wfBracket]
+  });
+  chWf[cen].$wfMeta=meta;
+  chWf[cen].$wfBracket={n:steps.length, text:`Esforço ${esf.toFixed(1)}%`};
+  chWf[cen].update();
+}
+
+// tabela YTG (orçado puro dos meses restantes) — 5 pacotes + total
+function tblYTG(model){
+  const {remMonths, year, pacs}=model;
+  const cols=monthCols(remMonths, year);
+  let rows='', tImp=0, tOrcRemNet=0, tOrcAcc=0, tRealAcc=0, tMonth={}; remMonths.forEach(mo=>tMonth[mo]=0);
+  PAC_ORDER.forEach(p=>{
+    const P=pacs[p]; if(!P) return; if(P.orcRem===0 && P.orcAcc===0 && P.imp===0) return;
+    const fixo=FIXOS.includes(p);
+    rows+=pacRow(model, p, P, remMonths, fixo);
+    // contas (drill)
+    Object.entries(P.contas).sort((a,b)=>a[1].imp-b[1].imp).forEach(([cta,c])=>{
+      if(c.orcRem===0 && c.orcAcc===0 && c.imp===0) return;
+      rows+=ctaRow(model, p, cta, c, remMonths, fixo);
+    });
+    tImp+=P.imp; tOrcRemNet+=P.orcRemNet; tOrcAcc+=P.orcAcc; tRealAcc+=P.realAcc;
+    remMonths.forEach(mo=>tMonth[mo]+=(P.orcMonth[mo]||0));
+  });
+  const totCells=remMonths.map(mo=>`<td class="num">-${fmtA(tMonth[mo])}</td>`).join('');
+  const dTot=sumAvReal(model)-sumAvRef(model);
+  rows+=`<tr class="total"><td class="conta">Total Frota</td><td class="num">${pctN(sumAvRef(model))}</td><td class="num">${pctN(sumAvReal(model))}</td><td class="num ${dTot<0?'cr':'cg'}">${pp(-dTot)}</td><td class="num sep-l ${tImp<0?'cr':'cg'}">${fmtA(tImp)}</td>${totCells.replace('<td class="num">','<td class="num sep-l">')}${fbCellsYtg(model,tOrcAcc,tOrcRemNet,tRealAcc,false)}</tr>`;
+  return tableShell('YTG (Year To Go)', 'blue', 'Orçado puro dos meses a realizar — nenhum ajuste aplicado. AV / Impacto = acumulado do ano fechado.', cols, rows, false, year);
+}
+
+// tabela Economia OU Forecast de um cenário
+function tblCenario(model, cen, kind){   // kind: 'eco' | 'fct'
+  const {remMonths, year, pacs}=model;
+  const cc=computeCenario(model, cen);
+  const cols=monthCols(remMonths, year);
+  const partSet=new Set(cc.parts);
+  let rows='', tImp=0, tVal={}; remMonths.forEach(mo=>tVal[mo]=0); let tEco=0;
+  PAC_ORDER.forEach(p=>{
+    const P=pacs[p]; if(!P) return; if(P.orcRem===0 && P.orcAcc===0 && P.imp===0) return;
+    const participa=partSet.has(p), po=cc.out[p];
+    // valores por mês
+    const cells=remMonths.map(mo=>{
+      const orc=P.orcMonth[mo]||0, eco=(participa&&po)?(po.econMonth[mo]||0):0;
+      if(kind==='eco'){ tVal[mo]+=eco; return eco?`<td class="num cg">${fmtA(eco)}</td>`:`<td class="num muted">—</td>`; }
+      const nv=orc-eco; tVal[mo]+=nv; return `<td class="num">${fmtA(nv)}</td>`;
+    }).join('');
+    const eco=(participa&&po)?po.economia:0; tEco+=eco; tImp+=P.imp;
+    const badge=participa?'':`<span class="pill">fixo</span>`;
+    const avRefC=pctAv(P.avRef), avRealC=pctAv(P.avReal);
+    // esforço médio do pacote (economia / orçado restante)
+    const esf=(participa&&P.orcRem)?eco/P.orcRem*100:null;
+    const impCell=`<td class="num sep-l ${P.imp<0?'cr':'cg'}">${fmtA(P.imp)}</td>`;
+    rows+=`<tr class="pac-row ${Object.keys(P.contas).length?'':'no-drill'}" onclick="toggleDrill(this)">
+      <td class="conta">${p} ${badge}</td>
+      <td class="num">${avRefC}</td><td class="num">${avRealC}</td>
+      <td class="num ${esf!=null&&esf>15?'eff-hi':(esf!=null?'':'muted')}">${esf!=null?esf.toFixed(0)+'%':'—'}</td>
+      ${impCell}${cells.replace('<td class="num','<td class="num sep-l',1)}</tr>`;
+    // contas
+    Object.entries(P.contas).sort((a,b)=>a[1].imp-b[1].imp).forEach(([cta,c])=>{
+      if(c.orcRem===0 && c.orcAcc===0 && c.imp===0) return;
+      const co=(participa&&po)?po.contas[cta]:null;
+      const cc2=remMonths.map(mo=>{
+        const orc=c.orcMonth[mo]||0, e=co?(co.econMonth[mo]||0):0;
+        if(kind==='eco') return e?`<td class="num cg">${fmtA(e)}</td>`:`<td class="num muted">—</td>`;
+        return `<td class="num">${fmtA(orc-e)}</td>`;
+      }).join('');
+      const ce=co?co.economia:0, cesf=(co&&c.orcRem)?ce/c.orcRem*100:null;
+      rows+=`<tr class="sub-row" data-pac="${p}">
+        <td class="conta">${contaLabel(cta)}</td>
+        <td class="num muted">${pctAv(c.orcAcc&&model.rlRefOrc?c.orcAcc/model.rlRefOrc*100:0)}</td>
+        <td class="num muted">${pctAv(c.realAcc&&model.rlReal?c.realAcc/model.rlReal*100:0)}</td>
+        <td class="num ${cesf!=null&&cesf>15?'eff-hi':'muted'}">${cesf!=null?cesf.toFixed(0)+'%':'—'}</td>
+        <td class="num sep-l ${c.imp<0?'cr':'cg'}">${fmtA(c.imp)}</td>${cc2.replace('<td class="num','<td class="num sep-l',1)}</tr>`;
+    });
+  });
+  const totCells=remMonths.map(mo=>kind==='eco'?`<td class="num cg">${fmtA(tVal[mo])}</td>`:`<td class="num">${fmtA(tVal[mo])}</td>`).join('');
+  const alvoNote = kind==='eco'
+    ? `<td class="num sep-l cg" colspan="1">${fmtA(cc.alvo)}</td>`
+    : `<td class="num sep-l ${tImp<0?'cr':'cg'}">${fmtA(tImp)}</td>`;
+  rows+=`<tr class="total"><td class="conta">${kind==='eco'?'Economia Total (alvo)':'Total Reorçado'}</td><td class="num">—</td><td class="num">—</td><td class="num">—</td>${alvoNote}${totCells.replace('<td class="num','<td class="num sep-l',1)}</tr>`;
+  const cenTxt = cen===3?'Combustíveis + Manutenção + Pneus':'Manutenção + Pneus';
+  if(kind==='eco'){
+    return tableShell(`Economia Necessária`, 'orange',
+      `Corte a distribuir por conta × mês para recuperar o impacto AVO. Alvo = |impacto total da empresa| = ${fmt(cc.alvo)} (fixos mantidos no orçado), absorvido por ${cenTxt}. Rateio: alvo × peso da conta × peso do mês. Coluna % = esforço (corte ÷ orçado do período).`,
+      cols, rows, true);
+  }
+  return tableShell(`Forecast Reorçado`, 'orange',
+    `Novo orçamento dos meses a realizar = orçado original − economia. Pacotes ${cenTxt} absorvem o alvo; Seguros e Licenças e ICMS mantêm o orçado (fixos). Coluna % = esforço exigido.`,
+    cols, rows, true);
+}
+
+// Cenário: título FORA do card + card único com DUAS tabelas (Economia e FCT).
+// Colunas iguais às do YTG (AV Orç/Real YTD, Δ pp, Impacto, meses) p/ alinhar; meses só nominal (negativo).
+// Esforço vira tag colada no nome do pacote.
+function tblCenarioMerged(model, cen, titulo, sub){
+  const {remMonths, year, pacs}=model;
+  const cc=computeCenario(model, cen);
+  const partSet=new Set(cc.parts);
+  const pctS = v => (v==null||!isFinite(v))?'—':v.toFixed(2)+'%';
+  const monthHead=remMonths.map(mo=>`<th class="num">${MESES[mo-1]}/${String(year).slice(2)}</th>`).join('').replace('<th class="num"','<th class="num sep-l"',1);
+  const head=`<tr><th class="conta">Pacotes</th><th class="num">Orç - YTD</th><th class="num">Real - YTD</th><th class="num">Δ pp</th><th class="num sep-l">Impacto</th>${monthHead}<th class="num sep-l">Orç - ${year}</th><th class="num">TGT - ${year}</th><th class="num">Δ pp</th><th class="num">Impacto</th></tr>`;
+  // bloco final 2026 (com economia aplicada): valores reais de Δpp/Impacto (Total fecha em 0)
+  const fbCells=(orcAccS,orcRemAbs,realAccS,ecoAbs,muted)=>{
+    const fb=fbCalc(model,orcAccS,orcRemAbs,realAccS,ecoAbs);
+    const m=muted?' muted':'';
+    return `<td class="num sep-l${m}">${pctS(fb.avO)}</td><td class="num${m}">${pctS(fb.avL)}</td>`+
+      `<td class="num ${fb.d<0?'cr':'cg'}">${pp(-fb.d)}</td><td class="num ${fb.d<0?'cr':'cg'}">${fmtA(fb.imp)}</td>`;
+  };
+
+  const buildRows=(kind)=>{   // kind: 'eco' | 'fct'
+    let rows='', tM={}; remMonths.forEach(mo=>tM[mo]=0); let tImp=0, tOrcAcc=0, tRealAcc=0, tOrcRemNet=0;
+    PAC_ORDER.forEach(p=>{
+      const P=pacs[p]; if(!P) return; if(P.orcRem===0&&P.orcAcc===0&&P.imp===0) return;
+      const participa=partSet.has(p), po=participa?cc.out[p]:null;
+      const eco=po?po.economia:0, esf=(participa&&P.orcRem)?eco/P.orcRem*100:null;
+      const tag=participa?`<span class="esf-tag${esf>15?' hi':''}">Esf. ${esf.toFixed(0)}%</span>`:`<span class="pill">fixo</span>`;
+      const cells=remMonths.map(mo=>{
+        const orc=P.orcMonth[mo]||0, e=po?(po.econMonth[mo]||0):0;
+        const v=kind==='eco'?e:(orc-e); tM[mo]+=v;
+        if(kind==='eco'&&!e) return `<td class="num muted">—</td>`;
+        return `<td class="num">-${fmt(v)}</td>`;
+      }).join('').replace('<td class="num','<td class="num sep-l',1);
+      tImp+=P.imp; tOrcAcc+=P.orcAcc; tRealAcc+=P.realAcc; tOrcRemNet+=P.orcRemNet;
+      rows+=`<tr class="pac-row ${Object.keys(P.contas).length?'':'no-drill'}" onclick="toggleDrill(this)">
+        <td class="conta">${p} ${tag}</td>
+        <td class="num">${pctS(P.avRef)}</td><td class="num">${pctS(P.avReal)}</td>
+        <td class="num ${P.dPp<0?'cr':'cg'}">${pp(-P.dPp)}</td>
+        <td class="num sep-l ${P.imp<0?'cr':'cg'}">${fmtA(P.imp)}</td>${cells}${fbCells(P.orcAcc,P.orcRemNet,P.realAcc,eco,false)}</tr>`;
+      Object.entries(P.contas).sort((a,b)=>a[1].imp-b[1].imp).forEach(([cta,c])=>{
+        if(c.orcRem===0&&c.orcAcc===0&&c.imp===0) return;
+        const co=po?po.contas[cta]:null;
+        const avR=model.rlRefOrc?c.orcAcc/model.rlRefOrc*100:0, avRe=model.rlReal?c.realAcc/model.rlReal*100:0, dp=avRe-avR;
+        const cc2=remMonths.map(mo=>{
+          const orc=c.orcMonth[mo]||0, e=co?(co.econMonth[mo]||0):0;
+          if(kind==='eco') return e?`<td class="num">-${fmt(e)}</td>`:`<td class="num muted">—</td>`;
+          return `<td class="num">-${fmt(orc-e)}</td>`;
+        }).join('').replace('<td class="num','<td class="num sep-l',1);
+        rows+=`<tr class="sub-row" data-pac="${p}">
+          <td class="conta">${contaLabel(cta)}</td>
+          <td class="num muted">${pctS(avR)}</td><td class="num muted">${pctS(avRe)}</td>
+          <td class="num ${dp<0?'cr':'cg'}">${pp(-dp)}</td>
+          <td class="num sep-l ${c.imp<0?'cr':'cg'}">${fmtA(c.imp)}</td>${cc2}${fbCells(c.orcAcc,c.orcRemNet,c.realAcc,co?co.economia:0,true)}</tr>`;
+      });
+    });
+    let orcPart=0; cc.parts.forEach(p=>{ if(pacs[p]) orcPart+=pacs[p].orcRem; });
+    const esfTot=orcPart?cc.alvo/orcPart*100:0;
+    const dTot=sumAvReal(model)-sumAvRef(model);
+    const totCells=remMonths.map(mo=>`<td class="num">-${fmt(tM[mo])}</td>`).join('').replace('<td class="num','<td class="num sep-l',1);
+    rows+=`<tr class="total"><td class="conta">Total Frota <span class="esf-tag${esfTot>15?' hi':''}">Esf. ${esfTot.toFixed(0)}%</span></td><td class="num">${pctS(sumAvRef(model))}</td><td class="num">${pctS(sumAvReal(model))}</td><td class="num ${dTot<0?'cr':'cg'}">${pp(-dTot)}</td><td class="num sep-l ${tImp<0?'cr':'cg'}">${fmtA(tImp)}</td>${totCells}${fbCells(tOrcAcc,tOrcRemNet,tRealAcc,cc.alvo,false)}</tr>`;
+    return rows;
+  };
+
+  return `<div class="cen-title"><span class="cen-tx">${titulo}<small>${sub}</small></span></div>
+  <div class="tbl-section">
+    <div class="tbl-title">Economia Necessária</div>
+    <div class="tbl-sub">Corte por conta × mês para recuperar o alvo de ${fmt(cc.alvo)}. Rateio: alvo × peso da conta × peso do mês.</div>
+    <div class="tbl-wrap"><table class="dre">${colGroup(remMonths.length)}<thead>${head}</thead><tbody>${buildRows('eco')}</tbody></table></div>
+    <div class="tbl-title" style="margin-top:26px;">Target</div>
+    <div class="tbl-sub">Novo orçamento dos meses a realizar = orçado original − economia. Fixos mantêm o orçado.</div>
+    <div class="tbl-wrap"><table class="dre">${colGroup(remMonths.length)}<thead>${head}</thead><tbody>${buildRows('fct')}</tbody></table></div>
+  </div>`;
+}
+
+// helpers de render — tudo em módulo (é custo); a COR indica favorável/desfavorável
+const pctAv = v => (v==null||!isFinite(v))?'—':Math.abs(v).toFixed(2)+'%';
+const fmtA  = v => fmt(Math.abs(+v||0));
+const ppA   = v => (v==null||!isFinite(v))?'—':Math.abs(v).toFixed(2)+' pp';
+function sumAvRef(model){ let o=0; PAC_ORDER.forEach(p=>{ if(model.pacs[p]) o+=model.pacs[p].orcAcc; }); return model.rlRefOrc?o/model.rlRefOrc*100:0; }
+function sumAvReal(model){ let o=0; PAC_ORDER.forEach(p=>{ if(model.pacs[p]) o+=model.pacs[p].realAcc; }); return model.rlReal?o/model.rlReal*100:0; }
+// projeção fim de ano — usa o orçado restante COM SINAL (net), p/ não inflar com créditos (ex.: ICMS).
+// orcRemNet é negativo (custo); economia (ecoAbs, positivo) reduz o custo → soma.
+function fbCalc(model, orcAccS, orcRemNet, realAccS, ecoAbs){
+  const recOrcYear=model.rlRefOrc+model.recRem, recProj=model.rlReal+model.recRem;
+  const avO=recOrcYear?(orcAccS+orcRemNet)/recOrcYear*100:0;                 // AV orçado do ano (assinado)
+  const avL=recProj?((realAccS+orcRemNet+(ecoAbs||0))/recProj*100):0;        // AV de aterrissagem
+  const d=avL-avO;
+  return {avO, avL, d, imp:d/100*recProj};
+}
+
+const pctN = v => (v==null||!isFinite(v))?'—':v.toFixed(2)+'%';   // AV com sinal (custo negativo)
+// bloco final 2026 do YTG (sem economia): AV Orç 2026 | AV YTG | Δpp | Impacto
+function fbCellsYtg(model, orcAccS, orcRemAbs, realAccS, muted){
+  const fb=fbCalc(model, orcAccS, orcRemAbs, realAccS, 0);
+  const m=muted?' muted':'';
+  return `<td class="num sep-l${m}">${pctN(fb.avO)}</td><td class="num${m}">${pctN(fb.avL)}</td>`+
+    `<td class="num ${fb.d<0?'cr':'cg'}">${pp(-fb.d)}</td><td class="num ${fb.d<0?'cr':'cg'}">${fmtA(fb.imp)}</td>`;
+}
+function pacRow(model, p, P, remMonths, fixo){
+  const cells=remMonths.map(mo=>`<td class="num">-${fmt(P.orcMonth[mo]||0)}</td>`).join('');
+  const badge=fixo?`<span class="pill">fixo</span>`:'';
+  return `<tr class="pac-row ${Object.keys(P.contas).length?'':'no-drill'}" onclick="toggleDrill(this)">
+    <td class="conta">${p} ${badge}</td>
+    <td class="num">${pctN(P.avRef)}</td><td class="num">${pctN(P.avReal)}</td>
+    <td class="num ${P.dPp<0?'cr':'cg'}">${pp(-P.dPp)}</td>
+    <td class="num sep-l ${P.imp<0?'cr':'cg'}">${fmtA(P.imp)}</td>${cells.replace('<td class="num','<td class="num sep-l',1)}${fbCellsYtg(model,P.orcAcc,P.orcRemNet,P.realAcc,false)}</tr>`;
+}
+function ctaRow(model, p, cta, c, remMonths, fixo){
+  const cells=remMonths.map(mo=>`<td class="num">-${fmtA(c.orcMonth[mo]||0)}</td>`).join('');
+  const avR=model.rlRefOrc?c.orcAcc/model.rlRefOrc*100:0, avRe=model.rlReal?c.realAcc/model.rlReal*100:0, dp=avRe-avR;
+  return `<tr class="sub-row" data-pac="${p}">
+    <td class="conta">${contaLabel(cta)}</td>
+    <td class="num muted">${pctN(avR)}</td><td class="num muted">${pctN(avRe)}</td>
+    <td class="num ${dp<0?'cr':'cg'}">${pp(-dp)}</td>
+    <td class="num sep-l ${c.imp<0?'cr':'cg'}">${fmtA(c.imp)}</td>${cells.replace('<td class="num','<td class="num sep-l',1)}${fbCellsYtg(model,c.orcAcc,c.orcRemNet,c.realAcc,true)}</tr>`;
+}
+// colgroup ÚNICO de todas as tabelas (garante colunas alinhadas entre elas):
+// Pacotes 12% · 4 colunas YTD 6.2% · meses dividem o meio · 4 colunas 2026 6.2%
+function colGroup(nM){
+  const mW=((100-12-8*6.2)/nM).toFixed(2);
+  return `<colgroup><col style="width:12%">${'<col style="width:6.2%">'.repeat(4)}${(`<col style="width:${mW}%">`).repeat(nM)}${'<col style="width:6.2%">'.repeat(4)}</colgroup>`;
+}
+function tableShell(title, tag, sub, cols, rows, isCen, year){
+  const monthHead=cols.map(c=>`<th class="num">${c}</th>`).join('');
+  const firstMonth=monthHead.replace('<th class="num"','<th class="num sep-l"',1);
+  return `<div class="tbl-section">
+    <div class="tbl-title">Pacotes Frota · ${title}</div>
+    <div class="tbl-sub">${sub}</div>
+    <div class="tbl-wrap"><table class="dre">${colGroup(cols.length)}<thead>
+      <tr><th class="conta">Pacotes</th><th class="num">Orç - YTD</th><th class="num">Real - YTD</th><th class="num">Δ pp</th><th class="num sep-l">Impacto</th>${firstMonth}<th class="num sep-l">Orç - ${year}</th><th class="num">YTG</th><th class="num">Δ pp</th><th class="num">Impacto</th></tr>
+    </thead><tbody>${rows}</tbody></table></div></div>`;
+}
+function toggleDrill(tr){
+  if(tr.classList.contains('no-drill')) return;
+  tr.classList.toggle('open');
+  let n=tr.nextElementSibling;
+  while(n && n.classList.contains('sub-row')){ n.classList.toggle('show'); n=n.nextElementSibling; }
+}
+
+// ═══════════════════════════════════ ATUALIZAR ═══════════════════════════════════
+// ═══════════════════════════════════ FORECAST EDITÁVEL ═══════════════════════════════════
+let OV={}, recOV={};                       // overrides: OV[cta][mo]=custo(sinal) · recOV[mo]=receita(mód.)
+const FC_KEY='forecast_draft_v1';
+function saveDraft(){ try{ localStorage.setItem(FC_KEY, JSON.stringify({OV,recOV})); }catch(e){} }
+function loadDraft(){ try{ const d=JSON.parse(localStorage.getItem(FC_KEY)); if(d){ OV=d.OV||{}; recOV=d.recOV||{}; } }catch(e){} }
+function resetAll(){ if(!confirm('Descartar todas as edições e voltar ao orçado?')) return; OV={}; recOV={}; saveDraft(); atualizar(); }
+// aceita "-2.87 mi", "566k", "-2.870.000", "1234,56"
+function parseNum(raw){
+  if(raw==null) return null;
+  let t=String(raw).trim().toLowerCase().replace(/r\$|\s/g,''); if(t===''||t==='—') return null;
+  const neg=/^-/.test(t); t=t.replace(/^-/,''); let mult=1;
+  if(/bi$/.test(t)){mult=1e9;t=t.replace(/bi$/,'');}
+  else if(/mi$/.test(t)){mult=1e6;t=t.replace(/mi$/,'');}
+  else if(/mil$/.test(t)){mult=1e3;t=t.replace(/mil$/,'');}
+  else if(/k$/.test(t)){mult=1e3;t=t.replace(/k$/,'');}
+  if(mult!==1) t=t.replace(/\./g,'').replace(',','.');          // com sufixo: só vírgula é decimal
+  else if(t.includes(',')) t=t.replace(/\./g,'').replace(',','.'); // pt-BR: ponto=milhar
+  else t=t.replace(/\./g,'');
+  const n=parseFloat(t); if(isNaN(n)) return null; return (neg?-1:1)*n*mult;
+}
+const fcVal = (cta,c,mo)=>{ const o=OV[cta]; return (o&&o[mo]!=null)?+o[mo]:+(c.orcMonthNet[mo]||0); };
+const recVal = (model,mo)=>{ return (recOV[mo]!=null)?+recOV[mo]:+(model.recByMonth[mo]||0); };
+const ctaChanged = (cta,mo)=> !!(OV[cta]&&OV[cta][mo]!=null);
+
+function computeForecast(model){
+  const {remMonths, pacs, rlReal, rlRefOrc, recRem}=model;
+  let realAccCost=0, orcAccCost=0, orcRemNet=0;
+  PAC_ORDER.forEach(p=>{const P=pacs[p];if(P){realAccCost+=P.realAcc;orcAccCost+=P.orcAcc;orcRemNet+=P.orcRemNet;}});
+  let recRemF=0; remMonths.forEach(mo=>recRemF+=recVal(model,mo));
+  const recOrcYear=rlRefOrc+recRem, recProj0=rlReal+recRem, recProjF=rlReal+recRemF;
+  const per={}; let fcRemTot=0;
+  PAC_ORDER.forEach(p=>{ const P=pacs[p]; if(!P) return; const po={rem:0,month:{},contas:{},chMonth:{}};
+    Object.entries(P.contas).forEach(([cta,c])=>{ const co={month:{}};
+      remMonths.forEach(mo=>{ const v=fcVal(cta,c,mo); co.month[mo]=v; po.month[mo]=(po.month[mo]||0)+v; po.rem+=v; fcRemTot+=v; if(ctaChanged(cta,mo)) po.chMonth[mo]=true; });
+      po.contas[cta]=co;
+    });
+    po.avOrc  = recOrcYear? (P.orcAcc+P.orcRemNet)/recOrcYear*100 : 0;
+    po.avLand = recProjF? (P.realAcc+po.rem)/recProjF*100 : 0;
+    per[p]=po;
+  });
+  return { per,
+    avOrc:  recOrcYear?(orcAccCost+orcRemNet)/recOrcYear*100:0,
+    avNada: recProj0 ?(realAccCost+orcRemNet)/recProj0*100:0,
+    avFc:   recProjF ?(realAccCost+fcRemTot)/recProjF*100:0,
+    fcRemTot };
+}
+
+function renderCompare(model, F){
+  const dN=F.avNada-F.avOrc, dF=F.avFc-F.avOrc;
+  document.getElementById('fc-sub').textContent=`Ano ${model.year} · fechado até ${MESES[model.lrm-1]}/${String(model.year).slice(2)}. AV de custo projetada para o ano. Edite os meses abaixo e veja a aterrissagem mudar.`;
+  const cards=[
+    {l:'Orçado 2026', v:pctN(F.avOrc), m:'meta orçamentária'},
+    {l:'Se nada mudar', v:pctN(F.avNada), m:'gastando o orçado no restante', cls:dN<0?'cr':'cg'},
+    {l:'Seu Forecast', v:pctN(F.avFc), m:'com suas edições', hi:true},
+    {l:'Δ Forecast vs Orçado', v:pp(-dF), m:dF<0?'acima do orçado':'dentro do orçado', cls:dF<0?'cr':'cg'},
+  ];
+  document.getElementById('cmp-grid').innerHTML=cards.map(c=>`
+    <div class="cmp-card ${c.hi?'hi':''}">
+      <div class="cmp-label">${c.l}</div>
+      <div class="cmp-av ${c.cls||''}">${c.v}</div>
+      <div class="cmp-meta">${c.m}</div>
+    </div>`).join('');
+}
+
+function ecell(key, mo, val, changed){
+  return `<td class="num edit${changed?' changed':''}" data-k="${key}" data-mo="${mo}" data-raw="${Math.round(val)}" contenteditable="true">${fmt(val)}</td>`;
+}
+function tblForecast(model, F){
+  const {remMonths, year, pacs}=model;
+  const monthHead=remMonths.map(mo=>`<th class="num">${MESES[mo-1]}/${String(year).slice(2)}</th>`).join('').replace('<th class="num"','<th class="num sep-l"',1);
+  let rows='';
+  PAC_ORDER.forEach(p=>{ const P=pacs[p]; if(!P||(P.orcRem===0&&P.orcAcc===0&&P.imp===0)) return; const po=F.per[p];
+    const d=po.avLand-po.avOrc;
+    const cells=remMonths.map(mo=>ecell('pac|'+p, mo, po.month[mo]||0, !!po.chMonth[mo])).join('').replace('<td class="num','<td class="num sep-l',1);
+    rows+=`<tr class="pac-row ${Object.keys(P.contas).length?'':'no-drill'}" onclick="drillClick(event,this)">
+      <td class="conta">${p}</td>
+      <td class="num">${pctN(po.avOrc)}</td><td class="num">${pctN(po.avLand)}</td>
+      <td class="num ${d<0?'cr':'cg'}">${pp(-d)}</td>${cells}</tr>`;
+    Object.entries(P.contas).sort((a,b)=>a[1].imp-b[1].imp).forEach(([cta,c])=>{
+      if(c.orcRem===0&&c.orcAcc===0&&c.imp===0) return; const co=po.contas[cta];
+      const cc=remMonths.map(mo=>ecell('cta|'+cta, mo, co.month[mo]||0, ctaChanged(cta,mo))).join('').replace('<td class="num','<td class="num sep-l',1);
+      rows+=`<tr class="sub-row" data-pac="${p}"><td class="conta">${contaLabel(cta)}</td><td class="num muted">—</td><td class="num muted">—</td><td class="num muted">—</td>${cc}</tr>`;
+    });
+  });
+  const recCells=remMonths.map(mo=>ecell('rec', mo, recVal(model,mo), recOV[mo]!=null)).join('').replace('<td class="num','<td class="num sep-l',1);
+  rows+=`<tr class="rec-row"><td class="conta">Receita Líquida</td><td class="num muted">—</td><td class="num muted">—</td><td class="num muted">—</td>${recCells}</tr>`;
+  const totSigned=remMonths.map(mo=>{ let s=0; PAC_ORDER.forEach(p=>{ if(F.per[p]) s+=(F.per[p].month[mo]||0); }); return `<td class="num">${fmt(s)}</td>`; }).join('').replace('<td class="num','<td class="num sep-l',1);
+  rows+=`<tr class="total"><td class="conta">Total Frota</td><td class="num">${pctN(F.avOrc)}</td><td class="num">${pctN(F.avFc)}</td><td class="num ${(F.avFc-F.avOrc)<0?'cr':'cg'}">${pp(-(F.avFc-F.avOrc))}</td>${totSigned}</tr>`;
+  return `<div class="tbl-section">
+    <div class="tbl-title">Forecast por Pacote / Conta</div>
+    <div class="tbl-sub">Meses editáveis (custo negativo). Editar uma <b>conta</b> re-soma o pacote; editar um <b>pacote</b> rateia entre as contas. Δ pp = aterrissagem vs orçado (positivo = pior, vermelho).</div>
+    <div class="tbl-wrap"><table class="dre"><thead>
+      <tr><th class="conta">Pacotes</th><th class="num">Orç 2026</th><th class="num">FCT 2026</th><th class="num">Δ pp</th>${monthHead}</tr>
+    </thead><tbody>${rows}</tbody></table></div></div>`;
+}
+function drillClick(e,tr){ if(!e.target.closest('td.conta')) return; toggleDrill(tr); }
+function distributePac(pac, mo, newTotal){
+  const P=window._model&&window._model.pacs[pac]; if(!P) return;
+  const es=Object.entries(P.contas); if(!es.length) return;
+  let cur=0; const cv={}; es.forEach(([cta,c])=>{ const v=fcVal(cta,c,mo); cv[cta]=v; cur+=v; });
+  es.forEach(([cta,c])=>{ const share=cur!==0?cv[cta]/cur:1/es.length; (OV[cta]=OV[cta]||{})[mo]=newTotal*share; });
+}
+function applyEdit(td){
+  const k=td.dataset.k, mo=+td.dataset.mo, raw=+td.dataset.raw;
+  const parsed=parseNum(td.textContent); const val=(parsed==null)?raw:parsed;
+  if(k==='rec') recOV[mo]=Math.abs(val);
+  else if(k.slice(0,4)==='cta|') (OV[k.slice(4)]=OV[k.slice(4)]||{})[mo]=val;
+  else if(k.slice(0,4)==='pac|') distributePac(k.slice(4), mo, val);
+  saveDraft(); atualizar();
+}
+document.addEventListener('focusin', e=>{ const td=e.target.closest&&e.target.closest('td.edit'); if(!td) return; td.textContent=td.dataset.raw; const r=document.createRange(); r.selectNodeContents(td); const s=getSelection(); s.removeAllRanges(); s.addRange(r); });
+document.addEventListener('focusout', e=>{ const td=e.target.closest&&e.target.closest('td.edit'); if(td) applyEdit(td); });
+document.addEventListener('keydown', e=>{ if(e.key==='Enter'){ const td=e.target.closest&&e.target.closest('td.edit'); if(td){ e.preventDefault(); td.blur(); } } });
+
+function atualizar(){
+  refreshCascade();
+  const f=getF(); lastF=f;
+  const model=computeModel(f); window._model=model; window._rlRefOrc=model.rlRefOrc;
+  const F=computeForecast(model);
+  renderCompare(model,F);
+  document.getElementById('tables').innerHTML=tblForecast(model,F);
+  const now=new Date();
+  set('status-badge',`Atualizado ${now.toLocaleDateString('pt-BR')} ${now.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})}`);
+}
+
+// ═══════════════════════════════════ INIT / CACHE ═══════════════════════════════════
+const CACHE_KEY='bi_cache_ytg_v1', CACHE_TTL=60*60*1000;
+function loadCache(){ try{ const c=JSON.parse(localStorage.getItem(CACHE_KEY)); if(c&&c.rows&&c.t) return c; }catch(e){ localStorage.removeItem(CACHE_KEY); } return null; }
+function useRows(rows){ allRows=rows; if(allRows[0]&&typeof allRows[0][C.orc]==='string') allRows.shift(); populateFilters(allRows); atualizar(); }
+async function recarregar(){
+  set('status-badge','Carregando…');
+  try{ const {rows}=await fetchData(); try{ localStorage.setItem(CACHE_KEY,JSON.stringify({t:Date.now(),rows})); }catch(e){} useRows(rows); }
+  catch(e){ console.error(e); set('status-badge','Erro ao carregar dados'); }
+}
+async function init(){
+  loadDraft();
+  const c=loadCache();
+  if(c){ useRows(c.rows); if(Date.now()-c.t<CACHE_TTL){ const d=new Date(c.t); set('status-badge',`Atualizado ${d.toLocaleDateString('pt-BR')} ${d.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})} (cache)`); } else { await recarregar(); } }
+  else { await recarregar(); }
+  setInterval(recarregar,CACHE_TTL);
+}
+function initAccessLog(){
+  let name=localStorage.getItem('bi_user_name');
+  if(!name){ name=prompt('Qual é o seu nome?')||'Desconhecido'; localStorage.setItem('bi_user_name',name); }
+  const lastRaw=localStorage.getItem('bi_last_access');
+  if(lastRaw){ const d=new Date(lastRaw); const lastUser=localStorage.getItem('bi_last_user')||name; const badge=document.getElementById('access-badge');
+    if(badge){ badge.textContent=`Último acesso: ${d.toLocaleDateString('pt-BR')} ${d.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})} · ${lastUser}`; badge.style.display=''; } }
+  localStorage.setItem('bi_last_access',new Date().toISOString()); localStorage.setItem('bi_last_user',name);
+}
+// ═══════════════════════════════════ EXPORTAR PDF (padrão visao-financeira) ═══════════════════════════════════
+function _fmtFiltro(label, arr){ if(!arr||!arr.length) return `<b>${label}:</b> Todos`; return `<b>${label}:</b> ${arr.join(', ')}`; }
+function togglePdfMenu(e){ if(e) e.stopPropagation(); document.getElementById('pdfMenu').classList.toggle('open'); }
+document.addEventListener('click',e=>{ if(!e.target.closest('.pdf-wrap')){const m=document.getElementById('pdfMenu'); if(m)m.classList.remove('open');} });
+async function exportarPDF(mode){
+  const mn=document.getElementById('pdfMenu'); if(mn)mn.classList.remove('open');
+  if(typeof html2canvas==='undefined' || !window.jspdf){ alert('Biblioteca de PDF ainda carregando — tente de novo em instantes.'); return; }
+  const claro = mode!=='dark';
+  const btn=document.getElementById('pdfBtn');
+  const f=getF();
+  document.getElementById('rh-filtros').innerHTML='Filtros aplicados &nbsp; '+[
+    _fmtFiltro('Unidade',f.uni),_fmtFiltro('Projeto',f.nv3)
+  ].join(' &nbsp;·&nbsp; ');
+  const now=new Date();
+  document.getElementById('rh-meta').innerHTML=`Gerado em ${now.toLocaleDateString('pt-BR')} ${now.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})}<br>Gestão em Movimento · BI Frota`;
+  const temaOriginal=document.body.classList.contains('light-mode')?'light':'dark';
+  const temaAlvo=claro?'light':'dark';
+  if(temaOriginal!==temaAlvo) applyTheme(temaAlvo);
+  document.body.classList.add('exporting');
+  if(btn){ btn.disabled=true; const s=btn.querySelector('span'); if(s)s.textContent='Gerando…'; }
+  const ov=document.createElement('div'); ov.id='pdf-overlay';
+  ov.innerHTML='<div class="pdf-ov-box"><div class="pdf-ov-spin"></div>Gerando PDF…</div>';
+  document.body.appendChild(ov);
+  window.scrollTo(0,0);
+  const main=document.querySelector('main.main');
+  await new Promise(r=>setTimeout(r,500));
+  try{
+    const { jsPDF }=window.jspdf;
+    const PW=338.67, PH=190.5, m=9, uw=PW-2*m, uh=PH-2*m, gap=6;
+    const bg=claro?'#FFFFFF':'#0C1017';
+    const opts={scale:2,backgroundColor:bg,useCORS:true,logging:false,ignoreElements:el=>el.id==='pdf-overlay'};
+    const qa=s=>[...main.querySelectorAll(s)];
+    const slides=[];
+    const topo=[main.querySelector('#pdf-report-head'),main.querySelector('.bridge-title'),main.querySelector('.bridge-sub'),main.querySelector('.cmp-grid')].filter(Boolean);
+    if(topo.length) slides.push(topo);
+    qa('#tables > .tbl-section').forEach(t=>{ const prev=t.previousElementSibling; const grp=(prev&&prev.classList.contains('cen-title'))?[prev,t]:[t]; slides.push(grp); });
+    const COMP_W=2000, COMP_H=Math.round(COMP_W*PH/PW), ppm=COMP_W/PW;
+    let pdf=null;
+    for(const slide of slides){
+      const imgs=[];
+      for(const b of slide){
+        let o=opts;
+        if(b.classList.contains('tbl-section')){ const t=b.querySelector('table')||b; const ww=Math.max(1560,Math.min(3200,(t.scrollWidth||1560)+60)); o=Object.assign({},opts,{windowWidth:ww}); }
+        const c=await html2canvas(b,o);
+        imgs.push({canvas:c, nat:c.height*uw/c.width});
+      }
+      const natTotal=imgs.reduce((a,im)=>a+im.nat,0)+gap*(imgs.length-1);
+      const sf=Math.min(1, uh/natTotal);
+      const drawW=uw*sf, x=m+(uw-drawW)/2, g=gap*sf;
+      const grpH=imgs.reduce((a,im)=>a+im.nat*sf,0)+g*(imgs.length-1);
+      const hasHead=slide.some(b=>b.id==='pdf-report-head');
+      let y=hasHead?m:m+(uh-grpH)/2;
+      const cv=document.createElement('canvas'); cv.width=COMP_W; cv.height=COMP_H;
+      const cx=cv.getContext('2d');
+      cx.fillStyle=bg; cx.fillRect(0,0,COMP_W,COMP_H);
+      for(const im of imgs){ const h=im.nat*sf; cx.drawImage(im.canvas, x*ppm, y*ppm, drawW*ppm, h*ppm); y+=h+g; }
+      cx.fillStyle='#F97316'; cx.fillRect(PW*0.55*ppm, 0, PW*0.45*ppm, 5*ppm);
+      if(!pdf) pdf=new jsPDF({unit:'mm',orientation:'landscape',format:[PW,PH]});
+      else pdf.addPage([PW,PH],'landscape');
+      pdf.addImage(cv.toDataURL('image/jpeg',0.92),'JPEG',0,0,PW,PH);
+    }
+    pdf.save(`Forecast_${claro?'claro':'escuro'}_${now.toISOString().slice(0,10)}.pdf`);
+  }catch(e){ console.error(e); alert('Erro ao gerar PDF: '+(e&&e.message||e)); }
+  finally{
+    ov.remove();
+    document.body.classList.remove('exporting');
+    if(btn){ btn.disabled=false; const s=btn.querySelector('span'); if(s)s.textContent='PDF'; }
+    if(temaOriginal!==temaAlvo) applyTheme(temaOriginal);
+  }
+}
+document.addEventListener('DOMContentLoaded',()=>{initAccessLog();init();});
+// ── tema ──
+const _sun=`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>`;
+const _moon=`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>`;
+function applyTheme(t){ document.body.classList.toggle('light-mode',t==='light'); localStorage.setItem('bi_theme',t); const b=document.getElementById('themeBtn'); if(b) b.innerHTML=t==='light'?_moon:_sun; }
+(function(){ const t=localStorage.getItem('bi_theme')||'dark'; applyTheme(t); document.getElementById('themeBtn').addEventListener('click',()=>applyTheme(document.body.classList.contains('light-mode')?'dark':'light')); })();
+</script>
+</body>
+</html>
