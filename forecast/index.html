@@ -9,6 +9,7 @@
 <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.2/dist/jspdf.umd.min.js"></script>
 <script src="../assets/excel-export.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
 :root{
   --bg:#0C1017;--card:#141B26;--card2:#1A2335;--border:#1E2D40;
@@ -179,6 +180,14 @@ body.light-mode table.dre tr.total td{background:#F0F0F0;}
 .fc-hint{font-size:11px;color:var(--text3);font-style:italic;}
 .fc-btn{background:rgba(249,115,22,.15);border:1px solid rgba(249,115,22,.3);border-radius:4px;padding:5px 12px;cursor:pointer;color:var(--orange);font-family:'Montserrat',sans-serif;font-size:11px;font-weight:800;letter-spacing:.5px;}
 .fc-btn:hover{background:rgba(249,115,22,.32);}
+.fc-btn.ghost{background:transparent;border-color:#2a3a50;color:var(--text2);padding:5px 9px;}
+.fc-btn.ghost:hover{border-color:var(--orange);color:var(--orange);}
+.fc-btn.ghost.danger:hover{border-color:var(--red);color:var(--red);}
+.fc-scen{display:flex;align-items:center;gap:6px;flex-wrap:wrap;}
+#fc-list,#fc-name{background:#0a0f18;color:var(--text);border:1px solid #2a3a50;border-radius:4px;font-family:'Montserrat',sans-serif;font-size:11px;font-weight:600;padding:5px 8px;outline:none;}
+#fc-list{min-width:200px;max-width:300px;}
+#fc-name{min-width:150px;}
+#fc-list:focus,#fc-name:focus{border-color:var(--orange);}
 table.dre td.edit{cursor:text;}
 table.dre td.edit:hover{background:rgba(56,189,248,.08);}
 table.dre td.edit:focus{outline:1.5px solid var(--blue);background:rgba(56,189,248,.14);border-radius:2px;}
@@ -279,8 +288,19 @@ body.light-mode table.dre tbody tr{border-bottom:1px solid rgba(0,0,0,.06);}
 
   <!-- ── TOOLBAR ── -->
   <div class="fc-toolbar">
-    <span class="fc-hint" id="fc-hint">Edite os meses (jun→dez) por conta ou pacote. Rascunho salvo automaticamente neste navegador.</span>
-    <button class="fc-btn" onclick="resetAll()" title="Volta tudo ao orçado">↺ Resetar tudo</button>
+    <div class="fc-scen">
+      <select id="fc-list" title="Cenários salvos"><option value="">— Cenários salvos —</option></select>
+      <button class="fc-btn" onclick="loadScenario()">Carregar</button>
+      <button class="fc-btn ghost" onclick="renameScenario()" title="Renomear">✎</button>
+      <button class="fc-btn ghost" onclick="dupScenario()" title="Duplicar">⎘</button>
+      <button class="fc-btn ghost danger" onclick="delScenario()" title="Excluir">🗑</button>
+    </div>
+    <div class="fc-scen">
+      <input id="fc-name" placeholder="Nome do cenário…" maxlength="60">
+      <button class="fc-btn" onclick="saveScenario()" title="Publicar cenário no Supabase">💾 Salvar</button>
+      <button class="fc-btn ghost" onclick="resetAll()" title="Volta tudo ao orçado">↺ Resetar</button>
+    </div>
+    <span class="fc-hint" id="fc-hint">Rascunho salvo neste navegador. Dê um nome e “Salvar” para publicar o cenário.</span>
   </div>
 
   <!-- ── TABELA EDITÁVEL ── -->
@@ -1072,6 +1092,63 @@ document.addEventListener('focusin', e=>{ const td=e.target.closest&&e.target.cl
 document.addEventListener('focusout', e=>{ const td=e.target.closest&&e.target.closest('td.edit'); if(td) applyEdit(td); });
 document.addEventListener('keydown', e=>{ if(e.key==='Enter'){ const td=e.target.closest&&e.target.closest('td.edit'); if(td){ e.preventDefault(); td.blur(); } } });
 
+// ── Cenários salvos (Supabase; sessão vem do login do hub) ──
+const SB_URL='https://lozwipoeacpvplgkrxkq.supabase.co';
+const SB_KEY='sb_publishable_ggKEEebc5zjgQDVsF92Upw_6uoLmKe9';
+let SB=null, ME=null, SCEN=[];
+function initSB(){ try{ if(window.supabase) SB=window.supabase.createClient(SB_URL,SB_KEY); }catch(e){ console.error(e); } }
+async function whoami(){ if(!SB) return; try{ const {data}=await SB.auth.getUser(); ME=(data&&data.user)?data.user.email:null; }catch(e){} }
+function scenHint(msg){ const h=document.getElementById('fc-hint'); if(h) h.textContent=msg; }
+async function loadScenarios(){
+  if(!SB) return;
+  try{
+    const {data,error}=await SB.from('forecast_scenarios').select('id,nome,autor_email,ano,atualizado_em').order('atualizado_em',{ascending:false});
+    if(error){ console.error(error); return; }
+    SCEN=data||[]; const sel=document.getElementById('fc-list'); if(!sel) return;
+    sel.innerHTML='<option value="">— Cenários salvos —</option>'+SCEN.map(s=>`<option value="${s.id}">${s.nome} · ${(s.autor_email||'').split('@')[0]} · ${new Date(s.atualizado_em).toLocaleDateString('pt-BR')}</option>`).join('');
+  }catch(e){ console.error(e); }
+}
+async function saveScenario(){
+  if(!SB){ alert('Supabase indisponível.'); return; }
+  if(!ME){ alert('Faça login no portal (hub) para salvar cenários.'); return; }
+  const nome=((document.getElementById('fc-name')||{}).value||'').trim(); if(!nome){ alert('Dê um nome ao cenário.'); return; }
+  const f=getF();
+  const row={nome, autor_email:ME, ano:(window._model?window._model.year:null), filtros:{uni:f.uni,nv3:f.nv3}, overrides:{OV,recOV}};
+  const {error}=await SB.from('forecast_scenarios').insert(row);
+  if(error){ alert('Erro ao salvar: '+error.message); return; }
+  document.getElementById('fc-name').value=''; await loadScenarios(); scenHint(`Cenário "${nome}" salvo.`);
+}
+async function loadScenario(){
+  const sel=document.getElementById('fc-list'), id=sel&&sel.value; if(!id){ alert('Selecione um cenário.'); return; }
+  const {data,error}=await SB.from('forecast_scenarios').select('overrides,nome').eq('id',id).single();
+  if(error){ alert('Erro ao carregar: '+error.message); return; }
+  const ov=data.overrides||{}; OV=ov.OV||{}; recOV=ov.recOV||{}; saveDraft(); atualizar();
+  const nm=document.getElementById('fc-name'); if(nm) nm.value=data.nome||''; scenHint(`Cenário "${data.nome}" carregado.`);
+}
+async function renameScenario(){
+  const sel=document.getElementById('fc-list'), id=sel&&sel.value; if(!id){ alert('Selecione um cenário.'); return; }
+  const cur=SCEN.find(s=>s.id===id), nn=((prompt('Novo nome:',cur?cur.nome:''))||'').trim(); if(!nn) return;
+  const {error}=await SB.from('forecast_scenarios').update({nome:nn,atualizado_em:new Date().toISOString()}).eq('id',id);
+  if(error){ alert('Só o dono ou admin pode renomear. '+error.message); return; }
+  await loadScenarios();
+}
+async function dupScenario(){
+  const sel=document.getElementById('fc-list'), id=sel&&sel.value; if(!id){ alert('Selecione um cenário.'); return; }
+  if(!ME){ alert('Faça login para duplicar.'); return; }
+  const {data,error}=await SB.from('forecast_scenarios').select('nome,ano,filtros,overrides').eq('id',id).single();
+  if(error){ alert('Erro: '+error.message); return; }
+  const {error:e2}=await SB.from('forecast_scenarios').insert({nome:(data.nome||'Cenário')+' (cópia)', autor_email:ME, ano:data.ano, filtros:data.filtros, overrides:data.overrides});
+  if(e2){ alert('Erro: '+e2.message); return; }
+  await loadScenarios();
+}
+async function delScenario(){
+  const sel=document.getElementById('fc-list'), id=sel&&sel.value; if(!id){ alert('Selecione um cenário.'); return; }
+  const cur=SCEN.find(s=>s.id===id); if(!confirm(`Excluir "${cur?cur.nome:''}"?`)) return;
+  const {error}=await SB.from('forecast_scenarios').delete().eq('id',id);
+  if(error){ alert('Só o dono ou admin pode excluir. '+error.message); return; }
+  await loadScenarios();
+}
+
 function atualizar(){
   refreshCascade();
   const f=getF(); lastF=f;
@@ -1093,7 +1170,7 @@ async function recarregar(){
   catch(e){ console.error(e); set('status-badge','Erro ao carregar dados'); }
 }
 async function init(){
-  loadDraft();
+  loadDraft(); initSB(); whoami().then(loadScenarios);
   const c=loadCache();
   if(c){ useRows(c.rows); if(Date.now()-c.t<CACHE_TTL){ const d=new Date(c.t); set('status-badge',`Atualizado ${d.toLocaleDateString('pt-BR')} ${d.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})} (cache)`); } else { await recarregar(); } }
   else { await recarregar(); }
