@@ -501,33 +501,38 @@ function computeModel(f){
     impByCta[cta]={orcAcc:d.orc, realAcc:d.real, avRef, avReal, dPp:avReal-avRef, imp:(avReal-avRef)/100*rlReal};
   });
 
-  // orçado por conta nos meses que faltam (para pesos) e por mês
-  const orcRemByCta={};   // conta → total orçado (abs) dos meses que faltam
-  const orcByCtaMonth={}; // conta → {mo: orçado abs}
+  // orçado por conta nos meses que faltam: abs (pesos/exibição) + net com sinal (projeção AV)
+  const orcRemByCta={};    // conta → total orçado (abs) dos meses que faltam
+  const orcRemNetByCta={}; // conta → total orçado (com sinal) dos meses que faltam
+  const orcByCtaMonth={};  // conta → {mo: orçado abs}
   remMonths.forEach(mo=>{
     const mRows=rowsMonth(mo), byC=sumBy(mRows, r=>r[C.cta]);
     Object.entries(byC).forEach(([cta,d])=>{
       const a=Math.abs(d.orc);
       orcRemByCta[cta]=(orcRemByCta[cta]||0)+a;
+      orcRemNetByCta[cta]=(orcRemNetByCta[cta]||0)+d.orc;
       (orcByCtaMonth[cta]=orcByCtaMonth[cta]||{})[mo]=a;
     });
   });
 
   // agrupa contas por pacote YTG
   const ctaPac = cta => PAC_YTG[cta]||'Outros';
-  const pacs={};   // pacote → {imp, orcAcc, realAcc, avRef, avReal, dPp, contas:{cta:{...}}, orcRem, orcMonth:{mo}}
-  PAC_ORDER.forEach(p=>pacs[p]={imp:0,orcAcc:0,realAcc:0,contas:{},orcRem:0,orcMonth:{}});
+  const mkP=()=>({imp:0,orcAcc:0,realAcc:0,contas:{},orcRem:0,orcRemNet:0,orcMonth:{}});
+  const mkC=()=>({imp:0,orcAcc:0,realAcc:0,orcRem:0,orcRemNet:0,orcMonth:{}});
+  const pacs={};   // pacote → {imp, orcAcc, realAcc, avRef, avReal, dPp, contas, orcRem(abs), orcRemNet(sinal), orcMonth}
+  PAC_ORDER.forEach(p=>pacs[p]=mkP());
   // impacto/acumulado
   Object.entries(impByCta).forEach(([cta,d])=>{
-    const p=ctaPac(cta); if(!pacs[p]) pacs[p]={imp:0,orcAcc:0,realAcc:0,contas:{},orcRem:0,orcMonth:{}};
+    const p=ctaPac(cta); if(!pacs[p]) pacs[p]=mkP();
     pacs[p].imp+=d.imp; pacs[p].orcAcc+=d.orcAcc; pacs[p].realAcc+=d.realAcc;
-    const c=pacs[p].contas[cta]=pacs[p].contas[cta]||{imp:0,orcAcc:0,realAcc:0,orcRem:0,orcMonth:{}};
+    const c=pacs[p].contas[cta]=pacs[p].contas[cta]||mkC();
     c.imp+=d.imp; c.orcAcc+=d.orcAcc; c.realAcc+=d.realAcc;
   });
   // orçado dos meses restantes (por pacote e conta)
   Object.entries(orcRemByCta).forEach(([cta,a])=>{
-    const p=ctaPac(cta); if(!pacs[p]) pacs[p]={imp:0,orcAcc:0,realAcc:0,contas:{},orcRem:0,orcMonth:{}};
-    pacs[p].orcRem+=a; const c=pacs[p].contas[cta]=pacs[p].contas[cta]||{imp:0,orcAcc:0,realAcc:0,orcRem:0,orcMonth:{}}; c.orcRem+=a;
+    const p=ctaPac(cta); if(!pacs[p]) pacs[p]=mkP();
+    pacs[p].orcRem+=a; pacs[p].orcRemNet+=orcRemNetByCta[cta];
+    const c=pacs[p].contas[cta]=pacs[p].contas[cta]||mkC(); c.orcRem+=a; c.orcRemNet+=orcRemNetByCta[cta];
     Object.entries(orcByCtaMonth[cta]||{}).forEach(([mo,v])=>{ pacs[p].orcMonth[mo]=(pacs[p].orcMonth[mo]||0)+v; c.orcMonth[mo]=(c.orcMonth[mo]||0)+v; });
   });
   // AV por pacote (para colunas AV Orçado / AV Real / Δpp)
@@ -547,9 +552,9 @@ function computeCenario(model, cen){
   // = |impacto 2026 do YTG| (bloco final da tabela YTG, gastando o orçado no restante).
   // Base anual, não YTD: a receita acima do orçado dilui o AV, então o alvo anual difere do
   // impacto YTD. Fixos mantêm o orçado. FIXO nos dois cenários; muda só quem absorve (parts).
-  let orcAccT=0, orcRemT=0, realAccT=0;
-  PAC_ORDER.forEach(p=>{ const P=pacs[p]; if(P){ orcAccT+=P.orcAcc; orcRemT+=P.orcRem; realAccT+=P.realAcc; } });
-  const fb0=fbCalc(model, orcAccT, orcRemT, realAccT, 0);
+  let orcAccT=0, orcRemNetT=0, realAccT=0;
+  PAC_ORDER.forEach(p=>{ const P=pacs[p]; if(P){ orcAccT+=P.orcAcc; orcRemNetT+=P.orcRemNet; realAccT+=P.realAcc; } });
+  const fb0=fbCalc(model, orcAccT, orcRemNetT, realAccT, 0);
   let alvo=-fb0.imp; if(alvo<0) alvo=0;          // impacto projetado desfavorável (negativo) → alvo positivo
   // pesos
   let totOrcRem=0; parts.forEach(p=>{ if(pacs[p]) totOrcRem+=pacs[p].orcRem; });
@@ -663,7 +668,7 @@ function drawWf(model, cen, canvasId){
 function tblYTG(model){
   const {remMonths, year, pacs}=model;
   const cols=monthCols(remMonths, year);
-  let rows='', tImp=0, tOrcRem=0, tOrcAcc=0, tRealAcc=0, tMonth={}; remMonths.forEach(mo=>tMonth[mo]=0);
+  let rows='', tImp=0, tOrcRemNet=0, tOrcAcc=0, tRealAcc=0, tMonth={}; remMonths.forEach(mo=>tMonth[mo]=0);
   PAC_ORDER.forEach(p=>{
     const P=pacs[p]; if(!P) return; if(P.orcRem===0 && P.orcAcc===0 && P.imp===0) return;
     const fixo=FIXOS.includes(p);
@@ -673,12 +678,12 @@ function tblYTG(model){
       if(c.orcRem===0 && c.orcAcc===0 && c.imp===0) return;
       rows+=ctaRow(model, p, cta, c, remMonths, fixo);
     });
-    tImp+=P.imp; tOrcRem+=P.orcRem; tOrcAcc+=P.orcAcc; tRealAcc+=P.realAcc;
+    tImp+=P.imp; tOrcRemNet+=P.orcRemNet; tOrcAcc+=P.orcAcc; tRealAcc+=P.realAcc;
     remMonths.forEach(mo=>tMonth[mo]+=(P.orcMonth[mo]||0));
   });
   const totCells=remMonths.map(mo=>`<td class="num">-${fmtA(tMonth[mo])}</td>`).join('');
   const dTot=sumAvReal(model)-sumAvRef(model);
-  rows+=`<tr class="total"><td class="conta">Total Frota</td><td class="num">${pctN(sumAvRef(model))}</td><td class="num">${pctN(sumAvReal(model))}</td><td class="num ${dTot<0?'cr':'cg'}">${pp(dTot)}</td><td class="num sep-l ${tImp<0?'cr':'cg'}">${fmtA(tImp)}</td>${totCells.replace('<td class="num">','<td class="num sep-l">')}${fbCellsYtg(model,tOrcAcc,tOrcRem,tRealAcc,false)}</tr>`;
+  rows+=`<tr class="total"><td class="conta">Total Frota</td><td class="num">${pctN(sumAvRef(model))}</td><td class="num">${pctN(sumAvReal(model))}</td><td class="num ${dTot<0?'cr':'cg'}">${pp(dTot)}</td><td class="num sep-l ${tImp<0?'cr':'cg'}">${fmtA(tImp)}</td>${totCells.replace('<td class="num">','<td class="num sep-l">')}${fbCellsYtg(model,tOrcAcc,tOrcRemNet,tRealAcc,false)}</tr>`;
   return tableShell('YTG (Year To Go)', 'blue', 'Orçado puro dos meses a realizar — nenhum ajuste aplicado. AV / Impacto = acumulado do ano fechado.', cols, rows, false);
 }
 
@@ -752,7 +757,7 @@ function tblCenarioMerged(model, cen, titulo, sub){
   const partSet=new Set(cc.parts);
   const pctS = v => (v==null||!isFinite(v))?'—':v.toFixed(2)+'%';
   const monthHead=remMonths.map(mo=>`<th class="num">${MESES[mo-1]}/${String(year).slice(2)}</th>`).join('').replace('<th class="num"','<th class="num sep-l"',1);
-  const head=`<tr><th class="conta">Pacotes</th><th class="num">AV Orç - YTD</th><th class="num">AV Real - YTD</th><th class="num">Δ pp</th><th class="num sep-l">Impacto</th>${monthHead}<th class="num sep-l">AV Orç - 2026</th><th class="num">FCT - 2026</th><th class="num">Δ pp</th><th class="num">Impacto</th></tr>`;
+  const head=`<tr><th class="conta">Pacotes</th><th class="num">Orç - YTD</th><th class="num">Real - YTD</th><th class="num">Δ pp</th><th class="num sep-l">Impacto</th>${monthHead}<th class="num sep-l">Orç - 2026</th><th class="num">FCT - 2026</th><th class="num">Δ pp</th><th class="num">Impacto</th></tr>`;
   // bloco final 2026 (com economia aplicada): valores reais de Δpp/Impacto (Total fecha em 0)
   const fbCells=(orcAccS,orcRemAbs,realAccS,ecoAbs,muted)=>{
     const fb=fbCalc(model,orcAccS,orcRemAbs,realAccS,ecoAbs);
@@ -762,7 +767,7 @@ function tblCenarioMerged(model, cen, titulo, sub){
   };
 
   const buildRows=(kind)=>{   // kind: 'eco' | 'fct'
-    let rows='', tM={}; remMonths.forEach(mo=>tM[mo]=0); let tImp=0, tOrcAcc=0, tRealAcc=0, tOrcRem=0;
+    let rows='', tM={}; remMonths.forEach(mo=>tM[mo]=0); let tImp=0, tOrcAcc=0, tRealAcc=0, tOrcRemNet=0;
     PAC_ORDER.forEach(p=>{
       const P=pacs[p]; if(!P) return; if(P.orcRem===0&&P.orcAcc===0&&P.imp===0) return;
       const participa=partSet.has(p), po=participa?cc.out[p]:null;
@@ -774,12 +779,12 @@ function tblCenarioMerged(model, cen, titulo, sub){
         if(kind==='eco'&&!e) return `<td class="num muted">—</td>`;
         return `<td class="num">-${fmt(v)}</td>`;
       }).join('').replace('<td class="num','<td class="num sep-l',1);
-      tImp+=P.imp; tOrcAcc+=P.orcAcc; tRealAcc+=P.realAcc; tOrcRem+=P.orcRem;
+      tImp+=P.imp; tOrcAcc+=P.orcAcc; tRealAcc+=P.realAcc; tOrcRemNet+=P.orcRemNet;
       rows+=`<tr class="pac-row ${Object.keys(P.contas).length?'':'no-drill'}" onclick="toggleDrill(this)">
         <td class="conta">${p} ${tag}</td>
         <td class="num">${pctS(P.avRef)}</td><td class="num">${pctS(P.avReal)}</td>
         <td class="num ${P.dPp<0?'cr':'cg'}">${pp(P.dPp)}</td>
-        <td class="num sep-l ${P.imp<0?'cr':'cg'}">${fmtA(P.imp)}</td>${cells}${fbCells(P.orcAcc,P.orcRem,P.realAcc,eco,false)}</tr>`;
+        <td class="num sep-l ${P.imp<0?'cr':'cg'}">${fmtA(P.imp)}</td>${cells}${fbCells(P.orcAcc,P.orcRemNet,P.realAcc,eco,false)}</tr>`;
       Object.entries(P.contas).sort((a,b)=>a[1].imp-b[1].imp).forEach(([cta,c])=>{
         if(c.orcRem===0&&c.orcAcc===0&&c.imp===0) return;
         const co=po?po.contas[cta]:null;
@@ -793,14 +798,14 @@ function tblCenarioMerged(model, cen, titulo, sub){
           <td class="conta">${contaLabel(cta)}</td>
           <td class="num muted">${pctS(avR)}</td><td class="num muted">${pctS(avRe)}</td>
           <td class="num ${dp<0?'cr':'cg'}">${pp(dp)}</td>
-          <td class="num sep-l ${c.imp<0?'cr':'cg'}">${fmtA(c.imp)}</td>${cc2}${fbCells(c.orcAcc,c.orcRem,c.realAcc,co?co.economia:0,true)}</tr>`;
+          <td class="num sep-l ${c.imp<0?'cr':'cg'}">${fmtA(c.imp)}</td>${cc2}${fbCells(c.orcAcc,c.orcRemNet,c.realAcc,co?co.economia:0,true)}</tr>`;
       });
     });
     let orcPart=0; cc.parts.forEach(p=>{ if(pacs[p]) orcPart+=pacs[p].orcRem; });
     const esfTot=orcPart?cc.alvo/orcPart*100:0;
     const dTot=sumAvReal(model)-sumAvRef(model);
     const totCells=remMonths.map(mo=>`<td class="num">-${fmt(tM[mo])}</td>`).join('').replace('<td class="num','<td class="num sep-l',1);
-    rows+=`<tr class="total"><td class="conta">Total Frota <span class="esf-tag${esfTot>15?' hi':''}">esf. ${esfTot.toFixed(0)}%</span></td><td class="num">${pctS(sumAvRef(model))}</td><td class="num">${pctS(sumAvReal(model))}</td><td class="num ${dTot<0?'cr':'cg'}">${pp(dTot)}</td><td class="num sep-l ${tImp<0?'cr':'cg'}">${fmtA(tImp)}</td>${totCells}${fbCells(tOrcAcc,tOrcRem,tRealAcc,cc.alvo,false)}</tr>`;
+    rows+=`<tr class="total"><td class="conta">Total Frota <span class="esf-tag${esfTot>15?' hi':''}">esf. ${esfTot.toFixed(0)}%</span></td><td class="num">${pctS(sumAvRef(model))}</td><td class="num">${pctS(sumAvReal(model))}</td><td class="num ${dTot<0?'cr':'cg'}">${pp(dTot)}</td><td class="num sep-l ${tImp<0?'cr':'cg'}">${fmtA(tImp)}</td>${totCells}${fbCells(tOrcAcc,tOrcRemNet,tRealAcc,cc.alvo,false)}</tr>`;
     return rows;
   };
 
@@ -821,11 +826,12 @@ const fmtA  = v => fmt(Math.abs(+v||0));
 const ppA   = v => (v==null||!isFinite(v))?'—':Math.abs(v).toFixed(2)+' pp';
 function sumAvRef(model){ let o=0; PAC_ORDER.forEach(p=>{ if(model.pacs[p]) o+=model.pacs[p].orcAcc; }); return model.rlRefOrc?o/model.rlRefOrc*100:0; }
 function sumAvReal(model){ let o=0; PAC_ORDER.forEach(p=>{ if(model.pacs[p]) o+=model.pacs[p].realAcc; }); return model.rlReal?o/model.rlReal*100:0; }
-// projeção fim de ano: AV orçado 2026 × AV de aterrissagem (realizado acum + orçado restante − economia)
-function fbCalc(model, orcAccS, orcRemAbs, realAccS, ecoAbs){
+// projeção fim de ano — usa o orçado restante COM SINAL (net), p/ não inflar com créditos (ex.: ICMS).
+// orcRemNet é negativo (custo); economia (ecoAbs, positivo) reduz o custo → soma.
+function fbCalc(model, orcAccS, orcRemNet, realAccS, ecoAbs){
   const recOrcYear=model.rlRefOrc+model.recRem, recProj=model.rlReal+model.recRem;
-  const avO=recOrcYear?(orcAccS-orcRemAbs)/recOrcYear*100:0;              // AV orçado do ano (assinado, negativo)
-  const avL=recProj?((realAccS-(orcRemAbs-(ecoAbs||0)))/recProj*100):0;   // AV de aterrissagem
+  const avO=recOrcYear?(orcAccS+orcRemNet)/recOrcYear*100:0;                 // AV orçado do ano (assinado)
+  const avL=recProj?((realAccS+orcRemNet+(ecoAbs||0))/recProj*100):0;        // AV de aterrissagem
   const d=avL-avO;
   return {avO, avL, d, imp:d/100*recProj};
 }
@@ -845,7 +851,7 @@ function pacRow(model, p, P, remMonths, fixo){
     <td class="conta">${p} ${badge}</td>
     <td class="num">${pctN(P.avRef)}</td><td class="num">${pctN(P.avReal)}</td>
     <td class="num ${P.dPp<0?'cr':'cg'}">${pp(P.dPp)}</td>
-    <td class="num sep-l ${P.imp<0?'cr':'cg'}">${fmtA(P.imp)}</td>${cells.replace('<td class="num','<td class="num sep-l',1)}${fbCellsYtg(model,P.orcAcc,P.orcRem,P.realAcc,false)}</tr>`;
+    <td class="num sep-l ${P.imp<0?'cr':'cg'}">${fmtA(P.imp)}</td>${cells.replace('<td class="num','<td class="num sep-l',1)}${fbCellsYtg(model,P.orcAcc,P.orcRemNet,P.realAcc,false)}</tr>`;
 }
 function ctaRow(model, p, cta, c, remMonths, fixo){
   const cells=remMonths.map(mo=>`<td class="num">-${fmtA(c.orcMonth[mo]||0)}</td>`).join('');
@@ -854,7 +860,7 @@ function ctaRow(model, p, cta, c, remMonths, fixo){
     <td class="conta">${contaLabel(cta)}</td>
     <td class="num muted">${pctN(avR)}</td><td class="num muted">${pctN(avRe)}</td>
     <td class="num ${dp<0?'cr':'cg'}">${pp(dp)}</td>
-    <td class="num sep-l ${c.imp<0?'cr':'cg'}">${fmtA(c.imp)}</td>${cells.replace('<td class="num','<td class="num sep-l',1)}${fbCellsYtg(model,c.orcAcc,c.orcRem,c.realAcc,true)}</tr>`;
+    <td class="num sep-l ${c.imp<0?'cr':'cg'}">${fmtA(c.imp)}</td>${cells.replace('<td class="num','<td class="num sep-l',1)}${fbCellsYtg(model,c.orcAcc,c.orcRemNet,c.realAcc,true)}</tr>`;
 }
 // colgroup ÚNICO de todas as tabelas (garante colunas alinhadas entre elas):
 // Pacotes 12% · 4 colunas YTD 6.2% · meses dividem o meio · 4 colunas 2026 6.2%
@@ -869,7 +875,7 @@ function tableShell(title, tag, sub, cols, rows, isCen){
     <div class="tbl-title">Pacotes Frota · ${title}</div>
     <div class="tbl-sub">${sub}</div>
     <div class="tbl-wrap"><table class="dre">${colGroup(cols.length)}<thead>
-      <tr><th class="conta">Pacotes</th><th class="num">AV Orç - YTD</th><th class="num">AV Real - YTD</th><th class="num">Δ pp</th><th class="num sep-l">Impacto</th>${firstMonth}<th class="num sep-l">AV Orç - 2026</th><th class="num">AV YTG</th><th class="num">Δ pp</th><th class="num">Impacto</th></tr>
+      <tr><th class="conta">Pacotes</th><th class="num">Orç - YTD</th><th class="num">Real - YTD</th><th class="num">Δ pp</th><th class="num sep-l">Impacto</th>${firstMonth}<th class="num sep-l">Orç - 2026</th><th class="num">YTG</th><th class="num">Δ pp</th><th class="num">Impacto</th></tr>
     </thead><tbody>${rows}</tbody></table></div></div>`;
 }
 function toggleDrill(tr){
