@@ -6,6 +6,9 @@
 <title>YTG + Target — Frota</title>
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.2/dist/jspdf.umd.min.js"></script>
+<script src="../assets/excel-export.js"></script>
 <style>
 :root{
   --bg:#0C1017;--card:#141B26;--card2:#1A2335;--border:#1E2D40;
@@ -66,6 +69,34 @@ body{
 .refresh-btn:hover,.theme-btn:hover{background:rgba(249,115,22,.32);}
 .back-btn{background:rgba(249,115,22,.15);border:1px solid rgba(249,115,22,.3);border-radius:4px;padding:4px 8px;display:flex;align-items:center;color:var(--orange);text-decoration:none;}
 .back-btn:hover{background:rgba(249,115,22,.32);}
+/* ══ PDF EXPORT ══ */
+.pdf-btn{display:flex;align-items:center;gap:5px;background:rgba(249,115,22,.15);border:1px solid rgba(249,115,22,.3);border-radius:4px;padding:5px 9px;cursor:pointer;color:var(--orange);font-family:'Montserrat',sans-serif;font-size:11px;font-weight:800;letter-spacing:.5px;}
+.pdf-btn:hover{background:rgba(249,115,22,.32);}
+.pdf-btn:disabled{opacity:.55;cursor:default;}
+.pdf-wrap{position:relative;}
+.pdf-menu{display:none;position:absolute;top:calc(100% + 4px);right:0;z-index:600;flex-direction:column;background:#0f1824;border:1px solid #2a3a50;border-radius:6px;overflow:hidden;box-shadow:0 8px 24px rgba(0,0,0,.7);min-width:118px;}
+.pdf-menu.open{display:flex;}
+.pdf-menu button{background:none;border:none;color:var(--text);font-family:'Montserrat',sans-serif;font-size:11px;font-weight:700;text-align:left;padding:8px 12px;cursor:pointer;}
+.pdf-menu button:hover{background:rgba(249,115,22,.18);color:var(--orange);}
+#pdf-overlay{position:fixed;inset:0;z-index:9999;background:rgba(8,11,16,.82);backdrop-filter:blur(3px);display:flex;align-items:center;justify-content:center;}
+#pdf-overlay .pdf-ov-box{display:flex;flex-direction:column;align-items:center;gap:14px;color:#F1F5F9;font-family:'Montserrat',sans-serif;font-size:14px;font-weight:700;letter-spacing:.5px;}
+#pdf-overlay .pdf-ov-spin{width:34px;height:34px;border:3px solid rgba(249,115,22,.25);border-top-color:#F97316;border-radius:50%;animation:pdfspin .8s linear infinite;}
+@keyframes pdfspin{to{transform:rotate(360deg);}}
+#pdf-report-head{display:none;}
+body.exporting #pdf-report-head{display:block;background:#FFFFFF;color:#111;padding:0 0 6px;margin-bottom:10px;}
+body.exporting:not(.light-mode) #pdf-report-head{background:#0C1017;color:#F1F5F9;}
+body.exporting:not(.light-mode) #pdf-report-head .rh-title{color:#FFFFFF;}
+body.exporting:not(.light-mode) #pdf-report-head .rh-sub,body.exporting:not(.light-mode) #pdf-report-head .rh-meta{color:#94A3B8;}
+body.exporting:not(.light-mode) #pdf-report-head .rh-filtros{color:#CBD5E1;}
+body.exporting:not(.light-mode) main.main{background:#0C1017;padding:16px;border-radius:8px;}
+body.exporting:not(.light-mode) .wf-card,body.exporting:not(.light-mode) .tbl-section{background:#141B26!important;backdrop-filter:none!important;-webkit-backdrop-filter:none!important;}
+#pdf-report-head .rh-top{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;}
+#pdf-report-head .rh-title{font-size:30px;font-weight:800;color:#0C1017;letter-spacing:.3px;}
+#pdf-report-head .rh-sub{font-size:11px;color:#555;margin-top:2px;font-weight:600;}
+#pdf-report-head .rh-meta{font-size:10px;color:#555;text-align:right;font-weight:600;line-height:1.5;}
+#pdf-report-head .rh-filtros{margin-top:10px;font-size:10.5px;color:#222;line-height:1.6;}
+#pdf-report-head .rh-filtros b{color:#F97316;}
+body.exporting .wf-card,body.exporting .tbl-section,body.exporting .wf-grid,body.exporting .cen-grid{break-inside:avoid;page-break-inside:avoid;}
 /* ══ MAIN ══ */
 .main{padding:20px 24px;}
 /* ══ BRIDGE (gap-to-target) ══ */
@@ -183,6 +214,16 @@ body.light-mode table.dre tbody tr{border-bottom:1px solid rgba(0,0,0,.06);}
   </div>
   <div class="header-right">
     <a href="../visao-financeira/" class="back-btn" title="Voltar à Visão Financeira"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg></a>
+    <div class="pdf-wrap">
+      <button class="pdf-btn" id="pdfBtn" onclick="togglePdfMenu(event)" title="Exportar relatório PDF (estado filtrado)">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><polyline points="9 15 12 18 15 15"/></svg>
+        <span>PDF</span>
+      </button>
+      <div class="pdf-menu" id="pdfMenu">
+        <button onclick="exportarPDF('light')">☀ Claro</button>
+        <button onclick="exportarPDF('dark')">🌙 Escuro</button>
+      </div>
+    </div>
     <button class="theme-btn" id="themeBtn" title="Modo claro/escuro"></button>
     <button class="refresh-btn" onclick="recarregar()" title="Atualizar dados">
       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
@@ -200,6 +241,17 @@ body.light-mode table.dre tbody tr{border-bottom:1px solid rgba(0,0,0,.06);}
 </header>
 
 <main class="main">
+
+  <div id="pdf-report-head">
+    <div class="rh-top">
+      <div>
+        <div class="rh-title">Gestão em Movimento · YTG + Target</div>
+        <div class="rh-sub">Year To Go &amp; Target — Frota</div>
+      </div>
+      <div class="rh-meta" id="rh-meta"></div>
+    </div>
+    <div class="rh-filtros" id="rh-filtros"></div>
+  </div>
 
   <!-- ── CASCATA DO REORÇAMENTO (2 cenários lado a lado) ── -->
   <div class="bridge-title">Análise de Cenários — Bridge</div>
@@ -925,6 +977,76 @@ function initAccessLog(){
   if(lastRaw){ const d=new Date(lastRaw); const lastUser=localStorage.getItem('bi_last_user')||name; const badge=document.getElementById('access-badge');
     if(badge){ badge.textContent=`Último acesso: ${d.toLocaleDateString('pt-BR')} ${d.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})} · ${lastUser}`; badge.style.display=''; } }
   localStorage.setItem('bi_last_access',new Date().toISOString()); localStorage.setItem('bi_last_user',name);
+}
+// ═══════════════════════════════════ EXPORTAR PDF (padrão visao-financeira) ═══════════════════════════════════
+function _fmtFiltro(label, arr){ if(!arr||!arr.length) return `<b>${label}:</b> Todos`; return `<b>${label}:</b> ${arr.join(', ')}`; }
+function togglePdfMenu(e){ if(e) e.stopPropagation(); document.getElementById('pdfMenu').classList.toggle('open'); }
+document.addEventListener('click',e=>{ if(!e.target.closest('.pdf-wrap')){const m=document.getElementById('pdfMenu'); if(m)m.classList.remove('open');} });
+async function exportarPDF(mode){
+  const mn=document.getElementById('pdfMenu'); if(mn)mn.classList.remove('open');
+  if(typeof html2canvas==='undefined' || !window.jspdf){ alert('Biblioteca de PDF ainda carregando — tente de novo em instantes.'); return; }
+  const claro = mode!=='dark';
+  const btn=document.getElementById('pdfBtn');
+  const f=getF();
+  document.getElementById('rh-filtros').innerHTML='Filtros aplicados &nbsp; '+[
+    _fmtFiltro('Unidade',f.uni),_fmtFiltro('Projeto',f.nv3)
+  ].join(' &nbsp;·&nbsp; ');
+  const now=new Date();
+  document.getElementById('rh-meta').innerHTML=`Gerado em ${now.toLocaleDateString('pt-BR')} ${now.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})}<br>Gestão em Movimento · BI Frota`;
+  const temaOriginal=document.body.classList.contains('light-mode')?'light':'dark';
+  const temaAlvo=claro?'light':'dark';
+  if(temaOriginal!==temaAlvo) applyTheme(temaAlvo);
+  document.body.classList.add('exporting');
+  if(btn){ btn.disabled=true; const s=btn.querySelector('span'); if(s)s.textContent='Gerando…'; }
+  const ov=document.createElement('div'); ov.id='pdf-overlay';
+  ov.innerHTML='<div class="pdf-ov-box"><div class="pdf-ov-spin"></div>Gerando PDF…</div>';
+  document.body.appendChild(ov);
+  window.scrollTo(0,0);
+  const main=document.querySelector('main.main');
+  await new Promise(r=>setTimeout(r,500));
+  try{
+    const { jsPDF }=window.jspdf;
+    const PW=338.67, PH=190.5, m=9, uw=PW-2*m, uh=PH-2*m, gap=6;
+    const bg=claro?'#FFFFFF':'#0C1017';
+    const opts={scale:2,backgroundColor:bg,useCORS:true,logging:false,ignoreElements:el=>el.id==='pdf-overlay'};
+    const qa=s=>[...main.querySelectorAll(s)];
+    const slides=[];
+    const topo=[main.querySelector('#pdf-report-head'),main.querySelector('.bridge-title'),main.querySelector('.bridge-sub'),main.querySelector('.wf-summary'),main.querySelector('.wf-grid')].filter(Boolean);
+    if(topo.length) slides.push(topo);
+    qa('#tables > .tbl-section').forEach(t=>{ const prev=t.previousElementSibling; const grp=(prev&&prev.classList.contains('cen-title'))?[prev,t]:[t]; slides.push(grp); });
+    const COMP_W=2000, COMP_H=Math.round(COMP_W*PH/PW), ppm=COMP_W/PW;
+    let pdf=null;
+    for(const slide of slides){
+      const imgs=[];
+      for(const b of slide){
+        let o=opts;
+        if(b.classList.contains('tbl-section')){ const t=b.querySelector('table')||b; const ww=Math.max(1560,Math.min(3200,(t.scrollWidth||1560)+60)); o=Object.assign({},opts,{windowWidth:ww}); }
+        const c=await html2canvas(b,o);
+        imgs.push({canvas:c, nat:c.height*uw/c.width});
+      }
+      const natTotal=imgs.reduce((a,im)=>a+im.nat,0)+gap*(imgs.length-1);
+      const sf=Math.min(1, uh/natTotal);
+      const drawW=uw*sf, x=m+(uw-drawW)/2, g=gap*sf;
+      const grpH=imgs.reduce((a,im)=>a+im.nat*sf,0)+g*(imgs.length-1);
+      const hasHead=slide.some(b=>b.id==='pdf-report-head');
+      let y=hasHead?m:m+(uh-grpH)/2;
+      const cv=document.createElement('canvas'); cv.width=COMP_W; cv.height=COMP_H;
+      const cx=cv.getContext('2d');
+      cx.fillStyle=bg; cx.fillRect(0,0,COMP_W,COMP_H);
+      for(const im of imgs){ const h=im.nat*sf; cx.drawImage(im.canvas, x*ppm, y*ppm, drawW*ppm, h*ppm); y+=h+g; }
+      cx.fillStyle='#F97316'; cx.fillRect(PW*0.55*ppm, 0, PW*0.45*ppm, 5*ppm);
+      if(!pdf) pdf=new jsPDF({unit:'mm',orientation:'landscape',format:[PW,PH]});
+      else pdf.addPage([PW,PH],'landscape');
+      pdf.addImage(cv.toDataURL('image/jpeg',0.92),'JPEG',0,0,PW,PH);
+    }
+    pdf.save(`YTG-Target_${claro?'claro':'escuro'}_${now.toISOString().slice(0,10)}.pdf`);
+  }catch(e){ console.error(e); alert('Erro ao gerar PDF: '+(e&&e.message||e)); }
+  finally{
+    ov.remove();
+    document.body.classList.remove('exporting');
+    if(btn){ btn.disabled=false; const s=btn.querySelector('span'); if(s)s.textContent='PDF'; }
+    if(temaOriginal!==temaAlvo) applyTheme(temaOriginal);
+  }
 }
 document.addEventListener('DOMContentLoaded',()=>{initAccessLog();init();});
 // ── tema ──
