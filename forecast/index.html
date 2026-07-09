@@ -1008,21 +1008,24 @@ function computeForecast(model){
   PAC_ORDER.forEach(p=>{const P=pacs[p];if(P){realAccCost+=P.realAcc;orcAccCost+=P.orcAcc;orcRemNet+=P.orcRemNet;}});
   let recRemF=0; remMonths.forEach(mo=>recRemF+=recVal(model,mo));
   const recOrcYear=rlRefOrc+recRem, recProj0=rlReal+recRem, recProjF=rlReal+recRemF;
+  const AVo = x => recOrcYear? x/recOrcYear*100 : 0;   // AV do ano orçado
+  const AVl = x => recProjF ? x/recProjF*100 : 0;      // AV de aterrissagem (com edições)
   const per={}; let fcRemTot=0;
   PAC_ORDER.forEach(p=>{ const P=pacs[p]; if(!P) return; const po={rem:0,month:{},contas:{},chMonth:{}};
-    Object.entries(P.contas).forEach(([cta,c])=>{ const co={month:{}};
-      remMonths.forEach(mo=>{ const v=fcVal(cta,c,mo); co.month[mo]=v; po.month[mo]=(po.month[mo]||0)+v; po.rem+=v; fcRemTot+=v; if(ctaChanged(cta,mo)) po.chMonth[mo]=true; });
+    Object.entries(P.contas).forEach(([cta,c])=>{ const co={month:{},rem:0};
+      remMonths.forEach(mo=>{ const v=fcVal(cta,c,mo); co.month[mo]=v; co.rem+=v; po.month[mo]=(po.month[mo]||0)+v; po.rem+=v; fcRemTot+=v; if(ctaChanged(cta,mo)) po.chMonth[mo]=true; });
+      co.avYtdOrc=rlRefOrc?c.orcAcc/rlRefOrc*100:0; co.avYtdReal=rlReal?c.realAcc/rlReal*100:0;
+      co.avOrc=AVo(c.orcAcc+c.orcRemNet); co.avLand=AVl(c.realAcc+co.rem); co.dPp=co.avLand-co.avOrc; co.imp=co.dPp/100*recProjF;
       po.contas[cta]=co;
     });
-    po.avOrc  = recOrcYear? (P.orcAcc+P.orcRemNet)/recOrcYear*100 : 0;
-    po.avLand = recProjF? (P.realAcc+po.rem)/recProjF*100 : 0;
+    po.avYtdOrc=P.avRef; po.avYtdReal=P.avReal;
+    po.avOrc=AVo(P.orcAcc+P.orcRemNet); po.avLand=AVl(P.realAcc+po.rem); po.dPp=po.avLand-po.avOrc; po.imp=po.dPp/100*recProjF;
     per[p]=po;
   });
-  return { per,
-    avOrc:  recOrcYear?(orcAccCost+orcRemNet)/recOrcYear*100:0,
-    avNada: recProj0 ?(realAccCost+orcRemNet)/recProj0*100:0,
-    avFc:   recProjF ?(realAccCost+fcRemTot)/recProjF*100:0,
-    fcRemTot };
+  const avOrc=AVo(orcAccCost+orcRemNet), avNada=recProj0?(realAccCost+orcRemNet)/recProj0*100:0, avFc=AVl(realAccCost+fcRemTot);
+  return { per, avOrc, avNada, avFc,
+    impNada:(avNada-avOrc)/100*recProj0, impFc:(avFc-avOrc)/100*recProjF,
+    recYtdOrc:rlRefOrc, recYtdReal:rlReal, recOrcYear, recProjF, recRemF };
 }
 
 function renderCompare(model, F){
@@ -1030,9 +1033,9 @@ function renderCompare(model, F){
   document.getElementById('fc-sub').textContent=`Ano ${model.year} · fechado até ${MESES[model.lrm-1]}/${String(model.year).slice(2)}. AV de custo projetada para o ano. Edite os meses abaixo e veja a aterrissagem mudar.`;
   const cards=[
     {l:'Orçado 2026', v:pctN(F.avOrc), m:'meta orçamentária'},
-    {l:'Se nada mudar', v:pctN(F.avNada), m:'gastando o orçado no restante', cls:dN<0?'cr':'cg'},
+    {l:'Se nada mudar', v:pctN(F.avNada), m:`impacto ${fmtA(F.impNada)}`, cls:dN<0?'cr':'cg'},
     {l:'Seu Forecast', v:pctN(F.avFc), m:'com suas edições', hi:true},
-    {l:'Δ Forecast vs Orçado', v:pp(-dF), m:dF<0?'acima do orçado':'dentro do orçado', cls:dF<0?'cr':'cg'},
+    {l:'Δ Forecast vs Orçado', v:pp(-dF), m:`impacto ${fmtA(F.impFc)}`, cls:dF<0?'cr':'cg'},
   ];
   document.getElementById('cmp-grid').innerHTML=cards.map(c=>`
     <div class="cmp-card ${c.hi?'hi':''}">
@@ -1046,31 +1049,31 @@ function ecell(key, mo, val, changed){
   return `<td class="num edit${changed?' changed':''}" data-k="${key}" data-mo="${mo}" data-raw="${Math.round(val)}" contenteditable="true">${fmt(val)}</td>`;
 }
 function tblForecast(model, F){
-  const {remMonths, year, pacs}=model;
-  const monthHead=remMonths.map(mo=>`<th class="num">${MESES[mo-1]}/${String(year).slice(2)}</th>`).join('').replace('<th class="num"','<th class="num sep-l"',1);
-  let rows='';
+  const {remMonths, year, pacs}=model; const yy=String(year).slice(2);
+  const monthHead=remMonths.map(mo=>`<th class="num">${MESES[mo-1]}/${yy}</th>`).join('').replace('<th class="num"','<th class="num sep-l"',1);
+  const blockCols = (avO,avL,dPp,imp)=>`<td class="num sep-l">${pctN(avO)}</td><td class="num">${pctN(avL)}</td><td class="num ${dPp<0?'cr':'cg'}">${pp(-dPp)}</td><td class="num ${imp<0?'cr':'cg'}">${fmtA(imp)}</td>`;
+  // RECEITA no topo (valores em R$; AV não se aplica)
+  const recMonths=remMonths.map(mo=>ecell('rec', mo, recVal(model,mo), recOV[mo]!=null)).join('').replace('<td class="num','<td class="num sep-l',1);
+  let rows=`<tr class="rec-row"><td class="conta">Receita Líquida</td><td class="num">${fmtA(F.recYtdOrc)}</td><td class="num">${fmtA(F.recYtdReal)}</td>${recMonths}<td class="num sep-l">${fmtA(F.recOrcYear)}</td><td class="num">${fmtA(F.recProjF)}</td><td class="num muted">—</td><td class="num muted">—</td></tr>`;
+  // PACOTES + contas
   PAC_ORDER.forEach(p=>{ const P=pacs[p]; if(!P||(P.orcRem===0&&P.orcAcc===0&&P.imp===0)) return; const po=F.per[p];
-    const d=po.avLand-po.avOrc;
     const cells=remMonths.map(mo=>ecell('pac|'+p, mo, po.month[mo]||0, !!po.chMonth[mo])).join('').replace('<td class="num','<td class="num sep-l',1);
     rows+=`<tr class="pac-row ${Object.keys(P.contas).length?'':'no-drill'}" onclick="drillClick(event,this)">
       <td class="conta">${p}</td>
-      <td class="num">${pctN(po.avOrc)}</td><td class="num">${pctN(po.avLand)}</td>
-      <td class="num ${d<0?'cr':'cg'}">${pp(-d)}</td>${cells}</tr>`;
+      <td class="num">${pctN(po.avYtdOrc)}</td><td class="num">${pctN(po.avYtdReal)}</td>${cells}${blockCols(po.avOrc,po.avLand,po.dPp,po.imp)}</tr>`;
     Object.entries(P.contas).sort((a,b)=>a[1].imp-b[1].imp).forEach(([cta,c])=>{
       if(c.orcRem===0&&c.orcAcc===0&&c.imp===0) return; const co=po.contas[cta];
       const cc=remMonths.map(mo=>ecell('cta|'+cta, mo, co.month[mo]||0, ctaChanged(cta,mo))).join('').replace('<td class="num','<td class="num sep-l',1);
-      rows+=`<tr class="sub-row" data-pac="${p}"><td class="conta">${contaLabel(cta)}</td><td class="num muted">—</td><td class="num muted">—</td><td class="num muted">—</td>${cc}</tr>`;
+      rows+=`<tr class="sub-row" data-pac="${p}"><td class="conta">${contaLabel(cta)}</td><td class="num muted">${pctN(co.avYtdOrc)}</td><td class="num muted">${pctN(co.avYtdReal)}</td>${cc}${blockCols(co.avOrc,co.avLand,co.dPp,co.imp)}</tr>`;
     });
   });
-  const recCells=remMonths.map(mo=>ecell('rec', mo, recVal(model,mo), recOV[mo]!=null)).join('').replace('<td class="num','<td class="num sep-l',1);
-  rows+=`<tr class="rec-row"><td class="conta">Receita Líquida</td><td class="num muted">—</td><td class="num muted">—</td><td class="num muted">—</td>${recCells}</tr>`;
   const totSigned=remMonths.map(mo=>{ let s=0; PAC_ORDER.forEach(p=>{ if(F.per[p]) s+=(F.per[p].month[mo]||0); }); return `<td class="num">${fmt(s)}</td>`; }).join('').replace('<td class="num','<td class="num sep-l',1);
-  rows+=`<tr class="total"><td class="conta">Total Frota</td><td class="num">${pctN(F.avOrc)}</td><td class="num">${pctN(F.avFc)}</td><td class="num ${(F.avFc-F.avOrc)<0?'cr':'cg'}">${pp(-(F.avFc-F.avOrc))}</td>${totSigned}</tr>`;
+  rows+=`<tr class="total"><td class="conta">Total Frota</td><td class="num">${pctN(sumAvRef(model))}</td><td class="num">${pctN(sumAvReal(model))}</td>${totSigned}${blockCols(F.avOrc,F.avFc,F.avFc-F.avOrc,F.impFc)}</tr>`;
   return `<div class="tbl-section">
     <div class="tbl-title">Forecast por Pacote / Conta</div>
-    <div class="tbl-sub">Meses editáveis (custo negativo). Editar uma <b>conta</b> re-soma o pacote; editar um <b>pacote</b> rateia entre as contas. Δ pp = aterrissagem vs orçado (positivo = pior, vermelho).</div>
-    <div class="tbl-wrap"><table class="dre"><thead>
-      <tr><th class="conta">Pacotes</th><th class="num">Orç 2026</th><th class="num">FCT 2026</th><th class="num">Δ pp</th>${monthHead}</tr>
+    <div class="tbl-sub">Meses editáveis (custo negativo). Editar uma <b>conta</b> re-soma o pacote; editar um <b>pacote</b> rateia entre as contas. À direita: aterrissagem 2026 (Δ pp positivo = pior, vermelho).</div>
+    <div class="tbl-wrap"><table class="dre" style="table-layout:auto;min-width:100%;"><thead>
+      <tr><th class="conta">Pacotes</th><th class="num">Orç - YTD</th><th class="num">Real - YTD</th>${monthHead}<th class="num sep-l">Orç - ${year}</th><th class="num">FCT - ${year}</th><th class="num">Δ pp</th><th class="num">Impacto</th></tr>
     </thead><tbody>${rows}</tbody></table></div></div>`;
 }
 function drillClick(e,tr){ if(!e.target.closest('td.conta')) return; toggleDrill(tr); }
