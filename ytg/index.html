@@ -685,7 +685,7 @@ function tblYTG(model){
   const totCells=remMonths.map(mo=>`<td class="num">-${fmtA(tMonth[mo])}</td>`).join('');
   const dTot=sumAvReal(model)-sumAvRef(model);
   rows+=`<tr class="total"><td class="conta">Total Frota</td><td class="num">${pctN(sumAvRef(model))}</td><td class="num">${pctN(sumAvReal(model))}</td><td class="num ${dTot<0?'cr':'cg'}">${pp(-dTot)}</td><td class="num sep-l ${tImp<0?'cr':'cg'}">${fmtA(tImp)}</td>${totCells.replace('<td class="num">','<td class="num sep-l">')}${fbCellsYtg(model,tOrcAcc,tOrcRemNet,tRealAcc,false)}</tr>`;
-  return tableShell('YTG (Year To Go)', 'blue', 'Orçado puro dos meses a realizar — nenhum ajuste aplicado. AV / Impacto = acumulado do ano fechado.', cols, rows, false);
+  return tableShell('YTG (Year To Go)', 'blue', 'Orçado puro dos meses a realizar — nenhum ajuste aplicado. AV / Impacto = acumulado do ano fechado.', cols, rows, false, year);
 }
 
 // tabela Economia OU Forecast de um cenário
@@ -758,7 +758,7 @@ function tblCenarioMerged(model, cen, titulo, sub){
   const partSet=new Set(cc.parts);
   const pctS = v => (v==null||!isFinite(v))?'—':v.toFixed(2)+'%';
   const monthHead=remMonths.map(mo=>`<th class="num">${MESES[mo-1]}/${String(year).slice(2)}</th>`).join('').replace('<th class="num"','<th class="num sep-l"',1);
-  const head=`<tr><th class="conta">Pacotes</th><th class="num">Orç - YTD</th><th class="num">Real - YTD</th><th class="num">Δ pp</th><th class="num sep-l">Impacto</th>${monthHead}<th class="num sep-l">Orç - 2026</th><th class="num">TGT - 2026</th><th class="num">Δ pp</th><th class="num">Impacto</th></tr>`;
+  const head=`<tr><th class="conta">Pacotes</th><th class="num">Orç - YTD</th><th class="num">Real - YTD</th><th class="num">Δ pp</th><th class="num sep-l">Impacto</th>${monthHead}<th class="num sep-l">Orç - ${year}</th><th class="num">TGT - ${year}</th><th class="num">Δ pp</th><th class="num">Impacto</th></tr>`;
   // bloco final 2026 (com economia aplicada): valores reais de Δpp/Impacto (Total fecha em 0)
   const fbCells=(orcAccS,orcRemAbs,realAccS,ecoAbs,muted)=>{
     const fb=fbCalc(model,orcAccS,orcRemAbs,realAccS,ecoAbs);
@@ -869,14 +869,14 @@ function colGroup(nM){
   const mW=((100-12-8*6.2)/nM).toFixed(2);
   return `<colgroup><col style="width:12%">${'<col style="width:6.2%">'.repeat(4)}${(`<col style="width:${mW}%">`).repeat(nM)}${'<col style="width:6.2%">'.repeat(4)}</colgroup>`;
 }
-function tableShell(title, tag, sub, cols, rows, isCen){
+function tableShell(title, tag, sub, cols, rows, isCen, year){
   const monthHead=cols.map(c=>`<th class="num">${c}</th>`).join('');
   const firstMonth=monthHead.replace('<th class="num"','<th class="num sep-l"',1);
   return `<div class="tbl-section">
     <div class="tbl-title">Pacotes Frota · ${title}</div>
     <div class="tbl-sub">${sub}</div>
     <div class="tbl-wrap"><table class="dre">${colGroup(cols.length)}<thead>
-      <tr><th class="conta">Pacotes</th><th class="num">Orç - YTD</th><th class="num">Real - YTD</th><th class="num">Δ pp</th><th class="num sep-l">Impacto</th>${firstMonth}<th class="num sep-l">Orç - 2026</th><th class="num">YTG</th><th class="num">Δ pp</th><th class="num">Impacto</th></tr>
+      <tr><th class="conta">Pacotes</th><th class="num">Orç - YTD</th><th class="num">Real - YTD</th><th class="num">Δ pp</th><th class="num sep-l">Impacto</th>${firstMonth}<th class="num sep-l">Orç - ${year}</th><th class="num">YTG</th><th class="num">Δ pp</th><th class="num">Impacto</th></tr>
     </thead><tbody>${rows}</tbody></table></div></div>`;
 }
 function toggleDrill(tr){
