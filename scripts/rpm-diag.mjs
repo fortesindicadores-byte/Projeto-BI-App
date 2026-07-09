@@ -48,9 +48,34 @@ function parseCSV(text){
   if(cur!==''||row.length){ row.push(cur); rows.push(row); }
   return rows;
 }
-// lê a aba via CSV (o JSON do gviz trunca abas grandes; CSV traz tudo)
+// descobre o gid de cada aba a partir do HTML do workbook (gviz auto-detecta
+// só o primeiro bloco/tabela; o endpoint /export?format=csv&gid= traz a grade inteira)
+let _gids=null;
+async function loadGids(){
+  if(_gids)return _gids;
+  const res=await fetch(`https://docs.google.com/spreadsheets/d/${SID}/htmlview`);
+  const html=await res.text();
+  const map={};
+  // padrões: {"name":"Base RPM",...,"gid":"123456"} ou items=[{sheetName..., gid...}]
+  const re=/\{"[^{}]*?"name":"((?:[^"\\]|\\.)*)"[^{}]*?"gid":"(\d+)"|"gid":"(\d+)"[^{}]*?"name":"((?:[^"\\]|\\.)*)"/g;
+  let m;
+  while((m=re.exec(html))){
+    const name=(m[1]??m[4]); const gid=(m[2]??m[3]);
+    if(name!=null&&gid!=null) map[name.replace(/\\u002f/gi,'/').replace(/\\"/g,'"')]=gid;
+  }
+  _gids=map; return map;
+}
+// lê a aba INTEIRA via /export?format=csv&gid= (gviz trunca no primeiro bloco)
 async function gviz(tab){
-  const url=`https://docs.google.com/spreadsheets/d/${SID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(tab)}`;
+  const gids=await loadGids();
+  const gid=gids[tab];
+  let url;
+  if(gid!=null){
+    url=`https://docs.google.com/spreadsheets/d/${SID}/export?format=csv&gid=${gid}`;
+  }else{
+    console.log(`[aviso] gid de "${tab}" não encontrado; caindo para gviz. gids:`, JSON.stringify(gids).slice(0,300));
+    url=`https://docs.google.com/spreadsheets/d/${SID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(tab)}`;
+  }
   const res=await fetch(url); const raw=await res.text();
   const all=parseCSV(raw);
   const header=(all[0]||[]).map(s=>String(s).trim());
