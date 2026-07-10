@@ -1,0 +1,26 @@
+name: Ramos Fornecedor (CNPJ→CNAE)
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Gerar manutencao/ramos.json
+        run: node scripts/ramos-build.mjs
+      - name: Commit do mapa
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add manutencao/ramos.json
+          git commit -m "Ramos: atualiza mapa fornecedor->ramo (CNPJ/CNAE)" || echo "sem mudancas"
+          git push
