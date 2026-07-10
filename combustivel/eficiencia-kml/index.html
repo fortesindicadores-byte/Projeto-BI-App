@@ -48,6 +48,8 @@ body{background:radial-gradient(ellipse at 10% 25%,rgba(249,115,22,.06) 0%,trans
 .back-btn:hover{background:rgba(249,115,22,.32);}
 .main{padding:20px 24px;}
 .hero{display:flex;align-items:flex-end;margin-bottom:20px;}
+.rem-toggle-wrap{margin-left:auto;padding-bottom:16px;display:flex;flex-direction:column;align-items:flex-end;gap:5px;}
+.rem-toggle-lbl{font-size:9px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.8px;}
 .hero-main{padding:4px 0 16px;flex:0 0 auto;}
 .hero-label{font-size:10px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;}
 .hero-value{font-size:52px;font-weight:800;color:var(--text);line-height:1;}
@@ -127,6 +129,7 @@ body.light-mode table.dre thead tr.cols th{background:#F0F0F0;}
   /* Hero compacto */
   .hero{display:block;margin-bottom:14px;}
   .hero-main{padding:2px 0 0;}
+  .rem-toggle-wrap{align-items:flex-start;padding:10px 0 0;}
   .hero-value{font-size:34px;}
   .hero-rem{font-size:12px;margin-top:4px;}
   .hero-deltas{gap:10px 14px;margin-top:10px;}
@@ -242,6 +245,13 @@ body.light-mode table.dre thead tr.cols th{background:#F0F0F0;}
         <div class="hero-delta">Δ YTD<b id="h-ytd-v">—</b></div>
         <div class="hero-delta">Δ YTD %<b id="h-ytd-p">—</b></div>
         <div class="hero-delta">Impacto YTD<b id="h-ytd-imp">—</b></div>
+      </div>
+    </div>
+    <div class="rem-toggle-wrap">
+      <div class="rem-toggle-lbl">Benchmark remunerado</div>
+      <div class="dim-toggle">
+        <button class="dim-btn active" data-remmode="medio" onclick="setRemMode('medio')">Rem médio</button>
+        <button class="dim-btn" data-remmode="modelo" onclick="setRemMode('modelo')">Rem modelo (km)</button>
       </div>
     </div>
   </section>
@@ -382,7 +392,7 @@ const pctInt  = v => v==null||!isFinite(v)?'—':(+v>=0?'+':'')+Math.round(+v)+'
 const set     = (id,val) => { const e=document.getElementById(id);if(e)e.textContent=val; };
 const colI    = (el,bad) => { if(el)el.style.color=bad?'var(--red)':'var(--green)'; };
 
-let allRows=[], vigs=[], chKml=null, chProj=null, lastF=null, tableDim='uni';
+let allRows=[], vigs=[], chKml=null, chProj=null, lastF=null, tableDim='uni', remMode='medio';
 let _vigM1Done=false, _lastAnoKey='';
 let veiSort={col:'imp',asc:true}, veiCache=[];
 
@@ -562,12 +572,19 @@ function getYtdVigs(f){
 
 // ── AGREGAÇÃO ──
 function aggRows(rows){
-  let sumKm=0,sumLitros=0,sumRem=0,sumRsL=0,cnt=0;
+  // remMode='medio' (OFICIAL): média simples do rem médio (col rem).
+  // remMode='modelo': rem MODELO ponderado pelo KM RODADO
+  //   (ex.: placa A rem 2 · 100km e B rem 3 · 900km → (2·100+3·900)/1000 = 2,90).
+  let sumKm=0,sumLitros=0,sumRsL=0,sumRem=0,cnt=0,sumRemMKm=0,sumKmRem=0;
   rows.forEach(r=>{
-    const km=+(r[CL.kmRod]||0),lit=+(r[CL.litros]||0),rem=+(r[CL.rem]||0),rsL=+(r[CL.rsLReal]||0);
-    sumKm+=km;sumLitros+=lit;if(rem>0){sumRem+=rem;cnt++;}sumRsL+=rsL;
+    const km=+(r[CL.kmRod]||0),lit=+(r[CL.litros]||0),rem=+(r[CL.rem]||0),remM=+(r[CL.remM]||0),rsL=+(r[CL.rsLReal]||0);
+    sumKm+=km;sumLitros+=lit;sumRsL+=rsL;
+    if(rem>0){sumRem+=rem;cnt++;}
+    if(remM>0&&km>0){sumRemMKm+=remM*km;sumKmRem+=km;}
   });
-  const remAvg=cnt>0?sumRem/cnt:null;
+  const remAvg = remMode==='modelo'
+    ? (sumKmRem>0?sumRemMKm/sumKmRem:null)
+    : (cnt>0?sumRem/cnt:null);
   const realWt=sumLitros>0?sumKm/sumLitros:null;
   const rsLAvg=rows.length>0?sumRsL/rows.length:null;
   return{remAvg,realWt,sumKm,sumLitros,rsLAvg};
@@ -798,6 +815,15 @@ function setDim(dim){
   document.querySelectorAll('.dim-btn').forEach(b=>b.classList.toggle('active',b.dataset.dim===dim));
   const th=document.getElementById('th-dim');if(th)th.textContent=dim==='proj'?'PROJETO':'UNIDADE';
   if(lastF){const a=filterRows(allRows,lastF),yv=getYtdVigs(lastF),y=filterRows(allRows,{...lastF,vig:yv});renderTable(a,y);}
+}
+
+function setRemMode(m){
+  remMode=m;
+  document.querySelectorAll('.dim-btn[data-remmode]').forEach(b=>b.classList.toggle('active',b.dataset.remmode===m));
+  if(lastF){
+    const active=filterRows(allRows,lastF), yv=getYtdVigs(lastF), ytd=filterRows(allRows,{...lastF,vig:yv});
+    renderHero(active,ytd); renderCharts(lastF); renderTable(active,ytd);
+  }
 }
 
 // ── ATUALIZAR ──
