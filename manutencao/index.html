@@ -95,6 +95,7 @@ body.light-mode .cr{color:#cc0000!important;}
     <div class="filter-group"><div class="ms-wrap" id="ms-uni"></div></div>
     <div class="filter-group"><div class="ms-wrap" id="ms-proj"></div></div>
     <div class="filter-group"><div class="ms-wrap" id="ms-cc"></div></div>
+    <div class="filter-group"><div class="ms-wrap" id="ms-ramo"></div></div>
     <div class="filter-group"><div class="ms-wrap" id="ms-forn"></div></div>
     <div class="filter-group"><div class="ms-wrap" id="ms-conta"></div></div>
     <div class="filter-group"><div class="ms-wrap" id="ms-doc"></div></div>
@@ -149,10 +150,14 @@ function gviz(){
   });
 }
 
-let ROWS=[], COLS=[], MAP={}, dim='forn';
+let ROWS=[], COLS=[], MAP={}, RAMOS={}, dim='ramo';
+// mapa fornecedor(normalizado)→ramo, gerado por scripts/ramos-build.mjs (CNPJ/CNAE)
+async function loadRamos(){ try{ const r=await fetch('ramos.json',{cache:'no-store'}); if(r.ok) RAMOS=await r.json(); }catch(e){ RAMOS={}; } }
+const ramoDe=nome=>RAMOS[_n(nome)]||'Não classificado';
 let gsort={key:'real',dir:1}, dsort={key:'real',dir:1};   // dir 1 = asc (mais negativo no topo)
 
 async function carregar(){
+  await loadRamos();
   const t=await gviz(); COLS=t.cols;
   const i={
     vig:idxDe(COLS,'Vigência','Vigencia'), data:idxDe(COLS,'Data'),
@@ -172,7 +177,7 @@ async function carregar(){
       vig:vigRaw||vigDe(dt), dt, data:dt?fmtD(dt):(i.data>=0?String(r[i.data]||'').trim():''),
       uni:uniRaw||getUniLabel(n3), proj:getProjLabel(n3), n3,
       cc:i.cc>=0?String(r[i.cc]||'').trim():'', conta:i.conta>=0?String(r[i.conta]||'').trim():'',
-      forn:i.forn>=0?String(r[i.forn]||'').trim():'', hist:i.hist>=0?String(r[i.hist]||'').trim():'',
+      forn:i.forn>=0?String(r[i.forn]||'').trim():'', ramo:ramoDe(i.forn>=0?r[i.forn]:''), hist:i.hist>=0?String(r[i.hist]||'').trim():'',
       nat:i.nat>=0?String(r[i.nat]||'').trim():'', doc:i.doc>=0?String(r[i.doc]||'').trim():'',
       real:i.real>=0?(num(r[i.real])||0):0
     };
@@ -200,6 +205,7 @@ function buildFilters(){
   mkFilter('ms-uni','Unidade',uniq(ROWS.map(r=>r.uni)));
   mkFilter('ms-proj','Projeto',uniq(ROWS.map(r=>r.proj)));
   mkFilter('ms-cc','Centro de Custo',uniq(ROWS.map(r=>r.cc)));
+  mkFilter('ms-ramo','Ramo',uniq(ROWS.map(r=>r.ramo)));
   mkFilter('ms-forn','Fornecedor',uniq(ROWS.map(r=>r.forn)));
   mkFilter('ms-conta','Conta',uniq(ROWS.map(r=>r.conta)));
   mkFilter('ms-doc','Documento',uniq(ROWS.map(r=>r.doc)));
@@ -209,9 +215,9 @@ const uniq=a=>[...new Set(a.filter(x=>x!=null&&x!==''))].sort();
 const MS_NONE=' __NONE__';
 function getMsV(id){const w=document.getElementById(id);if(!w)return[];if(w._none&&(!w._sel||!w._sel.size))return[MS_NONE];return w._sel?[...w._sel]:[];}
 function filtered(){
-  const fv=getMsV('ms-vig'),fd=getMsV('ms-data'),fu=getMsV('ms-uni'),fp=getMsV('ms-proj'),fc=getMsV('ms-cc'),fn=getMsV('ms-forn'),fk=getMsV('ms-conta'),fo=getMsV('ms-doc');
+  const fv=getMsV('ms-vig'),fd=getMsV('ms-data'),fu=getMsV('ms-uni'),fp=getMsV('ms-proj'),fc=getMsV('ms-cc'),fr=getMsV('ms-ramo'),fn=getMsV('ms-forn'),fk=getMsV('ms-conta'),fo=getMsV('ms-doc');
   const has=(a,v)=>!a.length||a.includes(v);
-  return ROWS.filter(r=>has(fv,r.vig)&&has(fd,r.data)&&has(fu,r.uni)&&has(fp,r.proj)&&has(fc,r.cc)&&has(fn,r.forn)&&has(fk,r.conta)&&has(fo,r.doc));
+  return ROWS.filter(r=>has(fv,r.vig)&&has(fd,r.data)&&has(fu,r.uni)&&has(fp,r.proj)&&has(fc,r.cc)&&has(fr,r.ramo)&&has(fn,r.forn)&&has(fk,r.conta)&&has(fo,r.doc));
 }
 
 // ── multi-select component ──
@@ -255,13 +261,13 @@ function render(){
   set('hero-forn',uniq(rows.map(r=>r.forn)).length.toLocaleString('pt-BR'));
   set('hero-cc',uniq(rows.map(r=>r.cc)).length.toLocaleString('pt-BR'));
 
-  // agrupado (Fornecedor / Centro de Custo)
-  const key=dim==='forn'?'forn':'cc';
+  // agrupado (Ramo / Fornecedor / Centro de Custo)
+  const key=dim;
   const g={};rows.forEach(r=>{const k=r[key]||'—';(g[k]=g[k]||{nome:k,nfs:0,real:0}).nfs++;g[k].real+=r.real||0;});
   let grp=Object.values(g).map(o=>({nome:o.nome,nfs:o.nfs,real:o.real}));
   const gk=gsort.key==='nome'?'nome':gsort.key;
   grp=sortRows(grp.map(o=>({nome:o.nome,nfs:o.nfs,real:o.real})),gk,gsort.dir);
-  const dimLbl=dim==='forn'?'Fornecedor':'Centro de Custo';
+  const dimLbl={ramo:'Ramo',forn:'Fornecedor',cc:'Centro de Custo'}[dim]||'Fornecedor';
   const gh=`<thead><tr>
     <th onclick="setGSort('nome')">${dimLbl}${arw(gsort,'nome')}</th>
     <th class="num" onclick="setGSort('nfs')">NFs${arw(gsort,'nfs')}</th>
@@ -274,13 +280,14 @@ function render(){
     <th onclick="setDSort('dt')">Data${arw(dsort,'dt')}</th>
     <th onclick="setDSort('conta')">Conta${arw(dsort,'conta')}</th>
     <th onclick="setDSort('forn')">Fornecedor${arw(dsort,'forn')}</th>
+    <th onclick="setDSort('ramo')">Ramo${arw(dsort,'ramo')}</th>
     <th onclick="setDSort('hist')">Histórico${arw(dsort,'hist')}</th>
     <th onclick="setDSort('nat')">Natureza${arw(dsort,'nat')}</th>
     <th onclick="setDSort('doc')">Documento${arw(dsort,'doc')}</th>
     <th onclick="setDSort('cc')">Centro de Custo${arw(dsort,'cc')}</th>
     <th class="num" onclick="setDSort('real')">Realizado${arw(dsort,'real')}</th></tr></thead>`;
   const db=det.slice(0,3000).map(r=>`<tr>
-    <td>${esc(r.data)||'—'}</td><td>${esc(r.conta)||'—'}</td><td>${esc(r.forn)||'—'}</td>
+    <td>${esc(r.data)||'—'}</td><td>${esc(r.conta)||'—'}</td><td>${esc(r.forn)||'—'}</td><td>${esc(r.ramo)||'—'}</td>
     <td style="white-space:normal;max-width:320px">${esc((r.hist||'—').slice(0,120))}</td>
     <td>${esc(r.nat)||'—'}</td><td>${esc(r.doc)||'—'}</td><td>${esc(r.cc)||'—'}</td>
     <td class="num cr">${brlC(r.real)}</td></tr>`).join('');
@@ -289,7 +296,7 @@ function render(){
     <div class="tbl-section">
       <div class="tbl-head">
         <div><div class="tbl-title">Por ${dimLbl}</div><div class="tbl-sub">Ordenado pelo maior custo · clique no título pra ordenar</div></div>
-        <div class="dim-toggle"><button class="dim-btn ${dim==='forn'?'active':''}" onclick="setDim('forn')">Fornecedor</button><button class="dim-btn ${dim==='cc'?'active':''}" onclick="setDim('cc')">Centro de Custo</button></div>
+        <div class="dim-toggle"><button class="dim-btn ${dim==='ramo'?'active':''}" onclick="setDim('ramo')">Ramo</button><button class="dim-btn ${dim==='forn'?'active':''}" onclick="setDim('forn')">Fornecedor</button><button class="dim-btn ${dim==='cc'?'active':''}" onclick="setDim('cc')">Centro de Custo</button></div>
       </div>
       <div class="wrapx"><table>${gh}<tbody>${gb||'<tr><td colspan="3" class="mut">Sem dados para o filtro.</td></tr>'}</tbody></table></div>
     </div>

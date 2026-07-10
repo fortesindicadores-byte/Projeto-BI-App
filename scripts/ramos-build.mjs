@@ -68,15 +68,20 @@ const CNAE_RULES=[
 ];
 function ramoPorCnae(cnae){ const s=String(cnae||''); for(const [re,r] of CNAE_RULES){ if(re.test(s)) return r; } return null; }
 
+let _dbg=0;
 async function cnaeDoCnpj(cnpj){
-  for(let tent=0;tent<3;tent++){
+  const UA={'User-Agent':'gestao-em-movimento/1.0','Accept':'application/json'};
+  for(let tent=0;tent<4;tent++){
     try{
-      const r=await fetch(`https://brasilapi.com.br/api/cnpj/v1/${cnpj}`);
-      if(r.status===429){ await sleep(2500); continue; }
+      const r=await fetch(`https://brasilapi.com.br/api/cnpj/v1/${cnpj}`,{headers:UA});
+      if(_dbg<8){ console.log(`  [dbg cnpj] ${cnpj} status=${r.status}`); _dbg++; }
+      if(r.status===429||r.status>=500){ await sleep(3000); continue; }
       if(!r.ok) return null;
       const j=await r.json();
-      return { cnae:String(j.cnae_fiscal||''), desc:j.cnae_fiscal_descricao||'' };
-    }catch(e){ await sleep(1500); }
+      const cnae=String(j.cnae_fiscal||j.cnae_fiscal_principal||'');
+      if(_dbg<=8) console.log(`  [dbg cnae] ${cnpj} -> ${cnae} (${j.cnae_fiscal_descricao||''})`);
+      return { cnae, desc:j.cnae_fiscal_descricao||'' };
+    }catch(e){ if(_dbg<8){console.log(`  [dbg err] ${cnpj} ${e.message||e}`);_dbg++;} await sleep(1500); }
   }
   return null;
 }
@@ -103,7 +108,7 @@ async function main(){
     if(!ramo){
       const cj=nome2cnpj.get(nome);
       if(cj && cj.length===14){
-        const c=await cnaeDoCnpj(cj); await sleep(220);
+        const c=await cnaeDoCnpj(cj); await sleep(350);
         if(c){ ramo=ramoPorCnae(c.cnae)||'Outros'; fonte='cnpj'; }
       } else if(cj && cj.length===11){ ramo='Autônomo/PF'; fonte='cpf'; }
     }
