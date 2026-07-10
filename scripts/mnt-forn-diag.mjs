@@ -80,11 +80,14 @@ async function main(){
   console.log(`\n[conta → família] contas distintas=${contaFam.size} · 1 família (1:1)=${c1} · 2=${c2} · 3+=${c3}`);
   if(contaAmb.length){ console.log('Amostra de contas ambíguas:'); contaAmb.forEach(s=>console.log('  '+s)); }
 
-  // Família é igual à conta? (strings)
-  const contasSet=new Set([...contaFam.keys()]);
+  // Família corresponde a QUAL coluna da DRE? (overlap de conjuntos de valores)
   const famsNorm=new Set([...fams].map(_n));
-  let inter=0; for(const f of famsNorm) if(contasSet.has(f)) inter++;
-  console.log(`\nFamília × Conta (strings normalizadas): famílias=${famsNorm.size} · contas=${contasSet.size} · em comum=${inter}`);
+  console.log(`\nFamília: ${famsNorm.size} valores distintos. Overlap com colunas da DRE:`);
+  dre.cols.forEach((cname,ci)=>{
+    const vals=new Set(); dre.rows.forEach(r=>{ const v=_n(r[ci]); if(v)vals.add(v); });
+    let inter=0; for(const f of famsNorm) if(vals.has(f)) inter++;
+    if(vals.size<=200) console.log(`  col[${ci}] ${cname}: ${vals.size} valores · ${inter}/${famsNorm.size} famílias batem`);
+  });
   console.log('\n=== FIM ===');
 }
 main().catch(e=>{ console.error('Falha:',e); process.exit(1); });
