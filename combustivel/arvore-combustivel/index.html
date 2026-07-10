@@ -269,8 +269,10 @@ table td:first-child,table th:first-child{text-align:left;}
 // ═══════════════════════════════════════════════════════════════
 // Fonte de dados — Google Sheets via gviz/tq (sem Apps Script)
 // ═══════════════════════════════════════════════════════════════
-const GV_ID  = '1wCoRGsvOgmIvfLW4F9Sxr-5AX9Go-aFlRVjrQ_B2ilM';
-const GV_TAB = 'Árvore Comb.';
+const GV_ID  = '1wCoRGsvOgmIvfLW4F9Sxr-5AX9Go-aFlRVjrQ_B2ilM'; // Base Dispersão de km (abas Dispersão de km, R$/L)
+const GV_TAB = 'Árvore Comb.';                                 // (legado — não mais usado)
+const VF_ID  = '1qcTy2ppLCGBKKqZCxCYWCTL9kTAuWfHBMyBfWJOyih8'; // Visão Financeira (aba Frota) — Custo Combustível
+// Km/L usa KML_ID (definido mais abaixo) — fonte de KM/L e R$/L, igual aos painéis Eficiência e R$/L.
 
 // ── Dados estáticos (fallback / snapshot) ──
 const STATIC = {
@@ -480,61 +482,39 @@ const STATIC = {
   · Impacto Preço  = |Δ R$/km| × SUM(KM Real)
   · Impacto Volume = |Δ KM|    × |R$/km Rem|
 */
-function calcular(rows) {
-  let n = 0;
-  let sumKmRem=0, sumKmReal=0, sumLitros=0, sumCustoPF=0, sumRemunerado=0, sumRealizado=0;
-  let sumRsLRem=0, sumKmLRem=0;
-  let sum1V=0, sumRecs=0, sumNot=0, sumMapas=0;
+// Monta a árvore direto das abas-fonte (sem a aba "Árvore Comb.").
+// Cada card vem da mesma fonte/lógica do painel correspondente:
+//  · Custo Combustível → aba Frota (Visão Financeira), pacote Combustíveis
+//  · KM Rodado + Decomposição → aba Dispersão de km (Painel KM)
+//  · R$/Litro → abas Km/L + R$/L (painel R$/L)
+//  · Km/L → aba Km/L (painel Eficiência)
+//  · R$/km → calculado: Custo ÷ KM
+// f = filtros atuais {ano, vigencia, unidade, nivel3(=projeto)}.
+function calcular(f){
+  if(!FR||!DP||!KM) return null;
+  const c=custoAgg(f), k=kmAgg(f), rl=rslAgg(f), kl=kmlAgg(f);
 
-  for (const r of rows) {
-    if (!+r.kmReal) continue;
-    n++;
-    sumKmRem      += +r.kmRem      || 0;
-    sumKmReal     += +r.kmReal     || 0;
-    sumLitros     += +r.litros     || 0;
-    sumCustoPF    += +r.custoPF    || 0;
-    sumRemunerado += +r.remunerado || 0;
-    sumRealizado  += +r.realizado  || 0;
-    sumRsLRem     += +r.rsLRem     || 0;
-    sumKmLRem     += +r.kmLRem     || 0;
-    sum1V    += +r.viagem1  || 0;
-    sumRecs  += +r.recs     || 0;
-    sumNot   += +r.noturnas || 0;
-    sumMapas += +r.mapas    || 0;
-  }
-  if (!n) return null;
+  const custoRem=c.rem, custoReal=c.real;
+  const kmRem=k.rem, kmReal=k.real;
+  // R$/km = Custo ÷ KM (mantém o sinal do custo, negativo)
+  const rsKmRem  = kmRem  ? custoRem  / kmRem  : 0;
+  const rsKmReal = kmReal ? custoReal / kmReal : 0;
+  const dKmRod = kmRem - kmReal;
 
-  // Rem — médias simples (burra)
-  const rsLRem = sumRsLRem / n;
-  const kmLRem = sumKmLRem / n;
+  const impPreco  = Math.abs(Math.abs(rsKmReal) - Math.abs(rsKmRem)) * Math.abs(kmReal);
+  const impVolume = Math.abs(dKmRod) * Math.abs(rsKmRem);
 
-  // Real — médias ponderadas
-  const rsLReal = sumLitros > 0 ? sumCustoPF / sumLitros : 0;
-  const kmLReal = sumLitros > 0 ? sumKmReal  / sumLitros : 0;
-
-  // R$/km — fórmula Looker: SUM(REMUNERADO)/SUM(KM Rem) e SUM(REALIZADO)/SUM(KM Real)
-  const rsKmRem  = sumKmRem  !== 0 ? sumRemunerado / sumKmRem  : 0;
-  const rsKmReal = sumKmReal !== 0 ? sumRealizado  / sumKmReal : 0;
-
-  // Custo Combustível
-  const custoRem  = sumRemunerado;   // SUM(REMUNERADO)
-  const custoReal = sumRealizado;    // SUM(Realizado) — direto da coluna
-
-  // Δ KM Rodado = Rem − Real (negativo = andou mais = mais custo = ruim)
-  const dKmRod = sumKmRem - sumKmReal;
-
-  // Impactos
-  const impPreco  = Math.abs(rsKmReal - rsKmRem) * sumKmReal;
-  const impVolume = Math.abs(dKmRod)              * Math.abs(rsKmRem);
+  const rsLRem=rl.rem||0, rsLReal=rl.real||0;
+  const kmLRem=kl.rem||0, kmLReal=kl.real||0;
 
   return {
     rsLRem,  rsLReal,  dRsL:  rsLRem - rsLReal,   // positivo = real mais barato = bom
     kmLRem,  kmLReal,  dKmL:  kmLReal - kmLRem,   // negativo = real pior eficiência = ruim
     rsKmRem, rsKmReal,
     custoRem, custoReal,
-    kmRem: sumKmRem, kmReal: sumKmReal, dKmRod,
+    kmRem, kmReal, dKmRod,
     impPreco, impVolume,
-    viagem1: sum1V, recs: sumRecs, noturnas: sumNot, mapas: sumMapas
+    viagem1: k.viagem1, recs: k.recs, noturnas: k.noturnas, mapas: k.mapas
   };
 }
 
@@ -676,18 +656,21 @@ function kDetectCols(cols){
 const _kSplit=r=>{const v=(KCL&&r[KCL.proj]!=null)?String(r[KCL.proj]):'';const i=v.indexOf('-');return i>=0?[v.slice(0,i).trim(),v.slice(i+1).trim()]:[v.trim(),''];};
 const kGetProj=r=>_kSplit(r)[0];
 const kGetUni =r=>_kSplit(r)[1];
+let _gkSeq=0;
 function gvFetchSheet(id,tab){
   return new Promise((resolve,reject)=>{
-    const fn='_gk'+Date.now();
+    const fn='_gk'+Date.now()+'_'+(_gkSeq++);   // único mesmo em chamadas paralelas
     const s=document.createElement('script');
     const clean=()=>{try{delete window[fn];s.remove();}catch(e){}};
     window[fn]=resp=>{clean();try{
       if(resp.status!=='ok')throw new Error(resp.errors?.[0]?.message||'Erro gviz');
-      const cols=resp.table.cols.map(c=>c.label||c.id);
-      const rows=resp.table.rows.map(r=>(r.c||[]).map(c=>c?.v??null));
+      let cols=resp.table.cols.map(c=>c.label||c.id);
+      let rows=resp.table.rows.map(r=>(r.c||[]).map(c=>c?.v??null));
+      // fallback: se o gviz não detectou cabeçalho, usa a 1ª linha como header
+      if(cols.every(c=>!c||/^[A-Z]{1,2}$/.test(c))&&rows.length){ cols=rows[0].map(v=>String(v==null?'':v)); rows=rows.slice(1); }
       resolve({cols,rows});
     }catch(e){reject(e);}};
-    s.onerror=()=>reject(new Error('Sem acesso à aba Km/L.'));
+    s.onerror=()=>reject(new Error(`Sem acesso à aba "${tab}". Verifique se está logado no Google.`));
     s.src=`https://docs.google.com/spreadsheets/d/${id}/gviz/tq?sheet=${encodeURIComponent(tab)}&tqx=out:json;responseHandler:${fn}`;
     document.head.appendChild(s);
   });
@@ -824,7 +807,7 @@ function refreshCascade(){
 function onFilterChange(){
   refreshCascade();        // recalcula opções de todos os filtros conforme a seleção atual (cascata)
   if(allRows.length>0){
-    const k=calcular(filtrarRows(allRows));
+    const k=calcular(getFilters());
     if(k){ renderKPIs(k); setTimeout(fitAndDraw,60); }
   }
 }
@@ -834,69 +817,104 @@ function onFilterChange(){
 // Lê direto da planilha via JSONP — sem CORS,
 // sem deploy. Requer estar logado no Google.
 // ═══════════════════════════════════════════════
-const HMAP = {
-  'r$/l rem':'rsLRem','rs/l rem':'rsLRem',
-  'km rem':'kmRem','km real':'kmReal',
-  'litros':'litros','km/l rem':'kmLRem',
-  '1a viagem':'viagem1','1° viagem':'viagem1','1 viagem':'viagem1','1ª viagem':'viagem1',
-  'recs':'recs','noturnas':'noturnas','mapas virados':'mapas',
-  'custo pro-frotas':'custoPF','custo pro frotas':'custoPF',
-  'vigencia':'vigencia','unidade':'unidade',
-  'nivel 3':'nivel3','remunerado':'remunerado','realizado':'realizado',
-};
-const normH = s => String(s).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[ªº°]/g,'').replace(/\s+/g,' ').trim();
+// ── Detecção de colunas por aba (por nome de cabeçalho) ──
+const _fiFactory = cols => (...tests) => { for(let i=0;i<cols.length;i++){ const lc=String(cols[i]||'').toLowerCase(); if(tests.some(t=>lc.includes(t))) return i; } return -1; };
+function detFrota(cols){ const fi=_fiFactory(cols); return {vig:0, rem:fi('remunerado'), real:fi('realizado'), cta:fi('conta gerencial'), n3:fi('nível 3','nivel 3')}; }
+function detDisp(cols){ const fi=_fiFactory(cols); return {vig:0, proj:fi('proj.'), kmRem:fi('km rem. tt'), kmReal:fi('km rodado tt'), vgTot:fi('viagens - real'), vgRec:fi('viagens rec'), vgNot:fi('viagens noturnas'), vgMap:fi('viagens mapa aberto')}; }
+function detKmlSrc(cols){ const fi=_fiFactory(cols); return {vig:0, proj:fi('projeto'), remMed:fi('rem médio','rem medio'), kmlReal:fi('km/l real'), kmRod:fi('km rodado'), litros:fi('qtd total de litro','qtd litro','qtd total','litro'), totalRS:fi('totas r$','total r$','total geral'), fuel:fi('tipo combust','combustivel','combustível')}; }
 
-function gvFetch() {
-  return new Promise((resolve, reject) => {
-    const fn = '_gv' + Date.now();
-    const s  = document.createElement('script');
-    const ok = () => { try { delete window[fn]; s.remove(); } catch(e){} };
+// ── Normalização + chaves de vigência ──
+const _nk = s => String(s||'').toUpperCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/\s+/g,' ').trim();
+const _nf = s => { let x=String(s||''); const i=x.indexOf(':'); if(i>=0) x=x.slice(i+1); return _nk(x); };
+const _ym  = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;   // p/ lookup R$/L
+const vigBR = d => `${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()}`;   // formato dos filtros
 
-    window[fn] = resp => {
-      ok();
-      try {
-        if (resp.status !== 'ok') throw new Error(resp.errors?.[0]?.message || 'Erro gviz');
-        const cols = resp.table.cols.map(c => c.label || c.id);
-        console.log('📋 Colunas gviz:', cols.map((lb,i)=>`[${i}] "${lb}" → norm:"${normH(lb)}" → key:${HMAP[normH(lb)]||'❌'}`));
-        const kmap = {};
-        cols.forEach((lb, i) => { const k = HMAP[normH(lb)]; if (k) kmap[i] = k; });
+// Contas do pacote "Combustíveis" (mesmo critério da Visão Financeira)
+const COMB = new Set(['COMBUSTIVEIS VEICULOS E EQUIPAMENTOS','COMBUSTIVEIS','ESTORNO DE ICMS NAO APROVEITADO','FLUIDOS (ARLA)','ARLA','ICMS CREDITO PRESUMIDO']);
 
-        const vigSet={}, uniSet={}, nvlSet={}, rows=[];
-        for (const row of resp.table.rows) {
-          if (!row?.c) continue;
-          const obj = {};
-          row.c.forEach((cell, i) => {
-            if (!(i in kmap)) return;
-            let v = cell?.v ?? null;
-            // Datas do Google Sheets vêm como "Date(2024,0,1)"
-            if (typeof v === 'string' && v.startsWith('Date(')) {
-              const p = v.slice(5,-1).split(',');
-              v = String(+p[1]+1).padStart(2,'0') + '/' + p[0];
-            }
-            obj[kmap[i]] = v;
-          });
-          if (!obj.kmReal) continue;
-          const vig=String(obj.vigencia||''), uni=String(obj.unidade||''), nvl=String(obj.nivel3||'');
-          if (vig) vigSet[vig]=1;
-          if (uni) uniSet[uni]=1;
-          if (nvl) nvlSet[nvl]=1;
-          rows.push(obj);
-        }
-        resolve({
-          ok: true, rows,
-          vigencias: Object.keys(vigSet).sort(),
-          unidades:  Object.keys(uniSet).sort(),
-          nivel3s:   Object.keys(nvlSet).sort(),
-        });
-      } catch(e) { reject(e); }
-    };
+// Passa uma linha pelos filtros atuais (vigStr='MM/YYYY', n3='PROJETO - CODE')
+function _match(f, vigStr, n3){
+  if(f.ano.length      && !f.ano.includes(vigStr.slice(-4)))              return false;
+  if(f.vigencia.length && !f.vigencia.includes(vigStr))                  return false;
+  if(f.unidade.length  && !f.unidade.includes(getNv3Suffix(n3)))         return false;
+  if(f.nivel3.length   && !f.nivel3.includes(getNv3Prefix(n3)))          return false;
+  return true;
+}
 
-    s.onerror = () => { ok(); reject(new Error('Sem acesso à planilha. Verifique se está logado no Google.')); };
-    s.src = `https://docs.google.com/spreadsheets/d/${GV_ID}/gviz/tq`
-          + `?sheet=${encodeURIComponent(GV_TAB)}`
-          + `&tqx=out:json;responseHandler:${fn}`;
-    document.head.appendChild(s);
-  });
+// ── Fontes carregadas ──
+let FR=null, DP=null, KM=null;   // mapas de coluna
+let S_FR=[], S_DP=[], S_KM=[];   // linhas
+let REMLK=null;                  // lookup de preço remunerado (aba R$/L)
+
+function buildRemLookup(cols,rows){
+  const fi=_fiFactory(cols);
+  const cProj=fi('unidade benner');
+  let cVig=-1; for(let i=0;i<cols.length;i++){ const lc=(cols[i]||'').toLowerCase(); if(lc.includes('vigência')||lc.includes('vigencia')){ const sv=rows.find(r=>r[i]!=null)?.[i]; if(kParseVig(sv)){cVig=i;break;} } } if(cVig<0)cVig=3;
+  const cPreco=fi('precooperadora','preco operadora'), cFuel=fi('tipocombustivel','combustivel','combustível');
+  const L1=new Map(), L2=new Map();
+  rows.forEach(r=>{ const p=_nk(r[cProj]), d=kParseVig(r[cVig]); if(!p||!d)return; const ym=_ym(d), fu=_nf(r[cFuel]), v=+(r[cPreco]||0); if(!(v>0))return;
+    const k1=`${p}|${ym}|${fu}`, k2=`${p}|${ym}`;
+    if(!L1.has(k1))L1.set(k1,{s:0,n:0}); L1.get(k1).s+=v; L1.get(k1).n++;
+    if(!L2.has(k2))L2.set(k2,{s:0,n:0}); L2.get(k2).s+=v; L2.get(k2).n++; });
+  REMLK={L1,L2};
+}
+function remPriceFor(r,d){
+  if(!REMLK||!d)return null; const p=_nk(r[KM.proj]); if(!p)return null;
+  const ym=_ym(d), fu=_nf(r[KM.fuel]);
+  let e=REMLK.L1.get(`${p}|${ym}|${fu}`); if(!e)e=REMLK.L2.get(`${p}|${ym}`);
+  return e&&e.n>0 ? e.s/e.n : null;
+}
+
+// ── Agregações por card (aplicando os filtros f) ──
+function custoAgg(f){ let rem=0,real=0; if(!FR)return{rem,real};
+  for(const r of S_FR){ if(!COMB.has(_nk(r[FR.cta])))continue; const d=kParseVig(r[FR.vig]); if(!d)continue;
+    if(!_match(f,vigBR(d),String(r[FR.n3]||'')))continue; rem+=+r[FR.rem]||0; real+=+r[FR.real]||0; } return{rem,real}; }
+function kmAgg(f){ let rem=0,real=0,vT=0,vR=0,vN=0,vM=0; if(!DP)return{rem,real,viagem1:0,recs:0,noturnas:0,mapas:0};
+  for(const r of S_DP){ const d=kParseVig(r[DP.vig]); if(!d)continue; if(!_match(f,vigBR(d),String(r[DP.proj]||'')))continue;
+    rem+=+r[DP.kmRem]||0; real+=+r[DP.kmReal]||0; vT+=+r[DP.vgTot]||0; vR+=+r[DP.vgRec]||0; vN+=+r[DP.vgNot]||0; vM+=+r[DP.vgMap]||0; }
+  return{rem,real,viagem1:vT-vR-vN-vM,recs:vR,noturnas:vN,mapas:vM}; }
+function kmlAgg(f){ // Eficiência: rem médio = média burra por projeto ponderada por km do projeto; real = Σkm/Σlitros
+  let sumKm=0,sumLit=0; const proj={}; if(!KM)return{rem:null,real:null};
+  for(const r of S_KM){ const d=kParseVig(r[KM.vig]); if(!d)continue; const n3=String(r[KM.proj]||''); if(!_match(f,vigBR(d),n3))continue;
+    const p=getNv3Prefix(n3)||'—', km=+r[KM.kmRod]||0, lit=+r[KM.litros]||0, rem=+r[KM.remMed]||0;
+    sumKm+=km; sumLit+=lit; if(!proj[p])proj[p]={s:0,n:0,km:0}; if(rem>0){proj[p].s+=rem;proj[p].n++;} proj[p].km+=km; }
+  let sMp=0,kMp=0; for(const v of Object.values(proj)){ const rp=v.n>0?v.s/v.n:null; if(rp!=null&&v.km>0){sMp+=rp*v.km;kMp+=v.km;} }
+  return{rem:kMp>0?sMp/kMp:null, real:sumLit>0?sumKm/sumLit:null}; }
+function rslAgg(f){ // R$/L: real = ΣTotalR$/ΣLitros; rem = Σ(preço×litros)/Σlitros (preço da aba R$/L)
+  let sumLit=0,sumTot=0,sumRxL=0,sumLitR=0; if(!KM)return{rem:null,real:null};
+  for(const r of S_KM){ const d=kParseVig(r[KM.vig]); if(!d)continue; if(!_match(f,vigBR(d),String(r[KM.proj]||'')))continue;
+    const lit=+r[KM.litros]||0, tot=+r[KM.totalRS]||0, rem=remPriceFor(r,d);
+    sumLit+=lit; if(tot>0)sumTot+=tot; if(rem!=null&&rem>0){sumRxL+=rem*lit;sumLitR+=lit;} }
+  return{rem:sumLitR>0?sumRxL/sumLitR:null, real:sumLit>0?sumTot/sumLit:null}; }
+
+// Carrega as 4 abas-fonte e monta as opções de filtro (union project-unit-vigência)
+async function fetchAll(){
+  const [fr,dp,km,rs]=await Promise.all([
+    gvFetchSheet(VF_ID,'Frota'),
+    gvFetchSheet(GV_ID,'Dispersão de km'),
+    gvFetchSheet(KML_ID,KML_TAB),
+    gvFetchSheet(GV_ID,'R$/L'),
+  ]);
+  FR=detFrota(fr.cols); S_FR=fr.rows;
+  DP=detDisp(dp.cols);  S_DP=dp.rows;
+  KM=detKmlSrc(km.cols);S_KM=km.rows;
+  buildRemLookup(rs.cols,rs.rows);
+
+  // allRows = união {vigencia:'MM/YYYY', nivel3:'PROJETO - CODE'} p/ cascata e opções de filtro
+  const seen=new Set(); allRows=[];
+  const add=(vig,n3)=>{ if(!vig||!n3)return; const k=vig+'|'+n3; if(seen.has(k))return; seen.add(k); allRows.push({vigencia:vig,nivel3:n3}); };
+  S_FR.forEach(r=>{ if(!COMB.has(_nk(r[FR.cta])))return; const d=kParseVig(r[FR.vig]); if(d)add(vigBR(d),String(r[FR.n3]||'')); });
+  S_DP.forEach(r=>{ const d=kParseVig(r[DP.vig]); if(d)add(vigBR(d),String(r[DP.proj]||'')); });
+  S_KM.forEach(r=>{ const d=kParseVig(r[KM.vig]); if(d)add(vigBR(d),String(r[KM.proj]||'')); });
+
+  const vigs=[...new Set(allRows.map(r=>r.vigencia))].sort((a,b)=>{ const [ma,ya]=a.split('/'), [mb,yb]=b.split('/'); return (ya-yb)||(ma-mb); });
+  const anos=[...new Set(allRows.map(r=>r.vigencia.slice(-4)))].sort().reverse();
+  const unis=[...new Set(allRows.map(r=>getNv3Suffix(r.nivel3)).filter(Boolean))].sort();
+  const nv3s=[...new Set(allRows.map(r=>getNv3Prefix(r.nivel3)).filter(Boolean))].sort();
+  buildMsFilter('ms-ano',anos);
+  buildVigMsFilter(vigs);
+  buildMsFilter('ms-uni',unis);
+  buildMsFilter('ms-nv3',nv3s);
 }
 
 let allRows = [];
@@ -904,32 +922,17 @@ let allRows = [];
 const CACHE_KEY='bi_cache_arvore_v2';
 const CACHE_TTL=60*60*1000; // 1 hora
 
-function useJson(json,fromCacheTime){
-  allRows = json.rows || [];
-  if (json.vigencias) {
-    const anos=[...new Set(json.vigencias.map(v=>v.slice(-4)))].sort().reverse();
-    buildMsFilter('ms-ano', anos);
-    buildVigMsFilter(json.vigencias);
-  }
-  if (json.nivel3s)   buildMsFilter('ms-uni', [...new Set(json.nivel3s.map(v=>getNv3Suffix(v)))].filter(Boolean).sort());
-  if (json.nivel3s)   buildMsFilter('ms-nv3', [...new Set(json.nivel3s.map(v=>getNv3Prefix(v)))].sort());
-
-  const k = calcular(filtrarRows(allRows));
-  if (k) renderKPIs(k); else renderStatic();
-
-  const d=fromCacheTime?new Date(fromCacheTime):new Date();
-  set('status-badge',`Atualizado ${d.toLocaleDateString('pt-BR')} ${d.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})}${fromCacheTime?' (cache)':''}`);
-  setTimeout(fitAndDraw, 60);
-}
-
 async function atualizar() {
   const warn=id('warnBar');
   set('status-badge','Carregando…');
   try {
-    const json = await gvFetch();
-    try{ localStorage.setItem(CACHE_KEY,JSON.stringify({t:Date.now(),json:{rows:json.rows,vigencias:json.vigencias,nivel3s:json.nivel3s}})); }catch(e){}
-    useJson(json);
+    await fetchAll();
+    const k = calcular(getFilters());
+    if (k) renderKPIs(k); else renderStatic();
+    const now=new Date();
+    set('status-badge',`Atualizado ${now.toLocaleDateString('pt-BR')} ${now.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})}`);
     if(warn) warn.classList.remove('show');
+    setTimeout(fitAndDraw, 60);
   } catch(err) {
     console.error(err);
     renderStatic();
@@ -938,22 +941,7 @@ async function atualizar() {
     setTimeout(fitAndDraw, 60);
   }
 }
-
-// Carrega a aba "Km/L" (fonte do painel Eficiência) p/ o card KM/L bater — independente do cache do resto da árvore
-function loadKmlSheet(){
-  gvFetchSheet(KML_ID, KML_TAB).then(({cols,rows})=>{
-    KCL=kDetectCols(cols); KML_ROWS=rows;
-    if(allRows.length){ const k=calcular(filtrarRows(allRows)); if(k){ renderKPIs(k); setTimeout(fitAndDraw,60); } }
-  }).catch(e=>console.warn('Km/L (card):', e.message));
-}
-function initData(){
-  loadKmlSheet();
-  try{
-    const c=JSON.parse(localStorage.getItem(CACHE_KEY));
-    if(c&&c.json&&Date.now()-c.t<CACHE_TTL){ useJson(c.json,c.t); return; }
-  }catch(e){ localStorage.removeItem(CACHE_KEY); }
-  atualizar();
-}
+function initData(){ atualizar(); }
 
 function initAccessLog(){
   let name=localStorage.getItem('bi_user_name');
