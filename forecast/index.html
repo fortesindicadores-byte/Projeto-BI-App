@@ -138,6 +138,11 @@ body.light-mode .cen-title{border-bottom-color:rgba(0,0,0,.12);}
 .tbl-title .tag{font-size:11px;font-weight:700;color:#000;background:var(--orange);border-radius:4px;padding:2px 8px;margin-left:8px;vertical-align:middle;text-transform:uppercase;letter-spacing:.5px;}
 .tbl-title .tag.blue{background:var(--blue);}
 .tbl-sub{font-size:13px;color:var(--text2);margin-bottom:16px;}
+.strat-ta{width:100%;min-height:120px;resize:vertical;background:#0a0f18;color:var(--text);border:1px solid #2a3a50;border-radius:6px;font-family:'Montserrat',sans-serif;font-size:13px;line-height:1.6;padding:12px 14px;outline:none;}
+.strat-ta:focus{border-color:var(--orange);}
+.strat-ta::placeholder{color:var(--text3);}
+.strat-count{font-size:10px;color:var(--text3);float:right;font-weight:600;}
+body.light-mode .strat-ta{background:#fff;border-color:rgba(0,0,0,.15);}
 .tbl-wrap{overflow-x:auto;}
 table.dre{width:100%;border-collapse:collapse;font-size:13px;table-layout:fixed;}
 table.dre thead th{background:var(--card);color:var(--text);font-size:12px;font-weight:700;
@@ -305,6 +310,13 @@ body.light-mode table.dre tbody tr{border-bottom:1px solid rgba(0,0,0,.06);}
 
   <!-- ── TABELA EDITÁVEL ── -->
   <div id="tables"></div>
+
+  <!-- ── ESTRATÉGIA / OBSERVAÇÕES ── -->
+  <div class="tbl-section" id="strat-section">
+    <div class="tbl-title">Estratégia / Observações <span class="strat-count" id="strat-count"></span></div>
+    <div class="tbl-sub">O que será feito para reduzir custos e chegar na meta. Salvo junto do cenário.</div>
+    <textarea id="fc-notas" class="strat-ta" maxlength="4000" placeholder="Ex.: Renegociar contrato de combustível na CBA; revisar plano de pneus; adiar 2 preventivas para jul; renegociar seguros no fim do ano…"></textarea>
+  </div>
 
 </main>
 
@@ -980,10 +992,14 @@ function toggleDrill(tr){
 // ═══════════════════════════════════ ATUALIZAR ═══════════════════════════════════
 // ═══════════════════════════════════ FORECAST EDITÁVEL ═══════════════════════════════════
 let OV={}, recOVorc={}, recOVtrend={};      // custos (compartilhados) + receita por cenário (orçada / tendência)
+let NOTAS='';                               // estratégia/observações (texto livre, salvo junto do cenário)
 const FC_KEY='forecast_draft_v2';
-function saveDraft(){ try{ localStorage.setItem(FC_KEY, JSON.stringify({OV,recOVorc,recOVtrend})); }catch(e){} }
-function loadDraft(){ try{ const d=JSON.parse(localStorage.getItem(FC_KEY)); if(d){ OV=d.OV||{}; recOVorc=d.recOVorc||{}; recOVtrend=d.recOVtrend||{}; } }catch(e){} }
-function resetAll(){ if(!confirm('Descartar todas as edições e voltar ao orçado?')) return; OV={}; recOVorc={}; recOVtrend={}; saveDraft(); atualizar(); }
+function saveDraft(){ try{ localStorage.setItem(FC_KEY, JSON.stringify({OV,recOVorc,recOVtrend,NOTAS})); }catch(e){} }
+function loadDraft(){ try{ const d=JSON.parse(localStorage.getItem(FC_KEY)); if(d){ OV=d.OV||{}; recOVorc=d.recOVorc||{}; recOVtrend=d.recOVtrend||{}; NOTAS=d.NOTAS||''; } }catch(e){} }
+// textarea de estratégia (elemento estático — não é re-renderizado)
+function syncNotas(){ const t=document.getElementById('fc-notas'); if(t) t.value=NOTAS; const c=document.getElementById('strat-count'); if(c) c.textContent=NOTAS?`${NOTAS.length} caracteres`:''; }
+function wireNotas(){ const t=document.getElementById('fc-notas'); if(!t) return; syncNotas(); t.oninput=()=>{ NOTAS=t.value; const c=document.getElementById('strat-count'); if(c) c.textContent=NOTAS?`${NOTAS.length} caracteres`:''; saveDraft(); }; }
+function resetAll(){ if(!confirm('Descartar todas as edições e voltar ao orçado?')) return; OV={}; recOVorc={}; recOVtrend={}; NOTAS=''; syncNotas(); saveDraft(); atualizar(); }
 // aceita "-2.87 mi", "566k", "-2.870.000", "1234,56"
 function parseNum(raw){
   if(raw==null) return null;
@@ -1125,16 +1141,16 @@ async function saveScenario(){
   if(!ME){ alert('Faça login no portal (hub) para salvar cenários.'); return; }
   const nome=((document.getElementById('fc-name')||{}).value||'').trim(); if(!nome){ alert('Dê um nome ao cenário.'); return; }
   const f=getF();
-  const row={nome, autor_email:ME, ano:(window._model?window._model.year:null), filtros:{uni:f.uni,nv3:f.nv3}, overrides:{OV,recOVorc,recOVtrend}};
+  const row={nome, autor_email:ME, ano:(window._model?window._model.year:null), filtros:{uni:f.uni,nv3:f.nv3}, overrides:{OV,recOVorc,recOVtrend}, notas:NOTAS};
   const {error}=await SB.from('forecast_scenarios').insert(row);
   if(error){ alert('Erro ao salvar: '+error.message); return; }
   document.getElementById('fc-name').value=''; await loadScenarios(); scenHint(`Cenário "${nome}" salvo.`);
 }
 async function loadScenario(){
   const sel=document.getElementById('fc-list'), id=sel&&sel.value; if(!id){ alert('Selecione um cenário.'); return; }
-  const {data,error}=await SB.from('forecast_scenarios').select('overrides,nome').eq('id',id).single();
+  const {data,error}=await SB.from('forecast_scenarios').select('overrides,nome,notas').eq('id',id).single();
   if(error){ alert('Erro ao carregar: '+error.message); return; }
-  const ov=data.overrides||{}; OV=ov.OV||{}; recOVorc=ov.recOVorc||{}; recOVtrend=ov.recOVtrend||{}; saveDraft(); atualizar();
+  const ov=data.overrides||{}; OV=ov.OV||{}; recOVorc=ov.recOVorc||{}; recOVtrend=ov.recOVtrend||{}; NOTAS=data.notas||''; syncNotas(); saveDraft(); atualizar();
   const nm=document.getElementById('fc-name'); if(nm) nm.value=data.nome||''; scenHint(`Cenário "${data.nome}" carregado.`);
 }
 async function renameScenario(){
@@ -1147,9 +1163,9 @@ async function renameScenario(){
 async function dupScenario(){
   const sel=document.getElementById('fc-list'), id=sel&&sel.value; if(!id){ alert('Selecione um cenário.'); return; }
   if(!ME){ alert('Faça login para duplicar.'); return; }
-  const {data,error}=await SB.from('forecast_scenarios').select('nome,ano,filtros,overrides').eq('id',id).single();
+  const {data,error}=await SB.from('forecast_scenarios').select('nome,ano,filtros,overrides,notas').eq('id',id).single();
   if(error){ alert('Erro: '+error.message); return; }
-  const {error:e2}=await SB.from('forecast_scenarios').insert({nome:(data.nome||'Cenário')+' (cópia)', autor_email:ME, ano:data.ano, filtros:data.filtros, overrides:data.overrides});
+  const {error:e2}=await SB.from('forecast_scenarios').insert({nome:(data.nome||'Cenário')+' (cópia)', autor_email:ME, ano:data.ano, filtros:data.filtros, overrides:data.overrides, notas:data.notas||''});
   if(e2){ alert('Erro: '+e2.message); return; }
   await loadScenarios();
 }
@@ -1185,7 +1201,7 @@ async function recarregar(){
   catch(e){ console.error(e); set('status-badge','Erro ao carregar dados'); }
 }
 async function init(){
-  loadDraft(); initSB(); whoami().then(loadScenarios);
+  loadDraft(); wireNotas(); initSB(); whoami().then(loadScenarios);
   const c=loadCache();
   if(c){ useRows(c.rows); if(Date.now()-c.t<CACHE_TTL){ const d=new Date(c.t); set('status-badge',`Atualizado ${d.toLocaleDateString('pt-BR')} ${d.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})} (cache)`); } else { await recarregar(); } }
   else { await recarregar(); }
