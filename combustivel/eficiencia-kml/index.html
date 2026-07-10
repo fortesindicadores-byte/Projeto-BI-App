@@ -572,19 +572,28 @@ function getYtdVigs(f){
 
 // ── AGREGAÇÃO ──
 function aggRows(rows){
-  // remMode='medio' (OFICIAL): média simples do rem médio (col rem).
-  // remMode='modelo': rem MODELO ponderado pelo KM RODADO
-  //   (ex.: placa A rem 2 · 100km e B rem 3 · 900km → (2·100+3·900)/1000 = 2,90).
-  let sumKm=0,sumLitros=0,sumRsL=0,sumRem=0,cnt=0,sumRemMKm=0,sumKmRem=0;
+  // remMode='medio' (OFICIAL): coluna KM/l Rem Médio (col rem). No PROJETO é
+  //   média burra (média simples). Ao subir para UNIDADE/EMPRESA, pondera cada
+  //   projeto pelo seu KM RODADO do projeto (não pela placa).
+  // remMode='modelo': coluna Km/L Rem Modelo (col remM) ponderada pelo KM
+  //   RODADO DA PLACA (ex.: placa A rem 2·100km e B rem 3·900km → 2,90).
+  let sumKm=0,sumLitros=0,sumRsL=0,sumRemMKm=0,sumKmRem=0;
+  const proj={};
   rows.forEach(r=>{
     const km=+(r[CL.kmRod]||0),lit=+(r[CL.litros]||0),rem=+(r[CL.rem]||0),remM=+(r[CL.remM]||0),rsL=+(r[CL.rsLReal]||0);
     sumKm+=km;sumLitros+=lit;sumRsL+=rsL;
-    if(rem>0){sumRem+=rem;cnt++;}
-    if(remM>0&&km>0){sumRemMKm+=remM*km;sumKmRem+=km;}
+    if(remM>0&&km>0){sumRemMKm+=remM*km;sumKmRem+=km;}   // modelo: km da placa
+    const p=getProj(r)||'—';
+    if(!proj[p])proj[p]={sumRem:0,cnt:0,km:0};
+    if(rem>0){proj[p].sumRem+=rem;proj[p].cnt++;}         // média burra no projeto
+    proj[p].km+=km;
   });
-  const remAvg = remMode==='modelo'
-    ? (sumKmRem>0?sumRemMKm/sumKmRem:null)
-    : (cnt>0?sumRem/cnt:null);
+  // médio: média burra por projeto, projetos ponderados pelo km do projeto
+  let sMp=0,kMp=0;
+  Object.values(proj).forEach(v=>{const rp=v.cnt>0?v.sumRem/v.cnt:null; if(rp!=null&&v.km>0){sMp+=rp*v.km;kMp+=v.km;}});
+  const remMedio=kMp>0?sMp/kMp:null;
+  const remModelo=sumKmRem>0?sumRemMKm/sumKmRem:null;
+  const remAvg=remMode==='modelo'?remModelo:remMedio;
   const realWt=sumLitros>0?sumKm/sumLitros:null;
   const rsLAvg=rows.length>0?sumRsL/rows.length:null;
   return{remAvg,realWt,sumKm,sumLitros,rsLAvg};
