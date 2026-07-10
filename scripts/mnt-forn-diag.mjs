@@ -60,6 +60,31 @@ async function main(){
   console.log(`\nCobertura: fornecedores da DRE (com nome)=${dNames.size} · achados na aba=${achou} · NÃO achados=${naoAchou}`);
   console.log(`Custo total=${Math.round(totCusto)} · custo sem fornecedor("-" )=${Math.round(semNomeCusto)} · custo em fornecedores AMBÍGUOS (nome→>1 família)=${Math.round(ambigCusto)}`);
   if(amostraAmbig.length){ console.log('\nAmostra de ambíguos (nome → famílias):'); amostraAmbig.forEach(s=>console.log('  '+s)); }
+
+  // ── TESTE DECISIVO: as duas abas são paralelas? conta → família é 1:1? ──
+  const dConta=col(dre.cols,'Conta Gerencial');
+  console.log(`\n[ZIP por índice] DRE=${dre.rows.length} linhas · Fornecedores=${fo.rows.length} linhas · idx Conta(DRE)=${dConta}`);
+  const N=Math.min(dre.rows.length, fo.rows.length);
+  // valida alinhamento: o fornecedor bate linha a linha nas duas abas?
+  let fornBate=0, fornForaFornBase=0;
+  const contaFam=new Map(); // conta(norm) -> set famílias
+  for(let i=0;i<N;i++){
+    const dF=_n(dre.rows[i][dForn]), fF=_n(fo.rows[i][fForn]);
+    if(dF===fF) fornBate++; else fornForaFornBase++;
+    const conta=_n(dre.rows[i][dConta]); const fam=String(fo.rows[i][fFam]==null?'':fo.rows[i][fFam]).trim();
+    if(conta){ (contaFam.get(conta)||contaFam.set(conta,new Set()).get(conta)).add(fam); }
+  }
+  console.log(`Alinhamento (fornecedor DRE[i]==Fornecedores[i]): batem=${fornBate} · divergem=${fornForaFornBase}`);
+  let c1=0,c2=0,c3=0; const contaAmb=[];
+  for(const [c,s] of contaFam){ const n=[...s].filter(Boolean).length; if(n<=1)c1++; else if(n===2){c2++; if(contaAmb.length<10)contaAmb.push(`${c} → ${[...s].join(' | ')}`);} else {c3++; if(contaAmb.length<10)contaAmb.push(`${c} → ${[...s].join(' | ')}`);} }
+  console.log(`\n[conta → família] contas distintas=${contaFam.size} · 1 família (1:1)=${c1} · 2=${c2} · 3+=${c3}`);
+  if(contaAmb.length){ console.log('Amostra de contas ambíguas:'); contaAmb.forEach(s=>console.log('  '+s)); }
+
+  // Família é igual à conta? (strings)
+  const contasSet=new Set([...contaFam.keys()]);
+  const famsNorm=new Set([...fams].map(_n));
+  let inter=0; for(const f of famsNorm) if(contasSet.has(f)) inter++;
+  console.log(`\nFamília × Conta (strings normalizadas): famílias=${famsNorm.size} · contas=${contasSet.size} · em comum=${inter}`);
   console.log('\n=== FIM ===');
 }
 main().catch(e=>{ console.error('Falha:',e); process.exit(1); });
