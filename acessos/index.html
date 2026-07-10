@@ -56,6 +56,10 @@ tbody tr:hover{background:rgba(255,255,255,.035);}
 th.num{text-align:right;}
 .mut{color:var(--text3);}
 .pill{display:inline-block;min-width:34px;text-align:center;padding:2px 8px;border-radius:5px;font-weight:800;color:#0C1017;background:var(--orange);}
+.farol{width:13px;height:13px;border-radius:50%;display:inline-block;vertical-align:middle;}
+.farol.on{background:var(--green);box-shadow:0 0 8px rgba(59,179,59,.6);}
+.farol.off{background:var(--red);box-shadow:0 0 8px rgba(255,102,102,.55);}
+tr.falta td{background:rgba(255,102,102,.05);}
 .loading{text-align:center;color:var(--text3);padding:50px;font-size:13px;}
 .gate{max-width:560px;margin:80px auto;text-align:center;background:rgba(20,27,38,.55);border:1px solid rgba(255,255,255,.08);border-radius:14px;padding:38px 34px;backdrop-filter:blur(16px);}
 .gate h2{font-size:18px;font-weight:800;margin-bottom:10px;}
@@ -89,7 +93,12 @@ body.light-mode td{border-bottom-color:rgba(0,0,0,.06);color:var(--text);}
 <script>
 const SUPABASE_URL='https://lozwipoeacpvplgkrxkq.supabase.co';
 const SUPABASE_KEY='sb_publishable_ggKEEebc5zjgQDVsF92Upw_6uoLmKe9';
-let sb=null, ROWS=[], chDia=null;
+let sb=null, ROWS=[], chDia=null, PROFILES=[], LAST_ACCESS={};
+// Unidades que o FCA cobre (mesma lista do fca-preenchimento). Farol por cadastro.
+const DEPARA={'CGR':'CAMPO GRANDE','BLC':'BALNEARIO CAMBORIU','CBA':'CUIABA','FLP':'FLORIANOPOLIS','GRL':'GUARULHOS','NFR':'NOVA FRIBURGO','PLT':'PELOTAS','RON':'RONDONOPOLIS','MCC':'CACHOEIRAS DE MACACU','PIR':'PIRAI'};
+// resolve o valor de fca_profiles.unidade (código 'CGR' ou nome 'CAMPO GRANDE') para o código
+function resolveUni(u){ if(!u)return null; const s=String(u).trim().toUpperCase(); if(DEPARA[s])return s;
+  const hit=Object.keys(DEPARA).find(c=>DEPARA[c].toUpperCase()===s); return hit||null; }
 const NOMES={hub:'Hub (entrada)','visao-financeira':'Visão Financeira','painel-km':'Painel KM','rs-por-km':'R$/KM',combustivel:'Combustível','eficiencia-ativacao':'Ativação de Frota',disponibilidade:'Disponibilidade',pneus:'Pneus',termometro:'Termômetro',gerot:'Gerot',auditorias:'Auditorias',fca:'FCA','fca-preenchimento':'FCA · Preenchimento','fca-consolidado':'FCA · Admin','fca-gerencial':'Aderência ao FCA',mpr:'MPR',governanca:'Estratégia e Governança','papeis-responsabilidades':'Papéis e Responsabilidades',scorecard:'Scorecard',diagnostico:'Diagnóstico','resumo-executivo':'Resumo Executivo','programa-reconhecimento':'Programa de Reconhecimento','painel-metas':'Painel de Metas',acessos:'Acessos','financeiro-pessoal':'Financeiro Pessoal','missao-visao-valores':'Missão, Visão e Valores'};
 const nomePainel=p=>NOMES[p]||p||'—';
 const MESES_PT=['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
@@ -131,6 +140,7 @@ function shell(){
     <div class="kpi-card"><div class="card-label">Últimos 7 dias</div><div class="card-value" id="k-7d">—</div></div>
   </div>
   <div class="chart-card"><div class="tbl-title">Acessos por dia</div><div class="tbl-sub">Últimos 30 dias (respeita os filtros)</div><div class="chart-wrap"><canvas id="ch-dia"></canvas></div></div>
+  <div class="tbl-section"><div class="tbl-title">Por unidade (cadastro no FCA)</div><div class="tbl-sub" id="sub-uni">—</div><div id="t-uni"></div></div>
   <div class="tables">
     <div class="tbl-section"><div class="tbl-title">Por usuário</div><div class="tbl-sub" id="sub-usr">—</div><div id="t-usr"></div></div>
     <div class="tbl-section"><div class="tbl-title">Por painel</div><div class="tbl-sub" id="sub-pan">—</div><div id="t-pan"></div></div>
@@ -184,6 +194,32 @@ function render(){
     ps.map(p=>`<tr><td><b>${esc(nomePainel(p.painel))}</b></td><td class="num"><span class="pill">${p.tot}</span></td><td class="num">${p.users.size}</td><td class="mut">${fmtDT(p.last)}</td></tr>`).join('')+'</tbody></table>':'<div class="loading">Sem registros para o filtro.</div>';
 }
 
+// ── Por unidade: farol de cadastro (independe dos filtros) ──
+function renderUnidades(){
+  const byUni={};
+  Object.keys(DEPARA).forEach(c=>byUni[c]={cod:c,cidade:DEPARA[c],users:[]});
+  PROFILES.forEach(p=>{
+    if(p.is_admin) return;
+    const c=resolveUni(p.unidade); if(!c||!byUni[c]) return;
+    byUni[c].users.push(p);
+  });
+  const rows=Object.values(byUni).map(u=>{
+    let last=null; u.users.forEach(p=>{const la=LAST_ACCESS[p.user_id]; if(la&&(!last||la>last))last=la;});
+    return {...u, n:u.users.length, last, ok:u.users.length>0};
+  });
+  rows.sort((a,b)=>(a.ok-b.ok)|| a.cidade.localeCompare(b.cidade)); // vermelhos primeiro
+  const faltam=rows.filter(r=>!r.ok).length;
+  set('sub-uni', `${rows.length} unidades · ${faltam} sem ninguém cadastrado (farol vermelho). Cadastros pendentes de aprovação ainda não têm unidade e não contam aqui.`);
+  document.getElementById('t-uni').innerHTML='<table><thead><tr><th>Unidade</th><th>Farol</th><th class="num">Cadastrados</th><th>Quem</th><th>Último acesso</th></tr></thead><tbody>'+
+    rows.map(r=>`<tr class="${r.ok?'':'falta'}">
+      <td><b>${esc(r.cidade)}</b> <span class="mut">(${r.cod})</span></td>
+      <td><span class="farol ${r.ok?'on':'off'}" title="${r.ok?'Tem cadastro':'Ninguém cadastrado'}"></span></td>
+      <td class="num">${r.n||'—'}</td>
+      <td>${r.users.length?esc(r.users.map(p=>p.nome||'(sem nome)').join(', ')):'<span class="mut">— ninguém —</span>'}</td>
+      <td class="mut">${r.last?fmtDT(r.last):'—'}</td>
+    </tr>`).join('')+'</tbody></table>';
+}
+
 async function initApp(){
   try{ sb=supabase.createClient(SUPABASE_URL,SUPABASE_KEY); }
   catch(e){ gate('Erro','Falha ao iniciar o Supabase.'); return; }
@@ -194,7 +230,7 @@ async function initApp(){
   // pagina de 1000 em 1000 (limite do PostgREST) até esgotar
   let all=[],from=0;const STEP=1000;
   while(true){
-    const {data,error}=await sb.from('access_log').select('email,painel,created_at').order('created_at',{ascending:false}).range(from,from+STEP-1);
+    const {data,error}=await sb.from('access_log').select('user_id,email,painel,created_at').order('created_at',{ascending:false}).range(from,from+STEP-1);
     if(error){
       if(/relation .*access_log.* does not exist|could not find the table|schema cache/i.test(error.message||''))
         gate('Tabela ainda não criada','Rode o SQL de <code>scripts/acessos-supabase.sql</code> no SQL Editor do Supabase (1 vez) e recarregue. O hub já está pronto para registrar os acessos.');
@@ -205,6 +241,12 @@ async function initApp(){
     if(!data||data.length<STEP||all.length>=50000)break;
     from+=STEP;
   }
+  // último acesso por usuário (inclui o Hub) — usado no farol por unidade
+  LAST_ACCESS={};
+  all.forEach(r=>{ const uid=r.user_id; if(!uid)return; const dt=new Date(r.created_at); if(!LAST_ACCESS[uid]||dt>LAST_ACCESS[uid])LAST_ACCESS[uid]=dt; });
+  // perfis por unidade (admin lê todos via RLS) — base do farol de cadastro
+  try{ const {data:profs}=await sb.from('fca_profiles').select('user_id,nome,unidade,is_admin'); PROFILES=profs||[]; }
+  catch(e){ PROFILES=[]; }
   // exclui o "Hub (entrada)" da contagem — é só a entrada no portal, não um painel
   ROWS=all.map(r=>{const dt=new Date(r.created_at);return {email:r.email||'(sem e-mail)',painel:r.painel||'hub',dt,dia:diaKey(dt),mes:mesKey(dt)};}).filter(r=>r.painel!=='hub');
   shell();
@@ -212,6 +254,7 @@ async function initApp(){
   buildMs('ms-pan',[...new Set(ROWS.map(r=>r.painel))].sort((a,b)=>nomePainel(a).localeCompare(nomePainel(b))),nomePainel);
   buildMs('ms-mes',[...new Set(ROWS.map(r=>r.mes))].sort().reverse(),mesLbl);
   render();
+  renderUnidades();
   const now=new Date();
   set('status',ROWS.length.toLocaleString('pt-BR')+' registros · '+now.toLocaleDateString('pt-BR')+' '+now.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'}));
 }
