@@ -599,9 +599,21 @@ Objetivo: montar a Árvore (`/combustivel/arvore-combustivel/`) puxando dados **
 | **R$/km** (Rem/Real) | **calculado**: apenas Custo Combustível ÷ KM Rodado (não tem fonte própria) |
 | **R$/Litro** (Rem/Real) | vem do painel **R$/L** (`/combustivel/preco-litro/`) |
 | **KM/L** (Rem/Real) | **já vem** do painel **Km/L** (`/combustivel/eficiencia-kml/`, aba `Km/L`) |
-| **Decomposição · KM Rodado** (1ª Viagem, Recs, Noturnas, Virados) | fonte a ser enviada pelo usuário |
+| **Decomposição · KM Rodado** (1ª Viagem, Recs, Noturnas, Virados) | aba **`Dispersão de km`** (base do Painel KM) — são **contagens de viagens**, não km |
+
+**Decomposição — colunas e fórmula (aba `Dispersão de km`):** os quatro números são contagens de viagens.
+- **Recs** = `Viagens Rec. Real` (col. Z)
+- **Noturnas** = `Viagens Noturnas Real` (col. AC)
+- **Virados** = `Viagens Mapa Aberto` (col. AM)
+- **1ª Viagem** = `Viagens - Real` (col. W) − Recs − Noturnas − Virados
+
+**Abas-fonte no workbook `Base Dispersão de km`** (mesmo `GV_ID`, tabs no rodapé): `De-Para · Dispersão de km · Consumo · Árvore Comb. · R$/L · Unidocs · Trechos sem KM · Ativos · Resumo Timeline CTEs`. Ou seja, `Dispersão de km` e `R$/L` estão no MESMO workbook da `Árvore Comb.` — dá pra puxar tudo do mesmo `GV_ID`. Na `Dispersão de km`: `Km Rem. TT` (AF) e `Km Rodado TT` (AG) alimentam o card KM Rodado (Rem/Real).
+
+**Custo Combustível (DRE / Visão Financeira):** workbook `1qcTy2ppLCGBKKqZCxCYWCTL9kTAuWfHBMyBfWJOyih8`, aba **`Frota`** (colunas `orc`=0, `rem`=1, `real`=2, `kmRem`=5, `kmReal`=6, `vig`=9, `uni`=10, `nv3`=11, `cta`=12). Custo Combustível = soma de `rem`/`real` das contas que caem no pacote **"Combustíveis"** (ver `PACOTES_MAP` no `visao-financeira/index.html`: Combustíveis Veículos e Equipamentos, Estorno de ICMS não Aproveitado, Fluídos (Arla), Arla, ICMS Crédito Presumido).
 
 Situação atual do código: a Árvore lê a aba `Árvore Comb.` (`GV_ID=1wCoRGsvOgmIvfLW4F9Sxr-5AX9Go-aFlRVjrQ_B2ilM`) para quase tudo, e já lê a aba `Km/L` (`KML_ID=1ZZdvG_RK5cTBLdPl3TWCbNeqw-Y4fTYwWsQV4w-e__A`) só para o card KM/L bater com o painel Eficiência.
+
+**Como implementar com segurança:** os números precisam continuar batendo com a `Árvore Comb.` atual. Antes de trocar a fonte, inspecionar as abas reais (`Dispersão de km`, `R$/L`, `Frota`) via GitHub Actions (o sandbox não alcança docs.google), reproduzir os totais atuais e só então trocar.
 
 ---
 
