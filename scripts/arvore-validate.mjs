@@ -100,7 +100,11 @@ async function main(){
     o.kmRem+=+(r[A.kmRem])||0;o.kmReal+=+(r[A.kmReal])||0;o.rem+=+(r[A.rem])||0;o.real+=+(r[A.real])||0;o.v1+=+(r[A.v1])||0;o.recs+=+(r[A.recs])||0;o.not+=+(r[A.not])||0;o.map+=+(r[A.map])||0;});return o;}
 
   const fmt=v=>v==null?'—':(Math.abs(v)>=1e6?(v/1e6).toFixed(2)+'mi':Math.abs(v)>=1e3?(v/1e3).toFixed(1)+'k':(+v).toFixed(2));
-  for(const [tag,f] of [['TODOS',{}],['ANO=2026',{ano:['2026']}],['ANO=2025',{ano:['2025']}]]){
+  // Vigência default = a mais recente em qualquer fonte (é o que o painel mostra ao abrir)
+  const allYm=[...disp.rows,...kml.rows].map(r=>{const d=parseVig(r[0]);return d?vigKey(d):null;}).filter(Boolean);
+  const lastYm=allYm.sort().pop();
+  console.log('Vigência default (mais recente):',lastYm);
+  for(const [tag,f] of [['DEFAULT ym='+lastYm,{ym:[lastYm]}],['TODOS',{}],['ANO=2026',{ano:['2026']}],['ANO=2025',{ano:['2025']}]]){
     console.log(`\n══════════ ${tag} ══════════`);
     const c=custo(f),k=kmrod(f),ka=kmlAgg(f),ra=rslAgg(f),as=arvSum(f);
     console.log(`Custo Comb.  NOVO rem=${fmt(c.rem)} real=${fmt(c.real)}   | ÁrvoreComb rem=${fmt(as.rem)} real=${fmt(as.real)}  ${Math.round(c.rem)===Math.round(as.rem)&&Math.round(c.real)===Math.round(as.real)?'✅':'❌ DIVERGE'}`);
