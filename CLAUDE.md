@@ -588,6 +588,23 @@ td.num { text-align:right; }
 
 ---
 
+## Árvore de Combustível — origem de cada card (meta: eliminar a aba `Árvore Comb.`)
+
+Objetivo: montar a Árvore (`/combustivel/arvore-combustivel/`) puxando dados **direto das abas-fonte de cada painel**, para o usuário parar de manter a aba consolidada `Árvore Comb.`. Mapeamento definido pelo usuário (10/07/2026):
+
+| Card na árvore | Origem (o que alimenta) |
+|---|---|
+| **Custo Combustível** (Rem/Real) | vem do **DRE** → mesma fonte da **Visão Financeira** |
+| **KM Rodado** (Rem/Real) | vem do **Painel KM** |
+| **R$/km** (Rem/Real) | **calculado**: apenas Custo Combustível ÷ KM Rodado (não tem fonte própria) |
+| **R$/Litro** (Rem/Real) | vem do painel **R$/L** (`/combustivel/preco-litro/`) |
+| **KM/L** (Rem/Real) | **já vem** do painel **Km/L** (`/combustivel/eficiencia-kml/`, aba `Km/L`) |
+| **Decomposição · KM Rodado** (1ª Viagem, Recs, Noturnas, Virados) | fonte a ser enviada pelo usuário |
+
+Situação atual do código: a Árvore lê a aba `Árvore Comb.` (`GV_ID=1wCoRGsvOgmIvfLW4F9Sxr-5AX9Go-aFlRVjrQ_B2ilM`) para quase tudo, e já lê a aba `Km/L` (`KML_ID=1ZZdvG_RK5cTBLdPl3TWCbNeqw-Y4fTYwWsQV4w-e__A`) só para o card KM/L bater com o painel Eficiência.
+
+---
+
 ## Roadmap
 
 **Painéis ativos:** Visão Financeira, Painel KM, Árvore de Combustível, Financeiro Pessoal (acesso direto)
