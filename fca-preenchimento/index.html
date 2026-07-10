@@ -211,7 +211,10 @@ const SRC_DEPARA = 'https://docs.google.com/spreadsheets/d/1xGl1Xrk2sPS9zWghEuec
 const SRC_BASE_RPM = 'https://docs.google.com/spreadsheets/d/1xGl1Xrk2sPS9zWghEuecFMNBHwmeLiZ02U-QpO8cDPY/gviz/tq?sheet='+encodeURIComponent('Base RPM')+'&headers=1';
 // FCA Total (consolidação do script): Origem | Vigência | Unidade | Projeto | Fato | Causa | Ação | Prazo | Status
 const SRC_FCATOTAL = 'https://docs.google.com/spreadsheets/d/1oW3mss0pXVI6gaDU2z5cDAKvW40LWHCQXpanqSvb12o/gviz/tq?sheet='+encodeURIComponent('FCA Total')+'&headers=1';
-const srcDre = ()=>'https://docs.google.com/spreadsheets/d/1qcTy2ppLCGBKKqZCxCYWCTL9kTAuWfHBMyBfWJOyih8/gviz/tq?sheet='+encodeURIComponent('Consolidado DRE')+'&tq='+encodeURIComponent("select * where K = '"+UNIDADE_DRE+"'");
+// Custos: aba "Frota" (mesma da Visão Financeira). A "Consolidado DRE" foi aposentada.
+// Frota (índices): [0]VIGÊNCIA [3]Unidade [4]NÍVEL 3 [5]CONTA GERENCIAL [8]ORÇADO [9]REMUNERADO [10]REALIZADO.
+// Puxa a aba inteira e filtra a unidade no cliente (uniMatch, sem acento) — a Frota usa "CUIABÁ/PIRAÍ/RONDONÓPOLIS" com acento.
+const srcDre = ()=>'https://docs.google.com/spreadsheets/d/1qcTy2ppLCGBKKqZCxCYWCTL9kTAuWfHBMyBfWJOyih8/gviz/tq?sheet='+encodeURIComponent('Frota');
 const SRC_KML = 'https://docs.google.com/spreadsheets/d/1ZZdvG_RK5cTBLdPl3TWCbNeqw-Y4fTYwWsQV4w-e__A/gviz/tq?sheet='+encodeURIComponent('Km/L');
 // Dispersão de km (Painel KM): col0 vig · col13/14 unidade · col14 antes do "-" projeto · col31 rem · col32 real · col36 impacto R$
 const SRC_DISP = 'https://docs.google.com/spreadsheets/d/1wCoRGsvOgmIvfLW4F9Sxr-5AX9Go-aFlRVjrQ_B2ilM/gviz/tq?sheet='+encodeURIComponent('Dispersão de km');
@@ -363,17 +366,18 @@ function pushDRE(dre,fatos,kmlCausas,dispCausas,frotaMaps){
   kmlCausas=kmlCausas||{};dispCausas=dispCausas||{};frotaMaps=frotaMaps||{mes:{},porMes:{}};
   const _nc=s=>String(s||'').normalize('NFD').replace(/[̀-ͯ]/g,'').toUpperCase().replace(/\s+/g,' ').trim();
   const EXCL=new Set(['RECEITA LIQUIDA','ICMS CREDITO PRESUMIDO','IPVA E LICENCIAMENTO DE VEICULOS','ESTORNO ICMS NAO APROVEITADO']);
-  const drRows=(dre||[]).filter(r=>parseD(r[9])&&String(r[10]||'').trim().toUpperCase()===UNIDADE_DRE&&!EXCL.has(_nc(r[12])));
+  const drRows=(dre||[]).filter(r=>parseD(r[0])&&uniMatch(r[3])&&!EXCL.has(_nc(r[5])));
   if(!drRows.length)return;
-  let maxK=0;drRows.forEach(r=>{const k=vigKeyN(parseD(r[9]));if(k>maxK)maxK=k;});
+  // Frota tem meses ORÇADOS futuros (rem/real=0); mês de análise = última vigência COM realizado ≠ 0.
+  let maxK=0;drRows.forEach(r=>{const real=r[10]!=null?+r[10]:0;if(real!==0){const k=vigKeyN(parseD(r[0]));if(k>maxK)maxK=k;}});
   const vig=vigLbl(new Date(Math.floor(maxK/100),maxK%100,1));
   const yrMax=Math.floor(maxK/100);
   const acc={};
-  drRows.filter(r=>vigKeyN(parseD(r[9]))===maxK).forEach(r=>{const conta=String(r[12]||'—').trim();const niv=String(r[11]||'').trim();const rem=r[1]!=null?+r[1]:0,real=r[2]!=null?+r[2]:0;const key=niv+'||'+conta;if(!acc[key])acc[key]={conta,niv,rem:0,real:0};acc[key].rem+=rem;acc[key].real+=real;});
+  drRows.filter(r=>vigKeyN(parseD(r[0]))===maxK).forEach(r=>{const conta=String(r[5]||'—').trim();const niv=String(r[4]||'').trim();const rem=r[9]!=null?+r[9]:0,real=r[10]!=null?+r[10]:0;const key=niv+'||'+conta;if(!acc[key])acc[key]={conta,niv,rem:0,real:0};acc[key].rem+=rem;acc[key].real+=real;});
   // Manutenção/Pneus/Recapagem/Lavação: custo de CADA mês do ano (YTD) por projeto+conta, p/ a média do custo/placa ativa
   const isMP=c=>/MANUTEN|PNEU|RECAP|LAVA/.test(_nc(c));
   const custoPorMes={}; // key proj||conta -> { vigKey: custo }
-  drRows.forEach(r=>{const k=vigKeyN(parseD(r[9]));if(Math.floor(k/100)!==yrMax||k>maxK)return;const conta=String(r[12]||'').trim();if(!isMP(conta))return;const key=projKey(r[11])+'||'+_nc(conta);(custoPorMes[key]=custoPorMes[key]||{});custoPorMes[key][k]=(custoPorMes[key][k]||0)+Math.abs(r[2]!=null?+r[2]:0);});
+  drRows.forEach(r=>{const k=vigKeyN(parseD(r[0]));if(Math.floor(k/100)!==yrMax||k>maxK)return;const conta=String(r[5]||'').trim();if(!isMP(conta))return;const key=projKey(r[4])+'||'+_nc(conta);(custoPorMes[key]=custoPorMes[key]||{});custoPorMes[key][k]=(custoPorMes[key][k]||0)+Math.abs(r[10]!=null?+r[10]:0);});
   // Custos na DRE são negativos: gasto ACIMA do orçado => (rem - real) > 0 (mais gasto que o remunerado)
   Object.values(acc).map(o=>{const over=o.rem-o.real,base=Math.abs(o.rem);return {...o,over,dpct:base>0?over/base*100:0};})
     .filter(o=>o.over>0&&o.rem!==0).sort((a,b)=>b.over-a.over)
@@ -403,7 +407,7 @@ function kmlCausasPorProj(kml){
   const out={};
   const f2=v=>(+v).toFixed(2).replace('.',',');
   const norm=s=>String(s||'').normalize('NFD').replace(/[̀-ͯ]/g,'').toUpperCase().replace(/\s+/g,' ').trim();
-  const rows=(kml||[]).filter(r=>parseD(r[0])&&String(r[15]||'').trim().toUpperCase()===UNIDADE_DRE);
+  const rows=(kml||[]).filter(r=>parseD(r[0])&&uniMatch(r[15]));
   if(!rows.length)return out;
   let maxK=0;rows.forEach(r=>{const k=vigKeyN(parseD(r[0]));if(k>maxK)maxK=k;});
   const acc={}; // por projeto (col14)
@@ -498,7 +502,7 @@ async function gerarFatos(shared){
   // RPM agora é sincronizada à parte (Base RPM, via "Sincronizar RPM"); aqui só Custos (DRE) + drivers de causa.
   const disp=shared?shared.disp:await _gvizSafe(SRC_DISP); if(disp){try{dispCausas=dispCausasPorProj(disp);frotaMaps=frotaAtivaPorProj(disp);}catch(e){}}
   const kml=shared?shared.kml:await _gvizSafe(SRC_KML);    if(kml){try{kmlCausas=kmlCausasPorProj(kml);}catch(e){}}
-  try{ const dre=await gviz(srcDre()); pushDRE(dre,fatos,kmlCausas,dispCausas,frotaMaps); }catch(e){}
+  const dre=shared?shared.dre:await _gvizSafe(srcDre()); if(dre){try{pushDRE(dre,fatos,kmlCausas,dispCausas,frotaMaps);}catch(e){}}
   return fatos;
 }
 // Grava/atualiza na base os fatos da unidade atual. Retorna nº de novos.
@@ -575,7 +579,7 @@ async function gerarTodas(){
   const intro=document.querySelector('.intro'); if(intro)intro.style.display='none';
   list.innerHTML='<div class="loading">Baixando planilhas…</div>';
   // RPM recriado por (unidade, vigência) dentro do seedUnidade — meses anteriores e Custos preservados
-  const shared={ger:await _gvizSafe(SRC_GEROT), disp:await _gvizSafe(SRC_DISP), kml:await _gvizSafe(SRC_KML), dep:await _gvizSafe(SRC_DEPARA)};
+  const shared={ger:await _gvizSafe(SRC_GEROT), disp:await _gvizSafe(SRC_DISP), kml:await _gvizSafe(SRC_KML), dep:await _gvizSafe(SRC_DEPARA), dre:await _gvizSafe(srcDre())};
   const units=Object.keys(DEPARA).sort();
   const log=[]; let tot=0;
   for(const u of units){
