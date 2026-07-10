@@ -138,10 +138,14 @@ body.light-mode .cen-title{border-bottom-color:rgba(0,0,0,.12);}
 .tbl-title .tag{font-size:11px;font-weight:700;color:#000;background:var(--orange);border-radius:4px;padding:2px 8px;margin-left:8px;vertical-align:middle;text-transform:uppercase;letter-spacing:.5px;}
 .tbl-title .tag.blue{background:var(--blue);}
 .tbl-sub{font-size:13px;color:var(--text2);margin-bottom:16px;}
-.strat-ta{width:100%;min-height:120px;resize:vertical;background:#0a0f18;color:var(--text);border:1px solid #2a3a50;border-radius:6px;font-family:'Montserrat',sans-serif;font-size:13px;line-height:1.6;padding:12px 14px;outline:none;}
+.strat-section{background:rgba(20,27,38,.55);border:1px solid rgba(255,255,255,.07);border-radius:8px;padding:14px 18px 16px;margin:-6px 0 16px;}
+.strat-h{font-size:13px;font-weight:800;color:var(--text);margin-bottom:10px;}
+.strat-hint{font-size:11px;font-weight:500;color:var(--text2);}
+.strat-ta{width:100%;min-height:96px;resize:vertical;background:#0a0f18;color:var(--text);border:1px solid #2a3a50;border-radius:6px;font-family:'Montserrat',sans-serif;font-size:13px;line-height:1.6;padding:12px 14px;outline:none;}
 .strat-ta:focus{border-color:var(--orange);}
 .strat-ta::placeholder{color:var(--text3);}
-.strat-count{font-size:10px;color:var(--text3);float:right;font-weight:600;}
+.rec-dpct{font-size:10px;opacity:.8;font-weight:600;}
+body.light-mode .strat-section{background:rgba(128,128,128,.14)!important;border:none!important;}
 body.light-mode .strat-ta{background:#fff;border-color:rgba(0,0,0,.15);}
 .tbl-wrap{overflow-x:auto;}
 table.dre{width:100%;border-collapse:collapse;font-size:13px;table-layout:fixed;}
@@ -308,15 +312,8 @@ body.light-mode table.dre tbody tr{border-bottom:1px solid rgba(0,0,0,.06);}
     <span class="fc-hint" id="fc-hint">Rascunho salvo neste navegador. Dê um nome e “Salvar” para publicar o cenário.</span>
   </div>
 
-  <!-- ── TABELA EDITÁVEL ── -->
+  <!-- ── TABELAS EDITÁVEIS (cada cenário já traz sua caixa de estratégia) ── -->
   <div id="tables"></div>
-
-  <!-- ── ESTRATÉGIA / OBSERVAÇÕES ── -->
-  <div class="tbl-section" id="strat-section">
-    <div class="tbl-title">Estratégia / Observações <span class="strat-count" id="strat-count"></span></div>
-    <div class="tbl-sub">O que será feito para reduzir custos e chegar na meta. Salvo junto do cenário.</div>
-    <textarea id="fc-notas" class="strat-ta" maxlength="4000" placeholder="Ex.: Renegociar contrato de combustível na CBA; revisar plano de pneus; adiar 2 preventivas para jul; renegociar seguros no fim do ano…"></textarea>
-  </div>
 
 </main>
 
@@ -365,6 +362,8 @@ const fmt = v => { const neg=+v<0,a=Math.abs(+v); let s; if(a>=1e9) s=(a/1e9).to
 const fmtD = v => (+v>0?'+':'')+fmt(v);
 const pp = v => v==null||!isFinite(v) ? '—' : (v>=0?'+':'')+v.toFixed(2)+' pp';
 const pctInt = v => v==null||!isFinite(v) ? '—' : (v>=0?'+':'')+Math.round(v)+'%';
+const sfmt = v => (v==null||!isFinite(v)) ? '—' : (v>=0?'+':'')+fmt(v);          // Δ nominal com sinal
+const spct = v => (v==null||!isFinite(v)) ? '' : (v>=0?'+':'')+v.toFixed(1)+'%';  // Δ % com sinal
 const set = (id,val)=>{ const e=document.getElementById(id); if(e) e.textContent=val; };
 
 // ═══════════════════════════════════ ESTADO ═══════════════════════════════════
@@ -992,14 +991,14 @@ function toggleDrill(tr){
 // ═══════════════════════════════════ ATUALIZAR ═══════════════════════════════════
 // ═══════════════════════════════════ FORECAST EDITÁVEL ═══════════════════════════════════
 let OV={}, recOVorc={}, recOVtrend={};      // custos (compartilhados) + receita por cenário (orçada / tendência)
-let NOTAS='';                               // estratégia/observações (texto livre, salvo junto do cenário)
+let NOTAS={A:'',B:''};                       // estratégia/observações por cenário (salvo junto do cenário)
 const FC_KEY='forecast_draft_v2';
+function normNotas(n){ if(n&&typeof n==='object') return {A:n.A||'',B:n.B||''}; if(typeof n==='string') return {A:n,B:''}; return {A:'',B:''}; }
 function saveDraft(){ try{ localStorage.setItem(FC_KEY, JSON.stringify({OV,recOVorc,recOVtrend,NOTAS})); }catch(e){} }
-function loadDraft(){ try{ const d=JSON.parse(localStorage.getItem(FC_KEY)); if(d){ OV=d.OV||{}; recOVorc=d.recOVorc||{}; recOVtrend=d.recOVtrend||{}; NOTAS=d.NOTAS||''; } }catch(e){} }
-// textarea de estratégia (elemento estático — não é re-renderizado)
-function syncNotas(){ const t=document.getElementById('fc-notas'); if(t) t.value=NOTAS; const c=document.getElementById('strat-count'); if(c) c.textContent=NOTAS?`${NOTAS.length} caracteres`:''; }
-function wireNotas(){ const t=document.getElementById('fc-notas'); if(!t) return; syncNotas(); t.oninput=()=>{ NOTAS=t.value; const c=document.getElementById('strat-count'); if(c) c.textContent=NOTAS?`${NOTAS.length} caracteres`:''; saveDraft(); }; }
-function resetAll(){ if(!confirm('Descartar todas as edições e voltar ao orçado?')) return; OV={}; recOVorc={}; recOVtrend={}; NOTAS=''; syncNotas(); saveDraft(); atualizar(); }
+function loadDraft(){ try{ const d=JSON.parse(localStorage.getItem(FC_KEY)); if(d){ OV=d.OV||{}; recOVorc=d.recOVorc||{}; recOVtrend=d.recOVtrend||{}; NOTAS=normNotas(d.NOTAS); } }catch(e){} }
+// liga as duas textareas de estratégia (uma por cenário) — chamada após cada render de #tables
+function wireNotas(){ ['A','B'].forEach(k=>{ const t=document.getElementById('fc-notas-'+k); if(!t) return; t.value=NOTAS[k]||''; t.oninput=()=>{ NOTAS[k]=t.value; saveDraft(); }; }); }
+function resetAll(){ if(!confirm('Descartar todas as edições e voltar ao orçado?')) return; OV={}; recOVorc={}; recOVtrend={}; NOTAS={A:'',B:''}; saveDraft(); atualizar(); }
 // aceita "-2.87 mi", "566k", "-2.870.000", "1234,56"
 function parseNum(raw){
   if(raw==null) return null;
@@ -1076,8 +1075,11 @@ function tblFull(model, F, opts){
   const blockCols = (avO,avL,dPp,imp)=>`<td class="num sep-l">${pctN(avO)}</td><td class="num">${pctN(avL)}</td>${dppImp(dPp,imp)}`;
   const recCh = mo => opts.recKey==='rec|orc'? recOVorc[mo]!=null : recOVtrend[mo]!=null;
   const recCells=remMonths.map(mo=>ecell(opts.recKey, mo, opts.recFn(model,mo), recCh(mo))).join('').replace('<td class="num','<td class="num sep-l',1);
-  // RECEITA no topo
-  let rows=`<tr class="rec-row"><td class="conta">Receita Líquida</td><td class="num">${fmtA(F.recYtdOrc)}</td><td class="num">${fmtA(F.recYtdReal)}</td><td class="num muted">—</td><td class="num muted">—</td>${recCells}<td class="num sep-l">${fmtA(F.recOrcYear)}</td><td class="num">${fmtA(F.recProjF)}</td><td class="num muted">—</td><td class="num muted">—</td></tr>`;
+  // RECEITA no topo — Δ nominal + (%) com cor de receita (mais receita = verde)
+  const dYtd=F.recYtdReal-F.recYtdOrc, pYtd=F.recYtdOrc?(F.recYtdReal/F.recYtdOrc-1)*100:null;
+  const dYr =F.recProjF -F.recOrcYear, pYr =F.recOrcYear?(F.recProjF /F.recOrcYear-1)*100:null;
+  const recDelta=(d,p)=>`<td class="num ${d>=0?'cg':'cr'}">${sfmt(d)} <span class="rec-dpct">(${spct(p)})</span></td>`;
+  let rows=`<tr class="rec-row"><td class="conta">Receita Líquida</td><td class="num">${fmtA(F.recYtdOrc)}</td><td class="num">${fmtA(F.recYtdReal)}</td>${recDelta(dYtd,pYtd)}<td class="num muted">—</td>${recCells}<td class="num sep-l">${fmtA(F.recOrcYear)}</td><td class="num">${fmtA(F.recProjF)}</td>${recDelta(dYr,pYr)}<td class="num muted">—</td></tr>`;
   // CUSTOS
   let tImpYtd=0; PAC_ORDER.forEach(p=>{ if(pacs[p]) tImpYtd+=pacs[p].imp; });
   PAC_ORDER.forEach(p=>{ const P=pacs[p]; if(!P||(P.orcRem===0&&P.orcAcc===0&&P.imp===0)) return; const po=F.per[p];
@@ -1097,8 +1099,12 @@ function tblFull(model, F, opts){
     <div class="tbl-title">${opts.title}</div>
     <div class="tbl-sub">${opts.sub}</div>
     <div class="tbl-wrap"><table class="dre" style="table-layout:auto;min-width:100%;"><thead>
-      <tr><th class="conta">Receita / Pacotes</th><th class="num">Orç - YTD</th><th class="num">Real - YTD</th><th class="num">Δ pp</th><th class="num">Impacto</th>${monthHead}<th class="num sep-l">Orç - ${year}</th><th class="num">FCT - ${year}</th><th class="num">Δ pp</th><th class="num">Impacto</th></tr>
-    </thead><tbody>${rows}</tbody></table></div></div>`;
+      <tr><th class="conta">Receita / Pacotes</th><th class="num">Orç - YTD</th><th class="num">Real - YTD</th><th class="num">Δ</th><th class="num">Impacto</th>${monthHead}<th class="num sep-l">Orç - ${year}</th><th class="num">FCT - ${year}</th><th class="num">Δ</th><th class="num">Impacto</th></tr>
+    </thead><tbody>${rows}</tbody></table></div></div>
+    <div class="strat-section">
+      <div class="strat-h">Estratégia / Observações <span class="strat-hint">— o que será feito para reduzir custos neste cenário. Salvo junto do cenário.</span></div>
+      <textarea id="fc-notas-${opts.note}" class="strat-ta" maxlength="4000" placeholder="Ex.: Renegociar contrato de combustível na CBA; revisar plano de pneus; adiar 2 preventivas para jul…"></textarea>
+    </div>`;
 }
 function drillClick(e,tr){ if(!e.target.closest('td.conta')) return; toggleDrill(tr); }
 function distributePac(pac, mo, newTotal){
@@ -1141,7 +1147,7 @@ async function saveScenario(){
   if(!ME){ alert('Faça login no portal (hub) para salvar cenários.'); return; }
   const nome=((document.getElementById('fc-name')||{}).value||'').trim(); if(!nome){ alert('Dê um nome ao cenário.'); return; }
   const f=getF();
-  const row={nome, autor_email:ME, ano:(window._model?window._model.year:null), filtros:{uni:f.uni,nv3:f.nv3}, overrides:{OV,recOVorc,recOVtrend}, notas:NOTAS};
+  const row={nome, autor_email:ME, ano:(window._model?window._model.year:null), filtros:{uni:f.uni,nv3:f.nv3}, overrides:{OV,recOVorc,recOVtrend}, notas:JSON.stringify(NOTAS)};
   const {error}=await SB.from('forecast_scenarios').insert(row);
   if(error){ alert('Erro ao salvar: '+error.message); return; }
   document.getElementById('fc-name').value=''; await loadScenarios(); scenHint(`Cenário "${nome}" salvo.`);
@@ -1150,7 +1156,8 @@ async function loadScenario(){
   const sel=document.getElementById('fc-list'), id=sel&&sel.value; if(!id){ alert('Selecione um cenário.'); return; }
   const {data,error}=await SB.from('forecast_scenarios').select('overrides,nome,notas').eq('id',id).single();
   if(error){ alert('Erro ao carregar: '+error.message); return; }
-  const ov=data.overrides||{}; OV=ov.OV||{}; recOVorc=ov.recOVorc||{}; recOVtrend=ov.recOVtrend||{}; NOTAS=data.notas||''; syncNotas(); saveDraft(); atualizar();
+  const ov=data.overrides||{}; OV=ov.OV||{}; recOVorc=ov.recOVorc||{}; recOVtrend=ov.recOVtrend||{};
+  let nt=data.notas; try{ nt=JSON.parse(data.notas); }catch(e){} NOTAS=normNotas(nt); saveDraft(); atualizar();
   const nm=document.getElementById('fc-name'); if(nm) nm.value=data.nome||''; scenHint(`Cenário "${data.nome}" carregado.`);
 }
 async function renameScenario(){
@@ -1185,8 +1192,9 @@ function atualizar(){
   const Ft=computeForecast(model, recTrend);  // cenário receita tendência
   renderCompare(model, Fo, Ft);
   document.getElementById('tables').innerHTML=
-    tblFull(model, Fo, {title:'Cenário A · Receita Orçada', sub:'Receita fixa no orçado até dez. Custos editáveis abaixo; à direita, aterrissagem 2026.', recKey:'rec|orc', recFn:recOrc})
-   +tblFull(model, Ft, {title:'Cenário B · Receita Tendência', sub:'Receita projetada pela tendência (orçado × desempenho realizado). Mesmos custos, receita diferente → outra aterrissagem.', recKey:'rec|trend', recFn:recTrend});
+    tblFull(model, Fo, {title:'Cenário A · Receita Orçada', sub:'Receita fixa no orçado até dez. Custos editáveis abaixo; à direita, aterrissagem 2026.', recKey:'rec|orc', recFn:recOrc, note:'A'})
+   +tblFull(model, Ft, {title:'Cenário B · Receita Tendência', sub:'Receita projetada pela tendência (orçado × desempenho realizado). Mesmos custos, receita diferente → outra aterrissagem.', recKey:'rec|trend', recFn:recTrend, note:'B'});
+  wireNotas();
   const now=new Date();
   set('status-badge',`Atualizado ${now.toLocaleDateString('pt-BR')} ${now.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})}`);
 }
