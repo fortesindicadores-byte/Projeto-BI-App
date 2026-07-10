@@ -90,7 +90,7 @@ body.exporting:not(.light-mode) #pdf-report-head .rh-title{color:#FFFFFF;}
 body.exporting:not(.light-mode) #pdf-report-head .rh-sub,body.exporting:not(.light-mode) #pdf-report-head .rh-meta{color:#94A3B8;}
 body.exporting:not(.light-mode) #pdf-report-head .rh-filtros{color:#CBD5E1;}
 body.exporting:not(.light-mode) main.main{background:#0C1017;padding:16px;border-radius:8px;}
-body.exporting:not(.light-mode) .wf-card,body.exporting:not(.light-mode) .tbl-section{background:#141B26!important;backdrop-filter:none!important;-webkit-backdrop-filter:none!important;}
+body.exporting:not(.light-mode) .wf-card,body.exporting:not(.light-mode) .tbl-section,body.exporting:not(.light-mode) .strat-section{background:#141B26!important;backdrop-filter:none!important;-webkit-backdrop-filter:none!important;}
 #pdf-report-head .rh-top{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;}
 #pdf-report-head .rh-title{font-size:30px;font-weight:800;color:#0C1017;letter-spacing:.3px;}
 #pdf-report-head .rh-sub{font-size:11px;color:#555;margin-top:2px;font-weight:600;}
@@ -145,6 +145,9 @@ body.light-mode .cen-title{border-bottom-color:rgba(0,0,0,.12);}
 .strat-ta:focus{border-color:var(--orange);}
 .strat-ta::placeholder{color:var(--text3);}
 .rec-dpct{font-size:10px;opacity:.8;font-weight:600;}
+.strat-print{display:none;white-space:pre-wrap;font-size:13px;line-height:1.6;color:var(--text);padding:2px 2px;}
+body.exporting .strat-ta{display:none;}
+body.exporting .strat-print{display:block;}
 body.light-mode .strat-section{background:rgba(128,128,128,.14)!important;border:none!important;}
 body.light-mode .strat-ta{background:#fff;border-color:rgba(0,0,0,.15);}
 .tbl-wrap{overflow-x:auto;}
@@ -179,7 +182,7 @@ body.light-mode table.dre tr.total td{background:#F0F0F0;}
 .esf-tag.hi{color:var(--red);background:rgba(255,102,102,.10);border-color:rgba(255,102,102,.35);}
 .dot-ok{display:inline-block;width:10px;height:10px;border-radius:50%;background:var(--green);box-shadow:0 0 6px rgba(59,179,59,.55);vertical-align:middle;}
 /* ══ FORECAST: comparação, toolbar, células editáveis ══ */
-.cmp-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin:10px 0 4px;}
+.cmp-grid{display:grid;grid-template-columns:repeat(6,1fr);gap:12px;margin:10px 0 4px;}
 .cmp-card{background:rgba(20,27,38,.55);border:1px solid rgba(255,255,255,.07);border-radius:8px;padding:14px 16px;backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);box-shadow:0 2px 12px rgba(0,0,0,.25);}
 .cmp-card.hi{border-color:rgba(56,189,248,.5);}
 .cmp-label{font-size:10px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.5px;}
@@ -204,6 +207,7 @@ table.dre td.edit.changed{color:var(--blue)!important;font-weight:700;}
 tr.rec-row td{border-top:1px solid rgba(255,255,255,.10);color:var(--text2);}
 tr.rec-row td.conta{font-weight:700;color:var(--text);}
 body.light-mode .cmp-card{background:rgba(128,128,128,.14)!important;border:none!important;box-shadow:none!important;--text:#1a1a1a;--text2:#444;}
+@media(max-width:1200px){.cmp-grid{grid-template-columns:repeat(3,1fr);}}
 @media(max-width:768px){.cmp-grid{grid-template-columns:repeat(2,1fr);}}
 /* célula empilhada: forecast|AV em cima, economia(pp) menor embaixo */
 table.dre td.mcell{text-align:right;line-height:1.2;white-space:nowrap;}
@@ -997,7 +1001,9 @@ function normNotas(n){ if(n&&typeof n==='object') return {A:n.A||'',B:n.B||''}; 
 function saveDraft(){ try{ localStorage.setItem(FC_KEY, JSON.stringify({OV,recOVorc,recOVtrend,NOTAS})); }catch(e){} }
 function loadDraft(){ try{ const d=JSON.parse(localStorage.getItem(FC_KEY)); if(d){ OV=d.OV||{}; recOVorc=d.recOVorc||{}; recOVtrend=d.recOVtrend||{}; NOTAS=normNotas(d.NOTAS); } }catch(e){} }
 // liga as duas textareas de estratégia (uma por cenário) — chamada após cada render de #tables
-function wireNotas(){ ['A','B'].forEach(k=>{ const t=document.getElementById('fc-notas-'+k); if(!t) return; t.value=NOTAS[k]||''; t.oninput=()=>{ NOTAS[k]=t.value; saveDraft(); }; }); }
+function wireNotas(){ ['A','B'].forEach(k=>{ const t=document.getElementById('fc-notas-'+k); if(!t) return;
+  const pr=document.getElementById('fc-print-'+k); t.value=NOTAS[k]||''; if(pr) pr.textContent=NOTAS[k]||'';
+  t.oninput=()=>{ NOTAS[k]=t.value; if(pr) pr.textContent=t.value; saveDraft(); }; }); }
 function resetAll(){ if(!confirm('Descartar todas as edições e voltar ao orçado?')) return; OV={}; recOVorc={}; recOVtrend={}; NOTAS={A:'',B:''}; saveDraft(); atualizar(); }
 // aceita "-2.87 mi", "566k", "-2.870.000", "1234,56"
 function parseNum(raw){
@@ -1054,6 +1060,8 @@ function renderCompare(model, Fo, Ft){
     {l:'Se nada mudar', v:pctN(Fo.avNada), m:impMeta(Fo.impNada), cls:(Fo.avNada-Fo.avOrc)<0?'cr':'cg'},
     {l:'Forecast · Rec. Orçada', v:pctN(Fo.avFc), m:impMeta(Fo.impFc), cls:(Fo.avFc-Fo.avOrc)<0?'cr':'cg'},
     {l:'Forecast · Rec. Tendência', v:pctN(Ft.avFc), m:impMeta(Ft.impFc), hi:true, cls:(Ft.avFc-Ft.avOrc)<0?'cr':'cg'},
+    {l:'Impacto Rec. Orçada', v:fmtA(Fo.impFc), m:'em R$ vs orçado 2026', cls:Fo.impFc<0?'cr':'cg'},
+    {l:'Impacto Rec. Tendência', v:fmtA(Ft.impFc), m:'em R$ vs orçado 2026', cls:Ft.impFc<0?'cr':'cg'},
   ];
   document.getElementById('cmp-grid').innerHTML=cards.map(c=>`
     <div class="cmp-card ${c.hi?'hi':''}">
@@ -1102,8 +1110,9 @@ function tblFull(model, F, opts){
       <tr><th class="conta">Receita / Pacotes</th><th class="num">Orç - YTD</th><th class="num">Real - YTD</th><th class="num">Δ</th><th class="num">Impacto</th>${monthHead}<th class="num sep-l">Orç - ${year}</th><th class="num">FCT - ${year}</th><th class="num">Δ</th><th class="num">Impacto</th></tr>
     </thead><tbody>${rows}</tbody></table></div></div>
     <div class="strat-section">
-      <div class="strat-h">Estratégia / Observações <span class="strat-hint">— o que será feito para reduzir custos neste cenário. Salvo junto do cenário.</span></div>
+      <div class="strat-h">Estratégia / Observações · Cenário ${opts.note} <span class="strat-hint">— o que será feito para reduzir custos neste cenário. Salvo junto do cenário.</span></div>
       <textarea id="fc-notas-${opts.note}" class="strat-ta" maxlength="4000" placeholder="Ex.: Renegociar contrato de combustível na CBA; revisar plano de pneus; adiar 2 preventivas para jul…"></textarea>
+      <div class="strat-print" id="fc-print-${opts.note}"></div>
     </div>`;
 }
 function drillClick(e,tr){ if(!e.target.closest('td.conta')) return; toggleDrill(tr); }
@@ -1258,7 +1267,11 @@ async function exportarPDF(mode){
     const slides=[];
     const topo=[main.querySelector('#pdf-report-head'),main.querySelector('.bridge-title'),main.querySelector('.bridge-sub'),main.querySelector('.cmp-grid')].filter(Boolean);
     if(topo.length) slides.push(topo);
-    qa('#tables > .tbl-section').forEach(t=>{ const prev=t.previousElementSibling; const grp=(prev&&prev.classList.contains('cen-title'))?[prev,t]:[t]; slides.push(grp); });
+    qa('#tables > .tbl-section').forEach(t=>{
+      const prev=t.previousElementSibling; const grp=(prev&&prev.classList.contains('cen-title'))?[prev,t]:[t]; slides.push(grp);
+      const st=t.nextElementSibling;   // caixa de estratégia do cenário → slide próprio se tiver texto
+      if(st&&st.classList.contains('strat-section')){ const pr=st.querySelector('.strat-print'); if(pr&&pr.textContent.trim()) slides.push([st]); }
+    });
     const COMP_W=2000, COMP_H=Math.round(COMP_W*PH/PW), ppm=COMP_W/PW;
     let pdf=null;
     for(const slide of slides){
