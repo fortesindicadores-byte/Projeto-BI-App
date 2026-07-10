@@ -268,11 +268,14 @@ function render(){
   const gk=gsort.key==='nome'?'nome':gsort.key;
   grp=sortRows(grp.map(o=>({nome:o.nome,nfs:o.nfs,real:o.real})),gk,gsort.dir);
   const dimLbl={ramo:'Ramo',forn:'Fornecedor',cc:'Centro de Custo'}[dim]||'Fornecedor';
+  const totReal=grp.reduce((s,o)=>s+(o.real||0),0);
+  const pctFmt=v=>(v==null||!isFinite(v))?'—':(Math.round(v*10)/10).toLocaleString('pt-BR',{minimumFractionDigits:1,maximumFractionDigits:1})+'%';
   const gh=`<thead><tr>
     <th onclick="setGSort('nome')">${dimLbl}${arw(gsort,'nome')}</th>
     <th class="num" onclick="setGSort('nfs')">NFs${arw(gsort,'nfs')}</th>
-    <th class="num" onclick="setGSort('real')">Realizado${arw(gsort,'real')}</th></tr></thead>`;
-  const gb=grp.map(o=>`<tr><td><b>${esc(o.nome)}</b></td><td class="num">${o.nfs}</td><td class="num cr">${brl(o.real)}</td></tr>`).join('');
+    <th class="num" onclick="setGSort('real')">Realizado${arw(gsort,'real')}</th>
+    <th class="num" onclick="setGSort('real')">% do Total</th></tr></thead>`;
+  const gb=grp.map(o=>`<tr><td><b>${esc(o.nome)}</b></td><td class="num">${o.nfs}</td><td class="num cr">${brl(o.real)}</td><td class="num">${pctFmt(totReal?o.real/totReal*100:null)}</td></tr>`).join('');
 
   // tabelão detalhado
   const det=sortRows(rows,dsort.key,dsort.dir);
@@ -298,7 +301,7 @@ function render(){
         <div><div class="tbl-title">Por ${dimLbl}</div><div class="tbl-sub">Ordenado pelo maior custo · clique no título pra ordenar</div></div>
         <div class="dim-toggle"><button class="dim-btn ${dim==='ramo'?'active':''}" onclick="setDim('ramo')">Ramo</button><button class="dim-btn ${dim==='forn'?'active':''}" onclick="setDim('forn')">Fornecedor</button><button class="dim-btn ${dim==='cc'?'active':''}" onclick="setDim('cc')">Centro de Custo</button></div>
       </div>
-      <div class="wrapx"><table>${gh}<tbody>${gb||'<tr><td colspan="3" class="mut">Sem dados para o filtro.</td></tr>'}</tbody></table></div>
+      <div class="wrapx"><table>${gh}<tbody>${gb||'<tr><td colspan="4" class="mut">Sem dados para o filtro.</td></tr>'}</tbody></table></div>
     </div>
     <div class="tbl-section">
       <div class="tbl-head"><div><div class="tbl-title">Detalhamento (todas as NFs)</div><div class="tbl-sub">${det.length.toLocaleString('pt-BR')} NF(s)${det.length>3000?' · mostrando 3.000':''} · clique no título pra ordenar</div></div></div>
