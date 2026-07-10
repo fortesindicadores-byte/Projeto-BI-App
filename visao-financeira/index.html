@@ -531,7 +531,9 @@ body.light-mode table.dre tbody tr{border-bottom:1px solid rgba(0,0,0,.06);}
       <div class="hero-value" id="h-ebitda">—</div>
       <div class="hero-deltas">
         <div class="hero-delta">Δ Orç. %<b id="he-dorc">—</b></div>
+        <div class="hero-delta">Δ Orç. pp<b id="he-porc">—</b></div>
         <div class="hero-delta">Δ Rem. %<b id="he-drem">—</b></div>
+        <div class="hero-delta">Δ Rem. pp<b id="he-prem">—</b></div>
         <div class="hero-delta">YoY %<b id="he-yoy">—</b></div>
       </div>
     </div>
@@ -1271,16 +1273,25 @@ function renderHeroCards(mes, prev){
 // ═══════════════════════════════════
 // RENDER HERO EBITDA (canto direito)
 // ═══════════════════════════════════
-function renderEbitdaHero(cur, prev){
+function renderEbitdaHero(cur, prev, rec){
   const S=id=>document.getElementById(id);
-  if(!cur){ set('h-ebitda','—'); ['he-dorc','he-drem','he-yoy'].forEach(id=>{const e=S(id);if(e){e.textContent='—';e.style.color='';}}); return; }
+  const ALL=['he-dorc','he-porc','he-drem','he-prem','he-yoy'];
+  if(!cur){ set('h-ebitda','—'); ALL.forEach(id=>{const e=S(id);if(e){e.textContent='—';e.style.color='';}}); return; }
   set('h-ebitda', fmt(cur.real));
   const dOrc = cur.orc ? (cur.real-cur.orc)/Math.abs(cur.orc)*100 : null;
   const dRem = cur.rem ? (cur.real-cur.rem)/Math.abs(cur.rem)*100 : null;
   const yoy  = (prev&&prev.real) ? (cur.real-prev.real)/Math.abs(prev.real)*100 : null;
-  const eO=S('he-dorc'), eR=S('he-drem'), eY=S('he-yoy');
+  // margem EBITDA (% da Receita Líquida) → Δ em pontos percentuais vs orçado/remunerado
+  const avR = (rec&&rec.real) ? cur.real/rec.real*100 : null;
+  const avO = (rec&&rec.orc)  ? cur.orc /rec.orc *100 : null;
+  const avM = (rec&&rec.rem)  ? cur.rem /rec.rem *100 : null;
+  const ppO = (avR!=null&&avO!=null) ? avR-avO : null;
+  const ppR = (avR!=null&&avM!=null) ? avR-avM : null;
+  const eO=S('he-dorc'), ePO=S('he-porc'), eR=S('he-drem'), ePR=S('he-prem'), eY=S('he-yoy');
   if(eO){eO.textContent=pct(dOrc);colI(eO,dOrc<0);}
+  if(ePO){ePO.textContent=pp(ppO);colI(ePO,ppO<0);}
   if(eR){eR.textContent=pct(dRem);colI(eR,dRem<0);}
+  if(ePR){ePR.textContent=pp(ppR);colI(ePR,ppR<0);}
   if(eY){eY.textContent=pct(yoy); colI(eY, yoy<0);}
 }
 
@@ -1709,7 +1720,7 @@ function atualizar(){
     const prevVigs=[...closedMonths].flatMap(mi=>prevAnos.map(y=>`${y}-${String(mi+1).padStart(2,'0')}`));
     prevF={...f2, ano:prevAnos, vig:prevVigs};
   }
-  renderEbitdaHero(aggEbitda(f2), prevF?aggEbitda(prevF):null);
+  renderEbitdaHero(aggEbitda(f2), prevF?aggEbitda(prevF):null, rl(activeAgg));
   renderCharts(f2);
   renderPacote(accRows,allRows,f2);
   renderAnalise(accRows,'body-orc',true,avOrcDim);
