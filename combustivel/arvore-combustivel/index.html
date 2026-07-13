@@ -617,7 +617,10 @@ function renderStatic() {
 // FILTROS
 // ═══════════════════════════════════════════════
 const getNv3Prefix = v => v ? v.split('-')[0].trim() : v;
-const getNv3Suffix = v => v && v.includes('-') ? v.split('-').slice(1).join('-').trim() : (v||'');
+// Unidade = sufixo do nível 3, com "(INATIVO)" removido — mescla "MCC (INATIVO)" em "MCC"
+// (mesma regra da Visão Financeira). Sem isso, o filtro lista unidades duplicadas e a
+// agregação por unidade perde as linhas marcadas como inativas.
+const getNv3Suffix = v => { const s = v && v.includes('-') ? v.split('-').slice(1).join('-').trim() : (v||''); return s.replace(/\s*\(INATIVO\)\s*/i,'').trim(); };
 function getMsValues(id){ const w=document.getElementById(id); return w&&w._sel?[...w._sel]:[]; }
 function getFilters(){ return { ano:getMsValues('ms-ano'), vigencia:getMsValues('ms-vig'), unidade:getMsValues('ms-uni'), nivel3:getMsValues('ms-nv3') }; }
 function filtrarRows(rows) {
@@ -917,6 +920,9 @@ async function fetchAll(){
   buildVigMsFilter(vigs);
   buildMsFilter('ms-uni',unis);
   buildMsFilter('ms-nv3',nv3s);
+  // Alinha as opções à vigência default (cascata) já na carga inicial, para a lista
+  // não "pular" ao primeiro clique (ex.: sumir unidades sem dado no mês selecionado).
+  refreshCascade();
 }
 
 let allRows = [];
