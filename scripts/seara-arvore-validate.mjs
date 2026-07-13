@@ -65,11 +65,17 @@ async function main(){
   const remKm={};
   aggKm.forEach(r=>{const p=placaKey(r[0]),yr=+r[1],mo=(+r[2])+1;if(!p||!yr)return;remKm[p+'|'+String(mo).padStart(2,'0')+'/'+yr]=+r[3]||0;});
 
-  // ── CTEs: viagens distintas (col B) por placa|vig ──
-  const aggVg=(await gviz(SEARA_ID,{gid:GID_CTES,tq:'select B, C, year(D), month(D) group by B, C, year(D), month(D)'})).rows;
-  console.log(`\n(CTEs viagens distintas: ${aggVg.length} linhas retornadas)`);
-  const viag={};
-  aggVg.forEach(r=>{const p=placaKey(r[1]),yr=+r[2],mo=(+r[3])+1;if(!p||!yr)return;const k=p+'|'+String(mo).padStart(2,'0')+'/'+yr;viag[k]=(viag[k]||0)+1;});
+  // ── CTEs: viagens distintas (col B = CD_VIAGEM_TRANSPORTE) por placa|vig ──
+  // gviz não faz count-distinct; puxa B,C,D cru e dedupa no cliente.
+  const rawVg=(await gviz(SEARA_ID,{gid:GID_CTES,tq:'select B, C, D'})).rows;
+  console.log(`\n(CTEs cru B,C,D: ${rawVg.length} linhas)`);
+  const seenVg=new Set(); const viag={};
+  for(const r of rawVg){
+    const b=r[0]; const p=placaKey(r[1]); const pv=parseVig(r[2]); if(b==null||!p||!pv)continue;
+    if(seenVg.has(b))continue; seenVg.add(b);
+    const k=p+'|'+String(pv.m).padStart(2,'0')+'/'+pv.y; viag[k]=(viag[k]||0)+1;
+  }
+  console.log(`(viagens distintas totais: ${seenVg.size})`);
 
   // ── Base Remunerado: KmPorLitro(P=15) e PrecoDiesel(R=17) por placa|vig ──
   const bremRows=(await gviz(SEARA_ID,{gid:GID_REM})).rows;
