@@ -305,10 +305,11 @@ body.light-mode table.dre tbody tr{border-bottom:1px solid rgba(0,0,0,.06);}
 
 <script>
 const COST_ID  = '1qcTy2ppLCGBKKqZCxCYWCTL9kTAuWfHBMyBfWJOyih8';
-const COST_TAB = 'Consolidado DRE';
+const COST_TAB = 'Frota';   // migrado de "Consolidado DRE" (aposentada) — mesmos custos por conta
 const KM_ID    = '1wCoRGsvOgmIvfLW4F9Sxr-5AX9Go-aFlRVjrQ_B2ilM';
 const KM_TAB   = 'Dispersão de km';
-const C = {orc:0,rem:1,real:2,vig:9,nv3:11,cta:12};
+// Layout da aba Frota: orçado=8, remunerado=9, realizado=10, vigência=0, nível3=4, conta=5
+const C = {orc:8,rem:9,real:10,vig:0,nv3:4,cta:5};
 
 const getNv3Prefix = v => v ? v.split('-')[0].trim() : v;
 const getUniLabel  = v => { if(!v) return ''; const i=v.indexOf('-'); const s=i>=0?v.slice(i+1).trim():v.trim(); return s.replace(/\s*\(INATIVO\)\s*/i,'').trim(); };
@@ -460,7 +461,8 @@ const vigLabel=d=>d?`${MESES[d.getMonth()]}/${String(d.getFullYear()).slice(2)}`
 // ── FILTROS ──
 function populateFilters(rows){
   const vMap=new Map();
-  rows.forEach(r=>{const d=parseVig(r[C.vig]);if(d)vMap.set(vigKey(d),d);});
+  // só vigências COM custo — a Frota tem meses orçados futuros (rem/real=0) que não devem virar opção
+  rows.forEach(r=>{if(Math.abs(+(r[C.rem]||0))===0&&Math.abs(+(r[C.real]||0))===0)return;const d=parseVig(r[C.vig]);if(d)vMap.set(vigKey(d),d);});
   vigs=[...vMap.values()].sort((a,b)=>a-b);
   const anos=[...new Set(vigs.map(d=>String(d.getFullYear())))].sort().reverse();
   buildMsFilter('ms-ano',anos);

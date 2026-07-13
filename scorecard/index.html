@@ -234,7 +234,7 @@ body.light-mode tbody tr+tr td{border-top-color:rgba(0,0,0,.05);}
 <script>
 const SRC={
   ics:'https://docs.google.com/spreadsheets/d/1xGl1Xrk2sPS9zWghEuecFMNBHwmeLiZ02U-QpO8cDPY/gviz/tq?sheet='+encodeURIComponent('Consolidado ICs'),
-  dre:'https://docs.google.com/spreadsheets/d/1qcTy2ppLCGBKKqZCxCYWCTL9kTAuWfHBMyBfWJOyih8/gviz/tq?sheet='+encodeURIComponent('Consolidado DRE'),
+  dre:'https://docs.google.com/spreadsheets/d/1qcTy2ppLCGBKKqZCxCYWCTL9kTAuWfHBMyBfWJOyih8/gviz/tq?sheet='+encodeURIComponent('Frota'),   // migrado de "Consolidado DRE"
   rsl:'https://docs.google.com/spreadsheets/d/1ZZdvG_RK5cTBLdPl3TWCbNeqw-Y4fTYwWsQV4w-e__A/gviz/tq?sheet='+encodeURIComponent('R$/L'),
   kmlEf:'https://docs.google.com/spreadsheets/d/1ZZdvG_RK5cTBLdPl3TWCbNeqw-Y4fTYwWsQV4w-e__A/gviz/tq?sheet='+encodeURIComponent('Km/L'),
   km:'https://docs.google.com/spreadsheets/d/1wCoRGsvOgmIvfLW4F9Sxr-5AX9Go-aFlRVjrQ_B2ilM/gviz/tq?sheet='+encodeURIComponent('Dispersão de km'),
@@ -579,7 +579,8 @@ function applyData(d){
   const {ics:icRows,dre:dreR,km:kmR,dpo:dpoR,fca:fcaR,rsl:rslR,kmlEf:kmlEfR,conlog:conlogR}=d;
   if(conlogR)XPANEL.conlog=conlogR;
   // Custos = custo da FROTA → EXCLUI a linha "Receita Líquida" (ela só baliza o AV)
-  if(dreR)try{XPANEL.dre=dreR.filter(r=>parseD(r[9])&&String(r[12]||'').trim()!=='Receita Líquida').map(r=>({vk:vigKeyN(parseD(r[9])),cid:NK(r[10]),rem:r[1]!=null?+r[1]:0,real:r[2]!=null?+r[2]:0}));}catch(e){}
+  // Frota: vig=0, unidade=3, conta=5, rem=9, real=10
+  if(dreR)try{XPANEL.dre=dreR.filter(r=>parseD(r[0])&&String(r[5]||'').trim()!=='Receita Líquida').map(r=>({vk:vigKeyN(parseD(r[0])),cid:NK(r[3]),rem:r[9]!=null?+r[9]:0,real:r[10]!=null?+r[10]:0}));}catch(e){}
   if(kmR)try{XPANEL.km=kmR.filter(r=>parseD(r[0])).map(r=>({vk:vigKeyN(parseD(r[0])),proj:r[14],rem:r[31]!=null?+r[31]:0,real:r[32]!=null?+r[32]:0}));}catch(e){}
   // R$/L: lookup do preço remunerado (aba R$/L) por Projeto|Vigência|Combustível — proj=0, vig=3, preco=22, comb=23
   const L1={},L2={};
