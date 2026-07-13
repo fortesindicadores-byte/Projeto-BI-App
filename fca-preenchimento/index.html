@@ -374,14 +374,15 @@ function pushDRE(dre,fatos,kmlCausas,dispCausas,frotaMaps){
   const vig=vigLbl(new Date(Math.floor(maxK/100),maxK%100,1));
   const yrMax=Math.floor(maxK/100);
   const acc={};
-  drRows.filter(r=>vigKeyN(parseD(r[0]))===maxK).forEach(r=>{const conta=String(r[5]||'—').trim();const niv=String(r[4]||'').trim();const rem=r[9]!=null?+r[9]:0,real=r[10]!=null?+r[10]:0;const key=niv+'||'+conta;if(!acc[key])acc[key]={conta,niv,rem:0,real:0};acc[key].rem+=rem;acc[key].real+=real;});
+  drRows.filter(r=>vigKeyN(parseD(r[0]))===maxK).forEach(r=>{const conta=String(r[5]||'—').trim();const niv=String(r[4]||'').trim();const orc=r[8]!=null?+r[8]:0,real=r[10]!=null?+r[10]:0;const key=niv+'||'+conta;if(!acc[key])acc[key]={conta,niv,orc:0,real:0};acc[key].orc+=orc;acc[key].real+=real;});
   // Manutenção/Pneus/Recapagem/Lavação: custo de CADA mês do ano (YTD) por projeto+conta, p/ a média do custo/placa ativa
   const isMP=c=>/MANUTEN|PNEU|RECAP|LAVA/.test(_nc(c));
   const custoPorMes={}; // key proj||conta -> { vigKey: custo }
   drRows.forEach(r=>{const k=vigKeyN(parseD(r[0]));if(Math.floor(k/100)!==yrMax||k>maxK)return;const conta=String(r[5]||'').trim();if(!isMP(conta))return;const key=projKey(r[4])+'||'+_nc(conta);(custoPorMes[key]=custoPorMes[key]||{});custoPorMes[key][k]=(custoPorMes[key][k]||0)+Math.abs(r[10]!=null?+r[10]:0);});
-  // Custos na DRE são negativos: gasto ACIMA do orçado => (rem - real) > 0 (mais gasto que o remunerado)
-  Object.values(acc).map(o=>{const over=o.rem-o.real,base=Math.abs(o.rem);return {...o,over,dpct:base>0?over/base*100:0};})
-    .filter(o=>o.over>0&&o.rem!==0).sort((a,b)=>b.over-a.over)
+  // Custos na DRE são negativos: gasto ACIMA do orçado => (orc - real) > 0 (gastou mais que o orçado).
+  // Referência = ORÇADO (mesma da "Análise vs Orçado"); saving vs orçado (over<0) NÃO vira fato.
+  Object.values(acc).map(o=>{const over=o.orc-o.real,base=Math.abs(o.orc);return {...o,over,dpct:base>0?over/base*100:0};})
+    .filter(o=>o.over>0&&o.orc!==0).sort((a,b)=>b.over-a.over)
     .forEach(o=>{const sev=o.dpct>=5?'crit':'aten';
       // Fato financeiro: "Desvio: ▲ R$ X · ▲ -Y%"
       const brlFull='R$ '+Math.round(Math.abs(o.over)).toLocaleString('pt-BR');
