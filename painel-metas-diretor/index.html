@@ -214,6 +214,9 @@ function fullYearVigs(){
 }
 function n1(v){return v==null||!isFinite(v)?'-':Number(v).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});}
 function pctI(v){return v==null||!isFinite(v)?'-':Math.round(v)+'%';}
+function pct2(v){return v==null||!isFinite(v)?'-':Number(v).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2})+'%';}
+// Ating. com 2 casas p/ Resultado Op. e Perdas (ratio/perdas); inteiro p/ binários
+function atgFmt(no,v){const cfg=INDS.find(i=>i.no===no);return(cfg&&(cfg.kind==='ratio'||cfg.kind==='perdas'))?pct2(v):pctI(v);}
 const numFmt=v=>{const a=Math.abs(v),s=v<0?'-':'';if(a>=1e9)return s+Math.round(a/1e9)+' bi';if(a>=1e6)return s+Math.round(a/1e6)+' mi';if(a>=1e5)return s+Math.round(a/1e3)+'k';return s+Math.round(a).toLocaleString('pt-BR');};
 // Formato de valor (Meta/Real): inteiro se for; milhões/k p/ grandes; senão 1 casa
 function vfmt(v){if(v==null||!isFinite(v))return '-';const a=Math.abs(v);if(a>=1000)return numFmt(v);return Number.isInteger(v)?String(v):n1(v);}
@@ -282,14 +285,16 @@ function renderTable(){
   const dsUpto=VIGS.filter(d=>vigKeyN(d)<=upto).sort((a,b)=>vigKeyN(a)-vigKeyN(b));
   const firstD=dsUpto[0],selD=dsUpto[dsUpto.length-1];
   const atgColor=(pts,peso)=>{if(pts==null||!peso)return 'var(--text3)';const f=pts/peso;return f>=1?'var(--green)':f>0?'var(--amber)':'var(--red)';};
-  const subEl=document.getElementById('tbl-sub');if(subEl)subEl.textContent=(firstD&&selD&&vigKeyN(firstD)!==vigKeyN(selD))?`${vigLbl(firstD).toUpperCase()} – ${vigLbl(selD).toUpperCase()} · ACUMULADO`:`${selD?vigLbl(selD).toUpperCase():''} · ACUMULADO`;
-  let html='<table><thead><tr class="cols"><th class="lft">Indicador</th><th class="sec-col">Peso</th><th class="lft sec-col">Descrição</th><th class="lft sec-col">Regra de Atingimento</th><th class="sec-col">Un.</th><th class="sec-col">Meta</th><th>Real</th><th>Ating.</th><th>Pontos</th></tr></thead><tbody>';
+  const subEl=document.getElementById('tbl-sub');if(subEl)subEl.textContent=(firstD&&selD&&vigKeyN(firstD)!==vigKeyN(selD))?`MÊS ${vigLbl(selD).toUpperCase()} · YTD ${vigLbl(firstD).toUpperCase()}–${vigLbl(selD).toUpperCase()}`:`${selD?vigLbl(selD).toUpperCase():''}`;
+  let html='<table><thead><tr class="cols"><th class="lft">Indicador</th><th class="sec-col">Peso</th><th class="lft sec-col">Descrição</th><th class="lft sec-col">Regra de Atingimento</th><th class="sec-col">Un.</th><th class="sec-col">Meta</th><th>Real</th><th>Ating.</th><th>Pontos</th><th class="sep-l sec-col">Ating. YTD</th><th class="sec-col">Pontos YTD</th></tr></thead><tbody>';
   INDS.forEach(cfg=>{
-    const a=indAccum(cfg.no,upto);
+    const mes=ALL.find(o=>o.no===cfg.no&&vigKeyN(o.vigD)===upto);  // mês âncora (isolado)
+    const a=indAccum(cfg.no,upto);                                  // acumulado YTD
     const base=ALL.find(o=>o.no===cfg.no)||{};
     const nome=(a&&a.indicador)||base.indicador||('Indicador '+cfg.no);
     html+=`<tr><td class="lft ind">${nome}</td><td class="sec-col">${vfmt(base.peso)}</td><td class="lft desc sec-col">${(base.desc||'').replace(/\n/g,'<br>')}</td><td class="lft regra sec-col">${(base.regra||'').replace(/\n/g,'<br>')}</td><td class="un sec-col">${base.un||''}</td>`;
-    if(a){html+=`<td class="sec-col">${vfmt(a.meta)}</td><td>${vfmt(a.real)}</td><td style="color:${atgColor(a.pontos,a.peso)};font-weight:700">${pctI(a.atg)}</td><td><span class="pts">${n1(a.pontos)}</span></td>`;}else{html+='<td class="sec-col">-</td><td>-</td><td>-</td><td>-</td>';}
+    if(mes){html+=`<td class="sec-col">${vfmt(mes.meta)}</td><td>${vfmt(mes.real)}</td><td style="color:${atgColor(mes.pontos,mes.peso)};font-weight:700">${atgFmt(cfg.no,mes.atg)}</td><td><span class="pts">${n1(mes.pontos)}</span></td>`;}else{html+='<td class="sec-col">-</td><td>-</td><td>-</td><td>-</td>';}
+    if(a){html+=`<td class="sep-l sec-col" style="color:${atgColor(a.pontos,a.peso)};font-weight:700">${atgFmt(cfg.no,a.atg)}</td><td class="sec-col"><span class="pts">${n1(a.pontos)}</span></td>`;}else{html+='<td class="sep-l sec-col">-</td><td class="sec-col">-</td>';}
     html+='</tr>';
   });
   html+='</tbody></table>';
