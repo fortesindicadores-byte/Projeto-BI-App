@@ -174,18 +174,19 @@ function atgDisp(kind,meta,real){
   if(kind==='perdas')return meta?(1-real/meta)*100:null;
   return null;
 }
-// Mês âncora = último mês selecionado (ou último com dado). Tudo é acumulado até ele.
-function anchorKey(){
+// Meses do filtro (vigKeyN), ordenados. Filtro vazio ("Todas") = todos os meses com dado.
+function selKeys(){
   const selVig=getMsValues('ms-vig');
   const ds=(selVig.length?VIGS.filter(d=>selVig.includes(vigLbl(d))):VIGS.slice()).sort((a,b)=>vigKeyN(a)-vigKeyN(b));
-  return ds.length?vigKeyN(ds[ds.length-1]):(VIGS.length?vigKeyN(VIGS[VIGS.length-1]):0);
+  return ds.map(vigKeyN);
 }
-// Pontuação ACUMULADA de um indicador até uptoKey (só meses com Real):
-//  ratio/perdas → soma Real ÷ soma Meta (fluxo, acumula no ano)
-//  le/ge        → valor do ÚLTIMO mês (indicador cumulativo: a leitura mais recente já é o acumulado)
-function indAccum(no,uptoKey){
+// Pontuação ACUMULADA de um indicador sobre um conjunto de meses (keys) — respeita o filtro:
+//  ratio/perdas → soma Real ÷ soma Meta dos meses selecionados (fluxo)
+//  le/ge        → valor do ÚLTIMO mês selecionado (indicador cumulativo)
+function indAccum(no,keys){
   const cfg=INDS.find(i=>i.no===no);if(!cfg)return null;
-  const es=ALL.filter(o=>o.no===no&&vigKeyN(o.vigD)<=uptoKey).sort((a,b)=>vigKeyN(a.vigD)-vigKeyN(b.vigD));
+  const kset=new Set(keys);
+  const es=ALL.filter(o=>o.no===no&&kset.has(vigKeyN(o.vigD))).sort((a,b)=>vigKeyN(a.vigD)-vigKeyN(b.vigD));
   if(!es.length)return null;
   const peso=es[0].peso;
   if(cfg.kind==='ratio'||cfg.kind==='perdas'){
@@ -246,7 +247,7 @@ function chartMensal(){
   const selVig=getMsValues('ms-vig');
   const XV=fullYearVigs();
   const labels=XV.map(d=>vigLbl(d));
-  const data=XV.map(d=>{const k=vigKeyN(d);if(!ALL.some(o=>vigKeyN(o.vigD)===k))return null;return INDS.map(i=>indAccum(i.no,k)).filter(Boolean).reduce((s,a)=>s+(a.pontos||0),0);});
+  const data=XV.map(d=>{const k=vigKeyN(d);if(!ALL.some(o=>vigKeyN(o.vigD)===k))return null;const ks=VIGS.filter(x=>vigKeyN(x)<=k).map(vigKeyN);return INDS.map(i=>indAccum(i.no,ks)).filter(Boolean).reduce((s,a)=>s+(a.pontos||0),0);});
   const on=XV.map(d=>selVig.length===0||selVig.includes(vigLbl(d)));
   const hasFocus=selVig.length>0;
   const bg=data.map((v,i)=>{if(v==null)return 'transparent';const a=hasFocus?(on[i]?.85:.2):.65;return v>=META_PONTOS?`rgba(59,179,59,${a})`:`rgba(255,102,102,${a})`;});
@@ -263,8 +264,8 @@ function chartMensal(){
 }
 function chartIndicador(){
   const isLight=document.body.classList.contains('light-mode');
-  const upto=anchorKey();
-  const items=INDS.map(i=>indAccum(i.no,upto)).filter(Boolean).map(a=>({ind:a.indicador,pts:a.pontos||0,peso:a.peso})).filter(x=>x.peso>0);
+  const keys=selKeys();
+  const items=INDS.map(i=>indAccum(i.no,keys)).filter(Boolean).map(a=>({ind:a.indicador,pts:a.pontos||0,peso:a.peso})).filter(x=>x.peso>0);
   const labels=items.map(x=>x.ind);
   const data=items.map(x=>+x.pts.toFixed(1));
   const bg=items.map(x=>{const r=x.peso?x.pts/x.peso:0;const a=.85;return r>=1?`rgba(59,179,59,${a})`:r>0?`rgba(244,161,0,${a})`:`rgba(255,102,102,${a})`;});
@@ -277,26 +278,27 @@ function chartIndicador(){
 
 function atualizar(){
   if(!ALL.length)return;
-  const upto=anchorKey();
-  const accs=INDS.map(i=>indAccum(i.no,upto)).filter(Boolean);
+  const keys=selKeys();
+  const accs=INDS.map(i=>indAccum(i.no,keys)).filter(Boolean);
   const total=accs.length?accs.reduce((s,a)=>s+(a.pontos||0),0):null;
   const eT=document.getElementById('h-total');eT.textContent=n1(total);eT.style.color=total>=META_PONTOS?'var(--green)':total>=70?'var(--amber)':'var(--red)';
-  const selD=VIGS.filter(d=>vigKeyN(d)<=upto).sort((a,b)=>vigKeyN(a)-vigKeyN(b)).pop();
-  document.getElementById('h-sub').textContent=`de 100 pontos · meta ${META_PONTOS} · acumulado até ${selD?vigLbl(selD):'—'}`;
+  const firstD=keys.length?VIGS.find(d=>vigKeyN(d)===keys[0]):null,selD=keys.length?VIGS.find(d=>vigKeyN(d)===keys[keys.length-1]):null;
+  const per=(firstD&&selD&&vigKeyN(firstD)!==vigKeyN(selD))?`acumulado ${vigLbl(firstD)}–${vigLbl(selD)}`:`${selD?vigLbl(selD):'—'}`;
+  document.getElementById('h-sub').textContent=`de 100 pontos · meta ${META_PONTOS} · ${per}`;
   chartMensal();chartIndicador();renderTable();
 }
 function renderTable(){
   const tbl=document.getElementById('tbl');
-  const upto=anchorKey();
-  if(!upto){tbl.innerHTML='<div class="loading">Sem dados</div>';return;}
-  const dsUpto=VIGS.filter(d=>vigKeyN(d)<=upto).sort((a,b)=>vigKeyN(a)-vigKeyN(b));
-  const firstD=dsUpto[0],selD=dsUpto[dsUpto.length-1];
+  const keys=selKeys();
+  if(!keys.length){tbl.innerHTML='<div class="loading">Sem dados</div>';return;}
+  const anchor=keys[keys.length-1],firstK=keys[0];
+  const selD=VIGS.find(d=>vigKeyN(d)===anchor),firstD=VIGS.find(d=>vigKeyN(d)===firstK);
   const atgColor=(pts,peso)=>{if(pts==null||!peso)return 'var(--text3)';const f=pts/peso;return f>=1?'var(--green)':f>0?'var(--amber)':'var(--red)';};
-  const subEl=document.getElementById('tbl-sub');if(subEl)subEl.textContent=(firstD&&selD&&vigKeyN(firstD)!==vigKeyN(selD))?`MÊS ${vigLbl(selD).toUpperCase()} · YTD ${vigLbl(firstD).toUpperCase()}–${vigLbl(selD).toUpperCase()}`:`${selD?vigLbl(selD).toUpperCase():''}`;
-  let html='<table><thead><tr class="cols"><th class="lft">Indicador</th><th class="sec-col">Peso</th><th class="lft sec-col">Descrição</th><th class="lft sec-col">Regra de Atingimento</th><th class="sec-col">Un.</th><th class="sec-col">Meta</th><th>Real</th><th>Ating.</th><th>Pontos</th><th class="sep-l sec-col">Ating. YTD</th><th class="sec-col">Pontos YTD</th></tr></thead><tbody>';
+  const subEl=document.getElementById('tbl-sub');if(subEl)subEl.textContent=(firstD&&selD&&vigKeyN(firstD)!==vigKeyN(selD))?`MÊS ${vigLbl(selD).toUpperCase()} · ACUM ${vigLbl(firstD).toUpperCase()}–${vigLbl(selD).toUpperCase()}`:`${selD?vigLbl(selD).toUpperCase():''}`;
+  let html='<table><thead><tr class="cols"><th class="lft">Indicador</th><th class="sec-col">Peso</th><th class="lft sec-col">Descrição</th><th class="lft sec-col">Regra de Atingimento</th><th class="sec-col">Un.</th><th class="sec-col">Meta</th><th>Real</th><th>Ating.</th><th>Pontos</th><th class="sep-l sec-col">Ating. Acum.</th><th class="sec-col">Pontos Acum.</th></tr></thead><tbody>';
   INDS.forEach(cfg=>{
-    const mes=ALL.find(o=>o.no===cfg.no&&vigKeyN(o.vigD)===upto);  // mês âncora (isolado)
-    const a=indAccum(cfg.no,upto);                                  // acumulado YTD
+    const mes=ALL.find(o=>o.no===cfg.no&&vigKeyN(o.vigD)===anchor);  // último mês selecionado (isolado)
+    const a=indAccum(cfg.no,keys);                                   // acumulado sobre os meses do filtro
     const base=ALL.find(o=>o.no===cfg.no)||{};
     const nome=(a&&a.indicador)||base.indicador||('Indicador '+cfg.no);
     html+=`<tr><td class="lft ind">${nome}</td><td class="sec-col">${vfmt(base.peso)}</td><td class="lft desc sec-col">${(base.desc||'').replace(/\n/g,'<br>')}</td><td class="lft regra sec-col">${(base.regra||'').replace(/\n/g,'<br>')}</td><td class="un sec-col">${base.un||''}</td>`;
