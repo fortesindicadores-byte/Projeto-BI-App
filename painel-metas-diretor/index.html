@@ -144,12 +144,13 @@ const SRC={regras:gvUrl(0)};
 // ge  → maior/igual é melhor: Real>=Meta → peso cheio (Gente sucessores)
 // ratio → Real/Meta: >=100%→cheio, >=98%→75%, >=95%→50%, senão 0 (Resultado Op./EBITDA)
 // perdas → redução=(1-Real/Meta): >=30%→cheio, >=20%→50%, >=10%→25%, senão 0 (Perdas Op.)
+// fmt do valor Meta/Real: 'pos' = posição (º) · 'mm' = R$ milhões 2 casas · 'int' = inteiro
 const INDS=[
-  {no:1, gid:410676465,  vc:0, mc:1, rc:2, kind:'le'},     // Getrans/Gemovi
-  {no:2, gid:1055877945, vc:0, mc:1, rc:2, kind:'ratio'},  // Resultado Operacional (EBITDA)
-  {no:3, gid:1358349252, vc:0, mc:1, rc:2, kind:'ge'},     // Gente - Sucessores
-  {no:4, gid:1177655149, vc:0, mc:1, rc:2, kind:'le'},     // SSMAQ (LTI=0+1TRI)
-  {no:5, gid:523073816,  vc:1, mc:2, rc:3, kind:'perdas'}, // Perdas Operacionais
+  {no:1, gid:410676465,  vc:0, mc:1, rc:2, kind:'le',     fmt:'pos'},  // Getrans/Gemovi (posição ranking)
+  {no:2, gid:1055877945, vc:0, mc:1, rc:2, kind:'ratio',  fmt:'mm'},   // Resultado Operacional (EBITDA, R$ MM)
+  {no:3, gid:1358349252, vc:0, mc:1, rc:2, kind:'ge',     fmt:'int'},  // Gente - Sucessores (qtde)
+  {no:4, gid:1177655149, vc:0, mc:1, rc:2, kind:'le',     fmt:'int'},  // SSMAQ (LTI=0+1TRI, qtde)
+  {no:5, gid:523073816,  vc:1, mc:2, rc:3, kind:'perdas', fmt:'mm'},   // Perdas Operacionais (R$ MM)
 ];
 const MESES=['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
 const META_PONTOS=80;
@@ -218,29 +219,19 @@ function atgFmt(no,v){const cfg=INDS.find(i=>i.no===no);return(cfg&&(cfg.kind===
 const numFmt=v=>{const a=Math.abs(v),s=v<0?'-':'';if(a>=1e9)return s+Math.round(a/1e9)+' bi';if(a>=1e6)return s+Math.round(a/1e6)+' mi';if(a>=1e5)return s+Math.round(a/1e3)+'k';return s+Math.round(a).toLocaleString('pt-BR');};
 // Formato de valor (Meta/Real): inteiro se for; milhões/k p/ grandes; senão 1 casa
 function vfmt(v){if(v==null||!isFinite(v))return '-';const a=Math.abs(v);if(a>=1000)return numFmt(v);return Number.isInteger(v)?String(v):n1(v);}
-// Meta/Real: valor cheio com 2 casas decimais (sem abreviar mi/k)
-function mfmt(v){return v==null||!isFinite(v)?'-':Number(v).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});}
+// Meta/Real formatado por indicador: 'pos'→posição (º) · 'mm'→R$ milhões 2 casas · 'int'→inteiro
+function valFmt(no,v){
+  if(v==null||!isFinite(v))return '-';
+  const cfg=INDS.find(i=>i.no===no),f=cfg?cfg.fmt:'int';
+  if(f==='mm')return (v/1e6).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2})+' mi';
+  if(f==='pos')return Math.round(v)+'º';
+  return String(Math.round(v));
+}
 
 // ── MULTI-SELECT ──
 function _buildMs(wrap,renderFn,getAllFn){if(!(wrap._sel instanceof Set))wrap._sel=new Set();const sel=wrap._sel,list=wrap.querySelector('.ms-list'),srch=wrap.querySelector('.ms-search input');const render=(q='')=>{renderFn(list,sel,q);syncBadge(wrap);};list.addEventListener('change',e=>{const box=e.target;if(box.classList.contains('ms-all')){sel.clear();}else if(sel.size===0){if(!box.checked){const all=getAllFn?getAllFn():[];all.forEach(v=>{if(v!==box.dataset.v)sel.add(v);});}}else{if(box.checked)sel.add(box.dataset.v);else sel.delete(box.dataset.v);if(getAllFn){const all=getAllFn();if(all.length>0&&all.every(v=>sel.has(v)))sel.clear();}}render(srch.value);atualizar();});list.addEventListener('click',e=>{const only=e.target.closest('.ms-only');if(!only)return;e.preventDefault();e.stopPropagation();sel.clear();sel.add(only.dataset.v);render(srch.value);atualizar();});srch.addEventListener('input',()=>render(srch.value));srch.addEventListener('click',e=>e.stopPropagation());render();}
 function buildMsFilter(id,items){const wrap=document.getElementById(id);if(!wrap)return;_buildMs(wrap,(list,sel,q)=>{const f=q.toLowerCase(),shown=items.filter(v=>String(v).toLowerCase().includes(f)),allChk=sel.size===0;list.innerHTML=(!q?`<label class="ms-opt all-opt"><input type="checkbox" class="ms-all" ${allChk?'checked':''}> Todas</label>`:'')+shown.map(v=>{const ve=String(v).replace(/"/g,'&quot;');return `<label class="ms-opt"><input type="checkbox" data-v="${ve}" ${allChk||sel.has(v)?'checked':''}> ${v}<span class="ms-only" data-v="${ve}">only</span></label>`;}).join('');},()=>items);}
 function syncBadge(wrap){const cnt=wrap.querySelector('.ms-cnt'),n=wrap._sel?wrap._sel.size:0;if(cnt){cnt.textContent=n;cnt.style.display=n?'':'none';}}
-// Filtro de MÊS ÚNICO: escolhe 1 mês de referência (sem "Todas"). Coluna Mês = mês escolhido; YTD = acumulado até ele.
-function buildSingleFilter(id,items,initial){
-  const wrap=document.getElementById(id);if(!wrap)return;
-  if(!(wrap._sel instanceof Set))wrap._sel=new Set();
-  const sel=wrap._sel;sel.clear();if(initial)sel.add(initial);
-  const list=wrap.querySelector('.ms-list'),srch=wrap.querySelector('.ms-search input'),lbl=wrap.querySelector('.ms-lbl'),cnt=wrap.querySelector('.ms-cnt');
-  if(cnt)cnt.style.display='none';
-  const render=(q='')=>{
-    const f=(q||'').toLowerCase(),shown=items.filter(v=>String(v).toLowerCase().includes(f));
-    list.innerHTML=shown.map(v=>{const ve=String(v).replace(/"/g,'&quot;');return `<label class="ms-opt"><input type="checkbox" data-v="${ve}" ${sel.has(v)?'checked':''}> ${v}</label>`;}).join('');
-    if(lbl)lbl.textContent=([...sel][0]||'Vigência');
-  };
-  list.onchange=e=>{const v=e.target&&e.target.dataset?e.target.dataset.v:null;if(!v)return;sel.clear();sel.add(v);render(srch.value);toggleMs(id);atualizar();};
-  srch.oninput=()=>render(srch.value);srch.onclick=e=>e.stopPropagation();
-  render();
-}
 function toggleMs(id){document.querySelectorAll('.ms-panel.open').forEach(p=>{if(p.closest('.ms-wrap').id!==id)p.classList.remove('open');});const panel=document.querySelector(`#${id} .ms-panel`);panel.classList.toggle('open');if(panel.classList.contains('open')){const inp=panel.querySelector('input[type=text]');if(inp)setTimeout(()=>inp.focus(),50);}}
 function getMsValues(id){const wrap=document.getElementById(id);if(!wrap)return[];return wrap._sel?[...wrap._sel]:[];}
 document.addEventListener('click',e=>{if(!e.target.closest('.ms-wrap'))document.querySelectorAll('.ms-panel.open').forEach(p=>p.classList.remove('open'));});
@@ -309,7 +300,7 @@ function renderTable(){
     const base=ALL.find(o=>o.no===cfg.no)||{};
     const nome=(a&&a.indicador)||base.indicador||('Indicador '+cfg.no);
     html+=`<tr><td class="lft ind">${nome}</td><td class="sec-col">${vfmt(base.peso)}</td><td class="lft desc sec-col">${(base.desc||'').replace(/\n/g,'<br>')}</td><td class="lft regra sec-col">${(base.regra||'').replace(/\n/g,'<br>')}</td><td class="un sec-col">${base.un||''}</td>`;
-    if(mes){html+=`<td class="sec-col">${mfmt(mes.meta)}</td><td>${mfmt(mes.real)}</td><td style="color:${atgColor(mes.pontos,mes.peso)};font-weight:700">${atgFmt(cfg.no,mes.atg)}</td><td><span class="pts">${n1(mes.pontos)}</span></td>`;}else{html+='<td class="sec-col">-</td><td>-</td><td>-</td><td>-</td>';}
+    if(mes){html+=`<td class="sec-col">${valFmt(cfg.no,mes.meta)}</td><td>${valFmt(cfg.no,mes.real)}</td><td style="color:${atgColor(mes.pontos,mes.peso)};font-weight:700">${atgFmt(cfg.no,mes.atg)}</td><td><span class="pts">${n1(mes.pontos)}</span></td>`;}else{html+='<td class="sec-col">-</td><td>-</td><td>-</td><td>-</td>';}
     if(a){html+=`<td class="sep-l sec-col" style="color:${atgColor(a.pontos,a.peso)};font-weight:700">${atgFmt(cfg.no,a.atg)}</td><td class="sec-col"><span class="pts">${n1(a.pontos)}</span></td>`;}else{html+='<td class="sep-l sec-col">-</td><td class="sec-col">-</td>';}
     html+='</tr>';
   });
@@ -342,8 +333,8 @@ async function carregar(){
     const vm=new Map();ALL.forEach(o=>{if(o.vigD)vm.set(vigKeyN(o.vigD),o.vigD);});
     VIGS=[...vm.values()].sort((a,b)=>vigKeyN(a)-vigKeyN(b));
     const vigItems=VIGS.map(d=>vigLbl(d));
-    // Filtro de mês único; padrão = último mês com dado (junho)
-    buildSingleFilter('ms-vig',vigItems,vigItems.length?vigItems[vigItems.length-1]:null);
+    const vw=document.getElementById('ms-vig');if(vigItems.length)vw._sel=new Set([vigItems[vigItems.length-1]]); // padrão = último mês (junho); multi-select com "Todas"
+    buildMsFilter('ms-vig',vigItems);
     atualizar();
     const now=new Date();document.getElementById('status').textContent=`${now.toLocaleDateString('pt-BR')} ${now.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})}`;
   }catch(e){console.error(e);document.getElementById('status').textContent='Erro ao carregar';}
