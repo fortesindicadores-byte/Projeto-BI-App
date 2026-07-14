@@ -68,7 +68,7 @@ body{background:radial-gradient(ellipse at 10% 25%,rgba(249,115,22,.06) 0%,trans
 /* ── Tabela consolidada ── */
 .tbl-section{background:rgba(20,27,38,.55);border:1px solid rgba(255,255,255,.07);border-radius:10px;padding:6px 4px 12px;backdrop-filter:blur(16px);box-shadow:0 2px 12px rgba(0,0,0,.25);overflow-x:auto;}
 table.cons{width:100%;border-collapse:collapse;font-size:12px;min-width:1180px;}
-table.cons thead th{font-size:10px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:.5px;text-align:left;padding:10px 8px 8px;border-bottom:1px solid rgba(255,255,255,.10);white-space:nowrap;position:sticky;top:0;background:rgba(15,20,30,.96);z-index:2;}
+table.cons thead th{font-size:10px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:.5px;text-align:left;padding:10px 8px 8px;border-bottom:1px solid rgba(255,255,255,.10);white-space:nowrap;position:sticky;top:var(--hh,0px);background:rgba(15,20,30,.96);z-index:2;}
 table.cons td{padding:7px 8px;vertical-align:top;border-top:1px solid rgba(255,255,255,.05);}
 table.cons tbody tr:hover{background:rgba(255,255,255,.025);}
 .c-uni{font-weight:800;color:var(--text);white-space:nowrap;}
@@ -180,7 +180,9 @@ body.light-mode .kcard{background:#F7F7F7;border-color:rgba(0,0,0,.10);}
     <div class="hfilter"><label>Vigência</label><div class="ms-wrap" id="ms-vig"><button class="ms-btn" onclick="toggleMs('ms-vig')"><span class="ms-lbl">Vigência</span><span class="ms-cnt"></span><svg width="10" height="6" viewBox="0 0 10 6"><path d="M0 0l5 6 5-6z" fill="#F97316"/></svg></button><div class="ms-panel"><div class="ms-search"><input type="text" placeholder="Pesquisar…"></div><div class="ms-list"></div></div></div></div>
     <div class="hfilter"><label>Projeto</label><div class="ms-wrap" id="ms-proj"><button class="ms-btn" onclick="toggleMs('ms-proj')"><span class="ms-lbl">Projeto</span><span class="ms-cnt"></span><svg width="10" height="6" viewBox="0 0 10 6"><path d="M0 0l5 6 5-6z" fill="#F97316"/></svg></button><div class="ms-panel"><div class="ms-search"><input type="text" placeholder="Pesquisar…"></div><div class="ms-list"></div></div></div></div>
     <div class="hfilter"><label>Origem</label><div class="ms-wrap" id="ms-org"><button class="ms-btn" onclick="toggleMs('ms-org')"><span class="ms-lbl">Origem</span><span class="ms-cnt"></span><svg width="10" height="6" viewBox="0 0 10 6"><path d="M0 0l5 6 5-6z" fill="#F97316"/></svg></button><div class="ms-panel"><div class="ms-search"><input type="text" placeholder="Pesquisar…"></div><div class="ms-list"></div></div></div></div>
+    <div class="hfilter"><label>Fato</label><div class="ms-wrap" id="ms-fato"><button class="ms-btn" onclick="toggleMs('ms-fato')"><span class="ms-lbl">Fato</span><span class="ms-cnt"></span><svg width="10" height="6" viewBox="0 0 10 6"><path d="M0 0l5 6 5-6z" fill="#F97316"/></svg></button><div class="ms-panel"><div class="ms-search"><input type="text" placeholder="Pesquisar…"></div><div class="ms-list"></div></div></div></div>
     <div class="hfilter"><label>Status</label><div class="ms-wrap" id="ms-st"><button class="ms-btn" onclick="toggleMs('ms-st')"><span class="ms-lbl">Status</span><span class="ms-cnt"></span><svg width="10" height="6" viewBox="0 0 10 6"><path d="M0 0l5 6 5-6z" fill="#F97316"/></svg></button><div class="ms-panel"><div class="ms-search"><input type="text" placeholder="Pesquisar…"></div><div class="ms-list"></div></div></div></div>
+    <div class="hfilter"><label>Status Prazo</label><div class="ms-wrap" id="ms-prazo"><button class="ms-btn" onclick="toggleMs('ms-prazo')"><span class="ms-lbl">Status Prazo</span><span class="ms-cnt"></span><svg width="10" height="6" viewBox="0 0 10 6"><path d="M0 0l5 6 5-6z" fill="#F97316"/></svg></button><div class="ms-panel"><div class="ms-search"><input type="text" placeholder="Pesquisar…"></div><div class="ms-list"></div></div></div></div>
     <div class="hfilter"><label>Causa</label><div class="ms-wrap" id="ms-causa"><button class="ms-btn" onclick="toggleMs('ms-causa')"><span class="ms-lbl">Causa</span><span class="ms-cnt"></span><svg width="10" height="6" viewBox="0 0 10 6"><path d="M0 0l5 6 5-6z" fill="#F97316"/></svg></button><div class="ms-panel"><div class="ms-search"><input type="text" placeholder="Pesquisar…"></div><div class="ms-list"></div></div></div></div>
     <div class="hfilter"><label>Ação</label><div class="ms-wrap" id="ms-acao"><button class="ms-btn" onclick="toggleMs('ms-acao')"><span class="ms-lbl">Ação</span><span class="ms-cnt"></span><svg width="10" height="6" viewBox="0 0 10 6"><path d="M0 0l5 6 5-6z" fill="#F97316"/></svg></button><div class="ms-panel"><div class="ms-search"><input type="text" placeholder="Pesquisar…"></div><div class="ms-list"></div></div></div></div>
   </div>
@@ -238,7 +240,17 @@ function _buildMs(w,getItems,after){
 function toggleMs(id){document.querySelectorAll('.ms-panel.open').forEach(p=>{if(p.closest('.ms-wrap').id!==id)p.classList.remove('open');});const p=document.querySelector('#'+id+' .ms-panel');if(p)p.classList.toggle('open');}
 function getMsValues(id){const w=document.getElementById(id);return w&&w._sel?[...w._sel]:[];}
 
-let UNI_OPTS=[],VIG_OPTS=[],ORG_OPTS=[],ST_OPTS=[],_vigInit=false;
+let UNI_OPTS=[],VIG_OPTS=[],ORG_OPTS=[],ST_OPTS=[],FATO_OPTS=[],_vigInit=false;
+const PRZ_OPTS=['Vencida','No prazo','Sem prazo'];
+// Status do prazo pela data de vencimento: concluída/cancelada não vence; sem prazo à parte.
+function prazoState(r){
+  const st=String(r.status||DEFAULT_STATUS);
+  if(/conclu|cancel/i.test(st)) return 'No prazo';
+  if(!r.prazo) return 'Sem prazo';
+  const d=new Date(String(r.prazo).slice(0,10)+'T00:00:00'); if(isNaN(d)) return 'Sem prazo';
+  const hoje=new Date(); hoje.setHours(0,0,0,0);
+  return d<hoje ? 'Vencida' : 'No prazo';
+}
 // Projetos disponíveis dependem da(s) Unidade(s) selecionada(s) — filtro em cascata. Usa projeto "limpo".
 function projItems(){const fu=getMsValues('ms-uni');return [...new Set(_ROWS.filter(r=>!fu.length||fu.includes(r.unidade)).map(r=>projLabel(r.projeto)))].sort();}
 function popFiltros(){
@@ -246,10 +258,11 @@ function popFiltros(){
   VIG_OPTS=[...new Set(_ROWS.map(r=>r.vigencia).filter(Boolean))].sort((a,b)=>vigNum(b)-vigNum(a));
   ORG_OPTS=[...new Set(_ROWS.map(r=>r.origem).filter(Boolean))].sort();
   ST_OPTS=[...new Set(_ROWS.map(r=>r.status||DEFAULT_STATUS))].sort();
+  FATO_OPTS=[...new Set(_ROWS.map(r=>r.fato).filter(Boolean))].sort();
   // 1ª carga: abre já na vigência mais recente (menos linhas = mais rápido); admin pode trocar
   const wv=document.getElementById('ms-vig');
   if(wv && wv._sel && !_vigInit && VIG_OPTS.length){ wv._sel.clear(); wv._sel.add(VIG_OPTS[0]); _vigInit=true; }  // muta o Set (não substitui) p/ o dropdown refletir
-  ['ms-uni','ms-vig','ms-org','ms-st','ms-proj'].forEach(id=>{const w=document.getElementById(id);if(w&&w._render)w._render('');});
+  ['ms-uni','ms-vig','ms-org','ms-st','ms-proj','ms-fato','ms-prazo'].forEach(id=>{const w=document.getElementById(id);if(w&&w._render)w._render('');});
 }
 
 function autoResize(ta){ta.style.height='auto';ta.style.height=ta.scrollHeight+'px';}
@@ -348,9 +361,9 @@ function rowHTML(r){
 function render(){
   const c=document.getElementById('content');
   if(!_ROWS.length){c.innerHTML=summaryHTML([])+'<div class="tbl-section"><div class="empty">Nenhuma ação cadastrada ainda. Assim que as unidades preencherem o FCA, os registros aparecem aqui.</div></div>';return;}
-  const fu=getMsValues('ms-uni'),fv=getMsValues('ms-vig'),fo=getMsValues('ms-org'),fs=getMsValues('ms-st'),fp=getMsValues('ms-proj'),fc=getMsValues('ms-causa'),fa=getMsValues('ms-acao');
+  const fu=getMsValues('ms-uni'),fv=getMsValues('ms-vig'),fo=getMsValues('ms-org'),fs=getMsValues('ms-st'),fp=getMsValues('ms-proj'),fc=getMsValues('ms-causa'),fa=getMsValues('ms-acao'),ff=getMsValues('ms-fato'),fpz=getMsValues('ms-prazo');
   const fillState=v=>String(v||'').trim()?'Preenchida':'Em branco';
-  const vis=_ROWS.filter(r=>(!fu.length||fu.includes(r.unidade))&&(!fv.length||fv.includes(r.vigencia))&&(!fo.length||fo.includes(r.origem))&&(!fs.length||fs.includes(r.status||DEFAULT_STATUS))&&(!fp.length||fp.includes(projLabel(r.projeto)))&&(!fc.length||fc.includes(fillState(r.causa)))&&(!fa.length||fa.includes(fillState(r.acao))));
+  const vis=_ROWS.filter(r=>(!fu.length||fu.includes(r.unidade))&&(!fv.length||fv.includes(r.vigencia))&&(!fo.length||fo.includes(r.origem))&&(!fs.length||fs.includes(r.status||DEFAULT_STATUS))&&(!fp.length||fp.includes(projLabel(r.projeto)))&&(!fc.length||fc.includes(fillState(r.causa)))&&(!fa.length||fa.includes(fillState(r.acao)))&&(!ff.length||ff.includes(r.fato))&&(!fpz.length||fpz.includes(prazoState(r))));
   vis.sort((a,b)=>String(a.unidade||'').localeCompare(String(b.unidade||''))||(vigNum(b.vigencia)-vigNum(a.vigencia))||String(a.projeto||'').localeCompare(String(b.projeto||''))||String(a.fato||'').localeCompare(String(b.fato||'')));  // unidade A→Z, vigência recente, projeto, fato
   let body;
   if(!vis.length){body='<div class="tbl-section"><div class="empty">Nenhuma ação para os filtros selecionados.</div></div>';}
@@ -445,11 +458,18 @@ _buildMs(document.getElementById('ms-uni'),()=>UNI_OPTS,_onUniChange);
 _buildMs(document.getElementById('ms-vig'),()=>VIG_OPTS);
 _buildMs(document.getElementById('ms-org'),()=>ORG_OPTS);
 _buildMs(document.getElementById('ms-st'),()=>ST_OPTS);
+_buildMs(document.getElementById('ms-fato'),()=>FATO_OPTS);
+_buildMs(document.getElementById('ms-prazo'),()=>PRZ_OPTS);
 _buildMs(document.getElementById('ms-proj'),projItems);
 const FILL_OPTS=['Preenchida','Em branco'];
 _buildMs(document.getElementById('ms-causa'),()=>FILL_OPTS);
 _buildMs(document.getElementById('ms-acao'),()=>FILL_OPTS);
 document.addEventListener('click',e=>{if(!e.target.closest('.ms-wrap'))document.querySelectorAll('.ms-panel.open').forEach(p=>p.classList.remove('open'));});
+// Cabeçalho da tabela congela LOGO ABAIXO da barra de filtros (sticky): mantém --hh = altura do header.
+function syncStickyTop(){const h=document.querySelector('.header');document.documentElement.style.setProperty('--hh',(h?h.offsetHeight:0)+'px');}
+window.addEventListener('resize',syncStickyTop);
+new ResizeObserver(syncStickyTop).observe(document.querySelector('.header'));
+syncStickyTop();
 
 // ── Início: exige login + admin (mesmo fluxo do fca-preenchimento) ──
 async function initApp(){
