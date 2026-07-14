@@ -291,19 +291,21 @@ function renderTable(){
   const tbl=document.getElementById('tbl');
   const keys=selKeys();
   if(!keys.length){tbl.innerHTML='<div class="loading">Sem dados</div>';return;}
-  const anchor=keys[keys.length-1],firstK=keys[0];
-  const selD=VIGS.find(d=>vigKeyN(d)===anchor),firstD=VIGS.find(d=>vigKeyN(d)===firstK);
+  const allKeys=VIGS.map(vigKeyN);                                   // YTD FIXO = ano até o último mês com dado
+  const firstD=VIGS.find(d=>vigKeyN(d)===keys[0]),selD=VIGS.find(d=>vigKeyN(d)===keys[keys.length-1]);
+  const yF=VIGS[0],yL=VIGS[VIGS.length-1];
   const atgColor=(pts,peso)=>{if(pts==null||!peso)return 'var(--text3)';const f=pts/peso;return f>=1?'var(--green)':f>0?'var(--amber)':'var(--red)';};
-  const subEl=document.getElementById('tbl-sub');if(subEl)subEl.textContent=(firstD&&selD&&vigKeyN(firstD)!==vigKeyN(selD))?`MÊS ${vigLbl(selD).toUpperCase()} · ACUM ${vigLbl(firstD).toUpperCase()}–${vigLbl(selD).toUpperCase()}`:`${selD?vigLbl(selD).toUpperCase():''}`;
-  let html='<table><thead><tr class="cols"><th class="lft">Indicador</th><th class="sec-col">Peso</th><th class="lft sec-col">Descrição</th><th class="lft sec-col">Regra de Atingimento</th><th class="sec-col">Un.</th><th class="sec-col">Meta</th><th>Real</th><th>Ating.</th><th>Pontos</th><th class="sep-l sec-col">Ating. Acum.</th><th class="sec-col">Pontos Acum.</th></tr></thead><tbody>';
+  const perLbl=(firstD&&selD&&vigKeyN(firstD)!==vigKeyN(selD))?`${vigLbl(firstD).toUpperCase()}–${vigLbl(selD).toUpperCase()}`:`${selD?vigLbl(selD).toUpperCase():''}`;
+  const subEl=document.getElementById('tbl-sub');if(subEl)subEl.textContent=`FILTRO ${perLbl} · YTD ${yF?vigLbl(yF).toUpperCase():''}–${yL?vigLbl(yL).toUpperCase():''} (fixo)`;
+  let html='<table><thead><tr class="cols"><th class="lft">Indicador</th><th class="sec-col">Peso</th><th class="lft sec-col">Descrição</th><th class="lft sec-col">Regra de Atingimento</th><th class="sec-col">Un.</th><th class="sec-col">Meta</th><th>Real</th><th>Ating.</th><th>Pontos</th><th class="sep-l sec-col">Ating. YTD</th><th class="sec-col">Pontos YTD</th></tr></thead><tbody>';
   INDS.forEach(cfg=>{
-    const mes=ALL.find(o=>o.no===cfg.no&&vigKeyN(o.vigD)===anchor);  // último mês selecionado (isolado)
-    const a=indAccum(cfg.no,keys);                                   // acumulado sobre os meses do filtro
+    const p=indAccum(cfg.no,keys);                                   // período do filtro (VARIA)
+    const y=indAccum(cfg.no,allKeys);                                // YTD (FIXO)
     const base=ALL.find(o=>o.no===cfg.no)||{};
-    const nome=(a&&a.indicador)||base.indicador||('Indicador '+cfg.no);
+    const nome=(p&&p.indicador)||(y&&y.indicador)||base.indicador||('Indicador '+cfg.no);
     html+=`<tr><td class="lft ind">${nome}</td><td class="sec-col">${vfmt(base.peso)}</td><td class="lft desc sec-col">${(base.desc||'').replace(/\n/g,'<br>')}</td><td class="lft regra sec-col">${(base.regra||'').replace(/\n/g,'<br>')}</td><td class="un sec-col">${base.un||''}</td>`;
-    if(mes){html+=`<td class="sec-col">${valFmt(cfg.no,mes.meta)}</td><td>${valFmt(cfg.no,mes.real)}</td><td style="color:${atgColor(mes.pontos,mes.peso)};font-weight:700">${atgFmt(cfg.no,mes.atg)}</td><td><span class="pts">${n1(mes.pontos)}</span></td>`;}else{html+='<td class="sec-col">-</td><td>-</td><td>-</td><td>-</td>';}
-    if(a){html+=`<td class="sep-l sec-col" style="color:${atgColor(a.pontos,a.peso)};font-weight:700">${atgFmt(cfg.no,a.atg)}</td><td class="sec-col"><span class="pts">${n1(a.pontos)}</span></td>`;}else{html+='<td class="sep-l sec-col">-</td><td class="sec-col">-</td>';}
+    if(p){html+=`<td class="sec-col">${valFmt(cfg.no,p.meta)}</td><td>${valFmt(cfg.no,p.real)}</td><td style="color:${atgColor(p.pontos,p.peso)};font-weight:700">${atgFmt(cfg.no,p.atg)}</td><td><span class="pts">${n1(p.pontos)}</span></td>`;}else{html+='<td class="sec-col">-</td><td>-</td><td>-</td><td>-</td>';}
+    if(y){html+=`<td class="sep-l sec-col" style="color:${atgColor(y.pontos,y.peso)};font-weight:700">${atgFmt(cfg.no,y.atg)}</td><td class="sec-col"><span class="pts">${n1(y.pontos)}</span></td>`;}else{html+='<td class="sep-l sec-col">-</td><td class="sec-col">-</td>';}
     html+='</tr>';
   });
   html+='</tbody></table>';
