@@ -161,7 +161,9 @@ body.light-mode select.st[data-v="Cancelada"]{background:#333333;color:#fff;}
   <div class="hfilter"><label>Vigência</label><div class="ms-wrap" id="ms-vig"><button class="ms-btn" onclick="toggleMs('ms-vig')"><span class="ms-lbl">Todas</span><span class="ms-cnt"></span><svg width="10" height="6" viewBox="0 0 10 6"><path d="M0 0l5 6 5-6z" fill="#F97316"/></svg></button><div class="ms-panel"><div class="ms-search"><input type="text" placeholder="Pesquisar…"></div><div class="ms-list"></div></div></div></div>
   <div class="hfilter"><label>Projeto</label><div class="ms-wrap" id="ms-proj"><button class="ms-btn" onclick="toggleMs('ms-proj')"><span class="ms-lbl">Todos</span><span class="ms-cnt"></span><svg width="10" height="6" viewBox="0 0 10 6"><path d="M0 0l5 6 5-6z" fill="#F97316"/></svg></button><div class="ms-panel"><div class="ms-search"><input type="text" placeholder="Pesquisar…"></div><div class="ms-list"></div></div></div></div>
   <div class="hfilter"><label>Origem</label><div class="ms-wrap" id="ms-org"><button class="ms-btn" onclick="toggleMs('ms-org')"><span class="ms-lbl">Todas</span><span class="ms-cnt"></span><svg width="10" height="6" viewBox="0 0 10 6"><path d="M0 0l5 6 5-6z" fill="#F97316"/></svg></button><div class="ms-panel"><div class="ms-search"><input type="text" placeholder="Pesquisar…"></div><div class="ms-list"></div></div></div></div>
-  <div class="hfilter"><label>Indicador</label><div class="ms-wrap" id="ms-ind"><button class="ms-btn" onclick="toggleMs('ms-ind')"><span class="ms-lbl">Todos</span><span class="ms-cnt"></span><svg width="10" height="6" viewBox="0 0 10 6"><path d="M0 0l5 6 5-6z" fill="#F97316"/></svg></button><div class="ms-panel"><div class="ms-search"><input type="text" placeholder="Pesquisar…"></div><div class="ms-list"></div></div></div></div>
+  <div class="hfilter"><label>Fato</label><div class="ms-wrap" id="ms-ind"><button class="ms-btn" onclick="toggleMs('ms-ind')"><span class="ms-lbl">Fato</span><span class="ms-cnt"></span><svg width="10" height="6" viewBox="0 0 10 6"><path d="M0 0l5 6 5-6z" fill="#F97316"/></svg></button><div class="ms-panel"><div class="ms-search"><input type="text" placeholder="Pesquisar…"></div><div class="ms-list"></div></div></div></div>
+  <div class="hfilter"><label>Status</label><div class="ms-wrap" id="ms-st"><button class="ms-btn" onclick="toggleMs('ms-st')"><span class="ms-lbl">Status</span><span class="ms-cnt"></span><svg width="10" height="6" viewBox="0 0 10 6"><path d="M0 0l5 6 5-6z" fill="#F97316"/></svg></button><div class="ms-panel"><div class="ms-search"><input type="text" placeholder="Pesquisar…"></div><div class="ms-list"></div></div></div></div>
+  <div class="hfilter"><label>Status Prazo</label><div class="ms-wrap" id="ms-prazo"><button class="ms-btn" onclick="toggleMs('ms-prazo')"><span class="ms-lbl">Status Prazo</span><span class="ms-cnt"></span><svg width="10" height="6" viewBox="0 0 10 6"><path d="M0 0l5 6 5-6z" fill="#F97316"/></svg></button><div class="ms-panel"><div class="ms-search"><input type="text" placeholder="Pesquisar…"></div><div class="ms-list"></div></div></div></div>
   <span class="uni-badge" id="uniBadge" style="display:none">—</span>
   <a class="btn" id="backUnits" href="./" title="Trocar de unidade" style="display:none;text-decoration:none">← Unidades</a>
   <a class="btn" href="../" title="Voltar ao hub" style="text-decoration:none">← Hub</a>
@@ -656,6 +658,16 @@ async function sincronizarRPM(){
 
 const STATUS=['Não iniciada','Em andamento','Concluída','Cancelada'];
 const DEFAULT_STATUS='Não iniciada';
+const PRZ_OPTS=['Vencida','No prazo','Sem prazo'];
+// Status do prazo de uma ação pela data de vencimento (concluída/cancelada não vence).
+function prazoState(r){
+  const st=String(r.status||DEFAULT_STATUS);
+  if(/conclu|cancel/i.test(st)) return 'No prazo';
+  if(!r.prazo) return 'Sem prazo';
+  const d=new Date(String(r.prazo).slice(0,10)+'T00:00:00'); if(isNaN(d)) return 'Sem prazo';
+  const hoje=new Date(); hoje.setHours(0,0,0,0);
+  return d<hoje ? 'Vencida' : 'No prazo';
+}
 
 // ── Ações vêm do Supabase (mapeadas por chave de fato) ──
 const keyOf=f=>fkey(f.vig,f.origem,f.proj,f.fato);
@@ -707,13 +719,15 @@ function popFiltros(){
   // 1ª carga: já abre na vigência mais recente (as outras ficam no filtro)
   const wv=document.getElementById('ms-vig');
   if(wv && wv._sel && !_vigInit && VIG_OPTS.length){ wv._sel.clear(); wv._sel.add(VIG_OPTS[0]); _vigInit=true; }  // muta o Set (não substitui) p/ o dropdown refletir
-  ['ms-vig','ms-org','ms-proj','ms-ind'].forEach(id=>{const w=document.getElementById(id);if(w&&w._render)w._render('');});
+  ['ms-vig','ms-org','ms-proj','ms-ind','ms-st','ms-prazo'].forEach(id=>{const w=document.getElementById(id);if(w&&w._render)w._render('');});
 }
 function aplicar(){
   const list=document.getElementById('list');
   if(!_FATOS.length){list.innerHTML='<div class="empty">✓ Nenhum desvio encontrado para esta unidade na vigência mais recente — sem fatos a tratar.</div>';return;}
-  const fv=getMsValues('ms-vig'), fo=getMsValues('ms-org'), fp=getMsValues('ms-proj'), fi=getMsValues('ms-ind');
-  const vis=_FATOS.filter(f=>(!fv.length||fv.includes(f.vig))&&(!fo.length||fo.includes(f.origem))&&(!fp.length||fp.includes(projLabel(f.proj)))&&(!fi.length||fi.includes(f.fato)));
+  const fv=getMsValues('ms-vig'), fo=getMsValues('ms-org'), fp=getMsValues('ms-proj'), fi=getMsValues('ms-ind'), fs=getMsValues('ms-st'), fpz=getMsValues('ms-prazo');
+  const acMatch=r=>(!fs.length||fs.includes(r.status||DEFAULT_STATUS))&&(!fpz.length||fpz.includes(prazoState(r)));
+  const vis=_FATOS.filter(f=>(!fv.length||fv.includes(f.vig))&&(!fo.length||fo.includes(f.origem))&&(!fp.length||fp.includes(projLabel(f.proj)))&&(!fi.length||fi.includes(f.fato))
+    &&(!(fs.length||fpz.length) || (_DBROWS[keyOf(f)]||[]).some(acMatch)));
   if(!vis.length){list.innerHTML='<div class="empty">Nenhum fato para o filtro selecionado.</div>';return;}
   if(VIEW==='kanban'){ list.innerHTML=kanbanHTMLpre(vis); return; }
   list.innerHTML=vis.map(f=>{
@@ -755,7 +769,9 @@ function kcardHTMLpre(x){const r=x.r,f=x.f,org=String(f.origem||'').toUpperCase(
     <div class="kcard-meta">${r.responsavel?esc(r.responsavel):'<span class="dim">sem resp.</span>'} · ${r.prazo?esc(String(r.prazo).split('-').reverse().join('/')):'<span class="dim">sem prazo</span>'}</div>
   </div>`;}
 function kanbanHTMLpre(vis){
-  const cards=[]; vis.forEach(f=>{const key=keyOf(f);(_DBROWS[key]||[]).forEach(r=>cards.push({r,f}));});
+  const fs=getMsValues('ms-st'), fpz=getMsValues('ms-prazo');
+  const acMatch=r=>(!fs.length||fs.includes(r.status||DEFAULT_STATUS))&&(!fpz.length||fpz.includes(prazoState(r)));
+  const cards=[]; vis.forEach(f=>{const key=keyOf(f);(_DBROWS[key]||[]).forEach(r=>{if(acMatch(r))cards.push({r,f});});});
   const COLS=[{k:'Não iniciada',cls:'nao'},{k:'Em andamento',cls:'and'},{k:'Concluída',cls:'con'}];
   return `<div class="kanban">${COLS.map(c=>{const items=cards.filter(x=>(x.r.status||DEFAULT_STATUS)===c.k);
     return `<div class="kcol" data-status="${esc(c.k)}"><div class="kcol-head ${c.cls}">${c.k}<span class="kcount">${items.length}</span></div>
@@ -770,8 +786,70 @@ async function moveCardPre(id,status){
   if(error){row.status=old;aplicar();return;}
   const all=[]; for(const k in _DBROWS) all.push(..._DBROWS[k]); writeCache('fca_cache_'+UNIDADE_COD,all);
 }
+// ── Editar card no próprio Kanban (clique abre modal) ──
+let _kmId=null;
+const _KM_STS=['Não iniciada','Em andamento','Concluída','Cancelada'];
+function _findDbRow(id){for(const k in _DBROWS){const r=(_DBROWS[k]||[]).find(x=>String(x.id)===String(id));if(r)return {r,key:k};}return null;}
+function ensureKModal(){
+  if(document.getElementById('kmodal-ov'))return;
+  const st=document.createElement('style');
+  st.textContent='.kmodal-ov{position:fixed;inset:0;background:rgba(0,0,0,.55);display:none;align-items:center;justify-content:center;z-index:2000;padding:16px;}'+
+    '.kmodal{background:#0f1824;border:1px solid #2a3a50;border-radius:12px;width:min(560px,96vw);max-height:92vh;overflow:auto;padding:18px 20px;box-shadow:0 20px 60px rgba(0,0,0,.6);}'+
+    'body.light-mode .kmodal{background:#fff;border-color:rgba(0,0,0,.12);}'+
+    '.kmodal-head{display:flex;align-items:flex-start;gap:10px;justify-content:space-between;}'+
+    '.kmodal-head b{font-size:15px;font-weight:800;color:var(--text);line-height:1.3;}'+
+    '.kmodal-x{background:none;border:none;color:var(--text2);font-size:18px;cursor:pointer;line-height:1;}'+
+    '.kmodal-sub{font-size:11px;color:var(--text2);margin:2px 0 12px;text-transform:uppercase;letter-spacing:.4px;}'+
+    '.kmodal label{display:block;font-size:10px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:.5px;margin:10px 0 3px;}'+
+    '.kmodal textarea,.kmodal input,.kmodal select{width:100%;background:#0a0f18;border:1px solid #2a3a50;border-radius:6px;color:var(--text);font-family:Montserrat,sans-serif;font-size:13px;padding:8px 10px;outline:none;}'+
+    'body.light-mode .kmodal textarea,body.light-mode .kmodal input,body.light-mode .kmodal select{background:#f0f0f0;border-color:rgba(0,0,0,.15);}'+
+    '.kmodal textarea{resize:vertical;min-height:52px;}'+
+    '.kmodal-row{display:flex;gap:12px;}.kmodal-row>div{flex:1;}'+
+    '.kmodal-foot{display:flex;justify-content:flex-end;gap:8px;margin-top:16px;}'+
+    '.kcard{cursor:pointer;}.kcard.klock{cursor:default;}';
+  document.head.appendChild(st);
+  const d=document.createElement('div');d.id='kmodal-ov';d.className='kmodal-ov';
+  d.innerHTML='<div class="kmodal">'+
+    '<div class="kmodal-head"><b id="km-fato"></b><button class="kmodal-x" onclick="closeKModal()">✕</button></div>'+
+    '<div class="kmodal-sub" id="km-ctx"></div>'+
+    '<label>Causa</label><textarea id="km-causa" rows="2"></textarea>'+
+    '<label>Ação</label><textarea id="km-acao" rows="2"></textarea>'+
+    '<div class="kmodal-row"><div><label>Responsável</label><input id="km-resp" type="text"></div><div><label>Prazo</label><input id="km-prazo" type="date"></div></div>'+
+    '<div class="kmodal-row"><div><label>Status</label><select id="km-status">'+_KM_STS.map(s=>'<option>'+s+'</option>').join('')+'</select></div><div><label>Acompanhamento</label><input id="km-acomp" type="text"></div></div>'+
+    '<div class="kmodal-foot"><button class="btn ghost" onclick="closeKModal()">Cancelar</button><button class="btn" onclick="saveKModal()">Salvar</button></div>'+
+  '</div>';
+  d.addEventListener('click',e=>{if(e.target===d)closeKModal();});
+  document.body.appendChild(d);
+}
+function openKModal(id){
+  const hit=_findDbRow(id);if(!hit)return;const r=hit.r;
+  if(r.locked&&!ADMIN)return;            // ação travada: só admin edita
+  ensureKModal();_kmId=r.id;
+  const f=_FATOS.find(x=>keyOf(x)===hit.key)||{};
+  document.getElementById('km-fato').textContent=_firstLine(f.nome||f.fato||r.fato||'')||'—';
+  document.getElementById('km-ctx').textContent=[f.origem,typeof UNIDADE_COD!=='undefined'?UNIDADE_COD:'',projLabel(f.proj),f.vig].filter(Boolean).join(' · ');
+  document.getElementById('km-causa').value=r.causa||'';
+  document.getElementById('km-acao').value=r.acao||'';
+  document.getElementById('km-resp').value=r.responsavel||'';
+  document.getElementById('km-prazo').value=r.prazo?String(r.prazo).slice(0,10):'';
+  document.getElementById('km-status').value=r.status||DEFAULT_STATUS;
+  document.getElementById('km-acomp').value=r.acompanhamento||'';
+  document.getElementById('kmodal-ov').style.display='flex';
+}
+function closeKModal(){const m=document.getElementById('kmodal-ov');if(m)m.style.display='none';_kmId=null;}
+async function saveKModal(){
+  const hit=_findDbRow(_kmId);if(!hit){closeKModal();return;}const r=hit.r;
+  const upd={causa:document.getElementById('km-causa').value||null,acao:document.getElementById('km-acao').value||null,
+    responsavel:document.getElementById('km-resp').value||null,prazo:document.getElementById('km-prazo').value||null,
+    status:document.getElementById('km-status').value,acompanhamento:document.getElementById('km-acomp').value||null};
+  Object.assign(r,upd);aplicar();closeKModal();
+  if(PREVIEW||!sb)return;
+  const {error}=await sb.from('fca').update(upd).eq('id',r.id);if(error){console.error('update modal',error);return;}
+  const all=[];for(const k in _DBROWS)all.push(..._DBROWS[k]);writeCache('fca_cache_'+UNIDADE_COD,all);
+}
 // Drag-and-drop do Kanban (montado 1x no #list, que persiste entre renders)
 (function(){const c=document.getElementById('list'); if(!c)return;
+  c.addEventListener('click',e=>{const card=e.target.closest&&e.target.closest('.kcard');if(card&&VIEW==='kanban'){const id=card.dataset.id;if(id)openKModal(id);}});
   c.addEventListener('dragstart',e=>{const card=e.target.closest&&e.target.closest('.kcard');if(card&&card.getAttribute('draggable')==='true'){e.dataTransfer.setData('text/plain',card.dataset.id);e.dataTransfer.effectAllowed='move';card.classList.add('dragging');}});
   c.addEventListener('dragend',e=>{const card=e.target.closest&&e.target.closest('.kcard');if(card)card.classList.remove('dragging');});
   c.addEventListener('dragover',e=>{const col=e.target.closest&&e.target.closest('.kcol');if(col){e.preventDefault();e.dataTransfer.dropEffect='move';col.classList.add('kover');}});
@@ -844,6 +922,8 @@ _buildMs(document.getElementById('ms-vig'),()=>VIG_OPTS);
 _buildMs(document.getElementById('ms-org'),()=>ORG_OPTS);
 _buildMs(document.getElementById('ms-proj'),()=>PROJ_OPTS);
 _buildMs(document.getElementById('ms-ind'),()=>IND_OPTS);
+_buildMs(document.getElementById('ms-st'),()=>STATUS);
+_buildMs(document.getElementById('ms-prazo'),()=>PRZ_OPTS);
 document.addEventListener('click',e=>{if(!e.target.closest('.ms-wrap'))document.querySelectorAll('.ms-panel.open').forEach(p=>p.classList.remove('open'));});
 
 // ── Início: exige login (hub), carrega perfil (unidade/admin) e os fatos ──
