@@ -2294,9 +2294,18 @@ function inspsAsOf(refDate) {
   let insps = DATA.inspections.filter(i => i.tireId != null && new Date(i.dataInspecao) <= refDate);
   if (FILTERS.placa.length)  insps = insps.filter(x => FILTERS.placa.includes(x.placa));
   if (FILTERS.serial.length) insps = insps.filter(x => FILTERS.serial.includes(x.serial));
-  const latest = {};
-  insps.forEach(i => { const c = latest[i.tireId]; if (!c || new Date(i.dataInspecao) > new Date(c.dataInspecao)) latest[i.tireId] = i; });
-  return Object.values(latest);
+  // Por pneu: a aferição mais recente COM LEITURA VÁLIDA (menorMM > 0). Se a última
+  // vier zerada (leitura vazia), pega a anterior válida; só usa zerada se não houver válida.
+  const best = {};
+  insps.forEach(i => {
+    const c = best[i.tireId];
+    const iVal = (+i.menorMM) > 0, di = new Date(i.dataInspecao);
+    if (!c) { best[i.tireId] = i; return; }
+    const cVal = (+c.menorMM) > 0, dc = new Date(c.dataInspecao);
+    if (iVal !== cVal) { if (iVal) best[i.tireId] = i; return; } // válida sempre ganha de zerada
+    if (di > dc) best[i.tireId] = i;                             // mesma validade → mais recente
+  });
+  return Object.values(best);
 }
 function getFilteredTires() {
   const temPeriodo = FILTERS.ano.length || FILTERS.vigencia.length;
