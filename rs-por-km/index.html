@@ -64,7 +64,7 @@ body{background:radial-gradient(ellipse at 10% 25%,rgba(249,115,22,.06) 0%,trans
 .chart-leg .leg-dash{border-top:2px dashed;}
 .leg-rem-dash{border-color:#F1F5F9;}
 body.light-mode .leg-rem-dash{border-color:#000000;}
-.chart-wrap{position:relative;height:230px;}
+.chart-wrap{position:relative;height:280px;}
 .tbl-section{background:rgba(20,27,38,.55);border:1px solid rgba(255,255,255,.07);border-radius:8px;padding:18px 20px 16px;margin-bottom:16px;backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);box-shadow:0 2px 12px rgba(0,0,0,.25);}
 .tbl-title{font-size:18px;font-weight:800;color:var(--text);margin-bottom:3px;}
 .tbl-sub{font-size:12px;color:var(--text2);margin-bottom:16px;}
@@ -675,8 +675,18 @@ function renderCharts(f){
 
   var cbRs=function(v){return v!=null?rsKm(v):'';};
   var cbBrl=function(v){return v!=null?fmtBrl(v):'';};
-  var scRs={x:{grid,ticks:tick},y:{beginAtZero:false,grid,ticks:{...tickY,callback:cbRs}}};
-  var scImp={x:{grid,ticks:tick},y:{beginAtZero:false,grid,ticks:{...tickY,callback:cbBrl}}};
+  // Eixo Y auto com FOLGA (menos apertado): realça flutuações sem exagerar o zoom.
+  function padBounds(arrs,below,above){
+    var vals=[]; arrs.forEach(function(a){(a||[]).forEach(function(v){if(v!=null&&isFinite(v))vals.push(+v);});});
+    if(!vals.length) return null;
+    var mn=Math.min.apply(null,vals),mx=Math.max.apply(null,vals),r=(mx-mn)||Math.abs(mx)||1;
+    var lo=mn-r*below,hi=mx+r*above,raw=(hi-lo)/6,mag=Math.pow(10,Math.floor(Math.log10(raw))),n=raw/mag,step=(n>=5?5:n>=2?2:1)*mag;
+    lo=Math.floor(lo/step)*step; hi=Math.ceil(hi/step)*step; if(mn>=0&&lo<0)lo=0;
+    return {min:lo,max:hi};
+  }
+  var bRs=padBounds([dRsReal,dRsRem],0.12,0.06), bImp=padBounds([dImp],0.12,0.06);
+  var scRs={x:{grid,ticks:tick},y:Object.assign({beginAtZero:false,grid,ticks:{...tickY,callback:cbRs}}, bRs||{})};
+  var scImp={x:{grid,ticks:tick},y:Object.assign({beginAtZero:false,grid,ticks:{...tickY,callback:cbBrl}}, bImp||{})};
   var opts=function(sc){return{responsive:true,maintainAspectRatio:false,layout:{padding:{top:28}},plugins:{legend:{display:false},tooltip},scales:sc};};
 
   if(chRsKm)chRsKm.destroy();
