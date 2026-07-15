@@ -174,7 +174,7 @@ body.light-mode select.st[data-v="Cancelada"]{background:#333333;color:#fff;}
   <span class="saved-msg" id="savedMsg">Salvo ✓ na nuvem</span>
 </header>
 <main class="main">
-  <div class="intro">Para cada <b>fato</b> (indicador com desvio) preencha uma ou mais <b>ações</b> com <b>Causa</b>, <b>Ação</b>, <b>Responsável</b>, <b>Prazo</b> e <b>Status</b>. Os fatos vêm dos <b>ICs do Gerot</b> e dos <b>Custos da DRE</b> da unidade (Km/L e R$/L entram como causa do Custo Combustível, não como fato próprio). Ao <b>Salvar</b>, as ações são gravadas na <b>nuvem</b> e travadas (depois só o Acompanhamento fica editável).</div>
+  <div class="intro">Para cada <b>fato</b> (indicador com desvio) preencha uma ou mais <b>ações</b> com <b>Causa</b>, <b>Ação</b>, <b>Responsável</b>, <b>Prazo</b> e <b>Status</b>. Os fatos vêm dos <b>ICs do Gerot</b> e dos <b>Custos da DRE</b> da unidade (Km/L e R$/L entram como causa do Custo Combustível, não como fato próprio). Ao <b>Salvar</b>, as ações são gravadas na <b>nuvem</b> e podem continuar sendo editadas quando precisar.</div>
   <div id="list"><div class="loading">Carregando fatos da unidade…</div></div>
 </main>
 <script>
@@ -682,9 +682,9 @@ function blankAcao(){return {id:'',causa:'',acao:'',resp:'',prazo:'',status:DEFA
 
 function rowHTML(a,canRemove){
   const opts=STATUS.map(s=>`<option ${a.status===s?'selected':''}>${s}</option>`).join('');
-  const lk=a.locked&&!ADMIN;          // travado p/ usuário comum após salvar; admin edita tudo
+  const lk=false;                     // a unidade edita sempre (sem trava após salvar)
   const d=lk?' disabled':'';
-  return `<tr data-id="${a.id||''}" data-locked="${a.locked?1:''}"${lk?' class="locked"':''}>
+  return `<tr data-id="${a.id||''}" data-locked=""${lk?' class="locked"':''}>
     <td class="col-causa"><span class="cell-label">Causa</span><textarea rows="1" data-k="causa" placeholder="Por que aconteceu?"${d}>${esc(a.causa)}</textarea></td>
     <td class="col-acao"><span class="cell-label">Ação</span><textarea rows="1" data-k="acao" placeholder="O que será feito?"${d}>${esc(a.acao)}</textarea></td>
     <td class="col-resp"><span class="cell-label">Responsável</span><input type="text" data-k="resp" placeholder="Quem?" value="${esc(a.resp)}"${d}></td>
@@ -761,7 +761,7 @@ function aplicar(){
 let VIEW='tabela';
 function toggleView(){VIEW=VIEW==='kanban'?'tabela':'kanban';const b=document.getElementById('viewBtn');if(b)b.textContent=VIEW==='kanban'?'Tabela':'Kanban';aplicar();}
 function _firstLine(s){return String(s==null?'':s).split('\n')[0].trim();}
-function kcardHTMLpre(x){const r=x.r,f=x.f,org=String(f.origem||'').toUpperCase()==='RPM'?'rpm':'cst',lk=r.locked&&!ADMIN;
+function kcardHTMLpre(x){const r=x.r,f=x.f,org=String(f.origem||'').toUpperCase()==='RPM'?'rpm':'cst',lk=false;
   return `<div class="kcard${lk?' klock':''}"${lk?'':' draggable="true"'} data-id="${esc(r.id||'')}">
     <div class="kcard-top"><span class="korg ${org}">${esc(f.origem||'')}</span> ${esc(UNIDADE_COD)} · ${esc(projLabel(f.proj))} · ${esc(f.vig)}${r.locked?' 🔒':''}</div>
     <div class="kcard-fato">${esc(_firstLine(f.nome||f.fato))}</div>
@@ -823,7 +823,7 @@ function ensureKModal(){
 }
 function openKModal(id){
   const hit=_findDbRow(id);if(!hit)return;const r=hit.r;
-  if(r.locked&&!ADMIN)return;            // ação travada: só admin edita
+  // (sem trava: a unidade edita qualquer ação da sua unidade)
   ensureKModal();_kmId=r.id;
   const f=_FATOS.find(x=>keyOf(x)===hit.key)||{};
   document.getElementById('km-fato').textContent=_firstLine(f.nome||f.fato||r.fato||'')||'—';
@@ -898,10 +898,7 @@ function wireBlock(block){
 const _saveBtn=document.getElementById('saveBtn');
 _saveBtn.addEventListener('click',async ()=>{
   const m=document.getElementById('savedMsg');_saveBtn.disabled=true;
-  document.querySelectorAll('.fato-block tbody tr').forEach(tr=>{
-    const tem=['causa','acao','resp','prazo'].some(k=>{const el=tr.querySelector('[data-k="'+k+'"]');return el&&el.value.trim();});
-    if(tem)tr.dataset.locked='1';
-  });
+  // (a unidade NÃO trava mais ao salvar — pode continuar editando)
   try{
     for(const block of document.querySelectorAll('.fato-block')) await saveBlock(block);
     const rows=await fetchDB(); if(rows) writeCache('fca_cache_'+UNIDADE_COD,rows); aplicar();
