@@ -8,10 +8,9 @@
 --   - fca          : 1 linha por AÇÃO (um fato tem N ações). origem = RPM | Custos.
 --
 --  Segurança (RLS):
---   - Usuário comum: vê e edita SÓ a sua unidade.
+--   - Usuário comum: vê e edita SÓ a sua unidade (LIVREMENTE — pode reeditar
+--           depois de salvar; a trava por linha foi removida a pedido).
 --   - Admin: vê e edita TUDO (login de qualquer unidade + consolidado).
---   - Lock: depois de travado (locked=true), usuário comum só altera
---           'acompanhamento'. Admin altera qualquer campo / destrava.
 --   - Cliente usa apenas a chave anon (publishable) + RLS. NUNCA service_role.
 -- ============================================================================
 
@@ -67,31 +66,13 @@ drop trigger if exists fca_touch on public.fca;
 create trigger fca_touch before update on public.fca
   for each row execute function public.fca_touch();
 
--- Lock por coluna: travado + não-admin => só 'acompanhamento' pode mudar; não pode destravar.
-create or replace function public.fca_lock_guard() returns trigger
-  language plpgsql security definer set search_path = public as $$
-begin
-  if public.fca_is_admin() then return new; end if;
-  if old.locked then
-    if new.causa        is distinct from old.causa
-    or new.acao         is distinct from old.acao
-    or new.responsavel  is distinct from old.responsavel
-    or new.prazo        is distinct from old.prazo
-    or new.status       is distinct from old.status
-    or new.fato         is distinct from old.fato
-    or new.projeto      is distinct from old.projeto
-    or new.unidade      is distinct from old.unidade
-    or new.vigencia     is distinct from old.vigencia
-    or new.origem       is distinct from old.origem
-    or (new.locked = false) then
-      raise exception 'Registro travado: apenas Acompanhamento pode ser editado.';
-    end if;
-  end if;
-  return new;
-end $$;
+-- Trava por linha REMOVIDA: a unidade edita suas ações livremente, inclusive
+-- depois de salvar. (Antes um trigger fca_lock_guard impedia editar linhas
+-- locked=true — o que travava a reedição. Removido a pedido.)
 drop trigger if exists fca_lock_guard on public.fca;
-create trigger fca_lock_guard before update on public.fca
-  for each row execute function public.fca_lock_guard();
+drop function if exists public.fca_lock_guard();
+-- destrava o que ficou travado no modelo antigo:
+update public.fca set locked = false where locked = true;
 
 -- ---------- RLS -------------------------------------------------------------
 alter table public.fca_profiles enable row level security;

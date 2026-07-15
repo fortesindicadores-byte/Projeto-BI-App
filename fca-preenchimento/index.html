@@ -877,8 +877,8 @@ async function saveBlock(block){
     const g=k=>{const el=tr.querySelector('[data-k="'+k+'"]');return el?el.value:'';};
     const payload={causa:g('causa'),acao:g('acao'),responsavel:g('resp'),prazo:g('prazo')||null,status:g('status'),acompanhamento:g('obs'),locked:tr.dataset.locked==='1'};
     const id=tr.dataset.id;
-    if(id){seen.add(id);const {error}=await sb.from('fca').update(payload).eq('id',id);if(error)console.error('update',error);}
-    else{const {data,error}=await sb.from('fca').insert({...ident,...payload}).select('id').single();if(error)console.error('insert',error);else if(data){tr.dataset.id=data.id;seen.add(data.id);}}
+    if(id){seen.add(id);const {error}=await sb.from('fca').update(payload).eq('id',id);if(error){console.error('update',error);throw error;}}
+    else{const {data,error}=await sb.from('fca').insert({...ident,...payload}).select('id').single();if(error){console.error('insert',error);throw error;}else if(data){tr.dataset.id=data.id;seen.add(data.id);}}
   }
   const dbRows=_DBROWS[block.dataset.key]||[];
   for(const d of dbRows){if(!seen.has(d.id)){const {error}=await sb.from('fca').delete().eq('id',d.id);if(error)console.error('delete',error);}}
@@ -903,7 +903,7 @@ _saveBtn.addEventListener('click',async ()=>{
     for(const block of document.querySelectorAll('.fato-block')) await saveBlock(block);
     const rows=await fetchDB(); if(rows) writeCache('fca_cache_'+UNIDADE_COD,rows); aplicar();
     m.textContent='Salvo ✓ na nuvem';m.style.display='inline';setTimeout(()=>m.style.display='none',2500);
-  }catch(e){console.error(e);m.textContent='Erro ao salvar';m.style.display='inline';}
+  }catch(e){console.error(e);m.textContent='Erro ao salvar: '+(e.message||e);m.style.color='var(--red)';m.style.display='inline';setTimeout(()=>{m.style.display='none';m.style.color='';},6000);}
   _saveBtn.disabled=false;
 });
 // admin: botão só p/ admin; alterna "ver como unidade" (preview do lock)
