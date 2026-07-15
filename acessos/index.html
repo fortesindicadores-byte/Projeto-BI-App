@@ -93,7 +93,7 @@ body.light-mode td{border-bottom-color:rgba(0,0,0,.06);color:var(--text);}
 <script>
 const SUPABASE_URL='https://lozwipoeacpvplgkrxkq.supabase.co';
 const SUPABASE_KEY='sb_publishable_ggKEEebc5zjgQDVsF92Upw_6uoLmKe9';
-let sb=null, ROWS=[], chDia=null, PROFILES=[], LAST_ACCESS={};
+let sb=null, ROWS=[], chDia=null, chMes=null, PROFILES=[], LAST_ACCESS={};
 // Unidades que o FCA cobre (mesma lista do fca-preenchimento). Farol por cadastro.
 const DEPARA={'CGR':'CAMPO GRANDE','BLC':'BALNEARIO CAMBORIU','CBA':'CUIABA','FLP':'FLORIANOPOLIS','GRL':'GUARULHOS','NFR':'NOVA FRIBURGO','PLT':'PELOTAS','RON':'RONDONOPOLIS','MCC':'CACHOEIRAS DE MACACU','PIR':'PIRAI','ANG':'ANHANGUERA'};
 // resolve o valor de fca_profiles.unidade (código 'CGR' ou nome 'CAMPO GRANDE') para o código
@@ -139,7 +139,10 @@ function shell(){
     <div class="kpi-card"><div class="card-label">Acessos hoje</div><div class="card-value" id="k-hoje">—</div></div>
     <div class="kpi-card"><div class="card-label">Últimos 7 dias</div><div class="card-value" id="k-7d">—</div></div>
   </div>
-  <div class="chart-card"><div class="tbl-title">Acessos por dia</div><div class="tbl-sub">Últimos 30 dias (respeita os filtros)</div><div class="chart-wrap"><canvas id="ch-dia"></canvas></div></div>
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:16px;">
+    <div class="chart-card"><div class="tbl-title">Acessos por mês</div><div class="tbl-sub">Últimos 12 meses (respeita os filtros)</div><div class="chart-wrap"><canvas id="ch-mes"></canvas></div></div>
+    <div class="chart-card"><div class="tbl-title">Acessos por dia</div><div class="tbl-sub">Últimos 30 dias (respeita os filtros)</div><div class="chart-wrap"><canvas id="ch-dia"></canvas></div></div>
+  </div>
   <div class="tbl-section"><div class="tbl-title">Por unidade (cadastro no FCA)</div><div class="tbl-sub" id="sub-uni">—</div><div id="t-uni"></div></div>
   <div class="tables">
     <div class="tbl-section"><div class="tbl-title">Por usuário</div><div class="tbl-sub" id="sub-usr">—</div><div id="t-usr"></div></div>
@@ -172,6 +175,16 @@ function render(){
     options:{responsive:true,maintainAspectRatio:false,
       plugins:{legend:{display:false},tooltip:{backgroundColor:'#141B26',titleColor:'#F97316',bodyColor:'#F1F5F9',borderColor:'#1E2D40',borderWidth:1,titleFont:{family:'Montserrat'},bodyFont:{family:'Montserrat'}}},
       scales:{x:{grid:getGrid(),ticks:{...getTick(9),autoSkip:true,maxRotation:0}},y:{beginAtZero:true,grid:getGrid(),ticks:{...getTick(),precision:0}}}}});
+
+  // gráfico: últimos 12 meses (eixo X fixo — sempre 12 meses, mesmo com 0)
+  const mLabels=[],mData=[];
+  for(let i=11;i>=0;i--){const d=new Date(hoje.getFullYear(),hoje.getMonth()-i,1);const k=mesKey(d);mLabels.push(MESES_PT[d.getMonth()]+'/'+String(d.getFullYear()).slice(2));mData.push(rows.filter(r=>r.dia.slice(0,7)===k).length);}
+  if(chMes)chMes.destroy();
+  chMes=new Chart(document.getElementById('ch-mes'),{type:'bar',
+    data:{labels:mLabels,datasets:[{label:'Acessos',data:mData,backgroundColor:'rgba(249,115,22,.55)',borderColor:'#F97316',borderWidth:1,borderRadius:3,maxBarThickness:38}]},
+    options:{responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{display:false},tooltip:{backgroundColor:'#141B26',titleColor:'#F97316',bodyColor:'#F1F5F9',borderColor:'#1E2D40',borderWidth:1,titleFont:{family:'Montserrat'},bodyFont:{family:'Montserrat'}}},
+      scales:{x:{grid:getGrid(),ticks:{...getTick(9),autoSkip:false,maxRotation:0}},y:{beginAtZero:true,grid:getGrid(),ticks:{...getTick(),precision:0}}}}});
 
   // por usuário
   const byU={};
