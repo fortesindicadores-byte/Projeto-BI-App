@@ -1346,6 +1346,16 @@
           <div id="opts-vida"></div>
         </div>
       </div>
+      <div class="ms-wrap" id="wrap-situacao">
+        <button class="ms-btn" onclick="toggleMs('situacao')">
+          SITUAÇÃO <span class="ms-count" id="cnt-situacao" style="display:none"></span><span class="ms-arrow">▾</span>
+        </button>
+        <div class="ms-panel" id="panel-situacao">
+          <input class="ms-search" placeholder="Buscar..." oninput="filterMs(this,'panel-situacao')">
+          <div class="ms-option select-all"><label><input type="checkbox" onchange="selectAll('panel-situacao',this)"> Todos</label></div>
+          <div id="opts-situacao"></div>
+        </div>
+      </div>
     </div>
   </header>
 
@@ -1622,6 +1632,7 @@
             <th class="dcol">Marca</th><th class="dcol">Vida</th><th class="dcol">Marca Banda</th><th class="dcol">Banda</th>
             <th class="dcol">mm1</th><th class="dcol">mm2</th><th class="dcol">mm3</th><th class="dcol">mm4</th>
             <th class="dcol">Amplitude</th><th>Menor MM</th><th>Status</th>
+            <th class="dcol">Situação</th><th class="dcol">Última Aferição</th>
           </tr></thead>
           <tbody id="tbodyMM"></tbody>
         </table>
@@ -2006,7 +2017,7 @@ let DATA = { vehicles: [], tires: [], inspections: [] };
 // cai no km/dia do odômetro (comportamento atual) — nunca regride/zera.
 let KMDIA = { placa: {}, modelo: {}, cidade: {}, carregado: false };
 let charts = {};
-let FILTERS = { ano: [], vigencia: [], branch: [], unidade: [], placa: [], serial: [], marca: [], modelo: [], vida: [] };
+let FILTERS = { ano: [], vigencia: [], branch: [], unidade: [], placa: [], serial: [], marca: [], modelo: [], vida: [], situacao: [] };
 
 // ============================================================
 // TEMA
@@ -2067,10 +2078,21 @@ function filterMs(input, panelId) {
 // Os filtros se conectam: as opções de um filtro vêm dos dados
 // já filtrados por TODOS os outros (ex.: marca restringe placa/vigência).
 // ============================================================
-const FILTER_KEYS = ['ano','vigencia','branch','unidade','placa','serial','marca','modelo','vida'];
-let SEL = { ano:'all', vigencia:'all', branch:'all', unidade:'all', placa:'all', serial:'all', marca:'all', modelo:'all', vida:'all' };
+const FILTER_KEYS = ['ano','vigencia','branch','unidade','placa','serial','marca','modelo','vida','situacao'];
+let SEL = { ano:'all', vigencia:'all', branch:'all', unidade:'all', placa:'all', serial:'all', marca:'all', modelo:'all', vida:'all', situacao:'all' };
 
 function labelVida(cv) { return (cv || 1) === 1 ? 'V1 (Novo)' : 'V' + cv + ' (recapado)'; }
+// Nome amigável do status do pneu (API é normalizada p/ 'status' antes de chegar aqui).
+function statusAmigavel(s) {
+  const k = String(s || '').trim().toUpperCase();
+  const map = { INSTALLED:'Em uso', RODANDO:'Em uso', STOCK:'Estoque', ESTOQUE:'Estoque', SCRAP:'Sucata', SUCATA:'Sucata',
+                REMOVED:'Removido', REMOVIDO:'Removido', DISPOSED:'Descartado', DESCARTADO:'Descartado', REPAIR:'Reparo', RECAP:'Recapagem' };
+  if (map[k]) return map[k];
+  if (!k) return 'Sem status';
+  return k.charAt(0) + k.slice(1).toLowerCase();
+}
+// pneu passa pelo filtro de Situação (padrão: só "Em uso")
+function passaSituacao(t) { const sel = FILTERS.situacao; return !sel.length || sel.includes(statusAmigavel(t.status)); }
 
 function vigOf(i) { const d = new Date(i.dataInspecao); return `${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()}`; }
 
@@ -2104,6 +2126,7 @@ function optionsFor(key) {
   if (key === 'modelo')  return distinctSorted(vehOk.map(v => v.modelo));
   if (key === 'placa')   return distinctSorted(vehOk.map(v => v.placa));
   if (key === 'serial')  return distinctSorted(DATA.tires.filter(t => placasOk.has(t.placa)).map(t => t.serial));
+  if (key === 'situacao') return distinctSorted(DATA.tires.filter(t => placasOk.has(t.placa)).map(t => statusAmigavel(t.status)));
 
   if (key === 'ano' || key === 'vigencia') {
     let insps = DATA.inspections.filter(i => vehOkIds.has(i.veiculoId));
@@ -2185,9 +2208,11 @@ function selectAll(panelId, cb) {
 
 function populateFilters() {
   // padrão: tudo "Todos", exceto VIGÊNCIA = mês mais recente com dado
-  SEL = { ano:'all', vigencia:'all', branch:'all', unidade:'all', placa:'all', serial:'all', marca:'all', modelo:'all', vida:'all' };
+  SEL = { ano:'all', vigencia:'all', branch:'all', unidade:'all', placa:'all', serial:'all', marca:'all', modelo:'all', vida:'all', situacao:'all' };
   const vigs = optionsFor('vigencia');          // mais recente primeiro
   if (vigs.length) SEL.vigencia = new Set([vigs[0]]);
+  const sits = optionsFor('situacao');          // padrão: só "Em uso"
+  if (sits.includes('Em uso')) SEL.situacao = new Set(['Em uso']);
   syncFiltersFromSel();
   FILTER_KEYS.forEach(renderFilterOptions);
 }
@@ -2253,10 +2278,30 @@ function reconstructTires(insps) {
   return Object.values(porPos);
 }
 
+// Data de referência = fim do mês mais recente selecionado (ou fim do ano, ou agora).
+function refDateOf() {
+  if (FILTERS.vigencia.length) {
+    const ms = FILTERS.vigencia.map(mv => { const [mm, yy] = mv.split('/').map(Number); return yy * 12 + (mm - 1); });
+    const mx = Math.max(...ms); return new Date(Math.floor(mx / 12), (mx % 12) + 1, 0, 23, 59, 59);
+  }
+  if (FILTERS.ano.length) { const y = Math.max(...FILTERS.ano.map(Number)); return new Date(y, 11, 31, 23, 59, 59); }
+  return new Date();
+}
+// Para cada pneu, a ÚLTIMA aferição com data ≤ refDate (modelo "situação atual até o mês").
+// Assim a vigência vira DATA DE REFERÊNCIA: traz todos os pneus com a última medição até ali
+// (pneu medido só em meses anteriores aparece com a leitura mais recente dele), não só os aferidos no mês.
+function inspsAsOf(refDate) {
+  let insps = DATA.inspections.filter(i => i.tireId != null && new Date(i.dataInspecao) <= refDate);
+  if (FILTERS.placa.length)  insps = insps.filter(x => FILTERS.placa.includes(x.placa));
+  if (FILTERS.serial.length) insps = insps.filter(x => FILTERS.serial.includes(x.serial));
+  const latest = {};
+  insps.forEach(i => { const c = latest[i.tireId]; if (!c || new Date(i.dataInspecao) > new Date(c.dataInspecao)) latest[i.tireId] = i; });
+  return Object.values(latest);
+}
 function getFilteredTires() {
   const temPeriodo = FILTERS.ano.length || FILTERS.vigencia.length;
-  // Sem período: estado atual (snapshot). Com período: reconstrói da última medição no período.
-  let t = temPeriodo ? reconstructTires(getFilteredInspections()) : DATA.tires;
+  // Sem período: estado atual (snapshot). Com período: última aferição de cada pneu até a data de referência.
+  let t = temPeriodo ? reconstructTires(inspsAsOf(refDateOf())) : DATA.tires;
 
   if (FILTERS.placa.length || FILTERS.branch.length || FILTERS.unidade.length || FILTERS.marca.length || FILTERS.modelo.length) {
     const placasOk = new Set(getFilteredVehicles().map(v => v.placa));
@@ -2305,6 +2350,7 @@ function tiresNoMes(ano, mes) {
   });
   let tm = reconstructTires(medidas);
   if (FILTERS.vida.length) tm = tm.filter(t => FILTERS.vida.includes(labelVida(t.cicloVida)));
+  tm = tm.filter(passaSituacao); // respeita o filtro Situação (padrão: só Em uso)
   return tm;
 }
 
@@ -2557,7 +2603,7 @@ const INFLACAO_ANUAL = 0.045; // 4,5% a.a. (estimativa) — aplicada ao virar o 
 
 function renderOrcamento() {
   if (!document.getElementById('orcTable')) return;
-  const tires = getFilteredTires().filter(t => t.status === 'INSTALLED');
+  const tires = getFilteredTires().filter(t => passaSituacao(t));
   const media = arr => arr.length ? arr.reduce((a, b) => a + b, 0) / arr.length : 0;
 
   // Preço médio de pneu novo (V1) — priorizando os de direcional
@@ -2842,7 +2888,7 @@ function _mediana(arr) {
 // 2ª passada: confiável usa a própria; senão aplica cascata placa·similar→…→mediana frota.
 // TODO pneu recebe previsão (sem "sem base").
 function calcPrevisao() {
-  const tires = getFilteredTires().filter(t => t.status === 'INSTALLED' && t.menorMM > 0);
+  const tires = getFilteredTires().filter(t => passaSituacao(t) && t.menorMM > 0);
 
   // histórico de inspeções por tireId (mm e odômetro válidos), ordenado por data
   const hist = {};
@@ -3133,7 +3179,7 @@ function fmtCPK(v) { return 'R$ ' + v.toFixed(3).replace('.', ','); }
 
 function renderCPK() {
   if (!document.getElementById('cpkHeroVal')) return;
-  const tires = getFilteredTires().filter(t => t.status === 'INSTALLED' && t.cpk > 0);
+  const tires = getFilteredTires().filter(t => passaSituacao(t) && t.cpk > 0);
 
   const media = arr => arr.length ? arr.reduce((a, b) => a + b, 0) / arr.length : 0;
   const cpkMedio = media(tires.map(t => t.cpk));
@@ -3316,7 +3362,7 @@ function fmtIdade(anos) {
 }
 
 function renderSaude() {
-  const tires = getFilteredTires().filter(t => t.status === 'INSTALLED' && t.placa);
+  const tires = getFilteredTires().filter(t => passaSituacao(t) && t.placa);
   if (!tires.length) return;
 
   // ---- agregados gerais ----
@@ -3900,7 +3946,7 @@ function renderUnidadeChart(porUni) {
 // MILIMETRAGEM
 // ============================================================
 function renderMilimetragem() {
-  const tires = getFilteredTires().filter(t => t.status === 'INSTALLED');
+  const tires = getFilteredTires().filter(t => passaSituacao(t));
   if (!document.getElementById('mmHeroVal')) return;
 
   // Hero = MM média sobre os meses selecionados (= barras do gráfico); contagens por pneu.
@@ -3970,7 +4016,7 @@ function filtrarMM() {
   };
 
   document.getElementById('tbodyMM').innerHTML = lista.length === 0
-    ? '<tr><td colspan="16" class="empty">Nenhum pneu encontrado</td></tr>'
+    ? '<tr><td colspan="18" class="empty">Nenhum pneu encontrado</td></tr>'
     : lista.map((t, i) => `
         <tr>
           <td style="color:var(--text-muted)">${i + 1}</td>
@@ -3989,8 +4035,10 @@ function filtrarMM() {
           <td class="dcol" style="color:${t.amplitude > 5 ? 'var(--red-soft)' : t.amplitude > 3 ? 'var(--yellow)' : 'var(--green)'};font-weight:700">${fmt(t.amplitude)}</td>
           <td style="color:${corStatus[t.statusMM] || 'var(--text)'};font-weight:700">${fmt(t.menorMM)}</td>
           <td style="white-space:nowrap"><span class="farol-dot"><span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:${corStatus[t.statusMM] || 'var(--text-muted)'};margin-right:6px"></span>${t.statusMM}</span><button class="row-toggle" onclick="toggleDetail(this)">+</button></td>
+          <td class="dcol">${statusAmigavel(t.status)}</td>
+          <td class="dcol" style="white-space:nowrap">${t._ultimaAfericao ? new Date(t._ultimaAfericao).toLocaleDateString('pt-BR') : '—'}</td>
         </tr>
-        <tr class="detail-row"><td colspan="16"><div class="kv">
+        <tr class="detail-row"><td colspan="18"><div class="kv">
           <span>Placa: <b>${t.placa || '—'}</b></span>
           <span>Frota: <b>${t.frota || '—'}</b></span>
           <span>Posição: <b>${t.nomePosicao || t.posicao || '—'}</b></span>
@@ -4088,7 +4136,7 @@ function renderMMMensalCharts() {
 // PRESSÃO
 // ============================================================
 function renderPressao() {
-  const tires    = getFilteredTires().filter(t => t.status === 'INSTALLED' && t.pressaoIdeal > 0);
+  const tires    = getFilteredTires().filter(t => passaSituacao(t) && t.pressaoIdeal > 0);
   if (!document.getElementById('prHeroVal')) return;
 
   const nok    = tires.filter(t => t.pressaoNOK);
@@ -4111,7 +4159,7 @@ function renderPressao() {
     if (cor) el.style.color = cor;
   };
   // Metas: aferidos = 100% da frota | OK ≥ 98% | Baixa = 0 | Alta = 0 | Desvio ≤ 5%
-  const totalInstalados = getFilteredTires().filter(t => t.status === 'INSTALLED').length;
+  const totalInstalados = getFilteredTires().filter(t => passaSituacao(t)).length;
   const metaVerde = 'var(--green)', metaVermelho = 'var(--red-soft)';
   setCard('prCardTotal', tires.length, tires.length >= totalInstalados ? metaVerde : metaVermelho);
   document.getElementById('prCardTotalSub').textContent =
@@ -4368,7 +4416,7 @@ function renderEixos() {
 
   // Pneus instalados por veículo (respeita todos os filtros, inclusive vigência/ano)
   const pneusPorVeiculo = {};
-  getFilteredTires().filter(t => t.status === 'INSTALLED').forEach(t => {
+  getFilteredTires().filter(t => passaSituacao(t)).forEach(t => {
     if (!pneusPorVeiculo[t.veiculoId]) pneusPorVeiculo[t.veiculoId] = [];
     pneusPorVeiculo[t.veiculoId].push(t);
   });
