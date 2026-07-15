@@ -191,7 +191,7 @@ body.light-mode .chart-leg .leg-orc-dash{border-top-color:#1D4ED8;}
 .ref-toggle .rt-lbl{color:var(--text2);font-weight:700;}
 .ref-toggle.inline{position:static;top:auto;right:auto;}
 body.light-mode .ref-toggle{background:rgba(29,78,216,.10);border-color:rgba(29,78,216,.35);color:#1D4ED8;}
-.chart-wrap{position:relative;height:230px;}
+.chart-wrap{position:relative;height:280px;}
 
 /* ══ TABLES ══ */
 .tbl-section{
@@ -1393,8 +1393,18 @@ function renderCharts(f){
   }
   var cbFmt = function(v){ return fmt(v); };
   var cbPct = function(v){ return v!=null ? v.toFixed(1)+'%' : ''; };
-  var scBrl={x:{grid,ticks:tick},y:{beginAtZero:false,grid,ticks:{...tickY,callback:cbFmt}}};
-  var scAv={x:{grid,ticks:tick},y:{beginAtZero:false,grid,ticks:{...tickY,callback:cbPct}}};
+  // Eixo Y auto, porém com FOLGA (menos apertado): realça as flutuações sem exagerar o zoom.
+  function padBounds(arrs,below,above){
+    var vals=[]; arrs.forEach(function(a){(a||[]).forEach(function(v){if(v!=null&&isFinite(v))vals.push(+v);});});
+    if(!vals.length) return null;
+    var mn=Math.min.apply(null,vals),mx=Math.max.apply(null,vals),r=(mx-mn)||Math.abs(mx)||1;
+    var lo=mn-r*below,hi=mx+r*above,raw=(hi-lo)/6,mag=Math.pow(10,Math.floor(Math.log10(raw))),n=raw/mag,step=(n>=5?5:n>=2?2:1)*mag;
+    lo=Math.floor(lo/step)*step; hi=Math.ceil(hi/step)*step; if(mn>=0&&lo<0)lo=0;
+    return {min:lo,max:hi};
+  }
+  var bBrl=padBounds([dReal,dRem,dOrc],0.12,0.06), bAv=padBounds([dAvReal,dAvRem,dAvOrc],0.12,0.06);
+  var scBrl={x:{grid,ticks:tick},y:Object.assign({beginAtZero:false,grid,ticks:{...tickY,callback:cbFmt}}, bBrl||{})};
+  var scAv={x:{grid,ticks:tick},y:Object.assign({beginAtZero:false,grid,ticks:{...tickY,callback:cbPct}}, bAv||{})};
   var chartOpts=function(sc){return {responsive:true,maintainAspectRatio:false,layout:{padding:{top:28}},plugins:{legend:{display:false},tooltip},scales:sc};};
   if(chReceita) chReceita.destroy();
   // referência das condicionais (cor das barras): Remunerado (padrão) ou Orçado, por gráfico
