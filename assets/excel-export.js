@@ -37,13 +37,84 @@
     const card=canvas.closest('.chart-card,.tbl-section,section,div');
     const t=card&&card.querySelector('.chart-title,.tbl-title,.sec-title,h2,h3'); return (t&&t.textContent.trim())||'Grafico';
   }
+  // Converte texto formatado em NÚMERO (p/ análise no Excel). Trata pt-BR (vírgula
+  // decimal, ponto milhar), toFixed (ponto decimal), %, pp, R$, sufixos mi/bi/k, º.
+  // Rótulos/datas/horas ficam como texto (retorna null). Desambigua ponto milhar×decimal.
+  function parseNum(raw){
+    if(raw==null) return null;
+    let s=String(raw).trim();
+    if(!s || /^[—–\-]+$/.test(s)) return null;
+    if(/[\/:]/.test(s)) return null;                 // datas/horas → texto
+    const low=s.toLowerCase();
+    const resid=low.replace(/[0-9.,\s%+\-()º°ª]/g,'').replace(/r\$/g,'').replace(/\$/g,'').replace(/milh\w*|mil|mi|bi|pp|k/g,'');
+    if(resid.length) return null;                     // sobrou letra → rótulo/texto
+    let mult=1;
+    if(/\bbi\b/.test(low)||/[\d\s]bi\b/.test(low)) mult=1e9;
+    else if(/mi|milh/.test(low)) mult=1e6;
+    else if(/\bmil\b/.test(low)||/[\d\s]k\b/.test(low)) mult=1e3;
+    let t=s.replace(/[^0-9.,-]/g,'');
+    const neg=/^-/.test(t); t=t.replace(/-/g,'');
+    if(!/[0-9]/.test(t)) return null;
+    if(t.indexOf(',')>=0){ t=t.replace(/\./g,'').replace(',','.'); }
+    else if(t.indexOf('.')>=0){
+      const parts=t.split('.'), afterLast=parts[parts.length-1];
+      if(parts.length>2 || (afterLast.length===3 && parts[0]!=='0' && parts[0]!=='')) t=t.replace(/\./g,'');
+    }
+    let n=parseFloat(t); if(!isFinite(n)) return null;
+    return (neg?-n:n)*mult;
+  }
+  // valor de uma célula → número (respeita data-v cru se o painel fornecer), senão texto
+  function cellVal(cell){
+    const dv=cell.getAttribute&&cell.getAttribute('data-v');
+    if(dv!=null && dv!=='' && isFinite(+dv)) return +dv;
+    const n=parseNum(cell.textContent);
+    return n==null ? cell.textContent.trim() : n;
+  }
   function baixarTabela(table, nome){
     ensureXLSX(err=>{ if(err){alert('Não foi possível carregar o componente de Excel. Verifique a conexão.');return;}
       try{
-        const ws=XLSX.utils.table_to_sheet(table,{raw:false,display:true});
+        const aoa=[];
+        table.querySelectorAll('tr').forEach(tr=>{
+          const row=[];
+          tr.querySelectorAll('th,td').forEach(cell=>{
+            row.push(cellVal(cell));
+            const span=parseInt(cell.getAttribute('colspan')||'1',10);
+            for(let k=1;k<span;k++) row.push(null);
+          });
+          if(row.length) aoa.push(row);
+        });
+        const ws=XLSX.utils.aoa_to_sheet(aoa);
         const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,sheetName(nome));
         XLSX.writeFile(wb, slug(painelTitulo())+'_'+slug(nome)+'.xlsx');
       }catch(e){ console.error(e); alert('Erro ao exportar tabela: '+(e.message||e)); }
+    });
+  }
+  // ---- Exportar CARDS (label + valor numérico) ----
+  const CARD_SEL='.kpi-card,.kpi,.scard,.stat-card,.sc-card,.card';
+  const LBL_SEL='.card-label,.kpi-lbl,.hero-label,.slbl,.sc-label,.card-lbl,.stat-label,.card-title';
+  const VAL_SEL='.card-value,.kpi-val,.hero-value,.sval,.sc-value,.card-val,.stat-value,.card-num';
+  const CARD_GROUP='.cards-row,.cards-grid,.kpi-row,.scards,.sc-row,.cards,.card-grid';
+  function cardsDe(el){
+    const card=el.closest(CARD_SEL); if(!card) return null;
+    const group=card.closest(CARD_GROUP)||card.parentElement;
+    const all=[].slice.call(group.querySelectorAll(CARD_SEL)).filter(c=>!c.querySelector(CARD_SEL)); // só cards folha
+    return all.length?all:[card];
+  }
+  function baixarCards(cards, nome){
+    ensureXLSX(err=>{ if(err){alert('Não foi possível carregar o componente de Excel. Verifique a conexão.');return;}
+      try{
+        const aoa=[['Indicador','Valor']];
+        cards.forEach(c=>{
+          const lblEl=c.querySelector(LBL_SEL), valEl=c.querySelector(VAL_SEL);
+          const lbl=((lblEl&&lblEl.textContent)||'').trim()||'Item';
+          const vtxt=((valEl&&valEl.textContent)||'').trim();
+          const n=parseNum(vtxt);
+          aoa.push([lbl, n==null?vtxt:n]);
+        });
+        const ws=XLSX.utils.aoa_to_sheet(aoa);
+        const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,sheetName(nome));
+        XLSX.writeFile(wb, slug(painelTitulo())+'_'+slug(nome)+'.xlsx');
+      }catch(e){ console.error(e); alert('Erro ao exportar cards: '+(e.message||e)); }
     });
   }
   function baixarGrafico(chart, nome){
@@ -186,15 +257,17 @@
         return;
       }
     }
-    // 3) card / bloco (sem tabela nem gráfico) → só Imagem
+    // 3) card / bloco (sem tabela nem gráfico) → Excel (se for card) + Imagem
     const bloco=blocoImagem(e.target);
     if(bloco){
       e.preventDefault();
       const t=bloco.querySelector('.chart-title,.tbl-title,.sec-title,.card-label,.kpi-lbl,h2,h3');
       const nome=(t&&t.textContent.trim())||'card';
-      showMenu(e.clientX,e.clientY,[
-        {icon:IC_IMG,label:'Exportar imagem (PNG)',action:()=>capturaImagem(bloco, nome)}
-      ]);
+      const items=[];
+      const cards=cardsDe(e.target);
+      if(cards) items.push({icon:IC_FILE,label:'Exportar Excel (cards)',action:()=>baixarCards(cards, 'Cards')});
+      items.push({icon:IC_IMG,label:'Exportar imagem (PNG)',action:()=>capturaImagem(bloco, nome)});
+      showMenu(e.clientX,e.clientY,items);
       return;
     }
     // fora disso: menu nativo do navegador
