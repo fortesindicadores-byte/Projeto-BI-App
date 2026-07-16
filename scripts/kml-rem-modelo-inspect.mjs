@@ -123,6 +123,16 @@ async function main() {
     placaStats.get(p).set(vk, med);
   }
 
+  // ===== BASE via GVIZ (verificar se trunca vs CSV=6255) =====
+  const bGviz = `https://docs.google.com/spreadsheets/d/${ID}/gviz/tq?sheet=${encodeURIComponent('Base Remunerado Modelo')}&tqx=out:json`;
+  try {
+    const gTxt = await (await fetch(bGviz)).text();
+    const gj = parseGviz(gTxt);
+    const gRows = (gj.table.rows || []).length;
+    const gCols = (gj.table.cols || []).map(c => (c.label||c.id||'').trim());
+    console.log(`\n>> BASE via gviz: linhas=${gRows} (CSV=${bRows.length-1})  cols=${gCols.length} [${gCols.join(' | ')}]`);
+  } catch (e) { console.log('>> BASE gviz ERRO:', e.message); }
+
   // ===== KM/L (gviz json) =====
   console.log('\n\n============================================================');
   console.log('ABA: Km/L  (gviz json)');
