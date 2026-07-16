@@ -331,6 +331,25 @@ body.light-mode table.dre thead tr.cols th{background:#F0F0F0;}
 <script>
 const KML_ID  = '1ZZdvG_RK5cTBLdPl3TWCbNeqw-Y4fTYwWsQV4w-e__A';
 const KML_TAB = 'Km/L';
+// Aba (mesmo workbook) com a Média do Modelo por PLACA+VIGÊNCIA — origem oficial
+// do Rem Modelo (também alimenta o painel R$/L). Substitui a coluna "Km/l Rem
+// Modelo" da aba Km/L. Regra: 0 = placa inativa (nunca entra em média).
+const BASE_REMMOD_TAB = 'Base Remunerado Modelo';
+
+// ── PLACA CANÔNICA (Mercosul <-> antigo) ──
+// No Mercosul (AAA9A99) o 5º caractere virou LETRA: 0->A 1->B … 9->J. Convertendo
+// de volta p/ dígito obtemos a placa antiga equivalente — chave de join estável
+// entre as duas bases (uma pode estar em Mercosul e a outra no formato antigo).
+const _MERC2NUM={A:'0',B:'1',C:'2',D:'3',E:'4',F:'5',G:'6',H:'7',I:'8',J:'9'};
+function canonPlaca(p){
+  const c=String(p||'').toUpperCase().replace(/[^A-Z0-9]/g,'');
+  if(/^[A-Z]{3}\d[A-Z]\d{2}$/.test(c)){const d=_MERC2NUM[c[4]];if(d!=null)return c.slice(0,4)+d+c.slice(5);}
+  return c;
+}
+// baseRemRaw: `${placaCanon}|${YYYY-MM}` -> Média Modelo (inclui 0 = inativa)
+let baseRemRaw=new Map();
+// remModStatus: placas que não acharam média em nenhuma hipótese (relatório)
+let remModStatus=[];
 
 // Detected column indices (populated after fetch)
 let CL = {vig:0,rem:4,remM:5,real:6,rsLReal:9,ativo:11,proj:14,uni:-1,placa:15,modelo:16,tipoVei:17,kmRod:22,litros:23};
@@ -520,6 +539,67 @@ function fetchSheet(id,tab){
     s.src=`https://docs.google.com/spreadsheets/d/${id}/gviz/tq?sheet=${encodeURIComponent(tab)}&tqx=out:json;responseHandler:${fn}`;
     document.head.appendChild(s);
   });
+}
+
+// ── BASE REMUNERADO MODELO ──
+// Lê a aba com a Média do Modelo por placa+vigência e monta baseRemRaw.
+async function fetchBaseRemMod(){
+  const {cols,rows}=await fetchSheet(KML_ID,BASE_REMMOD_TAB);
+  const li=t=>{for(let i=0;i<cols.length;i++){if(String(cols[i]).toLowerCase().includes(t))return i;}return -1;};
+  const cPl=li('placa'); let cMd=li('média'); if(cMd<0)cMd=li('media');
+  // coluna de vigência: a que parseVig reconhece como data (col "Vigência Data")
+  let cVg=-1;
+  for(let c=0;c<cols.length;c++){for(let r=0;r<Math.min(rows.length,50);r++){if(rows[r][c]!=null&&parseVig(rows[r][c])){cVg=c;break;}}if(cVg>=0)break;}
+  const PL=cPl>=0?cPl:8, MD=cMd>=0?cMd:9, VG=cVg>=0?cVg:4;
+  const m=new Map();
+  rows.forEach(row=>{
+    const p=canonPlaca(row[PL]); if(!p)return;
+    const d=parseVig(row[VG]); if(!d)return;
+    const med=+row[MD]||0;
+    m.set(`${p}|${vigKey(d)}`,med);
+  });
+  return m;
+}
+
+// Constrói os índices e SOBRESCREVE o Rem Modelo (CL.remM) de cada linha do Km/L
+// com o valor vindo da base. Resolução em cascata (0 nunca entra em média):
+//   1) placa+vigência (valor>0)
+//   2) média do MODELO na mesma vigência (média simples das placas ativas)
+//   3) média do TIPO de veículo na mesma vigência
+//   4) modelo/tipo na vigência mais próxima
+//   5) sem média -> null (entra no relatório remModStatus)
+function buildRemModIndex(){
+  if(!(baseRemRaw instanceof Map)||baseRemRaw.size===0)return;
+  const info=new Map();  // placaCanon -> {modelo,tipo}
+  allRows.forEach(r=>{const p=canonPlaca(r[CL.placa]);if(!p)return;if(!info.has(p))info.set(p,{modelo:r[CL.modelo]?String(r[CL.modelo]).trim():'',tipo:r[CL.tipoVei]?String(r[CL.tipoVei]).trim():''});});
+  const modAgg=new Map(),tipAgg=new Map();  // `${vk}|${chave}` -> {s,n}
+  for(const [key,med] of baseRemRaw){
+    if(!(med>0))continue;
+    const i=key.indexOf('|'),p=key.slice(0,i),vk=key.slice(i+1);
+    const nf=info.get(p);if(!nf)continue;
+    if(nf.modelo){const k=`${vk}|${nf.modelo}`,a=modAgg.get(k)||{s:0,n:0};a.s+=med;a.n++;modAgg.set(k,a);}
+    if(nf.tipo){const k=`${vk}|${nf.tipo}`,a=tipAgg.get(k)||{s:0,n:0};a.s+=med;a.n++;tipAgg.set(k,a);}
+  }
+  const mean=(mp,vk,key)=>{const a=mp.get(`${vk}|${key}`);return a&&a.n>0?a.s/a.n:null;};
+  const vigsAll=[...new Set([...baseRemRaw.keys()].map(k=>k.slice(k.indexOf('|')+1)))].sort();
+  const vigOrder=vk=>{const le=vigsAll.filter(v=>v<=vk).sort().reverse(),gt=vigsAll.filter(v=>v>vk).sort().reverse();return le.concat(gt);};
+  const seen=new Set();remModStatus=[];
+  allRows.forEach(r=>{
+    const p=canonPlaca(r[CL.placa]),d=parseVig(r[CL.vig]),vk=d?vigKey(d):'';
+    const modelo=r[CL.modelo]?String(r[CL.modelo]).trim():'',tipo=r[CL.tipoVei]?String(r[CL.tipoVei]).trim():'';
+    let val=null;
+    const direct=baseRemRaw.get(`${p}|${vk}`);
+    if(direct!=null&&direct>0)val=direct;
+    else if((val=mean(modAgg,vk,modelo))!=null){}
+    else if((val=mean(tipAgg,vk,tipo))!=null){}
+    else{
+      for(const v of vigOrder(vk)){if(v===vk)continue;const mm=mean(modAgg,v,modelo);if(mm!=null){val=mm;break;}}
+      if(val==null)for(const v of vigOrder(vk)){if(v===vk)continue;const tt=mean(tipAgg,v,tipo);if(tt!=null){val=tt;break;}}
+    }
+    r[CL.remM]=val;  // sobrescreve o Rem Modelo com a base
+    if(val==null){const kk=`${p}|${vk}`;if(!seen.has(kk)){seen.add(kk);remModStatus.push({placa:r[CL.placa],modelo,tipo,vig:vk});}}
+  });
+  if(remModStatus.length)console.warn('[Rem Modelo] '+remModStatus.length+' placa(s) sem média:',remModStatus);
 }
 
 // ── FILTROS ──
@@ -861,16 +941,25 @@ function atualizar(){
 
 // ── INIT ──
 async function init(){
-  const CACHE_KEY='bi_cache_kml';
+  const CACHE_KEY='bi_cache_kml', BASE_KEY='bi_cache_kml_base';
   let hasCached=false;
   try{
     const cached=sessionStorage.getItem(CACHE_KEY);
-    if(cached){const obj=JSON.parse(cached);detectCols(obj.cols);allRows=obj.rows;populateFilters(allRows);atualizar();set('status-badge','Atualizando…');hasCached=true;}
+    if(cached){
+      const obj=JSON.parse(cached);detectCols(obj.cols);allRows=obj.rows;
+      try{const bc=sessionStorage.getItem(BASE_KEY);if(bc)baseRemRaw=new Map(JSON.parse(bc));}catch(e){}
+      buildRemModIndex();populateFilters(allRows);atualizar();set('status-badge','Atualizando…');hasCached=true;
+    }
   }catch(e){sessionStorage.removeItem(CACHE_KEY);}
   try{
-    const{cols,rows}=await fetchSheet(KML_ID,KML_TAB);
-    detectCols(cols);allRows=rows;
-    sessionStorage.setItem(CACHE_KEY,JSON.stringify({cols,rows}));
+    const [kml,base]=await Promise.all([
+      fetchSheet(KML_ID,KML_TAB),
+      fetchBaseRemMod().catch(e=>{console.error('Base Remunerado Modelo:',e);return null;})
+    ]);
+    detectCols(kml.cols);allRows=kml.rows;
+    sessionStorage.setItem(CACHE_KEY,JSON.stringify({cols:kml.cols,rows:kml.rows}));
+    if(base instanceof Map){baseRemRaw=base;try{sessionStorage.setItem(BASE_KEY,JSON.stringify([...base]));}catch(e){}}
+    buildRemModIndex();
     populateFilters(allRows);atualizar();
     setInterval(atualizar,30*60*1000);
   }catch(e){console.error(e);if(!hasCached)set('status-badge','Erro ao carregar dados');}
