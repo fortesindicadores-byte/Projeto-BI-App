@@ -313,17 +313,17 @@ function renderCharts(rows){
   if(chP){try{chP.destroy();}catch(e){}chP=null;}
   if(!window.Chart)return;
   const key=dim;
-  const g={};rows.forEach(r=>{const k=r[key]||'—';(g[k]=g[k]||{nome:k,nfs:0,real:0}).nfs++;g[k].real+=r.real||0;});
+  const g={};rows.forEach(r=>{const k=r[key]||'—';(g[k]=g[k]||{nome:k,real:0}).real+=r.real||0;});
   const totReal=Object.values(g).reduce((s,o)=>s+(o.real||0),0)||1;
-  // top 10 por GASTO (maior custo = real mais negativo)
-  const top=Object.values(g).sort((a,b)=>a.real-b.real).slice(0,10);
+  // top 10 por GASTO (maior custo = real mais negativo), do maior pro menor
+  const top=Object.values(g).map(o=>({nome:o.nome,val:-o.real,pct:o.real/totReal*100}))
+    .sort((a,b)=>b.val-a.val).slice(0,10);
   const labels=top.map(o=>o.nome);
-  const qtd=top.map(o=>o.nfs);
-  const pct=top.map(o=>Math.round(o.real/totReal*1000)/10);
+  const val=top.map(o=>Math.round(o.val));                       // gasto (R$, positivo)
+  const pct=top.map(o=>Math.round(o.pct*10)/10);
   const pFmt=v=>(Math.round(v*10)/10).toLocaleString('pt-BR',{minimumFractionDigits:1,maximumFractionDigits:1})+'%';
-  const qFmt=v=>Math.round(v).toLocaleString('pt-BR');
-  const cq=document.getElementById('ch-qtd'), cp=document.getElementById('ch-pct');
-  if(cq)chQ=new Chart(cq,{type:'bar',data:{labels,datasets:[{data:qtd,backgroundColor:'rgba(249,115,22,.85)',borderColor:'#F97316',borderWidth:1,borderRadius:3}]},options:_chartOpts(qFmt,qFmt,55)});
+  const cq=document.getElementById('ch-val'), cp=document.getElementById('ch-pct');
+  if(cq)chQ=new Chart(cq,{type:'bar',data:{labels,datasets:[{data:val,backgroundColor:'rgba(249,115,22,.85)',borderColor:'#F97316',borderWidth:1,borderRadius:3}]},options:_chartOpts(brlK,brl,55)});
   if(cp)chP=new Chart(cp,{type:'bar',data:{labels,datasets:[{data:pct,backgroundColor:'rgba(56,189,248,.85)',borderColor:'#38BDF8',borderWidth:1,borderRadius:3}]},options:_chartOpts(pFmt,pFmt,55)});
 }
 
@@ -396,11 +396,11 @@ function render(){
   document.getElementById('content').innerHTML=`
     <div class="tbl-section">
       <div class="tbl-head">
-        <div><div class="tbl-title">Distribuição por ${dimLbl}</div><div class="tbl-sub">Top 10 por gasto · quantidade de NFs e % do realizado</div></div>
+        <div><div class="tbl-title">Distribuição por ${dimLbl}</div><div class="tbl-sub">Top 10 por gasto · valor (R$) e % do realizado</div></div>
         ${toggle}
       </div>
       <div class="charts-row">
-        <div class="chart-card"><div class="chart-title"># Quantidade de NFs</div><div class="chart-wrap" style="height:340px"><canvas id="ch-qtd"></canvas></div></div>
+        <div class="chart-card"><div class="chart-title">Valor (R$)</div><div class="chart-wrap" style="height:340px"><canvas id="ch-val"></canvas></div></div>
         <div class="chart-card"><div class="chart-title">% do Realizado</div><div class="chart-wrap" style="height:340px"><canvas id="ch-pct"></canvas></div></div>
       </div>
     </div>
