@@ -340,7 +340,7 @@ body.light-mode table.dre thead tr.cols th{background:#F0F0F0;}
         Exportar Base (Excel)
       </button>
     </div>
-    <div style="font-size:10px;color:var(--text3);margin-bottom:12px;">Placas do mesmo modelo, mesma unidade e mesma vigência com Média Modelo diferente da predominante (moda) — normalmente placas em trimestre de revisão distinto. Respeita o filtro de vigência.</div>
+    <div style="font-size:10px;color:var(--text3);margin-bottom:12px;">Placas do mesmo modelo, mesma unidade e mesma vigência com Média Modelo diferente da predominante (moda) — normalmente placas em trimestre de revisão distinto. Respeita os filtros do painel.</div>
     <div class="tbl-wrap">
       <table class="dre">
         <thead><tr class="cols">
@@ -606,20 +606,21 @@ function computeDivergencias(){
   remModDiverg=[];
   if(!baseFull.rows||!baseFull.rows.length)return;
   const idx=baseFull.idx;
-  const pmod=new Map();  // placaCanon -> modelo (do Km/L)
-  allRows.forEach(r=>{const p=canonPlaca(r[CL.placa]);if(p&&!pmod.has(p))pmod.set(p,r[CL.modelo]?String(r[CL.modelo]).trim():'');});
+  // placaCanon -> {modelo,proj,uni,tipo} do Km/L (p/ o diagnóstico respeitar filtros)
+  const pinfo=new Map();
+  allRows.forEach(r=>{const p=canonPlaca(r[CL.placa]);if(p&&!pinfo.has(p))pinfo.set(p,{modelo:r[CL.modelo]?String(r[CL.modelo]).trim():'',proj:getProj(r)||'',uni:getUni(r)||'',tipo:abbrTipo(r[CL.tipoVei])});});
   const groups=new Map();  // `${vk}|${uni}|${modelo}` -> {cnt:Map(val->n), rows:[]}
   baseFull.rows.forEach(row=>{
     const med=+row[idx.media]||0; if(!(med>0))return;
     const p=canonPlaca(row[idx.placa]); if(!p)return;
     const d=parseVig(row[idx.vigDate]); const vk=d?vigKey(d):''; if(!vk)return;
     const uni=row[idx.uniBenner]!=null?String(row[idx.uniBenner]).trim():'';
-    const modelo=pmod.get(p)||'';
-    if(!modelo)return;  // sem modelo (placa fora do Km/L) não entra no diagnóstico
-    const gk=`${vk}|${uni}|${modelo}`;
+    const nf=pinfo.get(p);
+    if(!nf||!nf.modelo)return;  // sem modelo (placa fora do Km/L) não entra no diagnóstico
+    const gk=`${vk}|${uni}|${nf.modelo}`;
     let g=groups.get(gk); if(!g){g={cnt:new Map(),rows:[]};groups.set(gk,g);}
     g.cnt.set(med,(g.cnt.get(med)||0)+1);
-    g.rows.push({placa:String(row[idx.placa]).trim(),media:med,vk,uni,modelo});
+    g.rows.push({placa:String(row[idx.placa]).trim(),media:med,vk,uni,modelo:nf.modelo,fproj:nf.proj,funi:nf.uni,ftipo:nf.tipo});
   });
   const modeVal=cnt=>{let best=null,bc=-1;for(const [v,c] of cnt){if(c>bc||(c===bc&&v<best)){best=v;bc=c;}}return best;};
   const dedup=new Set();
@@ -630,17 +631,26 @@ function computeDivergencias(){
       if(x.media===moda)return;
       const dk=`${x.vk}|${x.uni}|${x.modelo}|${x.placa}|${x.media}`;
       if(dedup.has(dk))return; dedup.add(dk);   // dedup: base repete placa (CNPJs diferentes)
-      remModDiverg.push({vk:x.vk,uni:x.uni,modelo:x.modelo,placa:x.placa,media:x.media,moda,delta:x.media-moda});
+      remModDiverg.push({vk:x.vk,uni:x.uni,modelo:x.modelo,placa:x.placa,media:x.media,moda,delta:x.media-moda,fproj:x.fproj,funi:x.funi,ftipo:x.ftipo});
     });
   }
   remModDiverg.sort((a,b)=> a.vk<b.vk?1 : a.vk>b.vk?-1 : (a.modelo<b.modelo?-1:a.modelo>b.modelo?1:Math.abs(b.delta)-Math.abs(a.delta)));
 }
 
-// Renderiza a tabela de divergências (respeita o filtro de vigência do painel)
+// Renderiza a tabela de divergências (respeita os filtros do painel:
+// ano, vigência, unidade, projeto, modelo e tipo de veículo).
 function renderDiverg(f){
   const body=document.getElementById('body-diverg'); if(!body)return;
-  const selVig=(f&&f.vig&&f.vig.length)?new Set(f.vig):null;
-  const rows=remModDiverg.filter(x=>!selVig||selVig.has(x.vk));
+  f=f||{ano:[],vig:[],uni:[],proj:[],modelo:[],tipo:[]};
+  const rows=remModDiverg.filter(x=>{
+    if(f.ano&&f.ano.length&&!f.ano.includes(x.vk.slice(0,4)))return false;
+    if(f.vig&&f.vig.length&&!f.vig.includes(x.vk))return false;
+    if(f.uni&&f.uni.length&&!f.uni.includes(x.funi))return false;
+    if(f.proj&&f.proj.length&&!f.proj.includes(x.fproj))return false;
+    if(f.modelo&&f.modelo.length&&!f.modelo.includes(x.modelo))return false;
+    if(f.tipo&&f.tipo.length&&!f.tipo.includes(x.ftipo))return false;
+    return true;
+  });
   const sub=document.getElementById('sub-diverg');
   if(sub)sub.textContent=`${rows.length} placa(s) com Média Modelo diferente da predominante do modelo na mesma unidade/vigência`;
   if(!rows.length){body.innerHTML='<tr><td colspan="7" style="text-align:center;padding:18px;color:var(--text3)">Sem divergências para o filtro selecionado</td></tr>';return;}
