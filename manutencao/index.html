@@ -105,6 +105,7 @@ body.light-mode .cr{color:#cc0000!important;}
     <div class="filter-group"><div class="ms-wrap" id="ms-uni"></div></div>
     <div class="filter-group"><div class="ms-wrap" id="ms-proj"></div></div>
     <div class="filter-group"><div class="ms-wrap" id="ms-cc"></div></div>
+    <div class="filter-group"><div class="ms-wrap" id="ms-cluster"></div></div>
     <div class="filter-group"><div class="ms-wrap" id="ms-ramo"></div></div>
     <div class="filter-group"><div class="ms-wrap" id="ms-forn"></div></div>
     <div class="filter-group"><div class="ms-wrap" id="ms-conta"></div></div>
@@ -160,7 +161,9 @@ function gviz(){
   });
 }
 
-let ROWS=[], COLS=[], MAP={}, RAMOS={}, dim='ramo', chQ=null, chP=null;
+let ROWS=[], COLS=[], MAP={}, RAMOS={}, dim='cluster', metric='real', chMain=null;
+// R$ compacto p/ rótulos/eixo (visão financeira): 1,2 mi · 850 mil
+const brlK=v=>{if(v==null||!isFinite(v))return'—';const a=Math.abs(v);let s;if(a>=1e6)s=(Math.round(a/1e5)/10).toLocaleString('pt-BR',{minimumFractionDigits:1,maximumFractionDigits:1})+' mi';else if(a>=1e3)s=Math.round(a/1e3)+' mil';else s=Math.round(a).toString();return(v<0?'-':'')+'R$ '+s;};
 // mapa fornecedor(normalizado)→ramo, gerado por scripts/ramos-build.mjs (CNPJ/CNAE)
 async function loadRamos(){ try{ const r=await fetch('ramos.json',{cache:'no-store'}); if(r.ok) RAMOS=await r.json(); }catch(e){ RAMOS={}; } }
 const ramoDe=nome=>RAMOS[_n(nome)]||'Não classificado';
@@ -241,6 +244,7 @@ function buildFilters(){
   mkFilter('ms-uni','Unidade',uniq(ROWS.map(r=>r.uni)));
   mkFilter('ms-proj','Projeto',uniq(ROWS.map(r=>r.proj)));
   mkFilter('ms-cc','Centro de Custo',uniq(ROWS.map(r=>r.cc)));
+  mkFilter('ms-cluster','Cluster',uniq(ROWS.map(r=>r.cluster)));
   mkFilter('ms-ramo','Ramo',uniq(ROWS.map(r=>r.ramo)));
   mkFilter('ms-forn','Fornecedor',uniq(ROWS.map(r=>r.forn)));
   mkFilter('ms-conta','Conta',uniq(ROWS.map(r=>r.conta)));
@@ -251,9 +255,9 @@ const uniq=a=>[...new Set(a.filter(x=>x!=null&&x!==''))].sort();
 const MS_NONE=' __NONE__';
 function getMsV(id){const w=document.getElementById(id);if(!w)return[];if(w._none&&(!w._sel||!w._sel.size))return[MS_NONE];return w._sel?[...w._sel]:[];}
 function filtered(){
-  const fv=getMsV('ms-vig'),fd=getMsV('ms-data'),fu=getMsV('ms-uni'),fp=getMsV('ms-proj'),fc=getMsV('ms-cc'),fr=getMsV('ms-ramo'),fn=getMsV('ms-forn'),fk=getMsV('ms-conta'),fo=getMsV('ms-doc');
+  const fv=getMsV('ms-vig'),fd=getMsV('ms-data'),fu=getMsV('ms-uni'),fp=getMsV('ms-proj'),fc=getMsV('ms-cc'),fcl=getMsV('ms-cluster'),fr=getMsV('ms-ramo'),fn=getMsV('ms-forn'),fk=getMsV('ms-conta'),fo=getMsV('ms-doc');
   const has=(a,v)=>!a.length||a.includes(v);
-  return ROWS.filter(r=>has(fv,r.vig)&&has(fd,r.data)&&has(fu,r.uni)&&has(fp,r.proj)&&has(fc,r.cc)&&has(fr,r.ramo)&&has(fn,r.forn)&&has(fk,r.conta)&&has(fo,r.doc));
+  return ROWS.filter(r=>has(fv,r.vig)&&has(fd,r.data)&&has(fu,r.uni)&&has(fp,r.proj)&&has(fc,r.cc)&&has(fcl,r.cluster)&&has(fr,r.ramo)&&has(fn,r.forn)&&has(fk,r.conta)&&has(fo,r.doc));
 }
 
 // ── multi-select component ──
@@ -290,35 +294,40 @@ const arw=(cur,k)=>cur.key===k?`<span class="arw">${cur.dir>0?'▲':'▼'}</span
 function setDim(d){dim=d;render();}
 const DIM_LBL={ramo:'Ramo',cluster:'Cluster',forn:'Fornecedor',cc:'Centro de Custo'};
 
-// ── gráficos (Qtde de NFs + % do Realizado) — padrão visão financeira ──
-function renderCharts(rows){
-  if(chQ){try{chQ.destroy();}catch(e){}chQ=null;}
-  if(chP){try{chP.destroy();}catch(e){}chP=null;}
+// ── gráfico único (barra vertical, padrão visão financeira) ──
+// métrica: 'real' (R$, prioridade) · 'pct' (% do realizado) · 'qtde' (NFs)
+const MET_LBL={real:'R$',pct:'%',qtde:'Qtde'};
+function setMetric(m){metric=m;render();}
+function renderChart(rows){
+  if(chMain){try{chMain.destroy();}catch(e){}chMain=null;}
   if(!window.Chart)return;
+  const cv=document.getElementById('ch-main'); if(!cv)return;
   const key=dim;
   const g={};rows.forEach(r=>{const k=r[key]||'—';(g[k]=g[k]||{nome:k,nfs:0,real:0}).nfs++;g[k].real+=r.real||0;});
-  let arr=Object.values(g).sort((a,b)=>b.real-a.real);
-  const MAX=20;
-  if(arr.length>MAX){const head=arr.slice(0,MAX),tail=arr.slice(MAX),o={nome:'Outros ('+tail.length+')',nfs:0,real:0};tail.forEach(t=>{o.nfs+=t.nfs;o.real+=t.real;});head.push(o);arr=head;}
-  const totReal=arr.reduce((s,o)=>s+(o.real||0),0)||1;
-  const labels=arr.map(o=>o.nome), qtd=arr.map(o=>o.nfs), pct=arr.map(o=>Math.round(o.real/totReal*1000)/10);
-  const H=Math.max(220,arr.length*26+40);
-  ['ch-qtd','ch-pct'].forEach(id=>{const c=document.getElementById(id);if(c&&c.parentElement)c.parentElement.style.height=H+'px';});
+  const totReal=Object.values(g).reduce((s,o)=>s+(o.real||0),0)||1;
+  // custo = -real (gasto vira barra positiva; crédito/estorno vira barra negativa)
+  const valOf=o=>metric==='real'?-o.real:metric==='pct'?(o.real/totReal*100):o.nfs;
+  let arr=Object.values(g).map(o=>({nome:o.nome,v:valOf(o)})).sort((a,b)=>b.v-a.v);
+  const MAX=15;
+  if(arr.length>MAX){const head=arr.slice(0,MAX),tail=arr.slice(MAX);const sv=tail.reduce((s,o)=>s+o.v,0);head.push({nome:'Outros ('+tail.length+')',v:sv});arr=head;}
+  const labels=arr.map(o=>o.nome), data=arr.map(o=>Math.round(o.v*100)/100);
   const isLight=document.body.classList.contains('light-mode');
   const grid={color:isLight?'rgba(0,0,0,.08)':'rgba(255,255,255,.06)'};
-  const tick={color:isLight?'#444':'#94A3B8',font:{family:'Montserrat',size:10}};
-  const tickY={color:isLight?'#1a1a1a':'#F1F5F9',font:{family:'Montserrat',size:10,weight:'600'}};
+  const tick={color:isLight?'#444':'#94A3B8',font:{family:'Montserrat',size:9}};
+  const tickX={color:isLight?'#1a1a1a':'#CBD5E1',font:{family:'Montserrat',size:9,weight:'600'}};
   const tooltip={backgroundColor:'#141B26',titleColor:'#F97316',bodyColor:'#F1F5F9',borderColor:'#1E2D40',borderWidth:1,titleFont:{family:'Montserrat'},bodyFont:{family:'Montserrat'}};
   const dlc=isLight?'#1a1a1a':'#F1F5F9';
-  const qFmt=v=>Math.round(v).toLocaleString('pt-BR');
   const pFmt=v=>(Math.round(v*10)/10).toLocaleString('pt-BR',{minimumFractionDigits:1,maximumFractionDigits:1})+'%';
-  const opts=fmt=>({indexAxis:'y',responsive:true,maintainAspectRatio:false,layout:{padding:{right:42}},
-    plugins:{legend:{display:false},tooltip:{...tooltip,callbacks:{label:c=>fmt(c.raw)}},
-      datalabels:{anchor:'end',align:'end',clamp:true,color:dlc,font:{family:'Montserrat',size:10,weight:'700'},formatter:fmt}},
-    scales:{x:{grid,ticks:{...tick,callback:fmt},beginAtZero:true},y:{grid:{display:false},ticks:tickY}}});
-  const cq=document.getElementById('ch-qtd'), cp=document.getElementById('ch-pct');
-  if(cq)chQ=new Chart(cq,{type:'bar',data:{labels,datasets:[{label:'NFs',data:qtd,backgroundColor:'rgba(249,115,22,.85)',borderColor:'#F97316',borderWidth:1,borderRadius:3}]},options:opts(qFmt)});
-  if(cp)chP=new Chart(cp,{type:'bar',data:{labels,datasets:[{label:'% Realizado',data:pct,backgroundColor:'rgba(56,189,248,.85)',borderColor:'#38BDF8',borderWidth:1,borderRadius:3}]},options:opts(pFmt)});
+  const fmtAxis=metric==='real'?brlK:metric==='pct'?pFmt:(v=>Math.round(v).toLocaleString('pt-BR'));
+  const fmtTip =metric==='real'?(v=>brl(v)):fmtAxis;   // tooltip R$ completo
+  const cor=metric==='pct'?['rgba(56,189,248,.85)','#38BDF8']:['rgba(249,115,22,.85)','#F97316'];
+  chMain=new Chart(cv,{type:'bar',
+    data:{labels,datasets:[{label:MET_LBL[metric],data,backgroundColor:cor[0],borderColor:cor[1],borderWidth:1,borderRadius:3}]},
+    options:{responsive:true,maintainAspectRatio:false,layout:{padding:{top:22}},
+      plugins:{legend:{display:false},tooltip:{...tooltip,callbacks:{label:c=>fmtTip(c.raw)}},
+        datalabels:{anchor:'end',align:'end',clamp:true,color:dlc,font:{family:'Montserrat',size:9,weight:'700'},formatter:fmtAxis}},
+      scales:{x:{grid:{display:false},ticks:{...tickX,maxRotation:60,minRotation:45,autoSkip:false,callback:function(v){const l=this.getLabelForValue(v);return l.length>16?l.slice(0,15)+'…':l;}}},
+        y:{grid,ticks:{...tick,callback:fmtAxis},beginAtZero:true}}}});
 }
 
 // ── diagnóstico: lançamentos que provavelmente NÃO são manutenção ──
@@ -357,9 +366,11 @@ function render(){
   let grp=Object.values(g).map(o=>({nome:o.nome,nfs:o.nfs,real:o.real}));
   const gk=gsort.key==='nome'?'nome':gsort.key;
   grp=sortRows(grp.map(o=>({nome:o.nome,nfs:o.nfs,real:o.real})),gk,gsort.dir);
-  const dimLbl=DIM_LBL[dim]||'Ramo';
+  const dimLbl=DIM_LBL[dim]||'Cluster';
   const toggle=`<div class="dim-toggle">`+
-    ['ramo','cluster','forn','cc'].map(d=>`<button class="dim-btn ${dim===d?'active':''}" onclick="setDim('${d}')">${DIM_LBL[d]}</button>`).join('')+`</div>`;
+    ['cluster','ramo','forn','cc'].map(d=>`<button class="dim-btn ${dim===d?'active':''}" onclick="setDim('${d}')">${DIM_LBL[d]}</button>`).join('')+`</div>`;
+  const mtoggle=`<div class="dim-toggle">`+
+    ['real','pct','qtde'].map(m=>`<button class="dim-btn ${metric===m?'active':''}" onclick="setMetric('${m}')">${MET_LBL[m]}</button>`).join('')+`</div>`;
   const totReal=grp.reduce((s,o)=>s+(o.real||0),0);
   const pctFmt=v=>(v==null||!isFinite(v))?'—':(Math.round(v*10)/10).toLocaleString('pt-BR',{minimumFractionDigits:1,maximumFractionDigits:1})+'%';
   const gh=`<thead><tr>
@@ -390,13 +401,10 @@ function render(){
   document.getElementById('content').innerHTML=`
     <div class="tbl-section">
       <div class="tbl-head">
-        <div><div class="tbl-title">Distribuição por ${dimLbl}</div><div class="tbl-sub">Quantidade de NFs e % do realizado · toggle p/ trocar a dimensão</div></div>
-        ${toggle}
+        <div><div class="tbl-title">Distribuição por ${dimLbl}</div><div class="tbl-sub">${metric==='real'?'Realizado (R$)':metric==='pct'?'% do realizado':'Quantidade de NFs'} · dimensão e métrica nos botões</div></div>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">${mtoggle}${toggle}</div>
       </div>
-      <div class="charts-row">
-        <div class="chart-card"><div class="chart-title">Quantidade de NFs</div><div class="chart-wrap"><canvas id="ch-qtd"></canvas></div></div>
-        <div class="chart-card"><div class="chart-title">% do Realizado</div><div class="chart-wrap"><canvas id="ch-pct"></canvas></div></div>
-      </div>
+      <div class="chart-card"><div class="chart-wrap" style="height:380px"><canvas id="ch-main"></canvas></div></div>
     </div>
     <div class="tbl-section">
       <div class="tbl-head"><div><div class="tbl-title">Por ${dimLbl}</div><div class="tbl-sub">Ordenado pelo maior custo · clique no título pra ordenar</div></div></div>
@@ -407,7 +415,7 @@ function render(){
       <div class="wrapx"><table>${dh}<tbody>${db||'<tr><td colspan="8" class="mut">Sem dados para o filtro.</td></tr>'}</tbody></table></div>
     </div>
     ${renderDiag(rows)}`;
-  renderCharts(rows);
+  renderChart(rows);
 }
 
 async function atualizar(){
