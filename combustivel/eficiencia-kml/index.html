@@ -824,12 +824,15 @@ function aggRows(rows){
   //   projeto pelo seu KM RODADO do projeto (não pela placa).
   // remMode='modelo': coluna Km/L Rem Modelo (col remM) ponderada pelo KM
   //   RODADO DA PLACA (ex.: placa A rem 2·100km e B rem 3·900km → 2,90).
-  let sumKm=0,sumLitros=0,sumRsL=0,sumRemMKm=0,sumKmRem=0;
+  let sumKm=0,sumLitros=0,sumRsL=0,sumRemMKm=0,sumKmRem=0,sumImp=0;
   const proj={};
   rows.forEach(r=>{
-    const km=+(r[CL.kmRod]||0),lit=+(r[CL.litros]||0),rem=+(r[CL.rem]||0),remM=+(r[CL.remM]||0),rsL=+(r[CL.rsLReal]||0);
+    const km=+(r[CL.kmRod]||0),lit=+(r[CL.litros]||0),rem=+(r[CL.rem]||0),remM=+(r[CL.remM]||0),rsL=+(r[CL.rsLReal]||0),real=+(r[CL.real]||0);
     sumKm+=km;sumLitros+=lit;sumRsL+=rsL;
     if(remM>0&&km>0){sumRemMKm+=remM*km;sumKmRem+=km;}   // modelo: km da placa
+    // impacto ADITIVO por linha (subtotais somam o total): (km/rem − km/real)·R$/L
+    const rb=remMode==='modelo'?remM:rem;
+    if(km>0&&rb>0&&real>0)sumImp+=(km/rb-km/real)*rsL;
     const p=getProj(r)||'—';
     if(!proj[p])proj[p]={sumRem:0,cnt:0,km:0};
     if(rem>0){proj[p].sumRem+=rem;proj[p].cnt++;}         // média burra no projeto
@@ -843,14 +846,11 @@ function aggRows(rows){
   const remAvg=remMode==='modelo'?remModelo:remMedio;
   const realWt=sumLitros>0?sumKm/sumLitros:null;
   const rsLAvg=rows.length>0?sumRsL/rows.length:null;
-  return{remAvg,realWt,sumKm,sumLitros,rsLAvg};
+  return{remAvg,realWt,sumKm,sumLitros,rsLAvg,sumImp};
 }
+// impacto = soma dos impactos por linha (aditivo: ROTA + VAN = Total)
 function calcImpacto(agg){
-  const{remAvg,realWt,sumKm,rsLAvg}=agg;
-  if(!remAvg||!realWt||!rsLAvg)return null;
-  // liters saved = km/rem - km/real (positive = saved, negative = extra consumed)
-  const litrosSaved=sumKm/remAvg-sumKm/realWt;
-  return litrosSaved*rsLAvg;
+  return (agg&&isFinite(agg.sumImp))?agg.sumImp:null;
 }
 function aggByKey(rows,keyFn){
   const m={};
@@ -1034,7 +1034,9 @@ function renderVeiTable(active,ytd){
     const rem=+(r[CL.rem]||0),remM=+(r[CL.remM]||0),real=+(r[CL.real]||0);
     const km=+(r[CL.kmRod]||0),rsL=+(r[CL.rsLReal]||0);
     const delta=real-rem,deltaP=rem?delta/Math.abs(rem)*100:null;
-    const litrosSaved=km>0&&rem>0&&real>0?km/rem-km/real:null;
+    // impacto por veículo no mesmo benchmark do resumo (médio/modelo) → soma bate com o total
+    const rb=remMode==='modelo'?remM:rem;
+    const litrosSaved=km>0&&rb>0&&real>0?km/rb-km/real:null;
     const imp=litrosSaved!=null?litrosSaved*rsL:null;
     const placa=r[CL.placa]?String(r[CL.placa]).trim():'—';
     const yagg=ytdByPlaca[placa];
