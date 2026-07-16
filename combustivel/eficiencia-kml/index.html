@@ -117,6 +117,9 @@ table.dre tr.total td.sep-l{border-left:1px solid rgba(255,255,255,.38);}
 .dim-toggle{display:flex;border:1px solid #2a3a50;border-radius:4px;overflow:hidden;}
 .dim-btn{background:transparent;color:var(--text2);border:none;font-family:'Montserrat',sans-serif;font-size:10px;font-weight:700;padding:5px 12px;cursor:pointer;text-transform:uppercase;letter-spacing:.5px;transition:background .12s,color .12s;}
 .dim-btn.active{background:var(--orange);color:#000;}
+.export-btn{display:flex;align-items:center;gap:6px;background:rgba(59,179,59,.15);border:1px solid rgba(59,179,59,.4);border-radius:5px;color:var(--green);font-family:'Montserrat',sans-serif;font-size:11px;font-weight:700;padding:7px 12px;cursor:pointer;white-space:nowrap;flex-shrink:0;}
+.export-btn:hover{background:rgba(59,179,59,.28);}
+body.light-mode .export-btn{color:#0E8C0E;border-color:rgba(14,140,14,.4);background:rgba(14,140,14,.10);}
 .dim-btn:not(.active):hover{background:rgba(255,255,255,.05);color:var(--text);}
 .cr{color:var(--red)!important;font-weight:700;}.cg{color:var(--green)!important;font-weight:700;}
 .cr-t{color:var(--red)!important;font-weight:700;}.cg-t{color:var(--green)!important;font-weight:700;}
@@ -326,6 +329,34 @@ body.light-mode table.dre thead tr.cols th{background:#F0F0F0;}
     </div>
   </div>
 
+  <div class="tbl-section">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;margin-bottom:3px;">
+      <div>
+        <div class="tbl-title">Diagnóstico · Divergências de Média Modelo</div>
+        <div class="tbl-sub" id="sub-diverg">—</div>
+      </div>
+      <button class="export-btn" onclick="exportBaseRemMod()" title="Baixar a aba Base Remunerado Modelo (com a coluna Modelo) em Excel">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        Exportar Base (Excel)
+      </button>
+    </div>
+    <div style="font-size:10px;color:var(--text3);margin-bottom:12px;">Placas do mesmo modelo, mesma unidade e mesma vigência com Média Modelo diferente da predominante (moda) — normalmente placas em trimestre de revisão distinto. Respeita o filtro de vigência.</div>
+    <div class="tbl-wrap">
+      <table class="dre">
+        <thead><tr class="cols">
+          <th>VIGÊNCIA</th>
+          <th>UNIDADE</th>
+          <th>MODELO</th>
+          <th>PLACA</th>
+          <th class="num">MÉDIA (BASE)</th>
+          <th class="num">PREDOMINANTE</th>
+          <th class="num">Δ</th>
+        </tr></thead>
+        <tbody id="body-diverg"></tbody>
+      </table>
+    </div>
+  </div>
+
 </main>
 
 <script>
@@ -348,8 +379,12 @@ function canonPlaca(p){
 }
 // baseRemRaw: `${placaCanon}|${YYYY-MM}` -> Média Modelo (inclui 0 = inativa)
 let baseRemRaw=new Map();
+// baseFull: base completa (p/ diagnóstico e export) — {cols,rows,idx}
+let baseFull={cols:[],rows:[],idx:{}};
 // remModStatus: placas que não acharam média em nenhuma hipótese (relatório)
 let remModStatus=[];
+// remModDiverg: divergências de Média Modelo (mesmo modelo+unidade+vig, valor≠moda)
+let remModDiverg=[];
 
 // Detected column indices (populated after fetch)
 let CL = {vig:0,rem:4,remM:5,real:6,rsLReal:9,ativo:11,proj:14,uni:-1,placa:15,modelo:16,tipoVei:17,kmRod:22,litros:23};
@@ -542,15 +577,18 @@ function fetchSheet(id,tab){
 }
 
 // ── BASE REMUNERADO MODELO ──
-// Lê a aba com a Média do Modelo por placa+vigência e monta baseRemRaw.
+// Lê a aba com a Média do Modelo por placa+vigência: monta baseRemRaw (mapa
+// placa|vig -> média) e guarda a base completa em baseFull (p/ diagnóstico e export).
 async function fetchBaseRemMod(){
   const {cols,rows}=await fetchSheet(KML_ID,BASE_REMMOD_TAB);
   const li=t=>{for(let i=0;i<cols.length;i++){if(String(cols[i]).toLowerCase().includes(t))return i;}return -1;};
   const cPl=li('placa'); let cMd=li('média'); if(cMd<0)cMd=li('media');
+  const cUni=li('unidade benner')>=0?li('unidade benner'):li('benner');
   // coluna de vigência: a que parseVig reconhece como data (col "Vigência Data")
   let cVg=-1;
   for(let c=0;c<cols.length;c++){for(let r=0;r<Math.min(rows.length,50);r++){if(rows[r][c]!=null&&parseVig(rows[r][c])){cVg=c;break;}}if(cVg>=0)break;}
-  const PL=cPl>=0?cPl:8, MD=cMd>=0?cMd:9, VG=cVg>=0?cVg:4;
+  const PL=cPl>=0?cPl:8, MD=cMd>=0?cMd:9, VG=cVg>=0?cVg:4, UNI=cUni>=0?cUni:1;
+  baseFull={cols,rows,idx:{placa:PL,media:MD,vigDate:VG,uniBenner:UNI}};
   const m=new Map();
   rows.forEach(row=>{
     const p=canonPlaca(row[PL]); if(!p)return;
@@ -559,6 +597,92 @@ async function fetchBaseRemMod(){
     m.set(`${p}|${vigKey(d)}`,med);
   });
   return m;
+}
+
+// ── DIVERGÊNCIAS (diagnóstico) ──
+// Placas do MESMO modelo + MESMA unidade + MESMA vigência com Média Modelo
+// diferente da predominante (moda) — os "erros" de trimestre de revisão.
+function computeDivergencias(){
+  remModDiverg=[];
+  if(!baseFull.rows||!baseFull.rows.length)return;
+  const idx=baseFull.idx;
+  const pmod=new Map();  // placaCanon -> modelo (do Km/L)
+  allRows.forEach(r=>{const p=canonPlaca(r[CL.placa]);if(p&&!pmod.has(p))pmod.set(p,r[CL.modelo]?String(r[CL.modelo]).trim():'');});
+  const groups=new Map();  // `${vk}|${uni}|${modelo}` -> {cnt:Map(val->n), rows:[]}
+  baseFull.rows.forEach(row=>{
+    const med=+row[idx.media]||0; if(!(med>0))return;
+    const p=canonPlaca(row[idx.placa]); if(!p)return;
+    const d=parseVig(row[idx.vigDate]); const vk=d?vigKey(d):''; if(!vk)return;
+    const uni=row[idx.uniBenner]!=null?String(row[idx.uniBenner]).trim():'';
+    const modelo=pmod.get(p)||'';
+    if(!modelo)return;  // sem modelo (placa fora do Km/L) não entra no diagnóstico
+    const gk=`${vk}|${uni}|${modelo}`;
+    let g=groups.get(gk); if(!g){g={cnt:new Map(),rows:[]};groups.set(gk,g);}
+    g.cnt.set(med,(g.cnt.get(med)||0)+1);
+    g.rows.push({placa:String(row[idx.placa]).trim(),media:med,vk,uni,modelo});
+  });
+  const modeVal=cnt=>{let best=null,bc=-1;for(const [v,c] of cnt){if(c>bc||(c===bc&&v<best)){best=v;bc=c;}}return best;};
+  const dedup=new Set();
+  for(const [,g] of groups){
+    if(g.cnt.size<=1)continue;        // sem divergência
+    const moda=modeVal(g.cnt);
+    g.rows.forEach(x=>{
+      if(x.media===moda)return;
+      const dk=`${x.vk}|${x.uni}|${x.modelo}|${x.placa}|${x.media}`;
+      if(dedup.has(dk))return; dedup.add(dk);   // dedup: base repete placa (CNPJs diferentes)
+      remModDiverg.push({vk:x.vk,uni:x.uni,modelo:x.modelo,placa:x.placa,media:x.media,moda,delta:x.media-moda});
+    });
+  }
+  remModDiverg.sort((a,b)=> a.vk<b.vk?1 : a.vk>b.vk?-1 : (a.modelo<b.modelo?-1:a.modelo>b.modelo?1:Math.abs(b.delta)-Math.abs(a.delta)));
+}
+
+// Renderiza a tabela de divergências (respeita o filtro de vigência do painel)
+function renderDiverg(f){
+  const body=document.getElementById('body-diverg'); if(!body)return;
+  const selVig=(f&&f.vig&&f.vig.length)?new Set(f.vig):null;
+  const rows=remModDiverg.filter(x=>!selVig||selVig.has(x.vk));
+  const sub=document.getElementById('sub-diverg');
+  if(sub)sub.textContent=`${rows.length} placa(s) com Média Modelo diferente da predominante do modelo na mesma unidade/vigência`;
+  if(!rows.length){body.innerHTML='<tr><td colspan="7" style="text-align:center;padding:18px;color:var(--text3)">Sem divergências para o filtro selecionado</td></tr>';return;}
+  let html='';
+  rows.forEach(x=>{
+    const vlbl=(()=>{const d=vigs.find(v=>vigKey(v)===x.vk);return d?vigLabelFull(d):x.vk;})();
+    html+=`<tr><td>${vlbl}</td><td>${x.uni||'—'}</td><td>${x.modelo||'—'}</td><td>${x.placa}</td><td class="num">${kml(x.media)}</td><td class="num">${kml(x.moda)}</td><td class="num ${x.delta<0?'cr':'cg'}">${kmlD(x.delta)}</td></tr>`;
+  });
+  body.innerHTML=html;
+}
+
+// ── EXPORT: aba "Base Remunerado Modelo" (as-is) + coluna Modelo ──
+function exportBaseRemMod(){
+  if(!baseFull.rows||!baseFull.rows.length){alert('Base ainda não carregada. Aguarde o carregamento e tente de novo.');return;}
+  const load=cb=>{
+    if(window.XLSX)return cb();
+    let s=document.getElementById('xlsx-cdn');
+    if(s){s.addEventListener('load',()=>cb());s.addEventListener('error',()=>alert('Falha ao carregar o componente de Excel.'));return;}
+    s=document.createElement('script');s.id='xlsx-cdn';s.src='https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js';
+    s.onload=()=>cb();s.onerror=()=>alert('Falha ao carregar o componente de Excel. Verifique a conexão.');
+    document.head.appendChild(s);
+  };
+  load(()=>{
+    try{
+      const {cols,rows,idx}=baseFull;
+      const pmod=new Map();
+      allRows.forEach(r=>{const p=canonPlaca(r[CL.placa]);if(p&&!pmod.has(p))pmod.set(p,r[CL.modelo]?String(r[CL.modelo]).trim():'');});
+      const aoa=[[...cols,'Modelo']];
+      rows.forEach(row=>{
+        const out=row.map((v,i)=>{
+          if(i===idx.media){const n=+v;return isFinite(n)?n:(v==null?'':v);}                    // média = número
+          if(i===idx.vigDate){const d=parseVig(v);return d?`${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()}`:(v==null?'':String(v));}
+          return v==null?'':v;
+        });
+        out.push(pmod.get(canonPlaca(row[idx.placa]))||'');
+        aoa.push(out);
+      });
+      const ws=XLSX.utils.aoa_to_sheet(aoa);
+      const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'Base Remunerado Modelo');
+      XLSX.writeFile(wb,'km-l_base-remunerado-modelo.xlsx');
+    }catch(e){console.error(e);alert('Erro ao exportar: '+(e.message||e));}
+  });
 }
 
 // Constrói os índices e SOBRESCREVE o Rem Modelo (CL.remM) de cada linha do Km/L
@@ -927,6 +1051,7 @@ function atualizar(){
   renderCharts(f2);
   renderTable(active,ytd);
   renderVeiTable(active,ytd);
+  renderDiverg(f2);
 
   let vigLbl;
   if(!f2.vig||f2.vig.length===0)vigLbl='TODAS';
@@ -959,7 +1084,7 @@ async function init(){
     detectCols(kml.cols);allRows=kml.rows;
     sessionStorage.setItem(CACHE_KEY,JSON.stringify({cols:kml.cols,rows:kml.rows}));
     if(base instanceof Map){baseRemRaw=base;try{sessionStorage.setItem(BASE_KEY,JSON.stringify([...base]));}catch(e){}}
-    buildRemModIndex();
+    buildRemModIndex();computeDivergencias();
     populateFilters(allRows);atualizar();
     setInterval(atualizar,30*60*1000);
   }catch(e){console.error(e);if(!hasCached)set('status-badge','Erro ao carregar dados');}

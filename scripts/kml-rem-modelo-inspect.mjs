@@ -252,6 +252,82 @@ async function main() {
     }
   }
 
+  // ===== ANÁLISE MODA vs MÉDIA por (modelo,vig) =====
+  console.log('\n\n===== MODA vs MÉDIA por (modelo,vig) — valores>0 =====');
+  // distValues[`${vk}|${modelo}`] = Map(valorFix2 -> contagem de placas)
+  const dist = new Map();
+  for (const [key, med] of baseMap) {
+    if (med <= 0) continue;
+    const [p, vk] = key.split('|');
+    const info = placaInfo.get(p); if (!info || !info.modelo) continue;
+    const gk = `${vk}|${info.modelo}`;
+    if (!dist.has(gk)) dist.set(gk, new Map());
+    const dv = med.toFixed(2);
+    dist.get(gk).set(dv, (dist.get(gk).get(dv) || 0) + 1);
+  }
+  const modeOf = m => { let best=null, bc=-1; for (const [v,c] of m){ if (c>bc || (c===bc && +v < +best)){best=v;bc=c;} } return best; };
+  const meanOfMap = m => { let s=0,n=0; for (const [v,c] of m){ s+=(+v)*c; n+=c; } return n?s/n:null; };
+  // foco: ACTROS 2651S e 2548S em jun/2026
+  for (const foc of ['2026-06|M.BENZ/ACTROS 2651S','2026-06|M.BENZ/ACTROS 2548S','2026-06|M.BENZ ACTROS 2651 6X4']) {
+    const m = dist.get(foc);
+    if (m) console.log(`  ${foc}\n     dist=${[...m].map(([v,c])=>`${v}×${c}`).join('  ')}\n     MODA=${modeOf(m)}   MÉDIA=${meanOfMap(m).toFixed(4)}`);
+    else console.log(`  ${foc} -> (sem valores>0)`);
+  }
+  // quantos grupos divergem e, neles, quão dominante é a moda
+  let div=0, domFortes=0;
+  for (const [gk, m] of dist) {
+    if (m.size <= 1) continue;
+    div++;
+    let tot=0, mc=0; for (const [,c] of m){ tot+=c; if(c>mc)mc=c; }
+    if (mc/tot >= 0.6) domFortes++;
+  }
+  console.log(`\n  grupos (modelo,vig) com >1 valor: ${div}  |  moda domina >=60% em: ${domFortes}`);
+
+  // ===== DUMP por placa: quem são as divergentes (proj/unidade) =====
+  console.log('\n\n===== DUMP placas por (modelo,vig) — proj/unidade =====');
+  // placa canônica -> {proj,uni} do Km/L (col14 Projeto "VAN - GRL", col15 Unidade)
+  const KPROJ=14, KUNI=15;
+  const meta=new Map();
+  for (const r of kRows){ const pr=r[KPLACA]; if(!pr)continue; const cp=canonPlaca(pr); if(!meta.has(cp)) meta.set(cp,{proj:r[KPROJ]!=null?String(r[KPROJ]).trim():'',uni:r[KUNI]!=null?String(r[KUNI]).trim():''}); }
+  for (const foc of ['2026-06|M.BENZ/ACTROS 2651S','2026-06|M.BENZ/ACTROS 2548S']){
+    const [fvk,fmod]=foc.split('|');
+    console.log(`\n  ${foc}:`);
+    const linhas=[];
+    for (const [key,med] of baseMap){
+      const [p,vk]=key.split('|'); if(vk!==fvk)continue;
+      const inf=placaInfo.get(p); if(!inf||inf.modelo!==fmod)continue;
+      const mt=meta.get(p)||{proj:'',uni:''};
+      linhas.push({p,med,proj:mt.proj,uni:mt.uni});
+    }
+    linhas.sort((a,b)=>a.med-b.med);
+    linhas.forEach(x=>console.log(`     ${x.p}  media=${x.med}  proj="${x.proj}"  uni="${x.uni}"`));
+  }
+
+  // ===== VALIDA computeDivergencias (grupo vig|uniBenner|modelo) =====
+  console.log('\n\n===== DIVERGÊNCIAS (vig|unidadeBenner|modelo) — como no painel =====');
+  const IUNI = bHead.findIndex(h => /unidade benner/i.test(h));
+  const UB = IUNI>=0?IUNI:1;
+  const pmod = new Map();  // placaCanon -> modelo (Km/L)
+  for (const [p,inf] of placaInfo) if(!pmod.has(p)) pmod.set(p, inf.modelo);
+  const grp = new Map();
+  for (let i=1;i<bRows.length;i++){
+    const med=parseFloat(String(bRows[i][MD]).replace(',','.'))||0; if(!(med>0))continue;
+    const p=canonPlaca(bRows[i][PL]); if(!p)continue;
+    const modelo=pmod.get(p); if(!modelo)continue;
+    const vk=vigCol>=0?vigKeyFromDate(bRows[i][vigCol]):''; if(!vk)continue;
+    const uni=String(bRows[i][UB]||'').trim();
+    const gk=`${vk}|${uni}|${modelo}`;
+    let g=grp.get(gk); if(!g){g={cnt:new Map(),rows:[]};grp.set(gk,g);}
+    g.cnt.set(med,(g.cnt.get(med)||0)+1);
+    g.rows.push({placa:String(bRows[i][PL]).trim(),med,vk,uni,modelo});
+  }
+  const modeV=cnt=>{let b=null,bc=-1;for(const[v,c]of cnt){if(c>bc||(c===bc&&v<b)){b=v;bc=c;}}return b;};
+  let divTot=0; const divSample=[];
+  for(const[,g]of grp){ if(g.cnt.size<=1)continue; const md=modeV(g.cnt);
+    g.rows.forEach(x=>{ if(x.med!==md){divTot++; if(x.vk==='2026-06'&&/2651S/.test(x.modelo)) divSample.push(`${x.placa} media=${x.med} moda=${md} (${x.uni})`);} }); }
+  console.log(`>> total de divergências (todas vigências): ${divTot}`);
+  console.log(`>> exemplo ACTROS 2651S jun/2026:`); divSample.forEach(s=>console.log('   '+s));
+
   console.log('\nFIM.');
 }
 main().catch(e => { console.error('ERRO:', e); process.exit(1); });
