@@ -340,7 +340,7 @@ body.light-mode table.dre thead tr.cols th{background:#F0F0F0;}
         Exportar Base (Excel)
       </button>
     </div>
-    <div style="font-size:10px;color:var(--text3);margin-bottom:12px;">Placas do mesmo modelo, mesma unidade e mesma vigência com Média Modelo diferente da predominante (moda) — normalmente placas em trimestre de revisão distinto. Respeita os filtros do painel.</div>
+    <div style="font-size:10px;color:var(--text3);margin-bottom:12px;">Placas cujo Rem Modelo (coluna REM MOD.) difere da predominante do mesmo modelo/unidade/vigência — placas em trimestre de revisão distinto ou inativas (que herdam a média do modelo). Respeita os filtros do painel.</div>
     <div class="tbl-wrap">
       <table class="dre">
         <thead><tr class="cols">
@@ -348,7 +348,7 @@ body.light-mode table.dre thead tr.cols th{background:#F0F0F0;}
           <th>UNIDADE</th>
           <th>MODELO</th>
           <th>PLACA</th>
-          <th class="num">MÉDIA (BASE)</th>
+          <th class="num">REM MOD.</th>
           <th class="num">PREDOMINANTE</th>
           <th class="num">Δ</th>
         </tr></thead>
@@ -600,27 +600,24 @@ async function fetchBaseRemMod(){
 }
 
 // ── DIVERGÊNCIAS (diagnóstico) ──
-// Placas do MESMO modelo + MESMA unidade + MESMA vigência com Média Modelo
-// diferente da predominante (moda) — os "erros" de trimestre de revisão.
+// Placas cujo Rem Modelo EXIBIDO (coluna REM MOD., já resolvido) difere da
+// predominante (moda) do mesmo modelo+unidade+vigência. Cobre tanto os outliers
+// de trimestre de revisão quanto as placas inativas que herdam a média do modelo.
 function computeDivergencias(){
   remModDiverg=[];
-  if(!baseFull.rows||!baseFull.rows.length)return;
-  const idx=baseFull.idx;
-  // placaCanon -> {modelo,proj,uni,tipo} do Km/L (p/ o diagnóstico respeitar filtros)
-  const pinfo=new Map();
-  allRows.forEach(r=>{const p=canonPlaca(r[CL.placa]);if(p&&!pinfo.has(p))pinfo.set(p,{modelo:r[CL.modelo]?String(r[CL.modelo]).trim():'',proj:getProj(r)||'',uni:getUni(r)||'',tipo:abbrTipo(r[CL.tipoVei])});});
+  if(!allRows||!allRows.length)return;
   const groups=new Map();  // `${vk}|${uni}|${modelo}` -> {cnt:Map(val->n), rows:[]}
-  baseFull.rows.forEach(row=>{
-    const med=+row[idx.media]||0; if(!(med>0))return;
-    const p=canonPlaca(row[idx.placa]); if(!p)return;
-    const d=parseVig(row[idx.vigDate]); const vk=d?vigKey(d):''; if(!vk)return;
-    const uni=row[idx.uniBenner]!=null?String(row[idx.uniBenner]).trim():'';
-    const nf=pinfo.get(p);
-    if(!nf||!nf.modelo)return;  // sem modelo (placa fora do Km/L) não entra no diagnóstico
-    const gk=`${vk}|${uni}|${nf.modelo}`;
+  allRows.forEach(r=>{
+    const rm=+r[CL.remM]; if(!isFinite(rm)||rm<=0)return;          // rem modelo resolvido
+    const d=parseVig(r[CL.vig]); const vk=d?vigKey(d):''; if(!vk)return;
+    const modelo=r[CL.modelo]?String(r[CL.modelo]).trim():''; if(!modelo)return;
+    const uni=getUni(r)||'', proj=getProj(r)||'', tipo=abbrTipo(r[CL.tipoVei]);
+    const placa=r[CL.placa]?String(r[CL.placa]).trim():'';
+    const val=Math.round(rm*100)/100;                              // 2 casas (igual ao exibido)
+    const gk=`${vk}|${uni}|${modelo}`;
     let g=groups.get(gk); if(!g){g={cnt:new Map(),rows:[]};groups.set(gk,g);}
-    g.cnt.set(med,(g.cnt.get(med)||0)+1);
-    g.rows.push({placa:String(row[idx.placa]).trim(),media:med,vk,uni,modelo:nf.modelo,fproj:nf.proj,funi:nf.uni,ftipo:nf.tipo});
+    g.cnt.set(val,(g.cnt.get(val)||0)+1);
+    g.rows.push({placa,media:val,vk,uni,modelo,fproj:proj,funi:uni,ftipo:tipo});
   });
   const modeVal=cnt=>{let best=null,bc=-1;for(const [v,c] of cnt){if(c>bc||(c===bc&&v<best)){best=v;bc=c;}}return best;};
   const dedup=new Set();
@@ -629,8 +626,8 @@ function computeDivergencias(){
     const moda=modeVal(g.cnt);
     g.rows.forEach(x=>{
       if(x.media===moda)return;
-      const dk=`${x.vk}|${x.uni}|${x.modelo}|${x.placa}|${x.media}`;
-      if(dedup.has(dk))return; dedup.add(dk);   // dedup: base repete placa (CNPJs diferentes)
+      const dk=`${x.vk}|${x.uni}|${x.modelo}|${x.placa}`;
+      if(dedup.has(dk))return; dedup.add(dk);
       remModDiverg.push({vk:x.vk,uni:x.uni,modelo:x.modelo,placa:x.placa,media:x.media,moda,delta:x.media-moda,fproj:x.fproj,funi:x.funi,ftipo:x.ftipo});
     });
   }
@@ -1083,7 +1080,7 @@ async function init(){
     if(cached){
       const obj=JSON.parse(cached);detectCols(obj.cols);allRows=obj.rows;
       try{const bc=sessionStorage.getItem(BASE_KEY);if(bc)baseRemRaw=new Map(JSON.parse(bc));}catch(e){}
-      buildRemModIndex();populateFilters(allRows);atualizar();set('status-badge','Atualizando…');hasCached=true;
+      buildRemModIndex();computeDivergencias();populateFilters(allRows);atualizar();set('status-badge','Atualizando…');hasCached=true;
     }
   }catch(e){sessionStorage.removeItem(CACHE_KEY);}
   try{

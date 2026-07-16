@@ -328,6 +328,32 @@ async function main() {
   console.log(`>> total de divergências (todas vigências): ${divTot}`);
   console.log(`>> exemplo ACTROS 2651S jun/2026:`); divSample.forEach(s=>console.log('   '+s));
 
+  // ===== DIVERGÊNCIAS pelo VALOR RESOLVIDO (como o painel agora faz) =====
+  console.log('\n\n===== DIVERGÊNCIAS pelo Rem Modelo RESOLVIDO (vig|uni|modelo) =====');
+  const KPROJ2=14;
+  const gRes=new Map();
+  for (const r of kRows){
+    const praw=r[KPLACA]; if(!praw)continue;
+    const pc=canonPlaca(praw);
+    const modelo=KMOD>=0&&r[KMOD]!=null?String(r[KMOD]).trim():''; if(!modelo)continue;
+    const g=String(r[KVIG]).match(/Date\((\d+),(\d+)/); const vk=g?`${g[1]}-${String(+g[2]+1).padStart(2,'0')}`:vigKeyFromDate(r[KVIG]); if(!vk)continue;
+    const tipo=KTIPO>=0&&r[KTIPO]!=null?String(r[KTIPO]).trim():'';
+    const projRaw=r[KPROJ2]!=null?String(r[KPROJ2]):''; const ix=projRaw.indexOf('-'); const uni=ix>=0?projRaw.slice(ix+1).trim():projRaw.trim();
+    const {val}=resolve(pc,modelo,tipo,vk); if(val==null)continue;
+    const v2=Math.round(val*100)/100;
+    const gk=`${vk}|${uni}|${modelo}`;
+    let gg=gRes.get(gk); if(!gg){gg={cnt:new Map(),rows:[]};gRes.set(gk,gg);}
+    gg.cnt.set(v2,(gg.cnt.get(v2)||0)+1);
+    gg.rows.push({placa:String(praw).trim(),v2,uni});
+  }
+  const modeV2=cnt=>{let b=null,bc=-1;for(const[v,c]of cnt){if(c>bc||(c===bc&&v<b)){b=v;bc=c;}}return b;};
+  let resTot=0; const resSample=[]; const seenR=new Set();
+  for(const[gk,gg]of gRes){ if(gg.cnt.size<=1)continue; const md=modeV2(gg.cnt);
+    gg.rows.forEach(x=>{ if(x.v2===md)return; const dk=gk+'|'+x.placa; if(seenR.has(dk))return; seenR.add(dk); resTot++;
+      if(gk.startsWith('2026-06|')&&/2651S/.test(gk)&&/PIR/.test(x.uni)) resSample.push(`${x.placa} rem=${x.v2} moda=${md}`); }); }
+  console.log(`>> total divergências (resolvido, dedup placa): ${resTot}`);
+  console.log(`>> ACTROS 2651S PIR jun/2026 (deve ter 3):`); resSample.forEach(s=>console.log('   '+s));
+
   console.log('\nFIM.');
 }
 main().catch(e => { console.error('ERRO:', e); process.exit(1); });
