@@ -20,8 +20,25 @@ const INDS = [
   {field:'civf',   tab:'CIVF',                label:'CIVF',              metaCol:0, vigCol:1, filCol:3, descCol:12, mode:'desconto'},
 ];
 
-// pesos nominais (Combustível 10% saiu; normalização redistribui proporcional)
-const FIELD_WEIGHTS = { disp:20, prev:15, pneus:10, checkT:10, checkWH:10, conf:5, stVeic:5, stEmp:5, sla:5, civf:5 };
+// pesos por indicador (soma 100)
+const FIELD_WEIGHTS = { disp:20, prev:15, comb:10, pneus:10, checkT:10, checkWH:10, conf:5, stVeic:5, stEmp:5, sla:5, civf:5 };
+
+// ── Combustível: vem da fonte do Eficiência Km/L (mesmo de-para do scorecard) ──
+const KML_ID = '1ZZdvG_RK5cTBLdPl3TWCbNeqw-Y4fTYwWsQV4w-e__A';
+const KML_TAB = 'Km/L';
+const UNI2COD = {'CDD CAMBORIU':'BLC','CDD CUIABA':'CBA','CUIABA':'CBA','CUIABA EMPURRADA':'CBA','CDD FLORIANOPOLIS':'FLP','CDD GUARULHOS':'GRL','CDD NOVA FRIBURGO':'NFR','CDD PELOTAS':'PLT','CDD RIO DE JANEIRO':'CGR','CDD RONDONOPOLIS':'RON','CDI MACACU':'MCC','MACACU EMPURRADA':'MCC','PIRAI EMPURRADA':'PIR'};
+const UNI_SEM_KM = new Set(['CUIABA']);                                   // armazém: sem km/combustível
+const UNI_LIST_COMB = Object.keys(UNI2COD);
+function NK(s){ return String(s==null?'':s).normalize('NFD').replace(/[̀-ͯ]/g,'').toUpperCase().replace(/\s+/g,' ').trim(); }
+// mapeia um projeto do Km/L ("ROTA - BLC", "EMPURRADA - PIR"…) para uma filial
+function projMatchUni(uniNome, projStr){
+  const p=NK(projStr), cod=UNI2COD[uniNome]; if(!cod) return false;
+  if(!p.includes(cod)) return false;
+  const isEmp=/EMPURRAD/.test(p);
+  if(uniNome==='CUIABA EMPURRADA'||uniNome==='MACACU EMPURRADA') return isEmp;
+  if(uniNome==='CDD CUIABA'||uniNome==='CDI MACACU') return !isEmp;         // rota/AS/van, não empurrada
+  return true;                                                             // demais: código único basta
+}
 
 function parse(txt){ const s=txt.indexOf('{'), e=txt.lastIndexOf('}'); return JSON.parse(txt.slice(s,e+1)); }
 function pct(c){ if(!c) return null; let v=c.v;
@@ -70,17 +87,44 @@ function calcScore(fields){ let num=0,den=0;
     if(v==null) continue; den+=w; let v01=v/100; if(v01>1)v01=1; num+=w*v01; }
   return den>0?(num/den)*100:null; }
 
+// Combustível por filial+vigência: real = Σkm/Σlitros; rem = média simples do
+// "Rem Médio" (col4); atg = real/rem*100 (NÃO limitado — pode passar de 100%).
+async function loadComb(){
+  const url = `https://docs.google.com/spreadsheets/d/${KML_ID}/gviz/tq?sheet=${encodeURIComponent(KML_TAB)}&tqx=out:json`;
+  let rows; try{ const j=parse(await (await fetch(url)).text()); if(j.status!=='ok')throw new Error('status '+j.status); rows=j.table.rows||[]; }
+  catch(e){ console.error('FALHA Km/L', e.message); return []; }
+  const numRaw = c => { if(!c||c.v==null)return 0; const n=Number(c.v); return isFinite(n)?n:0; };
+  const parsed = rows.map(r=>{ const c=r.c||[]; const vig=gvig(c[0]); if(!vig)return null;
+    return {vig, proj:String(c[14]?.v??''), km:numRaw(c[22]), lit:numRaw(c[23]), rem:numRaw(c[4])}; }).filter(Boolean);
+  const vigs=[...new Set(parsed.map(p=>p.vig))];
+  const recs=[];
+  for(const uni of UNI_LIST_COMB){
+    if(UNI_SEM_KM.has(uni)) continue;
+    for(const vig of vigs){
+      let km=0,lit=0,rs=0,cnt=0;
+      parsed.forEach(p=>{ if(p.vig!==vig)return; if(!projMatchUni(uni,p.proj))return; km+=p.km; lit+=p.lit; if(p.rem>0){rs+=p.rem;cnt++;} });
+      if(!lit||!cnt) continue;
+      const rem=rs/cnt, real=km/lit, atg=rem?(real/rem*100):null;
+      if(atg==null) continue;
+      recs.push({field:'comb',label:'Combustível',unit:uni,vig,meta:rem,real,atg});
+    }
+  }
+  return recs;
+}
+
 async function main(){
   console.log('VIG alvo:', VIG_ALVO);
   const rec = await load();
-  console.log('Total records:', rec.length);
+  const combRec = await loadComb();
+  rec.push(...combRec);
+  console.log('Total records:', rec.length, '| comb:', combRec.length);
   const vigs=[...new Set(rec.map(r=>r.vig))].sort();
   console.log('Vigências:', vigs.join(', '));
 
-  for (const ind of INDS){
+  for (const ind of [...INDS, {field:'comb',label:'Combustível'}]){
     const rs = rec.filter(r=>r.field===ind.field && r.vig===VIG_ALVO).sort((a,b)=>a.unit.localeCompare(b.unit));
     console.log(`\n### ${ind.label} (${ind.field}) — ${VIG_ALVO} — ${rs.length} filiais`);
-    rs.forEach(r=>console.log(`   ${r.unit.padEnd(22)} meta=${r.meta==null?'—':r.meta.toFixed(1)}  real=${r.real==null?'—':r.real.toFixed(1)}  atg=${r.atg==null?'—':r.atg.toFixed(1)}%`));
+    rs.forEach(r=>console.log(`   ${r.unit.padEnd(22)} meta=${r.meta==null?'—':r.meta.toFixed(2)}  real=${r.real==null?'—':r.real.toFixed(2)}  atg=${r.atg==null?'—':r.atg.toFixed(1)}%`));
   }
 
   const byUnit=new Map();
