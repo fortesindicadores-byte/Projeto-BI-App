@@ -95,9 +95,88 @@
     return recs;
   }
 
+  // ══════════ IVs (Indicadores de Verificação) — só no Gerot, não pontuam ══════════
+  // Cada IV tem: real, meta, dir ('higher'|'lower'), fmt ('pct'|'time'|'mm'|'count').
+  // favorável = dir 'lower' ? real<=meta : real>=meta.  metaMode:'median' → meta é a
+  // mediana das filiais na vigência ("melhor que o 2º quartil" do termômetro).
+  const IV_BASE = [
+    {field:'iv_mttr',     label:'MTTR Veículos',                tab:'Disponibilidade', vigCol:0, filCol:2, valCol:8, fmt:'time',  dir:'lower',  metaMode:'median'},
+    {field:'iv_mtbf',     label:'MTBF Veículos',                tab:'Disponibilidade', vigCol:0, filCol:2, valCol:9, fmt:'time',  dir:'higher', metaMode:'median'},
+    {field:'iv_prevfora', label:'Preventivas · % Fora do Prazo',tab:'Preventivas',     vigCol:0, filCol:2, calc:'foraPrazo',      fmt:'pct',  dir:'lower',  meta:5},
+    {field:'iv_prevanexo',label:'Preventivas · OS Sem Anexo %', tab:'Preventivas',     vigCol:0, filCol:2, valCol:9, fmt:'pct',  dir:'lower',  meta:30},
+    {field:'iv_chktempo', label:'Checklist T1/T2 · Tempo Médio',tab:'Checklist T1/T2', vigCol:0, filCol:2, valCol:7, fmt:'time', dir:'higher', meta:240},
+    {field:'iv_chkoscrit',label:'Checklist T1/T2 · Saídas c/ OS Crítica', tab:'Checklist T1/T2', vigCol:0, filCol:2, valCol:9, fmt:'count', dir:'lower', meta:0},
+    {field:'iv_whtempo',  label:'Checklist WH · Realizados < Tempo mín',  tab:'Checklist WH',    vigCol:0, filCol:2, valCol:9, fmt:'pct',   dir:'lower',  meta:15},
+    {field:'iv_confseg',  label:'Conformidade · Seg.',          tab:'Conformidade',    vigCol:0, filCol:2, valCol:7, fmt:'pct',   dir:'higher', meta:98},
+    {field:'iv_confqual', label:'Conformidade · Quali.',        tab:'Conformidade',    vigCol:0, filCol:2, valCol:9, fmt:'pct',   dir:'higher', meta:98},
+    {field:'iv_slaexec',  label:'SLA Man. · Total Executada %', tab:'SLA Man.',        vigCol:1, filCol:2, valCol:3, fmt:'pct',   dir:'higher', meta:98},
+  ];
+  // Pneus vêm do painel Pneus (Supabase snapshot; sem histórico → só na vigência mais recente).
+  const IV_PNEUS = [
+    {field:'iv_pneu_amp', label:'Pneus · Amplitude',  fmt:'mm',  dir:'lower',  meta:5},
+    {field:'iv_pneu_pres',label:'Pneus · % Pressão',  fmt:'pct', dir:'higher', meta:90},   // "bom" = ±10% da ideal; painel: meta 100%
+    {field:'iv_pneu_mm',  label:'Pneus · MM Média',   fmt:'mm',  dir:'higher', meta:8},
+  ];
+  // ordem de exibição (agrupado pelo IC pai)
+  const IV_DISPLAY = [ IV_BASE[0], IV_BASE[1], IV_BASE[2], IV_BASE[3], IV_PNEUS[0], IV_PNEUS[1], IV_PNEUS[2], IV_BASE[4], IV_BASE[5], IV_BASE[6], IV_BASE[7], IV_BASE[8], IV_BASE[9] ];
+
+  function numRaw(c){ if(!c||c.v==null) return null; const n=Number(c.v); return isFinite(n)?n:null; }
+  function timeSec(c){ if(!c) return null; let f=c.f; if(f==null&&Array.isArray(c.v)) f=c.v.slice(0,3).map(x=>x||0).join(':'); f=String(f!=null?f:(c.v!=null?c.v:'')); const m=f.match(/(\d+):(\d+)(?::(\d+))?/); if(!m) return null; return (+m[1])*3600+(+m[2])*60+(+(m[3]||0)); }
+  function median(a){ const v=a.filter(x=>x!=null&&isFinite(x)).sort((x,y)=>x-y); if(!v.length) return null; const n=v.length; return n%2?v[(n-1)/2]:(v[n/2-1]+v[n/2])/2; }
+
+  async function loadIVs(){
+    const byTab={}; IV_BASE.forEach(iv=>{ (byTab[iv.tab]=byTab[iv.tab]||[]).push(iv); });
+    const recs=[];
+    await Promise.all(Object.entries(byTab).map(async ([tab,ivs])=>{
+      let rows; try{ rows=await fetchTab(tab); }catch(e){ console.error('IV — falha aba', tab, e); return; }
+      ivs.forEach(iv=>{
+        const vals=[];
+        rows.forEach(r=>{ const c=r.c||[]; const unit=gstr(c[iv.filCol]).toUpperCase(); const vig=gvig(c[iv.vigCol]); if(!unit||!vig)return;
+          let value=null;
+          if(iv.calc==='foraPrazo'){ const fora=numRaw(c[5]), tot=numRaw(c[3]); value=(tot&&tot>0)?fora/tot*100:null; }
+          else if(iv.fmt==='time'){ value=timeSec(c[iv.valCol]); }
+          else if(iv.fmt==='count'){ value=numRaw(c[iv.valCol]); }
+          else { value=pct(c[iv.valCol]); }
+          if(value==null||!isFinite(value))return;
+          vals.push({unit,vig,value});
+        });
+        let metaByVig=null;
+        if(iv.metaMode==='median'){ metaByVig={}; const g={}; vals.forEach(v=>{(g[v.vig]=g[v.vig]||[]).push(v.value);}); Object.keys(g).forEach(vg=>metaByVig[vg]=median(g[vg])); }
+        vals.forEach(v=>recs.push({field:iv.field,label:iv.label,unit:v.unit,vig:v.vig,real:v.value,meta:metaByVig?metaByVig[v.vig]:iv.meta,dir:iv.dir,fmt:iv.fmt,iv:true}));
+      });
+    }));
+    return recs;
+  }
+
+  // ── Pneus (painel Pneus): Supabase snapshot; filial → branch Prolog (de-para do farol/scorecard) ──
+  const PN_URL = 'https://ewbzeqsneeylwkxtcpme.supabase.co';
+  const PN_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImV3YnplcXNuZWV5bHdreHRjcG1lIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE4NzY2MTcsImV4cCI6MjA5NzQ1MjYxN30.W8W6Yunt6Z8NB73qpOD8eqYlrsgMRgEG-siYsJFwDwE';
+  const FILIAL2BRANCH = {'CDD CAMBORIU':24,'CDD CUIABA':1878,'CUIABA':1906,'CUIABA EMPURRADA':1907,'CDD FLORIANOPOLIS':20,'CDD GUARULHOS':30,'CDD NOVA FRIBURGO':2517,'CDD PELOTAS':26,'CDD RIO DE JANEIRO':37,'CDD RONDONOPOLIS':2277,'CDI MACACU':1677,'MACACU EMPURRADA':1676,'PIRAI EMPURRADA':38};
+  async function loadPneusIVs(latestVig){
+    if(!latestVig) return [];
+    let rows;
+    try{ const res=await fetch(`${PN_URL}/rest/v1/snapshot?endpoint=eq.tires&select=branch_id,data`, {headers:{apikey:PN_KEY, Authorization:'Bearer '+PN_KEY}}); if(!res.ok) throw new Error('http '+res.status); rows=await res.json(); }
+    catch(e){ console.error('IV Pneus (Supabase) falhou', e); return []; }
+    const byBranch={}; rows.forEach(r=>{ byBranch[r.branch_id]=r.data||[]; });
+    const mean=a=>{ const v=a.filter(x=>x!=null&&isFinite(x)); return v.length?v.reduce((s,x)=>s+x,0)/v.length:null; };
+    const recs=[];
+    for(const uni in FILIAL2BRANCH){
+      const tires=(byBranch[FILIAL2BRANCH[uni]]||[]).filter(t=>t && t.placa && (+t.menorMM)>0);  // instalados c/ leitura
+      if(!tires.length) continue;
+      const amp=mean(tires.map(t=>+t.amplitude));
+      const mm =mean(tires.map(t=>+t.menorMM).filter(x=>x>0));
+      const comP=tires.filter(t=>+t.pressaoIdeal>0);
+      const pres=comP.length?comP.filter(t=>Math.abs(+t.desvioPressao)<=10).length/comP.length*100:null;
+      IV_PNEUS.forEach(iv=>{ const real=iv.field==='iv_pneu_amp'?amp:(iv.field==='iv_pneu_mm'?mm:pres); if(real==null)return;
+        recs.push({field:iv.field,label:iv.label,unit:uni,vig:latestVig,real,meta:iv.meta,dir:iv.dir,fmt:iv.fmt,iv:true,snapshot:true}); });
+    }
+    return recs;
+  }
+
   async function load(){
     const records=[];
     const combP = loadComb();   // Km/L em paralelo com as abas da base
+    const ivP   = loadIVs();    // IVs das abas da base
     await Promise.all(INDS.map(async ind=>{
       let rows; try{ rows=await fetchTab(ind.tab); }catch(e){ console.error('Gerot base — falha aba', ind.tab, e); return; }
       // atingimento é limitado a 100% (só o Combustível pode passar de 100%)
@@ -118,6 +197,11 @@
       }
     }));
     records.push(...await combP);
+    records.push(...await ivP);
+    // Pneus (snapshot) entram na vigência mais recente que existe nos dados
+    const vigsAll=[...new Set(records.map(r=>r.vig))].sort();
+    const latest=vigsAll[vigsAll.length-1];
+    try{ records.push(...await loadPneusIVs(latest)); }catch(e){ console.error('IV Pneus', e); }
     return records;
   }
 
@@ -137,7 +221,7 @@
     {field:'sla',     label:'SLA Man.'},
   ];
 
-  global.GerotBase = { ID, INDS, DISPLAY, load,
+  global.GerotBase = { ID, INDS, DISPLAY, IV_DISPLAY, load,
     fieldLabels: DISPLAY.reduce((m,i)=>{ m[i.field]=i.label; return m; }, {}),
     fieldOrder: DISPLAY.map(i=>i.field) };
 })(window);
