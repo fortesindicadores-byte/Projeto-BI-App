@@ -13,7 +13,7 @@ const INDS = [
   {field:'pneus',  tab:'Pneus',               label:'Pneus',             metaCol:1, vigCol:0, filCol:2, valCol:3,  mode:'direct'},
   {field:'checkT', tab:'Checklist T1/T2',     label:'Checklist T1/T2',   metaCol:1, vigCol:0, filCol:2, valCol:3,  mode:'direct'},
   {field:'checkWH',tab:'Checklist WH',        label:'Checklist WH',      metaCol:1, vigCol:0, filCol:2, valCol:3,  mode:'direct'},
-  {field:'conf',   tab:'Conformidade',        label:'Conformidade',      metaCol:1, vigCol:0, filCol:2, valCol:3,  mode:'direct'},
+  {field:'conf',   tab:'Conformidade',        label:'Conformidade',      metaCol:1, vigCol:0, filCol:2, valCol:3,  mode:'direct', valColByUnit:{'CDD RIO DE JANEIRO':5}},
   {field:'sla',    tab:'SLA Man.',            label:'SLA Man.',          metaCol:0, vigCol:1, filCol:2, valCol:8,  mode:'direct'},
   {field:'stVeic', tab:'Stress Test - Veíc.', label:'Stress Test Veíc.', metaCol:0, vigCol:1, filCol:3, descCol:16, mode:'desconto'},
   {field:'stEmp',  tab:'Stress Test - Emp',   label:'Stress Test Emp.',  metaCol:0, vigCol:1, filCol:4, descCol:19, mode:'desconto'},
@@ -67,7 +67,8 @@ async function load(){
     let rows; try{ rows=await fetchTab(ind.tab); }catch(e){ console.error('FALHA', ind.tab, e.message); continue; }
     if (ind.mode==='direct'){
       rows.forEach(r=>{ const c=r.c||[]; const unit=gstr(c[ind.filCol]).toUpperCase(); const vig=gvig(c[ind.vigCol]); if(!unit||!vig)return;
-        const meta=pct(c[ind.metaCol]); const real=pct(c[ind.valCol]); if(real==null)return;
+        const vc=(ind.valColByUnit&&ind.valColByUnit[unit]!=null)?ind.valColByUnit[unit]:ind.valCol;
+        const meta=pct(c[ind.metaCol]); const real=pct(c[vc]); if(real==null)return;
         const atg=(meta&&meta>0)?(real/meta*100):null;
         records.push({field:ind.field,label:ind.label,unit,vig,meta,real,atg}); });
     } else {
@@ -126,6 +127,11 @@ async function main(){
     console.log(`\n### ${ind.label} (${ind.field}) — ${VIG_ALVO} — ${rs.length} filiais`);
     rs.forEach(r=>console.log(`   ${r.unit.padEnd(22)} meta=${r.meta==null?'—':r.meta.toFixed(2)}  real=${r.real==null?'—':r.real.toFixed(2)}  atg=${r.atg==null?'—':r.atg.toFixed(1)}%`));
   }
+
+  // check: Conformidade do Rio (col F bimestral) por vigência
+  console.log('\n### Conformidade CDD RIO DE JANEIRO (col F bimestral) por vigência');
+  rec.filter(r=>r.field==='conf'&&r.unit==='CDD RIO DE JANEIRO').sort((a,b)=>a.vig.localeCompare(b.vig))
+    .forEach(r=>console.log(`   ${r.vig}  real=${r.real==null?'—':r.real.toFixed(1)}  atg=${r.atg==null?'—':r.atg.toFixed(1)}%`));
 
   const byUnit=new Map();
   rec.filter(r=>r.vig===VIG_ALVO).forEach(r=>{ if(!byUnit.has(r.unit))byUnit.set(r.unit,{}); byUnit.get(r.unit)[r.field]=r.atg; });

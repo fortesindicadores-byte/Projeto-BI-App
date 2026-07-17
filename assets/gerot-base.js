@@ -23,7 +23,7 @@
     {field:'pneus',   tab:'Pneus',               label:'Pneus',             metaCol:1, vigCol:0, filCol:2, valCol:3,  mode:'direct'},
     {field:'checkT',  tab:'Checklist T1/T2',     label:'Checklist T1/T2',   metaCol:1, vigCol:0, filCol:2, valCol:3,  mode:'direct'},
     {field:'checkWH', tab:'Checklist WH',        label:'Checklist WH',      metaCol:1, vigCol:0, filCol:2, valCol:3,  mode:'direct'},
-    {field:'conf',    tab:'Conformidade',        label:'Conformidade',      metaCol:1, vigCol:0, filCol:2, valCol:3,  mode:'direct'},
+    {field:'conf',    tab:'Conformidade',        label:'Conformidade',      metaCol:1, vigCol:0, filCol:2, valCol:3,  mode:'direct', valColByUnit:{'CDD RIO DE JANEIRO':5}}, // Rio usa col F (Aderência Bimestral)
     {field:'sla',     tab:'SLA Man.',            label:'SLA Man.',          metaCol:0, vigCol:1, filCol:2, valCol:8,  mode:'direct'},
     {field:'stVeic',  tab:'Stress Test - Veíc.', label:'Stress Test Veíc.', metaCol:0, vigCol:1, filCol:3, descCol:16, mode:'desconto'},
     {field:'stEmp',   tab:'Stress Test - Emp',   label:'Stress Test Emp.',  metaCol:0, vigCol:1, filCol:4, descCol:19, mode:'desconto'},
@@ -104,7 +104,8 @@
       const capAtg = a => (a!=null && ind.cap!==false) ? Math.min(100,a) : a;
       if (ind.mode==='direct'){
         rows.forEach(r=>{ const c=r.c||[]; const unit=gstr(c[ind.filCol]).toUpperCase(); const vig=gvig(c[ind.vigCol]); if(!unit||!vig)return;
-          const meta=pct(c[ind.metaCol]); const real=pct(c[ind.valCol]); if(real==null)return;
+          const vc=(ind.valColByUnit&&ind.valColByUnit[unit]!=null)?ind.valColByUnit[unit]:ind.valCol;   // override por filial (ex.: Rio → Conformidade bimestral)
+          const meta=pct(c[ind.metaCol]); const real=pct(c[vc]); if(real==null)return;
           const atg=capAtg((meta&&meta>0)?(real/meta*100):null);
           records.push({field:ind.field,label:ind.label,unit,vig,meta,real,atg}); });
       } else {
