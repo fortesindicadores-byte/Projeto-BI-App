@@ -356,6 +356,7 @@ body.light-mode .podio-slot.primeiro .pedestal{box-shadow:0 -4px 24px rgba(196,1
             <th style="text-align:left;">Unidade</th>
             <th class="num ind-col">Disp.</th>
             <th class="num ind-col">Prev.</th>
+            <th class="num ind-col">Combust.</th>
             <th class="num ind-col">Pneus</th>
             <th class="num ind-col">Check T1/T2</th>
             <th class="num ind-col">Check WH</th>
@@ -455,7 +456,7 @@ const NOMES = {
    Pesos nominais por indicador. Combustível (antes 10%) saiu da nova base;
    calcScore_ normaliza por `den`, então o peso é redistribuído
    proporcionalmente entre os indicadores presentes de cada unidade. */
-const FIELD_WEIGHTS = { disp:20, prev:15, pneus:10, checkT:10, checkWH:10, conf:5, stVeic:5, stEmp:5, sla:5, civf:5 };
+const FIELD_WEIGHTS = { disp:20, prev:15, comb:10, pneus:10, checkT:10, checkWH:10, conf:5, stVeic:5, stEmp:5, sla:5, civf:5 };
 const FIELD_ORDER   = Object.keys(FIELD_WEIGHTS);
 
 // média ponderada (0-100), redistribuindo o peso dos indicadores ausentes.
@@ -469,6 +470,7 @@ const IND_LABELS = {
   pontuacao:   'Pontuação',
   disp:        'Disponib.',
   prev:        'Preventivas',
+  comb:        'Combustível',
   pneus:       'Pneus',
   checkT:      'Check T1/T2',
   checkWH:     'Check WH',
@@ -481,7 +483,7 @@ const IND_LABELS = {
 
 // rótulos completos p/ a caixa de pesos
 const PESO_LABELS = {
-  disp:'Disponibilidade', prev:'Preventivas', pneus:'Pneus', checkT:'Checklist T1/T2',
+  disp:'Disponibilidade', prev:'Preventivas', comb:'Combustível', pneus:'Pneus', checkT:'Checklist T1/T2',
   checkWH:'Checklist WH', conf:'Conformidade', stVeic:'Stress Test Veíc.',
   stEmp:'Stress Test Emp.', sla:'SLA Man.', civf:'CIVF',
 };
@@ -493,7 +495,7 @@ let chartTemporal = null;
 let activeInd = 'media_geral';
 
 /* ── Fetch ── */
-const CACHE_KEY='bi_cache_reconhecimento_v4';
+const CACHE_KEY='bi_cache_reconhecimento_v5';
 const CACHE_TTL=60*60*1000; // 1 hora
 
 async function fetchData() {
@@ -534,7 +536,7 @@ function buildEliteRows(records) {
   m.forEach(o => {
     const f = o.f;
     out.push({ vig:o.vig, unit:o.unit,
-      disp:f.disp??null, prev:f.prev??null, pneus:f.pneus??null, checkT:f.checkT??null,
+      disp:f.disp??null, prev:f.prev??null, comb:f.comb??null, pneus:f.pneus??null, checkT:f.checkT??null,
       checkWH:f.checkWH??null, conf:f.conf??null, stVeic:f.stVeic??null, stEmp:f.stEmp??null,
       civf:f.civf??null, sla:f.sla??null,
       pont:calcScore_(f) });
@@ -676,7 +678,7 @@ function getRankingData(data) {
     };
     return {
       unit,
-      disp: avg('disp'), prev: avg('prev'), pneus: avg('pneus'),
+      disp: avg('disp'), prev: avg('prev'), comb: avg('comb'), pneus: avg('pneus'),
       checkT: avg('checkT'), checkWH: avg('checkWH'), conf: avg('conf'),
       stVeic: avg('stVeic'), stEmp: avg('stEmp'), civf: avg('civf'), sla: avg('sla'),
       pont: avg('pont'),
@@ -700,6 +702,7 @@ function renderRanking(data) {
       <td style="font-weight:600">${r.unit}</td>
       <td class="num ind-col">${p(r.disp)}</td>
       <td class="num ind-col">${p(r.prev)}</td>
+      <td class="num ind-col">${p(r.comb)}</td>
       <td class="num ind-col">${p(r.pneus)}</td>
       <td class="num ind-col">${p(r.checkT)}</td>
       <td class="num ind-col">${p(r.checkWH)}</td>
@@ -805,7 +808,7 @@ function setActiveInd(ind) {
 
 function getFieldAvg(rows, key) {
   if (key === 'media_geral') {
-    const fields = ['disp','prev','pneus','checkT','checkWH','conf','stVeic','stEmp','civf','sla'];
+    const fields = ['disp','prev','comb','pneus','checkT','checkWH','conf','stVeic','stEmp','civf','sla'];
     const allVals = rows.flatMap(r => fields.map(f=>r[f]).filter(v=>v!=null));
     return allVals.length ? allVals.reduce((a,b)=>a+b,0)/allVals.length : null;
   }

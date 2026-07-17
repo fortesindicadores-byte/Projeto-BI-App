@@ -43,19 +43,61 @@
     m=f.match(/(\d{4})[\/\-](\d{1,2})/); if(m) return m[1]+'-'+m[2].padStart(2,'0'); return null; }
   function gstr(c){ if(!c) return ''; return String(c.f!=null?c.f:(c.v!=null?c.v:'')).trim(); }
 
-  // ── fetch de 1 aba via gviz JSONP (por nome) ──
-  function fetchTab(name){ return new Promise((res,rej)=>{
+  // ── fetch de 1 aba via gviz JSONP (por nome), de um workbook qualquer ──
+  function fetchTabFrom(wbId,name){ return new Promise((res,rej)=>{
     const fn='_gb'+Math.floor(Math.random()*1e9)+Date.now();
     const s=document.createElement('script');
     const clr=()=>{try{delete global[fn];s.remove();}catch(e){}};
     global[fn]=r=>{ clr(); try{ if(r.status!=='ok'){ rej(new Error(name+' status '+r.status)); return; } res(r.table.rows||[]); }catch(e){ rej(e); } };
     s.onerror=()=>{ clr(); rej(new Error('erro rede '+name)); };
-    s.src=`https://docs.google.com/spreadsheets/d/${ID}/gviz/tq?sheet=${encodeURIComponent(name)}&tqx=out:json;responseHandler:${fn}`;
+    s.src=`https://docs.google.com/spreadsheets/d/${wbId}/gviz/tq?sheet=${encodeURIComponent(name)}&tqx=out:json;responseHandler:${fn}`;
     document.head.appendChild(s);
   }); }
+  const fetchTab = name => fetchTabFrom(ID,name);
+
+  // ── Combustível: vem da fonte do Eficiência Km/L (mesmo de-para do scorecard) ──
+  const KML_ID = '1ZZdvG_RK5cTBLdPl3TWCbNeqw-Y4fTYwWsQV4w-e__A';
+  const KML_TAB = 'Km/L';
+  // filial → código de cidade no Km/L. Armazém (CUIABA) não tem km/combustível.
+  const UNI2COD = {'CDD CAMBORIU':'BLC','CDD CUIABA':'CBA','CUIABA':'CBA','CUIABA EMPURRADA':'CBA','CDD FLORIANOPOLIS':'FLP','CDD GUARULHOS':'GRL','CDD NOVA FRIBURGO':'NFR','CDD PELOTAS':'PLT','CDD RIO DE JANEIRO':'CGR','CDD RONDONOPOLIS':'RON','CDI MACACU':'MCC','MACACU EMPURRADA':'MCC','PIRAI EMPURRADA':'PIR'};
+  const UNI_SEM_KM = new Set(['CUIABA']);
+  const UNI_LIST_COMB = Object.keys(UNI2COD);
+  function NK(s){ return String(s==null?'':s).normalize('NFD').replace(/[̀-ͯ]/g,'').toUpperCase().replace(/\s+/g,' ').trim(); }
+  // mapeia um projeto do Km/L ("ROTA - BLC", "EMPURRADA - PIR", "INSUMOS - PIR"…) → filial
+  function projMatchUni(uniNome,projStr){
+    const p=NK(projStr), cod=UNI2COD[uniNome]; if(!cod) return false;
+    if(!p.includes(cod)) return false;
+    const isEmp=/EMPURRAD/.test(p);
+    if(uniNome==='CUIABA EMPURRADA'||uniNome==='MACACU EMPURRADA') return isEmp;
+    if(uniNome==='CDD CUIABA'||uniNome==='CDI MACACU') return !isEmp;   // rota/AS/van, não empurrada
+    return true;                                                       // demais: código único basta
+  }
+  // Km/L: col0=vigência, col4=Rem Médio, col14=Projeto, col22=km, col23=litros.
+  // real = Σkm/Σlitros; rem = média simples do Rem Médio; atg = real/rem*100 (SEM teto).
+  async function loadComb(){
+    let rows; try{ rows=await fetchTabFrom(KML_ID,KML_TAB); }catch(e){ console.error('Gerot base — falha Km/L (comb)', e); return []; }
+    const nRaw = c => { if(!c||c.v==null) return 0; const n=Number(c.v); return isFinite(n)?n:0; };
+    const parsed = rows.map(r=>{ const c=r.c||[]; const vig=gvig(c[0]); if(!vig)return null;
+      return {vig, proj:String(c[14]&&c[14].v!=null?c[14].v:''), km:nRaw(c[22]), lit:nRaw(c[23]), rem:nRaw(c[4])}; }).filter(Boolean);
+    const vigs=[...new Set(parsed.map(p=>p.vig))];
+    const recs=[];
+    for(const uni of UNI_LIST_COMB){
+      if(UNI_SEM_KM.has(uni)) continue;
+      for(const vig of vigs){
+        let km=0,lit=0,rs=0,cnt=0;
+        parsed.forEach(p=>{ if(p.vig!==vig||!projMatchUni(uni,p.proj))return; km+=p.km; lit+=p.lit; if(p.rem>0){rs+=p.rem;cnt++;} });
+        if(!lit||!cnt) continue;
+        const rem=rs/cnt, real=km/lit, atg=rem?(real/rem*100):null;   // NÃO limitado a 100%
+        if(atg==null) continue;
+        recs.push({field:'comb',label:'Combustível',unit:uni,vig,meta:rem,real,atg});
+      }
+    }
+    return recs;
+  }
 
   async function load(){
     const records=[];
+    const combP = loadComb();   // Km/L em paralelo com as abas da base
     await Promise.all(INDS.map(async ind=>{
       let rows; try{ rows=await fetchTab(ind.tab); }catch(e){ console.error('Gerot base — falha aba', ind.tab, e); return; }
       // atingimento é limitado a 100% (só o Combustível pode passar de 100%)
@@ -74,10 +116,27 @@
           records.push({field:ind.field,label:ind.label,unit:o.unit,vig:o.vig,meta,real,atg}); });
       }
     }));
+    records.push(...await combP);
     return records;
   }
 
-  global.GerotBase = { ID, INDS, load,
-    fieldLabels: INDS.reduce((m,i)=>{ m[i.field]=i.label; return m; }, {}),
-    fieldOrder: INDS.map(i=>i.field) };
+  // ordem de exibição (Gerot / rótulos), com o Combustível após Preventivas.
+  // fmt:'kml' → meta/real são km/L (não %). cap:false → atingimento sem teto.
+  const DISPLAY = [
+    {field:'disp',    label:'Disponibilidade'},
+    {field:'prev',    label:'Preventivas'},
+    {field:'comb',    label:'Combustível',       fmt:'kml', cap:false},
+    {field:'pneus',   label:'Pneus'},
+    {field:'checkT',  label:'Checklist T1/T2'},
+    {field:'checkWH', label:'Checklist WH'},
+    {field:'conf',    label:'Conformidade'},
+    {field:'stVeic',  label:'Stress Test Veíc.'},
+    {field:'stEmp',   label:'Stress Test Emp.'},
+    {field:'civf',    label:'CIVF'},
+    {field:'sla',     label:'SLA Man.'},
+  ];
+
+  global.GerotBase = { ID, INDS, DISPLAY, load,
+    fieldLabels: DISPLAY.reduce((m,i)=>{ m[i.field]=i.label; return m; }, {}),
+    fieldOrder: DISPLAY.map(i=>i.field) };
 })(window);

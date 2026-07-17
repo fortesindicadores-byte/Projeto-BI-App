@@ -159,13 +159,17 @@ function atualizar(){
   if(subEl)subEl.textContent=perVigs.length<=1?vigDisp(selK):`${vigDisp(perVigs[0])} – ${vigDisp(selK)} · média de ${perVigs.length} vigências`;
 
   const unitOk=r=>selUnits.length===0||selUnits.includes(r.unit);
+  const kmlTxt=v=>v==null||!isFinite(v)?'-':Number(v).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
   let html='<table><thead><tr class="cols"><th class="lft">Indicador</th><th>Meta</th><th>Real</th><th>% de Ating.</th><th class="sep-l">% Ating. YTD</th></tr></thead><tbody>';
-  GerotBase.INDS.forEach(ind=>{
+  GerotBase.DISPLAY.forEach(ind=>{
     const per=RECORDS.filter(r=>r.field===ind.field&&unitOk(r)&&perSet.has(r.vig));
     const ytd=RECORDS.filter(r=>r.field===ind.field&&unitOk(r)&&ytdSet.has(r.vig));
     const meta=avg(per.map(r=>r.meta)), real=avg(per.map(r=>r.real)), atg=avg(per.map(r=>r.atg));
     const atgY=avg(ytd.map(r=>r.atg));
-    html+=`<tr><td class="kpi">${ind.label}</td><td>${pctTxt(meta,0)}</td><td>${pctTxt(real,1)}</td><td>${atgCell(atg)}</td><td class="sep-l">${atgCell(atgY)}</td></tr>`;
+    const isKml=ind.fmt==='kml';                      // Combustível: meta/real em km/L
+    const metaTxt=isKml?kmlTxt(meta):pctTxt(meta,0);
+    const realTxt=isKml?kmlTxt(real):pctTxt(real,1);
+    html+=`<tr><td class="kpi">${ind.label}</td><td>${metaTxt}</td><td>${realTxt}</td><td>${atgCell(atg)}</td><td class="sep-l">${atgCell(atgY)}</td></tr>`;
   });
   html+='</tbody></table>';
   tbl.innerHTML=html;
