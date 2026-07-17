@@ -56,6 +56,9 @@ tbody td.kpi{text-align:left;color:var(--text);font-weight:700;white-space:norma
 tbody tr:hover{background:rgba(255,255,255,.035);}
 tbody tr:last-child td{border-bottom:none;}
 .atg{font-weight:800;color:#0C1017;border-radius:4px;padding:3px 8px;display:inline-block;min-width:46px;text-align:center;}
+tbody tr.iv-head td{padding:20px 10px 8px;font-size:10px;font-weight:800;color:var(--orange);text-transform:uppercase;letter-spacing:1.2px;text-align:left;border-top:2px solid rgba(249,115,22,.25);border-bottom:1px solid rgba(249,115,22,.2);}
+tbody tr.iv-row td.kpi{font-weight:600;color:var(--text2);}
+tbody tr.iv-row td{color:var(--text2);}
 .loading{text-align:center;color:var(--text3);padding:40px;}
 body.light-mode .main{background:#F0F0F0;--text:#1a1a1a;--text2:#444444;--text3:#666666;color:var(--text);--red:#ff0000;--green:#0E8C0E;}
 body.light-mode .tbl-section{background:rgba(128,128,128,.14)!important;border:none!important;box-shadow:none!important;--text:#1a1a1a;--text2:#444444;--text3:#555555;}
@@ -124,6 +127,18 @@ function heat(atg){ // atingimento 0-100 → cor de fundo (verde se ≥95%, sen�
 function atgCell(atg){if(atg==null||!isFinite(atg))return '<span style="color:var(--text3)">-</span>';const c=heat(atg);return `<span class="atg" style="background:${c.bg};color:${c.fg}">${Math.round(atg)}%</span>`;}
 function avg(arr){const v=arr.filter(x=>x!=null&&isFinite(x));return v.length?v.reduce((a,b)=>a+b,0)/v.length:null;}
 
+// ── IV (Indicadores de Verificação) ──
+function fmtIV(v,fmt){
+  if(v==null||!isFinite(v))return '-';
+  if(fmt==='time'){const s=Math.round(v),h=Math.floor(s/3600),m=Math.floor(s%3600/60),ss=s%60;return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(ss).padStart(2,'0')}`;}
+  if(fmt==='mm')return Number(v).toLocaleString('pt-BR',{minimumFractionDigits:1,maximumFractionDigits:1})+' mm';
+  if(fmt==='count')return Math.round(v).toLocaleString('pt-BR');
+  return (Math.round(v*10)/10).toLocaleString('pt-BR')+'%';           // pct
+}
+function metaIVTxt(iv,meta){ if(meta==null||!isFinite(meta))return '-'; return (iv.dir==='lower'?'≤ ':'≥ ')+fmtIV(meta,iv.fmt); }
+function favOf(real,meta,dir){ if(real==null||meta==null||!isFinite(real)||!isFinite(meta))return null; return dir==='lower'?real<=meta:real>=meta; }
+function favPill(fav){ if(fav==null)return '<span style="color:var(--text3)">-</span>'; return fav?'<span class="atg" style="background:#7BC47F;color:#0C1017">OK</span>':'<span class="atg" style="background:#F0918B;color:#0C1017">Atenção</span>'; }
+
 // ── MULTI-SELECT (padrão) ──
 function _buildMs(wrap,renderFn,getAllFn){
   if(!(wrap._sel instanceof Set))wrap._sel=new Set();
@@ -171,6 +186,17 @@ function atualizar(){
     const realTxt=isKml?kmlTxt(real):pctTxt(real,1);
     html+=`<tr><td class="kpi">${ind.label}</td><td>${metaTxt}</td><td>${realTxt}</td><td>${atgCell(atg)}</td><td class="sep-l">${atgCell(atgY)}</td></tr>`;
   });
+  // ── Indicadores de Verificação (IV) ──
+  let ivHtml='';
+  (GerotBase.IV_DISPLAY||[]).forEach(iv=>{
+    const per=RECORDS.filter(r=>r.field===iv.field&&unitOk(r)&&perSet.has(r.vig));
+    const ytd=RECORDS.filter(r=>r.field===iv.field&&unitOk(r)&&ytdSet.has(r.vig));
+    if(!per.length&&!ytd.length)return;   // sem dado no período (ex.: Pneus fora da vig recente)
+    const real=avg(per.map(r=>r.real)), meta=avg(per.map(r=>r.meta));
+    const realY=avg(ytd.map(r=>r.real)), metaY=avg(ytd.map(r=>r.meta));
+    ivHtml+=`<tr class="iv-row"><td class="kpi">${iv.label}</td><td>${metaIVTxt(iv,meta)}</td><td>${fmtIV(real,iv.fmt)}</td><td>${favPill(favOf(real,meta,iv.dir))}</td><td class="sep-l">${favPill(favOf(realY,metaY,iv.dir))}</td></tr>`;
+  });
+  if(ivHtml) html+='<tr class="iv-head"><td class="kpi" colspan="5">Indicadores de Verificação (IV)</td></tr>'+ivHtml;
   html+='</tbody></table>';
   tbl.innerHTML=html;
 }

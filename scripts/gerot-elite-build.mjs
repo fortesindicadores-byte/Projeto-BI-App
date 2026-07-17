@@ -139,6 +139,65 @@ async function main(){
   console.log(`\n\n===== RANKING FROTA DE ELITE — ${VIG_ALVO} =====`);
   rank.forEach((x,i)=>console.log(`  ${String(i+1).padStart(2)}. ${x.unit.padEnd(22)} ${x.score.toFixed(1)} pts   [${Object.keys(FIELD_WEIGHTS).map(k=>x.f[k]==null?'·':Math.round(Math.min(100,x.f[k]))).join(' ')}]`));
   console.log('  ordem cols:', Object.keys(FIELD_WEIGHTS).join(' '));
+
+  await checkIVs();
   console.log('\nFIM.');
+}
+// ── Validação dos IVs (parsing de tempo, %Fora Prazo, Pneus/Supabase) ──
+const IV_BASE=[
+  {field:'iv_mttr',label:'MTTR',tab:'Disponibilidade',vigCol:0,filCol:2,valCol:8,fmt:'time',dir:'lower',metaMode:'median'},
+  {field:'iv_mtbf',label:'MTBF',tab:'Disponibilidade',vigCol:0,filCol:2,valCol:9,fmt:'time',dir:'higher',metaMode:'median'},
+  {field:'iv_prevfora',label:'Prev %Fora',tab:'Preventivas',vigCol:0,filCol:2,calc:'foraPrazo',fmt:'pct',dir:'lower',meta:5},
+  {field:'iv_prevanexo',label:'Prev OS s/Anexo%',tab:'Preventivas',vigCol:0,filCol:2,valCol:9,fmt:'pct',dir:'lower',meta:30},
+  {field:'iv_chktempo',label:'Chk Tempo Médio',tab:'Checklist T1/T2',vigCol:0,filCol:2,valCol:7,fmt:'time',dir:'higher',meta:240},
+  {field:'iv_chkoscrit',label:'Chk Saídas OS Crít',tab:'Checklist T1/T2',vigCol:0,filCol:2,valCol:9,fmt:'count',dir:'lower',meta:0},
+  {field:'iv_whtempo',label:'WH Realiz<Tmin',tab:'Checklist WH',vigCol:0,filCol:2,valCol:9,fmt:'pct',dir:'lower',meta:15},
+  {field:'iv_confseg',label:'Conf Seg',tab:'Conformidade',vigCol:0,filCol:2,valCol:7,fmt:'pct',dir:'higher',meta:98},
+  {field:'iv_confqual',label:'Conf Quali',tab:'Conformidade',vigCol:0,filCol:2,valCol:9,fmt:'pct',dir:'higher',meta:98},
+  {field:'iv_slaexec',label:'SLA Tot Exec%',tab:'SLA Man.',vigCol:1,filCol:2,valCol:3,fmt:'pct',dir:'higher',meta:98},
+];
+function numRaw(c){ if(!c||c.v==null)return null; const n=Number(c.v); return isFinite(n)?n:null; }
+function timeSec(c){ if(!c)return null; let f=c.f; if(f==null&&Array.isArray(c.v))f=c.v.slice(0,3).map(x=>x||0).join(':'); f=String(f!=null?f:(c.v!=null?c.v:'')); const m=f.match(/(\d+):(\d+)(?::(\d+))?/); if(!m)return null; return (+m[1])*3600+(+m[2])*60+(+(m[3]||0)); }
+function median(a){ const v=a.filter(x=>x!=null&&isFinite(x)).sort((x,y)=>x-y); if(!v.length)return null; const n=v.length; return n%2?v[(n-1)/2]:(v[n/2-1]+v[n/2])/2; }
+function fmtT(s){ if(s==null)return '—'; s=Math.round(s); return `${String(Math.floor(s/3600)).padStart(2,'0')}:${String(Math.floor(s%3600/60)).padStart(2,'0')}:${String(s%60).padStart(2,'0')}`; }
+async function checkIVs(){
+  console.log('\n\n===== IVs — '+VIG_ALVO+' =====');
+  const byTab={}; IV_BASE.forEach(iv=>{(byTab[iv.tab]=byTab[iv.tab]||[]).push(iv);});
+  for(const [tab,ivs] of Object.entries(byTab)){
+    let rows; try{ rows=await fetchTab(tab); }catch(e){ console.log('  FALHA',tab,e.message); continue; }
+    for(const iv of ivs){
+      const vals=[];
+      rows.forEach(r=>{ const c=r.c||[]; const unit=gstr(c[iv.filCol]).toUpperCase(); const vig=gvig(c[iv.vigCol]); if(!unit||vig!==VIG_ALVO)return;
+        let value=null;
+        if(iv.calc==='foraPrazo'){ const fora=numRaw(c[5]),tot=numRaw(c[3]); value=(tot&&tot>0)?fora/tot*100:null; }
+        else if(iv.fmt==='time'){ value=timeSec(c[iv.valCol]); }
+        else if(iv.fmt==='count'){ value=numRaw(c[iv.valCol]); }
+        else { value=pct(c[iv.valCol]); }
+        if(value!=null&&isFinite(value))vals.push({unit,value});
+      });
+      const meta=iv.metaMode==='median'?median(vals.map(v=>v.value)):iv.meta;
+      const fmtV=v=>iv.fmt==='time'?fmtT(v):(iv.fmt==='pct'?v.toFixed(1)+'%':(iv.fmt==='count'?String(Math.round(v)):v.toFixed(1)));
+      const fav=vals.filter(v=>iv.dir==='lower'?v.value<=meta:v.value>=meta).length;
+      console.log(`  ${iv.label.padEnd(18)} n=${String(vals.length).padStart(2)} meta=${iv.metaMode==='median'?'(med) ':''}${fmtV(meta)}  fav=${fav}/${vals.length}  amostra: ${vals.slice(0,4).map(v=>v.unit.slice(0,10)+'='+fmtV(v.value)).join(' , ')}`);
+    }
+  }
+  // Pneus (Supabase snapshot)
+  const PN_URL='https://ewbzeqsneeylwkxtcpme.supabase.co';
+  const PN_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImV3YnplcXNuZWV5bHdreHRjcG1lIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE4NzY2MTcsImV4cCI6MjA5NzQ1MjYxN30.W8W6Yunt6Z8NB73qpOD8eqYlrsgMRgEG-siYsJFwDwE';
+  const FILIAL2BRANCH={'CDD CAMBORIU':24,'CDD CUIABA':1878,'CUIABA':1906,'CUIABA EMPURRADA':1907,'CDD FLORIANOPOLIS':20,'CDD GUARULHOS':30,'CDD NOVA FRIBURGO':2517,'CDD PELOTAS':26,'CDD RIO DE JANEIRO':37,'CDD RONDONOPOLIS':2277,'CDI MACACU':1677,'MACACU EMPURRADA':1676,'PIRAI EMPURRADA':38};
+  console.log('\n  --- Pneus (snapshot Supabase) ---');
+  let rows; try{ const res=await fetch(`${PN_URL}/rest/v1/snapshot?endpoint=eq.tires&select=branch_id,data`,{headers:{apikey:PN_KEY,Authorization:'Bearer '+PN_KEY}}); rows=await res.json(); }
+  catch(e){ console.log('  Pneus FALHOU',e.message); return; }
+  const byBranch={}; rows.forEach(r=>{byBranch[r.branch_id]=r.data||[];});
+  const mean=a=>{const v=a.filter(x=>x!=null&&isFinite(x));return v.length?v.reduce((s,x)=>s+x,0)/v.length:null;};
+  for(const uni of Object.keys(FILIAL2BRANCH)){
+    const tires=(byBranch[FILIAL2BRANCH[uni]]||[]).filter(t=>t&&t.placa&&(+t.menorMM)>0);
+    if(!tires.length){ console.log(`  ${uni.padEnd(20)} (sem pneus instalados)`); continue; }
+    const amp=mean(tires.map(t=>+t.amplitude));
+    const mm=mean(tires.map(t=>+t.menorMM).filter(x=>x>0));
+    const comP=tires.filter(t=>+t.pressaoIdeal>0);
+    const pres=comP.length?comP.filter(t=>Math.abs(+t.desvioPressao)<=10).length/comP.length*100:null;
+    console.log(`  ${uni.padEnd(20)} n=${String(tires.length).padStart(4)}  amp=${amp==null?'—':amp.toFixed(2)}mm  mm=${mm==null?'—':mm.toFixed(2)}  pres=${pres==null?'—':pres.toFixed(1)+'%'}`);
+  }
 }
 main().catch(e=>{ console.error('ERRO:', e); process.exit(1); });
