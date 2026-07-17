@@ -58,17 +58,19 @@
     const records=[];
     await Promise.all(INDS.map(async ind=>{
       let rows; try{ rows=await fetchTab(ind.tab); }catch(e){ console.error('Gerot base — falha aba', ind.tab, e); return; }
+      // atingimento é limitado a 100% (só o Combustível pode passar de 100%)
+      const capAtg = a => (a!=null && ind.cap!==false) ? Math.min(100,a) : a;
       if (ind.mode==='direct'){
         rows.forEach(r=>{ const c=r.c||[]; const unit=gstr(c[ind.filCol]).toUpperCase(); const vig=gvig(c[ind.vigCol]); if(!unit||!vig)return;
           const meta=pct(c[ind.metaCol]); const real=pct(c[ind.valCol]); if(real==null)return;
-          const atg=(meta&&meta>0)?(real/meta*100):null;
+          const atg=capAtg((meta&&meta>0)?(real/meta*100):null);
           records.push({field:ind.field,label:ind.label,unit,vig,meta,real,atg}); });
       } else {
         const g=new Map();
         rows.forEach(r=>{ const c=r.c||[]; const unit=gstr(c[ind.filCol]).toUpperCase(); const vig=gvig(c[ind.vigCol]); if(!unit||!vig)return;
           const meta=pct(c[ind.metaCol]); const d=money(c[ind.descCol]); const aderente=(d==null||d===0)?1:0;
           const k=unit+'||'+vig; if(!g.has(k))g.set(k,{unit,vig,meta:null,n:0,ok:0}); const o=g.get(k); o.n++; o.ok+=aderente; if(meta!=null)o.meta=meta; });
-        g.forEach(o=>{ const real=o.n?o.ok/o.n*100:null; const meta=o.meta!=null?o.meta:100; const atg=(meta>0)?(real/meta*100):null;
+        g.forEach(o=>{ const real=o.n?o.ok/o.n*100:null; const meta=o.meta!=null?o.meta:100; const atg=capAtg((meta>0)?(real/meta*100):null);
           records.push({field:ind.field,label:ind.label,unit:o.unit,vig:o.vig,meta,real,atg}); });
       }
     }));
