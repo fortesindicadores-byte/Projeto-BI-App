@@ -181,6 +181,7 @@ const EXCLUDE_CONTAS = new Set(['ICMS Crédito Presumido','Estorno de ICMS não 
     <div class="filter-group"><div class="ms-wrap" id="ms-vig"><button class="ms-btn" onclick="toggleMs('ms-vig')"><span class="ms-lbl">Vigência</span><span class="ms-cnt"></span><svg width="10" height="6" viewBox="0 0 10 6"><path d="M0 0l5 6 5-6z" fill="#F97316"/></svg></button><div class="ms-panel"><div class="ms-search"><svg width="12" height="12" viewBox="0 0 12 12"><circle cx="5" cy="5" r="4" stroke="#94A3B8" stroke-width="1.5" fill="none"/><line x1="8.5" y1="8.5" x2="11" y2="11" stroke="#94A3B8" stroke-width="1.5"/></svg><input type="text" placeholder="Digite para pesquisar…"></div><div class="ms-list"></div></div></div></div>
     <div class="filter-group"><div class="ms-wrap" id="ms-uni"><button class="ms-btn" onclick="toggleMs('ms-uni')"><span class="ms-lbl">Unidade</span><span class="ms-cnt"></span><svg width="10" height="6" viewBox="0 0 10 6"><path d="M0 0l5 6 5-6z" fill="#F97316"/></svg></button><div class="ms-panel"><div class="ms-search"><svg width="12" height="12" viewBox="0 0 12 12"><circle cx="5" cy="5" r="4" stroke="#94A3B8" stroke-width="1.5" fill="none"/><line x1="8.5" y1="8.5" x2="11" y2="11" stroke="#94A3B8" stroke-width="1.5"/></svg><input type="text" placeholder="Digite para pesquisar…"></div><div class="ms-list"></div></div></div></div>
     <div class="filter-group"><div class="ms-wrap" id="ms-nv3"><button class="ms-btn" onclick="toggleMs('ms-nv3')"><span class="ms-lbl">Projeto</span><span class="ms-cnt"></span><svg width="10" height="6" viewBox="0 0 10 6"><path d="M0 0l5 6 5-6z" fill="#F97316"/></svg></button><div class="ms-panel"><div class="ms-search"><svg width="12" height="12" viewBox="0 0 12 12"><circle cx="5" cy="5" r="4" stroke="#94A3B8" stroke-width="1.5" fill="none"/><line x1="8.5" y1="8.5" x2="11" y2="11" stroke="#94A3B8" stroke-width="1.5"/></svg><input type="text" placeholder="Digite para pesquisar…"></div><div class="ms-list"></div></div></div></div>
+    <div class="filter-group"><div class="ms-wrap" id="ms-pac"><button class="ms-btn" onclick="toggleMs('ms-pac')"><span class="ms-lbl">Pacote</span><span class="ms-cnt"></span><svg width="10" height="6" viewBox="0 0 10 6"><path d="M0 0l5 6 5-6z" fill="#F97316"/></svg></button><div class="ms-panel"><div class="ms-search"><svg width="12" height="12" viewBox="0 0 12 12"><circle cx="5" cy="5" r="4" stroke="#94A3B8" stroke-width="1.5" fill="none"/><line x1="8.5" y1="8.5" x2="11" y2="11" stroke="#94A3B8" stroke-width="1.5"/></svg><input type="text" placeholder="Digite para pesquisar…"></div><div class="ms-list"></div></div></div></div>
     <span class="filter-hint">Somente Transportes (exclui o projeto Apoio). R$/km, R$/Frota Ativa e AV usam km, frota ativa e receita do filtro.</span>
   </div>
 </header>
@@ -261,7 +262,7 @@ let FR=null,RE=null,DP=null, S_FR=[],S_RE=[],S_DP=[], allRows=[];
 // FILTROS
 // ═══════════════════════════════════════════════
 function getMsValues(i){ const w=id(i); return w&&w._sel?[...w._sel]:[]; }
-function getFilters(){ return {ano:getMsValues('ms-ano'),vigencia:getMsValues('ms-vig'),unidade:getMsValues('ms-uni'),nivel3:getMsValues('ms-nv3')}; }
+function getFilters(){ return {ano:getMsValues('ms-ano'),vigencia:getMsValues('ms-vig'),unidade:getMsValues('ms-uni'),nivel3:getMsValues('ms-nv3'),pacote:getMsValues('ms-pac')}; }
 function _match(f,vigStr,n3){
   if(isApoio(n3)) return false;                                            // só Transportes
   if(f.ano.length      && !f.ano.includes(vigStr.slice(-4)))       return false;
@@ -395,9 +396,11 @@ function renderTree(D){
     cardHTML('c-km','root-card','Km Rodado',H4,kmCells(D.kmRem,D.kmReal))+
     `<div class="kpi-card root-card" id="c-ativa"><div class="card-label">Frota Ativa</div><table class="kpi-table single"><thead><tr><th>Ativa</th></tr></thead><tbody><tr><td>${D.ativa?fmtInt(D.ativa):'—'}</td></tr></tbody></table></div>`;
 
-  // ── pacotes → contas → 3 visões ──
+  // ── pacotes → contas → 3 visões (filtro Pacote poda quais pacotes aparecem) ──
+  const selPac=getFilters().pacote;
+  const pacotesShow=selPac.length ? D.pacotes.filter(p=>selPac.includes(p.nome)) : D.pacotes;
   let pacHTML='';
-  D.pacotes.forEach((p,pi)=>{
+  pacotesShow.forEach((p,pi)=>{
     const pid='pac-'+pi; LINKS.root.push(pid); LINKS.pac[pid]=[];
     let contasHTML='';
     p.contas.forEach((c,ci)=>{
@@ -472,7 +475,7 @@ async function fetchAll(){
   const anos=[...new Set(allRows.map(r=>r.vigencia.slice(-4)))].sort().reverse();
   const unis=[...new Set(allRows.map(r=>getNv3Suffix(r.nivel3)).filter(Boolean))].sort();
   const nv3s=[...new Set(allRows.map(r=>getNv3Prefix(r.nivel3)).filter(Boolean))].sort();
-  buildMsFilter('ms-ano',anos); buildVigMsFilter(vigs); buildMsFilter('ms-uni',unis); buildMsFilter('ms-nv3',nv3s);
+  buildMsFilter('ms-ano',anos); buildVigMsFilter(vigs); buildMsFilter('ms-uni',unis); buildMsFilter('ms-nv3',nv3s); buildMsFilter('ms-pac',PAC_ORDER.slice());
   refreshCascade();
 }
 
