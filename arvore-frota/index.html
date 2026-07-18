@@ -1,0 +1,520 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Árvore de Custo da Frota · BI Frota</title>
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.2/dist/jspdf.umd.min.js"></script>
+<script src="../assets/pdf-export.js"></script>
+<script src="../assets/excel-export.js"></script>
+<style>
+:root{
+  --bg:#0C1017; --card:#141B26; --card2:#1A2335; --border:#1E2D40;
+  --orange:#F97316; --orange-d:#EA580C; --text:#F1F5F9; --text2:#94A3B8;
+  --text3:#475569; --green:#3BB33B; --red:#FF6666;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'Montserrat',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:radial-gradient(ellipse at 10% 25%,rgba(249,115,22,.06) 0%,transparent 50%),radial-gradient(ellipse at 90% 75%,rgba(56,189,248,.05) 0%,transparent 50%),var(--bg);color:var(--text);min-height:100vh;}
+
+/* ── Header ── */
+.header{background:rgba(12,16,23,.75);border-bottom:1px solid rgba(255,255,255,.07);padding:10px 24px 12px;display:flex;flex-wrap:wrap;align-items:center;position:sticky;top:0;z-index:100;backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);box-shadow:0 2px 12px rgba(0,0,0,.3);}
+.brand{flex:1;order:1;}
+.brand h1{font-size:16px;font-weight:700;color:var(--orange);}
+.brand p{font-size:10px;color:var(--text2);margin-top:2px;}
+.header-right{flex-shrink:0;order:2;display:flex;align-items:center;gap:8px;}
+.status-badge{font-size:9px;color:var(--text);background:rgba(249,115,22,.15);border:1px solid rgba(249,115,22,.3);border-radius:4px;padding:2px 8px;white-space:nowrap;}
+.access-badge{font-size:9px;color:var(--text2);background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);border-radius:4px;padding:2px 8px;white-space:nowrap;}
+.refresh-btn{background:rgba(249,115,22,.15);border:1px solid rgba(249,115,22,.3);border-radius:4px;padding:4px 8px;cursor:pointer;color:var(--orange);display:flex;align-items:center;}
+.refresh-btn:hover{background:rgba(249,115,22,.25);}
+.theme-btn{background:rgba(249,115,22,.15);border:1px solid rgba(249,115,22,.3);border-radius:4px;padding:4px 6px;cursor:pointer;color:var(--orange);display:flex;align-items:center;}
+.theme-btn:hover{background:rgba(249,115,22,.25);}
+.back-btn{background:rgba(249,115,22,.15);border:1px solid rgba(249,115,22,.3);border-radius:4px;padding:4px 8px;display:flex;align-items:center;color:var(--orange);text-decoration:none;}
+.back-btn:hover{background:rgba(249,115,22,.32);}
+.header-filters{flex-basis:100%;order:3;margin-top:10px;display:flex;gap:10px;flex-wrap:wrap;align-items:flex-start;}
+.filter-group{display:flex;flex-direction:column;gap:3px;}
+.filter-label{display:none;}
+.filter-hint{flex-basis:100%;font-size:10px;color:var(--text3);font-style:italic;margin-top:3px;line-height:1.2;}
+
+.ms-wrap{position:relative;}
+.ms-btn{display:flex;align-items:center;gap:8px;background:#0a0f18;color:var(--text);border:1px solid #2a3a50;border-radius:4px;font-family:'Montserrat',sans-serif;font-size:11px;font-weight:700;padding:6px 12px;cursor:pointer;text-transform:uppercase;letter-spacing:.5px;white-space:nowrap;min-width:110px;}
+.ms-btn:hover{border-color:var(--orange);}
+.ms-lbl{flex:1;}
+.ms-cnt{background:var(--orange);color:#000;border-radius:10px;padding:1px 6px;font-size:9px;font-weight:800;display:none;}
+.ms-btn svg{flex-shrink:0;opacity:.8;}
+.ms-panel{display:none;flex-direction:column;position:absolute;top:calc(100% + 4px);left:0;z-index:500;background:#0f1824;border:1px solid #2a3a50;border-radius:4px;min-width:230px;max-height:300px;box-shadow:0 8px 24px rgba(0,0,0,.7);}
+.ms-panel.open{display:flex;}
+.ms-search{padding:7px 10px;border-bottom:1px solid #1e2d40;display:flex;align-items:center;gap:6px;flex-shrink:0;}
+.ms-search svg{opacity:.4;flex-shrink:0;}
+.ms-search input{flex:1;background:transparent;border:none;color:var(--text);font-family:'Montserrat',sans-serif;font-size:11px;outline:none;}
+.ms-search input::placeholder{color:var(--text3);}
+.ms-list{overflow-y:auto;flex:1;}
+.ms-opt{display:flex;align-items:center;gap:8px;padding:7px 12px;cursor:pointer;font-size:11px;color:var(--text2);text-transform:uppercase;letter-spacing:.3px;}
+.ms-opt:hover{background:rgba(255,255,255,.05);color:var(--text);}
+.ms-opt.all-opt{border-bottom:1px solid #1e2d40;color:var(--text);font-weight:700;}
+.ms-opt input[type=checkbox]{accent-color:var(--orange);cursor:pointer;width:14px;height:14px;flex-shrink:0;}
+.ms-only{margin-left:auto;font-size:8px;color:var(--orange);padding:1px 5px;border-radius:2px;cursor:pointer;white-space:nowrap;flex-shrink:0;opacity:0;transition:opacity .12s;}
+.ms-opt:hover .ms-only{opacity:1;}
+.ms-only:hover{background:rgba(249,115,22,.2);}
+.ms-list::-webkit-scrollbar{width:4px;}
+.ms-list::-webkit-scrollbar-track{background:transparent;}
+.ms-list::-webkit-scrollbar-thumb{background:#2a3a50;border-radius:2px;}
+
+/* ── Main ── */
+.main{padding:36px 32px;overflow-x:auto;}
+.warn-bar{background:rgba(234,179,8,.08);border:1px solid rgba(234,179,8,.2);border-radius:8px;color:#a16207;font-size:12px;padding:10px 16px;margin-bottom:24px;display:none;}
+.warn-bar.show{display:flex;align-items:center;gap:10px;}
+.warn-bar button{background:none;border:1px solid #a16207;border-radius:5px;color:#a16207;font-size:11px;padding:3px 10px;cursor:pointer;white-space:nowrap;}
+
+/* ── Tree ── */
+.tree-wrap{position:relative;display:inline-block;min-width:100%;}
+.tree-svg{position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;overflow:visible;z-index:0;}
+.tree{display:flex;align-items:center;position:relative;z-index:1;}
+.root-col{display:flex;flex-direction:column;gap:12px;flex:0 0 auto;}
+.pacotes{display:flex;flex-direction:column;gap:20px;flex:0 0 auto;margin-left:72px;}
+.pac-block{display:flex;align-items:center;flex:0 0 auto;}
+.contas{display:flex;flex-direction:column;gap:10px;flex:0 0 auto;margin-left:56px;}
+.conta-block{display:flex;align-items:center;flex:0 0 auto;}
+.views{display:flex;flex-direction:column;gap:6px;flex:0 0 auto;margin-left:46px;}
+
+/* ── KPI Card ── */
+.kpi-card{background:var(--card);border:1px solid var(--border);border-radius:6px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,.4);width:204px;}
+.root-card{width:214px;}
+.root-total{border-color:rgba(249,115,22,.5);box-shadow:0 0 0 1px rgba(249,115,22,.4),0 2px 10px rgba(0,0,0,.5);}
+.pac-card{width:200px;}
+.conta-card{width:206px;}
+.view-card{width:176px;}
+.card-label{font-size:10px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:#F1F5F9;padding:10px 14px 6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.view-card .card-label{font-size:9px;padding:7px 11px 4px;color:var(--orange);}
+.pac-card .card-label{color:var(--orange);}
+.kpi-table{width:100%;border-collapse:collapse;table-layout:fixed;}
+.kpi-table th{background:#050a12;color:#F1F5F9;font-size:10px;font-weight:700;letter-spacing:.03em;padding:7px 5px;text-align:center;border-right:1px solid #0c1017;white-space:nowrap;}
+.kpi-table th:last-child{border-right:none;}
+.kpi-table td{background:#f8fafc;color:#0f172a;font-size:12px;font-weight:500;padding:9px 5px;text-align:center;border-right:1px solid #e2e8f0;white-space:nowrap;}
+.kpi-table td:last-child{border-right:none;}
+.view-card .kpi-table th{font-size:8.5px;padding:5px 3px;}
+.view-card .kpi-table td{font-size:10.5px;padding:6px 3px;}
+.cr{background:#FF6666 !important;color:#0f172a !important;font-weight:700;}
+.cg{background:#3BB33B !important;color:#0f172a !important;font-weight:700;}
+.cr-t{background:#f8fafc !important;color:#FF0000 !important;font-weight:700;}
+.cg-t{background:#f8fafc !important;color:#008000 !important;font-weight:700;}
+.single td{font-size:20px;font-weight:800;padding:12px 6px;}
+
+/* Light mode */
+body.light-mode .main{background:#F0F0F0;--text:#1a1a1a;--text2:#444;--text3:#666;color:var(--text);--red:#f00;--green:#0E8C0E;}
+body.light-mode .kpi-card{background:#fff;border-color:transparent;box-shadow:0 2px 12px rgba(0,0,0,.10);}
+body.light-mode .card-label{color:#1a1a1a;}
+body.light-mode .pac-card .card-label,body.light-mode .view-card .card-label{color:var(--orange-d);}
+body.light-mode .kpi-table th{background:#1A2335;color:#F1F5F9;}
+
+/* ── Mobile ── */
+@media(max-width:768px){
+  .header{padding:8px 12px 10px;}
+  .brand h1{font-size:14px;} .brand p{font-size:9px;}
+  .header-right{flex-direction:row;align-items:center;gap:4px;flex-wrap:wrap;justify-content:flex-end;}
+  .header-right .refresh-btn{display:none;}
+  .status-badge,.access-badge{font-size:8px;padding:2px 6px;}
+  .theme-btn{padding:3px 5px;} .theme-btn svg{width:13px;height:13px;}
+  .header-filters{gap:5px;margin-top:8px;}
+  .filter-group{flex:0 0 calc(50% - 3px);}
+  .ms-wrap{width:100%;}
+  .ms-btn{width:100%;min-width:0;font-size:8px;padding:3px 6px;gap:3px;}
+  .ms-btn svg{width:9px;height:9px;}
+  .filter-hint{display:none;}
+  .main{padding:12px;overflow-x:hidden;}
+  .tree-svg{display:none;}
+  .tree-wrap{transform:none!important;margin-bottom:0!important;width:100%;display:block;min-width:0;}
+  .tree{flex-direction:column;align-items:stretch;gap:12px;}
+  .pacotes,.contas,.views{margin-left:0;gap:8px;}
+  .pac-block,.conta-block{flex-direction:column;align-items:stretch;gap:8px;}
+  .kpi-card,.root-card,.pac-card,.conta-card,.view-card{width:100%;}
+}
+</style>
+<script>try{if(!sessionStorage.getItem("gem_hub"))location.replace("../");}catch(e){}</script>
+</head>
+<body>
+
+<script>
+// ═══════════════════════════════════════════════════════════════
+// Fontes — Google Sheets via gviz/tq (JSONP, sem Apps Script)
+//  · Custo por conta      → DRE aba "Frota"   (Visão Financeira)
+//  · Receita Líquida      → DRE aba "Receita Líquida"  (p/ AV)
+//  · KM Rodado + Frota Ativa → aba "Dispersão de km"   (Painel KM / Ativação)
+// Escopo: SÓ Transportes → exclui o projeto "Apoio" (armazém, sem km).
+// ═══════════════════════════════════════════════════════════════
+const VF_ID = '1qcTy2ppLCGBKKqZCxCYWCTL9kTAuWfHBMyBfWJOyih8'; // Frota + Receita Líquida
+const GV_ID = '1wCoRGsvOgmIvfLW4F9Sxr-5AX9Go-aFlRVjrQ_B2ilM'; // Dispersão de km (KM + Frota Ativa)
+
+// conta → pacote (mesmo critério da Visão Financeira)
+const PACOTES_MAP = {
+  'Combustíveis Veiculos e Equipamentos':'Combustíveis','Combustíveis':'Combustíveis',
+  'Estorno de ICMS não Aproveitado':'Combustíveis','Fluídos (Arla)':'Combustíveis',
+  'Arla':'Combustíveis','ICMS Crédito Presumido':'Combustíveis',
+  'Manutenção de Veículos e Equipamentos':'Manutenções','Manutenção de Veículos e Equip.':'Manutenções',
+  'Materiais e Ferramentas de Oficina':'Manutenções','Lavação de Veículos':'Manutenções',
+  'Manutenção de Carrocerias':'Manutenções','Personalização/Padronização de Veículos':'Manutenções',
+  'Personalização/Padronização':'Manutenções','Personalização e Padronização de Veículos':'Manutenções',
+  'Contratos de Manutenção Fabricante':'Manutenções','Consertos e Recapagens de Pneus':'Pneus',
+  'Pneus e Camaras':'Pneus','Recapagens e Outros Serviços':'Pneus','Pneus Novos':'Pneus',
+  'IPVA e Licenciamento de Veículos':'Seguros e licenças','IPVA e Licenciamento':'Seguros e licenças',
+  'Seguro de Veículos e Equipamentos':'Seguros e licenças','Seguros':'Seguros e licenças',
+};
+// ordem dos pacotes na árvore (topo → base)
+const PAC_ORDER = ['Seguros e licenças','Pneus','Manutenções','Combustíveis'];
+</script>
+
+<!-- ── Header ── -->
+<header class="header">
+  <div class="brand">
+    <h1>Árvore de Custo da Frota</h1>
+    <p>BI Frota — Gestão em Movimento · Transportes</p>
+  </div>
+  <div class="header-right">
+    <a href="../" class="back-btn" title="Voltar ao Hub"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg></a>
+    <button class="theme-btn" id="themeBtn" title="Modo claro/escuro"></button>
+    <button class="refresh-btn" onclick="atualizar()" title="Atualizar dados">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/></svg>
+    </button>
+    <span class="status-badge" id="status-badge">Carregando…</span>
+    <span class="access-badge" id="access-badge" style="display:none"></span>
+  </div>
+  <div class="header-filters">
+    <div class="filter-group"><div class="ms-wrap" id="ms-ano"><button class="ms-btn" onclick="toggleMs('ms-ano')"><span class="ms-lbl">Ano</span><span class="ms-cnt"></span><svg width="10" height="6" viewBox="0 0 10 6"><path d="M0 0l5 6 5-6z" fill="#F97316"/></svg></button><div class="ms-panel"><div class="ms-search"><svg width="12" height="12" viewBox="0 0 12 12"><circle cx="5" cy="5" r="4" stroke="#94A3B8" stroke-width="1.5" fill="none"/><line x1="8.5" y1="8.5" x2="11" y2="11" stroke="#94A3B8" stroke-width="1.5"/></svg><input type="text" placeholder="Digite para pesquisar…"></div><div class="ms-list"></div></div></div></div>
+    <div class="filter-group"><div class="ms-wrap" id="ms-vig"><button class="ms-btn" onclick="toggleMs('ms-vig')"><span class="ms-lbl">Vigência</span><span class="ms-cnt"></span><svg width="10" height="6" viewBox="0 0 10 6"><path d="M0 0l5 6 5-6z" fill="#F97316"/></svg></button><div class="ms-panel"><div class="ms-search"><svg width="12" height="12" viewBox="0 0 12 12"><circle cx="5" cy="5" r="4" stroke="#94A3B8" stroke-width="1.5" fill="none"/><line x1="8.5" y1="8.5" x2="11" y2="11" stroke="#94A3B8" stroke-width="1.5"/></svg><input type="text" placeholder="Digite para pesquisar…"></div><div class="ms-list"></div></div></div></div>
+    <div class="filter-group"><div class="ms-wrap" id="ms-uni"><button class="ms-btn" onclick="toggleMs('ms-uni')"><span class="ms-lbl">Unidade</span><span class="ms-cnt"></span><svg width="10" height="6" viewBox="0 0 10 6"><path d="M0 0l5 6 5-6z" fill="#F97316"/></svg></button><div class="ms-panel"><div class="ms-search"><svg width="12" height="12" viewBox="0 0 12 12"><circle cx="5" cy="5" r="4" stroke="#94A3B8" stroke-width="1.5" fill="none"/><line x1="8.5" y1="8.5" x2="11" y2="11" stroke="#94A3B8" stroke-width="1.5"/></svg><input type="text" placeholder="Digite para pesquisar…"></div><div class="ms-list"></div></div></div></div>
+    <div class="filter-group"><div class="ms-wrap" id="ms-nv3"><button class="ms-btn" onclick="toggleMs('ms-nv3')"><span class="ms-lbl">Projeto</span><span class="ms-cnt"></span><svg width="10" height="6" viewBox="0 0 10 6"><path d="M0 0l5 6 5-6z" fill="#F97316"/></svg></button><div class="ms-panel"><div class="ms-search"><svg width="12" height="12" viewBox="0 0 12 12"><circle cx="5" cy="5" r="4" stroke="#94A3B8" stroke-width="1.5" fill="none"/><line x1="8.5" y1="8.5" x2="11" y2="11" stroke="#94A3B8" stroke-width="1.5"/></svg><input type="text" placeholder="Digite para pesquisar…"></div><div class="ms-list"></div></div></div></div>
+    <span class="filter-hint">Somente Transportes (exclui o projeto Apoio). R$/km, R$/Frota Ativa e AV usam km, frota ativa e receita do filtro.</span>
+  </div>
+</header>
+
+<!-- ── Main ── -->
+<div class="main">
+  <div class="warn-bar" id="warnBar"><span id="warnMsg">⚠ Erro ao carregar dados.</span><button onclick="atualizar()">Tentar novamente ↺</button></div>
+  <div class="tree-wrap" id="treeWrap">
+    <svg class="tree-svg" id="treeSvg"></svg>
+    <div class="tree" id="tree"></div>
+  </div>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════
+// Helpers
+// ═══════════════════════════════════════════════
+const id  = s => document.getElementById(s);
+const el  = s => document.getElementById(s);
+const set = (s,v)=>{ const e=id(s); if(e) e.textContent=v; };
+const f2  = v => (+v).toFixed(2);
+const pct = (d,b) => Math.round(Math.abs(d/(b||1))*100)+'%';
+const fmt = v => { const neg=+v<0, a=Math.abs(+v); let s; if(a>=1e6)s=(a/1e6).toFixed(2)+' mi'; else if(a>=1e5)s=(a/1e3).toFixed(1)+'k'; else s=Math.round(a).toLocaleString('pt-BR'); return (neg?'-':'')+s; };
+const fmtInt = v => { const a=Math.round(Math.abs(+v)); return (+v<0?'-':'')+(a>=1e6?(a/1e6).toFixed(1)+' mi':a.toLocaleString('pt-BR')); };
+const money  = v => { const a=Math.abs(+v); return (+v<0?'-':'')+(a>=1e6?(a/1e6).toFixed(2)+' mi':a>=1e4?(a/1e3).toFixed(1)+'k':Math.round(a).toLocaleString('pt-BR')); };
+
+// ── normalização + vigência ──
+const _nk = s => String(s||'').toUpperCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/\s+/g,' ').trim();
+const getNv3Prefix = v => v ? String(v).split('-')[0].trim() : v;
+const getNv3Suffix = v => { const x=String(v||''); const s=x.includes('-')?x.split('-').slice(1).join('-').trim():x.trim(); return s.replace(/\s*\(INATIVO\)\s*/i,'').trim(); };
+const isApoio = n3 => _nk(getNv3Prefix(n3))==='APOIO';
+const vigBR = d => `${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()}`;
+const _KMMAP={jan:0,fev:1,mar:2,abr:3,mai:4,jun:5,jul:6,ago:7,set:8,out:9,nov:10,dez:11};
+function kParseVig(v){
+  if(!v)return null;
+  if(v instanceof Date)return new Date(v.getFullYear(),v.getMonth(),1);
+  if(typeof v==='string'){
+    const g=v.match(/^Date\((\d+),(\d+)/);if(g)return new Date(+g[1],+g[2],1);
+    const m1=v.match(/^([a-záéíóúâêôãõç]+)\.?\/(\d{4})$/i);if(m1){const mo=_KMMAP[m1[1].toLowerCase().slice(0,3)];if(mo!==undefined)return new Date(+m1[2],mo,1);}
+    const m2=v.match(/^(\d{1,2})\/(\d{4})$/);if(m2)return new Date(+m2[2],+m2[1]-1,1);
+  }
+  if(typeof v==='number'){const d=new Date(1899,11,30);d.setDate(d.getDate()+Math.round(v));return new Date(d.getFullYear(),d.getMonth(),1);}
+  return null;
+}
+
+// ═══════════════════════════════════════════════
+// FETCH (gviz JSONP)
+// ═══════════════════════════════════════════════
+let _gkSeq=0;
+function gvFetchSheet(sid,tab){
+  return new Promise((resolve,reject)=>{
+    const fn='_gk'+Date.now()+'_'+(_gkSeq++);
+    const s=document.createElement('script');
+    const clean=()=>{try{delete window[fn];s.remove();}catch(e){}};
+    window[fn]=resp=>{clean();try{
+      if(resp.status!=='ok')throw new Error(resp.errors?.[0]?.message||'Erro gviz');
+      let cols=resp.table.cols.map(c=>c.label||c.id);
+      let rows=resp.table.rows.map(r=>(r.c||[]).map(c=>c?.v??null));
+      if(cols.every(c=>!c||/^[A-Z]{1,2}$/.test(c))&&rows.length){ cols=rows[0].map(v=>String(v==null?'':v)); rows=rows.slice(1); }
+      resolve({cols,rows});
+    }catch(e){reject(e);}};
+    s.onerror=()=>reject(new Error(`Sem acesso à aba "${tab}". Verifique se está logado no Google.`));
+    s.src=`https://docs.google.com/spreadsheets/d/${sid}/gviz/tq?sheet=${encodeURIComponent(tab)}&tqx=out:json;responseHandler:${fn}`;
+    document.head.appendChild(s);
+  });
+}
+const _fi = cols => (...t)=>{ for(let i=0;i<cols.length;i++){ const lc=String(cols[i]||'').toLowerCase(); if(t.some(x=>lc.includes(x)))return i; } return -1; };
+const _fb = (i,d)=>i>=0?i:d;
+function detFrota(cols){ const fi=_fi(cols); return {vig:0,rem:_fb(fi('remunerado'),1),real:_fb(fi('realizado'),2),cta:_fb(fi('conta gerencial','conta'),12),n3:_fb(fi('nível 3','nivel 3'),11)}; }
+function detRec(cols){ const fi=_fi(cols); return {vig:0,rem:_fb(fi('remunerado'),1),real:_fb(fi('realizado'),2),n3:_fb(fi('nível 3','nivel 3'),11)}; }
+// Frota Ativa = contagem (col 21, igual ao painel Ativação). Evita a col "Km/Frota Ativa Rem." (razão).
+function _detAtiva(cols){ for(let i=0;i<cols.length;i++){ const lc=String(cols[i]||'').toLowerCase(); if(lc.includes('frota ativa')&&!lc.includes('km')&&!lc.includes('/')&&!lc.includes('%')) return i; } return 21; }
+function detDisp(cols){ const fi=_fi(cols); return {vig:0,proj:_fb(fi('proj.','projeto'),14),kmRem:_fb(fi('km rem. tt'),31),kmReal:_fb(fi('km rodado tt'),32),ativa:_detAtiva(cols)}; }
+
+let FR=null,RE=null,DP=null, S_FR=[],S_RE=[],S_DP=[], allRows=[];
+
+// ═══════════════════════════════════════════════
+// FILTROS
+// ═══════════════════════════════════════════════
+function getMsValues(i){ const w=id(i); return w&&w._sel?[...w._sel]:[]; }
+function getFilters(){ return {ano:getMsValues('ms-ano'),vigencia:getMsValues('ms-vig'),unidade:getMsValues('ms-uni'),nivel3:getMsValues('ms-nv3')}; }
+function _match(f,vigStr,n3){
+  if(isApoio(n3)) return false;                                            // só Transportes
+  if(f.ano.length      && !f.ano.includes(vigStr.slice(-4)))       return false;
+  if(f.vigencia.length && !f.vigencia.includes(vigStr))           return false;
+  if(f.unidade.length  && !f.unidade.includes(getNv3Suffix(n3)))  return false;
+  if(f.nivel3.length   && !f.nivel3.includes(getNv3Prefix(n3)))   return false;
+  return true;
+}
+
+// ── multi-select UI ──
+function _buildMs(wrap,renderFn,getAll){
+  if(!(wrap._sel instanceof Set))wrap._sel=new Set();
+  const sel=wrap._sel,list=wrap.querySelector('.ms-list'),srch=wrap.querySelector('.ms-search input');
+  const render=q=>{ renderFn(list,sel,q!==undefined?q:(srch.value||'')); syncBadge(wrap); };
+  wrap._render=render;
+  if(!wrap._wired){ wrap._wired=true;
+    list.addEventListener('change',e=>{ const box=e.target;
+      if(box.classList.contains('ms-all')){ sel.clear(); }
+      else if(sel.size===0){ if(!box.checked){ const all=getAll?getAll():[]; all.forEach(v=>{ if(v!==box.dataset.v)sel.add(v);}); } }
+      else { box.checked?sel.add(box.dataset.v):sel.delete(box.dataset.v); if(getAll){ const all=getAll(); if(all.length>0&&all.every(v=>sel.has(v)))sel.clear(); } }
+      render(srch.value); onFilterChange(); });
+    list.addEventListener('click',e=>{ const only=e.target.closest('.ms-only'); if(!only)return; e.preventDefault(); e.stopPropagation(); sel.clear(); sel.add(only.dataset.v); render(srch.value); onFilterChange(); });
+    srch.addEventListener('input',()=>render(srch.value));
+    srch.addEventListener('click',e=>e.stopPropagation());
+  }
+  render();
+}
+function buildMsFilter(i,items){ const wrap=id(i); if(!wrap)return; wrap._items=items;
+  _buildMs(wrap,(list,sel,q)=>{ const it=wrap._items||[],f=q.toLowerCase(),shown=it.filter(v=>v.toLowerCase().includes(f)),allChk=sel.size===0;
+    list.innerHTML=(!q?`<label class="ms-opt all-opt"><input type="checkbox" class="ms-all" ${allChk?'checked':''}> Todos</label>`:'')+shown.map(v=>`<label class="ms-opt"><input type="checkbox" data-v="${v}" ${allChk||sel.has(v)?'checked':''}> ${v}<span class="ms-only" data-v="${v}">only</span></label>`).join('');
+  },()=>wrap._items||[]);
+}
+function setMsOptions(i,items){ const wrap=id(i); if(!wrap)return; wrap._items=items; if(wrap._sel&&wrap._sel.size){ [...wrap._sel].forEach(v=>{ if(!items.includes(v))wrap._sel.delete(v); }); } if(wrap._render)wrap._render(); }
+function buildVigMsFilter(items){ const wrap=id('ms-vig'); if(!wrap)return; if(!(wrap._sel instanceof Set)){ wrap._sel=new Set(); if(items.length)wrap._sel.add(items[items.length-1]); } buildMsFilter('ms-vig',items); }
+function syncBadge(wrap){ const cnt=wrap.querySelector('.ms-cnt'),n=wrap._sel?wrap._sel.size:0; if(cnt){cnt.textContent=n;cnt.style.display=n?'':'none';} }
+function toggleMs(i){ document.querySelectorAll('.ms-panel.open').forEach(p=>{ if(p.closest('.ms-wrap').id!==i)p.classList.remove('open'); }); const panel=document.querySelector(`#${i} .ms-panel`); panel.classList.toggle('open'); if(panel.classList.contains('open')){ const inp=panel.querySelector('input[type=text]'); if(inp)setTimeout(()=>inp.focus(),50); } }
+document.addEventListener('click',e=>{ if(!e.target.closest('.ms-wrap'))document.querySelectorAll('.ms-panel.open').forEach(p=>p.classList.remove('open')); });
+
+function rowPassesExcept(r,f,except){
+  if(isApoio(r.nivel3)) return false;
+  if(except!=='ano'      && f.ano.length      && !f.ano.includes(String(r.vigencia).slice(-4)))       return false;
+  if(except!=='vigencia' && f.vigencia.length && !f.vigencia.includes(String(r.vigencia)))            return false;
+  if(except!=='unidade'  && f.unidade.length  && !f.unidade.includes(getNv3Suffix(String(r.nivel3)))) return false;
+  if(except!=='nivel3'   && f.nivel3.length   && !f.nivel3.includes(getNv3Prefix(String(r.nivel3))))  return false;
+  return true;
+}
+let _cascVigKey='';
+function refreshCascade(){
+  const f=getFilters();
+  const anos=[...new Set(allRows.filter(r=>rowPassesExcept(r,f,'ano')).map(r=>String(r.vigencia).slice(-4)).filter(Boolean))].sort().reverse();
+  setMsOptions('ms-ano',anos);
+  const unis=[...new Set(allRows.filter(r=>rowPassesExcept(r,f,'unidade')).map(r=>getNv3Suffix(String(r.nivel3))).filter(Boolean))].sort();
+  setMsOptions('ms-uni',unis);
+  const nv3s=[...new Set(allRows.filter(r=>rowPassesExcept(r,f,'nivel3')).map(r=>getNv3Prefix(String(r.nivel3))).filter(Boolean))].sort();
+  setMsOptions('ms-nv3',nv3s);
+  const vigs=[...new Set(allRows.filter(r=>rowPassesExcept(r,f,'vigencia')).map(r=>String(r.vigencia)).filter(Boolean))].sort((a,b)=>{const[ma,ya]=a.split('/'),[mb,yb]=b.split('/');return(ya-yb)||(ma-mb);});
+  const vkey=vigs.join(','); if(vkey!==_cascVigKey){ _cascVigKey=vkey; setMsOptions('ms-vig',vigs); }
+}
+function onFilterChange(){ refreshCascade(); if(allRows.length){ renderTree(compute(getFilters())); setTimeout(fitAndDraw,60); } }
+
+// ═══════════════════════════════════════════════
+// COMPUTE
+// ═══════════════════════════════════════════════
+function compute(f){
+  // custo por conta
+  const contas={};
+  for(const r of S_FR){
+    const cta=String(r[FR.cta]||''); if(!cta||cta==='Receita Líquida')continue;
+    const pac=PACOTES_MAP[cta]; if(!pac)continue;
+    const d=kParseVig(r[FR.vig]); if(!d)continue;
+    if(!_match(f,vigBR(d),String(r[FR.n3]||'')))continue;
+    if(!contas[cta])contas[cta]={nome:cta,pac,rem:0,real:0};
+    contas[cta].rem+=+r[FR.rem]||0; contas[cta].real+=+r[FR.real]||0;
+  }
+  // receita (p/ AV)
+  let recRem=0,recReal=0;
+  for(const r of S_RE){ const d=kParseVig(r[RE.vig]); if(!d)continue; if(!_match(f,vigBR(d),String(r[RE.n3]||'')))continue; recRem+=+r[RE.rem]||0; recReal+=+r[RE.real]||0; }
+  // km + frota ativa (p/ R$/km e R$/frota ativa)
+  let kmRem=0,kmReal=0,ativa=0;
+  for(const r of S_DP){ const d=kParseVig(r[DP.vig]); if(!d)continue; if(!_match(f,vigBR(d),String(r[DP.proj]||'')))continue; kmRem+=+r[DP.kmRem]||0; kmReal+=+r[DP.kmReal]||0; ativa+=+r[DP.ativa]||0; }
+  // pacotes
+  const pacotes=[];
+  for(const pn of PAC_ORDER){
+    const cs=Object.values(contas).filter(c=>c.pac===pn && (c.rem||c.real)).sort((a,b)=>Math.abs(b.real)-Math.abs(a.real));
+    if(!cs.length)continue;
+    const rem=cs.reduce((a,c)=>a+c.rem,0), real=cs.reduce((a,c)=>a+c.real,0);
+    pacotes.push({nome:pn,rem,real,contas:cs});
+  }
+  const totRem=pacotes.reduce((a,p)=>a+p.rem,0), totReal=pacotes.reduce((a,p)=>a+p.real,0);
+  return {pacotes,totRem,totReal,recRem,recReal,kmRem,kmReal,ativa};
+}
+
+// ═══════════════════════════════════════════════
+// RENDER
+// ═══════════════════════════════════════════════
+function cardHTML(cid,cls,label,heads,cells){
+  return `<div class="kpi-card ${cls||''}" id="${cid}"><div class="card-label" title="${label}">${label}</div>
+    <table class="kpi-table"><thead><tr>${heads.map(h=>`<th>${h}</th>`).join('')}</tr></thead>
+    <tbody><tr>${cells.map(c=>`<td class="${c.cls||''}">${c.v}</td>`).join('')}</tr></tbody></table></div>`;
+}
+// custo (Rem/Real/Δ/Δ%) — ruim se |real|>|rem|
+function costCells(rem,real){ const d=real-rem, bad=Math.abs(real)>Math.abs(rem);
+  return [{v:fmt(rem)},{v:fmt(real)},{v:fmt(Math.abs(d)),cls:bad?'cr':'cg'},{v:pct(d,rem),cls:bad?'cr-t':'cg-t'}]; }
+// receita — ruim se real<rem
+function recCells(rem,real){ const d=real-rem, bad=real<rem;
+  return [{v:fmt(rem)},{v:fmt(real)},{v:fmt(Math.abs(d)),cls:bad?'cr':'cg'},{v:pct(d,rem),cls:bad?'cr-t':'cg-t'}]; }
+// km — ruim se rodou mais (real>rem)
+function kmCells(rem,real){ const d=real-rem, bad=Math.abs(real)>Math.abs(rem);
+  return [{v:fmt(rem)},{v:fmt(real)},{v:fmt(Math.abs(d)),cls:bad?'cr':'cg'},{v:pct(d,rem),cls:bad?'cr-t':'cg-t'}]; }
+// razão (R$/km, R$/frota ativa) — ruim se |real|>|rem|
+function ratioCells(rem,real,ff){
+  if(!isFinite(rem)||!isFinite(real))return [{v:'—'},{v:'—'},{v:'—'},{v:'—'}];
+  const ar=Math.abs(rem),arl=Math.abs(real),d=arl-ar,bad=d>0;
+  return [{v:ff(ar)},{v:ff(arl)},{v:ff(Math.abs(d)),cls:bad?'cr':'cg'},{v:pct(d,ar),cls:bad?'cr-t':'cg-t'}]; }
+// AV (custo ÷ receita) — Rem%/Real%/Δpp — ruim se consome mais receita
+function avCells(rem,real,recRem,recReal){
+  if(!recRem||!recReal)return [{v:'—'},{v:'—'},{v:'—'}];
+  const ar=Math.abs(rem/recRem),arl=Math.abs(real/recReal),d=arl-ar,bad=d>0,p=x=>(x*100).toFixed(1)+'%';
+  return [{v:p(ar)},{v:p(arl)},{v:(d>=0?'+':'-')+(Math.abs(d)*100).toFixed(1)+' pp',cls:bad?'cr-t':'cg-t'}]; }
+
+let LINKS={root:[],pac:{},conta:{}};   // p/ conectores
+
+function renderTree(D){
+  LINKS={root:[],pac:{},conta:{}};
+  const H4=['Rem','Real','Δ','Δ%'];
+
+  // ── raiz (coluna esquerda) ──
+  let rootHTML=
+    cardHTML('c-total','root-card root-total','Custo Pacote Frota',H4,costCells(D.totRem,D.totReal))+
+    cardHTML('c-rec','root-card','Receita Líquida',H4,recCells(D.recRem,D.recReal))+
+    cardHTML('c-km','root-card','Km Rodado',H4,kmCells(D.kmRem,D.kmReal))+
+    `<div class="kpi-card root-card" id="c-ativa"><div class="card-label">Frota Ativa</div><table class="kpi-table single"><thead><tr><th>Ativa</th></tr></thead><tbody><tr><td>${D.ativa?fmtInt(D.ativa):'—'}</td></tr></tbody></table></div>`;
+
+  // ── pacotes → contas → 3 visões ──
+  let pacHTML='';
+  D.pacotes.forEach((p,pi)=>{
+    const pid='pac-'+pi; LINKS.root.push(pid); LINKS.pac[pid]=[];
+    let contasHTML='';
+    p.contas.forEach((c,ci)=>{
+      const cid=`conta-${pi}-${ci}`; LINKS.pac[pid].push(cid); LINKS.conta[cid]=[];
+      const vk=`view-${pi}-${ci}-`;
+      const vKm=vk+'km', vAt=vk+'at', vAv=vk+'av';
+      LINKS.conta[cid].push(vKm,vAt,vAv);
+      const viewsHTML=
+        cardHTML(vKm,'view-card','R$/km',H4,ratioCells(D.kmRem?c.rem/D.kmRem:NaN, D.kmReal?c.real/D.kmReal:NaN, f2))+
+        cardHTML(vAt,'view-card','R$/Frota Ativa',H4,ratioCells(D.ativa?c.rem/D.ativa:NaN, D.ativa?c.real/D.ativa:NaN, money))+
+        cardHTML(vAv,'view-card','AV s/ Receita',['Rem','Real','Δ pp'],avCells(c.rem,c.real,D.recRem,D.recReal));
+      contasHTML+=`<div class="conta-block">${cardHTML(cid,'conta-card',c.nome,H4,costCells(c.rem,c.real))}<div class="views">${viewsHTML}</div></div>`;
+    });
+    pacHTML+=`<div class="pac-block">${cardHTML(pid,'pac-card',p.nome,H4,costCells(p.rem,p.real))}<div class="contas">${contasHTML}</div></div>`;
+  });
+
+  id('tree').innerHTML=`<div class="root-col">${rootHTML}</div><div class="pacotes">${pacHTML}</div>`;
+}
+
+// ═══════════════════════════════════════════════
+// CONECTORES (SVG)
+// ═══════════════════════════════════════════════
+function drawConnectors(){
+  const svg=id('treeSvg'),wrap=id('treeWrap'); if(!svg||!wrap)return;
+  const wr=wrap.getBoundingClientRect(); const C='#334155',O='#F97316';
+  const pt=(eid,side)=>{ const e=el(eid); if(!e)return null; const r=e.getBoundingClientRect(); return {x:(side==='r'?r.right:r.left)-wr.left,y:(r.top+r.bottom)/2-wr.top}; };
+  const f=n=>n.toFixed(1);
+  const ln=(x1,y1,x2,y2,col)=>`<line x1="${f(x1)}" y1="${f(y1)}" x2="${f(x2)}" y2="${f(y2)}" stroke="${col||C}" stroke-width="1.6" stroke-linecap="round"/>`;
+  const head=(x,y,col)=>`<polygon points="${f(x-6)},${f(y-3.5)} ${f(x)},${f(y)} ${f(x-6)},${f(y+3.5)}" fill="${col||C}"/>`;
+  function bracket(fromId,toIds,col){
+    const a=pt(fromId,'r'); if(!a)return '';
+    const tos=toIds.map(i=>pt(i,'l')).filter(Boolean); if(!tos.length)return '';
+    const minX=Math.min(...tos.map(t=>t.x)), midX=(a.x+minX)/2;
+    const ys=tos.map(t=>t.y).concat(a.y), y1=Math.min(...ys), y2=Math.max(...ys);
+    let s=ln(a.x,a.y,midX,a.y,col)+ln(midX,y1,midX,y2,col);
+    tos.forEach(t=>{ s+=ln(midX,t.y,t.x-5,t.y,col)+head(t.x,t.y,col); });
+    return s;
+  }
+  let out=bracket('c-total',LINKS.root,O);
+  LINKS.root.forEach(pid=>{ out+=bracket(pid,LINKS.pac[pid]||[],C); });
+  Object.keys(LINKS.conta).forEach(cid=>{ out+=bracket(cid,LINKS.conta[cid]||[],C); });
+  svg.innerHTML=out;
+}
+function fitTree(){
+  const wrap=id('treeWrap'),main=wrap.closest('.main')||wrap.parentElement;
+  wrap.style.transform=''; wrap.style.marginBottom='';
+  const treeW=wrap.scrollWidth, availW=main.clientWidth-28;
+  if(treeW>availW){ const sc=availW/treeW; wrap.style.transformOrigin='top left'; wrap.style.transform='scale('+sc+')'; wrap.style.marginBottom='-'+Math.round(wrap.scrollHeight*(1-sc))+'px'; }
+}
+function fitAndDraw(){ const wrap=id('treeWrap'); wrap.style.transform=''; wrap.style.marginBottom=''; drawConnectors(); fitTree(); }
+window.addEventListener('resize',fitAndDraw);
+
+// ═══════════════════════════════════════════════
+// FETCH ALL + INIT
+// ═══════════════════════════════════════════════
+async function fetchAll(){
+  const [fr,re,dp]=await Promise.all([
+    gvFetchSheet(VF_ID,'Frota'),
+    gvFetchSheet(VF_ID,'Receita Líquida'),
+    gvFetchSheet(GV_ID,'Dispersão de km'),
+  ]);
+  FR=detFrota(fr.cols); S_FR=fr.rows;
+  RE=detRec(re.cols);   S_RE=re.rows;
+  DP=detDisp(dp.cols);  S_DP=dp.rows;
+
+  const seen=new Set(); allRows=[];
+  const add=(vig,n3)=>{ if(!vig||!n3||isApoio(n3))return; const k=vig+'|'+n3; if(seen.has(k))return; seen.add(k); allRows.push({vigencia:vig,nivel3:n3}); };
+  S_FR.forEach(r=>{ const cta=String(r[FR.cta]||''); if(!PACOTES_MAP[cta])return; if((+r[FR.real]||0)===0&&(+r[FR.rem]||0)===0)return; const d=kParseVig(r[FR.vig]); if(d)add(vigBR(d),String(r[FR.n3]||'')); });
+  S_DP.forEach(r=>{ if((+r[DP.kmReal]||0)===0&&(+r[DP.kmRem]||0)===0&&(+r[DP.ativa]||0)===0)return; const d=kParseVig(r[DP.vig]); if(d)add(vigBR(d),String(r[DP.proj]||'')); });
+
+  const vigs=[...new Set(allRows.map(r=>r.vigencia))].sort((a,b)=>{const[ma,ya]=a.split('/'),[mb,yb]=b.split('/');return(ya-yb)||(ma-mb);});
+  const anos=[...new Set(allRows.map(r=>r.vigencia.slice(-4)))].sort().reverse();
+  const unis=[...new Set(allRows.map(r=>getNv3Suffix(r.nivel3)).filter(Boolean))].sort();
+  const nv3s=[...new Set(allRows.map(r=>getNv3Prefix(r.nivel3)).filter(Boolean))].sort();
+  buildMsFilter('ms-ano',anos); buildVigMsFilter(vigs); buildMsFilter('ms-uni',unis); buildMsFilter('ms-nv3',nv3s);
+  refreshCascade();
+}
+
+const CACHE_TTL=60*60*1000;
+async function atualizar(){
+  const warn=id('warnBar'); set('status-badge','Carregando…');
+  try{
+    await fetchAll();
+    renderTree(compute(getFilters()));
+    const now=new Date();
+    set('status-badge',`Atualizado ${now.toLocaleDateString('pt-BR')} ${now.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})}`);
+    if(warn)warn.classList.remove('show');
+    setTimeout(fitAndDraw,60);
+  }catch(err){
+    console.error(err);
+    if(warn){ warn.classList.add('show'); id('warnMsg').textContent='⚠ '+err.message; }
+    set('status-badge','Erro ao carregar dados');
+  }
+}
+
+function initAccessLog(){
+  let name=localStorage.getItem('bi_user_name');
+  if(!name){name=prompt('Qual é o seu nome?')||'Desconhecido';localStorage.setItem('bi_user_name',name);}
+  const lastRaw=localStorage.getItem('bi_last_access');
+  if(lastRaw){ const d=new Date(lastRaw),lastUser=localStorage.getItem('bi_last_user')||name,badge=id('access-badge');
+    if(badge){ badge.textContent=`Último acesso: ${d.toLocaleDateString('pt-BR')} ${d.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})} · ${lastUser}`; badge.style.display=''; } }
+  localStorage.setItem('bi_last_access',new Date().toISOString()); localStorage.setItem('bi_last_user',name);
+}
+
+// theme
+const _sun=`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>`;
+const _moon=`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>`;
+function applyTheme(t){ document.body.classList.toggle('light-mode',t==='light'); localStorage.setItem('bi_theme',t); const b=id('themeBtn'); if(b)b.innerHTML=t==='light'?_moon:_sun; setTimeout(fitAndDraw,40); }
+(function(){ const t=localStorage.getItem('bi_theme')||'dark'; applyTheme(t); id('themeBtn').addEventListener('click',()=>applyTheme(document.body.classList.contains('light-mode')?'dark':'light')); })();
+
+window.addEventListener('load',()=>{ initAccessLog(); atualizar(); });
+setInterval(atualizar,CACHE_TTL);
+</script>
+<script>(function(){function go(){try{initPdfExport();}catch(e){console.error(e);}}if(document.readyState!=='loading')go();else document.addEventListener('DOMContentLoaded',go);})();</script>
+<script src="../assets/filters-toggle.js"></script>
+</body>
+</html>
