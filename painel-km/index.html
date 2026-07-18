@@ -167,7 +167,7 @@ body.light-mode .drill-tab.active{background:rgba(217,94,8,.1);border-color:rgba
 .chart-leg .leg-sq{display:inline-block;width:10px;height:10px;border:1.5px solid var(--text2);border-radius:1px;vertical-align:middle;margin-right:3px;}
 .evo-deltas{margin-top:8px;display:flex;flex-direction:column;gap:3px;}
 .evo-deltas .drow{display:flex;align-items:center;gap:6px;}
-.evo-deltas .dlbl{flex:0 0 30px;font-size:10px;font-weight:800;color:var(--text2);white-space:nowrap;}
+.evo-deltas .dlbl{flex:0 0 46px;font-size:10px;font-weight:800;color:var(--text2);white-space:nowrap;}
 .evo-deltas .dcells{flex:1;display:grid;grid-template-columns:repeat(12,1fr);padding-right:6px;}
 .evo-deltas .cell{text-align:center;font-size:11px;font-weight:700;}
 
@@ -245,7 +245,7 @@ body.light-mode tbody tr{border-bottom:1px solid rgba(0,0,0,.06);}
   .chart-sub{font-size:9px;margin-bottom:10px;}
   .chart-leg{gap:8px;margin-bottom:8px;}
   .chart-leg span{font-size:9px;}
-  .evo-deltas .dlbl{flex-basis:18px;font-size:7px;}
+  .evo-deltas .dlbl{flex-basis:30px;font-size:7px;}
   .evo-deltas .cell{font-size:7px;}
   .chart-wrap{height:220px;}
   .chart-wrap-tall{height:220px;}
@@ -977,7 +977,7 @@ function renderCharts(F) {
     },
     options:{
       responsive:true, maintainAspectRatio:false,
-      layout:{padding:{top:26, left:30, right:6}},
+      layout:{padding:{top:24, right:6}},
       plugins:{
         legend:{display:false},
         tooltip:{...tooltip, callbacks:{label:function(c){return c.dataset.label + ': ' + fmt(c.parsed.y);}}},
@@ -995,7 +995,8 @@ function renderCharts(F) {
       },
       scales:{
         x:{grid, ticks:tick},
-        y:{display:false, beginAtZero:true, grace:'16%'}
+        y:{display:true, grid:{display:false}, beginAtZero:true, grace:'12%',
+           ticks:{...tickY, maxTicksLimit:5, callback:function(v){return numFmt(v);}}}
       }
     }
   });
@@ -1007,8 +1008,8 @@ function renderCharts(F) {
     var dkm = MONTHS.map(function(_, i){ var m=i+1; return mData[m].cnt>0 ? (mData[m].real - mData[m].rem) : null; });
     var cellK = MONTHS.map(function(_, i){ var v=dkm[i]; if(v==null) return '<span class="cell"></span>'; return '<span class="cell '+(v>0?'cr':'cg')+'">'+kInt(v)+'</span>'; }).join('');
     var cellP = MONTHS.map(function(_, i){ var v=deltaPctLine[i]; if(v==null) return '<span class="cell"></span>'; return '<span class="cell '+(v>0?'cr':'cg')+'">'+(v>=0?'+':'')+v.toFixed(1)+'%</span>'; }).join('');
-    el.innerHTML = '<div class="drow"><span class="dlbl">▲ Km</span><div class="dcells">'+cellK+'</div></div>'+
-                   '<div class="drow"><span class="dlbl">▲ %</span><div class="dcells">'+cellP+'</div></div>';
+    el.innerHTML = '<div class="drow"><span class="dlbl">Δ Rem</span><div class="dcells">'+cellK+'</div></div>'+
+                   '<div class="drow"><span class="dlbl">Δ Rem %</span><div class="dcells">'+cellP+'</div></div>';
   })();
 
   const impData = MONTHS.map(function(_, i) {
