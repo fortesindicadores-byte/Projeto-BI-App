@@ -380,8 +380,8 @@ function ratioCells(rem,real,ff){
 // AV (custo ÷ receita) — Rem%/Real%/Δpp — ruim se consome mais receita
 function avCells(rem,real,recRem,recReal){
   if(!recRem||!recReal)return [{v:'—'},{v:'—'},{v:'—'}];
-  const ar=Math.abs(rem/recRem),arl=Math.abs(real/recReal),d=arl-ar,bad=d>0,p=x=>(x*100).toFixed(1)+'%';
-  return [{v:p(ar)},{v:p(arl)},{v:(d>=0?'+':'-')+(Math.abs(d)*100).toFixed(1)+' pp',cls:bad?'cr-t':'cg-t'}]; }
+  const ar=Math.abs(rem/recRem),arl=Math.abs(real/recReal),d=arl-ar,bad=d>0,p=x=>(x*100).toFixed(2)+'%';
+  return [{v:p(ar)},{v:p(arl)},{v:(d>=0?'+':'-')+(Math.abs(d)*100).toFixed(2)+' pp',cls:bad?'cr-t':'cg-t'}]; }
 
 let LINKS={root:[],pac:{},conta:{}};   // p/ conectores
 
@@ -433,13 +433,14 @@ function drawConnectors(){
   function bracket(fromId,toIds,col){
     const a=pt(fromId,'r'); if(!a)return '';
     const tos=toIds.map(i=>pt(i,'l')).filter(Boolean); if(!tos.length)return '';
-    const minX=Math.min(...tos.map(t=>t.x)), midX=(a.x+minX)/2;
+    // dobra perto dos filhos (sai reto do pai e só desce junto ao destino)
+    const minX=Math.min(...tos.map(t=>t.x)), midX=Math.max(a.x+14,minX-24);
     const ys=tos.map(t=>t.y).concat(a.y), y1=Math.min(...ys), y2=Math.max(...ys);
     let s=ln(a.x,a.y,midX,a.y,col)+ln(midX,y1,midX,y2,col);
     tos.forEach(t=>{ s+=ln(midX,t.y,t.x-5,t.y,col)+head(t.x,t.y,col); });
     return s;
   }
-  let out=bracket('c-total',LINKS.root,O);
+  let out=bracket('c-total',LINKS.root,C);
   LINKS.root.forEach(pid=>{ out+=bracket(pid,LINKS.pac[pid]||[],C); });
   Object.keys(LINKS.conta).forEach(cid=>{ out+=bracket(cid,LINKS.conta[cid]||[],C); });
   svg.innerHTML=out;
