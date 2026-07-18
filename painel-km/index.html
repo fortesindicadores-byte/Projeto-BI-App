@@ -369,16 +369,6 @@ body.light-mode tbody tr{border-bottom:1px solid rgba(0,0,0,.06);}
     </div>
   </div>
 
-  <!-- Km Rem vs Km Real (full width, no topo) -->
-  <div class="chart-card chart-card-full">
-    <div class="chart-title">Km Rem vs Km Real</div>
-    <div class="chart-leg">
-      <span><i class="leg-sq"></i>Km Rodado</span>
-      <span><i class="leg-dash"></i>Km Rem</span>
-    </div>
-    <div class="chart-wrap chart-wrap-tall"><canvas id="chart-kmrem"></canvas></div>
-  </div>
-
   <!-- Gráficos linha 1: Evolução KM + Impacto Financeiro -->
   <div class="charts-grid">
     <div class="chart-card">
@@ -465,7 +455,7 @@ const SHEET_ID  = '1wCoRGsvOgmIvfLW4F9Sxr-5AX9Go-aFlRVjrQ_B2ilM';
 const SHEET_TAB = 'Dispersão de km';
 
 let ALL = [];
-let chEvo = null, chImp = null, chKmFrota = null, chKmViagem = null, chProjKm = null, chProjPct = null, chKmRem = null;
+let chEvo = null, chImp = null, chKmFrota = null, chKmViagem = null, chProjKm = null, chProjPct = null;
 let drillKM = 'und', _lastTableArgs = null;
 
 function setDrillKM(v) {
@@ -887,7 +877,6 @@ function renderCharts(F) {
   if(chKmViagem) { chKmViagem.destroy(); chKmViagem = null; }
   if(chProjKm)   { chProjKm.destroy();   chProjKm   = null; }
   if(chProjPct)  { chProjPct.destroy();  chProjPct  = null; }
-  if(chKmRem)    { chKmRem.destroy();    chKmRem    = null; }
   if(!F.length) return;
 
   const isLight  = document.body.classList.contains('light-mode');
@@ -1006,60 +995,15 @@ function renderCharts(F) {
     }
   });
 
-  // ── Km Rem vs Km Real (full width, topo): barras Km Rodado + linha Km Rem ──
-  var kmRemBg = MONTHS.map(function(_, i) {
-    var m = i + 1;
-    if(mData[m].cnt === 0) return 'transparent';
-    var red = mData[m].real > mData[m].rem;
-    var a = hasFocusEvo ? (hiMonths.has(m) ? '.85' : '.2') : '.65';
-    return red ? 'rgba(255,102,102,' + a + ')' : 'rgba(59,179,59,' + a + ')';
-  });
-  var kmRemBc = MONTHS.map(function(_, i) {
-    var m = i + 1;
-    if(mData[m].cnt === 0) return 'transparent';
-    return mData[m].real > mData[m].rem ? '#FF6666' : '#3BB33B';
-  });
-  chKmRem = new Chart(document.getElementById('chart-kmrem').getContext('2d'), {
-    type:'bar',
-    data:{
-      labels: MONTHS,
-      datasets:[
-        {
-          type:'bar', label:'Km Rodado', data:realLine,
-          backgroundColor:kmRemBg, borderColor:kmRemBc, borderWidth:1, borderRadius:3, order:2
-        },
-        {
-          type:'line', label:'Km Rem', data:remLine,
-          borderColor:orcC, borderWidth:2, tension:.3, fill:false, borderDash:[5,3],
-          order:1, ...mkPts(orcC, orcC), datalabels:{display:false}
-        }
-      ]
-    },
-    options:{
-      responsive:true, maintainAspectRatio:false,
-      layout:{padding:{top:24}},
-      plugins:{
-        legend:{display:false},
-        tooltip:{...tooltip, callbacks:{label:function(c){return c.dataset.label + ': ' + fmt(c.parsed.y);}}},
-        datalabels:{
-          display: function(ctx) {
-            if(ctx.datasetIndex !== 0) return false;
-            var m = ctx.dataIndex + 1;
-            if(mData[m].cnt === 0) return false;
-            return !hasFocusEvo || hiMonths.has(m);
-          },
-          anchor:'end', align:'top', color:dlColor,
-          font:{family:'Montserrat',size:isMobile?9:14,weight:'700'},
-          formatter: function(v) { return v != null ? numFmt(v) : ''; }
-        }
-      },
-      scales:{
-        x:{grid, ticks:tick},
-        y:{display:true, beginAtZero:false, grace:'10%', grid:{display:false},
-           ticks:{...tickY, maxTicksLimit:5, callback:function(v){return numFmt(v);}}}
-      }
-    }
-  });
+  // Exportar Excel deste gráfico (clique direito) → Km Rem, Km Real, Δ Km, Δ %, R$/km, Impacto por vigência
+  (function(){
+    var byVig={};
+    chartRows.forEach(function(r){ var o=byVig[r.vig]=byVig[r.vig]||{rem:0,real:0,imp:0}; o.rem+=r.rem; o.real+=r.real; o.imp+=r.imp; });
+    var aoa=[['Vigência','Km Rem','Km Real','Δ Km','Δ %','R$/km','Impacto (BRL)']];
+    Object.keys(byVig).sort(sortVig).forEach(function(v){ var o=byVig[v], dkm=o.real-o.rem, dpct=o.rem?dkm/Math.abs(o.rem)*100:0, rkm=dkm?o.imp/dkm:0;
+      aoa.push([vigLabel(v), Math.round(o.rem), Math.round(o.real), Math.round(dkm), +dpct.toFixed(1), +rkm.toFixed(2), Math.round(o.imp)]); });
+    if(chEvo) chEvo.$exportAoA = aoa;
+  })();
 
   const impData = MONTHS.map(function(_, i) {
     var m = i + 1;

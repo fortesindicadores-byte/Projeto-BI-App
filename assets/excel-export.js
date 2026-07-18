@@ -120,10 +120,16 @@
   function baixarGrafico(chart, nome){
     ensureXLSX(err=>{ if(err){alert('Não foi possível carregar o componente de Excel. Verifique a conexão.');return;}
       try{
-        const labels=chart.data.labels||[];
-        const dss=(chart.data.datasets||[]).filter(d=>!d._meta && d.data);
-        const aoa=[['', ...dss.map(d=>d.label||'Série')]];
-        labels.forEach((lb,i)=>aoa.push([lb, ...dss.map(d=>{const v=d.data[i];return (v&&typeof v==='object'&&'y'in v)?v.y:v;})]));
+        // hook: o painel pode fornecer colunas customizadas p/ este gráfico
+        let aoa;
+        const custom = (typeof chart.$exportAoA==='function') ? chart.$exportAoA() : (Array.isArray(chart.$exportAoA)?chart.$exportAoA:null);
+        if(custom && custom.length){ aoa = custom; }
+        else {
+          const labels=chart.data.labels||[];
+          const dss=(chart.data.datasets||[]).filter(d=>!d._meta && d.data);
+          aoa=[['', ...dss.map(d=>d.label||'Série')]];
+          labels.forEach((lb,i)=>aoa.push([lb, ...dss.map(d=>{const v=d.data[i];return (v&&typeof v==='object'&&'y'in v)?v.y:v;})]));
+        }
         const ws=XLSX.utils.aoa_to_sheet(aoa);
         const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,sheetName(nome));
         XLSX.writeFile(wb, slug(painelTitulo())+'_'+slug(nome)+'.xlsx');
