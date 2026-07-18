@@ -231,7 +231,8 @@ function kParseVig(v){
 // FETCH (gviz JSONP)
 // ═══════════════════════════════════════════════
 let _gkSeq=0;
-function gvFetchSheet(sid,tab){
+function gvFetchSheet(sid,opts){
+  const o=typeof opts==='string'?{tab:opts}:(opts||{});
   return new Promise((resolve,reject)=>{
     const fn='_gk'+Date.now()+'_'+(_gkSeq++);
     const s=document.createElement('script');
@@ -243,8 +244,13 @@ function gvFetchSheet(sid,tab){
       if(cols.every(c=>!c||/^[A-Z]{1,2}$/.test(c))&&rows.length){ cols=rows[0].map(v=>String(v==null?'':v)); rows=rows.slice(1); }
       resolve({cols,rows});
     }catch(e){reject(e);}};
-    s.onerror=()=>reject(new Error(`Sem acesso à aba "${tab}". Verifique se está logado no Google.`));
-    s.src=`https://docs.google.com/spreadsheets/d/${sid}/gviz/tq?sheet=${encodeURIComponent(tab)}&tqx=out:json;responseHandler:${fn}`;
+    s.onerror=()=>reject(new Error(`Sem acesso à fonte. Verifique se está logado no Google.`));
+    const p=[];
+    if(o.tab)p.push('sheet='+encodeURIComponent(o.tab));
+    if(o.gid!=null)p.push('gid='+o.gid);
+    if(o.tq)p.push('tq='+encodeURIComponent(o.tq));
+    p.push('tqx=out:json;responseHandler:'+fn);
+    s.src=`https://docs.google.com/spreadsheets/d/${sid}/gviz/tq?${p.join('&')}`;
     document.head.appendChild(s);
   });
 }
@@ -254,9 +260,27 @@ function detFrota(cols){ const fi=_fi(cols); return {vig:0,rem:_fb(fi('remunerad
 function detRec(cols){ const fi=_fi(cols); return {vig:0,rem:_fb(fi('remunerado'),1),real:_fb(fi('realizado'),2),n3:_fb(fi('nível 3','nivel 3'),11)}; }
 // Frota Ativa = contagem (col 21, igual ao painel Ativação). Evita a col "Km/Frota Ativa Rem." (razão).
 function _detAtiva(cols){ for(let i=0;i<cols.length;i++){ const lc=String(cols[i]||'').toLowerCase(); if(lc.includes('frota ativa')&&!lc.includes('km')&&!lc.includes('/')&&!lc.includes('%')) return i; } return 21; }
-function detDisp(cols){ const fi=_fi(cols); return {vig:0,proj:_fb(fi('proj.','projeto'),14),kmRem:_fb(fi('km rem. tt'),31),kmReal:_fb(fi('km rodado tt'),32),ativa:_detAtiva(cols)}; }
+function detDisp(cols){ const fi=_fi(cols); return {vig:0,proj:_fb(fi('proj.','projeto'),14),kmRem:_fb(fi('km rem. tt'),31),kmReal:_fb(fi('km rodado tt'),32),ativa:_detAtiva(cols),viag:_fb(fi('viagens - real'),22),du:_fb(fi('dias úteis','dias uteis'),2)}; }
 
 let FR=null,RE=null,DP=null, S_FR=[],S_RE=[],S_DP=[], allRows=[];
+
+// ── Seara (Distribuição Urbana) — km + frota da fonte própria (Base CTEs) ──
+const SEARA_ID='1Rlwc0MZiupQI38gSN8VyBq_zMADgX9R_ZbfygNP-OXE', SEARA_GID=1672208132;
+const SEARA_PROJ_NK=_nk('DISTRIBUIÇÃO URBANA');  // projeto da Seara no DRE
+const SEARA_ATIVA=50;                            // frota ativa fixa (remunerada)
+let SEARA_VIG={};   // { 'MM/YYYY': {kmRem,kmReal,frotaReal} }
+async function loadSeara(){
+  SEARA_VIG={};
+  try{
+    // frota realizada = countdistinct(CD_VIAGEM_TRANSPORTE B) por mês/ano; km rem = Σ QT_QUILOMETROS (J); km real = Σ KM Rodado (Z)
+    const [dist,km]=await Promise.all([
+      gvFetchSheet(SEARA_ID,{gid:SEARA_GID,tq:'select B, year(D), month(D), count(A) group by B, year(D), month(D)'}),
+      gvFetchSheet(SEARA_ID,{gid:SEARA_GID,tq:'select year(D), month(D), sum(J), sum(Z) group by year(D), month(D)'}),
+    ]);
+    dist.rows.forEach(r=>{ const yr=+r[1], mo=(+r[2])+1; if(!yr)return; const v=String(mo).padStart(2,'0')+'/'+yr; (SEARA_VIG[v]=SEARA_VIG[v]||{kmRem:0,kmReal:0,frotaReal:0}).frotaReal++; });
+    km.rows.forEach(r=>{ const yr=+r[0], mo=(+r[1])+1; if(!yr)return; const v=String(mo).padStart(2,'0')+'/'+yr; const o=SEARA_VIG[v]=SEARA_VIG[v]||{kmRem:0,kmReal:0,frotaReal:0}; o.kmRem=+r[2]||0; o.kmReal=+r[3]||0; });
+  }catch(e){ console.warn('Seara indisponível:',e.message); SEARA_VIG={}; }
+}
 
 // ═══════════════════════════════════════════════
 // FILTROS
@@ -340,9 +364,22 @@ function compute(f){
   // receita (p/ AV)
   let recRem=0,recReal=0;
   for(const r of S_RE){ const d=kParseVig(r[RE.vig]); if(!d)continue; if(!_match(f,vigBR(d),String(r[RE.n3]||'')))continue; recRem+=+r[RE.rem]||0; recReal+=+r[RE.real]||0; }
-  // km + frota ativa (p/ R$/km e R$/frota ativa)
-  let kmRem=0,kmReal=0,ativa=0;
-  for(const r of S_DP){ const d=kParseVig(r[DP.vig]); if(!d)continue; if(!_match(f,vigBR(d),String(r[DP.proj]||'')))continue; kmRem+=+r[DP.kmRem]||0; kmReal+=+r[DP.kmReal]||0; ativa+=+r[DP.ativa]||0; }
+  // km + frota (Rem=remunerada/ativa · Real=realizada=viagens÷dias úteis, Empurrada/2)
+  let kmRem=0,kmReal=0,ativa=0,frotaReal=0;
+  for(const r of S_DP){ const d=kParseVig(r[DP.vig]); if(!d)continue; const proj=String(r[DP.proj]||''); if(!_match(f,vigBR(d),proj))continue;
+    kmRem+=+r[DP.kmRem]||0; kmReal+=+r[DP.kmReal]||0; ativa+=+r[DP.ativa]||0;
+    const emp=_nk(getNv3Prefix(proj))==='EMPURRADA', viag=+r[DP.viag]||0, du=+r[DP.du]||0;
+    if(du>0) frotaReal += emp ? viag/du/2 : viag/du;
+  }
+  // Seara (Distribuição Urbana): km + frota da fonte própria, quando o filtro Projeto permite e sem filtro de Unidade
+  const searaOn = !f.unidade.length && (!f.nivel3.length || f.nivel3.some(p=>_nk(p)===SEARA_PROJ_NK));
+  if(searaOn){
+    for(const v in SEARA_VIG){ const o=SEARA_VIG[v], yr=v.slice(-4);
+      if(f.ano.length && !f.ano.includes(yr))continue;
+      if(f.vigencia.length && !f.vigencia.includes(v))continue;
+      kmRem+=o.kmRem; kmReal+=o.kmReal; ativa+=SEARA_ATIVA; frotaReal+=o.frotaReal;
+    }
+  }
   // pacotes
   const pacotes=[];
   for(const pn of PAC_ORDER){
@@ -352,7 +389,7 @@ function compute(f){
     pacotes.push({nome:pn,rem,real,contas:cs});
   }
   const totRem=pacotes.reduce((a,p)=>a+p.rem,0), totReal=pacotes.reduce((a,p)=>a+p.real,0);
-  return {pacotes,totRem,totReal,recRem,recReal,kmRem,kmReal,ativa};
+  return {pacotes,totRem,totReal,recRem,recReal,kmRem,kmReal,ativaRem:ativa,frotaReal};
 }
 
 // ═══════════════════════════════════════════════
@@ -372,6 +409,8 @@ function recCells(rem,real){ const d=real-rem, bad=real<rem;
 // km — ruim se rodou mais (real>rem)
 function kmCells(rem,real){ const d=real-rem, bad=Math.abs(real)>Math.abs(rem);
   return [{v:fmt(rem)},{v:fmt(real)},{v:fmt(Math.abs(d)),cls:bad?'cr':'cg'},{v:pct(d,rem),cls:bad?'cr-t':'cg-t'}]; }
+// frota — Rem=ativa (remunerada) · Real=realizada — neutro (sem cor)
+function frotaCells(rem,real){ const d=real-rem; return [{v:fmtInt(rem)},{v:fmtInt(real)},{v:fmtInt(Math.abs(d))},{v:pct(d,rem)}]; }
 // razão (R$/km, R$/frota ativa) — ruim se |real|>|rem|
 function ratioCells(rem,real,ff){
   if(!isFinite(rem)||!isFinite(real))return [{v:'—'},{v:'—'},{v:'—'},{v:'—'}];
@@ -394,7 +433,7 @@ function renderTree(D){
     cardHTML('c-rec','root-card','Receita Líquida',H4,recCells(D.recRem,D.recReal))+
     cardHTML('c-total','root-card root-total','Custo Pacote Frota',H4,costCells(D.totRem,D.totReal))+
     cardHTML('c-km','root-card','Km Rodado',H4,kmCells(D.kmRem,D.kmReal))+
-    `<div class="kpi-card root-card" id="c-ativa"><div class="card-label">Frota Ativa</div><table class="kpi-table single"><thead><tr><th>Ativa</th></tr></thead><tbody><tr><td>${D.ativa?fmtInt(D.ativa):'—'}</td></tr></tbody></table></div>`;
+    cardHTML('c-ativa','root-card','Frota Ativa · Realizada',H4,frotaCells(D.ativaRem,D.frotaReal));
 
   // ── pacotes → contas → 3 visões (filtro Pacote poda quais pacotes aparecem) ──
   const selPac=getFilters().pacote;
@@ -410,7 +449,7 @@ function renderTree(D){
       LINKS.conta[cid].push(vKm,vAt,vAv);
       const viewsHTML=
         cardHTML(vKm,'view-card','R$/km',H4,ratioCells(D.kmRem?c.rem/D.kmRem:NaN, D.kmReal?c.real/D.kmReal:NaN, f2))+
-        cardHTML(vAt,'view-card','R$/Frota Ativa',H4,ratioCells(D.ativa?c.rem/D.ativa:NaN, D.ativa?c.real/D.ativa:NaN, money))+
+        cardHTML(vAt,'view-card','R$/Frota Ativa',H4,ratioCells(D.ativaRem?c.rem/D.ativaRem:NaN, D.frotaReal?c.real/D.frotaReal:NaN, money))+
         cardHTML(vAv,'view-card','AV s/ Receita',['Rem','Real','Δ pp'],avCells(c.rem,c.real,D.recRem,D.recReal));
       contasHTML+=`<div class="conta-block">${cardHTML(cid,'conta-card',c.nome,H4,costCells(c.rem,c.real))}<div class="views">${viewsHTML}</div></div>`;
     });
@@ -462,6 +501,7 @@ async function fetchAll(){
     gvFetchSheet(VF_ID,'Frota'),
     gvFetchSheet(VF_ID,'Receita Líquida'),
     gvFetchSheet(GV_ID,'Dispersão de km'),
+    loadSeara(),
   ]);
   FR=detFrota(fr.cols); S_FR=fr.rows;
   RE=detRec(re.cols);   S_RE=re.rows;
