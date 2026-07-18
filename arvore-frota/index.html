@@ -265,20 +265,24 @@ function detDisp(cols){ const fi=_fi(cols); return {vig:0,proj:_fb(fi('proj.','p
 let FR=null,RE=null,DP=null, S_FR=[],S_RE=[],S_DP=[], allRows=[];
 
 // ── Seara (Distribuição Urbana) — km + frota da fonte própria (Base CTEs) ──
-const SEARA_ID='1Rlwc0MZiupQI38gSN8VyBq_zMADgX9R_ZbfygNP-OXE', SEARA_GID=1672208132;
+const SEARA_ID='1Rlwc0MZiupQI38gSN8VyBq_zMADgX9R_ZbfygNP-OXE', SEARA_GID_CTES=1672208132, SEARA_GID_COMB=1982300845;
 const SEARA_PROJ_NK=_nk('DISTRIBUIÇÃO URBANA');  // projeto da Seara no DRE
 const SEARA_ATIVA=50;                            // frota ativa fixa (remunerada)
+const _M3=['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
 let SEARA_VIG={};   // { 'MM/YYYY': {kmRem,kmReal,frotaReal} }
+function _seVig(v){ return SEARA_VIG[v]=SEARA_VIG[v]||{kmRem:0,kmReal:0,frotaReal:0}; }
 async function loadSeara(){
   SEARA_VIG={};
   try{
-    // frota realizada = countdistinct(CD_VIAGEM_TRANSPORTE B) por mês/ano; km rem = Σ QT_QUILOMETROS (J); km real = Σ KM Rodado (Z)
-    const [dist,km]=await Promise.all([
-      gvFetchSheet(SEARA_ID,{gid:SEARA_GID,tq:'select B, year(D), month(D), count(A) group by B, year(D), month(D)'}),
-      gvFetchSheet(SEARA_ID,{gid:SEARA_GID,tq:'select year(D), month(D), sum(J), sum(Z) group by year(D), month(D)'}),
+    // igual ao painel KM-Seara: km REM = Σ Z (Base CTEs "KM Rodado") · km REAL = Σ K (aba Combustível) · frota realizada = countdistinct(CD_VIAGEM_TRANSPORTE B)
+    const [dist,kmRem,kmReal]=await Promise.all([
+      gvFetchSheet(SEARA_ID,{gid:SEARA_GID_CTES,tq:'select B, year(D), month(D), count(A) group by B, year(D), month(D)'}),
+      gvFetchSheet(SEARA_ID,{gid:SEARA_GID_CTES,tq:'select year(D), month(D), sum(Z) group by year(D), month(D)'}),
+      gvFetchSheet(SEARA_ID,{gid:SEARA_GID_COMB,tq:'select F, G, sum(K) group by F, G'}),
     ]);
-    dist.rows.forEach(r=>{ const yr=+r[1], mo=(+r[2])+1; if(!yr)return; const v=String(mo).padStart(2,'0')+'/'+yr; (SEARA_VIG[v]=SEARA_VIG[v]||{kmRem:0,kmReal:0,frotaReal:0}).frotaReal++; });
-    km.rows.forEach(r=>{ const yr=+r[0], mo=(+r[1])+1; if(!yr)return; const v=String(mo).padStart(2,'0')+'/'+yr; const o=SEARA_VIG[v]=SEARA_VIG[v]||{kmRem:0,kmReal:0,frotaReal:0}; o.kmRem=+r[2]||0; o.kmReal=+r[3]||0; });
+    dist.rows.forEach(r=>{ const yr=+r[1], mo=(+r[2])+1; if(!yr)return; _seVig(String(mo).padStart(2,'0')+'/'+yr).frotaReal++; });
+    kmRem.rows.forEach(r=>{ const yr=+r[0], mo=(+r[1])+1; if(!yr)return; _seVig(String(mo).padStart(2,'0')+'/'+yr).kmRem=+r[2]||0; });
+    kmReal.rows.forEach(r=>{ const mi=_M3.indexOf(String(r[0]||'').toLowerCase().slice(0,3)), yr=+r[1]; if(mi<0||!yr)return; _seVig(String(mi+1).padStart(2,'0')+'/'+yr).kmReal=+r[2]||0; });
   }catch(e){ console.warn('Seara indisponível:',e.message); SEARA_VIG={}; }
 }
 
