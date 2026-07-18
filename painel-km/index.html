@@ -165,6 +165,11 @@ body.light-mode .drill-tab.active{background:rgba(217,94,8,.1);border-color:rgba
 .chart-leg .leg-bar{display:inline-block;width:5px;height:11px;border-radius:2px 2px 0 0;vertical-align:middle;margin-right:1px;}
 .chart-leg .leg-dash{display:inline-block;width:18px;height:0;border-top:2px dashed;vertical-align:middle;margin-right:1px;}
 .chart-leg .leg-sq{display:inline-block;width:10px;height:10px;border:1.5px solid var(--text2);border-radius:1px;vertical-align:middle;margin-right:3px;}
+.evo-deltas{margin-top:8px;display:flex;flex-direction:column;gap:3px;}
+.evo-deltas .drow{display:flex;align-items:center;gap:6px;}
+.evo-deltas .dlbl{flex:0 0 30px;font-size:10px;font-weight:800;color:var(--text2);white-space:nowrap;}
+.evo-deltas .dcells{flex:1;display:grid;grid-template-columns:repeat(12,1fr);padding-right:6px;}
+.evo-deltas .cell{text-align:center;font-size:11px;font-weight:700;}
 
 /* ── Table ── */
 .tbl-section{
@@ -240,6 +245,8 @@ body.light-mode tbody tr{border-bottom:1px solid rgba(0,0,0,.06);}
   .chart-sub{font-size:9px;margin-bottom:10px;}
   .chart-leg{gap:8px;margin-bottom:8px;}
   .chart-leg span{font-size:9px;}
+  .evo-deltas .dlbl{flex-basis:18px;font-size:7px;}
+  .evo-deltas .cell{font-size:7px;}
   .chart-wrap{height:220px;}
   .chart-wrap-tall{height:220px;}
 
@@ -372,12 +379,13 @@ body.light-mode tbody tr{border-bottom:1px solid rgba(0,0,0,.06);}
   <!-- Gráficos linha 1: Evolução KM + Impacto Financeiro -->
   <div class="charts-grid">
     <div class="chart-card">
-      <div class="chart-title">Dispersão de KM %</div>
+      <div class="chart-title">Dispersão de KM</div>
       <div class="chart-leg">
-        <span><i class="leg-sq"></i>▲ Rem %</span>
-        <span><i class="leg-dash"></i>Meta (5%)</span>
+        <span><i class="leg-sq"></i>Km Rodado</span>
+        <span><i class="leg-dash"></i>Km Rem</span>
       </div>
       <div class="chart-wrap"><canvas id="chart-evolucao"></canvas></div>
+      <div class="evo-deltas" id="evo-deltas"></div>
     </div>
     <div class="chart-card">
       <div class="chart-title">Impacto Financeiro</div>
@@ -937,45 +945,42 @@ function renderCharts(F) {
   const metaLine = MONTHS.map(function(_, i) { return mData[i+1].cnt > 0 ? 5 : null; });
 
   var hasFocusEvo = hiMonths.size > 0;
-  // cor pela META de 5%: ≤5% verde, >5% vermelho (só neste gráfico de Dispersão)
+  // barras = Km Rodado; cor pelo Δ vs Rem (rodou MAIS que o remunerado = vermelho; menos = verde)
   var realBarBg = MONTHS.map(function(_, i) {
     var m = i + 1;
-    if(mData[m].cnt === 0 || mData[m].rem === 0) return 'transparent';
-    var dp = (mData[m].real - mData[m].rem) / Math.abs(mData[m].rem) * 100;
-    var red = dp > 5;
+    if(mData[m].cnt === 0) return 'transparent';
+    var red = mData[m].real > mData[m].rem;
     var a = hasFocusEvo ? (hiMonths.has(m) ? '.85' : '.2') : '.65';
     return red ? 'rgba(255,102,102,' + a + ')' : 'rgba(59,179,59,' + a + ')';
   });
   var realBarBc = MONTHS.map(function(_, i) {
     var m = i + 1;
-    if(mData[m].cnt === 0 || mData[m].rem === 0) return 'transparent';
-    var dp = (mData[m].real - mData[m].rem) / Math.abs(mData[m].rem) * 100;
-    return dp > 5 ? '#FF6666' : '#3BB33B';
+    if(mData[m].cnt === 0) return 'transparent';
+    return mData[m].real > mData[m].rem ? '#FF6666' : '#3BB33B';
   });
 
   chEvo = new Chart(document.getElementById('chart-evolucao').getContext('2d'), {
-    type:'line',
+    type:'bar',
     data:{
       labels: MONTHS,
       datasets:[
         {
-          type:'bar', label:'▲ REM %', data:deltaPctLine,
+          type:'bar', label:'Km Rodado', data:realLine,
           backgroundColor:realBarBg, borderColor:realBarBc, borderWidth:1, borderRadius:3, order:2
         },
         {
-          type:'line', label:'META 5%', data:metaLine,
-          borderColor:orcC, borderWidth:2, tension:0, fill:false, borderDash:[5,3],
-          order:1,
-          ...mkPts(orcC, orcC)
+          type:'line', label:'Km Rem', data:remLine,
+          borderColor:orcC, borderWidth:2, tension:.3, fill:false, borderDash:[5,3],
+          order:1, ...mkPts(orcC, orcC), datalabels:{display:false}
         }
       ]
     },
     options:{
       responsive:true, maintainAspectRatio:false,
-      layout:{padding:{top:30}},
+      layout:{padding:{top:26, left:30, right:6}},
       plugins:{
         legend:{display:false},
-        tooltip,
+        tooltip:{...tooltip, callbacks:{label:function(c){return c.dataset.label + ': ' + fmt(c.parsed.y);}}},
         datalabels:{
           display: function(ctx) {
             if(ctx.datasetIndex !== 0) return false;
@@ -984,16 +989,27 @@ function renderCharts(F) {
             return !hasFocusEvo || hiMonths.has(m);
           },
           anchor:'end', align:'top', color:dlColor,
-          font:{family:'Montserrat',size:isMobile?8:14,weight:'700'},
-          formatter: function(v) { return v !== null ? (v >= 0 ? '+' : '') + v.toFixed(1) + '%' : ''; }
+          font:{family:'Montserrat',size:isMobile?8:13,weight:'700'},
+          formatter: function(v) { return v != null ? Math.round(v).toLocaleString('pt-BR') : ''; }
         }
       },
       scales:{
         x:{grid, ticks:tick},
-        y:{display:false, beginAtZero:true}
+        y:{display:false, beginAtZero:true, grace:'16%'}
       }
     }
   });
+
+  // linhas ▲ Km e ▲ % embaixo (alinhadas aos meses)
+  (function(){
+    var el = document.getElementById('evo-deltas'); if(!el) return;
+    var kInt = function(v){ var a=Math.abs(v); return (v>=0?'+':'-') + (a>=1000 ? Math.round(a/1000)+'k' : Math.round(a)); };
+    var dkm = MONTHS.map(function(_, i){ var m=i+1; return mData[m].cnt>0 ? (mData[m].real - mData[m].rem) : null; });
+    var cellK = MONTHS.map(function(_, i){ var v=dkm[i]; if(v==null) return '<span class="cell"></span>'; return '<span class="cell '+(v>0?'cr':'cg')+'">'+kInt(v)+'</span>'; }).join('');
+    var cellP = MONTHS.map(function(_, i){ var v=deltaPctLine[i]; if(v==null) return '<span class="cell"></span>'; return '<span class="cell '+(v>0?'cr':'cg')+'">'+(v>=0?'+':'')+v.toFixed(1)+'%</span>'; }).join('');
+    el.innerHTML = '<div class="drow"><span class="dlbl">▲ Km</span><div class="dcells">'+cellK+'</div></div>'+
+                   '<div class="drow"><span class="dlbl">▲ %</span><div class="dcells">'+cellP+'</div></div>';
+  })();
 
   const impData = MONTHS.map(function(_, i) {
     var m = i + 1;
