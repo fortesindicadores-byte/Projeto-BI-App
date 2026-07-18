@@ -86,8 +86,6 @@ body{font-family:'Montserrat',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-s
 .conta-card{width:284px;}
 .view-card{width:284px;}
 .card-label{font-size:10px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:#F1F5F9;padding:10px 14px 6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-.view-card .card-label{color:var(--orange);}
-.pac-card .card-label{color:var(--orange);}
 .kpi-table{width:100%;border-collapse:collapse;table-layout:fixed;}
 .kpi-table th{background:#050a12;color:#F1F5F9;font-size:10px;font-weight:700;letter-spacing:.03em;padding:7px 5px;text-align:center;border-right:1px solid #0c1017;white-space:nowrap;}
 .kpi-table th:last-child{border-right:none;}
@@ -103,7 +101,6 @@ body{font-family:'Montserrat',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-s
 body.light-mode .main{background:#F0F0F0;--text:#1a1a1a;--text2:#444;--text3:#666;color:var(--text);--red:#f00;--green:#0E8C0E;}
 body.light-mode .kpi-card{background:#fff;border-color:transparent;box-shadow:0 2px 12px rgba(0,0,0,.10);}
 body.light-mode .card-label{color:#1a1a1a;}
-body.light-mode .pac-card .card-label,body.light-mode .view-card .card-label{color:var(--orange-d);}
 body.light-mode .kpi-table th{background:#1A2335;color:#F1F5F9;}
 
 /* ── Mobile ── */
@@ -159,7 +156,9 @@ const PACOTES_MAP = {
   'Seguro de Veículos e Equipamentos':'Seguros e licenças','Seguros':'Seguros e licenças',
 };
 // ordem dos pacotes na árvore (topo → base)
-const PAC_ORDER = ['Seguros e licenças','Pneus','Manutenções','Combustíveis'];
+const PAC_ORDER = ['Pneus','Manutenções','Combustíveis'];
+// contas removidas da árvore (não entram em pacote nem no total)
+const EXCLUDE_CONTAS = new Set(['ICMS Crédito Presumido','Estorno de ICMS não Aproveitado']);
 </script>
 
 <!-- ── Header ── -->
@@ -330,7 +329,7 @@ function compute(f){
   // custo por conta
   const contas={};
   for(const r of S_FR){
-    const cta=String(r[FR.cta]||''); if(!cta||cta==='Receita Líquida')continue;
+    const cta=String(r[FR.cta]||''); if(!cta||cta==='Receita Líquida'||EXCLUDE_CONTAS.has(cta))continue;
     const pac=PACOTES_MAP[cta]; if(!pac)continue;
     const d=kParseVig(r[FR.vig]); if(!d)continue;
     if(!_match(f,vigBR(d),String(r[FR.n3]||'')))continue;
@@ -391,8 +390,8 @@ function renderTree(D){
 
   // ── raiz (coluna esquerda) ──
   let rootHTML=
-    cardHTML('c-total','root-card root-total','Custo Pacote Frota',H4,costCells(D.totRem,D.totReal))+
     cardHTML('c-rec','root-card','Receita Líquida',H4,recCells(D.recRem,D.recReal))+
+    cardHTML('c-total','root-card root-total','Custo Pacote Frota',H4,costCells(D.totRem,D.totReal))+
     cardHTML('c-km','root-card','Km Rodado',H4,kmCells(D.kmRem,D.kmReal))+
     `<div class="kpi-card root-card" id="c-ativa"><div class="card-label">Frota Ativa</div><table class="kpi-table single"><thead><tr><th>Ativa</th></tr></thead><tbody><tr><td>${D.ativa?fmtInt(D.ativa):'—'}</td></tr></tbody></table></div>`;
 
