@@ -59,7 +59,7 @@ body{
 .leg i{width:16px;height:0;display:inline-block;}
 .leg .b-real{width:14px;height:11px;background:var(--orange);border-radius:2px;}
 .leg .b-proj{width:14px;height:11px;background:rgba(249,115,22,.15);border:1.5px dashed var(--orange);border-radius:2px;}
-.leg .l-rem{border-top:2px dashed var(--blue);width:16px;}
+.leg .l-rem{border-top:2px dashed #F1F5F9;width:16px;}
 
 /* TABLES */
 table{width:100%;border-collapse:collapse;font-size:12px;}
@@ -75,10 +75,11 @@ tr.total td{color:var(--text);font-weight:700;font-size:12px;border-top:2px soli
 .cg{color:var(--green)!important;font-weight:700;}
 
 /* LIGHT MODE */
-body.light-mode .main{--text:#1a1a1a;--text2:#444;--text3:#666;}
+body.light-mode .main{--text:#1a1a1a;--text2:#444;--text3:#666;background:#F0F0F0;}
 body.light-mode .chart-card,
 body.light-mode .tbl-section{background:#FFFFFF!important;border-color:transparent!important;box-shadow:0 2px 12px rgba(0,0,0,.10)!important;--text:#1a1a1a;--text2:#444;--text3:#555;}
 body.light-mode td{color:var(--text);}
+body.light-mode .leg .l-rem{border-top-color:#000;}
 
 @media(max-width:900px){
   .charts-grid{grid-template-columns:1fr;}
@@ -141,12 +142,12 @@ body.light-mode td{color:var(--text);}
   <div class="charts-grid">
     <!-- TABLE 1: R$/km -->
     <div class="tbl-section">
-      <div class="tbl-title">R$/km — memória por ano</div>
+      <div class="tbl-title">R$/km</div>
       <div class="tbl-sub">Δ = Rem − Real · Impacto e acumulado conforme planilha</div>
       <table>
         <thead><tr>
-          <th>Ano</th><th class="num">R$/km Real</th><th class="num">R$/km Rem</th>
-          <th class="num">Δ R$/km</th><th class="num">Impacto</th><th class="num">Impacto Acum.</th>
+          <th>Ano</th><th class="num">Rem</th><th class="num">Real</th>
+          <th class="num">Δ</th><th class="num">Impacto</th><th class="num">Impacto Acum.</th>
         </tr></thead>
         <tbody id="tb-rkm"></tbody>
       </table>
@@ -154,12 +155,12 @@ body.light-mode td{color:var(--text);}
 
     <!-- TABLE 2: R$/Equipamento -->
     <div class="tbl-section">
-      <div class="tbl-title">R$/Equipamento — memória por ano</div>
+      <div class="tbl-title">R$/Equipamento</div>
       <div class="tbl-sub">Δ = Rem − Real · Impacto e acumulado conforme planilha</div>
       <table>
         <thead><tr>
-          <th>Ano</th><th class="num">R$/Eq. Real</th><th class="num">R$/Eq. Rem</th>
-          <th class="num">Δ R$/Eq.</th><th class="num">Impacto</th><th class="num">Impacto Acum.</th>
+          <th>Ano</th><th class="num">Rem</th><th class="num">Real</th>
+          <th class="num">Δ</th><th class="num">Impacto</th><th class="num">Impacto Acum.</th>
         </tr></thead>
         <tbody id="tb-eq"></tbody>
       </table>
@@ -242,7 +243,10 @@ function buildSeries(realKey, remKey){
 function renderChart(canvasId, realKey, remKey, fmt, prevRef){
   const {years,realHist,realProj,remLine,projIdx}=buildSeries(realKey,remKey);
   if(prevRef) prevRef.destroy();
-  const dl={color:isLight()?'#1a1a1a':'#F1F5F9',font:{family:'Montserrat',size:10,weight:'700'},anchor:'end',align:'end',offset:2,formatter:v=>v==null?'':fmt(v)};
+  const isL=isLight();
+  const remC=isL?'#000000':'#F1F5F9';               // remunerado: preto (claro) / branco (escuro)
+  const holo=isL?'#FFFFFF':'#141B26';               // ponto vazado da projeção
+  const dl={color:isL?'#1a1a1a':'#F1F5F9',font:{family:'Montserrat',size:10,weight:'700'},anchor:'end',align:'end',offset:2,formatter:v=>v==null?'':fmt(v)};
   return new Chart(document.getElementById(canvasId),{
     data:{
       labels:years,
@@ -251,10 +255,10 @@ function renderChart(canvasId, realKey, remKey, fmt, prevRef){
          categoryPercentage:.62,barPercentage:.9,datalabels:dl},
         {type:'bar',label:'Tendência',data:realProj,stack:'r',backgroundColor:'rgba(249,115,22,.14)',
          borderColor:'#F97316',borderWidth:1.5,borderDash:[5,4],borderRadius:3,
-         categoryPercentage:.62,barPercentage:.9,datalabels:{...dl,color:isLight()?'#B45309':'#F97316'}},
-        {type:'line',label:'Remunerado',data:remLine,borderColor:'#38BDF8',borderWidth:2,tension:.25,
-         pointRadius:3,pointBackgroundColor:'#38BDF8',
-         segment:{borderDash:ctx=>ctx.p1DataIndex>=projIdx?[6,4]:undefined},
+         categoryPercentage:.62,barPercentage:.9,datalabels:dl},
+        {type:'line',label:'Remunerado',data:remLine,borderColor:remC,borderWidth:2.5,tension:.25,borderDash:[5,3],
+         pointRadius:3.5,pointBorderColor:remC,pointBorderWidth:1.5,
+         pointBackgroundColor:years.map(y=>y>=PROJ_FROM?holo:remC),   // projeção = ponto vazado
          datalabels:{display:false}},
       ]
     },
@@ -283,7 +287,7 @@ function renderTables(){
     const dCls=d.dRkm==null?'':(d.dRkm<0?'cr':'cg');
     const iCls=d.impRkm==null?'':(d.impRkm<0?'cr':'cg');
     html+=`<tr class="${proj}"><td class="ano">${d.ano}</td>`
-       +`<td class="num">${nf2(d.rkmReal)}</td><td class="num">${nf2(d.rkmRem)}</td>`
+       +`<td class="num">${nf2(d.rkmRem)}</td><td class="num">${nf2(d.rkmReal)}</td>`
        +`<td class="num ${dCls}">${nf2(d.dRkm)}</td>`
        +`<td class="num ${iCls}">${numFmt(d.impRkm)}</td>`
        +`<td class="num ${acum<0?'cr':'cg'}">${numFmt(acum)}</td></tr>`;
@@ -298,7 +302,7 @@ function renderTables(){
     const dCls=d.dEq==null?'':(d.dEq<0?'cr':'cg');
     const iCls=d.impEq==null?'':(d.impEq<0?'cr':'cg');
     html+=`<tr class="${proj}"><td class="ano">${d.ano}</td>`
-       +`<td class="num">${nf0(d.eqReal)}</td><td class="num">${nf0(d.eqRem)}</td>`
+       +`<td class="num">${nf0(d.eqRem)}</td><td class="num">${nf0(d.eqReal)}</td>`
        +`<td class="num ${dCls}">${nf0(d.dEq)}</td>`
        +`<td class="num ${iCls}">${numFmt(d.impEq)}</td>`
        +`<td class="num ${acum<0?'cr':'cg'}">${numFmt(acum)}</td></tr>`;
