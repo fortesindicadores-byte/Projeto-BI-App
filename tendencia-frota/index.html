@@ -49,15 +49,14 @@ body{
 .hero-card{
   padding:4px 2px 18px;margin-bottom:12px;
 }
-.hero-sub{font-size:10px;font-weight:700;color:var(--orange);text-transform:uppercase;letter-spacing:1.6px;margin-bottom:12px;}
-.hero-tag{font-size:11px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.8px;}
-.hero-real{font-size:52px;font-weight:800;color:var(--text);line-height:1;margin-top:2px;}
-.hero-rem{font-size:30px;font-weight:800;color:var(--text2);line-height:1;margin-top:2px;}
-.hero-metrics{display:flex;gap:48px;margin-top:18px;flex-wrap:wrap;}
+.hero-tag{font-size:10px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;}
+.hero-real{font-size:44px;font-weight:800;color:var(--text);line-height:1;}
+.hero-reminline{font-size:13px;font-weight:600;color:var(--text2);margin-top:8px;}
+.hero-reminline b{color:var(--text);font-weight:800;font-size:14px;}
+.hero-metrics{display:flex;gap:40px;margin-top:14px;flex-wrap:wrap;}
 .hero-metrics>div{display:flex;flex-direction:column;}
-.hero-metrics span{font-size:10px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.6px;}
-.hero-metrics b{font-size:24px;font-weight:800;color:var(--text);margin-top:3px;}
-.hero-rem-row{margin-top:14px;}
+.hero-metrics span{font-size:10px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.5px;}
+.hero-metrics b{font-size:18px;font-weight:800;color:var(--text);margin-top:3px;}
 .chart-card,.tbl-section{
   background:rgba(20,27,38,.55);border:1px solid rgba(255,255,255,.07);border-radius:8px;
   padding:18px 20px 16px;margin-bottom:16px;backdrop-filter:blur(16px);box-shadow:0 2px 12px rgba(0,0,0,.25);
@@ -133,13 +132,9 @@ body.light-mode .leg .l-rem{border-top-color:#000;}
 <main class="main">
   <!-- HERO: card grande — projeção 2029 -->
   <div class="hero-card">
-    <div class="hero-sub">Projeção 2029 · tendência linear</div>
-    <div class="hero-tag">Realizado</div>
+    <div class="hero-tag">Realizado · projeção 2029</div>
     <div class="hero-real" id="h-real">—</div>
-    <div class="hero-rem-row">
-      <div class="hero-tag">Remunerado</div>
-      <div class="hero-rem" id="h-rem">—</div>
-    </div>
+    <div class="hero-reminline">Remunerado: <b id="h-rem">—</b></div>
     <div class="hero-metrics">
       <div><span>R$/km</span><b id="h-rkm">—</b></div>
       <div><span>R$/Equipamento</span><b id="h-eq">—</b></div>
@@ -313,8 +308,8 @@ function renderChart(canvasId, realKey, remKey, fmt, prevRef){
           callbacks:{label:c=>c.parsed.y==null?null:`${c.dataset.label}: ${fmt(c.parsed.y)}`}},
       },
       scales:{
-        x:{grid:{display:false},ticks:tick(11),stacked:true},
-        y:{grid:grid(),ticks:{...tick(10),callback:v=>fmt(v)},beginAtZero:true},
+        x:{grid:{display:false},border:{display:false},ticks:tick(11),stacked:true},
+        y:{display:false,beginAtZero:true,grace:'14%'},   // sem eixo Y nem linhas de grade
       }
     }
   });
@@ -326,25 +321,28 @@ function renderTable(bodyId, realKey, remKey, dKey, impKey, fmtV){
   const first=hist.length?hist[0].ano:2020;
   const predReal=linReg(hist.map(d=>[d.ano,d[realKey]]).filter(p=>p[1]!=null));
   const predRem =linReg(hist.map(d=>[d.ano,d[remKey ]]).filter(p=>p[1]!=null));
+  const predImp =linReg(hist.map(d=>[d.ano,d[impKey ]]).filter(p=>p[1]!=null));  // tendência do impacto (base 2020–2025)
   const byYear={}; DATA.forEach(d=>byYear[d.ano]=d);
-  let acum=0, totImp=0, html='';
+  let acum=0, totImp=0, sumRem=0, sumReal=0, html='';
   for(let y=first; y<=END_YEAR; y++){
     const d=byYear[y];
     let rem,real,delta,imp;
-    if(d){ rem=d[remKey]; real=d[realKey]; delta=d[dKey]; imp=d[impKey]; }   // ano real (2020–2026)
-    else { rem=predRem(y); real=predReal(y); delta=rem-real; imp=null; }     // ano projetado (2027–2029)
+    if(d){ rem=d[remKey]; real=d[realKey]; delta=d[dKey]; imp=d[impKey]; }        // ano real (2020–2026)
+    else { rem=predRem(y); real=predReal(y); delta=rem-real; imp=predImp(y); }    // ano projetado (2027–2029)
     const proj=y>=PROJ_FROM?'proj':'';
-    if(imp!=null){ acum+=imp; totImp+=imp; }
+    acum+=(imp||0); totImp+=(imp||0); sumRem+=(rem||0); sumReal+=(real||0);
     const dCls=delta==null?'':(delta<0?'cr':'cg');
     const iCls=imp==null?'':(imp<0?'cr':'cg');
     html+=`<tr class="${proj}"><td class="ano">${y}</td>`
        +`<td class="num">${fmtV(rem)}</td><td class="num">${fmtV(real)}</td>`
        +`<td class="num ${dCls}">${fmtV(delta)}</td>`
-       +`<td class="num ${iCls}">${imp==null?'—':numFmt(imp)}</td>`
-       +`<td class="num ${imp==null?'':(acum<0?'cr':'cg')}">${imp==null?'—':numFmt(acum)}</td></tr>`;
+       +`<td class="num ${iCls}">${numFmt(imp)}</td>`
+       +`<td class="num ${acum<0?'cr':'cg'}">${numFmt(acum)}</td></tr>`;
   }
+  const totD=sumRem-sumReal;                                                     // total dos 10 anos
   html+=`<tr class="total"><td class="ano">Total</td>`
-     +`<td class="num">—</td><td class="num">—</td><td class="num">—</td>`
+     +`<td class="num">${fmtV(sumRem)}</td><td class="num">${fmtV(sumReal)}</td>`
+     +`<td class="num ${totD<0?'cr':'cg'}">${fmtV(totD)}</td>`
      +`<td class="num ${totImp<0?'cr':'cg'}">${numFmt(totImp)}</td>`
      +`<td class="num ${totImp<0?'cr':'cg'}">${numFmt(totImp)}</td></tr>`;
   document.getElementById(bodyId).innerHTML=html;
