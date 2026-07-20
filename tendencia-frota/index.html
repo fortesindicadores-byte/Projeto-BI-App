@@ -131,7 +131,7 @@ body.light-mode .leg .l-rem{border-top-color:#000;}
 <main class="main">
   <!-- HERO: card grande — projeção 2029 -->
   <div class="hero-card">
-    <div class="hero-tag">Realizado · projeção 2029</div>
+    <div class="hero-tag">Realizado · geral 2020–2029</div>
     <div class="hero-real" id="h-real">—</div>
     <div class="hero-reminline">Remunerado: <b id="h-rem">—</b></div>
     <div class="hero-metrics">
@@ -380,14 +380,22 @@ function renderTables(){
   renderTable('tb-eq' ,'eqReal' ,'eqRem' ,'dEq' ,'impEq' ,nf0,'nEq');
 }
 
-// Card grande: projeção linear (2029) de Custo Total (Realizado), Remunerado, R$/km e R$/Equipamento.
+// Card grande: GERAL do período 2020–2029 (real + projetado) — igual ao Total da tabela.
 function renderHero(){
   const hist=DATA.filter(d=>d.ano<PROJ_FROM);
-  const P=key=>linReg(hist.map(d=>[d.ano,d[key]]).filter(p=>p[1]!=null))(END_YEAR);
-  set('h-real', moneyFmt(P('custoTot')));
-  set('h-rem',  moneyFmt(P('remuner')));
-  set('h-rkm',  nf2(P('rkmReal')));
-  set('h-eq',   nf0(P('eqReal')));
+  const P=key=>linReg(hist.map(d=>[d.ano,d[key]]).filter(p=>p[1]!=null));
+  const pC=P('custoTot'), pR=P('remuner'), pK=P('km'), pE=P('nEq');
+  const byYear={}; DATA.forEach(d=>byYear[d.ano]=d);
+  const first=hist.length?hist[0].ano:2020;
+  let sC=0,sR=0,sK=0,sE=0;
+  for(let y=first;y<=END_YEAR;y++){ const d=byYear[y];
+    sC+=d?(d.custoTot||0):pC(y);  sR+=d?(d.remuner||0):pR(y);
+    sK+=d?(d.km||0):pK(y);        sE+=d?(d.nEq||0):pE(y);
+  }
+  set('h-real', moneyFmt(sC));
+  set('h-rem',  moneyFmt(sR));
+  set('h-rkm',  sK? nf2(sC/sK):'—');   // razão ponderada do período
+  set('h-eq',   sE? nf0(sC/sE):'—');
 }
 
 function renderAll(){
