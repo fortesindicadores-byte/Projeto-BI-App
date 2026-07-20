@@ -2,7 +2,7 @@
 // tendência linear (TENDÊNCIA / regressão de mín. quadrados) 2020-2025 → 2026-2030.
 const SHEET_ID='1EFmp2qlevQG5OEgGJePrI_O8wKuQo3IDmbJIReN2Fl0';
 const TAB='Base';
-const PROJ_FROM=2026, END_YEAR=2030;
+const PROJ_FROM=2027, FULL_TO=2025, END_YEAR=2029;
 
 const num=v=>{ if(v==null||v==='')return null; if(typeof v==='number')return v;
   let s=String(v).replace(/\s|R\$/g,''); if(s.indexOf(',')>=0)s=s.replace(/\./g,'').replace(',','.');
@@ -45,7 +45,7 @@ async function main(){
     `${String(Math.round(d.eqRem??0)).padStart(5)} ${String(Math.round(d.eqReal??0)).padStart(6)} `+
     `${String(Math.round(d.dEq??0)).padStart(6)} ${String(Math.round(d.impEq??0)).padStart(9)}`));
 
-  const hist=D.filter(d=>d.ano<PROJ_FROM);
+  const hist=D.filter(d=>d.ano<PROJ_FROM); const histV=D.filter(d=>d.ano<=FULL_TO);
   const preds={
     rkmReal:linReg(hist.map(d=>[d.ano,d.rkmReal]).filter(p=>p[1]!=null)),
     rkmRem :linReg(hist.map(d=>[d.ano,d.rkmRem ]).filter(p=>p[1]!=null)),
@@ -59,12 +59,12 @@ async function main(){
       `${String(Math.round(preds.eqReal(y))).padStart(5)} ${String(Math.round(preds.eqRem(y))).padStart(5)}`);
   }
   // Hero (projeção 2029): Custo Total (Realizado), Remunerado, R$/km, R$/Equip
-  const pH=key=>linReg(hist.map(d=>[d.ano,d[key]]).filter(p=>p[1]!=null))(2029);
+  const pH=key=>linReg(histV.map(d=>[d.ano,d[key]]).filter(p=>p[1]!=null))(2029);
   const D2=[];
   rows.forEach(r=>{ const ano=num(r[0]); if(ano==null||ano<2000||ano>2100)return;
     D2.push({ano:Math.round(ano),custoTot:num(r[4]),remuner:num(r[1])}); });
   D2.sort((a,b)=>a.ano-b.ano);
-  const histM=D2.filter(d=>d.ano<PROJ_FROM);
+  const histM=D2.filter(d=>d.ano<=FULL_TO);
   const pM=key=>linReg(histM.map(d=>[d.ano,d[key]]).filter(p=>p[1]!=null))(2029);
   console.log('\n== HERO (projeção 2029) ==');
   console.log(`  Realizado (Custo Total): ${Math.round(pM('custoTot')).toLocaleString('pt-BR')}`);
@@ -73,7 +73,7 @@ async function main(){
   console.log(`  R$/Equipamento (Real):   ${Math.round(pH('eqReal')).toLocaleString('pt-BR')}`);
 
   // Projeção do Impacto (2027–2029) + totais 10 anos (como no painel)
-  const P2=key=>linReg(hist.map(d=>[d.ano,d[key]]).filter(p=>p[1]!=null));
+  const P2=key=>linReg(histV.map(d=>[d.ano,d[key]]).filter(p=>p[1]!=null));
   function tableTotals(impKey,denomKey,fmt){
     const pI=P2(impKey), pC=P2('custoTot'), pM=P2('remuner'), pD=P2(denomKey);
     const by={}; D.forEach(d=>by[d.ano]=d);

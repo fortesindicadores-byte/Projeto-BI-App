@@ -144,10 +144,10 @@ body.light-mode .leg .l-rem{border-top-color:#000;}
     <!-- CHART 1: R$/km -->
     <div class="chart-card">
       <div class="tbl-title">R$/km</div>
-      <div class="tbl-sub">Custo por quilômetro rodado · realizado vs remunerado · tendência a partir de 2026</div>
+      <div class="tbl-sub">Custo por quilômetro rodado · realizado vs remunerado · tendência a partir de 2027</div>
       <div class="leg">
         <span><i class="b-real"></i>Realizado</span>
-        <span><i class="b-proj"></i>Tendência (2026–2030)</span>
+        <span><i class="b-proj"></i>Tendência (2027–2029)</span>
         <span><i class="l-rem"></i>Remunerado</span>
       </div>
       <div class="chart-wrap"><canvas id="ch-rkm"></canvas></div>
@@ -156,10 +156,10 @@ body.light-mode .leg .l-rem{border-top-color:#000;}
     <!-- CHART 2: R$/Equipamento -->
     <div class="chart-card">
       <div class="tbl-title">R$/Equipamento</div>
-      <div class="tbl-sub">Custo por equipamento (carreta) · realizado vs remunerado · tendência a partir de 2026</div>
+      <div class="tbl-sub">Custo por equipamento (carreta) · realizado vs remunerado · tendência a partir de 2027</div>
       <div class="leg">
         <span><i class="b-real"></i>Realizado</span>
-        <span><i class="b-proj"></i>Tendência (2026–2030)</span>
+        <span><i class="b-proj"></i>Tendência (2027–2029)</span>
         <span><i class="l-rem"></i>Remunerado</span>
       </div>
       <div class="chart-wrap"><canvas id="ch-eq"></canvas></div>
@@ -200,7 +200,8 @@ Chart.register(ChartDataLabels);
 
 const SHEET_ID='1EFmp2qlevQG5OEgGJePrI_O8wKuQo3IDmbJIReN2Fl0';
 const TAB='Base';
-const PROJ_FROM=2026;   // primeiro ano de tendência (tracejado)
+const PROJ_FROM=2027;   // primeiro ano projetado (realizado até 2026, inclusive YTD)
+const FULL_TO=2025;     // último ano completo — bases de volume/impacto ignoram o parcial de 2026
 const END_YEAR=2029;    // 10 anos (2020–2029)
 
 // ── helpers ──────────────────────────────────────────────
@@ -337,11 +338,13 @@ function renderChart(canvasId, realKey, remKey, fmt, prevRef){
 // Renderiza uma tabela 2020→END_YEAR: real (aba) onde existe, tendência linear nos anos futuros.
 // denomKey = volume que vai no denominador do Total (km p/ R$/km, nEq p/ R$/Equipamento).
 function renderTable(bodyId, realKey, remKey, dKey, impKey, fmtV, denomKey){
-  const hist=DATA.filter(d=>d.ano<PROJ_FROM);                         // base da tendência: anos completos
-  const first=hist.length?hist[0].ano:2020;
-  const P=key=>linReg(hist.map(d=>[d.ano,d[key]]).filter(p=>p[1]!=null));
-  const predReal=P(realKey), predRem=P(remKey), predImp=P(impKey);
-  const predCusto=P('custoTot'), predRemun=P('remuner'), predDenom=P(denomKey);
+  const histR=DATA.filter(d=>d.ano<PROJ_FROM);      // taxas: inclui 2026 (YTD válido)
+  const histV=DATA.filter(d=>d.ano<=FULL_TO);       // volume/impacto: só anos completos (ignora parcial 2026)
+  const first=histR.length?histR[0].ano:2020;
+  const PR=key=>linReg(histR.map(d=>[d.ano,d[key]]).filter(p=>p[1]!=null));
+  const PV=key=>linReg(histV.map(d=>[d.ano,d[key]]).filter(p=>p[1]!=null));
+  const predReal=PR(realKey), predRem=PR(remKey);
+  const predImp=PV(impKey), predCusto=PV('custoTot'), predRemun=PV('remuner'), predDenom=PV(denomKey);
   const byYear={}; DATA.forEach(d=>byYear[d.ano]=d);
   let acum=0, totImp=0, sCusto=0, sRemun=0, sDenom=0, html='';
   for(let y=first; y<=END_YEAR; y++){
@@ -382,11 +385,11 @@ function renderTables(){
 
 // Card grande: GERAL do período 2020–2029 (real + projetado) — igual ao Total da tabela.
 function renderHero(){
-  const hist=DATA.filter(d=>d.ano<PROJ_FROM);
-  const P=key=>linReg(hist.map(d=>[d.ano,d[key]]).filter(p=>p[1]!=null));
+  const histV=DATA.filter(d=>d.ano<=FULL_TO);   // volume: só anos completos (ignora parcial 2026)
+  const P=key=>linReg(histV.map(d=>[d.ano,d[key]]).filter(p=>p[1]!=null));
   const pC=P('custoTot'), pR=P('remuner'), pK=P('km'), pE=P('nEq');
   const byYear={}; DATA.forEach(d=>byYear[d.ano]=d);
-  const first=hist.length?hist[0].ano:2020;
+  const first=DATA.length?DATA[0].ano:2020;
   let sC=0,sR=0,sK=0,sE=0;
   for(let y=first;y<=END_YEAR;y++){ const d=byYear[y];
     sC+=d?(d.custoTot||0):pC(y);  sR+=d?(d.remuner||0):pR(y);
