@@ -137,6 +137,23 @@
     });
   }
 
+  // ---- Exportar BASE + IMPACTO (2 abas: Base e Memória de cálculo) ----
+  // O painel liga o hook num elemento do card de impacto:
+  //   el.$exportImpacto = () => ({ nome, base:[[hdr],[...linhas com coluna IMPACTO]], memoria:[[...]] })
+  function findImpactoEl(target){ let e=target; while(e){ if(e.$exportImpacto) return e; e=e.parentElement; } return null; }
+  function baixarImpacto(getData, nomeFallback){
+    ensureXLSX(err=>{ if(err){alert('Não foi possível carregar o componente de Excel. Verifique a conexão.');return;}
+      try{
+        const d=(typeof getData==='function')?getData():getData;
+        if(!d||!d.base||!d.base.length){ alert('Sem base para exportar.'); return; }
+        const wb=XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(d.base), sheetName('Base'));
+        if(d.memoria&&d.memoria.length) XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(d.memoria), sheetName('Memória de cálculo'));
+        XLSX.writeFile(wb, slug(painelTitulo())+'_'+slug(d.nome||nomeFallback||'impacto')+'.xlsx');
+      }catch(e){ console.error(e); alert('Erro ao exportar base de impacto: '+(e.message||e)); }
+    });
+  }
+
   // ---- Exportar IMAGEM (PNG) em alta resolução ----
   function baixarPNG(canvas, nome){
     canvas.toBlob(blob=>{
@@ -270,6 +287,8 @@
       const t=bloco.querySelector('.chart-title,.tbl-title,.sec-title,.card-label,.kpi-lbl,h2,h3');
       const nome=(t&&t.textContent.trim())||'card';
       const items=[];
+      const impEl=findImpactoEl(e.target);
+      if(impEl) items.push({icon:IC_FILE,label:'Exportar base + Impacto (Excel)',action:()=>baixarImpacto(impEl.$exportImpacto,'Impacto')});
       const cards=cardsDe(e.target);
       if(cards) items.push({icon:IC_FILE,label:'Exportar Excel (cards)',action:()=>baixarCards(cards, 'Cards')});
       items.push({icon:IC_IMG,label:'Exportar imagem (PNG)',action:()=>capturaImagem(bloco, nome)});
