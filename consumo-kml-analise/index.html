@@ -91,16 +91,16 @@ table.dre th.sep-l,table.dre td.sep-l{border-left:1px solid rgba(255,255,255,.28
 td.imp-cell{font-size:13px;font-weight:800;padding-left:10px;padding-right:10px;}
 table.dre tr.total td.imp-cell{font-size:14px;}
 .w-conta{width:160px;}.w-num{width:80px;}.w-d{width:80px;}.w-pct{width:60px;}.w-imp{width:100px;}
-/* Km/L Detalhado: 8 colunas — layout fixo p/ distribuir sem gaps */
-#tbl-det{table-layout:fixed;width:100%;}
-#tbl-det th:nth-child(1),#tbl-det td:nth-child(1){width:14%;}
-#tbl-det th:nth-child(2),#tbl-det td:nth-child(2),
-#tbl-det th:nth-child(3),#tbl-det td:nth-child(3),
-#tbl-det th:nth-child(4),#tbl-det td:nth-child(4),
-#tbl-det th:nth-child(5),#tbl-det td:nth-child(5){width:10%;}
-#tbl-det th:nth-child(6),#tbl-det td:nth-child(6),
-#tbl-det th:nth-child(7),#tbl-det td:nth-child(7){width:15%;}
-#tbl-det th:nth-child(8),#tbl-det td:nth-child(8){width:16%;}
+/* Km/L Detalhado (Unidade e Projeto): 8 colunas — layout fixo p/ distribuir sem gaps */
+.tbl-det{table-layout:fixed;width:100%;}
+.tbl-det th:nth-child(1),.tbl-det td:nth-child(1){width:14%;}
+.tbl-det th:nth-child(2),.tbl-det td:nth-child(2),
+.tbl-det th:nth-child(3),.tbl-det td:nth-child(3),
+.tbl-det th:nth-child(4),.tbl-det td:nth-child(4),
+.tbl-det th:nth-child(5),.tbl-det td:nth-child(5){width:10%;}
+.tbl-det th:nth-child(6),.tbl-det td:nth-child(6),
+.tbl-det th:nth-child(7),.tbl-det td:nth-child(7){width:15%;}
+.tbl-det th:nth-child(8),.tbl-det td:nth-child(8){width:16%;}
 /* Tabela de veículos: 15 colunas — layout fixo p/ preencher largura sem gaps */
 #tbl-vei{font-size:12px;table-layout:fixed;width:100%;}
 #tbl-vei th,#tbl-vei td{padding-left:6px;padding-right:6px;}
@@ -285,27 +285,31 @@ body.light-mode table.dre thead tr.cols th{background:#F0F0F0;}
   </div>
 
   <div class="tbl-section">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:3px;">
-      <div class="tbl-title">Km/L Detalhado</div>
-      <div class="dim-toggle">
-        <button class="dim-btn active" data-dim="uni" onclick="setDim('uni')">Unidade</button>
-        <button class="dim-btn" data-dim="proj" onclick="setDim('proj')">Projeto</button>
-      </div>
-    </div>
-    <div class="tbl-sub" id="sub-kml">—</div>
+    <div class="tbl-title">Km/L Detalhado — por Unidade</div>
+    <div class="tbl-sub" id="sub-uni">—</div>
     <div class="tbl-wrap">
-      <table class="dre" id="tbl-det">
+      <table class="dre tbl-det">
         <thead><tr class="cols">
-          <th class="w-conta" id="th-dim">UNIDADE</th>
-          <th class="w-num num">Rem</th>
-          <th class="w-num num">Real</th>
-          <th class="w-d   num">Δ</th>
-          <th class="w-pct num">Δ %</th>
-          <th class="num sep-l">Litros</th>
-          <th class="num">R$/km Rem</th>
-          <th class="num">Impacto</th>
+          <th class="w-conta">UNIDADE</th>
+          <th class="w-num num">Rem</th><th class="w-num num">Real</th><th class="w-d num">Δ</th><th class="w-pct num">Δ %</th>
+          <th class="num sep-l">Litros</th><th class="num">R$/km Rem</th><th class="num">Impacto</th>
         </tr></thead>
-        <tbody id="body-kml"></tbody>
+        <tbody id="body-uni"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="tbl-section">
+    <div class="tbl-title">Km/L Detalhado — por Projeto</div>
+    <div class="tbl-sub" id="sub-proj">—</div>
+    <div class="tbl-wrap">
+      <table class="dre tbl-det">
+        <thead><tr class="cols">
+          <th class="w-conta">PROJETO</th>
+          <th class="w-num num">Rem</th><th class="w-num num">Real</th><th class="w-d num">Δ</th><th class="w-pct num">Δ %</th>
+          <th class="num sep-l">Litros</th><th class="num">R$/km Rem</th><th class="num">Impacto</th>
+        </tr></thead>
+        <tbody id="body-proj"></tbody>
       </table>
     </div>
     <div class="tbl-sub" style="margin-top:12px;font-size:11px;">
@@ -1127,8 +1131,8 @@ function chainCells(lit,rkmRem){
   const rkm=(rkmRem!=null&&isFinite(rkmRem))?rkmRem.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2}):'—';
   return `<td class="num sep-l">${_intBR(lit)}</td><td class="num">${rkm}</td>`;
 }
-function renderTable(active,ytd){
-  const keyFn=tableDim==='proj'?r=>getProj(r):r=>getUni(r);
+function renderTable(active,ytd,dim,bodyId){
+  const keyFn=dim==='proj'?r=>getProj(r):r=>getUni(r);
   const build=rows=>aggByKey(rows,keyFn);
   const activeItems=build(active);
   const ytdMap=Object.fromEntries(build(ytd).map(({k,agg})=>[k,agg]));
@@ -1161,7 +1165,7 @@ function renderTable(active,ytd){
   const tDY=(tRemY!=null&&tRealY!=null)?tRealY-tRemY:null,tDPY=(tDY!=null&&tRemY)?tDY/Math.abs(tRemY)*100:null,tImpY=calcImpacto(totY);
   const bT=tD!=null&&tD<0,bTY=tDY!=null&&tDY<0;
   html+=`<tr class="total"><td class="conta">Total</td><td class="num">${kml(tRem)}</td><td class="num">${kml(tReal)}</td><td class="num ${bT?'cr':'cg'}">${tD!=null?kmlD(tD):'—'}</td><td class="num ${bT?'cr-t':'cg-t'}">${pctInt(tDP)}</td>${chainCells(totA.sumLitros,(totA.remPrice!=null&&tRem)?totA.remPrice/tRem:null)}<td class="num imp-cell" style="color:${tImp<0?'var(--red)':'var(--green)'}">${tImp!=null?fmtBrlD(tImp):'—'}</td></tr>`;
-  document.getElementById('body-kml').innerHTML=html;
+  document.getElementById(bodyId).innerHTML=html;
 }
 
 // ── TABELA VEÍCULO ──
@@ -1225,7 +1229,7 @@ function setDim(dim){
   tableDim=dim;
   document.querySelectorAll('.dim-btn').forEach(b=>b.classList.toggle('active',b.dataset.dim===dim));
   const th=document.getElementById('th-dim');if(th)th.textContent=dim==='proj'?'PROJETO':'UNIDADE';
-  if(lastF){const a=filterRows(allRows,lastF),yv=getYtdVigs(lastF),y=filterRows(allRows,{...lastF,vig:yv});renderTable(a,y);}
+  if(lastF){const a=filterRows(allRows,lastF),yv=getYtdVigs(lastF),y=filterRows(allRows,{...lastF,vig:yv});renderTable(a,y,'uni','body-uni');renderTable(a,y,'proj','body-proj');}
 }
 
 function setRemMode(m){
@@ -1233,7 +1237,7 @@ function setRemMode(m){
   document.querySelectorAll('.dim-btn[data-remmode]').forEach(b=>b.classList.toggle('active',b.dataset.remmode===m));
   if(lastF){
     const active=filterRows(allRows,lastF), yv=getYtdVigs(lastF), ytd=filterRows(allRows,{...lastF,vig:yv});
-    renderHero(active,ytd); renderCharts(lastF); renderTable(active,ytd);
+    renderHero(active,ytd); renderCharts(lastF); renderTable(active,ytd,'uni','body-uni'); renderTable(active,ytd,'proj','body-proj');
   }
 }
 
@@ -1248,7 +1252,8 @@ function atualizar(){
   renderHero(active,ytd);
   setImpactoHook();
   renderCharts(f2);
-  renderTable(active,ytd);
+  renderTable(active,ytd,'uni','body-uni');
+  renderTable(active,ytd,'proj','body-proj');
   renderVeiTable(active,ytd);
   renderDiverg(f2);
 
@@ -1256,7 +1261,7 @@ function atualizar(){
   if(!f2.vig||f2.vig.length===0)vigLbl='TODAS';
   else if(f2.vig.length<=3)vigLbl=f2.vig.map(vk=>{const d=vigs.find(x=>vigKey(x)===vk);return d?vigLabelFull(d).toUpperCase():vk;}).join(', ');
   else vigLbl=`${f2.vig.length} vigências`;
-  set('sub-kml',vigLbl);
+  set('sub-uni',vigLbl); set('sub-proj',vigLbl);
   set('sub-vei',`${vigLbl} — ordenado por impacto`);
 
   const now=new Date();
