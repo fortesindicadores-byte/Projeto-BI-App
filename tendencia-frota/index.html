@@ -44,6 +44,21 @@ body{
 /* MAIN */
 .main{padding:20px 24px 60px;}
 .charts-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;align-items:start;}
+
+/* HERO (card grande — projeção 2029) */
+.hero-card{
+  background:rgba(20,27,38,.55);border:1px solid rgba(255,255,255,.07);border-radius:8px;
+  padding:22px 26px;margin-bottom:16px;backdrop-filter:blur(16px);box-shadow:0 2px 12px rgba(0,0,0,.25);
+}
+.hero-sub{font-size:10px;font-weight:700;color:var(--orange);text-transform:uppercase;letter-spacing:1.6px;margin-bottom:12px;}
+.hero-tag{font-size:11px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.8px;}
+.hero-real{font-size:52px;font-weight:800;color:var(--text);line-height:1;margin-top:2px;}
+.hero-rem{font-size:30px;font-weight:800;color:var(--text2);line-height:1;margin-top:2px;}
+.hero-metrics{display:flex;gap:48px;margin-top:18px;flex-wrap:wrap;}
+.hero-metrics>div{display:flex;flex-direction:column;}
+.hero-metrics span{font-size:10px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.6px;}
+.hero-metrics b{font-size:24px;font-weight:800;color:var(--text);margin-top:3px;}
+.hero-rem-row{margin-top:14px;}
 .chart-card,.tbl-section{
   background:rgba(20,27,38,.55);border:1px solid rgba(255,255,255,.07);border-radius:8px;
   padding:18px 20px 16px;margin-bottom:16px;backdrop-filter:blur(16px);box-shadow:0 2px 12px rgba(0,0,0,.25);
@@ -63,10 +78,10 @@ body{
 
 /* TABLES */
 table{width:100%;border-collapse:collapse;font-size:12px;}
-thead th{background:transparent;color:var(--text);font-size:11px;font-weight:700;padding:8px 8px 12px;border-bottom:1px solid rgba(255,255,255,.10);text-transform:uppercase;letter-spacing:.5px;white-space:nowrap;}
+thead th{background:transparent;color:var(--text);font-size:11px;font-weight:700;padding:8px 8px 12px;border-bottom:1px solid rgba(255,255,255,.10);text-transform:uppercase;letter-spacing:.5px;white-space:nowrap;text-align:left;}
 td{padding:11px 8px;border:none;color:var(--text);white-space:nowrap;}
 tbody tr:hover{background:rgba(255,255,255,.035);}
-td.num{text-align:right;font-variant-numeric:tabular-nums;}
+td.num,th.num{text-align:right;font-variant-numeric:tabular-nums;}
 td.ano{font-weight:700;}
 tr.proj td{color:var(--text2);font-style:italic;}
 tr.proj td.ano::after{content:' · tend.';font-size:9px;color:var(--text3);font-style:normal;}
@@ -77,9 +92,10 @@ tr.total td{color:var(--text);font-weight:700;font-size:12px;border-top:2px soli
 /* LIGHT MODE — espelha a Visão Financeira (cards translúcidos, sem borda/sombra) */
 body.light-mode .main{background:#F0F0F0;--text:#1a1a1a;--text2:#444444;--text3:#666666;color:var(--text);--red:#ff0000;--green:#0E8C0E;}
 body.light-mode .chart-card,
-body.light-mode .tbl-section{background:rgba(128,128,128,.14)!important;border:none!important;box-shadow:none!important;--text:#1a1a1a;--text2:#444444;--text3:#555555;}
+body.light-mode .tbl-section,
+body.light-mode .hero-card{background:rgba(128,128,128,.14)!important;border:none!important;box-shadow:none!important;--text:#1a1a1a;--text2:#444444;--text3:#555555;}
 body.light-mode td{color:var(--text);}
-body.light-mode thead th{border-bottom-color:rgba(0,0,0,.12);}
+body.light-mode thead th{border-bottom-color:rgba(0,0,0,.12);background:#F0F0F0;}
 body.light-mode tbody tr{border-bottom:1px solid rgba(0,0,0,.06);}
 body.light-mode tr.total td{border-top-color:rgba(0,0,0,.20);}
 body.light-mode .leg .l-rem{border-top-color:#000;}
@@ -116,6 +132,21 @@ body.light-mode .leg .l-rem{border-top-color:#000;}
 </header>
 
 <main class="main">
+  <!-- HERO: card grande — projeção 2029 -->
+  <div class="hero-card">
+    <div class="hero-sub">Projeção 2029 · tendência linear</div>
+    <div class="hero-tag">Realizado</div>
+    <div class="hero-real" id="h-real">—</div>
+    <div class="hero-rem-row">
+      <div class="hero-tag">Remunerado</div>
+      <div class="hero-rem" id="h-rem">—</div>
+    </div>
+    <div class="hero-metrics">
+      <div><span>R$/km</span><b id="h-rkm">—</b></div>
+      <div><span>R$/Equipamento</span><b id="h-eq">—</b></div>
+    </div>
+  </div>
+
   <div class="charts-grid">
     <!-- CHART 1: R$/km -->
     <div class="chart-card">
@@ -191,6 +222,11 @@ const numFmt=v=>{ if(v==null||!isFinite(v))return '—'; const a=Math.abs(v),s=v
   if(a>=1e6)return s+(a/1e6).toLocaleString('pt-BR',{maximumFractionDigits:1})+' mi';
   if(a>=1e3)return s+Math.round(a/1e3)+'k';
   return s+Math.round(a).toLocaleString('pt-BR'); };
+// formato "X,XX mi" para o hero (igual à Visão Financeira)
+const moneyFmt=v=>{ if(v==null||!isFinite(v))return '—'; const a=Math.abs(v),s=v<0?'-':'';
+  if(a>=1e6)return s+(a/1e6).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2})+' mi';
+  if(a>=1e3)return s+(a/1e3).toLocaleString('pt-BR',{minimumFractionDigits:1,maximumFractionDigits:1})+'k';
+  return s+Math.round(a).toLocaleString('pt-BR'); };
 
 // regressão linear (mín. quadrados) → função preditora
 function linReg(pairs){
@@ -221,6 +257,7 @@ async function fetchBase(){
     if(ano==null||ano<2000||ano>2100)return;   // ignora header/lixo
     out.push({
       ano:Math.round(ano),
+      remuner:num(r[1]), custoTot:num(r[4]),                                  // R$ Remunerado (B) / Custo Total (E)
       rkmReal:num(r[7]), rkmRem:num(r[8]), dRkm:num(r[9]), impRkm:num(r[10]),
       eqRem:num(r[11]), eqReal:num(r[12]), dEq:num(r[13]), impEq:num(r[14]),
     });
@@ -248,7 +285,6 @@ function renderChart(canvasId, realKey, remKey, fmt, prevRef){
   if(prevRef) prevRef.destroy();
   const isL=isLight();
   const remC=isL?'#000000':'#F1F5F9';               // remunerado: preto (claro) / branco (escuro)
-  const holo=isL?'#FFFFFF':'#141B26';               // ponto vazado da projeção
   // Condicional (padrão Visão Financeira): Real acima do Rem = custo desfavorável = vermelho; abaixo = verde.
   const bad=(v,i)=>{ const rem=remLine[i]; return rem==null ? true : v>rem; };
   const barBg =(arr,a)=>arr.map((v,i)=>v==null?'transparent':(bad(v,i)?`rgba(255,102,102,${a})`:`rgba(59,179,59,${a})`));
@@ -265,8 +301,7 @@ function renderChart(canvasId, realKey, remKey, fmt, prevRef){
          borderColor:barBc(realProj),borderWidth:1.5,borderDash:[5,4],borderRadius:3,
          categoryPercentage:.62,barPercentage:.9,datalabels:dl},
         {type:'line',label:'Remunerado',data:remLine,borderColor:remC,borderWidth:2.5,tension:.25,borderDash:[5,3],
-         pointRadius:3.5,pointBorderColor:remC,pointBorderWidth:1.5,
-         pointBackgroundColor:years.map(y=>y>=PROJ_FROM?holo:remC),   // projeção = ponto vazado
+         pointRadius:3.5,pointBackgroundColor:remC,pointBorderColor:remC,pointBorderWidth:0,   // marcador sólido branco(escuro)/preto(claro)
          datalabels:{display:false}},
       ]
     },
@@ -321,7 +356,18 @@ function renderTables(){
   renderTable('tb-eq' ,'eqReal' ,'eqRem' ,'dEq' ,'impEq' ,nf0);
 }
 
+// Card grande: projeção linear (2029) de Custo Total (Realizado), Remunerado, R$/km e R$/Equipamento.
+function renderHero(){
+  const hist=DATA.filter(d=>d.ano<PROJ_FROM);
+  const P=key=>linReg(hist.map(d=>[d.ano,d[key]]).filter(p=>p[1]!=null))(END_YEAR);
+  set('h-real', moneyFmt(P('custoTot')));
+  set('h-rem',  moneyFmt(P('remuner')));
+  set('h-rkm',  nf2(P('rkmReal')));
+  set('h-eq',   nf0(P('eqReal')));
+}
+
 function renderAll(){
+  renderHero();
   chRkm=renderChart('ch-rkm','rkmReal','rkmRem',nf2,chRkm);
   chEq =renderChart('ch-eq','eqReal','eqRem',nf0,chEq);
   renderTables();

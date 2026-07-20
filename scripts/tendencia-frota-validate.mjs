@@ -57,6 +57,20 @@ async function main(){
     console.log(`${y}  ${preds.rkmReal(y).toFixed(3).padStart(7)}  ${preds.rkmRem(y).toFixed(3).padStart(7)}   `+
       `${String(Math.round(preds.eqReal(y))).padStart(5)} ${String(Math.round(preds.eqRem(y))).padStart(5)}`);
   }
+  // Hero (projeção 2029): Custo Total (Realizado), Remunerado, R$/km, R$/Equip
+  const pH=key=>linReg(hist.map(d=>[d.ano,d[key]]).filter(p=>p[1]!=null))(2029);
+  const D2=[];
+  rows.forEach(r=>{ const ano=num(r[0]); if(ano==null||ano<2000||ano>2100)return;
+    D2.push({ano:Math.round(ano),custoTot:num(r[4]),remuner:num(r[1])}); });
+  D2.sort((a,b)=>a.ano-b.ano);
+  const histM=D2.filter(d=>d.ano<PROJ_FROM);
+  const pM=key=>linReg(histM.map(d=>[d.ano,d[key]]).filter(p=>p[1]!=null))(2029);
+  console.log('\n== HERO (projeção 2029) ==');
+  console.log(`  Realizado (Custo Total): ${Math.round(pM('custoTot')).toLocaleString('pt-BR')}`);
+  console.log(`  Remunerado:              ${Math.round(pM('remuner')).toLocaleString('pt-BR')}`);
+  console.log(`  R$/km (Real):            ${pH('rkmReal').toFixed(3)}`);
+  console.log(`  R$/Equipamento (Real):   ${Math.round(pH('eqReal')).toLocaleString('pt-BR')}`);
+
   const r26=D.find(d=>d.ano===2026);
   if(r26) console.log(`\n2026 REALIZADO PARCIAL na planilha: R$/kmReal=${r26.rkmReal}  R$/kmRem=${r26.rkmRem}  EqReal=${r26.eqReal}  EqRem=${r26.eqRem}  (km=${r26.km}, #eq=${r26.eq})`);
   console.log('\nOBS: no painel 2026 é exibido como TENDÊNCIA (tracejado); acima o comparativo com o parcial real.');
