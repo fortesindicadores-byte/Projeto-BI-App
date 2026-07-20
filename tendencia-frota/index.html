@@ -57,8 +57,8 @@ body{
 .leg{display:flex;gap:16px;flex-wrap:wrap;margin:2px 0 12px;font-size:10px;color:var(--text2);font-weight:600;}
 .leg span{display:inline-flex;align-items:center;gap:6px;}
 .leg i{width:16px;height:0;display:inline-block;}
-.leg .b-real{width:14px;height:11px;background:rgba(249,115,22,.45);border:1.5px solid var(--orange);border-radius:2px;}
-.leg .b-proj{width:14px;height:11px;background:rgba(249,115,22,.15);border:1.5px dashed var(--orange);border-radius:2px;}
+.leg .b-real{width:12px;height:12px;background:transparent;border:1.5px solid var(--text3);border-radius:2px;}
+.leg .b-proj{width:12px;height:12px;background:transparent;border:1.5px dashed var(--text3);border-radius:2px;}
 .leg .l-rem{border-top:2px dashed #F1F5F9;width:16px;}
 
 /* TABLES */
@@ -74,11 +74,13 @@ tr.total td{color:var(--text);font-weight:700;font-size:12px;border-top:2px soli
 .cr{color:var(--red)!important;font-weight:700;}
 .cg{color:var(--green)!important;font-weight:700;}
 
-/* LIGHT MODE */
-body.light-mode .main{--text:#1a1a1a;--text2:#444;--text3:#666;background:#F0F0F0;}
+/* LIGHT MODE — espelha a Visão Financeira (cards translúcidos, sem borda/sombra) */
+body.light-mode .main{background:#F0F0F0;--text:#1a1a1a;--text2:#444444;--text3:#666666;color:var(--text);--red:#ff0000;--green:#0E8C0E;}
 body.light-mode .chart-card,
-body.light-mode .tbl-section{background:#FFFFFF!important;border-color:transparent!important;box-shadow:0 2px 12px rgba(0,0,0,.10)!important;--text:#1a1a1a;--text2:#444;--text3:#555;}
+body.light-mode .tbl-section{background:rgba(128,128,128,.14)!important;border:none!important;box-shadow:none!important;--text:#1a1a1a;--text2:#444444;--text3:#555555;}
 body.light-mode td{color:var(--text);}
+body.light-mode thead th{border-bottom-color:rgba(0,0,0,.12);}
+body.light-mode tbody tr{border-bottom:1px solid rgba(0,0,0,.06);}
 body.light-mode .leg .l-rem{border-top-color:#000;}
 
 @media(max-width:900px){
@@ -246,18 +248,20 @@ function renderChart(canvasId, realKey, remKey, fmt, prevRef){
   const isL=isLight();
   const remC=isL?'#000000':'#F1F5F9';               // remunerado: preto (claro) / branco (escuro)
   const holo=isL?'#FFFFFF':'#141B26';               // ponto vazado da projeção
-  const barFill =isL?'rgba(249,115,22,.22)':'rgba(249,115,22,.55)';  // realizado: fill translúcido + borda (padrão casa)
-  const projFill=isL?'rgba(249,115,22,.09)':'rgba(249,115,22,.16)';  // tendência: mais claro + borda tracejada
+  // Condicional (padrão Visão Financeira): Real acima do Rem = custo desfavorável = vermelho; abaixo = verde.
+  const bad=(v,i)=>{ const rem=remLine[i]; return rem==null ? true : v>rem; };
+  const barBg =(arr,a)=>arr.map((v,i)=>v==null?'transparent':(bad(v,i)?`rgba(255,102,102,${a})`:`rgba(59,179,59,${a})`));
+  const barBc =(arr)  =>arr.map((v,i)=>v==null?'transparent':(bad(v,i)?'#FF6666':'#3BB33B'));
   const dl={color:isL?'#1a1a1a':'#F1F5F9',font:{family:'Montserrat',size:10,weight:'700'},anchor:'end',align:'end',offset:2,formatter:v=>v==null?'':fmt(v)};
   return new Chart(document.getElementById(canvasId),{
     data:{
       labels:years,
       datasets:[
-        {type:'bar',label:'Realizado',data:realHist,stack:'r',backgroundColor:barFill,
-         borderColor:'#F97316',borderWidth:1.5,borderRadius:3,
+        {type:'bar',label:'Realizado',data:realHist,stack:'r',backgroundColor:barBg(realHist,.6),
+         borderColor:barBc(realHist),borderWidth:1.5,borderRadius:3,
          categoryPercentage:.62,barPercentage:.9,datalabels:dl},
-        {type:'bar',label:'Tendência',data:realProj,stack:'r',backgroundColor:projFill,
-         borderColor:'#F97316',borderWidth:1.5,borderDash:[5,4],borderRadius:3,
+        {type:'bar',label:'Tendência',data:realProj,stack:'r',backgroundColor:barBg(realProj,.16),
+         borderColor:barBc(realProj),borderWidth:1.5,borderDash:[5,4],borderRadius:3,
          categoryPercentage:.62,barPercentage:.9,datalabels:dl},
         {type:'line',label:'Remunerado',data:remLine,borderColor:remC,borderWidth:2.5,tension:.25,borderDash:[5,3],
          pointRadius:3.5,pointBorderColor:remC,pointBorderWidth:1.5,
