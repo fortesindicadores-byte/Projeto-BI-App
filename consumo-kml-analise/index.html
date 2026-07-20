@@ -309,7 +309,7 @@ body.light-mode table.dre thead tr.cols th{background:#F0F0F0;}
       </table>
     </div>
     <div class="tbl-sub" style="margin-top:12px;font-size:11px;">
-      <b>Memória de cálculo:</b>&nbsp; Impacto = ▲ Km/L × Litros abastecido × R$/km Rem &nbsp;·&nbsp; ▲ Km/L = Km/L Real − Km/L Rem &nbsp;·&nbsp; R$/km Rem = efetivo (ponderado pelo impacto — fecha a linha) &nbsp;·&nbsp; Impacto somado por placa
+      <b>Memória de cálculo:</b>&nbsp; Impacto = ▲ Km/L × Litros abastecido × R$/km Rem &nbsp;·&nbsp; ▲ Km/L = Km/L Real − Km/L Rem &nbsp;·&nbsp; R$/km Rem = R$/L Rem ÷ Km/L Rem &nbsp;·&nbsp; calculado e somado <b>por placa</b> (na linha agregada a multiplicação direta é aproximada; o exato é por placa)
     </div>
   </div>
 
@@ -1138,8 +1138,7 @@ function renderTable(active,ytd){
     const delta=(rem!=null&&real!=null)?real-rem:null;
     const deltaP=(delta!=null&&rem)?delta/Math.abs(rem)*100:null;
     const imp=calcImpacto(agg);
-    const nomRkm=(remPrice!=null&&rem)?remPrice/rem:null;                // R$/km nominal (R$/L Rem ÷ Km/L Rem)
-    const rkmRem=(imp!=null&&delta&&lit)?imp/(delta*lit):nomRkm;         // R$/km EFETIVO: fecha ▲Km/L × Litros × R$/km = Impacto
+    const rkmRem=(remPrice!=null&&rem)?remPrice/rem:null;                // R$/km Rem nominal = R$/L Rem ÷ Km/L Rem (preço real)
     const yagg=ytdMap[k];
     let deltaY=null,deltaPY=null,impY=null;
     if(yagg){const{remAvg:ry,realWt:rly}=yagg;deltaY=(ry!=null&&rly!=null)?rly-ry:null;deltaPY=(deltaY!=null&&ry)?deltaY/Math.abs(ry)*100:null;impY=calcImpacto(yagg);}
@@ -1161,7 +1160,7 @@ function renderTable(active,ytd){
   const{remAvg:tRemY,realWt:tRealY}=totY;
   const tDY=(tRemY!=null&&tRealY!=null)?tRealY-tRemY:null,tDPY=(tDY!=null&&tRemY)?tDY/Math.abs(tRemY)*100:null,tImpY=calcImpacto(totY);
   const bT=tD!=null&&tD<0,bTY=tDY!=null&&tDY<0;
-  html+=`<tr class="total"><td class="conta">Total</td><td class="num">${kml(tRem)}</td><td class="num">${kml(tReal)}</td><td class="num ${bT?'cr':'cg'}">${tD!=null?kmlD(tD):'—'}</td><td class="num ${bT?'cr-t':'cg-t'}">${pctInt(tDP)}</td>${chainCells(totA.sumLitros,(tImp!=null&&tD&&totA.sumLitros)?tImp/(tD*totA.sumLitros):((totA.remPrice!=null&&tRem)?totA.remPrice/tRem:null))}<td class="num imp-cell" style="color:${tImp<0?'var(--red)':'var(--green)'}">${tImp!=null?fmtBrlD(tImp):'—'}</td></tr>`;
+  html+=`<tr class="total"><td class="conta">Total</td><td class="num">${kml(tRem)}</td><td class="num">${kml(tReal)}</td><td class="num ${bT?'cr':'cg'}">${tD!=null?kmlD(tD):'—'}</td><td class="num ${bT?'cr-t':'cg-t'}">${pctInt(tDP)}</td>${chainCells(totA.sumLitros,(totA.remPrice!=null&&tRem)?totA.remPrice/tRem:null)}<td class="num imp-cell" style="color:${tImp<0?'var(--red)':'var(--green)'}">${tImp!=null?fmtBrlD(tImp):'—'}</td></tr>`;
   document.getElementById('body-kml').innerHTML=html;
 }
 
