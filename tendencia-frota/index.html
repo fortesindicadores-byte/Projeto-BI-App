@@ -81,8 +81,9 @@ td{padding:11px 8px;border:none;color:var(--text);white-space:nowrap;}
 tbody tr:hover{background:rgba(255,255,255,.035);}
 td.num,th.num{text-align:right;font-variant-numeric:tabular-nums;}
 td.ano{font-weight:700;}
-tr.proj td{color:var(--text2);font-style:italic;}
+tr.proj td,tr.est td{color:var(--text2);font-style:italic;}
 tr.proj td.ano::after{content:' · tend.';font-size:9px;color:var(--text3);font-style:normal;}
+tr.est td.ano::after{content:' · est.';font-size:9px;color:var(--text3);font-style:normal;}
 tr.total td{color:var(--text);font-weight:700;font-size:12px;border-top:2px solid rgba(255,255,255,.12);padding-top:12px;background:var(--card);}
 .cr{color:var(--red)!important;font-weight:700;}
 .cg{color:var(--green)!important;font-weight:700;}
@@ -200,8 +201,8 @@ Chart.register(ChartDataLabels);
 
 const SHEET_ID='1EFmp2qlevQG5OEgGJePrI_O8wKuQo3IDmbJIReN2Fl0';
 const TAB='Base';
-const PROJ_FROM=2027;   // primeiro ano projetado (realizado até 2026, inclusive YTD)
-const FULL_TO=2025;     // último ano completo — bases de volume/impacto ignoram o parcial de 2026
+const PROJ_FROM=2027;   // primeiro ano projetado (realizado/estimado até 2026)
+const ANO_PARC=2026, MESES_PARC=6;   // 2026 só tem dado real de jan–jun → anualiza os fluxos (×12/6)
 const END_YEAR=2029;    // 10 anos (2020–2029)
 
 // ── helpers ──────────────────────────────────────────────
@@ -257,6 +258,10 @@ async function fetchBase(){
     });
   });
   out.sort((a,b)=>a.ano-b.ano);
+  // Anualiza o ano parcial (2026): projeta o ano cheio a partir dos meses já realizados (jan–jun).
+  // Fluxos (custo, remunerado, km, #eq, impactos) ×12/meses. As TAXAS (R$/km, R$/Eq) não mudam.
+  const F=12/MESES_PARC;
+  out.forEach(d=>{ if(d.ano===ANO_PARC){ ['remuner','custoTot','km','nEq','impRkm','impEq'].forEach(k=>{ if(d[k]!=null) d[k]=d[k]*F; }); } });
   return out;
 }
 
@@ -291,15 +296,15 @@ function renderChart(canvasId, realKey, remKey, fmt, prevRef){
   const mCon=mean(chartReal.slice(0,5)), mPos=mean(chartReal.slice(5,10));
   const brackets=[{a:0,b:4,txt:`Contrato · ${mCon==null?'—':fmt(mCon)}`},
                   {a:5,b:9,txt:`Pós-contrato · ${mPos==null?'—':fmt(mPos)}`}];
-  const brkCol=isL?'#555555':'#94A3B8';
+  const brkCol=isL?'#111111':'#E2E8F0';   // mais preto no claro / mais claro no escuro
   const bracketsPlugin={id:'brk',afterDraw(ch){
-    const x=ch.scales.x, top=ch.chartArea.top, yL=top-20, drop=13, ctx=ch.ctx;
-    ctx.save(); ctx.strokeStyle=brkCol; ctx.fillStyle=brkCol; ctx.lineWidth=1;
-    ctx.font='600 10px Montserrat, sans-serif'; ctx.textAlign='center'; ctx.textBaseline='alphabetic';
+    const x=ch.scales.x, top=ch.chartArea.top, yL=top-22, drop=13, ctx=ch.ctx;
+    ctx.save(); ctx.strokeStyle=brkCol; ctx.fillStyle=brkCol; ctx.lineWidth=1.6;
+    ctx.font='700 12px Montserrat, sans-serif'; ctx.textAlign='center'; ctx.textBaseline='alphabetic';
     brackets.forEach(bk=>{ const x1=x.getPixelForValue(bk.a), x2=x.getPixelForValue(bk.b);
       ctx.beginPath(); ctx.moveTo(x1,yL); ctx.lineTo(x2,yL);
       ctx.moveTo(x1,yL); ctx.lineTo(x1,yL+drop); ctx.moveTo(x2,yL); ctx.lineTo(x2,yL+drop); ctx.stroke();
-      ctx.fillText(bk.txt,(x1+x2)/2,yL-4); });
+      ctx.fillText(bk.txt,(x1+x2)/2,yL-5); });
     ctx.restore();
   }};
 
@@ -315,8 +320,13 @@ function renderChart(canvasId, realKey, remKey, fmt, prevRef){
          borderColor:barBc(realProj),borderWidth:1.5,borderDash:[5,4],borderRadius:3,order:2,
          categoryPercentage:.62,barPercentage:.9,datalabels:dl},
         {type:'line',label:'Remunerado',data:remLine,borderColor:remC,borderWidth:2.5,tension:.25,borderDash:[5,3],order:1,
-         pointRadius:3.5,pointBackgroundColor:remC,pointBorderColor:remC,pointBorderWidth:0,   // marcador sólido branco(escuro)/preto(claro)
-         datalabels:{display:false}},
+         pointRadius:5,pointBackgroundColor:remC,pointBorderColor:remC,pointBorderWidth:0,   // marcador sólido, gordinho
+         datalabels:{  // caixinha preta com o valor no 1º e no último ponto
+           display:c=>c.dataIndex===0||c.dataIndex===c.dataset.data.length-1,
+           backgroundColor:'#000', color:'#fff', borderRadius:4, padding:{top:3,bottom:3,left:6,right:6},
+           font:{family:'Montserrat',size:11,weight:'800'},
+           anchor:'center', align:c=>c.dataIndex===0?'left':'right', offset:8,
+           formatter:v=>v==null?'':fmt(v) }},
       ]
     },
     options:{
@@ -338,21 +348,19 @@ function renderChart(canvasId, realKey, remKey, fmt, prevRef){
 // Renderiza uma tabela 2020→END_YEAR: real (aba) onde existe, tendência linear nos anos futuros.
 // denomKey = volume que vai no denominador do Total (km p/ R$/km, nEq p/ R$/Equipamento).
 function renderTable(bodyId, realKey, remKey, dKey, impKey, fmtV, denomKey){
-  const histR=DATA.filter(d=>d.ano<PROJ_FROM);      // taxas: inclui 2026 (YTD válido)
-  const histV=DATA.filter(d=>d.ano<=FULL_TO);       // volume/impacto: só anos completos (ignora parcial 2026)
-  const first=histR.length?histR[0].ano:2020;
-  const PR=key=>linReg(histR.map(d=>[d.ano,d[key]]).filter(p=>p[1]!=null));
-  const PV=key=>linReg(histV.map(d=>[d.ano,d[key]]).filter(p=>p[1]!=null));
-  const predReal=PR(realKey), predRem=PR(remKey);
-  const predImp=PV(impKey), predCusto=PV('custoTot'), predRemun=PV('remuner'), predDenom=PV(denomKey);
+  const hist=DATA.filter(d=>d.ano<PROJ_FROM);       // base 2020–2026 (2026 anualizado = ano cheio)
+  const first=hist.length?hist[0].ano:2020;
+  const P=key=>linReg(hist.map(d=>[d.ano,d[key]]).filter(p=>p[1]!=null));
+  const predReal=P(realKey), predRem=P(remKey);
+  const predImp=P(impKey), predCusto=P('custoTot'), predRemun=P('remuner'), predDenom=P(denomKey);
   const byYear={}; DATA.forEach(d=>byYear[d.ano]=d);
   let acum=0, totImp=0, sCusto=0, sRemun=0, sDenom=0, html='';
   for(let y=first; y<=END_YEAR; y++){
     const d=byYear[y];
     let rem,real,delta,imp;
-    if(d){ rem=d[remKey]; real=d[realKey]; delta=d[dKey]; imp=d[impKey]; }        // ano real (2020–2026)
-    else { rem=predRem(y); real=predReal(y); delta=rem-real; imp=predImp(y); }    // ano projetado (2027–2029)
-    const proj=y>=PROJ_FROM?'proj':'';
+    if(d){ rem=d[remKey]; real=d[realKey]; delta=d[dKey]; imp=d[impKey]; }        // real 2020–2025 / estimado 2026
+    else { rem=predRem(y); real=predReal(y); delta=rem-real; imp=predImp(y); }    // projetado 2027–2029
+    const proj=y>=PROJ_FROM?'proj':(y===ANO_PARC?'est':'');
     acum+=(imp||0); totImp+=(imp||0);
     // agregados p/ o Total: custo, remunerado e volume estimados de cada ano
     sCusto += d?(d.custoTot||0):predCusto(y);
@@ -385,7 +393,7 @@ function renderTables(){
 
 // Card grande: GERAL do período 2020–2029 (real + projetado) — igual ao Total da tabela.
 function renderHero(){
-  const histV=DATA.filter(d=>d.ano<=FULL_TO);   // volume: só anos completos (ignora parcial 2026)
+  const histV=DATA.filter(d=>d.ano<PROJ_FROM);   // base 2020–2026 (2026 anualizado)
   const P=key=>linReg(histV.map(d=>[d.ano,d[key]]).filter(p=>p[1]!=null));
   const pC=P('custoTot'), pR=P('remuner'), pK=P('km'), pE=P('nEq');
   const byYear={}; DATA.forEach(d=>byYear[d.ano]=d);
