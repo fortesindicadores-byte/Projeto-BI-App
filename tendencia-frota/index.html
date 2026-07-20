@@ -1,0 +1,355 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Tendência R$/km &amp; R$/Equipamento — Frota</title>
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0"></script>
+<style>
+:root{
+  --bg:#0C1017; --card:#141B26; --card2:#1A2335; --border:#1E2D40;
+  --orange:#F97316; --blue:#38BDF8; --text:#F1F5F9; --text2:#94A3B8; --text3:#475569;
+  --green:#3BB33B; --red:#FF6666;
+}
+*{margin:0;padding:0;box-sizing:border-box;}
+body{
+  background:
+    radial-gradient(ellipse at 10% 25%, rgba(249,115,22,.06) 0%, transparent 50%),
+    radial-gradient(ellipse at 90% 75%, rgba(56,189,248,.05) 0%, transparent 50%),
+    var(--bg);
+  color:var(--text); font-family:'Montserrat',-apple-system,sans-serif; font-size:13px; min-height:100vh;
+}
+
+/* HEADER */
+.header{
+  background:rgba(12,16,23,.75); border-bottom:1px solid rgba(255,255,255,.07);
+  padding:10px 24px 12px; display:flex; flex-wrap:wrap; align-items:center;
+  position:sticky; top:0; z-index:100;
+  backdrop-filter:blur(20px); -webkit-backdrop-filter:blur(20px); box-shadow:0 2px 12px rgba(0,0,0,.3);
+}
+.brand{flex:1;}
+.brand h1{font-size:16px;font-weight:700;color:var(--orange);}
+.brand p{font-size:10px;color:var(--text2);margin-top:2px;}
+.header-right{flex-shrink:0;display:flex;align-items:center;gap:8px;}
+.status-badge{font-size:9px;color:var(--text);background:rgba(249,115,22,.15);border:1px solid rgba(249,115,22,.3);border-radius:4px;padding:2px 8px;white-space:nowrap;}
+.access-badge{font-size:9px;color:var(--text2);background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);border-radius:4px;padding:2px 8px;white-space:nowrap;}
+.theme-btn{background:rgba(249,115,22,.15);border:1px solid rgba(249,115,22,.3);border-radius:4px;padding:4px 6px;cursor:pointer;color:var(--orange);display:flex;align-items:center;}
+.theme-btn:hover{background:rgba(249,115,22,.32);}
+.refresh-btn{background:rgba(249,115,22,.15);border:1px solid rgba(249,115,22,.3);border-radius:4px;padding:5px 8px;cursor:pointer;color:var(--orange);display:flex;align-items:center;}
+.refresh-btn:hover{background:rgba(249,115,22,.32);}
+.refresh-btn svg{display:block;}
+
+/* MAIN */
+.main{padding:20px 24px 60px;}
+.charts-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;align-items:start;}
+.chart-card,.tbl-section{
+  background:rgba(20,27,38,.55);border:1px solid rgba(255,255,255,.07);border-radius:8px;
+  padding:18px 20px 16px;margin-bottom:16px;backdrop-filter:blur(16px);box-shadow:0 2px 12px rgba(0,0,0,.25);
+}
+.chart-card{min-width:0;}
+.tbl-title{font-size:16px;font-weight:800;color:var(--text);margin-bottom:3px;}
+.tbl-sub{font-size:10px;color:var(--text2);margin-bottom:14px;}
+.chart-wrap{position:relative;height:300px;}
+
+/* LEGEND custom */
+.leg{display:flex;gap:16px;flex-wrap:wrap;margin:2px 0 12px;font-size:10px;color:var(--text2);font-weight:600;}
+.leg span{display:inline-flex;align-items:center;gap:6px;}
+.leg i{width:16px;height:0;display:inline-block;}
+.leg .b-real{width:14px;height:11px;background:var(--orange);border-radius:2px;}
+.leg .b-proj{width:14px;height:11px;background:rgba(249,115,22,.15);border:1.5px dashed var(--orange);border-radius:2px;}
+.leg .l-rem{border-top:2px dashed var(--blue);width:16px;}
+
+/* TABLES */
+table{width:100%;border-collapse:collapse;font-size:12px;}
+thead th{background:transparent;color:var(--text);font-size:11px;font-weight:700;padding:8px 8px 12px;border-bottom:1px solid rgba(255,255,255,.10);text-transform:uppercase;letter-spacing:.5px;white-space:nowrap;}
+td{padding:11px 8px;border:none;color:var(--text);white-space:nowrap;}
+tbody tr:hover{background:rgba(255,255,255,.035);}
+td.num{text-align:right;font-variant-numeric:tabular-nums;}
+td.ano{font-weight:700;}
+tr.proj td{color:var(--text2);font-style:italic;}
+tr.proj td.ano::after{content:' · tend.';font-size:9px;color:var(--text3);font-style:normal;}
+tr.total td{color:var(--text);font-weight:700;font-size:12px;border-top:2px solid rgba(255,255,255,.12);padding-top:12px;}
+.cr{color:var(--red)!important;font-weight:700;}
+.cg{color:var(--green)!important;font-weight:700;}
+
+/* LIGHT MODE */
+body.light-mode .main{--text:#1a1a1a;--text2:#444;--text3:#666;}
+body.light-mode .chart-card,
+body.light-mode .tbl-section{background:#FFFFFF!important;border-color:transparent!important;box-shadow:0 2px 12px rgba(0,0,0,.10)!important;--text:#1a1a1a;--text2:#444;--text3:#555;}
+body.light-mode td{color:var(--text);}
+
+@media(max-width:900px){
+  .charts-grid{grid-template-columns:1fr;}
+}
+@media(max-width:768px){
+  .main{padding:14px 12px 50px;}
+  .header-right .refresh-btn{display:none;}
+  .status-badge,.access-badge{font-size:8px;padding:2px 6px;}
+  .chart-wrap{height:240px;}
+  table{font-size:11px;} thead th{font-size:10px;padding:6px 4px 8px;} td{padding:8px 4px;}
+}
+</style>
+</head>
+<body>
+<header class="header">
+  <div class="brand">
+    <h1>Tendência da Frota</h1>
+    <p>R$/km e R$/Equipamento — projeção linear (TENDÊNCIA) até 2030</p>
+  </div>
+  <div class="header-right">
+    <button class="theme-btn" id="themeBtn" title="Modo claro/escuro"></button>
+    <button class="refresh-btn" onclick="atualizar()" title="Atualizar dados">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+        <polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/>
+        <path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/>
+      </svg>
+    </button>
+    <span class="status-badge" id="status-badge">Carregando…</span>
+    <span class="access-badge" id="access-badge" style="display:none"></span>
+  </div>
+</header>
+
+<main class="main">
+  <div class="charts-grid">
+    <!-- CHART 1: R$/km -->
+    <div class="chart-card">
+      <div class="tbl-title">R$/km</div>
+      <div class="tbl-sub">Custo por quilômetro rodado · realizado vs remunerado · tendência a partir de 2026</div>
+      <div class="leg">
+        <span><i class="b-real"></i>Realizado</span>
+        <span><i class="b-proj"></i>Tendência (2026–2030)</span>
+        <span><i class="l-rem"></i>Remunerado</span>
+      </div>
+      <div class="chart-wrap"><canvas id="ch-rkm"></canvas></div>
+    </div>
+
+    <!-- CHART 2: R$/Equipamento -->
+    <div class="chart-card">
+      <div class="tbl-title">R$/Equipamento</div>
+      <div class="tbl-sub">Custo por equipamento (carreta) · realizado vs remunerado · tendência a partir de 2026</div>
+      <div class="leg">
+        <span><i class="b-real"></i>Realizado</span>
+        <span><i class="b-proj"></i>Tendência (2026–2030)</span>
+        <span><i class="l-rem"></i>Remunerado</span>
+      </div>
+      <div class="chart-wrap"><canvas id="ch-eq"></canvas></div>
+    </div>
+  </div>
+
+  <div class="charts-grid">
+    <!-- TABLE 1: R$/km -->
+    <div class="tbl-section">
+      <div class="tbl-title">R$/km — memória por ano</div>
+      <div class="tbl-sub">Δ = Rem − Real · Impacto e acumulado conforme planilha</div>
+      <table>
+        <thead><tr>
+          <th>Ano</th><th class="num">R$/km Real</th><th class="num">R$/km Rem</th>
+          <th class="num">Δ R$/km</th><th class="num">Impacto</th><th class="num">Impacto Acum.</th>
+        </tr></thead>
+        <tbody id="tb-rkm"></tbody>
+      </table>
+    </div>
+
+    <!-- TABLE 2: R$/Equipamento -->
+    <div class="tbl-section">
+      <div class="tbl-title">R$/Equipamento — memória por ano</div>
+      <div class="tbl-sub">Δ = Rem − Real · Impacto e acumulado conforme planilha</div>
+      <table>
+        <thead><tr>
+          <th>Ano</th><th class="num">R$/Eq. Real</th><th class="num">R$/Eq. Rem</th>
+          <th class="num">Δ R$/Eq.</th><th class="num">Impacto</th><th class="num">Impacto Acum.</th>
+        </tr></thead>
+        <tbody id="tb-eq"></tbody>
+      </table>
+    </div>
+  </div>
+</main>
+
+<script>
+Chart.register(ChartDataLabels);
+
+const SHEET_ID='1EFmp2qlevQG5OEgGJePrI_O8wKuQo3IDmbJIReN2Fl0';
+const TAB='Base';
+const PROJ_FROM=2026;   // primeiro ano de tendência (tracejado)
+const END_YEAR=2030;
+
+// ── helpers ──────────────────────────────────────────────
+const set=(id,t)=>{const e=document.getElementById(id);if(e)e.textContent=t;};
+const num=v=>{ if(v==null||v==='')return null; if(typeof v==='number')return v;
+  let s=String(v).replace(/\s|R\$/g,''); if(s.indexOf(',')>=0)s=s.replace(/\./g,'').replace(',','.');
+  const f=parseFloat(s); return isNaN(f)?null:f; };
+const nf2=v=>v==null||!isFinite(v)?'—':v.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
+const nf0=v=>v==null||!isFinite(v)?'—':Math.round(v).toLocaleString('pt-BR');
+const numFmt=v=>{ if(v==null||!isFinite(v))return '—'; const a=Math.abs(v),s=v<0?'-':'';
+  if(a>=1e9)return s+(a/1e9).toLocaleString('pt-BR',{maximumFractionDigits:1})+' bi';
+  if(a>=1e6)return s+(a/1e6).toLocaleString('pt-BR',{maximumFractionDigits:1})+' mi';
+  if(a>=1e3)return s+Math.round(a/1e3)+'k';
+  return s+Math.round(a).toLocaleString('pt-BR'); };
+
+// regressão linear (mín. quadrados) → função preditora
+function linReg(pairs){
+  const n=pairs.length; let sx=0,sy=0,sxy=0,sxx=0;
+  pairs.forEach(([x,y])=>{sx+=x;sy+=y;sxy+=x*y;sxx+=x*x;});
+  const den=n*sxx-sx*sx; if(!den) { const m=sy/n; return ()=>m; }
+  const b=(n*sxy-sx*sy)/den, a=(sy-b*sx)/n; return x=>a+b*x;
+}
+
+// tema-aware
+const isLight=()=>document.body.classList.contains('light-mode');
+const grid=()=>({color:isLight()?'rgba(0,0,0,.08)':'rgba(255,255,255,.06)'});
+const tick=(sz=10)=>({color:isLight()?'#444':'#94A3B8',font:{family:'Montserrat',size:sz}});
+
+let DATA=[];            // linhas cruas da planilha (anos com realizado)
+let chRkm=null, chEq=null;
+
+async function fetchBase(){
+  const url=`https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:json&sheet=${encodeURIComponent(TAB)}`;
+  const raw=await (await fetch(url)).text();
+  const json=JSON.parse(raw.replace(/^[\s\S]*?\(/, '').replace(/\);?\s*$/, ''));
+  let rows=json.table.rows.map(r=>(r.c||[]).map(c=>c&&c.v!=null?c.v:null));
+  // colunas (0-index): A ano, H R$/km Real(7), I R$/km Rem(8), J Δ(9), K Impacto(10),
+  //                    L R$/Eq Rem(11), M R$/Eq Real(12), N Δ(13), O Impacto(14)
+  const out=[];
+  rows.forEach(r=>{
+    const ano=num(r[0]);
+    if(ano==null||ano<2000||ano>2100)return;   // ignora header/lixo
+    out.push({
+      ano:Math.round(ano),
+      rkmReal:num(r[7]), rkmRem:num(r[8]), dRkm:num(r[9]), impRkm:num(r[10]),
+      eqRem:num(r[11]), eqReal:num(r[12]), dEq:num(r[13]), impEq:num(r[14]),
+    });
+  });
+  out.sort((a,b)=>a.ano-b.ano);
+  return out;
+}
+
+// monta séries para o gráfico: histórico (ano<PROJ_FROM) real + tendência (>=PROJ_FROM)
+function buildSeries(realKey, remKey){
+  const hist=DATA.filter(d=>d.ano<PROJ_FROM);
+  const years=[]; for(let y=hist.length?hist[0].ano:2020; y<=END_YEAR; y++) years.push(y);
+  const predReal=linReg(hist.map(d=>[d.ano, d[realKey]]).filter(p=>p[1]!=null));
+  const predRem =linReg(hist.map(d=>[d.ano, d[remKey ]]).filter(p=>p[1]!=null));
+  const mapReal={}, mapRem={}; DATA.forEach(d=>{mapReal[d.ano]=d[realKey];mapRem[d.ano]=d[remKey];});
+  const realHist=years.map(y=> y<PROJ_FROM ? (mapReal[y]??null) : null);
+  const realProj=years.map(y=> y>=PROJ_FROM ? predReal(y) : null);
+  const remLine =years.map(y=> y<PROJ_FROM ? (mapRem[y]??null) : predRem(y));
+  const projIdx =years.findIndex(y=>y>=PROJ_FROM);
+  return {years,realHist,realProj,remLine,projIdx};
+}
+
+function renderChart(canvasId, realKey, remKey, fmt, prevRef){
+  const {years,realHist,realProj,remLine,projIdx}=buildSeries(realKey,remKey);
+  if(prevRef) prevRef.destroy();
+  const dl={color:isLight()?'#1a1a1a':'#F1F5F9',font:{family:'Montserrat',size:10,weight:'700'},anchor:'end',align:'end',offset:2,formatter:v=>v==null?'':fmt(v)};
+  return new Chart(document.getElementById(canvasId),{
+    data:{
+      labels:years,
+      datasets:[
+        {type:'bar',label:'Realizado',data:realHist,stack:'r',backgroundColor:'#F97316',borderRadius:3,
+         categoryPercentage:.62,barPercentage:.9,datalabels:dl},
+        {type:'bar',label:'Tendência',data:realProj,stack:'r',backgroundColor:'rgba(249,115,22,.14)',
+         borderColor:'#F97316',borderWidth:1.5,borderDash:[5,4],borderRadius:3,
+         categoryPercentage:.62,barPercentage:.9,datalabels:{...dl,color:isLight()?'#B45309':'#F97316'}},
+        {type:'line',label:'Remunerado',data:remLine,borderColor:'#38BDF8',borderWidth:2,tension:.25,
+         pointRadius:3,pointBackgroundColor:'#38BDF8',
+         segment:{borderDash:ctx=>ctx.p1DataIndex>=projIdx?[6,4]:undefined},
+         datalabels:{display:false}},
+      ]
+    },
+    options:{
+      responsive:true,maintainAspectRatio:false,layout:{padding:{top:18}},
+      plugins:{
+        legend:{display:false},
+        tooltip:{backgroundColor:'#141B26',titleColor:'#F97316',bodyColor:'#F1F5F9',borderColor:'#1E2D40',borderWidth:1,
+          titleFont:{family:'Montserrat'},bodyFont:{family:'Montserrat'},
+          callbacks:{label:c=>c.parsed.y==null?null:`${c.dataset.label}: ${fmt(c.parsed.y)}`}},
+      },
+      scales:{
+        x:{grid:{display:false},ticks:tick(11),stacked:true},
+        y:{grid:grid(),ticks:{...tick(10),callback:v=>fmt(v)},beginAtZero:true},
+      }
+    }
+  });
+}
+
+function renderTables(){
+  // R$/km
+  let acum=0, html='';
+  DATA.forEach(d=>{
+    const proj=d.ano>=PROJ_FROM?'proj':'';
+    acum += (d.impRkm||0);
+    const dCls=d.dRkm==null?'':(d.dRkm<0?'cr':'cg');
+    const iCls=d.impRkm==null?'':(d.impRkm<0?'cr':'cg');
+    html+=`<tr class="${proj}"><td class="ano">${d.ano}</td>`
+       +`<td class="num">${nf2(d.rkmReal)}</td><td class="num">${nf2(d.rkmRem)}</td>`
+       +`<td class="num ${dCls}">${nf2(d.dRkm)}</td>`
+       +`<td class="num ${iCls}">${numFmt(d.impRkm)}</td>`
+       +`<td class="num ${acum<0?'cr':'cg'}">${numFmt(acum)}</td></tr>`;
+  });
+  document.getElementById('tb-rkm').innerHTML=html;
+
+  // R$/Equipamento
+  acum=0; html='';
+  DATA.forEach(d=>{
+    const proj=d.ano>=PROJ_FROM?'proj':'';
+    acum += (d.impEq||0);
+    const dCls=d.dEq==null?'':(d.dEq<0?'cr':'cg');
+    const iCls=d.impEq==null?'':(d.impEq<0?'cr':'cg');
+    html+=`<tr class="${proj}"><td class="ano">${d.ano}</td>`
+       +`<td class="num">${nf0(d.eqReal)}</td><td class="num">${nf0(d.eqRem)}</td>`
+       +`<td class="num ${dCls}">${nf0(d.dEq)}</td>`
+       +`<td class="num ${iCls}">${numFmt(d.impEq)}</td>`
+       +`<td class="num ${acum<0?'cr':'cg'}">${numFmt(acum)}</td></tr>`;
+  });
+  document.getElementById('tb-eq').innerHTML=html;
+}
+
+function renderAll(){
+  chRkm=renderChart('ch-rkm','rkmReal','rkmRem',nf2,chRkm);
+  chEq =renderChart('ch-eq','eqReal','eqRem',nf0,chEq);
+  renderTables();
+}
+
+async function atualizar(){
+  set('status-badge','Carregando…');
+  try{
+    DATA=await fetchBase();
+    renderAll();
+    const now=new Date();
+    set('status-badge',`Atualizado ${now.toLocaleDateString('pt-BR')} ${now.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})}`);
+  }catch(e){ console.error(e); set('status-badge','Erro ao carregar dados'); }
+}
+
+// último acesso
+function initAccessLog(){
+  let name=localStorage.getItem('bi_user_name');
+  if(!name){ name=prompt('Qual é o seu nome?')||'Desconhecido'; localStorage.setItem('bi_user_name',name); }
+  const lastRaw=localStorage.getItem('bi_last_access');
+  if(lastRaw){ const d=new Date(lastRaw); const lastUser=localStorage.getItem('bi_last_user')||name;
+    const badge=document.getElementById('access-badge');
+    if(badge){ badge.textContent=`Último acesso: ${d.toLocaleDateString('pt-BR')} ${d.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})} · ${lastUser}`; badge.style.display=''; } }
+  localStorage.setItem('bi_last_access',new Date().toISOString());
+  localStorage.setItem('bi_last_user',name);
+}
+
+// tema
+const _sun=`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>`;
+const _moon=`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>`;
+function applyTheme(t){
+  document.body.classList.toggle('light-mode',t==='light');
+  localStorage.setItem('bi_theme',t);
+  const b=document.getElementById('themeBtn'); if(b)b.innerHTML=t==='light'?_moon:_sun;
+  if(DATA.length) renderAll();
+}
+(function(){
+  const t=localStorage.getItem('bi_theme')||'dark'; applyTheme(t);
+  document.getElementById('themeBtn').addEventListener('click',()=>applyTheme(document.body.classList.contains('light-mode')?'dark':'light'));
+})();
+
+let _rt; window.addEventListener('resize',()=>{clearTimeout(_rt);_rt=setTimeout(()=>{if(DATA.length)renderAll();},400);});
+document.addEventListener('DOMContentLoaded',()=>{ initAccessLog(); atualizar(); });
+</script>
+</body>
+</html>
