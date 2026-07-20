@@ -44,6 +44,22 @@ async function main(){
   console.log('Modelos ACTROS:',[...new Set(base.map(r=>String(r[C.modelo]||'').trim()))].sort().join(' | '));
 
   const meses=['01/2026','02/2026','03/2026','04/2026','05/2026','06/2026'];
+
+  function wAvg(rows,colIdx){
+    const proj={};
+    rows.forEach(r=>{ const p=projPre(r[C.proj])||'—', val=+r[colIdx]||0, km=+r[C.kmRod]||0;
+      if(!proj[p])proj[p]={s:0,n:0,km:0}; if(val>0){proj[p].s+=val;proj[p].n++;} proj[p].km+=km; });
+    let sMp=0,kMp=0; Object.values(proj).forEach(v=>{const rp=v.n>0?v.s/v.n:null; if(rp!=null&&v.km>0){sMp+=rp*v.km;kMp+=v.km;}});
+    return kMp>0?sMp/kMp:null;
+  }
+  console.log('\n== POR MODELO — Rem Médio / Rem Modelo (ponderado por km) jan→jun ==');
+  [...new Set(base.map(r=>String(r[C.modelo]||'').trim()))].sort().forEach(mod=>{
+    const rowsM=base.filter(r=>String(r[C.modelo]||'').trim()===mod);
+    const med=meses.map(v=>{const rw=rowsM.filter(r=>{const d=parseVig(r[C.vig]);return d&&vigBR(d)===v;});const x=wAvg(rw,C.rem);return x!=null?x.toFixed(2):' ·  ';});
+    const modl=meses.map(v=>{const rw=rowsM.filter(r=>{const d=parseVig(r[C.vig]);return d&&vigBR(d)===v;});const x=wAvg(rw,C.remM);return x!=null?x.toFixed(2):' ·  ';});
+    console.log(`  ${mod}\n     Rem Médio : ${med.join('  ')}\n     Rem Modelo: ${modl.join('  ')}`);
+  });
+
   console.log('\n== Km/L Rem Médio (ponderado) por mês — ACTROS ==');
   meses.forEach(v=>{ const rw=base.filter(r=>{const d=parseVig(r[C.vig]);return d&&vigBR(d)===v;});
     const rem=remMedio(rw,C); const nPl=new Set(rw.map(r=>r[C.placa])).size;
