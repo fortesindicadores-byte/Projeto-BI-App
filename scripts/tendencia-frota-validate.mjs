@@ -34,6 +34,10 @@ async function main(){
              eqRem:num(r[11]),eqReal:num(r[12]),dEq:num(r[13]),impEq:num(r[14]),
              km:num(r[5]),eq:num(r[6]),nEq:num(r[6]),custoTot:num(r[4]),remuner:num(r[1])}); });
   D.sort((a,b)=>a.ano-b.ano);
+  // anualiza 2026 (jan–jun → ano cheio)
+  const ANO_PARC=2026, MESES_PARC=6, F=12/MESES_PARC;
+  D.forEach(d=>{ if(d.ano===ANO_PARC){ ['remuner','custoTot','km','nEq','eq','impRkm','impEq'].forEach(k=>{ if(d[k]!=null) d[k]=d[k]*F; }); } });
+  console.log(`\n2026 ANUALIZADO (×${F}): custo=${Math.round(D.find(d=>d.ano===2026).custoTot).toLocaleString('pt-BR')} km=${Math.round(D.find(d=>d.ano===2026).km).toLocaleString('pt-BR')} nEq=${Math.round(D.find(d=>d.ano===2026).nEq)} impRkm=${Math.round(D.find(d=>d.ano===2026).impRkm).toLocaleString('pt-BR')}`);
 
   console.log(`\nLinhas de ano lidas: ${D.length}  (${D.map(d=>d.ano).join(', ')})`);
   console.log('\n== VALORES LIDOS ==');
@@ -45,7 +49,7 @@ async function main(){
     `${String(Math.round(d.eqRem??0)).padStart(5)} ${String(Math.round(d.eqReal??0)).padStart(6)} `+
     `${String(Math.round(d.dEq??0)).padStart(6)} ${String(Math.round(d.impEq??0)).padStart(9)}`));
 
-  const hist=D.filter(d=>d.ano<PROJ_FROM); const histV=D.filter(d=>d.ano<=FULL_TO);
+  const hist=D.filter(d=>d.ano<PROJ_FROM); const histV=hist;   // base única 2020–2026 (2026 anualizado)
   const preds={
     rkmReal:linReg(hist.map(d=>[d.ano,d.rkmReal]).filter(p=>p[1]!=null)),
     rkmRem :linReg(hist.map(d=>[d.ano,d.rkmRem ]).filter(p=>p[1]!=null)),
