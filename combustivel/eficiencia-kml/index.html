@@ -892,30 +892,32 @@ function calcImpacto(agg){
 function _round(x,d){ const p=Math.pow(10,d==null?2:d); return Math.round((+x||0)*p)/p; }
 function _vigTxt(v){ const d=_pvK(v); return d?String(d.getMonth()+1).padStart(2,'0')+'/'+d.getFullYear():String(v==null?'':v); }
 function buildImpactoExport(active){
-  const hdr=['Vigência','Projeto - Unidade','Placa','Modelo','Tipo Veículo','KM Rodado','Litros','Km/L Rem','Km/L Real','R$/L Rem (usado)','R$/L Real','IMPACTO (R$)'];
-  const base=[hdr]; let sum=0,nRem=0,nFb=0;
+  const hdr=['Vigência','Projeto - Unidade','Placa','Modelo','Tipo Veículo','KM Rodado','Litros','Km/L Rem Médio','Km/L Rem Modelo','Km/L Real','R$/L Rem (usado)','R$/L Real','IMPACTO vs Média Geral (R$)','IMPACTO vs Média Modelo (R$)'];
+  const base=[hdr]; let sumMed=0,sumMod=0,nRem=0,nFb=0;
   (active||[]).forEach(r=>{
     const km=+(r[CL.kmRod]||0),lit=+(r[CL.litros]||0),rem=+(r[CL.rem]||0),remM=+(r[CL.remM]||0),real=+(r[CL.real]||0),rsL=+(r[CL.rsLReal]||0);
-    const rb=remMode==='modelo'?remM:rem;
     const pRem=remPriceFor(r), rsLimp=(pRem!=null&&pRem>0)?pRem:rsL;
-    const imp=(km>0&&rb>0&&real>0)?(km/rb-km/real)*rsLimp:0;
-    sum+=imp; if(pRem!=null&&pRem>0)nRem++; else if(km>0)nFb++;
+    const impMed=(km>0&&rem>0&&real>0)?(km/rem-km/real)*rsLimp:0;    // vs Média Geral (Rem Médio)
+    const impMod=(km>0&&remM>0&&real>0)?(km/remM-km/real)*rsLimp:0;  // vs Média do Modelo (Rem Modelo)
+    sumMed+=impMed; sumMod+=impMod; if(pRem!=null&&pRem>0)nRem++; else if(km>0)nFb++;
     base.push([_vigTxt(r[CL.vig]), r[CL.proj]||'', r[CL.placa]||'', r[CL.modelo]||'', r[CL.tipoVei]||'',
-      _round(km,0), _round(lit,0), rem?_round(rem,2):'', real?_round(real,2):'', rsLimp?_round(rsLimp,4):'', rsL?_round(rsL,4):'', _round(imp,2)]);
+      _round(km,0), _round(lit,0), rem?_round(rem,2):'', remM?_round(remM,2):'', real?_round(real,2):'', rsLimp?_round(rsLimp,4):'', rsL?_round(rsL,4):'', _round(impMed,2), _round(impMod,2)]);
   });
-  const modo=remMode==='modelo'?'Km/L Rem Modelo':'Km/L Rem Médio';
   const memoria=[
     ['MEMÓRIA DE CÁLCULO — IMPACTO (Eficiência Km/L)'],[],
     ['Fórmula (por linha, aditiva — subtotais somam o total):'],
     ['IMPACTO = ( KM ÷ Km/L Remunerado − KM ÷ Km/L Realizado ) × R$/L Remunerado'],[],
+    ['Duas visões de benchmark (Km/L Remunerado):'],
+    ['  · vs Média Geral  → coluna Km/L Rem Médio (média das placas do projeto)'],
+    ['  · vs Média Modelo → coluna Km/L Rem Modelo (média do modelo)'],[],
     ['Interpretação:','os litros que a eficiência real gastou a mais/menos vs. o remunerado, valorizados no preço REMUNERADO (isola o efeito eficiência do efeito preço).'],
-    ['Benchmark (Km/L Rem):',modo],
     ['Preço:','R$/L Remunerado (base R$/L, por projeto/vigência). Fallback = R$/L Realizado quando não há preço remunerado.'],[],
     ['Linhas na base:',(active||[]).length],
     ['Linhas com preço remunerado:',nRem],
     ['Linhas com fallback (preço realizado):',nFb],[],
-    ['IMPACTO TOTAL (R$):',_round(sum,2)],
-    ['(bate com o card Impacto do período filtrado)'],
+    ['IMPACTO TOTAL vs Média Geral (R$):',_round(sumMed,2)],
+    ['IMPACTO TOTAL vs Média Modelo (R$):',_round(sumMod,2)],
+    ['(o total da visão ativa no painel bate com o card Impacto)'],
   ];
   return { nome:'Impacto Km-L', base, memoria };
 }
