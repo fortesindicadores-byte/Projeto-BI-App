@@ -369,6 +369,38 @@ const KML_TAB = 'Km/L';
 // do Rem Modelo (também alimenta o painel R$/L). Substitui a coluna "Km/l Rem
 // Modelo" da aba Km/L. Regra: 0 = placa inativa (nunca entra em média).
 const BASE_REMMOD_TAB = 'Base Remunerado Modelo';
+// Base R$/L (preço REMUNERADO por projeto/vigência) — usada para valorizar o Impacto
+// de eficiência no preço remunerado (isola o efeito eficiência do efeito preço).
+const GV_RSL_ID = '1wCoRGsvOgmIvfLW4F9Sxr-5AX9Go-aFlRVjrQ_B2ilM';
+let REMLK = null;   // { L1: proj|ym|combustível -> {s,n}, L2: proj|ym -> {s,n} }
+const _nkK=s=>String(s||'').toUpperCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/\s+/g,' ').trim();
+const _nfK=s=>{let x=String(s||'');const i=x.indexOf(':');if(i>=0)x=x.slice(i+1);return _nkK(x);};
+const _KMAP2={jan:0,fev:1,mar:2,abr:3,mai:4,jun:5,jul:6,ago:7,set:8,out:9,nov:10,dez:11};
+function _pvK(v){ if(!v)return null; if(v instanceof Date)return new Date(v.getFullYear(),v.getMonth(),1);
+  if(typeof v==='string'){ const g=v.match(/^Date\((\d+),(\d+)/);if(g)return new Date(+g[1],+g[2],1);
+    const m1=v.match(/^([a-zá-ú]+)\.?\/(\d{4})$/i);if(m1){const mo=_KMAP2[m1[1].toLowerCase().slice(0,3)];if(mo!==undefined)return new Date(+m1[2],mo,1);}
+    const m2=v.match(/^(\d{1,2})\/(\d{4})$/);if(m2)return new Date(+m2[2],+m2[1]-1,1); }
+  if(typeof v==='number'){const d=new Date(1899,11,30);d.setDate(d.getDate()+Math.round(v));return new Date(d.getFullYear(),d.getMonth(),1);} return null; }
+const _ymK=d=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+function buildRemLookup(cols,rows){
+  const fi=(...t)=>{for(let i=0;i<cols.length;i++){const lc=String(cols[i]||'').toLowerCase();if(t.some(x=>lc.includes(x)))return i;}return -1;};
+  const cProj=fi('unidade benner');
+  let cVig=-1; for(let i=0;i<cols.length;i++){const lc=(cols[i]||'').toLowerCase();if(lc.includes('vigência')||lc.includes('vigencia')){const sv=rows.find(r=>r[i]!=null)?.[i];if(_pvK(sv)){cVig=i;break;}}} if(cVig<0)cVig=3;
+  const cPreco=fi('precooperadora','preco operadora'), cFuel=fi('tipocombustivel','combustivel','combustível');
+  const L1=new Map(),L2=new Map();
+  rows.forEach(r=>{const p=_nkK(r[cProj]),d=_pvK(r[cVig]);if(!p||!d)return;const ym=_ymK(d),fu=_nfK(r[cFuel]),v=+(r[cPreco]||0);if(!(v>0))return;
+    const k1=`${p}|${ym}|${fu}`,k2=`${p}|${ym}`;
+    if(!L1.has(k1))L1.set(k1,{s:0,n:0});L1.get(k1).s+=v;L1.get(k1).n++;
+    if(!L2.has(k2))L2.set(k2,{s:0,n:0});L2.get(k2).s+=v;L2.get(k2).n++;});
+  REMLK={L1,L2};
+}
+// Preço R$/L REMUNERADO da linha (por projeto/vigência[/combustível]); null se indisponível.
+function remPriceFor(r){
+  if(!REMLK)return null; const p=_nkK(r[CL.proj]); if(!p)return null; const d=_pvK(r[CL.vig]); if(!d)return null;
+  const ym=_ymK(d), fu=(CL.fuel>=0)?_nfK(r[CL.fuel]):'';
+  let e=REMLK.L1.get(`${p}|${ym}|${fu}`); if(!e)e=REMLK.L2.get(`${p}|${ym}`);
+  return e&&e.n>0?e.s/e.n:null;
+}
 
 // ── PLACA CANÔNICA (Mercosul <-> antigo) ──
 // No Mercosul (AAA9A99) o 5º caractere virou LETRA: 0->A 1->B … 9->J. Convertendo
@@ -413,6 +445,7 @@ function detectCols(cols) {
     tipoVei:fb(fi(['tipo vei','tipo_vei']),17),
     kmRod:  fb(fi(['km rodado','km_rodado','kmrodado']),22),
     litros: fb(fi(['litro','qtd total','qtd_total','qtd litro']),23),
+    fuel:   fi(['tipo combust','combustivel','combustível']),
   };
 }
 
@@ -830,9 +863,11 @@ function aggRows(rows){
     const km=+(r[CL.kmRod]||0),lit=+(r[CL.litros]||0),rem=+(r[CL.rem]||0),remM=+(r[CL.remM]||0),rsL=+(r[CL.rsLReal]||0),real=+(r[CL.real]||0);
     sumKm+=km;sumLitros+=lit;sumRsL+=rsL;
     if(remM>0&&km>0){sumRemMKm+=remM*km;sumKmRem+=km;}   // modelo: km da placa
-    // impacto ADITIVO por linha (subtotais somam o total): (km/rem − km/real)·R$/L
+    // impacto ADITIVO por linha (subtotais somam o total): (km/rem − km/real)·R$/L REMUNERADO
+    // Preço remunerado isola o efeito EFICIÊNCIA do efeito PREÇO (fallback: R$/L realizado).
     const rb=remMode==='modelo'?remM:rem;
-    if(km>0&&rb>0&&real>0)sumImp+=(km/rb-km/real)*rsL;
+    const pRem=remPriceFor(r), rsLimp=(pRem!=null&&pRem>0)?pRem:rsL;
+    if(km>0&&rb>0&&real>0)sumImp+=(km/rb-km/real)*rsLimp;
     const p=getProj(r)||'—';
     if(!proj[p])proj[p]={sumRem:0,cnt:0,km:0};
     if(rem>0){proj[p].sumRem+=rem;proj[p].cnt++;}         // média burra no projeto
@@ -1122,11 +1157,13 @@ async function init(){
     }
   }catch(e){sessionStorage.removeItem(CACHE_KEY);}
   try{
-    const [kml,base]=await Promise.all([
+    const [kml,base,rsl]=await Promise.all([
       fetchSheet(KML_ID,KML_TAB),
-      fetchBaseRemMod().catch(e=>{console.error('Base Remunerado Modelo:',e);return null;})
+      fetchBaseRemMod().catch(e=>{console.error('Base Remunerado Modelo:',e);return null;}),
+      fetchSheet(GV_RSL_ID,'R$/L').catch(e=>{console.error('R$/L (preço rem):',e);return null;})
     ]);
     detectCols(kml.cols);allRows=kml.rows;
+    if(rsl&&rsl.rows)buildRemLookup(rsl.cols,rsl.rows);
     sessionStorage.setItem(CACHE_KEY,JSON.stringify({cols:kml.cols,rows:kml.rows}));
     if(base instanceof Map){baseRemRaw=base;try{sessionStorage.setItem(BASE_KEY,JSON.stringify([...base]));}catch(e){}}
     buildRemModIndex();computeDivergencias();
