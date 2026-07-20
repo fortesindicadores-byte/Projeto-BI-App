@@ -81,6 +81,7 @@ body.light-mode .tbl-section{background:rgba(128,128,128,.14)!important;border:n
 body.light-mode td{color:var(--text);}
 body.light-mode thead th{border-bottom-color:rgba(0,0,0,.12);}
 body.light-mode tbody tr{border-bottom:1px solid rgba(0,0,0,.06);}
+body.light-mode tr.total td{border-top-color:rgba(0,0,0,.20);}
 body.light-mode .leg .l-rem{border-top-color:#000;}
 
 @media(max-width:900px){
@@ -176,7 +177,7 @@ Chart.register(ChartDataLabels);
 const SHEET_ID='1EFmp2qlevQG5OEgGJePrI_O8wKuQo3IDmbJIReN2Fl0';
 const TAB='Base';
 const PROJ_FROM=2026;   // primeiro ano de tendência (tracejado)
-const END_YEAR=2030;
+const END_YEAR=2029;    // 10 anos (2020–2029)
 
 // ── helpers ──────────────────────────────────────────────
 const set=(id,t)=>{const e=document.getElementById(id);if(e)e.textContent=t;};
@@ -285,36 +286,39 @@ function renderChart(canvasId, realKey, remKey, fmt, prevRef){
   });
 }
 
-function renderTables(){
-  // R$/km
-  let acum=0, html='';
-  DATA.forEach(d=>{
-    const proj=d.ano>=PROJ_FROM?'proj':'';
-    acum += (d.impRkm||0);
-    const dCls=d.dRkm==null?'':(d.dRkm<0?'cr':'cg');
-    const iCls=d.impRkm==null?'':(d.impRkm<0?'cr':'cg');
-    html+=`<tr class="${proj}"><td class="ano">${d.ano}</td>`
-       +`<td class="num">${nf2(d.rkmRem)}</td><td class="num">${nf2(d.rkmReal)}</td>`
-       +`<td class="num ${dCls}">${nf2(d.dRkm)}</td>`
-       +`<td class="num ${iCls}">${numFmt(d.impRkm)}</td>`
-       +`<td class="num ${acum<0?'cr':'cg'}">${numFmt(acum)}</td></tr>`;
-  });
-  document.getElementById('tb-rkm').innerHTML=html;
+// Renderiza uma tabela 2020→END_YEAR: real (aba) onde existe, tendência linear nos anos futuros.
+function renderTable(bodyId, realKey, remKey, dKey, impKey, fmtV){
+  const hist=DATA.filter(d=>d.ano<PROJ_FROM);                         // base da tendência: anos completos
+  const first=hist.length?hist[0].ano:2020;
+  const predReal=linReg(hist.map(d=>[d.ano,d[realKey]]).filter(p=>p[1]!=null));
+  const predRem =linReg(hist.map(d=>[d.ano,d[remKey ]]).filter(p=>p[1]!=null));
+  const byYear={}; DATA.forEach(d=>byYear[d.ano]=d);
+  let acum=0, totImp=0, html='';
+  for(let y=first; y<=END_YEAR; y++){
+    const d=byYear[y];
+    let rem,real,delta,imp;
+    if(d){ rem=d[remKey]; real=d[realKey]; delta=d[dKey]; imp=d[impKey]; }   // ano real (2020–2026)
+    else { rem=predRem(y); real=predReal(y); delta=rem-real; imp=null; }     // ano projetado (2027–2029)
+    const proj=y>=PROJ_FROM?'proj':'';
+    if(imp!=null){ acum+=imp; totImp+=imp; }
+    const dCls=delta==null?'':(delta<0?'cr':'cg');
+    const iCls=imp==null?'':(imp<0?'cr':'cg');
+    html+=`<tr class="${proj}"><td class="ano">${y}</td>`
+       +`<td class="num">${fmtV(rem)}</td><td class="num">${fmtV(real)}</td>`
+       +`<td class="num ${dCls}">${fmtV(delta)}</td>`
+       +`<td class="num ${iCls}">${imp==null?'—':numFmt(imp)}</td>`
+       +`<td class="num ${imp==null?'':(acum<0?'cr':'cg')}">${imp==null?'—':numFmt(acum)}</td></tr>`;
+  }
+  html+=`<tr class="total"><td class="ano">Total</td>`
+     +`<td class="num">—</td><td class="num">—</td><td class="num">—</td>`
+     +`<td class="num ${totImp<0?'cr':'cg'}">${numFmt(totImp)}</td>`
+     +`<td class="num ${totImp<0?'cr':'cg'}">${numFmt(totImp)}</td></tr>`;
+  document.getElementById(bodyId).innerHTML=html;
+}
 
-  // R$/Equipamento
-  acum=0; html='';
-  DATA.forEach(d=>{
-    const proj=d.ano>=PROJ_FROM?'proj':'';
-    acum += (d.impEq||0);
-    const dCls=d.dEq==null?'':(d.dEq<0?'cr':'cg');
-    const iCls=d.impEq==null?'':(d.impEq<0?'cr':'cg');
-    html+=`<tr class="${proj}"><td class="ano">${d.ano}</td>`
-       +`<td class="num">${nf0(d.eqRem)}</td><td class="num">${nf0(d.eqReal)}</td>`
-       +`<td class="num ${dCls}">${nf0(d.dEq)}</td>`
-       +`<td class="num ${iCls}">${numFmt(d.impEq)}</td>`
-       +`<td class="num ${acum<0?'cr':'cg'}">${numFmt(acum)}</td></tr>`;
-  });
-  document.getElementById('tb-eq').innerHTML=html;
+function renderTables(){
+  renderTable('tb-rkm','rkmReal','rkmRem','dRkm','impRkm',nf2);
+  renderTable('tb-eq' ,'eqReal' ,'eqRem' ,'dEq' ,'impEq' ,nf0);
 }
 
 function renderAll(){
