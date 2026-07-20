@@ -64,7 +64,7 @@ body{
 .chart-card{min-width:0;}
 .tbl-title{font-size:16px;font-weight:800;color:var(--text);margin-bottom:3px;}
 .tbl-sub{font-size:10px;color:var(--text2);margin-bottom:14px;}
-.chart-wrap{position:relative;height:300px;}
+.chart-wrap{position:relative;height:250px;}
 
 /* LEGEND custom */
 .leg{display:flex;gap:16px;flex-wrap:wrap;margin:2px 0 12px;font-size:10px;color:var(--text2);font-weight:600;}
@@ -104,7 +104,7 @@ body.light-mode .leg .l-rem{border-top-color:#000;}
   .main{padding:14px 12px 50px;}
   .header-right .refresh-btn{display:none;}
   .status-badge,.access-badge{font-size:8px;padding:2px 6px;}
-  .chart-wrap{height:240px;}
+  .chart-wrap{height:210px;}
   table{font-size:11px;} thead th{font-size:10px;padding:6px 4px 8px;} td{padding:8px 4px;}
 }
 </style>
@@ -283,7 +283,27 @@ function renderChart(canvasId, realKey, remKey, fmt, prevRef){
   const barBg =(arr,a)=>arr.map((v,i)=>v==null?'transparent':(bad(v,i)?`rgba(255,102,102,${a})`:`rgba(59,179,59,${a})`));
   const barBc =(arr)  =>arr.map((v,i)=>v==null?'transparent':(bad(v,i)?'#FF6666':'#3BB33B'));
   const dl={color:isL?'#1a1a1a':'#F1F5F9',font:{family:'Montserrat',size:10,weight:'700'},anchor:'end',align:'end',offset:2,formatter:v=>v==null?'':fmt(v)};
+
+  // Colchetes de período (Contrato 2020–2024 / Pós-contrato 2025–2029) com a média do Real exibido
+  const chartReal=years.map((y,i)=> realHist[i]!=null?realHist[i]:realProj[i]);
+  const mean=a=>{const v=a.filter(x=>x!=null);return v.length?v.reduce((s,x)=>s+x,0)/v.length:null;};
+  const mCon=mean(chartReal.slice(0,5)), mPos=mean(chartReal.slice(5,10));
+  const brackets=[{a:0,b:4,txt:`Contrato · ${mCon==null?'—':fmt(mCon)}`},
+                  {a:5,b:9,txt:`Pós-contrato · ${mPos==null?'—':fmt(mPos)}`}];
+  const brkCol=isL?'#555555':'#94A3B8';
+  const bracketsPlugin={id:'brk',afterDraw(ch){
+    const x=ch.scales.x, top=ch.chartArea.top, yL=top-16, drop=6, ctx=ch.ctx;
+    ctx.save(); ctx.strokeStyle=brkCol; ctx.fillStyle=brkCol; ctx.lineWidth=1;
+    ctx.font='600 10px Montserrat, sans-serif'; ctx.textAlign='center'; ctx.textBaseline='alphabetic';
+    brackets.forEach(bk=>{ const x1=x.getPixelForValue(bk.a), x2=x.getPixelForValue(bk.b);
+      ctx.beginPath(); ctx.moveTo(x1,yL); ctx.lineTo(x2,yL);
+      ctx.moveTo(x1,yL); ctx.lineTo(x1,yL+drop); ctx.moveTo(x2,yL); ctx.lineTo(x2,yL+drop); ctx.stroke();
+      ctx.fillText(bk.txt,(x1+x2)/2,yL-4); });
+    ctx.restore();
+  }};
+
   return new Chart(document.getElementById(canvasId),{
+    plugins:[bracketsPlugin],
     data:{
       labels:years,
       datasets:[
@@ -299,7 +319,7 @@ function renderChart(canvasId, realKey, remKey, fmt, prevRef){
       ]
     },
     options:{
-      responsive:true,maintainAspectRatio:false,layout:{padding:{top:18}},
+      responsive:true,maintainAspectRatio:false,layout:{padding:{top:46}},
       plugins:{
         legend:{display:false},
         tooltip:{backgroundColor:'#141B26',titleColor:'#F97316',bodyColor:'#F1F5F9',borderColor:'#1E2D40',borderWidth:1,
