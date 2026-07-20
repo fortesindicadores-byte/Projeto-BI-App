@@ -31,7 +31,8 @@ async function main(){
   const D=[];
   rows.forEach(r=>{ const ano=num(r[0]); if(ano==null||ano<2000||ano>2100)return;
     D.push({ano:Math.round(ano), rkmReal:num(r[7]),rkmRem:num(r[8]),dRkm:num(r[9]),impRkm:num(r[10]),
-             eqRem:num(r[11]),eqReal:num(r[12]),dEq:num(r[13]),impEq:num(r[14]), km:num(r[5]),eq:num(r[6])}); });
+             eqRem:num(r[11]),eqReal:num(r[12]),dEq:num(r[13]),impEq:num(r[14]),
+             km:num(r[5]),eq:num(r[6]),nEq:num(r[6]),custoTot:num(r[4]),remuner:num(r[1])}); });
   D.sort((a,b)=>a.ano-b.ano);
 
   console.log(`\nLinhas de ano lidas: ${D.length}  (${D.map(d=>d.ano).join(', ')})`);
@@ -72,24 +73,26 @@ async function main(){
   console.log(`  R$/Equipamento (Real):   ${Math.round(pH('eqReal')).toLocaleString('pt-BR')}`);
 
   // Projeção do Impacto (2027–2029) + totais 10 anos (como no painel)
-  function tableTotals(realKey,remKey,impKey){
-    const pR=linReg(hist.map(d=>[d.ano,d[realKey]]).filter(p=>p[1]!=null));
-    const pM=linReg(hist.map(d=>[d.ano,d[remKey ]]).filter(p=>p[1]!=null));
-    const pI=linReg(hist.map(d=>[d.ano,d[impKey ]]).filter(p=>p[1]!=null));
+  const P2=key=>linReg(hist.map(d=>[d.ano,d[key]]).filter(p=>p[1]!=null));
+  function tableTotals(impKey,denomKey,fmt){
+    const pI=P2(impKey), pC=P2('custoTot'), pM=P2('remuner'), pD=P2(denomKey);
     const by={}; D.forEach(d=>by[d.ano]=d);
-    let acum=0,tImp=0,sRem=0,sReal=0; const proj=[];
-    for(let y=2020;y<=2029;y++){ const d=by[y]; let rem,real,imp;
-      if(d){rem=d[remKey];real=d[realKey];imp=d[impKey];} else {rem=pM(y);real=pR(y);imp=pI(y);proj.push([y,Math.round(imp)]);}
-      acum+=imp||0;tImp+=imp||0;sRem+=rem||0;sReal+=real||0; }
-    return {proj,tImp,sRem,sReal};
+    let tImp=0,sCusto=0,sRemun=0,sDenom=0; const proj=[];
+    for(let y=2020;y<=2029;y++){ const d=by[y]; let imp;
+      if(d){imp=d[impKey];sCusto+=d.custoTot||0;sRemun+=d.remuner||0;sDenom+=d[denomKey]||0;}
+      else {imp=pI(y);proj.push([y,Math.round(imp)]);sCusto+=pC(y);sRemun+=pM(y);sDenom+=pD(y);}
+      tImp+=imp||0; }
+    return {proj,tImp,totRem:sRemun/sDenom,totReal:sCusto/sDenom,sCusto,sDenom};
   }
-  const tk=tableTotals('rkmReal','rkmRem','impRkm');
-  const te=tableTotals('eqReal','eqRem','impEq');
-  console.log('\n== TABELA — Impacto projetado 2027–2029 + Totais 10 anos ==');
+  const tk=tableTotals('impRkm','km',x=>x.toFixed(3));
+  const te=tableTotals('impEq','nEq',x=>Math.round(x));
+  console.log('\n== TABELA — Impacto projetado 2027–2029 + Total ponderado 10 anos ==');
   console.log('  R$/km   Imp proj:',tk.proj.map(([y,v])=>`${y}=${v.toLocaleString('pt-BR')}`).join('  '));
-  console.log('          Total Impacto:',Math.round(tk.tImp).toLocaleString('pt-BR'),'| ΣRem',tk.sRem.toFixed(2),'| ΣReal',tk.sReal.toFixed(2));
+  console.log('          Total: Rem(Σcusto? não)=Σrem/Σkm=',tk.totRem.toFixed(3),' Real=Σcusto/Σkm=',tk.totReal.toFixed(3),' | Total Impacto:',Math.round(tk.tImp).toLocaleString('pt-BR'));
+  console.log('          Σcusto=',Math.round(tk.sCusto).toLocaleString('pt-BR'),' Σkm=',Math.round(tk.sDenom).toLocaleString('pt-BR'));
   console.log('  R$/Eq   Imp proj:',te.proj.map(([y,v])=>`${y}=${v.toLocaleString('pt-BR')}`).join('  '));
-  console.log('          Total Impacto:',Math.round(te.tImp).toLocaleString('pt-BR'),'| ΣRem',Math.round(te.sRem).toLocaleString('pt-BR'),'| ΣReal',Math.round(te.sReal).toLocaleString('pt-BR'));
+  console.log('          Total: Rem=Σrem/ΣnEq=',Math.round(te.totRem),' Real=Σcusto/ΣnEq=',Math.round(te.totReal),' | Total Impacto:',Math.round(te.tImp).toLocaleString('pt-BR'));
+  console.log('          Σcusto=',Math.round(te.sCusto).toLocaleString('pt-BR'),' ΣnEq=',Math.round(te.sDenom).toLocaleString('pt-BR'));
 
   const r26=D.find(d=>d.ano===2026);
   if(r26) console.log(`\n2026 REALIZADO PARCIAL na planilha: R$/kmReal=${r26.rkmReal}  R$/kmRem=${r26.rkmRem}  EqReal=${r26.eqReal}  EqRem=${r26.eqRem}  (km=${r26.km}, #eq=${r26.eq})`);

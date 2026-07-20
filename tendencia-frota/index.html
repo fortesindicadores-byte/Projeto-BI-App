@@ -251,7 +251,7 @@ async function fetchBase(){
     if(ano==null||ano<2000||ano>2100)return;   // ignora header/lixo
     out.push({
       ano:Math.round(ano),
-      remuner:num(r[1]), custoTot:num(r[4]),                                  // R$ Remunerado (B) / Custo Total (E)
+      remuner:num(r[1]), custoTot:num(r[4]), km:num(r[5]), nEq:num(r[6]),      // R$ Rem (B) / Custo Total (E) / Km (F) / #Eq (G)
       rkmReal:num(r[7]), rkmRem:num(r[8]), dRkm:num(r[9]), impRkm:num(r[10]),
       eqRem:num(r[11]), eqReal:num(r[12]), dEq:num(r[13]), impEq:num(r[14]),
     });
@@ -316,21 +316,26 @@ function renderChart(canvasId, realKey, remKey, fmt, prevRef){
 }
 
 // Renderiza uma tabela 2020→END_YEAR: real (aba) onde existe, tendência linear nos anos futuros.
-function renderTable(bodyId, realKey, remKey, dKey, impKey, fmtV){
+// denomKey = volume que vai no denominador do Total (km p/ R$/km, nEq p/ R$/Equipamento).
+function renderTable(bodyId, realKey, remKey, dKey, impKey, fmtV, denomKey){
   const hist=DATA.filter(d=>d.ano<PROJ_FROM);                         // base da tendência: anos completos
   const first=hist.length?hist[0].ano:2020;
-  const predReal=linReg(hist.map(d=>[d.ano,d[realKey]]).filter(p=>p[1]!=null));
-  const predRem =linReg(hist.map(d=>[d.ano,d[remKey ]]).filter(p=>p[1]!=null));
-  const predImp =linReg(hist.map(d=>[d.ano,d[impKey ]]).filter(p=>p[1]!=null));  // tendência do impacto (base 2020–2025)
+  const P=key=>linReg(hist.map(d=>[d.ano,d[key]]).filter(p=>p[1]!=null));
+  const predReal=P(realKey), predRem=P(remKey), predImp=P(impKey);
+  const predCusto=P('custoTot'), predRemun=P('remuner'), predDenom=P(denomKey);
   const byYear={}; DATA.forEach(d=>byYear[d.ano]=d);
-  let acum=0, totImp=0, sumRem=0, sumReal=0, html='';
+  let acum=0, totImp=0, sCusto=0, sRemun=0, sDenom=0, html='';
   for(let y=first; y<=END_YEAR; y++){
     const d=byYear[y];
     let rem,real,delta,imp;
     if(d){ rem=d[remKey]; real=d[realKey]; delta=d[dKey]; imp=d[impKey]; }        // ano real (2020–2026)
     else { rem=predRem(y); real=predReal(y); delta=rem-real; imp=predImp(y); }    // ano projetado (2027–2029)
     const proj=y>=PROJ_FROM?'proj':'';
-    acum+=(imp||0); totImp+=(imp||0); sumRem+=(rem||0); sumReal+=(real||0);
+    acum+=(imp||0); totImp+=(imp||0);
+    // agregados p/ o Total: custo, remunerado e volume estimados de cada ano
+    sCusto += d?(d.custoTot||0):predCusto(y);
+    sRemun += d?(d.remuner ||0):predRemun(y);
+    sDenom += d?(d[denomKey]||0):predDenom(y);
     const dCls=delta==null?'':(delta<0?'cr':'cg');
     const iCls=imp==null?'':(imp<0?'cr':'cg');
     html+=`<tr class="${proj}"><td class="ano">${y}</td>`
@@ -339,18 +344,21 @@ function renderTable(bodyId, realKey, remKey, dKey, impKey, fmtV){
        +`<td class="num ${iCls}">${numFmt(imp)}</td>`
        +`<td class="num ${acum<0?'cr':'cg'}">${numFmt(acum)}</td></tr>`;
   }
-  const totD=sumRem-sumReal;                                                     // total dos 10 anos
+  // Total = razão ponderada dos 10 anos (Σ custo ÷ Σ volume, Σ remunerado ÷ Σ volume)
+  const totRem = sDenom?sRemun/sDenom:null, totReal = sDenom?sCusto/sDenom:null;
+  const totD   = (totRem!=null&&totReal!=null)?totRem-totReal:null;
+  const dCls=totD==null?'':(totD<0?'cr':'cg');
   html+=`<tr class="total"><td class="ano">Total</td>`
-     +`<td class="num">${fmtV(sumRem)}</td><td class="num">${fmtV(sumReal)}</td>`
-     +`<td class="num ${totD<0?'cr':'cg'}">${fmtV(totD)}</td>`
+     +`<td class="num">${fmtV(totRem)}</td><td class="num">${fmtV(totReal)}</td>`
+     +`<td class="num ${dCls}">${fmtV(totD)}</td>`
      +`<td class="num ${totImp<0?'cr':'cg'}">${numFmt(totImp)}</td>`
      +`<td class="num ${totImp<0?'cr':'cg'}">${numFmt(totImp)}</td></tr>`;
   document.getElementById(bodyId).innerHTML=html;
 }
 
 function renderTables(){
-  renderTable('tb-rkm','rkmReal','rkmRem','dRkm','impRkm',nf2);
-  renderTable('tb-eq' ,'eqReal' ,'eqRem' ,'dEq' ,'impEq' ,nf0);
+  renderTable('tb-rkm','rkmReal','rkmRem','dRkm','impRkm',nf2,'km');
+  renderTable('tb-eq' ,'eqReal' ,'eqRem' ,'dEq' ,'impEq' ,nf0,'nEq');
 }
 
 // Card grande: projeção linear (2029) de Custo Total (Realizado), Remunerado, R$/km e R$/Equipamento.
