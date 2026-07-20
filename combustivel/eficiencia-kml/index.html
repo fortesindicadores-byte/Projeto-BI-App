@@ -768,6 +768,20 @@ function exportBaseRemMod(){
 //   3) média do TIPO de veículo na mesma vigência
 //   4) modelo/tipo na vigência mais próxima
 //   5) sem média -> null (entra no relatório remModStatus)
+// Unifica nomes de modelo duplicados (ex.: "M BENZ ACTROS 2548S" e "M.BENZ/ACTROS 2548S").
+// Agrupa por "só letras+números" (ignora . / espaços e acentos) e reescreve com o nome mais
+// frequente. Preserva o número/variante (2548S ≠ 2546 6X2). Roda ANTES de tudo (grupos, filtro).
+const _modKey = s => String(s||'').toUpperCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^A-Z0-9]/g,'');
+function canonicalizeModels(rows){
+  if(CL.modelo==null||CL.modelo<0)return;
+  const cnt=new Map();
+  rows.forEach(r=>{ const raw=r[CL.modelo]?String(r[CL.modelo]).trim():''; if(!raw)return; const k=_modKey(raw); if(!k)return;
+    if(!cnt.has(k))cnt.set(k,new Map()); const m=cnt.get(k); m.set(raw,(m.get(raw)||0)+1); });
+  const canon=new Map();
+  cnt.forEach((m,k)=>{ let best=null,bn=-1; m.forEach((n,raw)=>{ if(n>bn||(n===bn&&raw.length>(best||'').length)){best=raw;bn=n;} }); canon.set(k,best); });
+  rows.forEach(r=>{ const raw=r[CL.modelo]?String(r[CL.modelo]).trim():''; if(!raw)return; const c=canon.get(_modKey(raw)); if(c&&c!==raw)r[CL.modelo]=c; });
+}
+
 function buildRemModIndex(){
   if(!(baseRemRaw instanceof Map)||baseRemRaw.size===0)return;
   const info=new Map();  // placaCanon -> {modelo,tipo}
@@ -1190,7 +1204,7 @@ async function init(){
   try{
     const cached=sessionStorage.getItem(CACHE_KEY);
     if(cached){
-      const obj=JSON.parse(cached);detectCols(obj.cols);allRows=obj.rows;
+      const obj=JSON.parse(cached);detectCols(obj.cols);allRows=obj.rows;canonicalizeModels(allRows);
       try{const bc=sessionStorage.getItem(BASE_KEY);if(bc)baseRemRaw=new Map(JSON.parse(bc));}catch(e){}
       buildRemModIndex();computeDivergencias();populateFilters(allRows);atualizar();set('status-badge','Atualizando…');hasCached=true;
     }
@@ -1201,7 +1215,7 @@ async function init(){
       fetchBaseRemMod().catch(e=>{console.error('Base Remunerado Modelo:',e);return null;}),
       fetchSheet(GV_RSL_ID,'R$/L').catch(e=>{console.error('R$/L (preço rem):',e);return null;})
     ]);
-    detectCols(kml.cols);allRows=kml.rows;
+    detectCols(kml.cols);allRows=kml.rows;canonicalizeModels(allRows);
     if(rsl&&rsl.rows)buildRemLookup(rsl.cols,rsl.rows);
     sessionStorage.setItem(CACHE_KEY,JSON.stringify({cols:kml.cols,rows:kml.rows}));
     if(base instanceof Map){baseRemRaw=base;try{sessionStorage.setItem(BASE_KEY,JSON.stringify([...base]));}catch(e){}}
