@@ -275,25 +275,6 @@ body.light-mode table.dre thead tr.cols th{background:#F0F0F0;}
   </div>
 
   <div class="tbl-section">
-    <div class="tbl-title">Composição do Impacto — storytelling</div>
-    <div class="tbl-sub">Toda a cadeia que leva ao impacto — KM, litros, Km/L (rem e real), preço remunerado, litros ideais × reais, Δ litros e o impacto. Uma linha por placa × vigência do filtro. Botão direito → Excel.</div>
-    <div class="tbl-wrap" style="overflow:auto;max-height:540px;">
-      <table class="dre" id="tbl-story">
-        <thead><tr>
-          <th style="text-align:left">Vigência</th><th style="text-align:left">Placa</th><th style="text-align:left">Modelo</th>
-          <th class="num">KM</th><th class="num">Litros</th>
-          <th class="num">Km/L Rem Médio</th><th class="num">Km/L Rem Modelo</th><th class="num">Km/L Real</th>
-          <th class="num">R$/L Rem</th>
-          <th class="num">Litros Ideais</th><th class="num">Litros Reais</th><th class="num">Δ Litros</th>
-          <th class="num">Impacto vs Geral</th><th class="num">Impacto vs Modelo</th>
-        </tr></thead>
-        <tbody id="story-body"></tbody>
-      </table>
-    </div>
-    <div id="story-memoria" style="margin-top:14px;font-size:11px;color:var(--text2);line-height:1.65;"></div>
-  </div>
-
-  <div class="tbl-section">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:3px;">
       <div class="tbl-title">Km/L Detalhado</div>
       <div class="dim-toggle">
@@ -310,6 +291,11 @@ body.light-mode table.dre thead tr.cols th{background:#F0F0F0;}
           <th class="w-num num">Real</th>
           <th class="w-d   num">Δ</th>
           <th class="w-pct num">Δ %</th>
+          <th class="num sep-l">KM</th>
+          <th class="num">Litros</th>
+          <th class="num">Litros Ideais</th>
+          <th class="num">Δ Litros</th>
+          <th class="num">R$/L Rem</th>
           <th class="w-imp num">Impacto</th>
           <th class="w-d   num sep-l">Δ YTD</th>
           <th class="w-pct num">Δ YTD %</th>
@@ -317,6 +303,9 @@ body.light-mode table.dre thead tr.cols th{background:#F0F0F0;}
         </tr></thead>
         <tbody id="body-kml"></tbody>
       </table>
+    </div>
+    <div class="tbl-sub" style="margin-top:12px;font-size:11px;">
+      <b>Memória de cálculo:</b>&nbsp; Impacto = ( KM ÷ Km/L Rem − KM ÷ Km/L Real ) × R$/L Rem &nbsp;=&nbsp; Δ Litros × R$/L Rem
     </div>
   </div>
 
@@ -889,7 +878,7 @@ function aggRows(rows){
   //   projeto pelo seu KM RODADO do projeto (não pela placa).
   // remMode='modelo': coluna Km/L Rem Modelo (col remM) ponderada pelo KM
   //   RODADO DA PLACA (ex.: placa A rem 2·100km e B rem 3·900km → 2,90).
-  let sumKm=0,sumLitros=0,sumRsL=0,sumRemMKm=0,sumKmRem=0,sumImp=0;
+  let sumKm=0,sumLitros=0,sumRsL=0,sumRemMKm=0,sumKmRem=0,sumImp=0,sumLitIdeal=0,sumRemPxLit=0,sumLitPx=0;
   const proj={};
   rows.forEach(r=>{
     const km=+(r[CL.kmRod]||0),lit=+(r[CL.litros]||0),rem=+(r[CL.rem]||0),remM=+(r[CL.remM]||0),rsL=+(r[CL.rsLReal]||0),real=+(r[CL.real]||0);
@@ -900,6 +889,8 @@ function aggRows(rows){
     const rb=remMode==='modelo'?remM:rem;
     const pRem=remPriceFor(r), rsLimp=(pRem!=null&&pRem>0)?pRem:rsL;
     if(km>0&&rb>0&&real>0)sumImp+=(km/rb-km/real)*rsLimp;
+    if(km>0&&rb>0)sumLitIdeal+=km/rb;                           // litros ideais = KM ÷ Km/L Rem
+    if(rsLimp>0&&lit>0){sumRemPxLit+=rsLimp*lit;sumLitPx+=lit;}  // R$/L Rem ponderado por litro
     const p=getProj(r)||'—';
     if(!proj[p])proj[p]={sumRem:0,cnt:0,km:0};
     if(rem>0){proj[p].sumRem+=rem;proj[p].cnt++;}         // média burra no projeto
@@ -913,7 +904,8 @@ function aggRows(rows){
   const remAvg=remMode==='modelo'?remModelo:remMedio;
   const realWt=sumLitros>0?sumKm/sumLitros:null;
   const rsLAvg=rows.length>0?sumRsL/rows.length:null;
-  return{remAvg,realWt,sumKm,sumLitros,rsLAvg,sumImp};
+  const remPrice=sumLitPx>0?sumRemPxLit/sumLitPx:null;
+  return{remAvg,realWt,sumKm,sumLitros,rsLAvg,sumImp,sumLitIdeal,remPrice};
 }
 // impacto = soma dos impactos por linha (aditivo: ROTA + VAN = Total)
 function calcImpacto(agg){
@@ -1124,6 +1116,13 @@ function renderCharts(f){
 }
 
 // ── TABELA RESUMO ──
+const _intBR=v=>(v==null||!isFinite(v))?'—':Math.round(v).toLocaleString('pt-BR');
+const _sigBR=v=>(v==null||!isFinite(v))?'—':(v>0?'+':'')+Math.round(v).toLocaleString('pt-BR');
+// células da cadeia do impacto: KM · Litros · Litros Ideais · Δ Litros · R$/L Rem
+function chainCells(km,lit,litIdeal,rsLrem){
+  const dLit=(lit!=null&&litIdeal!=null)?lit-litIdeal:null;
+  return `<td class="num sep-l">${_intBR(km)}</td><td class="num">${_intBR(lit)}</td><td class="num">${_intBR(litIdeal)}</td><td class="num">${_sigBR(dLit)}</td><td class="num">${(rsLrem!=null&&isFinite(rsLrem))?rsLrem.toFixed(3):'—'}</td>`;
+}
 function renderTable(active,ytd){
   const keyFn=tableDim==='proj'?r=>getProj(r):r=>getUni(r);
   const build=rows=>aggByKey(rows,keyFn);
@@ -1131,22 +1130,22 @@ function renderTable(active,ytd){
   const ytdMap=Object.fromEntries(build(ytd).map(({k,agg})=>[k,agg]));
 
   const items=activeItems.map(({k,agg})=>{
-    const{remAvg:rem,realWt:real}=agg;
+    const{remAvg:rem,realWt:real,sumKm:km,sumLitros:lit,sumLitIdeal:litIdeal,remPrice}=agg;
     const delta=(rem!=null&&real!=null)?real-rem:null;
     const deltaP=(delta!=null&&rem)?delta/Math.abs(rem)*100:null;
     const imp=calcImpacto(agg);
     const yagg=ytdMap[k];
     let deltaY=null,deltaPY=null,impY=null;
     if(yagg){const{remAvg:ry,realWt:rly}=yagg;deltaY=(ry!=null&&rly!=null)?rly-ry:null;deltaPY=(deltaY!=null&&ry)?deltaY/Math.abs(ry)*100:null;impY=calcImpacto(yagg);}
-    return{k,rem,real,delta,deltaP,imp,deltaY,deltaPY,impY};
+    return{k,rem,real,km,lit,litIdeal,remPrice,delta,deltaP,imp,deltaY,deltaPY,impY};
   }).filter(x=>x.rem!=null||x.real!=null);
 
   items.sort((a,b)=>(a.imp||0)-(b.imp||0));
 
   let html='';
-  items.forEach(({k,rem,real,delta,deltaP,imp,deltaY,deltaPY,impY})=>{
+  items.forEach(({k,rem,real,km,lit,litIdeal,remPrice,delta,deltaP,imp,deltaY,deltaPY,impY})=>{
     const bad=delta!=null&&delta<0,badY=deltaY!=null&&deltaY<0;
-    html+=`<tr><td class="conta">${k}</td><td class="num">${kml(rem)}</td><td class="num">${kml(real)}</td><td class="num ${bad?'cr':'cg'}">${kmlD(delta)}</td><td class="num ${bad?'cr-t':'cg-t'}">${pctInt(deltaP)}</td><td class="num imp-cell" style="color:${imp<0?'var(--red)':'var(--green)'}">${imp!=null?fmtBrlD(imp):'—'}</td><td class="num sep-l ${badY?'cr':'cg'}">${deltaY!=null?kmlD(deltaY):'—'}</td><td class="num ${badY?'cr-t':'cg-t'}">${deltaPY!=null?pctInt(deltaPY):'—'}</td><td class="num imp-cell" style="color:${impY<0?'var(--red)':'var(--green)'}">${impY!=null?fmtBrlD(impY):'—'}</td></tr>`;
+    html+=`<tr><td class="conta">${k}</td><td class="num">${kml(rem)}</td><td class="num">${kml(real)}</td><td class="num ${bad?'cr':'cg'}">${kmlD(delta)}</td><td class="num ${bad?'cr-t':'cg-t'}">${pctInt(deltaP)}</td>${chainCells(km,lit,litIdeal,remPrice)}<td class="num imp-cell" style="color:${imp<0?'var(--red)':'var(--green)'}">${imp!=null?fmtBrlD(imp):'—'}</td><td class="num sep-l ${badY?'cr':'cg'}">${deltaY!=null?kmlD(deltaY):'—'}</td><td class="num ${badY?'cr-t':'cg-t'}">${deltaPY!=null?pctInt(deltaPY):'—'}</td><td class="num imp-cell" style="color:${impY<0?'var(--red)':'var(--green)'}">${impY!=null?fmtBrlD(impY):'—'}</td></tr>`;
   });
 
   // Totais
@@ -1156,7 +1155,7 @@ function renderTable(active,ytd){
   const{remAvg:tRemY,realWt:tRealY}=totY;
   const tDY=(tRemY!=null&&tRealY!=null)?tRealY-tRemY:null,tDPY=(tDY!=null&&tRemY)?tDY/Math.abs(tRemY)*100:null,tImpY=calcImpacto(totY);
   const bT=tD!=null&&tD<0,bTY=tDY!=null&&tDY<0;
-  html+=`<tr class="total"><td class="conta">Total</td><td class="num">${kml(tRem)}</td><td class="num">${kml(tReal)}</td><td class="num ${bT?'cr':'cg'}">${tD!=null?kmlD(tD):'—'}</td><td class="num ${bT?'cr-t':'cg-t'}">${pctInt(tDP)}</td><td class="num imp-cell" style="color:${tImp<0?'var(--red)':'var(--green)'}">${tImp!=null?fmtBrlD(tImp):'—'}</td><td class="num sep-l ${bTY?'cr':'cg'}">${tDY!=null?kmlD(tDY):'—'}</td><td class="num ${bTY?'cr-t':'cg-t'}">${pctInt(tDPY)}</td><td class="num imp-cell" style="color:${tImpY<0?'var(--red)':'var(--green)'}">${tImpY!=null?fmtBrlD(tImpY):'—'}</td></tr>`;
+  html+=`<tr class="total"><td class="conta">Total</td><td class="num">${kml(tRem)}</td><td class="num">${kml(tReal)}</td><td class="num ${bT?'cr':'cg'}">${tD!=null?kmlD(tD):'—'}</td><td class="num ${bT?'cr-t':'cg-t'}">${pctInt(tDP)}</td>${chainCells(totA.sumKm,totA.sumLitros,totA.sumLitIdeal,totA.remPrice)}<td class="num imp-cell" style="color:${tImp<0?'var(--red)':'var(--green)'}">${tImp!=null?fmtBrlD(tImp):'—'}</td><td class="num sep-l ${bTY?'cr':'cg'}">${tDY!=null?kmlD(tDY):'—'}</td><td class="num ${bTY?'cr-t':'cg-t'}">${pctInt(tDPY)}</td><td class="num imp-cell" style="color:${tImpY<0?'var(--red)':'var(--green)'}">${tImpY!=null?fmtBrlD(tImpY):'—'}</td></tr>`;
   document.getElementById('body-kml').innerHTML=html;
 }
 
@@ -1246,7 +1245,6 @@ function atualizar(){
   renderCharts(f2);
   renderTable(active,ytd);
   renderVeiTable(active,ytd);
-  renderStory(active);
   renderDiverg(f2);
 
   let vigLbl;
