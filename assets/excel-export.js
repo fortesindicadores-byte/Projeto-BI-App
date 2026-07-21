@@ -175,7 +175,7 @@
     const body=getComputedStyle(document.body).backgroundColor;
     return (body && alpha(body)>=0.9) ? body : (document.body.classList.contains('light-mode')?'#F0F0F0':'#0C1017');
   }
-  const SCALE=3; // resolução do PNG (3× = nítido p/ PowerPoint, sem pesar demais)
+  const SCALE=4; // resolução do PNG (4× = bem nítido p/ PowerPoint; re-renderiza o gráfico nessa DPI)
   // Chart.js resiste a mudar DPI em runtime; então re-renderiza o gráfico num canvas temporário
   // em alta DPI (3×) e devolve um dataURL nítido p/ trocar no clone do html2canvas.
   function chartHiRes(chart){
