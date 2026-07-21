@@ -35,9 +35,7 @@ async function main(){
              km:num(r[5]),eq:num(r[6]),nEq:num(r[6]),custoTot:num(r[4]),remuner:num(r[1])}); });
   D.sort((a,b)=>a.ano-b.ano);
   // anualiza 2026 (jan–jun → ano cheio)
-  const ANO_PARC=2026, MESES_PARC=6, F=12/MESES_PARC;
-  D.forEach(d=>{ if(d.ano===ANO_PARC){ ['remuner','custoTot','km','nEq','eq','impRkm','impEq'].forEach(k=>{ if(d[k]!=null) d[k]=d[k]*F; }); } });
-  console.log(`\n2026 ANUALIZADO (×${F}): custo=${Math.round(D.find(d=>d.ano===2026).custoTot).toLocaleString('pt-BR')} km=${Math.round(D.find(d=>d.ano===2026).km).toLocaleString('pt-BR')} nEq=${Math.round(D.find(d=>d.ano===2026).nEq)} impRkm=${Math.round(D.find(d=>d.ano===2026).impRkm).toLocaleString('pt-BR')}`);
+  const ANO_PARC=2026, MESES_PARC=6;   // 2026 fica cru (jan–jun); mensalização feita na projeção
 
   console.log(`\nLinhas de ano lidas: ${D.length}  (${D.map(d=>d.ano).join(', ')})`);
   console.log('\n== VALORES LIDOS ==');
@@ -49,30 +47,26 @@ async function main(){
     `${String(Math.round(d.eqRem??0)).padStart(5)} ${String(Math.round(d.eqReal??0)).padStart(6)} `+
     `${String(Math.round(d.dEq??0)).padStart(6)} ${String(Math.round(d.impEq??0)).padStart(9)}`));
 
-  // Projeção ANCORADA no YTD de 2026 + inclinação histórica (2020–2025)
-  const REAL_TO=2025, off=(12-MESES_PARC)/24;
-  const makeProj=key=>{
-    const h=D.filter(d=>d.ano<=REAL_TO);
-    const reg=linReg(h.map(d=>[d.ano,d[key]]).filter(p=>p[1]!=null));
-    const m=reg(1)-reg(0), a=(D.find(d=>d.ano===ANO_PARC)||{})[key];
-    return y=> (a==null?reg(y):a + m*((y-ANO_PARC)+off));
-  };
-  const pRkmR=makeProj('rkmReal'), pRkmM=makeProj('rkmRem'), pEqR=makeProj('eqReal'), pEqM=makeProj('eqRem');
-  console.log(`\n== TENDÊNCIA ANCORADA (YTD jun/2026 + inclinação 2020–2025) → ${PROJ_FROM}-${END_YEAR} ==`);
+  // Projeção DRIVER-BASED: projeta Custo/Km/#Eq; taxas derivadas. 2026 mensalizado (×12/6).
+  const REAL_TO=2025, FAC=12/MESES_PARC;
+  const d26=key=>{const d=D.find(x=>x.ano===ANO_PARC);return d?(d[key]||0)*FAC:0;};
+  const driverReg=key=>{const pts=D.filter(d=>d.ano<=REAL_TO).map(d=>[d.ano,d[key]]).filter(p=>p[1]!=null);pts.push([ANO_PARC,d26(key)]);return linReg(pts);};
+  const driverVal=(key,y)=>{ if(y<=REAL_TO){const d=D.find(x=>x.ano===y);return d?(d[key]||0):0;} if(y===ANO_PARC)return d26(key); return driverReg(key)(y); };
+  const rrkm=y=>driverVal('custoTot',y)/driverVal('km',y),  mrkm=y=>driverVal('remuner',y)/driverVal('km',y);
+  const req =y=>driverVal('custoTot',y)/driverVal('nEq',y), meq =y=>driverVal('remuner',y)/driverVal('nEq',y);
+  console.log(`\n2026 mensalizado (×${FAC}): custo=${Math.round(d26('custoTot')).toLocaleString('pt-BR')} km=${Math.round(d26('km')).toLocaleString('pt-BR')} nEq=${Math.round(d26('nEq'))}`);
+  console.log(`\n== TENDÊNCIA DRIVER-BASED (R$/km=Custo÷Km, R$/Eq=Custo÷#Eq) → ${ANO_PARC}-${END_YEAR} ==`);
   console.log('Ano   R$/kmReal R$/kmRem   EqReal EqRem');
-  for(let y=PROJ_FROM;y<=END_YEAR;y++){
-    console.log(`${y}  ${pRkmR(y).toFixed(3).padStart(7)}  ${pRkmM(y).toFixed(3).padStart(7)}   `+
-      `${String(Math.round(pEqR(y))).padStart(5)} ${String(Math.round(pEqM(y))).padStart(5)}`);
+  for(let y=ANO_PARC;y<=END_YEAR;y++){
+    console.log(`${y}  ${rrkm(y).toFixed(3).padStart(7)}  ${mrkm(y).toFixed(3).padStart(7)}   `+
+      `${String(Math.round(req(y))).padStart(5)} ${String(Math.round(meq(y))).padStart(5)}`);
   }
-  // Totais 10 anos (real ≤2025 + tendência ancorada 2026–2029)
+  // Totais 10 anos (real ≤2025 + tendência driver-based 2026–2029)
   function tableTotals(impKey,denomKey){
-    const pI=makeProj(impKey), pC=makeProj('custoTot'), pMr=makeProj('remuner'), pD=makeProj(denomKey);
-    const by={}; D.forEach(d=>by[d.ano]=d);
     let tImp=0,sCusto=0,sRemun=0,sDenom=0; const proj=[];
-    for(let y=2020;y<=2029;y++){ const d=by[y], r=(y<=REAL_TO&&d); let imp;
-      if(r){imp=d[impKey];sCusto+=d.custoTot||0;sRemun+=d.remuner||0;sDenom+=d[denomKey]||0;}
-      else {imp=pI(y);proj.push([y,Math.round(imp)]);sCusto+=pC(y);sRemun+=pMr(y);sDenom+=pD(y);}
-      tImp+=imp||0; }
+    for(let y=2020;y<=2029;y++){ const c=driverVal('custoTot',y),rm=driverVal('remuner',y),dn=driverVal(denomKey,y);
+      let imp; if(y<=REAL_TO){const d=D.find(x=>x.ano===y);imp=d?d[impKey]:0;} else {imp=driverVal(impKey,y);proj.push([y,Math.round(imp)]);}
+      tImp+=imp||0;sCusto+=c;sRemun+=rm;sDenom+=dn; }
     return {proj,tImp,totRem:sRemun/sDenom,totReal:sCusto/sDenom,sCusto,sDenom};
   }
   const tk=tableTotals('impRkm','km',x=>x.toFixed(3));
