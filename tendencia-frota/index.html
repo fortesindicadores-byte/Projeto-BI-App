@@ -302,18 +302,21 @@ function driverVal(key,y){
   if(y===ANO_PARC) return d26(key);                                                // 2026 mensalizado
   return driverReg(key)(y);                                                        // 2027–2029 tendência
 }
-// taxa derivada dos drivers: numerador ÷ denominador
+// R$/km Real (e R$/Eq Real) DERIVADO dos drivers: Custo ÷ denominador
 const rateReal=den=>y=>{const dn=driverVal(den,y);return dn?driverVal('custoTot',y)/dn:null;};
-const rateRem =den=>y=>{const dn=driverVal(den,y);return dn?driverVal('remuner',y)/dn:null;};
+// Rem: a "R$/km Rem" da planilha NÃO é remuner÷km → tendência direta da taxa da planilha (≤2026 real, 2027+ reta)
+function remReg(rk){ const pts=DATA.filter(d=>d.ano<=REAL_TO).map(d=>[d.ano,d[rk]]).filter(p=>p[1]!=null);
+  const d=DATA.find(x=>x.ano===ANO_PARC); if(d&&d[rk]!=null)pts.push([ANO_PARC,d[rk]]); return linReg(pts); }
+function remRate(rk,y){ const d=DATA.find(x=>x.ano===y); if(d&&d[rk]!=null&&y<=ANO_PARC) return d[rk]; return remReg(rk)(y); }
 
-// séries do gráfico: realizado sólido (≤2025) + tendência derivada dos drivers (2026–2029)
+// séries do gráfico: realizado sólido (≤2025) + tendência (2026–2029)
 function buildSeries(realKey, remKey, denomKey){
   const years=[]; for(let y=2020; y<=END_YEAR; y++) years.push(y);
-  const pReal=rateReal(denomKey), pRem=rateRem(denomKey);
-  const mapReal={}, mapRem={}; DATA.forEach(d=>{mapReal[d.ano]=d[realKey];mapRem[d.ano]=d[remKey];});
+  const pReal=rateReal(denomKey);
+  const mapReal={}; DATA.forEach(d=>{mapReal[d.ano]=d[realKey];});
   const realHist=years.map(y=> y<=REAL_TO ? (mapReal[y]??null) : null);           // sólido ≤2025
-  const realProj=years.map(y=> y>=PROJ_FROM ? pReal(y) : null);                   // tendência 2026–2029 (derivada)
-  const remLine =years.map(y=> y<PROJ_FROM ? (mapRem[y]??null) : pRem(y));        // ≤2025 real, 2026+ derivado
+  const realProj=years.map(y=> y>=PROJ_FROM ? pReal(y) : null);                   // Real derivado dos drivers
+  const remLine =years.map(y=> remRate(remKey,y));                                // Rem: taxa planilha ≤2026 + reta
   const projIdx =years.findIndex(y=>y>=PROJ_FROM);
   return {years,realHist,realProj,remLine,projIdx};
 }
@@ -394,7 +397,7 @@ function renderTable(bodyId, realKey, remKey, dKey, impKey, fmtV, denomKey){
     const custo=driverVal('custoTot',y), remun=driverVal('remuner',y), den=driverVal(denomKey,y);
     let rem,real,delta,imp;
     if(real2020_25){ rem=d[remKey]; real=d[realKey]; delta=d[dKey]; imp=d[impKey]; }   // realizado ≤2025
-    else { real=den?custo/den:null; rem=den?remun/den:null; delta=(rem!=null&&real!=null)?rem-real:null; imp=driverVal(impKey,y); }  // 2026–2029: taxa DERIVADA dos drivers
+    else { real=den?custo/den:null; rem=remRate(remKey,y); delta=(rem!=null&&real!=null)?rem-real:null; imp=driverVal(impKey,y); }  // 2026–2029: Real derivado dos drivers, Rem = taxa planilha
     const proj=y>=PROJ_FROM?'proj':'';
     acum+=(imp||0); totImp+=(imp||0);
     sCusto += custo; sRemun += remun; sDenom += den;

@@ -52,8 +52,10 @@ async function main(){
   const d26=key=>{const d=D.find(x=>x.ano===ANO_PARC);return d?(d[key]||0)*FAC:0;};
   const driverReg=key=>{const pts=D.filter(d=>d.ano<=REAL_TO).map(d=>[d.ano,d[key]]).filter(p=>p[1]!=null);pts.push([ANO_PARC,d26(key)]);return linReg(pts);};
   const driverVal=(key,y)=>{ if(y<=REAL_TO){const d=D.find(x=>x.ano===y);return d?(d[key]||0):0;} if(y===ANO_PARC)return d26(key); return driverReg(key)(y); };
-  const rrkm=y=>driverVal('custoTot',y)/driverVal('km',y),  mrkm=y=>driverVal('remuner',y)/driverVal('km',y);
-  const req =y=>driverVal('custoTot',y)/driverVal('nEq',y), meq =y=>driverVal('remuner',y)/driverVal('nEq',y);
+  const remReg=rk=>{const pts=D.filter(d=>d.ano<=REAL_TO).map(d=>[d.ano,d[rk]]).filter(p=>p[1]!=null);const d=D.find(x=>x.ano===ANO_PARC);if(d&&d[rk]!=null)pts.push([ANO_PARC,d[rk]]);return linReg(pts);};
+  const remRate=(rk,y)=>{const d=D.find(x=>x.ano===y);if(d&&d[rk]!=null&&y<=ANO_PARC)return d[rk];return remReg(rk)(y);};
+  const rrkm=y=>driverVal('custoTot',y)/driverVal('km',y),  mrkm=y=>remRate('rkmRem',y);
+  const req =y=>driverVal('custoTot',y)/driverVal('nEq',y), meq =y=>remRate('eqRem',y);
   console.log(`\n2026 mensalizado (×${FAC}): custo=${Math.round(d26('custoTot')).toLocaleString('pt-BR')} km=${Math.round(d26('km')).toLocaleString('pt-BR')} nEq=${Math.round(d26('nEq'))}`);
   console.log(`\n== TENDÊNCIA DRIVER-BASED (R$/km=Custo÷Km, R$/Eq=Custo÷#Eq) → ${ANO_PARC}-${END_YEAR} ==`);
   console.log('Ano   R$/kmReal R$/kmRem   EqReal EqRem');
