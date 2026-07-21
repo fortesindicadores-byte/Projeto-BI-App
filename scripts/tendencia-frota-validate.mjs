@@ -49,42 +49,29 @@ async function main(){
     `${String(Math.round(d.eqRem??0)).padStart(5)} ${String(Math.round(d.eqReal??0)).padStart(6)} `+
     `${String(Math.round(d.dEq??0)).padStart(6)} ${String(Math.round(d.impEq??0)).padStart(9)}`));
 
-  const hist=D.filter(d=>d.ano<PROJ_FROM); const histV=hist;   // base única 2020–2026 (2026 anualizado)
-  const preds={
-    rkmReal:linReg(hist.map(d=>[d.ano,d.rkmReal]).filter(p=>p[1]!=null)),
-    rkmRem :linReg(hist.map(d=>[d.ano,d.rkmRem ]).filter(p=>p[1]!=null)),
-    eqReal :linReg(hist.map(d=>[d.ano,d.eqReal ]).filter(p=>p[1]!=null)),
-    eqRem  :linReg(hist.map(d=>[d.ano,d.eqRem  ]).filter(p=>p[1]!=null)),
+  // Projeção ANCORADA no YTD de 2026 + inclinação histórica (2020–2025)
+  const REAL_TO=2025, off=(12-MESES_PARC)/24;
+  const makeProj=key=>{
+    const h=D.filter(d=>d.ano<=REAL_TO);
+    const reg=linReg(h.map(d=>[d.ano,d[key]]).filter(p=>p[1]!=null));
+    const m=reg(1)-reg(0), a=(D.find(d=>d.ano===ANO_PARC)||{})[key];
+    return y=> (a==null?reg(y):a + m*((y-ANO_PARC)+off));
   };
-  console.log(`\n== TENDÊNCIA LINEAR (base ${hist[0].ano}-${hist[hist.length-1].ano}) → ${PROJ_FROM}-${END_YEAR} ==`);
+  const pRkmR=makeProj('rkmReal'), pRkmM=makeProj('rkmRem'), pEqR=makeProj('eqReal'), pEqM=makeProj('eqRem');
+  console.log(`\n== TENDÊNCIA ANCORADA (YTD jun/2026 + inclinação 2020–2025) → ${PROJ_FROM}-${END_YEAR} ==`);
   console.log('Ano   R$/kmReal R$/kmRem   EqReal EqRem');
   for(let y=PROJ_FROM;y<=END_YEAR;y++){
-    console.log(`${y}  ${preds.rkmReal(y).toFixed(3).padStart(7)}  ${preds.rkmRem(y).toFixed(3).padStart(7)}   `+
-      `${String(Math.round(preds.eqReal(y))).padStart(5)} ${String(Math.round(preds.eqRem(y))).padStart(5)}`);
+    console.log(`${y}  ${pRkmR(y).toFixed(3).padStart(7)}  ${pRkmM(y).toFixed(3).padStart(7)}   `+
+      `${String(Math.round(pEqR(y))).padStart(5)} ${String(Math.round(pEqM(y))).padStart(5)}`);
   }
-  // Hero (projeção 2029): Custo Total (Realizado), Remunerado, R$/km, R$/Equip
-  const pH=key=>linReg(histV.map(d=>[d.ano,d[key]]).filter(p=>p[1]!=null))(2029);
-  const D2=[];
-  rows.forEach(r=>{ const ano=num(r[0]); if(ano==null||ano<2000||ano>2100)return;
-    D2.push({ano:Math.round(ano),custoTot:num(r[4]),remuner:num(r[1])}); });
-  D2.sort((a,b)=>a.ano-b.ano);
-  const histM=D2.filter(d=>d.ano<=FULL_TO);
-  const pM=key=>linReg(histM.map(d=>[d.ano,d[key]]).filter(p=>p[1]!=null))(2029);
-  console.log('\n== HERO (projeção 2029) ==');
-  console.log(`  Realizado (Custo Total): ${Math.round(pM('custoTot')).toLocaleString('pt-BR')}`);
-  console.log(`  Remunerado:              ${Math.round(pM('remuner')).toLocaleString('pt-BR')}`);
-  console.log(`  R$/km (Real):            ${pH('rkmReal').toFixed(3)}`);
-  console.log(`  R$/Equipamento (Real):   ${Math.round(pH('eqReal')).toLocaleString('pt-BR')}`);
-
-  // Projeção do Impacto (2027–2029) + totais 10 anos (como no painel)
-  const P2=key=>linReg(histV.map(d=>[d.ano,d[key]]).filter(p=>p[1]!=null));
-  function tableTotals(impKey,denomKey,fmt){
-    const pI=P2(impKey), pC=P2('custoTot'), pM=P2('remuner'), pD=P2(denomKey);
+  // Totais 10 anos (real ≤2025 + tendência ancorada 2026–2029)
+  function tableTotals(impKey,denomKey){
+    const pI=makeProj(impKey), pC=makeProj('custoTot'), pMr=makeProj('remuner'), pD=makeProj(denomKey);
     const by={}; D.forEach(d=>by[d.ano]=d);
     let tImp=0,sCusto=0,sRemun=0,sDenom=0; const proj=[];
-    for(let y=2020;y<=2029;y++){ const d=by[y]; let imp;
-      if(d){imp=d[impKey];sCusto+=d.custoTot||0;sRemun+=d.remuner||0;sDenom+=d[denomKey]||0;}
-      else {imp=pI(y);proj.push([y,Math.round(imp)]);sCusto+=pC(y);sRemun+=pM(y);sDenom+=pD(y);}
+    for(let y=2020;y<=2029;y++){ const d=by[y], r=(y<=REAL_TO&&d); let imp;
+      if(r){imp=d[impKey];sCusto+=d.custoTot||0;sRemun+=d.remuner||0;sDenom+=d[denomKey]||0;}
+      else {imp=pI(y);proj.push([y,Math.round(imp)]);sCusto+=pC(y);sRemun+=pMr(y);sDenom+=pD(y);}
       tImp+=imp||0; }
     return {proj,tImp,totRem:sRemun/sDenom,totReal:sCusto/sDenom,sCusto,sDenom};
   }
