@@ -211,8 +211,8 @@ body.light-mode .leg .l-rem{border-top-color:#000;}
   <div class="memoria">
     <div class="memoria-title">Memória de cálculo</div>
     <ul>
-      <li><b>Tendência (2026–2029):</b> parte do <b>YTD de junho/2026</b> (piso) e cresce pela <b>inclinação histórica</b> (regressão linear 2020–2025). 2026 fecha um pouco acima do YTD (projeção do 2º semestre) e 2027–2029 seguem subindo.</li>
-      <li><b>2026:</b> ano em curso (só jan–jun) → é <b>tendência</b>, não realizado. A taxa parte do realizado de junho; os totais são <b>anualizados</b> (×12/6).</li>
+      <li><b>Tendência (2026–2029):</b> projetamos os <b>drivers</b> — Custo Total, Km e nº de Equipamentos — por regressão linear (2020–2025 + 2026 mensalizado). O <b>R$/km e o R$/Equipamento são derivados</b> (Custo projetado ÷ Km, ou ÷ nº Equip.), não a taxa em si.</li>
+      <li><b>2026:</b> ano em curso (jan–jun) → é <b>tendência</b>. <b>Mensalizado</b>: o 2º semestre é projetado ao ritmo mensal de jan–jun (×12/6).</li>
       <li><b>R$/km</b> = Custo Total ÷ Km. &nbsp; <b>R$/Equipamento</b> = Custo Total ÷ nº de Equipamentos.</li>
       <li><b>Total (10 anos):</b> razão ponderada do período — Σ Custo Total ÷ Σ Km (e ÷ Σ nº Equip.), <i>não</i> a soma nem a média das taxas anuais.</li>
       <li><b>Δ</b> = Rem − Real. &nbsp; <b>Impacto</b> = Remunerado − Custo Total (custo acima/abaixo do remunerado). &nbsp; <b>Impacto Acum.</b> = soma corrente.</li>
@@ -285,38 +285,44 @@ async function fetchBase(){
     });
   });
   out.sort((a,b)=>a.ano-b.ano);
-  // Anualiza o ano parcial (2026): projeta o ano cheio a partir dos meses já realizados (jan–jun).
-  // Fluxos (custo, remunerado, km, #eq, impactos) ×12/meses. As TAXAS (R$/km, R$/Eq) não mudam.
-  const F=12/MESES_PARC;
-  out.forEach(d=>{ if(d.ano===ANO_PARC){ ['remuner','custoTot','km','nEq','impRkm','impEq'].forEach(k=>{ if(d[k]!=null) d[k]=d[k]*F; }); } });
-  return out;
+  return out;   // 2026 fica cru (jan–jun); a mensalização é feita na projeção dos drivers
 }
 
-// Projeção ANCORADA: parte do YTD de 2026 (piso) e cresce pela inclinação histórica (2020–2025).
-// off = fração de ano de junho até dez → 2026 fecha um pouco acima do YTD, e não fixo nele.
-function makeProj(key){
-  const h=DATA.filter(d=>d.ano<=REAL_TO);
-  const reg=linReg(h.map(d=>[d.ano,d[key]]).filter(p=>p[1]!=null));
-  const m=reg(1)-reg(0);                                  // inclinação por ano
-  const a=(DATA.find(d=>d.ano===ANO_PARC)||{})[key];      // âncora = 2026 (YTD/anualizado)
-  const off=(12-MESES_PARC)/24;                           // junho → ano cheio (0,25 p/ 6 meses)
-  return y=> (a==null? reg(y) : a + m*((y-ANO_PARC)+off));
+// ── Projeção DRIVER-BASED: projeta Custo, Km e #Equip; as TAXAS são derivadas (Custo÷Km, Custo÷#Equip) ──
+// 2026 = ano cheio mensalizado ao ritmo de jan–jun (×12/meses); drivers projetados por regressão linear (2020–2025 + 2026 mensalizado).
+const _FAC=12/MESES_PARC;
+function d26(key){ const d=DATA.find(x=>x.ano===ANO_PARC); return d?(d[key]||0)*_FAC:0; }   // 2026 ano-cheio
+function driverReg(key){
+  const pts=DATA.filter(d=>d.ano<=REAL_TO).map(d=>[d.ano,d[key]]).filter(p=>p[1]!=null);
+  pts.push([ANO_PARC, d26(key)]);                          // inclui 2026 mensalizado na base
+  return linReg(pts);
 }
+function driverVal(key,y){
+  if(y<=REAL_TO){ const d=DATA.find(x=>x.ano===y); return d?(d[key]||0):0; }       // real ≤2025
+  if(y===ANO_PARC) return d26(key);                                                // 2026 mensalizado
+  return driverReg(key)(y);                                                        // 2027–2029 tendência
+}
+// R$/km Real (e R$/Eq Real) DERIVADO dos drivers: Custo ÷ denominador
+const rateReal=den=>y=>{const dn=driverVal(den,y);return dn?driverVal('custoTot',y)/dn:null;};
+// Rem: a "R$/km Rem" da planilha NÃO é remuner÷km → tendência direta da taxa da planilha (≤2026 real, 2027+ reta)
+function remReg(rk){ const pts=DATA.filter(d=>d.ano<=REAL_TO).map(d=>[d.ano,d[rk]]).filter(p=>p[1]!=null);
+  const d=DATA.find(x=>x.ano===ANO_PARC); if(d&&d[rk]!=null)pts.push([ANO_PARC,d[rk]]); return linReg(pts); }
+function remRate(rk,y){ const d=DATA.find(x=>x.ano===y); if(d&&d[rk]!=null&&y<=ANO_PARC) return d[rk]; return remReg(rk)(y); }
 
-// séries do gráfico: realizado sólido (≤2025) + tendência ancorada (2026–2029)
-function buildSeries(realKey, remKey){
+// séries do gráfico: realizado sólido (≤2025) + tendência (2026–2029)
+function buildSeries(realKey, remKey, denomKey){
   const years=[]; for(let y=2020; y<=END_YEAR; y++) years.push(y);
-  const pReal=makeProj(realKey), pRem=makeProj(remKey);
-  const mapReal={}, mapRem={}; DATA.forEach(d=>{mapReal[d.ano]=d[realKey];mapRem[d.ano]=d[remKey];});
+  const pReal=rateReal(denomKey);
+  const mapReal={}; DATA.forEach(d=>{mapReal[d.ano]=d[realKey];});
   const realHist=years.map(y=> y<=REAL_TO ? (mapReal[y]??null) : null);           // sólido ≤2025
-  const realProj=years.map(y=> y>=PROJ_FROM ? pReal(y) : null);                   // tendência 2026–2029
-  const remLine =years.map(y=> y<PROJ_FROM ? (mapRem[y]??null) : pRem(y));        // ≤2025 real, 2026+ tendência
+  const realProj=years.map(y=> y>=PROJ_FROM ? pReal(y) : null);                   // Real derivado dos drivers
+  const remLine =years.map(y=> remRate(remKey,y));                                // Rem: taxa planilha ≤2026 + reta
   const projIdx =years.findIndex(y=>y>=PROJ_FROM);
   return {years,realHist,realProj,remLine,projIdx};
 }
 
-function renderChart(canvasId, realKey, remKey, fmt, prevRef){
-  const {years,realHist,realProj,remLine,projIdx}=buildSeries(realKey,remKey);
+function renderChart(canvasId, realKey, remKey, fmt, prevRef, denomKey){
+  const {years,realHist,realProj,remLine,projIdx}=buildSeries(realKey,remKey,denomKey);
   if(prevRef) prevRef.destroy();
   const isL=isLight();
   const remC=isL?'#000000':'#F1F5F9';               // remunerado: preto (claro) / branco (escuro)
@@ -384,20 +390,17 @@ function renderChart(canvasId, realKey, remKey, fmt, prevRef){
 // Renderiza uma tabela 2020→END_YEAR: real (aba) onde existe, tendência linear nos anos futuros.
 // denomKey = volume que vai no denominador do Total (km p/ R$/km, nEq p/ R$/Equipamento).
 function renderTable(bodyId, realKey, remKey, dKey, impKey, fmtV, denomKey){
-  const pReal=makeProj(realKey), pRem=makeProj(remKey), pImp=makeProj(impKey);
-  const pCusto=makeProj('custoTot'), pRemun=makeProj('remuner'), pDenom=makeProj(denomKey);
   const byYear={}; DATA.forEach(d=>byYear[d.ano]=d);
   let acum=0, totImp=0, sCusto=0, sRemun=0, sDenom=0, html='';
   for(let y=2020; y<=END_YEAR; y++){
     const d=byYear[y], real2020_25=(y<=REAL_TO && d);
+    const custo=driverVal('custoTot',y), remun=driverVal('remuner',y), den=driverVal(denomKey,y);
     let rem,real,delta,imp;
     if(real2020_25){ rem=d[remKey]; real=d[realKey]; delta=d[dKey]; imp=d[impKey]; }   // realizado ≤2025
-    else { rem=pRem(y); real=pReal(y); delta=rem-real; imp=pImp(y); }                  // tendência 2026–2029
+    else { real=den?custo/den:null; rem=remRate(remKey,y); delta=(rem!=null&&real!=null)?rem-real:null; imp=driverVal(impKey,y); }  // 2026–2029: Real derivado dos drivers, Rem = taxa planilha
     const proj=y>=PROJ_FROM?'proj':'';
     acum+=(imp||0); totImp+=(imp||0);
-    sCusto += real2020_25?(d.custoTot||0):pCusto(y);
-    sRemun += real2020_25?(d.remuner ||0):pRemun(y);
-    sDenom += real2020_25?(d[denomKey]||0):pDenom(y);
+    sCusto += custo; sRemun += remun; sDenom += den;
     const dCls=delta==null?'':(delta<0?'cr':'cg');
     const iCls=imp==null?'':(imp<0?'cr':'cg');
     html+=`<tr class="${proj}"><td class="ano">${y}</td>`
@@ -425,12 +428,10 @@ function renderTables(){
 
 // Card grande: GERAL do período 2020–2029 (real + projetado) — igual ao Total da tabela.
 function renderHero(){
-  const pC=makeProj('custoTot'), pR=makeProj('remuner'), pK=makeProj('km'), pE=makeProj('nEq');
-  const byYear={}; DATA.forEach(d=>byYear[d.ano]=d);
   let sC=0,sR=0,sK=0,sE=0;
-  for(let y=2020;y<=END_YEAR;y++){ const d=byYear[y], r=(y<=REAL_TO&&d);
-    sC+=r?(d.custoTot||0):pC(y);  sR+=r?(d.remuner||0):pR(y);
-    sK+=r?(d.km||0):pK(y);        sE+=r?(d.nEq||0):pE(y);
+  for(let y=2020;y<=END_YEAR;y++){
+    sC+=driverVal('custoTot',y); sR+=driverVal('remuner',y);
+    sK+=driverVal('km',y);       sE+=driverVal('nEq',y);
   }
   set('h-real', moneyFmt(sC));
   set('h-rem',  moneyFmt(sR));
@@ -440,8 +441,8 @@ function renderHero(){
 
 function renderAll(){
   renderHero();
-  chRkm=renderChart('ch-rkm','rkmReal','rkmRem',nf2,chRkm);
-  chEq =renderChart('ch-eq','eqReal','eqRem',nf0,chEq);
+  chRkm=renderChart('ch-rkm','rkmReal','rkmRem',nf2,chRkm,'km');
+  chEq =renderChart('ch-eq','eqReal','eqRem',nf0,chEq,'nEq');
   renderTables();
 }
 
