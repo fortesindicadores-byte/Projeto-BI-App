@@ -73,7 +73,10 @@ body{
 .leg{display:flex;gap:16px;flex-wrap:wrap;margin:2px 0 12px;font-size:10px;color:var(--text2);font-weight:600;}
 .leg span{display:inline-flex;align-items:center;gap:6px;}
 .leg i{width:18px;height:0;border-top-width:3px;border-top-style:solid;display:inline-block;}
-.leg .b-conlog{width:12px;height:12px;border:1.5px dashed var(--orange);background:rgba(249,115,22,.20);border-radius:2px;}
+.charts-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;align-items:start;}
+@media(max-width:900px){.charts-grid{grid-template-columns:1fr;}}
+.leg .b-real{width:12px;height:12px;background:transparent;border:1.5px solid var(--text3);border-radius:2px;}
+.leg .b-proj{width:12px;height:12px;background:transparent;border:1.5px dashed var(--text3);border-radius:2px;}
 .leg .l-meio,.leg .l-ambev,.leg .l-optas{border-top-style:dashed;}
 .leg .l-ambev{border-top-color:#38BDF8;}
 .leg .l-meio{border-top-color:#F1F5F9;}
@@ -176,17 +179,32 @@ body.light-mode th.sep-l,body.light-mode td.sep-l{border-left-color:rgba(0,0,0,.
     </div>
   </div>
 
-  <!-- GRÁFICO: R$/km · período faltante 2026–2030 -->
-  <div class="chart-card">
-    <div class="tbl-title">R$/km <span style="font-weight:600;color:var(--text3);font-size:11px">· período faltante 2026–2030</span></div>
-    <div class="tbl-sub">Conlog (barra) = nosso custo real por km (tendência) · linhas = remuneração de cada cenário em R$/km (manut + REM K % × R$ 221.605 ÷ nossa km/carreta)</div>
-    <div class="leg">
-      <span><i class="b-conlog"></i>Conlog (nosso real · tendência)</span>
-      <span><i class="l-ambev"></i>Ambev · 1,00%</span>
-      <span><i class="l-meio"></i>Meio-termo · 1,15%</span>
-      <span><i class="l-optas"></i>Optas · 1,33%</span>
+  <!-- GRÁFICOS: 1) daqui pra frente · 2) ciclo da carreta Ano 1–10 -->
+  <div class="charts-grid">
+    <div class="chart-card">
+      <div class="tbl-title">Daqui pra frente <span style="font-weight:600;color:var(--text3);font-size:11px">· período faltante 2026–2030</span></div>
+      <div class="tbl-sub">Barras = nossa conta (R$/km) · verde = a menor proposta (Ambev) já cobre · linhas = remuneração dos cenários</div>
+      <div class="leg">
+        <span><i class="b-proj"></i>Nossa conta (tend.)</span>
+        <span><i class="l-ambev"></i>Ambev · 1,00%</span>
+        <span><i class="l-meio"></i>Meio-termo · 1,15%</span>
+        <span><i class="l-optas"></i>Optas · 1,33%</span>
+      </div>
+      <div class="chart-wrap"><canvas id="ch-falt"></canvas></div>
     </div>
-    <div class="chart-wrap"><canvas id="ch-rkm"></canvas></div>
+    <div class="chart-card">
+      <div class="tbl-title">Ciclo da carreta <span style="font-weight:600;color:var(--text3);font-size:11px">· Ano 1–10 · finame + extensão</span></div>
+      <div class="tbl-sub">Ano 1–5 = finame (remuneração 0,11; FINAME fora do R$/km) · Ano 6–10 = extensão — a linha divide-se nos 3 cenários</div>
+      <div class="leg">
+        <span><i class="b-real"></i>Nossa conta</span>
+        <span><i class="b-proj"></i>Nossa conta (tend.)</span>
+        <span><i class="l-meio"></i>Finame · 0,11</span>
+        <span><i class="l-ambev"></i>Ambev</span>
+        <span><i class="l-meio"></i>Meio-termo</span>
+        <span><i class="l-optas"></i>Optas</span>
+      </div>
+      <div class="chart-wrap"><canvas id="ch-ciclo"></canvas></div>
+    </div>
   </div>
 
   <!-- TABELA 1: pós-contrato 2026–2030 -->
@@ -206,8 +224,8 @@ body.light-mode th.sep-l,body.light-mode td.sep-l{border-left-color:rgba(0,0,0,.
 
   <!-- TABELA 2: ciclo completo 2021–2030 -->
   <div class="tbl-section">
-    <div class="tbl-title">2 · Ciclo completo (2021–2030) — finame + 5 anos (R$/km)</div>
-    <div class="tbl-sub">2021–2025 (finame): o FINAME fica FORA do R$/km (PMT fixo, remunerado à parte) — remuneração em R$/km = manut 0,11 (igual nos 3) · 2026–2030: cenários (REM K entra pra pagar a conta) · Imp. = ▲ × km do ano</div>
+    <div class="tbl-title">2 · Ciclo completo (Ano 1–10) — finame + 5 anos (R$/km)</div>
+    <div class="tbl-sub">Ano 1–5 (finame): o FINAME fica FORA do R$/km (PMT fixo, remunerado à parte) — remuneração em R$/km = manut 0,11 (igual nos 3) · Ano 6–10 (extensão): cenários (REM K entra pra pagar a conta) · Imp. = ▲ × km do ano</div>
     <table>
       <thead><tr>
         <th>Ano</th><th class="num">Nossa conta</th>
@@ -229,6 +247,7 @@ body.light-mode th.sep-l,body.light-mode td.sep-l{border-left-color:rgba(0,0,0,.
   <div class="memoria">
     <div class="memoria-title">Memória de cálculo</div>
     <ul>
+      <li><b>Ciclo = Ano 1 a Ano 10</b> (Ano 1–5 finame · Ano 6–10 extensão) — lifecycle da carreta, não anos-calendário. Os valores usam nossas variáveis dos anos correspondentes: Ano 1–5 ≈ realizado 2021–2025; Ano 6–10 ≈ tendência 2026–2030.</li>
       <li><b>Tudo por R$/km</b>, nas <b>nossas variáveis</b>: km por carreta·mês real (até 2025) e estimado (2026–2030, tendência por regressão dos drivers Custo/Km/Carretas; 2026 mensalizado ×12/6).</li>
       <li><b>Período de finame (2021–2025):</b> o FINAME <b>não entra no R$/km</b> — é PMT fixo (R$ 4.330,80), remunerado à parte. Em R$/km, a remuneração é a manutenção <b>0,11</b> (igual nos 3 cenários) vs nosso custo real por km. Por isso os impactos em R$ deste painel são idênticos aos do painel R$/Equipamento (lá o FINAME aparece dos dois lados e se anula).</li>
       <li><b>Período faltante / extensão (2026–2030):</b> sem financiamento — a <b>REM K entra para pagar a conta</b>. Remuneração em R$/km = manutenção do cenário + REM K % × <b>R$ 221.605</b> ÷ nossa km/carreta·mês. Ambev 1,00% + 0,19 · Meio-termo 1,15% + 0,22 · Optas 1,33% + 0,25.</li>
@@ -282,7 +301,7 @@ const isLight=()=>document.body.classList.contains('light-mode');
 const tick=(sz=10)=>({color:isLight()?'#444':'#94A3B8',font:{family:'Montserrat',size:sz}});
 const meioCor=()=>isLight()?'#111111':'#F1F5F9';
 
-let DATA=[], chRkm=null;
+let DATA=[], chFalt=null, chCiclo=null;
 
 async function fetchBase(){
   const url=`https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:json&sheet=${encodeURIComponent(TAB)}`;
@@ -351,14 +370,15 @@ function renderHero(R){
 
 function renderTables(R){
   const K=CENARIOS.map(c=>c.key);
-  const build=(years)=>{
+  const build=(years,lab)=>{
     let h='';
     R.rows.filter(r=>years.includes(r.y)).forEach(r=>{
       const proj=r.y>=ANO_PARC?'proj':'';
+      const rotulo=lab?lab(r.y):r.y;
       const sv=K.map(k=>r.rem[k]);
       const dl=sv.map(v=>(v==null||r.conta==null)?null:v-r.conta);
       const imp=dl.map(v=>v==null?null:v*(r.km||0));
-      h+=`<tr class="${proj}"><td class="ano">${r.y}</td><td class="num">${nf2(r.conta)}</td>`
+      h+=`<tr class="${proj}"><td class="ano">${rotulo}</td><td class="num">${nf2(r.conta)}</td>`
         + sv.map((v,j)=>`<td class="num ${j===0?'sep-l':''}">${v==null?'—':nf2(v)}</td>`).join('')
         + dl.map((v,j)=>`<td class="num ${cls(v)} ${j===0?'sep-l':''}">${v==null?'—':p2(v)}</td>`).join('')
         + imp.map((v,j)=>`<td class="num ${cls(v)} ${j===0?'sep-l':''}">${v==null?'—':signMoney(v)}</td>`).join('')
@@ -376,40 +396,77 @@ function renderTables(R){
   const yQ1=[]; for(let y=EXT_DE;y<=EXT_ATE;y++)yQ1.push(y);
   const yQ2=[]; for(let y=FIN_DE;y<=EXT_ATE;y++)yQ2.push(y);
   document.getElementById('tb-q1').innerHTML=build(yQ1)+totalRow(R.q1);
-  document.getElementById('tb-q2').innerHTML=build(yQ2)+totalRow(R.q2);
+  document.getElementById('tb-q2').innerHTML=build(yQ2,y=>'Ano '+(y-FIN_DE+1))+totalRow(R.q2);
 }
 
-function renderChart(R){
-  if(chRkm) chRkm.destroy();
-  const isL=isLight(), ORA='#F97316';
-  const years=[]; for(let y=EXT_DE;y<=EXT_ATE;y++) years.push(y);
-  const bars=years.map(y=>conlogRkm(y));
+// Gráficos no padrão Tendência: barras condicionais (verde = a menor proposta cobre a conta),
+// linhas tracejadas com caixinha preta nos extremos, colchetes de período.
+function renderCharts(R){
+  const isL=isLight();
+  const corOf=c=>c.tema?meioCor():(isL&&c.corL?c.corL:c.cor);
+  const brkCol=isL?'#111':'#E2E8F0';
   const dlBar={color:isL?'#1a1a1a':'#F1F5F9',font:{family:'Montserrat',size:10,weight:'700'},anchor:'end',align:'end',offset:2,formatter:v=>v==null?'':nf2(v)};
-  const boxDl=(displayFn,alignFn)=>({display:displayFn,backgroundColor:'#000',color:'#fff',borderRadius:4,
-    padding:{top:3,bottom:3,left:6,right:6},font:{family:'Montserrat',size:11,weight:'800'},
-    anchor:'center',align:alignFn,offset:8,formatter:v=>v==null?'':nf2(v)});
-  const lines=CENARIOS.map(c=>{
-    const cor=c.tema?meioCor():(isL&&c.corL?c.corL:c.cor);
-    const data=years.map(y=>remRkm(c,y));
-    return {type:'line',label:`${c.nome} · ${(c.remK*100).toLocaleString('pt-BR',{minimumFractionDigits:2})}%`,data,
-      borderColor:cor,backgroundColor:cor,borderWidth:2.5,borderDash:[6,4],tension:.15,order:1,
-      pointRadius:5,pointBackgroundColor:cor,pointBorderWidth:0,pointHoverRadius:8,
-      datalabels:boxDl(c2=>c2.dataIndex===years.length-1,'right')};
-  });
-  chRkm=new Chart(document.getElementById('ch-rkm'),{
-    data:{labels:years,datasets:[
-      {type:'bar',label:'Conlog (nosso real · tend.)',data:bars,backgroundColor:'rgba(249,115,22,.20)',borderColor:ORA,
-       borderWidth:1.5,borderDash:[5,4],borderRadius:3,order:2,categoryPercentage:.6,barPercentage:.8,datalabels:dlBar},
-      ...lines
-    ]},
-    options:{responsive:true,maintainAspectRatio:false,layout:{padding:{top:26,right:46}},
-      plugins:{legend:{display:false},
-        tooltip:{backgroundColor:'#141B26',titleColor:'#F97316',bodyColor:'#F1F5F9',borderColor:'#1E2D40',borderWidth:1,
-          titleFont:{family:'Montserrat'},bodyFont:{family:'Montserrat'},
-          callbacks:{label:c=>c.parsed.y==null?null:`${c.dataset.label}: ${nf2(c.parsed.y)}`}}},
-      scales:{x:{grid:{display:false},border:{display:false},ticks:tick(11),stacked:false},
-        y:{display:false,beginAtZero:true,grace:'14%'}}}
-  });
+  const boxDl=(disp,align)=>({display:disp,backgroundColor:'#000',color:'#fff',borderRadius:4,padding:{top:3,bottom:3,left:6,right:6},
+    font:{family:'Montserrat',size:11,weight:'800'},anchor:'center',align,offset:8,formatter:v=>v==null?'':nf2(v)});
+  const mean=a=>{const v=a.filter(x=>x!=null);return v.length?v.reduce((s,x)=>s+x,0)/v.length:null;};
+  const mkBrk=bks=>({id:'brk',afterDraw(ch){const x=ch.scales.x,top=ch.chartArea.top,yL=top-22,drop=13,ctx=ch.ctx;
+    ctx.save();ctx.strokeStyle=brkCol;ctx.fillStyle=brkCol;ctx.lineWidth=1.6;ctx.font='700 12px Montserrat, sans-serif';ctx.textAlign='center';ctx.textBaseline='alphabetic';
+    bks.forEach(bk=>{const x1=x.getPixelForValue(bk.a),x2=x.getPixelForValue(bk.b);
+      ctx.beginPath();ctx.moveTo(x1,yL);ctx.lineTo(x2,yL);ctx.moveTo(x1,yL);ctx.lineTo(x1,yL+drop);ctx.moveTo(x2,yL);ctx.lineTo(x2,yL+drop);ctx.stroke();
+      ctx.fillText(bk.txt,(x1+x2)/2,yL-5);});ctx.restore();}});
+  const barDs=(vals,ref,solidMask)=>{
+    const bad=i=> ref[i]!=null && vals[i]!=null && ref[i]<vals[i];   // remuneração de referência não cobre → vermelho
+    const solid=vals.map((v,i)=> solidMask[i]?v:null);
+    const proj =vals.map((v,i)=> solidMask[i]?null:v);
+    const bg=(arr,a)=>arr.map((v,i)=>v==null?'transparent':(bad(i)?`rgba(255,102,102,${a})`:`rgba(59,179,59,${a})`));
+    const bc=arr=>arr.map((v,i)=>v==null?'transparent':(bad(i)?'#FF6666':'#3BB33B'));
+    return [
+      {type:'bar',label:'Nossa conta',data:solid,stack:'r',backgroundColor:bg(solid,.6),borderColor:bc(solid),borderWidth:1.5,borderRadius:3,order:2,categoryPercentage:.62,barPercentage:.9,datalabels:dlBar},
+      {type:'bar',label:'Nossa conta (tend.)',data:proj,stack:'r',backgroundColor:bg(proj,.16),borderColor:bc(proj),borderWidth:1.5,borderDash:[5,4],borderRadius:3,order:2,categoryPercentage:.62,barPercentage:.9,datalabels:dlBar},
+    ];
+  };
+  const opts={responsive:true,maintainAspectRatio:false,layout:{padding:{top:46,right:40}},
+    plugins:{legend:{display:false},
+      tooltip:{backgroundColor:'#141B26',titleColor:'#F97316',bodyColor:'#F1F5F9',borderColor:'#1E2D40',borderWidth:1,
+        titleFont:{family:'Montserrat'},bodyFont:{family:'Montserrat'},
+        callbacks:{label:c=>c.parsed.y==null?null:`${c.dataset.label}: ${nf2(c.parsed.y)}`}}},
+    scales:{x:{grid:{display:false},border:{display:false},ticks:tick(11),stacked:true},
+      y:{display:false,beginAtZero:true,grace:'14%'}}};
+
+  // ── GRÁFICO 1: daqui pra frente (2026–2030) ──
+  if(chFalt) chFalt.destroy();
+  const yF=[]; for(let y=EXT_DE;y<=EXT_ATE;y++) yF.push(y);
+  const contaF=yF.map(y=>conlogRkm(y));
+  const refF=yF.map(y=>remRkm(CENARIOS[0],y));
+  const linesF=CENARIOS.map(c=>{const cor=corOf(c);
+    return {type:'line',label:c.nome,data:yF.map(y=>remRkm(c,y)),borderColor:cor,backgroundColor:cor,
+      borderWidth:2.5,borderDash:[6,4],tension:.15,order:1,pointRadius:5,pointBackgroundColor:cor,pointBorderWidth:0,pointHoverRadius:8,
+      datalabels:boxDl(c2=>c2.dataIndex===yF.length-1,'right')};});
+  chFalt=new Chart(document.getElementById('ch-falt'),{
+    plugins:[mkBrk([{a:0,b:yF.length-1,txt:`Período faltante · ${nf2(mean(contaF))}`}])],
+    data:{labels:yF,datasets:[...barDs(contaF,refF,yF.map(()=>false)),...linesF]},options:opts});
+
+  // ── GRÁFICO 2: ciclo da carreta (Ano 1–10 = finame + extensão) ──
+  if(chCiclo) chCiclo.destroy();
+  const yC=[]; for(let y=FIN_DE;y<=EXT_ATE;y++) yC.push(y);
+  const labC=yC.map((y,i)=>'Ano '+(i+1));
+  const contaC=yC.map(y=>conlogRkm(y));
+  const refC=yC.map(y=> y<=FIN_ATE? MANUT_FIN : remRkm(CENARIOS[0],y));
+  const solidC=yC.map(y=> y<=REAL_TO);
+  const finIdx=FIN_ATE-FIN_DE;   // Ano 5
+  const finLine={type:'line',label:'Remuneração finame',data:yC.map(y=> y<=FIN_ATE? MANUT_FIN : null),
+    borderColor:meioCor(),backgroundColor:meioCor(),borderWidth:2.5,borderDash:[6,4],tension:.15,order:1,spanGaps:false,
+    pointRadius:5,pointBackgroundColor:meioCor(),pointBorderWidth:0,pointHoverRadius:8,
+    datalabels:boxDl(c2=>c2.dataIndex===0,'left')};
+  const linesC=CENARIOS.map(c=>{const cor=corOf(c);
+    const data=yC.map((y,i)=> i<finIdx? null : (i===finIdx? MANUT_FIN : remRkm(c,y)));   // ancora no Ano 5 e diverge
+    return {type:'line',label:c.nome,data,borderColor:cor,backgroundColor:cor,borderWidth:2.5,borderDash:[6,4],tension:.15,order:1,spanGaps:false,
+      pointRadius:data.map(v=>v==null?0:5),pointBackgroundColor:cor,pointBorderWidth:0,pointHoverRadius:8,
+      datalabels:boxDl(c2=>c2.dataIndex===yC.length-1,'right')};});
+  chCiclo=new Chart(document.getElementById('ch-ciclo'),{
+    plugins:[mkBrk([{a:0,b:finIdx,txt:`Finame · ${nf2(mean(contaC.slice(0,finIdx+1)))}`},
+                    {a:finIdx+1,b:yC.length-1,txt:`Extensão · ${nf2(mean(contaC.slice(finIdx+1)))}`}])],
+    data:{labels:labC,datasets:[...barDs(contaC,refC,solidC),finLine,...linesC]},options:opts});
 }
 
 function renderResumo(R){
@@ -430,7 +487,7 @@ function renderResumo(R){
 
 function renderAll(){
   const R=calc(); window._R=R;
-  renderHero(R); renderChart(R); renderTables(R); renderResumo(R);
+  renderHero(R); renderCharts(R); renderTables(R); renderResumo(R);
 }
 
 async function atualizar(){
