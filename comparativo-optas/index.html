@@ -1,0 +1,510 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Comparativo OPTAS — Carroceria</title>
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0"></script>
+<script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.2/dist/jspdf.umd.min.js"></script>
+<script src="../assets/excel-export.js"></script>
+<script src="../assets/pdf-export.js"></script>
+<style>
+:root{
+  --bg:#0C1017; --card:#141B26; --card2:#1A2335; --border:#1E2D40;
+  --orange:#F97316; --blue:#38BDF8; --text:#F1F5F9; --text2:#94A3B8; --text3:#475569;
+  --green:#3BB33B; --red:#FF6666;
+}
+*{margin:0;padding:0;box-sizing:border-box;}
+body{
+  background:
+    radial-gradient(ellipse at 10% 25%, rgba(249,115,22,.06) 0%, transparent 50%),
+    radial-gradient(ellipse at 90% 75%, rgba(56,189,248,.05) 0%, transparent 50%),
+    var(--bg);
+  color:var(--text); font-family:'Montserrat',-apple-system,sans-serif; font-size:13px; min-height:100vh;
+}
+.header{
+  background:rgba(12,16,23,.75); border-bottom:1px solid rgba(255,255,255,.07);
+  padding:10px 24px 12px; display:flex; flex-wrap:wrap; align-items:center;
+  position:sticky; top:0; z-index:100;
+  backdrop-filter:blur(20px); -webkit-backdrop-filter:blur(20px); box-shadow:0 2px 12px rgba(0,0,0,.3);
+}
+.brand{flex:1;display:flex;align-items:center;gap:10px;}
+.brand h1{font-size:16px;font-weight:700;color:var(--orange);}
+.brand p{font-size:10px;color:var(--text2);margin-top:2px;}
+.back-btn{background:rgba(249,115,22,.15);border:1px solid rgba(249,115,22,.3);border-radius:4px;padding:4px 8px;display:flex;align-items:center;color:var(--orange);text-decoration:none;}
+.back-btn:hover{background:rgba(249,115,22,.32);}
+.header-right{flex-shrink:0;display:flex;align-items:center;gap:8px;}
+.status-badge{font-size:9px;color:var(--text);background:rgba(249,115,22,.15);border:1px solid rgba(249,115,22,.3);border-radius:4px;padding:2px 8px;white-space:nowrap;}
+.access-badge{font-size:9px;color:var(--text2);background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);border-radius:4px;padding:2px 8px;white-space:nowrap;}
+.theme-btn{background:rgba(249,115,22,.15);border:1px solid rgba(249,115,22,.3);border-radius:4px;padding:4px 6px;cursor:pointer;color:var(--orange);display:flex;align-items:center;}
+.theme-btn:hover{background:rgba(249,115,22,.32);}
+.refresh-btn{background:rgba(249,115,22,.15);border:1px solid rgba(249,115,22,.3);border-radius:4px;padding:5px 8px;cursor:pointer;color:var(--orange);display:flex;align-items:center;}
+.refresh-btn:hover{background:rgba(249,115,22,.32);}
+.refresh-btn svg{display:block;}
+
+.main{padding:20px 24px 60px;}
+.charts-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;align-items:start;}
+
+/* HERO — acumulado por cenário */
+.hero-card{padding:4px 2px 16px;margin-bottom:14px;}
+.hero-tag{font-size:10px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;}
+.hero-sub{font-size:11px;color:var(--text2);margin-bottom:12px;max-width:900px;line-height:1.5;}
+.hero-metrics{display:flex;gap:34px;flex-wrap:wrap;}
+.hero-metrics>div{display:flex;flex-direction:column;border-left:3px solid var(--text3);padding-left:12px;}
+.hero-metrics>div.m-ambev{border-color:#38BDF8;}
+.hero-metrics>div.m-meio{border-color:var(--text);}
+.hero-metrics>div.m-optas{border-color:#22C55E;}
+.hero-metrics span{font-size:10px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:.5px;}
+.hero-metrics b{font-size:26px;font-weight:800;color:var(--text);margin-top:3px;line-height:1;}
+.hero-metrics em{font-size:10px;color:var(--text3);font-style:normal;margin-top:3px;}
+
+.chart-card,.tbl-section{
+  background:rgba(20,27,38,.55);border:1px solid rgba(255,255,255,.07);border-radius:8px;
+  padding:18px 20px 16px;margin-bottom:16px;backdrop-filter:blur(16px);box-shadow:0 2px 12px rgba(0,0,0,.25);
+}
+.chart-card{min-width:0;}
+.tbl-title{font-size:16px;font-weight:800;color:var(--text);margin-bottom:3px;}
+.tbl-sub{font-size:10px;color:var(--text2);margin-bottom:14px;}
+.chart-wrap{position:relative;height:260px;}
+
+/* LEGEND */
+.leg{display:flex;gap:16px;flex-wrap:wrap;margin:2px 0 12px;font-size:10px;color:var(--text2);font-weight:600;}
+.leg span{display:inline-flex;align-items:center;gap:6px;}
+.leg i{width:18px;height:0;border-top-width:3px;border-top-style:solid;display:inline-block;}
+.leg .l-conlog{border-top-color:var(--orange);}
+.leg .l-meio{border-top-color:#F1F5F9;}
+.leg .l-ambev{border-top-color:#38BDF8;}
+.leg .l-optas{border-top-color:#22C55E;}
+
+/* TABLES */
+table{width:100%;border-collapse:collapse;font-size:12px;}
+thead th{background:var(--card);color:var(--text);font-size:11px;font-weight:700;padding:8px 8px 12px;border-bottom:1px solid rgba(255,255,255,.10);text-transform:uppercase;letter-spacing:.5px;white-space:nowrap;text-align:left;}
+td{padding:11px 8px;border:none;color:var(--text);white-space:nowrap;}
+tbody tr:hover{background:rgba(255,255,255,.035);}
+td.num,th.num{text-align:right;font-variant-numeric:tabular-nums;}
+td.ano{font-weight:700;}
+th.sep-l,td.sep-l{border-left:1px solid rgba(255,255,255,.12);}
+tr.proj td.ano::after{content:' · tend.';font-size:9px;color:var(--text3);font-weight:400;}
+tr.total td{color:var(--text);font-weight:700;font-size:12px;border-top:2px solid rgba(255,255,255,.12);padding-top:12px;background:var(--card);}
+.c-conlog{color:var(--orange)!important;font-weight:800;}
+.cr{color:var(--red)!important;font-weight:700;}
+.cg{color:var(--green)!important;font-weight:700;}
+
+/* CAIXA RESUMO (slide) */
+.resumo{background:rgba(20,27,38,.55);border:1px solid rgba(255,255,255,.07);border-radius:8px;padding:18px 22px 20px;margin:6px 0 16px;backdrop-filter:blur(16px);box-shadow:0 2px 12px rgba(0,0,0,.25);}
+.resumo h3{font-size:13px;font-weight:800;color:var(--orange);text-transform:uppercase;letter-spacing:1px;margin-bottom:10px;}
+.resumo p{font-size:12.5px;line-height:1.65;color:var(--text);margin-bottom:9px;}
+.resumo p b{font-weight:800;}
+.resumo .r-list{display:flex;flex-direction:column;gap:7px;margin:4px 0 10px;}
+.resumo .r-item{font-size:12.5px;line-height:1.5;color:var(--text);padding-left:16px;position:relative;}
+.resumo .r-item::before{content:'▸';position:absolute;left:0;color:var(--orange);font-weight:800;}
+.resumo .r-foot{font-size:10.5px;color:var(--text2);line-height:1.5;margin-top:8px;border-top:1px solid rgba(255,255,255,.08);padding-top:9px;}
+
+/* MEMÓRIA */
+.memoria{margin:4px 2px 0;padding:0;}
+.memoria-title{font-size:11px;font-weight:800;color:var(--text2);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;}
+.memoria ul{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:5px;}
+.memoria li{font-size:11px;line-height:1.5;color:var(--text2);padding-left:14px;position:relative;}
+.memoria li::before{content:'·';position:absolute;left:2px;color:var(--orange);font-weight:800;}
+.memoria li b{color:var(--text);font-weight:700;}
+
+/* LIGHT MODE */
+body.light-mode .main{background:#F0F0F0;--text:#1a1a1a;--text2:#444444;--text3:#666666;color:var(--text);--red:#ff0000;--green:#0E8C0E;}
+body.light-mode .chart-card,
+body.light-mode .tbl-section,
+body.light-mode .resumo{background:rgba(128,128,128,.14)!important;border:none!important;box-shadow:none!important;--text:#1a1a1a;--text2:#444444;--text3:#555555;}
+body.light-mode .hero-card{--text:#1a1a1a;--text2:#444444;--text3:#555555;}
+body.light-mode td{color:var(--text);}
+body.light-mode thead th{border-bottom-color:rgba(0,0,0,.12);background:#F0F0F0;}
+body.light-mode tr.total td{border-top-color:rgba(0,0,0,.20);background:#F0F0F0;}
+body.light-mode th.sep-l,body.light-mode td.sep-l{border-left-color:rgba(0,0,0,.14);}
+body.light-mode .leg .l-meio{border-top-color:#111;}
+
+@media(max-width:900px){ .charts-grid{grid-template-columns:1fr;} }
+@media(max-width:768px){
+  .main{padding:14px 12px 50px;}
+  .header-right .refresh-btn{display:none;}
+  .status-badge,.access-badge{font-size:8px;padding:2px 6px;}
+  .chart-wrap{height:220px;}
+  table{font-size:11px;} thead th{font-size:9.5px;padding:6px 4px 8px;} td{padding:8px 4px;}
+  .hero-metrics{gap:18px;} .hero-metrics b{font-size:20px;}
+}
+</style>
+</head>
+<body>
+<header class="header">
+  <div class="brand">
+    <a href="../tendencia-frota/" class="back-btn" title="Voltar à Tendência"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg></a>
+    <div>
+      <h1>Comparativo OPTAS — Carroceria</h1>
+      <p>Remuneração das propostas vs nosso custo real · período vencido 2025–2029</p>
+    </div>
+  </div>
+  <div class="header-right">
+    <button class="theme-btn" id="themeBtn" title="Modo claro/escuro"></button>
+    <button class="refresh-btn" onclick="atualizar()" title="Atualizar dados">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+        <polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/>
+        <path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/>
+      </svg>
+    </button>
+    <span class="status-badge" id="status-badge">Carregando…</span>
+    <span class="access-badge" id="access-badge" style="display:none"></span>
+  </div>
+</header>
+
+<main class="main">
+  <!-- HERO: acumulado 2025–2029 por cenário -->
+  <div class="hero-card">
+    <div class="hero-tag">Impacto acumulado 2025–2029 · remuneração acima do nosso custo real · frota real</div>
+    <div class="hero-sub" id="hero-sub">Quanto cada proposta remunera <b>a mais</b> (verde) ou <b>a menos</b> (vermelho) que o nosso custo real de carroceria, na nossa frota, ao longo dos 5 anos vencidos.</div>
+    <div class="hero-metrics">
+      <div class="m-ambev"><span>Ambev · 1,00%</span><b id="h-ambev">—</b><em>vs nosso custo real</em></div>
+      <div class="m-meio"><span>Meio-termo · 1,15%</span><b id="h-meio">—</b><em>vs nosso custo real</em></div>
+      <div class="m-optas"><span>Optas · 1,33%</span><b id="h-optas">—</b><em>vs nosso custo real</em></div>
+    </div>
+  </div>
+
+  <!-- GRÁFICOS -->
+  <div class="charts-grid">
+    <div class="chart-card">
+      <div class="tbl-title">R$/km</div>
+      <div class="tbl-sub">Propostas (base 10.000 km/mês) · Conlog = nosso custo real (tendência a partir de 2026)</div>
+      <div class="leg">
+        <span><i class="l-conlog"></i>Conlog (nosso real)</span>
+        <span><i class="l-meio"></i>Meio-termo</span>
+        <span><i class="l-ambev"></i>Ambev</span>
+        <span><i class="l-optas"></i>Optas</span>
+      </div>
+      <div class="chart-wrap"><canvas id="ch-rkm"></canvas></div>
+    </div>
+    <div class="chart-card">
+      <div class="tbl-title">R$/Equipamento <span style="font-weight:600;color:var(--text3);font-size:11px">· por carreta/mês</span></div>
+      <div class="tbl-sub">Propostas (base 10.000 km/mês) · Conlog = nosso custo real (tendência a partir de 2026)</div>
+      <div class="leg">
+        <span><i class="l-conlog"></i>Conlog (nosso real)</span>
+        <span><i class="l-meio"></i>Meio-termo</span>
+        <span><i class="l-ambev"></i>Ambev</span>
+        <span><i class="l-optas"></i>Optas</span>
+      </div>
+      <div class="chart-wrap"><canvas id="ch-eq"></canvas></div>
+    </div>
+  </div>
+
+  <!-- TABELA 1: R$/km -->
+  <div class="tbl-section">
+    <div class="tbl-title">R$/km — ano a ano</div>
+    <div class="tbl-sub">Propostas na base 10.000 km/mês · Conlog = nosso custo real (Custo ÷ Km) · ▲ = proposta − Conlog</div>
+    <table>
+      <thead><tr>
+        <th>Ano</th><th class="num c-conlog">Conlog</th>
+        <th class="num">Ambev</th><th class="num">Meio-termo</th><th class="num">Optas</th>
+        <th class="num sep-l">▲ Ambev</th><th class="num">▲ Meio</th><th class="num">▲ Optas</th>
+      </tr></thead>
+      <tbody id="tb-rkm"></tbody>
+    </table>
+  </div>
+
+  <!-- TABELA 2: R$/Equipamento -->
+  <div class="tbl-section">
+    <div class="tbl-title">R$/Equipamento (por carreta/mês) — ano a ano</div>
+    <div class="tbl-sub">Propostas = capital + manutenção por carreta/mês · Conlog = nosso custo real (Custo ÷ carretas·mês) · ▲ = proposta − Conlog</div>
+    <table>
+      <thead><tr>
+        <th>Ano</th><th class="num c-conlog">Conlog</th>
+        <th class="num">Ambev</th><th class="num">Meio-termo</th><th class="num">Optas</th>
+        <th class="num sep-l">▲ Ambev</th><th class="num">▲ Meio</th><th class="num">▲ Optas</th>
+      </tr></thead>
+      <tbody id="tb-eq"></tbody>
+    </table>
+  </div>
+
+  <!-- TABELA 3: Impacto financeiro -->
+  <div class="tbl-section">
+    <div class="tbl-title">Impacto financeiro — nossa frota (ano a ano)</div>
+    <div class="tbl-sub">▲ por carreta/mês × nossas carretas·mês do ano = R$ que cada proposta remunera acima (verde) / abaixo (vermelho) do nosso custo real</div>
+    <table>
+      <thead><tr>
+        <th>Ano</th><th class="num">Carretas (méd.)</th><th class="num">Carretas·mês</th>
+        <th class="num sep-l">Impacto Ambev</th><th class="num">Impacto Meio-termo</th><th class="num">Impacto Optas</th>
+      </tr></thead>
+      <tbody id="tb-imp"></tbody>
+    </table>
+  </div>
+
+  <!-- CAIXA RESUMO (slide) -->
+  <div class="resumo" id="resumo">
+    <h3>Resumo para apresentação</h3>
+    <div id="resumo-body"></div>
+  </div>
+
+  <!-- MEMÓRIA -->
+  <div class="memoria">
+    <div class="memoria-title">Memória de cálculo</div>
+    <ul>
+      <li><b>Propostas (Ambev · Meio-termo · Optas):</b> números <b>deles</b> — capital (REM K) = % × R$ 170.000/carreta/mês + manutenção (R$/km), na base <b>10.000 km/mês</b>. Ambev 1,00% + 0,19 · Meio-termo 1,15% + 0,22 · Optas 1,33% + 0,25. São valores fixos (não mudam por ano).</li>
+      <li><b>Conlog (nosso real):</b> do painel — R$/km = Custo Total ÷ Km; R$/Equipamento = Custo Total ÷ carretas·mês (nº de Equipamentos = carretas·mês). 2025 realizado; 2026–2029 tendência (drivers projetados por regressão linear).</li>
+      <li><b>▲</b> = proposta − Conlog (positivo = a proposta remunera acima do nosso custo real; negativo = não cobre).</li>
+      <li><b>Impacto financeiro</b> = ▲ (R$/carreta·mês) × nossas <b>carretas·mês</b> do ano — usa a frota real. Acumulado = soma 2025–2029.</li>
+      <li><b>Break-even de capital:</b> % de capital que cada cenário precisaria (mantida a manutenção dele) para o R$/km igualar o nosso custo real médio do período.</li>
+      <li><b>Base de km:</b> as propostas assumem 10.000 km/mês/carreta (referencial OPTAS); nosso real gira em torno de <span id="mem-kmreal">—</span> km/mês/carreta. Por isso a leitura por R$/km (taxa) e por R$/carreta·mês (caixa) pode divergir — ambas estão explícitas.</li>
+    </ul>
+  </div>
+</main>
+
+<script>
+const SHEET_ID='1EFmp2qlevQG5OEgGJePrI_O8wKuQo3IDmbJIReN2Fl0';
+const TAB='Base';
+const REAL_TO=2025, PROJ_FROM=2026, ANO_PARC=2026, MESES_PARC=6, END_YEAR=2029;
+const CMP_DE=2025, CMP_ATE=2029;
+
+// ── Propostas OPTAS (números DELES) — CONSTANTES EDITÁVEIS ──
+const VALOR_CAP=170000;     // valor da carreta 2021 (base do capital / REM K)
+const KM_DELES=10000;       // km/mês por carreta assumido pelas propostas
+const CENARIOS=[
+  {nome:'Ambev',      pct:0.0100, manut:0.19, cor:'#38BDF8', tema:false},
+  {nome:'Meio-termo', pct:0.0115, manut:0.22, cor:null,      tema:true},   // preta (claro) / branca (escuro)
+  {nome:'Optas',      pct:0.0133, manut:0.25, cor:'#22C55E', tema:false},
+];
+const CONLOG_COR='#F97316';
+
+// ── helpers ──
+const set=(id,t)=>{const e=document.getElementById(id);if(e)e.textContent=t;};
+const num=v=>{ if(v==null||v==='')return null; if(typeof v==='number')return v;
+  let s=String(v).replace(/\s|R\$/g,''); if(s.indexOf(',')>=0)s=s.replace(/\./g,'').replace(',','.');
+  const f=parseFloat(s); return isNaN(f)?null:f; };
+const nf2=v=>v==null||!isFinite(v)?'—':v.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
+const nf0=v=>v==null||!isFinite(v)?'—':Math.round(v).toLocaleString('pt-BR');
+const brl0=v=>v==null||!isFinite(v)?'—':'R$ '+Math.round(v).toLocaleString('pt-BR');
+const money=v=>{ if(v==null||!isFinite(v))return '—'; const a=Math.abs(v),s=v<0?'-':'';
+  if(a>=1e6)return s+'R$ '+(a/1e6).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2})+' mi';
+  if(a>=1e3)return s+'R$ '+(a/1e3).toLocaleString('pt-BR',{maximumFractionDigits:0})+' mil';
+  return s+'R$ '+Math.round(a).toLocaleString('pt-BR'); };
+const p2=v=>v==null?'—':(v>=0?'+':'')+nf2(v);
+const signMoney=v=>v==null?'—':(v>=0?'+':'')+money(v).replace('-','');
+
+function linReg(pairs){
+  const n=pairs.length; let sx=0,sy=0,sxy=0,sxx=0;
+  pairs.forEach(([x,y])=>{sx+=x;sy+=y;sxy+=x*y;sxx+=x*x;});
+  const den=n*sxx-sx*sx; if(!den){const m=sy/n;return ()=>m;}
+  const b=(n*sxy-sx*sy)/den, a=(sy-b*sx)/n; return x=>a+b*x;
+}
+const isLight=()=>document.body.classList.contains('light-mode');
+const grid=()=>({color:isLight()?'rgba(0,0,0,.08)':'rgba(255,255,255,.06)'});
+const tick=(sz=10)=>({color:isLight()?'#444':'#94A3B8',font:{family:'Montserrat',size:sz}});
+const meioCor=()=>isLight()?'#111111':'#F1F5F9';
+
+let DATA=[], chRkm=null, chEq=null;
+
+async function fetchBase(){
+  const url=`https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:json&sheet=${encodeURIComponent(TAB)}`;
+  const raw=await (await fetch(url)).text();
+  const json=JSON.parse(raw.replace(/^[\s\S]*?\(/, '').replace(/\);?\s*$/, ''));
+  let rows=json.table.rows.map(r=>(r.c||[]).map(c=>c&&c.v!=null?c.v:null));
+  const out=[];
+  rows.forEach(r=>{
+    const ano=num(r[0]); if(ano==null||ano<2000||ano>2100)return;
+    out.push({ ano:Math.round(ano), custoTot:num(r[4]), km:num(r[5]), nEq:num(r[6]) });
+  });
+  out.sort((a,b)=>a.ano-b.ano);
+  return out;
+}
+// drivers: 2026 mensalizado (jan–jun ×12/6); 2027–2029 regressão linear (2020–2025 + 2026 mensal.)
+const _FAC=12/MESES_PARC;
+function d26(key){ const d=DATA.find(x=>x.ano===ANO_PARC); return d?(d[key]||0)*_FAC:0; }
+function driverReg(key){
+  const pts=DATA.filter(d=>d.ano<=REAL_TO).map(d=>[d.ano,d[key]]).filter(p=>p[1]!=null);
+  pts.push([ANO_PARC, d26(key)]); return linReg(pts);
+}
+function driverVal(key,y){
+  if(y<=REAL_TO){ const d=DATA.find(x=>x.ano===y); return d?(d[key]||0):0; }
+  if(y===ANO_PARC) return d26(key);
+  return driverReg(key)(y);
+}
+
+// ── núcleo do comparativo ──
+function calc(){
+  const anos=[]; for(let y=CMP_DE;y<=CMP_ATE;y++) anos.push(y);
+  // Conlog (nosso real) por ano
+  const conlog=anos.map(y=>{
+    const custo=driverVal('custoTot',y), km=driverVal('km',y), nEq=driverVal('nEq',y);
+    return { y, custo, km, nEq,
+             rkm: km?custo/km:null,               // R$/km real
+             eqMes: nEq?custo/nEq:null,           // R$/carreta·mês real (nEq = carretas·mês)
+             carretas: nEq? nEq/12 : null,        // nº médio de carretas no ano
+             kmCarMes: nEq? km/nEq : null };       // km real por carreta·mês
+  });
+  // propostas (fixas, base deles)
+  const cen=CENARIOS.map(c=>{
+    const capMes=c.pct*VALOR_CAP;
+    return { ...c, capMes, rkm:c.manut+capMes/KM_DELES, eqMes:c.manut*KM_DELES+capMes };
+  });
+  // totais/acumulado
+  let sCusto=0,sKm=0,sNeq=0, acum=cen.map(()=>0);
+  conlog.forEach(d=>{ sCusto+=d.custo; sKm+=d.km; sNeq+=d.nEq;
+    cen.forEach((c,i)=>{ acum[i]+= (c.eqMes-(d.eqMes||0))*(d.nEq||0); }); });
+  const conlogTot={ rkm:sKm?sCusto/sKm:null, eqMes:sNeq?sCusto/sNeq:null, carretas:sNeq/12/anos.length, sNeq, sKm,
+                    kmCarMes:sNeq?sKm/sNeq:null };
+  // break-even de capital (por cenário): pct p/ rkm proposta == conlogTot.rkm
+  const be=cen.map(c=>({nome:c.nome, pct:((conlogTot.rkm - c.manut)*KM_DELES)/VALOR_CAP }));
+  return {anos, conlog, cen, acum, conlogTot, be};
+}
+
+function renderTables(R){
+  const {anos,conlog,cen,acum,conlogTot}=R;
+  // Tabela R$/km
+  let hk='';
+  conlog.forEach((d,idx)=>{
+    const proj=d.y>=PROJ_FROM?'proj':'';
+    hk+=`<tr class="${proj}"><td class="ano">${d.y}</td><td class="num c-conlog">${nf2(d.rkm)}</td>`;
+    cen.forEach(c=>{ hk+=`<td class="num">${nf2(c.rkm)}</td>`; });
+    cen.forEach((c,i)=>{ const dv=c.rkm-(d.rkm||0),cls=dv>=0?'cg':'cr'; hk+=`<td class="num ${cls} ${i===0?'sep-l':''}">${p2(dv)}</td>`; });
+    hk+='</tr>';
+  });
+  hk+=`<tr class="total"><td class="ano">Média pond.</td><td class="num c-conlog">${nf2(conlogTot.rkm)}</td>`;
+  cen.forEach(c=>{ hk+=`<td class="num">${nf2(c.rkm)}</td>`; });
+  cen.forEach((c,i)=>{ const dv=c.rkm-(conlogTot.rkm||0),cls=dv>=0?'cg':'cr'; hk+=`<td class="num ${cls} ${i===0?'sep-l':''}">${p2(dv)}</td>`; });
+  hk+='</tr>';
+  document.getElementById('tb-rkm').innerHTML=hk;
+
+  // Tabela R$/Equipamento (carreta·mês)
+  let he='';
+  conlog.forEach(d=>{
+    const proj=d.y>=PROJ_FROM?'proj':'';
+    he+=`<tr class="${proj}"><td class="ano">${d.y}</td><td class="num c-conlog">${brl0(d.eqMes)}</td>`;
+    cen.forEach(c=>{ he+=`<td class="num">${brl0(c.eqMes)}</td>`; });
+    cen.forEach((c,i)=>{ const dv=c.eqMes-(d.eqMes||0),cls=dv>=0?'cg':'cr'; he+=`<td class="num ${cls} ${i===0?'sep-l':''}">${(dv>=0?'+':'')+brl0(Math.abs(dv))}</td>`; });
+    he+='</tr>';
+  });
+  he+=`<tr class="total"><td class="ano">Média pond.</td><td class="num c-conlog">${brl0(conlogTot.eqMes)}</td>`;
+  cen.forEach(c=>{ he+=`<td class="num">${brl0(c.eqMes)}</td>`; });
+  cen.forEach((c,i)=>{ const dv=c.eqMes-(conlogTot.eqMes||0),cls=dv>=0?'cg':'cr'; he+=`<td class="num ${cls} ${i===0?'sep-l':''}">${(dv>=0?'+':'')+brl0(Math.abs(dv))}</td>`; });
+  he+='</tr>';
+  document.getElementById('tb-eq').innerHTML=he;
+
+  // Tabela impacto
+  let hi='';
+  conlog.forEach(d=>{
+    const proj=d.y>=PROJ_FROM?'proj':'';
+    hi+=`<tr class="${proj}"><td class="ano">${d.y}</td><td class="num">${nf0(d.carretas)}</td><td class="num">${nf0(d.nEq)}</td>`;
+    cen.forEach((c,i)=>{ const imp=(c.eqMes-(d.eqMes||0))*(d.nEq||0),cls=imp>=0?'cg':'cr'; hi+=`<td class="num ${cls} ${i===0?'sep-l':''}">${signMoney(imp)}</td>`; });
+    hi+='</tr>';
+  });
+  hi+=`<tr class="total"><td class="ano">Acumulado</td><td class="num">—</td><td class="num">${nf0(conlogTot.sNeq)}</td>`;
+  acum.forEach((a,i)=>{ const cls=a>=0?'cg':'cr'; hi+=`<td class="num ${cls} ${i===0?'sep-l':''}">${signMoney(a)}</td>`; });
+  hi+='</tr>';
+  document.getElementById('tb-imp').innerHTML=hi;
+}
+
+function renderChartMulti(canvasId, prevRef, key, fmt){
+  const R=window._R; if(!R) return prevRef;
+  if(prevRef) prevRef.destroy();
+  const labels=R.anos.map(String);
+  const conlogData=R.conlog.map(d=>d[key]);
+  const mk=(data,cor,dash)=>({data,borderColor:cor,backgroundColor:cor,borderWidth:dash?2:3,borderDash:dash||[],
+    tension:.25,pointRadius:4,pointHoverRadius:6,pointBackgroundColor:cor,fill:false});
+  const ds=[ Object.assign(mk(conlogData,CONLOG_COR,[6,3]),{label:'Conlog',_conlog:true}) ];
+  R.cen.forEach(c=>{ const cor=c.tema?meioCor():c.cor;
+    ds.push(Object.assign(mk(R.anos.map(()=>c[key]),cor),{label:c.nome})); });
+  const dl={ color:c=>c.dataset._conlog?CONLOG_COR:(c.dataset.borderColor),
+    font:{family:'Montserrat',size:9,weight:'700'},align:'top',offset:4,
+    display:c=>c.dataset._conlog || c.dataIndex===c.dataset.data.length-1,
+    formatter:v=>fmt(v) };
+  return new Chart(document.getElementById(canvasId),{
+    type:'line', data:{labels,datasets:ds},
+    plugins:[ChartDataLabels],
+    options:{ responsive:true,maintainAspectRatio:false,
+      layout:{padding:{top:18,right:20,left:4}},
+      plugins:{ legend:{display:false},
+        datalabels:dl,
+        tooltip:{backgroundColor:'#141B26',titleColor:'#F97316',bodyColor:'#F1F5F9',borderColor:'#1E2D40',borderWidth:1,
+          titleFont:{family:'Montserrat'},bodyFont:{family:'Montserrat'},
+          callbacks:{label:c=>`${c.dataset.label}: ${fmt(c.parsed.y)}`}} },
+      scales:{ x:{grid:{display:false},border:{display:false},ticks:tick(11)},
+        y:{grid:grid(),border:{display:false},ticks:{...tick(10),callback:v=>fmt(v)}} } }
+  });
+}
+
+function renderResumo(R){
+  const {conlogTot,cen,acum,be}=R;
+  const byName={}; cen.forEach((c,i)=>byName[c.nome]={c,acum:acum[i],be:be[i].pct});
+  const O=byName['Optas'], A=byName['Ambev'], M=byName['Meio-termo'];
+  const covers=x=> x.c.rkm>=conlogTot.rkm;
+  const gapKm=x=> (x.c.rkm-conlogTot.rkm);
+  const html=`
+    <p>No período vencido (2025–2029), nosso <b>custo real de carroceria</b> é de <b class="c-conlog">${nf2(conlogTot.rkm)} R$/km</b> (≈ <b>${brl0(conlogTot.eqMes)}</b> por carreta/mês), rodando cerca de <b>${nf0(conlogTot.kmCarMes)} km/mês</b> por carreta.</p>
+    <div class="r-list">
+      <div class="r-item"><b>Ambev (1,00%)</b> remunera <b>${nf2(A.c.rkm)} R$/km</b> (${brl0(A.c.eqMes)}/carreta·mês) → ${gapKm(A)>=0?'cobre':'<b>não cobre</b>'} nosso custo (${p2(gapKm(A))} R$/km). Impacto acumulado na frota: <b class="${A.acum>=0?'cg':'cr'}">${signMoney(A.acum)}</b>.</div>
+      <div class="r-item"><b>Meio-termo (1,15%)</b> remunera <b>${nf2(M.c.rkm)} R$/km</b> (${brl0(M.c.eqMes)}/carreta·mês) → ${gapKm(M)>=0?'cobre':'<b>não cobre</b>'} (${p2(gapKm(M))} R$/km). Impacto acumulado: <b class="${M.acum>=0?'cg':'cr'}">${signMoney(M.acum)}</b>.</div>
+      <div class="r-item"><b>Optas (1,33%)</b> remunera <b>${nf2(O.c.rkm)} R$/km</b> (${brl0(O.c.eqMes)}/carreta·mês) → ${gapKm(O)>=0?'cobre':'<b>não cobre</b>'} com folga (${p2(gapKm(O))} R$/km). Impacto acumulado: <b class="${O.acum>=0?'cg':'cr'}">${signMoney(O.acum)}</b>.</div>
+    </div>
+    <p><b>Diferença Optas × Ambev:</b> pedir como Optas em vez de aceitar a Ambev representa <b class="cg">${signMoney(O.acum-A.acum)}</b> a mais na frota ao longo dos 5 anos.</p>
+    <p class="r-foot"><b>Break-even de capital</b> (para o R$/km empatar com nosso custo real, mantida a manutenção de cada um): Ambev ${(be[0].pct*100).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2})}% · Meio-termo ${(be[1].pct*100).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2})}% · Optas ${(be[2].pct*100).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2})}%. &nbsp; Propostas na base 10.000 km/mês; nosso real ≈ ${nf0(conlogTot.kmCarMes)} km/mês/carreta.</p>`;
+  document.getElementById('resumo-body').innerHTML=html;
+}
+
+function renderHero(R){
+  const idx={Ambev:0,'Meio-termo':1,Optas:2};
+  set('h-ambev', signMoney(R.acum[0])); set('h-meio', signMoney(R.acum[1])); set('h-optas', signMoney(R.acum[2]));
+  const el=id=>document.getElementById(id);
+  [['h-ambev',R.acum[0]],['h-meio',R.acum[1]],['h-optas',R.acum[2]]].forEach(([id,v])=>{
+    const e=el(id); if(e) e.style.color = v>=0 ? 'var(--green)' : 'var(--red)';
+  });
+}
+
+function renderAll(){
+  const R=calc(); window._R=R;
+  renderHero(R);
+  renderTables(R);
+  chRkm=renderChartMulti('ch-rkm',chRkm,'rkm',nf2);
+  chEq =renderChartMulti('ch-eq', chEq,'eqMes',v=>nf0(v));
+  renderResumo(R);
+  set('mem-kmreal', nf0(R.conlogTot.kmCarMes));
+}
+
+async function atualizar(){
+  set('status-badge','Carregando…');
+  try{
+    DATA=await fetchBase(); renderAll();
+    const now=new Date();
+    set('status-badge',`Atualizado ${now.toLocaleDateString('pt-BR')} ${now.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})}`);
+  }catch(e){ console.error(e); set('status-badge','Erro ao carregar dados'); }
+}
+
+// último acesso
+function initAccessLog(){
+  let name=localStorage.getItem('bi_user_name');
+  if(!name){ name=prompt('Qual é o seu nome?')||'Desconhecido'; localStorage.setItem('bi_user_name',name); }
+  const lastRaw=localStorage.getItem('bi_last_access');
+  if(lastRaw){ const d=new Date(lastRaw); const lastUser=localStorage.getItem('bi_last_user')||name;
+    const badge=document.getElementById('access-badge');
+    if(badge){ badge.textContent=`Último acesso: ${d.toLocaleDateString('pt-BR')} ${d.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})} · ${lastUser}`; badge.style.display=''; } }
+  localStorage.setItem('bi_last_access',new Date().toISOString());
+  localStorage.setItem('bi_last_user',name);
+}
+
+// tema
+const _sun=`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>`;
+const _moon=`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>`;
+function applyTheme(t){
+  document.body.classList.toggle('light-mode',t==='light');
+  localStorage.setItem('bi_theme',t);
+  const b=document.getElementById('themeBtn'); if(b)b.innerHTML=t==='light'?_moon:_sun;
+  if(DATA.length) renderAll();
+}
+(function(){
+  const t=localStorage.getItem('bi_theme')||'dark'; applyTheme(t);
+  document.getElementById('themeBtn').addEventListener('click',()=>applyTheme(document.body.classList.contains('light-mode')?'dark':'light'));
+})();
+
+let _rt; window.addEventListener('resize',()=>{clearTimeout(_rt);_rt=setTimeout(()=>{if(DATA.length)renderAll();},400);});
+document.addEventListener('DOMContentLoaded',()=>{
+  initAccessLog(); atualizar();
+  if(window.initPdfExport) initPdfExport({fileBase:'comparativo-optas'});
+});
+</script>
+</body>
+</html>
