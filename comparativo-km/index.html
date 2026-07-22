@@ -1,0 +1,478 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lifecycle da Carreta — R$/km</title>
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0"></script>
+<script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.2/dist/jspdf.umd.min.js"></script>
+<script src="../assets/excel-export.js"></script>
+<script src="../assets/pdf-export.js"></script>
+<style>
+:root{
+  --bg:#0C1017; --card:#141B26; --card2:#1A2335; --border:#1E2D40;
+  --orange:#F97316; --blue:#38BDF8; --text:#F1F5F9; --text2:#94A3B8; --text3:#475569;
+  --green:#3BB33B; --red:#FF6666;
+}
+*{margin:0;padding:0;box-sizing:border-box;}
+body{
+  background:
+    radial-gradient(ellipse at 10% 25%, rgba(249,115,22,.06) 0%, transparent 50%),
+    radial-gradient(ellipse at 90% 75%, rgba(56,189,248,.05) 0%, transparent 50%),
+    var(--bg);
+  color:var(--text); font-family:'Montserrat',-apple-system,sans-serif; font-size:13px; min-height:100vh;
+}
+.header{
+  background:rgba(12,16,23,.75); border-bottom:1px solid rgba(255,255,255,.07);
+  padding:10px 24px 12px; display:flex; flex-wrap:wrap; align-items:center;
+  position:sticky; top:0; z-index:100;
+  backdrop-filter:blur(20px); -webkit-backdrop-filter:blur(20px); box-shadow:0 2px 12px rgba(0,0,0,.3);
+}
+.brand{flex:1;display:flex;align-items:center;gap:10px;}
+.brand h1{font-size:16px;font-weight:700;color:var(--orange);}
+.brand p{font-size:10px;color:var(--text2);margin-top:2px;}
+.back-btn{background:rgba(249,115,22,.15);border:1px solid rgba(249,115,22,.3);border-radius:4px;padding:4px 8px;display:flex;align-items:center;color:var(--orange);text-decoration:none;}
+.back-btn:hover{background:rgba(249,115,22,.32);}
+.header-right{flex-shrink:0;display:flex;align-items:center;gap:8px;}
+.status-badge{font-size:9px;color:var(--text);background:rgba(249,115,22,.15);border:1px solid rgba(249,115,22,.3);border-radius:4px;padding:2px 8px;white-space:nowrap;}
+.access-badge{font-size:9px;color:var(--text2);background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);border-radius:4px;padding:2px 8px;white-space:nowrap;}
+.theme-btn{background:rgba(249,115,22,.15);border:1px solid rgba(249,115,22,.3);border-radius:4px;padding:4px 6px;cursor:pointer;color:var(--orange);display:flex;align-items:center;}
+.theme-btn:hover{background:rgba(249,115,22,.32);}
+.refresh-btn{background:rgba(249,115,22,.15);border:1px solid rgba(249,115,22,.3);border-radius:4px;padding:5px 8px;cursor:pointer;color:var(--orange);display:flex;align-items:center;}
+.refresh-btn:hover{background:rgba(249,115,22,.32);}
+.refresh-btn svg{display:block;}
+
+.main{padding:20px 24px 60px;}
+
+/* HERO — respostas às 2 perguntas */
+.hero-card{padding:4px 2px 16px;margin-bottom:14px;}
+.hero-q{margin-bottom:14px;}
+.hero-q .q-title{font-size:11px;font-weight:800;color:var(--text2);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;}
+.hero-metrics{display:flex;gap:34px;flex-wrap:wrap;}
+.hero-metrics>div{display:flex;flex-direction:column;border-left:3px solid var(--text3);padding-left:12px;}
+.hero-metrics>div.m-ambev{border-color:#38BDF8;}
+.hero-metrics>div.m-meio{border-color:var(--text);}
+.hero-metrics>div.m-optas{border-color:#16A34A;}
+.hero-metrics span{font-size:10px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:.5px;}
+.hero-metrics b{font-size:22px;font-weight:800;color:var(--text);margin-top:3px;line-height:1;}
+.hero-metrics em{font-size:10px;color:var(--text3);font-style:normal;margin-top:3px;font-weight:700;}
+
+.chart-card,.tbl-section{
+  background:rgba(20,27,38,.55);border:1px solid rgba(255,255,255,.07);border-radius:8px;
+  padding:18px 20px 16px;margin-bottom:16px;backdrop-filter:blur(16px);box-shadow:0 2px 12px rgba(0,0,0,.25);
+}
+.chart-card{min-width:0;}
+.tbl-title{font-size:16px;font-weight:800;color:var(--text);margin-bottom:3px;}
+.tbl-sub{font-size:10px;color:var(--text2);margin-bottom:14px;}
+.chart-wrap{position:relative;height:300px;}
+
+/* LEGEND */
+.leg{display:flex;gap:16px;flex-wrap:wrap;margin:2px 0 12px;font-size:10px;color:var(--text2);font-weight:600;}
+.leg span{display:inline-flex;align-items:center;gap:6px;}
+.leg i{width:18px;height:0;border-top-width:3px;border-top-style:solid;display:inline-block;}
+.leg .b-conlog{width:12px;height:12px;border:1.5px dashed var(--orange);background:rgba(249,115,22,.20);border-radius:2px;}
+.leg .l-meio,.leg .l-ambev,.leg .l-optas{border-top-style:dashed;}
+.leg .l-ambev{border-top-color:#38BDF8;}
+.leg .l-meio{border-top-color:#F1F5F9;}
+.leg .l-optas{border-top-color:#16A34A;}
+body.light-mode .leg .l-meio{border-top-color:#111;}
+body.light-mode .leg .l-ambev{border-top-color:#1D4ED8;}
+
+/* TABLES */
+table{width:100%;border-collapse:collapse;font-size:12px;}
+thead th{background:var(--card);color:var(--text);font-size:11px;font-weight:700;padding:8px 8px 12px;border-bottom:1px solid rgba(255,255,255,.10);text-transform:uppercase;letter-spacing:.5px;white-space:nowrap;text-align:left;}
+td{padding:11px 8px;border:none;color:var(--text);white-space:nowrap;}
+tbody tr:hover{background:rgba(255,255,255,.035);}
+td.num,th.num{text-align:right;font-variant-numeric:tabular-nums;}
+td.ano{font-weight:700;}
+th.sep-l,td.sep-l{border-left:1px solid rgba(255,255,255,.12);}
+tr.proj td.ano::after{content:' · tend.';font-size:9px;color:var(--text3);font-weight:400;}
+tr.total td{color:var(--text);font-weight:700;font-size:12px;border-top:2px solid rgba(255,255,255,.12);padding-top:12px;background:var(--card);}
+.cr{color:var(--red)!important;font-weight:700;}
+.cg{color:var(--green)!important;font-weight:700;}
+
+/* CAIXA RESUMO (slide) */
+.resumo{background:rgba(20,27,38,.55);border:1px solid rgba(255,255,255,.07);border-radius:8px;padding:18px 22px 20px;margin:6px 0 16px;backdrop-filter:blur(16px);box-shadow:0 2px 12px rgba(0,0,0,.25);}
+.resumo h3{font-size:13px;font-weight:800;color:var(--orange);text-transform:uppercase;letter-spacing:1px;margin-bottom:10px;}
+.resumo p{font-size:12.5px;line-height:1.65;color:var(--text);margin-bottom:9px;}
+.resumo p b{font-weight:800;}
+.resumo .r-list{display:flex;flex-direction:column;gap:7px;margin:4px 0 10px;}
+.resumo .r-item{font-size:12.5px;line-height:1.5;color:var(--text);padding-left:16px;position:relative;}
+.resumo .r-item::before{content:'▸';position:absolute;left:0;color:var(--orange);font-weight:800;}
+.resumo .r-foot{font-size:10.5px;color:var(--text2);line-height:1.5;margin-top:8px;border-top:1px solid rgba(255,255,255,.08);padding-top:9px;}
+
+/* MEMÓRIA */
+.memoria{margin:4px 2px 0;padding:0;}
+.memoria-title{font-size:11px;font-weight:800;color:var(--text2);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;}
+.memoria ul{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:5px;}
+.memoria li{font-size:11px;line-height:1.5;color:var(--text2);padding-left:14px;position:relative;}
+.memoria li::before{content:'·';position:absolute;left:2px;color:var(--orange);font-weight:800;}
+.memoria li b{color:var(--text);font-weight:700;}
+
+/* LIGHT MODE */
+body.light-mode .main{background:#F0F0F0;--text:#1a1a1a;--text2:#444444;--text3:#666666;color:var(--text);--red:#ff0000;--green:#0E8C0E;}
+body.light-mode .chart-card,
+body.light-mode .tbl-section,
+body.light-mode .resumo{background:rgba(128,128,128,.14)!important;border:none!important;box-shadow:none!important;--text:#1a1a1a;--text2:#444444;--text3:#555555;}
+body.light-mode .hero-card{--text:#1a1a1a;--text2:#444444;--text3:#555555;}
+body.light-mode td{color:var(--text);}
+body.light-mode thead th{border-bottom-color:rgba(0,0,0,.12);background:#F0F0F0;}
+body.light-mode tr.total td{border-top-color:rgba(0,0,0,.20);background:#F0F0F0;}
+body.light-mode th.sep-l,body.light-mode td.sep-l{border-left-color:rgba(0,0,0,.14);}
+
+@media(max-width:768px){
+  .main{padding:14px 12px 50px;}
+  .header-right .refresh-btn{display:none;}
+  .status-badge,.access-badge{font-size:8px;padding:2px 6px;}
+  .chart-wrap{height:230px;}
+  table{font-size:11px;} thead th{font-size:9.5px;padding:6px 4px 8px;} td{padding:8px 4px;}
+  .hero-metrics{gap:18px;} .hero-metrics b{font-size:18px;}
+}
+</style>
+</head>
+<body>
+<header class="header">
+  <div class="brand">
+    <a href="../comparativo-optas/" class="back-btn" title="Voltar ao Comparativo OPTAS"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg></a>
+    <div>
+      <h1>Lifecycle da Carreta — R$/km</h1>
+      <p>Os cenários pagam a nossa conta? · Pós-contrato 2026–2030 e ciclo finame + 5 anos</p>
+    </div>
+  </div>
+  <div class="header-right">
+    <button class="theme-btn" id="themeBtn" title="Modo claro/escuro"></button>
+    <button class="refresh-btn" onclick="atualizar()" title="Atualizar dados">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+        <polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/>
+        <path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/>
+      </svg>
+    </button>
+    <span class="status-badge" id="status-badge">Carregando…</span>
+    <span class="access-badge" id="access-badge" style="display:none"></span>
+  </div>
+</header>
+
+<main class="main">
+  <!-- HERO: as 2 respostas -->
+  <div class="hero-card">
+    <div class="hero-q">
+      <div class="q-title">1 · Pós-contrato (2026–2030) — os cenários pagam a nossa conta, com as nossas variáveis?</div>
+      <div class="hero-metrics">
+        <div class="m-ambev"><span>Ambev · 1,00%</span><b id="q1-ambev">—</b><em id="q1v-ambev">—</em></div>
+        <div class="m-meio"><span>Meio-termo · 1,15%</span><b id="q1-meio">—</b><em id="q1v-meio">—</em></div>
+        <div class="m-optas"><span>Optas · 1,33%</span><b id="q1-optas">—</b><em id="q1v-optas">—</em></div>
+      </div>
+    </div>
+    <div class="hero-q">
+      <div class="q-title">2 · Ciclo completo — finame (2021–2025) + 5 anos (2026–2030) — pagam a conta do ciclo?</div>
+      <div class="hero-metrics">
+        <div class="m-ambev"><span>Ambev · 1,00%</span><b id="q2-ambev">—</b><em id="q2v-ambev">—</em></div>
+        <div class="m-meio"><span>Meio-termo · 1,15%</span><b id="q2-meio">—</b><em id="q2v-meio">—</em></div>
+        <div class="m-optas"><span>Optas · 1,33%</span><b id="q2-optas">—</b><em id="q2v-optas">—</em></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- GRÁFICO: R$/km · período faltante 2026–2030 -->
+  <div class="chart-card">
+    <div class="tbl-title">R$/km <span style="font-weight:600;color:var(--text3);font-size:11px">· período faltante 2026–2030</span></div>
+    <div class="tbl-sub">Conlog (barra) = nosso custo real por km (tendência) · linhas = remuneração de cada cenário em R$/km (manut + REM K % × R$ 221.605 ÷ nossa km/carreta)</div>
+    <div class="leg">
+      <span><i class="b-conlog"></i>Conlog (nosso real · tendência)</span>
+      <span><i class="l-ambev"></i>Ambev · 1,00%</span>
+      <span><i class="l-meio"></i>Meio-termo · 1,15%</span>
+      <span><i class="l-optas"></i>Optas · 1,33%</span>
+    </div>
+    <div class="chart-wrap"><canvas id="ch-rkm"></canvas></div>
+  </div>
+
+  <!-- TABELA 1: pós-contrato 2026–2030 -->
+  <div class="tbl-section">
+    <div class="tbl-title">1 · Pós-contrato (2026–2030) — remuneração vs nossa conta (R$/km)</div>
+    <div class="tbl-sub">Nossa conta = custo real por km (Conlog) · cenários = manut + REM K % × R$ 221.605 ÷ nossa km/carreta · ▲ = cenário − conta · Imp. = ▲ × km rodado no ano</div>
+    <table>
+      <thead><tr>
+        <th>Ano</th><th class="num">Nossa conta</th>
+        <th class="num sep-l">Ambev</th><th class="num">Meio-termo</th><th class="num">Optas</th>
+        <th class="num sep-l">▲ Ambev</th><th class="num">▲ Meio</th><th class="num">▲ Optas</th>
+        <th class="num sep-l">Imp. Ambev</th><th class="num">Imp. Meio</th><th class="num">Imp. Optas</th>
+      </tr></thead>
+      <tbody id="tb-q1"></tbody>
+    </table>
+  </div>
+
+  <!-- TABELA 2: ciclo completo 2021–2030 -->
+  <div class="tbl-section">
+    <div class="tbl-title">2 · Ciclo completo (2021–2030) — finame + 5 anos (R$/km)</div>
+    <div class="tbl-sub">2021–2025 (finame): o FINAME fica FORA do R$/km (PMT fixo, remunerado à parte) — remuneração em R$/km = manut 0,11 (igual nos 3) · 2026–2030: cenários (REM K entra pra pagar a conta) · Imp. = ▲ × km do ano</div>
+    <table>
+      <thead><tr>
+        <th>Ano</th><th class="num">Nossa conta</th>
+        <th class="num sep-l">Ambev</th><th class="num">Meio-termo</th><th class="num">Optas</th>
+        <th class="num sep-l">▲ Ambev</th><th class="num">▲ Meio</th><th class="num">▲ Optas</th>
+        <th class="num sep-l">Imp. Ambev</th><th class="num">Imp. Meio</th><th class="num">Imp. Optas</th>
+      </tr></thead>
+      <tbody id="tb-q2"></tbody>
+    </table>
+  </div>
+
+  <!-- CAIXA RESUMO (slide) -->
+  <div class="resumo" id="resumo">
+    <h3>Resposta — para apresentação</h3>
+    <div id="resumo-body"></div>
+  </div>
+
+  <!-- MEMÓRIA -->
+  <div class="memoria">
+    <div class="memoria-title">Memória de cálculo</div>
+    <ul>
+      <li><b>Tudo por R$/km</b>, nas <b>nossas variáveis</b>: km por carreta·mês real (até 2025) e estimado (2026–2030, tendência por regressão dos drivers Custo/Km/Carretas; 2026 mensalizado ×12/6).</li>
+      <li><b>Período de finame (2021–2025):</b> o FINAME <b>não entra no R$/km</b> — é PMT fixo (R$ 4.330,80), remunerado à parte. Em R$/km, a remuneração é a manutenção <b>0,11</b> (igual nos 3 cenários) vs nosso custo real por km. Por isso os impactos em R$ deste painel são idênticos aos do painel R$/Equipamento (lá o FINAME aparece dos dois lados e se anula).</li>
+      <li><b>Período faltante / extensão (2026–2030):</b> sem financiamento — a <b>REM K entra para pagar a conta</b>. Remuneração em R$/km = manutenção do cenário + REM K % × <b>R$ 221.605</b> ÷ nossa km/carreta·mês. Ambev 1,00% + 0,19 · Meio-termo 1,15% + 0,22 · Optas 1,33% + 0,25.</li>
+      <li><b>Valor da carreta:</b> aba <b>'Valor de Compra NF'</b> — valor médio atual <b>R$ 221.605</b> (média de tudo) na REM K do pós; valor inicial R$ 203.086 (média sem 2025) documentado como referência.</li>
+      <li><b>▲</b> = remuneração − nossa conta em R$/km (verde paga · vermelho não paga). <b>Imp. (R$)</b> = ▲ × km rodado no ano (frota real). <b>Resposta</b> = acumulado do período: positivo → o cenário paga a conta.</li>
+      <li><b>Lifecycle</b> (análise da carreta): comprar nova custa R$ 5.430,80/carreta·mês (FINAME + manut); estender a vencida custa 3.600 (Ambev) a 4.761 (Optas) — estender é melhor para a Ambev do que comprar nova.</li>
+    </ul>
+  </div>
+</main>
+
+<script>
+Chart.register(ChartDataLabels);
+
+const SHEET_ID='1EFmp2qlevQG5OEgGJePrI_O8wKuQo3IDmbJIReN2Fl0';
+const TAB='Base';
+const REAL_TO=2025, ANO_PARC=2026, MESES_PARC=6;
+
+// ── CONSTANTES EDITÁVEIS ──
+const VALOR_ATUAL=221605;    // valor médio atual das carretas (aba 'Valor de Compra NF' · média de tudo) → REM K no pós
+const VALOR_INICIO=203086;   // valor inicial (média sem 2025) — referência
+const FINAME_PMT=4330.80;    // PMT do financiamento (fora do R$/km; referência)
+const MANUT_FIN=0.11;        // manutenção remunerada nos anos de finame (R$/km)
+const FIN_DE=2021, FIN_ATE=2025;   // período de finame (5 anos)
+const EXT_DE=2026, EXT_ATE=2030;   // extensão / período faltante (5 anos)
+const CENARIOS=[
+  {nome:'Ambev',      key:'ambev', remK:0.0100, manut:0.19, cor:'#38BDF8', corL:'#1D4ED8', tema:false},
+  {nome:'Meio-termo', key:'meio',  remK:0.0115, manut:0.22, cor:null,      tema:true},
+  {nome:'Optas',      key:'optas', remK:0.0133, manut:0.25, cor:'#16A34A', tema:false},
+];
+
+// ── helpers ──
+const set=(id,t)=>{const e=document.getElementById(id);if(e)e.textContent=t;};
+const num=v=>{ if(v==null||v==='')return null; if(typeof v==='number')return v;
+  let s=String(v).replace(/\s|R\$/g,''); if(s.indexOf(',')>=0)s=s.replace(/\./g,'').replace(',','.');
+  const f=parseFloat(s); return isNaN(f)?null:f; };
+const nf2=v=>v==null||!isFinite(v)?'—':v.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
+const money=v=>{ if(v==null||!isFinite(v))return '—'; const a=Math.abs(v),s=v<0?'-':'';
+  if(a>=1e6)return s+'R$ '+(a/1e6).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2})+' mi';
+  if(a>=1e3)return s+'R$ '+(a/1e3).toLocaleString('pt-BR',{maximumFractionDigits:0})+' mil';
+  return s+'R$ '+Math.round(a).toLocaleString('pt-BR'); };
+const signMoney=v=>v==null?'—':(v>=0?'+':'')+money(v).replace('-','');
+const p2=v=>v==null?'—':(v>=0?'+':'')+nf2(v);
+const cls=v=>v==null?'':(v>=0?'cg':'cr');
+function linReg(pairs){
+  const n=pairs.length; let sx=0,sy=0,sxy=0,sxx=0;
+  pairs.forEach(([x,y])=>{sx+=x;sy+=y;sxy+=x*y;sxx+=x*x;});
+  const den=n*sxx-sx*sx; if(!den){const m=sy/n;return ()=>m;}
+  const b=(n*sxy-sx*sy)/den, a=(sy-b*sx)/n; return x=>a+b*x;
+}
+const isLight=()=>document.body.classList.contains('light-mode');
+const tick=(sz=10)=>({color:isLight()?'#444':'#94A3B8',font:{family:'Montserrat',size:sz}});
+const meioCor=()=>isLight()?'#111111':'#F1F5F9';
+
+let DATA=[], chRkm=null;
+
+async function fetchBase(){
+  const url=`https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:json&sheet=${encodeURIComponent(TAB)}`;
+  const raw=await (await fetch(url)).text();
+  const json=JSON.parse(raw.replace(/^[\s\S]*?\(/, '').replace(/\);?\s*$/, ''));
+  let rows=json.table.rows.map(r=>(r.c||[]).map(c=>c&&c.v!=null?c.v:null));
+  const out=[];
+  rows.forEach(r=>{
+    const ano=num(r[0]); if(ano==null||ano<2000||ano>2100)return;
+    out.push({ ano:Math.round(ano), custoTot:num(r[4]), km:num(r[5]), nEq:num(r[6]) });
+  });
+  out.sort((a,b)=>a.ano-b.ano);
+  return out;
+}
+// drivers: real ≤2025 · 2026 mensalizado (jan–jun ×12/6) · 2027–2030 regressão linear
+const _FAC=12/MESES_PARC;
+function d26(key){ const d=DATA.find(x=>x.ano===ANO_PARC); return d?(d[key]||0)*_FAC:0; }
+function driverReg(key){
+  const pts=DATA.filter(d=>d.ano<=REAL_TO).map(d=>[d.ano,d[key]]).filter(p=>p[1]!=null);
+  pts.push([ANO_PARC, d26(key)]); return linReg(pts);
+}
+function driverVal(key,y){
+  if(y<=REAL_TO){ const d=DATA.find(x=>x.ano===y); return d?(d[key]||0):0; }
+  if(y===ANO_PARC) return d26(key);
+  return driverReg(key)(y);
+}
+const kmCarOf=y=>{const k=driverVal('km',y),n=driverVal('nEq',y);return n?k/n:null;};
+const conlogRkm=y=>{const c=driverVal('custoTot',y),k=driverVal('km',y);return k?c/k:null;};   // nosso custo real R$/km
+
+// remuneração do cenário no ano y (R$/km) — nossas variáveis; FINAME fica fora do R$/km
+function remRkm(c,y){
+  if(y>=FIN_DE && y<=FIN_ATE) return MANUT_FIN;                                   // finame: 0,11 (igual nos 3)
+  if(y>=EXT_DE && y<=EXT_ATE){ const km=kmCarOf(y); return km?c.manut + c.remK*VALOR_ATUAL/km:null; }
+  return null;
+}
+
+function calc(){
+  const rows=[];
+  for(let y=FIN_DE;y<=EXT_ATE;y++){
+    rows.push({y,km:driverVal('km',y),conta:conlogRkm(y),
+      rem:Object.fromEntries(CENARIOS.map(c=>[c.key,remRkm(c,y)]))});
+  }
+  const q1={},q2={};
+  CENARIOS.forEach(c=>{ let a1=0,a2=0;
+    rows.forEach(r=>{ const rm=r.rem[c.key]; if(rm==null||r.conta==null)return;
+      const imp=(rm-r.conta)*(r.km||0);
+      if(r.y>=EXT_DE) a1+=imp;
+      a2+=imp;
+    });
+    q1[c.key]=a1; q2[c.key]=a2;
+  });
+  return {rows,q1,q2};
+}
+
+function renderHero(R){
+  const setQ=(pfx,obj)=>{
+    CENARIOS.forEach(c=>{
+      const v=obj[c.key];
+      const b=document.getElementById(`${pfx}-${c.key}`), e=document.getElementById(`${pfx}v-${c.key}`);
+      if(b){ b.textContent=signMoney(v); b.style.color=v>=0?'var(--green)':'var(--red)'; }
+      if(e){ e.textContent=v>=0?'SIM — paga a conta':'NÃO — não paga'; e.style.color=v>=0?'var(--green)':'var(--red)'; }
+    });
+  };
+  setQ('q1',R.q1); setQ('q2',R.q2);
+}
+
+function renderTables(R){
+  const K=CENARIOS.map(c=>c.key);
+  const build=(years)=>{
+    let h='';
+    R.rows.filter(r=>years.includes(r.y)).forEach(r=>{
+      const proj=r.y>=ANO_PARC?'proj':'';
+      const sv=K.map(k=>r.rem[k]);
+      const dl=sv.map(v=>(v==null||r.conta==null)?null:v-r.conta);
+      const imp=dl.map(v=>v==null?null:v*(r.km||0));
+      h+=`<tr class="${proj}"><td class="ano">${r.y}</td><td class="num">${nf2(r.conta)}</td>`
+        + sv.map((v,j)=>`<td class="num ${j===0?'sep-l':''}">${v==null?'—':nf2(v)}</td>`).join('')
+        + dl.map((v,j)=>`<td class="num ${cls(v)} ${j===0?'sep-l':''}">${v==null?'—':p2(v)}</td>`).join('')
+        + imp.map((v,j)=>`<td class="num ${cls(v)} ${j===0?'sep-l':''}">${v==null?'—':signMoney(v)}</td>`).join('')
+        + '</tr>';
+    });
+    return h;
+  };
+  const totalRow=(obj)=>{
+    return `<tr class="total"><td class="ano">Acumulado</td><td class="num">—</td>`
+      + K.map((k,j)=>`<td class="num ${j===0?'sep-l':''}">—</td>`).join('')
+      + K.map((k,j)=>`<td class="num ${j===0?'sep-l':''}">—</td>`).join('')
+      + K.map((k,j)=>`<td class="num ${cls(obj[k])} ${j===0?'sep-l':''}">${signMoney(obj[k])}</td>`).join('')
+      + '</tr>';
+  };
+  const yQ1=[]; for(let y=EXT_DE;y<=EXT_ATE;y++)yQ1.push(y);
+  const yQ2=[]; for(let y=FIN_DE;y<=EXT_ATE;y++)yQ2.push(y);
+  document.getElementById('tb-q1').innerHTML=build(yQ1)+totalRow(R.q1);
+  document.getElementById('tb-q2').innerHTML=build(yQ2)+totalRow(R.q2);
+}
+
+function renderChart(R){
+  if(chRkm) chRkm.destroy();
+  const isL=isLight(), ORA='#F97316';
+  const years=[]; for(let y=EXT_DE;y<=EXT_ATE;y++) years.push(y);
+  const bars=years.map(y=>conlogRkm(y));
+  const dlBar={color:isL?'#1a1a1a':'#F1F5F9',font:{family:'Montserrat',size:10,weight:'700'},anchor:'end',align:'end',offset:2,formatter:v=>v==null?'':nf2(v)};
+  const boxDl=(displayFn,alignFn)=>({display:displayFn,backgroundColor:'#000',color:'#fff',borderRadius:4,
+    padding:{top:3,bottom:3,left:6,right:6},font:{family:'Montserrat',size:11,weight:'800'},
+    anchor:'center',align:alignFn,offset:8,formatter:v=>v==null?'':nf2(v)});
+  const lines=CENARIOS.map(c=>{
+    const cor=c.tema?meioCor():(isL&&c.corL?c.corL:c.cor);
+    const data=years.map(y=>remRkm(c,y));
+    return {type:'line',label:`${c.nome} · ${(c.remK*100).toLocaleString('pt-BR',{minimumFractionDigits:2})}%`,data,
+      borderColor:cor,backgroundColor:cor,borderWidth:2.5,borderDash:[6,4],tension:.15,order:1,
+      pointRadius:5,pointBackgroundColor:cor,pointBorderWidth:0,pointHoverRadius:8,
+      datalabels:boxDl(c2=>c2.dataIndex===years.length-1,'right')};
+  });
+  chRkm=new Chart(document.getElementById('ch-rkm'),{
+    data:{labels:years,datasets:[
+      {type:'bar',label:'Conlog (nosso real · tend.)',data:bars,backgroundColor:'rgba(249,115,22,.20)',borderColor:ORA,
+       borderWidth:1.5,borderDash:[5,4],borderRadius:3,order:2,categoryPercentage:.6,barPercentage:.8,datalabels:dlBar},
+      ...lines
+    ]},
+    options:{responsive:true,maintainAspectRatio:false,layout:{padding:{top:26,right:46}},
+      plugins:{legend:{display:false},
+        tooltip:{backgroundColor:'#141B26',titleColor:'#F97316',bodyColor:'#F1F5F9',borderColor:'#1E2D40',borderWidth:1,
+          titleFont:{family:'Montserrat'},bodyFont:{family:'Montserrat'},
+          callbacks:{label:c=>c.parsed.y==null?null:`${c.dataset.label}: ${nf2(c.parsed.y)}`}}},
+      scales:{x:{grid:{display:false},border:{display:false},ticks:tick(11),stacked:false},
+        y:{display:false,beginAtZero:true,grace:'14%'}}}
+  });
+}
+
+function renderResumo(R){
+  const nm={ambev:'Ambev (1,00%)',meio:'Meio-termo (1,15%)',optas:'Optas (1,33%)'};
+  const line=(q,k)=>`<b>${nm[k]}</b>: <b class="${q[k]>=0?'cg':'cr'}">${q[k]>=0?'SIM':'NÃO'}</b> (${signMoney(q[k])})`;
+  const html=`
+    <p><b>1 · Pós-contrato (2026–2030), com nossas variáveis (km real por carreta e nosso custo por km):</b></p>
+    <div class="r-list">
+      <div class="r-item">${line(R.q1,'ambev')} · ${line(R.q1,'meio')} · ${line(R.q1,'optas')}</div>
+    </div>
+    <p><b>2 · Ciclo completo — finame (2021–2025) + extensão (2026–2030):</b></p>
+    <div class="r-list">
+      <div class="r-item">${line(R.q2,'ambev')} · ${line(R.q2,'meio')} · ${line(R.q2,'optas')}</div>
+    </div>
+    <p class="r-foot">No finame (2021–25) o FINAME fica <b>fora do R$/km</b> (PMT fixo remunerado à parte) — em R$/km a remuneração é a manut 0,11 vs nosso custo real. Na extensão (2026–30) a <b>REM K entra para pagar a conta</b> (% × R$ 221.605 ÷ nossa km). Lifecycle: comprar nova = R$ 5.430,80/carreta·mês; estender = 3.600 (Ambev) a 4.761 (Optas) — estender é melhor para a Ambev que comprar nova.</p>`;
+  document.getElementById('resumo-body').innerHTML=html;
+}
+
+function renderAll(){
+  const R=calc(); window._R=R;
+  renderHero(R); renderChart(R); renderTables(R); renderResumo(R);
+}
+
+async function atualizar(){
+  set('status-badge','Carregando…');
+  try{
+    DATA=await fetchBase(); renderAll();
+    const now=new Date();
+    set('status-badge',`Atualizado ${now.toLocaleDateString('pt-BR')} ${now.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})}`);
+  }catch(e){ console.error(e); set('status-badge','Erro ao carregar dados'); }
+}
+
+// último acesso
+function initAccessLog(){
+  let name=localStorage.getItem('bi_user_name');
+  if(!name){ name=prompt('Qual é o seu nome?')||'Desconhecido'; localStorage.setItem('bi_user_name',name); }
+  const lastRaw=localStorage.getItem('bi_last_access');
+  if(lastRaw){ const d=new Date(lastRaw); const lastUser=localStorage.getItem('bi_last_user')||name;
+    const badge=document.getElementById('access-badge');
+    if(badge){ badge.textContent=`Último acesso: ${d.toLocaleDateString('pt-BR')} ${d.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})} · ${lastUser}`; badge.style.display=''; } }
+  localStorage.setItem('bi_last_access',new Date().toISOString());
+  localStorage.setItem('bi_last_user',name);
+}
+
+// tema
+const _sun=`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>`;
+const _moon=`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>`;
+function applyTheme(t){
+  document.body.classList.toggle('light-mode',t==='light');
+  localStorage.setItem('bi_theme',t);
+  const b=document.getElementById('themeBtn'); if(b)b.innerHTML=t==='light'?_moon:_sun;
+  if(DATA.length) renderAll();
+}
+(function(){
+  const t=localStorage.getItem('bi_theme')||'dark'; applyTheme(t);
+  document.getElementById('themeBtn').addEventListener('click',()=>applyTheme(document.body.classList.contains('light-mode')?'dark':'light'));
+})();
+
+let _rt; window.addEventListener('resize',()=>{clearTimeout(_rt);_rt=setTimeout(()=>{if(DATA.length)renderAll();},400);});
+document.addEventListener('DOMContentLoaded',()=>{
+  initAccessLog(); atualizar();
+  if(window.initPdfExport) initPdfExport({fileBase:'lifecycle-km'});
+});
+</script>
+</body>
+</html>
