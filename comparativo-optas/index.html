@@ -74,7 +74,7 @@ body{
 .leg{display:flex;gap:16px;flex-wrap:wrap;margin:2px 0 12px;font-size:10px;color:var(--text2);font-weight:600;}
 .leg span{display:inline-flex;align-items:center;gap:6px;}
 .leg i{width:18px;height:0;border-top-width:3px;border-top-style:solid;display:inline-block;}
-.leg .l-conlog{border-top-color:var(--orange);}
+.leg .b-conlog{width:12px;height:12px;border:1.5px solid var(--orange);background:rgba(249,115,22,.55);border-radius:2px;}
 .leg .l-meio{border-top-color:#F1F5F9;}
 .leg .l-ambev{border-top-color:#38BDF8;}
 .leg .l-optas{border-top-color:#22C55E;}
@@ -174,7 +174,7 @@ body.light-mode .leg .l-meio{border-top-color:#111;}
       <div class="tbl-title">R$/km</div>
       <div class="tbl-sub">Propostas (base 10.000 km/mês) · Conlog = nosso custo real (tendência a partir de 2026)</div>
       <div class="leg">
-        <span><i class="l-conlog"></i>Conlog (nosso real)</span>
+        <span><i class="b-conlog"></i>Conlog (nosso real)</span>
         <span><i class="l-meio"></i>Meio-termo</span>
         <span><i class="l-ambev"></i>Ambev</span>
         <span><i class="l-optas"></i>Optas</span>
@@ -185,7 +185,7 @@ body.light-mode .leg .l-meio{border-top-color:#111;}
       <div class="tbl-title">R$/Equipamento <span style="font-weight:600;color:var(--text3);font-size:11px">· por carreta/mês</span></div>
       <div class="tbl-sub">Propostas (base 10.000 km/mês) · Conlog = nosso custo real (tendência a partir de 2026)</div>
       <div class="leg">
-        <span><i class="l-conlog"></i>Conlog (nosso real)</span>
+        <span><i class="b-conlog"></i>Conlog (nosso real)</span>
         <span><i class="l-meio"></i>Meio-termo</span>
         <span><i class="l-ambev"></i>Ambev</span>
         <span><i class="l-optas"></i>Optas</span>
@@ -399,32 +399,52 @@ function renderTables(R){
   document.getElementById('tb-imp').innerHTML=hi;
 }
 
-function renderChartMulti(canvasId, prevRef, key, fmt){
+// Conlog (nosso custo real) — ciclo completo 2020–2029 para os gráficos (barras)
+function conlogFullSeries(){
+  const years=[]; for(let y=2020;y<=END_YEAR;y++) years.push(y);
+  const rkm=years.map(y=>{const c=driverVal('custoTot',y),k=driverVal('km',y);return k?c/k:null;});
+  const eq =years.map(y=>{const c=driverVal('custoTot',y),n=driverVal('nEq',y);return n?c/n:null;});
+  return {years,rkm,eq};
+}
+// Gráfico padrão Tendência: Conlog em BARRAS laranja (histórico sólido + tendência tracejada),
+// propostas em linhas só no pós-contrato (2025–2029), colchetes Contrato/Pós, sem eixo Y.
+function renderChart(canvasId, prevRef, key, fmt){
   const R=window._R; if(!R) return prevRef;
   if(prevRef) prevRef.destroy();
-  const labels=R.anos.map(String);
-  const conlogData=R.conlog.map(d=>d[key]);
-  const mk=(data,cor,dash)=>({data,borderColor:cor,backgroundColor:cor,borderWidth:dash?2:3,borderDash:dash||[],
-    tension:.25,pointRadius:4,pointHoverRadius:6,pointBackgroundColor:cor,fill:false});
-  const ds=[ Object.assign(mk(conlogData,CONLOG_COR,[6,3]),{label:'Conlog',_conlog:true}) ];
-  R.cen.forEach(c=>{ const cor=c.tema?meioCor():c.cor;
-    ds.push(Object.assign(mk(R.anos.map(()=>c[key]),cor),{label:c.nome})); });
-  const dl={ color:c=>c.dataset._conlog?CONLOG_COR:(c.dataset.borderColor),
-    font:{family:'Montserrat',size:9,weight:'700'},align:'top',offset:4,
-    display:c=>c.dataset._conlog || c.dataIndex===c.dataset.data.length-1,
-    formatter:v=>fmt(v) };
+  const S=conlogFullSeries(), years=S.years, conlog=(key==='rkm')?S.rkm:S.eq;
+  const isL=isLight(), ORA='#F97316';
+  const realBars=years.map((y,i)=> y<=REAL_TO?conlog[i]:null);
+  const projBars=years.map((y,i)=> y>=PROJ_FROM?conlog[i]:null);
+  const dl={color:isL?'#1a1a1a':'#F1F5F9',font:{family:'Montserrat',size:9,weight:'700'},anchor:'end',align:'end',offset:2,formatter:v=>v==null?'':fmt(v)};
+  // colchetes: média do Conlog (Contrato 2020–2024 / Pós-contrato 2025–2029)
+  const mean=a=>{const v=a.filter(x=>x!=null);return v.length?v.reduce((s,x)=>s+x,0)/v.length:null;};
+  const mCon=mean(conlog.slice(0,5)), mPos=mean(conlog.slice(5,10));
+  const brackets=[{a:0,b:4,txt:`Contrato · ${mCon==null?'—':fmt(mCon)}`},{a:5,b:9,txt:`Pós-contrato · ${mPos==null?'—':fmt(mPos)}`}];
+  const brkCol=isL?'#111':'#E2E8F0';
+  const bracketsPlugin={id:'brk',afterDraw(ch){const x=ch.scales.x,top=ch.chartArea.top,yL=top-22,drop=13,ctx=ch.ctx;
+    ctx.save();ctx.strokeStyle=brkCol;ctx.fillStyle=brkCol;ctx.lineWidth=1.6;ctx.font='700 12px Montserrat, sans-serif';ctx.textAlign='center';ctx.textBaseline='alphabetic';
+    brackets.forEach(bk=>{const x1=x.getPixelForValue(bk.a),x2=x.getPixelForValue(bk.b);
+      ctx.beginPath();ctx.moveTo(x1,yL);ctx.lineTo(x2,yL);ctx.moveTo(x1,yL);ctx.lineTo(x1,yL+drop);ctx.moveTo(x2,yL);ctx.lineTo(x2,yL+drop);ctx.stroke();
+      ctx.fillText(bk.txt,(x1+x2)/2,yL-5);});ctx.restore();}};
+  // linhas das propostas (fixas, só no pós-contrato)
+  const propDs=R.cen.map(c=>{ const cor=c.tema?meioCor():c.cor, val=(key==='rkm')?c.rkm:c.eqMes;
+    return {type:'line',label:c.nome,data:years.map(y=> y>=CMP_DE?val:null),borderColor:cor,backgroundColor:cor,
+      borderWidth:2.5,tension:0,order:1,spanGaps:false,pointRadius:years.map(y=>y>=CMP_DE?3:0),pointBackgroundColor:cor,
+      datalabels:{display:c2=>c2.dataIndex===years.length-1,color:cor,font:{family:'Montserrat',size:9,weight:'800'},align:'right',anchor:'center',offset:6,formatter:v=>v==null?'':fmt(v)}};
+  });
   return new Chart(document.getElementById(canvasId),{
-    type:'line', data:{labels,datasets:ds},
-    plugins:[ChartDataLabels],
-    options:{ responsive:true,maintainAspectRatio:false,
-      layout:{padding:{top:18,right:20,left:4}},
-      plugins:{ legend:{display:false},
-        datalabels:dl,
-        tooltip:{backgroundColor:'#141B26',titleColor:'#F97316',bodyColor:'#F1F5F9',borderColor:'#1E2D40',borderWidth:1,
-          titleFont:{family:'Montserrat'},bodyFont:{family:'Montserrat'},
-          callbacks:{label:c=>`${c.dataset.label}: ${fmt(c.parsed.y)}`}} },
-      scales:{ x:{grid:{display:false},border:{display:false},ticks:tick(11)},
-        y:{grid:grid(),border:{display:false},ticks:{...tick(10),callback:v=>fmt(v)}} } }
+    plugins:[bracketsPlugin],
+    data:{labels:years,datasets:[
+      {type:'bar',label:'Conlog (real)',data:realBars,stack:'r',backgroundColor:'rgba(249,115,22,.55)',borderColor:ORA,borderWidth:1.5,borderRadius:3,order:2,categoryPercentage:.62,barPercentage:.9,datalabels:dl},
+      {type:'bar',label:'Conlog (tend.)',data:projBars,stack:'r',backgroundColor:'rgba(249,115,22,.16)',borderColor:ORA,borderWidth:1.5,borderDash:[5,4],borderRadius:3,order:2,categoryPercentage:.62,barPercentage:.9,datalabels:dl},
+      ...propDs
+    ]},
+    options:{responsive:true,maintainAspectRatio:false,layout:{padding:{top:46,right:34}},
+      plugins:{legend:{display:false},
+        tooltip:{backgroundColor:'#141B26',titleColor:'#F97316',bodyColor:'#F1F5F9',borderColor:'#1E2D40',borderWidth:1,titleFont:{family:'Montserrat'},bodyFont:{family:'Montserrat'},
+          callbacks:{label:c=>c.parsed.y==null?null:`${c.dataset.label}: ${fmt(c.parsed.y)}`}}},
+      scales:{x:{grid:{display:false},border:{display:false},ticks:tick(11),stacked:true},
+        y:{display:false,beginAtZero:true,grace:'16%'}}}
   });
 }
 
@@ -459,8 +479,8 @@ function renderAll(){
   const R=calc(); window._R=R;
   renderHero(R);
   renderTables(R);
-  chRkm=renderChartMulti('ch-rkm',chRkm,'rkm',nf2);
-  chEq =renderChartMulti('ch-eq', chEq,'eqMes',v=>nf0(v));
+  chRkm=renderChart('ch-rkm',chRkm,'rkm',nf2);
+  chEq =renderChart('ch-eq', chEq,'eq', v=>nf0(v));
   renderResumo(R);
   set('mem-kmreal', nf0(R.conlogTot.kmCarMes));
 }
