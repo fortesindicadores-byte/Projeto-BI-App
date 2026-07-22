@@ -83,7 +83,7 @@ async function main(){
 
   // ===== COMPARATIVO OPTAS — novo painel /comparativo-optas/ (NOSSA km por carreta) =====
   // 4 cenários: Atual (nova, contrato) + Ambev/Meio/Optas (vencida, pós). manut × NOSSA km + capital fixo.
-  const VALOR_VENCIDA=170000, FINAME_ATUAL=4330.80, CMP_DE=2025, CMP_ATE=END_YEAR, CONTRATO_ATE=2024;
+  const VALOR_VENCIDA=221605, FINAME_ATUAL=4330.80, CMP_DE=2025, CMP_ATE=END_YEAR, CONTRATO_ATE=2024;  // 221605 = valor médio atual (aba Valor de Compra NF)
   const CEN=[{nome:'Atual',key:'atual',per:'contrato',finame:FINAME_ATUAL,remK:0,manut:0.11},
              {nome:'Ambev',key:'ambev',per:'pos',finame:0,remK:0.0100,manut:0.19},
              {nome:'Meio-termo',key:'meio',per:'pos',finame:0,remK:0.0115,manut:0.22},
@@ -110,6 +110,21 @@ async function main(){
     const be=((cpRkm-c.manut)*cpKm/VALOR_VENCIDA)*100;
     console.log(`  ${c.nome.padEnd(11)} R$/km=${(stn/sk).toFixed(3)} · R$/car·mês=${Math.round(stn/sn).toLocaleString('pt-BR')} · ▲=${((stn/sk-cpRkm)>=0?'+':'')+(stn/sk-cpRkm).toFixed(3)}/km · Impacto acum=${(ac>=0?'+':'')+Math.round(ac).toLocaleString('pt-BR')} · break-even=${be.toFixed(2)}%`);
   });
+
+  // Verifica os valores de carreta (aba 'Valor de Compra NF')
+  try{
+    const nfUrl=`https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:json&sheet=${encodeURIComponent('Valor de Compra NF')}`;
+    const nfJson=JSON.parse((await (await fetch(nfUrl)).text()).replace(/^[\s\S]*?\(/,'').replace(/\);?\s*$/,''));
+    const nfCols=(nfJson.table.cols||[]).map(c=>String((c&&(c.label||c.id))||'').trim().toLowerCase());
+    const iAno=nfCols.findIndex(c=>c==='ano'), iVal=nfCols.findIndex(c=>c.includes('valornfcompra'));
+    const nfRows=nfJson.table.rows.map(r=>(r.c||[]).map(c=>c&&c.v!=null?c.v:null));
+    const all=[],noNew=[]; nfRows.forEach(r=>{const v=num(r[iVal]),a=num(r[iAno]); if(v!=null){all.push(v); if(Math.round(a)!==2025)noNew.push(v);}});
+    const avg=arr=>arr.length?arr.reduce((s,x)=>s+x,0)/arr.length:null;
+    console.log(`\n== VALOR DE COMPRA NF (verificação) == [ano]=col${iAno} [valorNfCompra]=col${iVal}`);
+    console.log(`  Linhas: ${all.length} (sem 2025: ${noNew.length})`);
+    console.log(`  Valor médio ATUAL (média de tudo) = ${avg(all)==null?'—':Math.round(avg(all)).toLocaleString('pt-BR')}  (esperado ~221.605)`);
+    console.log(`  Valor INICIAL (sem 2025)          = ${avg(noNew)==null?'—':Math.round(avg(noNew)).toLocaleString('pt-BR')}  (esperado ~203.086)`);
+  }catch(e){ console.log('NF tab erro:', e.message); }
 
   const r26=D.find(d=>d.ano===2026);
   if(r26) console.log(`\n2026 REALIZADO PARCIAL na planilha: R$/kmReal=${r26.rkmReal}  R$/kmRem=${r26.rkmRem}  EqReal=${r26.eqReal}  EqRem=${r26.eqRem}  (km=${r26.km}, #eq=${r26.eq})`);
