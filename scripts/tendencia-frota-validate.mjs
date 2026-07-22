@@ -81,22 +81,27 @@ async function main(){
   console.log('          Total: Rem=Σrem/ΣnEq=',Math.round(te.totRem),' Real=Σcusto/ΣnEq=',Math.round(te.totReal),' | Total Impacto:',Math.round(te.tImp).toLocaleString('pt-BR'));
   console.log('          Σcusto=',Math.round(te.sCusto).toLocaleString('pt-BR'),' ΣnEq=',Math.round(te.sDenom).toLocaleString('pt-BR'));
 
-  // ===== COMPARATIVO OPTAS (período vencido 2025–2029) =====
-  // Conlog = R$/km Real ponderado do pós-contrato (do painel). Capital convertido por KM_MES (param OPTAS).
-  const VALOR_CAP=170000, KM_MES=10000, CMP_DE=2025, CMP_ATE=END_YEAR;
-  const CENARIOS=[{nome:'Ambev',pct:0.0100,manut:0.19},{nome:'Meio-termo',pct:0.0115,manut:0.22},{nome:'Optas',pct:0.0133,manut:0.25}];
-  let sC=0,sK=0;
-  for(let y=CMP_DE;y<=CMP_ATE;y++){ sC+=driverVal('custoTot',y); sK+=driverVal('km',y); }
-  const cRkm=sK?sC/sK:null, cReq=cRkm==null?null:cRkm*12*KM_MES;
-  console.log(`\n== COMPARATIVO OPTAS — período vencido ${CMP_DE}–${CMP_ATE} (KM_MES=${KM_MES}) ==`);
-  console.log(`Conlog (nosso Real): R$/km=${cRkm?.toFixed(3)}  R$/Equip(ano)=${cReq==null?'—':Math.round(cReq).toLocaleString('pt-BR')}`);
-  console.log('Cenário        Capital/mês   R$/km   ▲R$/km    R$/Equip(ano)   ▲Equip');
-  CENARIOS.forEach(c=>{
-    const capMes=c.pct*VALOR_CAP;
-    const pRkm=c.manut+capMes/KM_MES, pEq=pRkm*12*KM_MES;
-    const dR=pRkm-cRkm, dE=pEq-cReq;
-    console.log(`${c.nome.padEnd(12)} ${('R$ '+Math.round(capMes).toLocaleString('pt-BR')).padStart(11)}  ${pRkm.toFixed(3).padStart(6)}  ${(dR>=0?'+':'')+dR.toFixed(3)}   ${String(Math.round(pEq).toLocaleString('pt-BR')).padStart(11)}   ${(dE>=0?'+':'')+Math.round(dE).toLocaleString('pt-BR')}`);
-  });
+  // ===== COMPARATIVO OPTAS — novo painel /comparativo-optas/ (números deles vs Conlog nosso) =====
+  // Propostas na base 10.000 km/mês (deles). Conlog = nosso real ano a ano (Custo÷Km, Custo÷carretas·mês).
+  const VALOR_CAP=170000, KM_DELES=10000, CMP_DE=2025, CMP_ATE=END_YEAR;
+  const CENARIOS=[{nome:'Ambev',pct:0.0100,manut:0.19},{nome:'Meio-termo',pct:0.0115,manut:0.22},{nome:'Optas',pct:0.0133,manut:0.25}]
+    .map(c=>({...c,capMes:c.pct*VALOR_CAP,rkm:c.manut+c.pct*VALOR_CAP/KM_DELES,eqMes:c.manut*KM_DELES+c.pct*VALOR_CAP}));
+  console.log(`\n== COMPARATIVO OPTAS (novo painel) — ${CMP_DE}–${CMP_ATE} ==`);
+  console.log('Propostas (base 10.000 km/mês):');
+  CENARIOS.forEach(c=>console.log(`  ${c.nome.padEnd(11)} capital R$ ${Math.round(c.capMes).toLocaleString('pt-BR')}/mês · R$/km=${c.rkm.toFixed(3)} · R$/carreta·mês=${Math.round(c.eqMes).toLocaleString('pt-BR')}`));
+  console.log('\nAno   Conlog R$/km  Conlog R$/carreta·mês  km/car·mês  carretas   ImpAmbev   ImpMeio    ImpOptas');
+  let sC=0,sK=0,sN=0, ac=[0,0,0];
+  for(let y=CMP_DE;y<=CMP_ATE;y++){
+    const custo=driverVal('custoTot',y),km=driverVal('km',y),nEq=driverVal('nEq',y);
+    const rkm=km?custo/km:null, eqMes=nEq?custo/nEq:null, kmcar=nEq?km/nEq:null, car=nEq?nEq/12:null;
+    sC+=custo;sK+=km;sN+=nEq;
+    const imps=CENARIOS.map((c,i)=>{const v=(c.eqMes-eqMes)*nEq;ac[i]+=v;return v;});
+    console.log(`${y}  ${rkm.toFixed(3).padStart(9)}  ${String(Math.round(eqMes).toLocaleString('pt-BR')).padStart(18)}  ${String(Math.round(kmcar)).padStart(9)}  ${String(Math.round(car)).padStart(7)}  `+imps.map(v=>(v>=0?'+':'')+Math.round(v/1000)+'k').map(s=>s.padStart(9)).join(' '));
+  }
+  const tRkm=sK?sC/sK:null,tEq=sN?sC/sN:null,tKmCar=sN?sK/sN:null;
+  console.log(`Tot  ${tRkm.toFixed(3).padStart(9)}  ${String(Math.round(tEq).toLocaleString('pt-BR')).padStart(18)}  ${String(Math.round(tKmCar)).padStart(9)}  ${String(Math.round(sN/12/(CMP_ATE-CMP_DE+1))).padStart(7)}  `+ac.map(v=>(v>=0?'+':'')+Math.round(v/1000)+'k').map(s=>s.padStart(9)).join(' '));
+  console.log('Acumulado impacto:', CENARIOS.map((c,i)=>`${c.nome}=${(ac[i]>=0?'+':'')+Math.round(ac[i]).toLocaleString('pt-BR')}`).join('  '));
+  console.log('Break-even capital (rkm==Conlog médio):', CENARIOS.map(c=>`${c.nome}=${(((tRkm-c.manut)*KM_DELES/VALOR_CAP)*100).toFixed(2)}%`).join('  '));
 
   const r26=D.find(d=>d.ano===2026);
   if(r26) console.log(`\n2026 REALIZADO PARCIAL na planilha: R$/kmReal=${r26.rkmReal}  R$/kmRem=${r26.rkmRem}  EqReal=${r26.eqReal}  EqRem=${r26.eqRem}  (km=${r26.km}, #eq=${r26.eq})`);
