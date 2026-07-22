@@ -116,6 +116,28 @@ async function main(){
     console.log(`  ${c.nome.padEnd(11)} R$/km=${(stn/sk).toFixed(3)} · R$/car·mês=${Math.round(stn/sn).toLocaleString('pt-BR')} · ▲=${((stn/sk-cpRkm)>=0?'+':'')+(stn/sk-cpRkm).toFixed(3)}/km · Impacto acum=${(ac>=0?'+':'')+Math.round(ac).toLocaleString('pt-BR')} · break-even=${be.toFixed(2)}%`);
   });
 
+  // ===== CLONES LIFECYCLE (/comparativo-km/ e /comparativo-equipamento/) — Q1 e Q2 =====
+  // Q1: pós 2026–2030 — cenários pagam nossa conta? · Q2: ciclo finame (2021–25) + 5 anos (2026–30)
+  {
+    const FINAME_PMT=4330.80, MANUT_FIN=0.11, FIN_DE=2021, FIN_ATE=2025, EXT_DE=2026, EXT_ATE=2030;
+    const remEq=(c,y)=>{const km=kmCar(y);if(km==null)return null;
+      return (y<=FIN_ATE)? FINAME_PMT+MANUT_FIN*km : c.manut*km+c.remK*VALOR_ATUAL_NF;};
+    console.log(`\n== LIFECYCLE CLONES — Q1 (pós ${EXT_DE}–${EXT_ATE}) e Q2 (ciclo ${FIN_DE}–${EXT_ATE}) ==`);
+    console.log('Ano   km/car  Conlog/car·mês  RemFin/cen(Amb,Meio,Opt)/car·mês');
+    for(let y=FIN_DE;y<=EXT_ATE;y++){
+      const n=driverVal('nEq',y), eq=driverVal('custoTot',y)/n;
+      const rems=CEN.map(c=>remEq(c,y));
+      console.log(`${y}  ${String(Math.round(kmCar(y))).padStart(5)}  ${String(Math.round(eq).toLocaleString('pt-BR')).padStart(12)}   `+rems.map(v=>String(Math.round(v).toLocaleString('pt-BR')).padStart(7)).join(' '));
+    }
+    CEN.forEach(c=>{ let q1=0,q2=0;
+      for(let y=FIN_DE;y<=EXT_ATE;y++){const n=driverVal('nEq',y),eq=driverVal('custoTot',y)/n;
+        const rem=remEq(c,y), conta=eq+((y<=FIN_ATE)?FINAME_PMT:0);
+        if(y>=EXT_DE) q1+=(rem-eq)*n;
+        q2+=(rem-conta)*n; }
+      console.log(`  ${c.nome.padEnd(11)} Q1 pós ${EXT_DE}–${EXT_ATE}: ${(q1>=0?'+':'')+Math.round(q1).toLocaleString('pt-BR')} (${q1>=0?'PAGA':'NÃO PAGA'}) · Q2 ciclo: ${(q2>=0?'+':'')+Math.round(q2).toLocaleString('pt-BR')} (${q2>=0?'PAGA':'NÃO PAGA'})`);
+    });
+  }
+
   // Verifica os valores de carreta (aba 'Valor de Compra NF')
   try{
     const nfUrl=`https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:json&sheet=${encodeURIComponent('Valor de Compra NF')}`;
