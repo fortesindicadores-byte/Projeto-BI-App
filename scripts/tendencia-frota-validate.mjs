@@ -81,27 +81,35 @@ async function main(){
   console.log('          Total: Rem=Σrem/ΣnEq=',Math.round(te.totRem),' Real=Σcusto/ΣnEq=',Math.round(te.totReal),' | Total Impacto:',Math.round(te.tImp).toLocaleString('pt-BR'));
   console.log('          Σcusto=',Math.round(te.sCusto).toLocaleString('pt-BR'),' ΣnEq=',Math.round(te.sDenom).toLocaleString('pt-BR'));
 
-  // ===== COMPARATIVO OPTAS — novo painel /comparativo-optas/ (números deles vs Conlog nosso) =====
-  // Propostas na base 10.000 km/mês (deles). Conlog = nosso real ano a ano (Custo÷Km, Custo÷carretas·mês).
-  const VALOR_CAP=170000, KM_DELES=10000, CMP_DE=2025, CMP_ATE=END_YEAR;
-  const CENARIOS=[{nome:'Ambev',pct:0.0100,manut:0.19},{nome:'Meio-termo',pct:0.0115,manut:0.22},{nome:'Optas',pct:0.0133,manut:0.25}]
-    .map(c=>({...c,capMes:c.pct*VALOR_CAP,rkm:c.manut+c.pct*VALOR_CAP/KM_DELES,eqMes:c.manut*KM_DELES+c.pct*VALOR_CAP}));
-  console.log(`\n== COMPARATIVO OPTAS (novo painel) — ${CMP_DE}–${CMP_ATE} ==`);
-  console.log('Propostas (base 10.000 km/mês):');
-  CENARIOS.forEach(c=>console.log(`  ${c.nome.padEnd(11)} capital R$ ${Math.round(c.capMes).toLocaleString('pt-BR')}/mês · R$/km=${c.rkm.toFixed(3)} · R$/carreta·mês=${Math.round(c.eqMes).toLocaleString('pt-BR')}`));
-  console.log('\nAno   Conlog R$/km  Conlog R$/carreta·mês  km/car·mês  carretas   ImpAmbev   ImpMeio    ImpOptas');
-  let sC=0,sK=0,sN=0, ac=[0,0,0];
-  for(let y=CMP_DE;y<=CMP_ATE;y++){
+  // ===== COMPARATIVO OPTAS — novo painel /comparativo-optas/ (NOSSA km por carreta) =====
+  // 4 cenários: Atual (nova, contrato) + Ambev/Meio/Optas (vencida, pós). manut × NOSSA km + capital fixo.
+  const VALOR_VENCIDA=170000, FINAME_ATUAL=4330.80, CMP_DE=2025, CMP_ATE=END_YEAR, CONTRATO_ATE=2024;
+  const CEN=[{nome:'Atual',key:'atual',per:'contrato',finame:FINAME_ATUAL,remK:0,manut:0.11},
+             {nome:'Ambev',key:'ambev',per:'pos',finame:0,remK:0.0100,manut:0.19},
+             {nome:'Meio-termo',key:'meio',per:'pos',finame:0,remK:0.0115,manut:0.22},
+             {nome:'Optas',key:'optas',per:'pos',finame:0,remK:0.0133,manut:0.25}];
+  const kmCar=y=>{const k=driverVal('km',y),n=driverVal('nEq',y);return n?k/n:null;};
+  const inPer=(c,y)=>c.per==='contrato'?(y<=CONTRATO_ATE):(y>=CMP_DE);
+  const scenTot=(c,y)=>{if(!inPer(c,y))return null;const km=kmCar(y);return km==null?null:c.finame+c.remK*VALOR_VENCIDA+c.manut*km;};
+  console.log(`\n== COMPARATIVO OPTAS (novo painel · NOSSA km) — 2020–${CMP_ATE} ==`);
+  console.log('Ano   km/car·mês  Conlog R$/km  Conlog R$/car·mês   Atual    Ambev    Meio    Optas   (R$/car·mês)');
+  for(let y=2020;y<=END_YEAR;y++){
     const custo=driverVal('custoTot',y),km=driverVal('km',y),nEq=driverVal('nEq',y);
-    const rkm=km?custo/km:null, eqMes=nEq?custo/nEq:null, kmcar=nEq?km/nEq:null, car=nEq?nEq/12:null;
-    sC+=custo;sK+=km;sN+=nEq;
-    const imps=CENARIOS.map((c,i)=>{const v=(c.eqMes-eqMes)*nEq;ac[i]+=v;return v;});
-    console.log(`${y}  ${rkm.toFixed(3).padStart(9)}  ${String(Math.round(eqMes).toLocaleString('pt-BR')).padStart(18)}  ${String(Math.round(kmcar)).padStart(9)}  ${String(Math.round(car)).padStart(7)}  `+imps.map(v=>(v>=0?'+':'')+Math.round(v/1000)+'k').map(s=>s.padStart(9)).join(' '));
+    const rkm=km?custo/km:null, eqMes=nEq?custo/nEq:null, kc=kmCar(y);
+    const tots=CEN.map(c=>scenTot(c,y));
+    console.log(`${y}  ${String(Math.round(kc)).padStart(9)}  ${rkm.toFixed(3).padStart(9)}  ${String(Math.round(eqMes).toLocaleString('pt-BR')).padStart(15)}   `+
+      tots.map(v=>v==null?'—':Math.round(v).toLocaleString('pt-BR')).map(s=>s.padStart(7)).join(' '));
   }
-  const tRkm=sK?sC/sK:null,tEq=sN?sC/sN:null,tKmCar=sN?sK/sN:null;
-  console.log(`Tot  ${tRkm.toFixed(3).padStart(9)}  ${String(Math.round(tEq).toLocaleString('pt-BR')).padStart(18)}  ${String(Math.round(tKmCar)).padStart(9)}  ${String(Math.round(sN/12/(CMP_ATE-CMP_DE+1))).padStart(7)}  `+ac.map(v=>(v>=0?'+':'')+Math.round(v/1000)+'k').map(s=>s.padStart(9)).join(' '));
-  console.log('Acumulado impacto:', CENARIOS.map((c,i)=>`${c.nome}=${(ac[i]>=0?'+':'')+Math.round(ac[i]).toLocaleString('pt-BR')}`).join('  '));
-  console.log('Break-even capital (rkm==Conlog médio):', CENARIOS.map(c=>`${c.nome}=${(((tRkm-c.manut)*KM_DELES/VALOR_CAP)*100).toFixed(2)}%`).join('  '));
+  // pós ponderado + acumulado impacto (propostas)
+  let sC=0,sK=0,sN=0; for(let y=CMP_DE;y<=CMP_ATE;y++){sC+=driverVal('custoTot',y);sK+=driverVal('km',y);sN+=driverVal('nEq',y);}
+  const cpRkm=sC/sK, cpEq=sC/sN, cpKm=sK/sN;
+  console.log(`\nPós-contrato Conlog: R$/km=${cpRkm.toFixed(3)} · R$/car·mês=${Math.round(cpEq).toLocaleString('pt-BR')} · km/car·mês=${Math.round(cpKm)}`);
+  CEN.filter(c=>c.per==='pos').forEach(c=>{
+    let stn=0,sn=0,sk=0,ac=0;
+    for(let y=CMP_DE;y<=CMP_ATE;y++){const n=driverVal('nEq',y),t=scenTot(c,y),e=driverVal('custoTot',y)/n; stn+=t*n;sn+=n;sk+=(kmCar(y))*n;ac+=(t-e)*n;}
+    const be=((cpRkm-c.manut)*cpKm/VALOR_VENCIDA)*100;
+    console.log(`  ${c.nome.padEnd(11)} R$/km=${(stn/sk).toFixed(3)} · R$/car·mês=${Math.round(stn/sn).toLocaleString('pt-BR')} · ▲=${((stn/sk-cpRkm)>=0?'+':'')+(stn/sk-cpRkm).toFixed(3)}/km · Impacto acum=${(ac>=0?'+':'')+Math.round(ac).toLocaleString('pt-BR')} · break-even=${be.toFixed(2)}%`);
+  });
 
   const r26=D.find(d=>d.ano===2026);
   if(r26) console.log(`\n2026 REALIZADO PARCIAL na planilha: R$/kmReal=${r26.rkmReal}  R$/kmRem=${r26.rkmRem}  EqReal=${r26.eqReal}  EqRem=${r26.eqRem}  (km=${r26.km}, #eq=${r26.eq})`);
