@@ -80,6 +80,7 @@ body{
 .leg .l-meio{border-top-color:#F1F5F9;}
 .leg .l-optas{border-top-color:#16A34A;}
 body.light-mode .leg .l-meio{border-top-color:#111;}
+body.light-mode .leg .l-ambev{border-top-color:#1D4ED8;}
 
 /* TABLES */
 table{width:100%;border-collapse:collapse;font-size:12px;}
@@ -177,10 +178,10 @@ body.light-mode .leg .l-meio{border-top-color:#111;}
       <div class="tbl-sub">Conlog (barra) = nosso custo real · linha única no contrato (2020–24) divide-se nos 3 cenários em 2025 · km nosso por carreta</div>
       <div class="leg">
         <span><i class="b-conlog"></i>Conlog (nosso real)</span>
-        <span><i class="l-meio"></i>Contrato · 2020–24</span>
-        <span><i class="l-ambev"></i>Ambev</span>
-        <span><i class="l-meio"></i>Meio-termo</span>
-        <span><i class="l-optas"></i>Optas</span>
+        <span><i class="l-meio"></i>Contrato · 2020–24 · 0,81%</span>
+        <span><i class="l-ambev"></i>Ambev · 1,00%</span>
+        <span><i class="l-meio"></i>Meio-termo · 1,15%</span>
+        <span><i class="l-optas"></i>Optas · 1,33%</span>
       </div>
       <div class="chart-wrap"><canvas id="ch-rkm"></canvas></div>
     </div>
@@ -189,10 +190,10 @@ body.light-mode .leg .l-meio{border-top-color:#111;}
       <div class="tbl-sub">Conlog (barra) = nosso custo real · linha única no contrato (2020–24) divide-se nos 3 cenários em 2025 · km nosso por carreta</div>
       <div class="leg">
         <span><i class="b-conlog"></i>Conlog (nosso real)</span>
-        <span><i class="l-meio"></i>Contrato · 2020–24</span>
-        <span><i class="l-ambev"></i>Ambev</span>
-        <span><i class="l-meio"></i>Meio-termo</span>
-        <span><i class="l-optas"></i>Optas</span>
+        <span><i class="l-meio"></i>Contrato · 2020–24 · 0,81%</span>
+        <span><i class="l-ambev"></i>Ambev · 1,00%</span>
+        <span><i class="l-meio"></i>Meio-termo · 1,15%</span>
+        <span><i class="l-optas"></i>Optas · 1,33%</span>
       </div>
       <div class="chart-wrap"><canvas id="ch-eq"></canvas></div>
     </div>
@@ -263,6 +264,8 @@ body.light-mode .leg .l-meio{border-top-color:#111;}
 </main>
 
 <script>
+Chart.register(ChartDataLabels);
+
 const SHEET_ID='1EFmp2qlevQG5OEgGJePrI_O8wKuQo3IDmbJIReN2Fl0';
 const TAB='Base';
 const REAL_TO=2025, PROJ_FROM=2026, ANO_PARC=2026, MESES_PARC=6, END_YEAR=2029;
@@ -279,7 +282,7 @@ const CONTRATO_ATE=2024;
 const REMK_CONTRATO=0.0081, MANUT_CONTRATO=0.11;
 // PÓS-CONTRATO (2025–2029) — a linha divide-se nos 3 cenários: manut × nossa km + REM K % × VALOR_ATUAL (221.605)
 const CENARIOS=[
-  {nome:'Ambev',      key:'ambev', remK:0.0100, manut:0.19, cor:'#38BDF8', tema:false},
+  {nome:'Ambev',      key:'ambev', remK:0.0100, manut:0.19, cor:'#38BDF8', corL:'#1D4ED8', tema:false},  // azul da Visão Financeira (claro usa #1D4ED8)
   {nome:'Meio-termo', key:'meio',  remK:0.0115, manut:0.22, cor:null,      tema:true},
   {nome:'Optas',      key:'optas', remK:0.0133, manut:0.25, cor:'#16A34A', tema:false},
 ];
@@ -450,7 +453,7 @@ function renderChart(canvasId, prevRef, key, fmt){
   const isL=isLight(), ORA='#F97316';
   const realBars=years.map((y,i)=> y<=REAL_TO?conlog[i]:null);
   const projBars=years.map((y,i)=> y>=PROJ_FROM?conlog[i]:null);
-  const dl={color:isL?'#1a1a1a':'#F1F5F9',font:{family:'Montserrat',size:9,weight:'700'},anchor:'end',align:'end',offset:2,formatter:v=>v==null?'':fmt(v)};
+  const dl={color:isL?'#1a1a1a':'#F1F5F9',font:{family:'Montserrat',size:10,weight:'700'},anchor:'end',align:'end',offset:2,formatter:v=>v==null?'':fmt(v)};
   // colchetes: média do Conlog (Contrato 2020–2024 / Pós-contrato 2025–2029)
   const mean=a=>{const v=a.filter(x=>x!=null);return v.length?v.reduce((s,x)=>s+x,0)/v.length:null;};
   const mCon=mean(conlog.slice(0,5)), mPos=mean(conlog.slice(5,10));
@@ -463,16 +466,21 @@ function renderChart(canvasId, prevRef, key, fmt){
       ctx.fillText(bk.txt,(x1+x2)/2,yL-5);});ctx.restore();}};
   // linha ÚNICA do contrato (preta, 2020–2024) que se DIVIDE nos 3 cenários a partir de 2024
   const val=(k,i)=> (key==='rkm')?R.scen[k][i].rkm:R.scen[k][i].eqMes;
+  // caixinha preta com o valor (padrão Tendência) — extremos das linhas
+  const boxDl=(displayFn,alignFn)=>({display:displayFn,backgroundColor:'#000',color:'#fff',borderRadius:4,
+    padding:{top:3,bottom:3,left:6,right:6},font:{family:'Montserrat',size:11,weight:'800'},
+    anchor:'center',align:alignFn,offset:8,formatter:v=>v==null?'':fmt(v)});
   const contratoDs={type:'line',label:'Contrato (simulação)',
     data:years.map((y,i)=> y<=CONTRATO_ATE? val('ambev',i) : null),   // no contrato os 3 são iguais
     borderColor:meioCor(),backgroundColor:meioCor(),borderWidth:2.5,borderDash:[6,4],tension:.15,order:1,spanGaps:false,
-    pointRadius:3,pointBackgroundColor:meioCor(),
-    datalabels:{display:c2=>c2.dataIndex===0,color:meioCor(),font:{family:'Montserrat',size:9,weight:'800'},align:'left',anchor:'center',offset:6,formatter:v=>v==null?'':fmt(v)}};
-  const propDs=R.cen.map(c=>{ const cor=c.tema?meioCor():c.cor;
+    pointRadius:5,pointBackgroundColor:meioCor(),pointBorderWidth:0,pointHoverRadius:8,
+    datalabels:boxDl(c2=>c2.dataIndex===0,'left')};
+  const propDs=R.cen.map(c=>{ const cor=c.tema?meioCor():(isL&&c.corL?c.corL:c.cor);
     const data=years.map((y,i)=> y>=CONTRATO_ATE? val(c.key,i) : null);   // ancora em 2024 e diverge em 2025+
     return {type:'line',label:c.nome,data,borderColor:cor,backgroundColor:cor,
-      borderWidth:2.5,borderDash:[6,4],tension:.15,order:1,spanGaps:false,pointRadius:data.map(v=>v==null?0:3),pointBackgroundColor:cor,
-      datalabels:{display:c2=>c2.dataIndex===years.length-1,color:cor,font:{family:'Montserrat',size:9,weight:'800'},align:'right',anchor:'center',offset:6,formatter:v=>v==null?'':fmt(v)}};
+      borderWidth:2.5,borderDash:[6,4],tension:.15,order:1,spanGaps:false,
+      pointRadius:data.map(v=>v==null?0:5),pointBackgroundColor:cor,pointBorderWidth:0,pointHoverRadius:8,
+      datalabels:boxDl(c2=>c2.dataIndex===years.length-1,'right')};
   });
   return new Chart(document.getElementById(canvasId),{
     plugins:[bracketsPlugin],
