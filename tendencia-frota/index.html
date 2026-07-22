@@ -252,8 +252,8 @@ body.light-mode .leg .l-rem{border-top-color:#000;}
       <li><b>Total (10 anos):</b> razão ponderada do período — Σ Custo Total ÷ Σ Km (e ÷ Σ nº Equip.), <i>não</i> a soma nem a média das taxas anuais.</li>
       <li><b>Δ</b> = Rem − Real. &nbsp; <b>Impacto</b> = Remunerado − Custo Total (custo acima/abaixo do remunerado). &nbsp; <b>Impacto Acum.</b> = soma corrente.</li>
       <li><b>Colchetes:</b> Contrato = 2020–2024 · Pós-contrato = 2025–2029 — o valor no colchete é a <b>média</b> do R$/km (ou R$/Equip.) Real do período.</li>
-      <li><b>Comparativo OPTAS (período vencido 2025–2029):</b> <b>Conlog</b> = nosso custo Real (Σ Custo ÷ Σ Km e ÷ Σ nº Equip. do pós-contrato, do próprio painel — sem capital). Cada cenário = <b>capital (REM K)</b> = % × R$ 170.000/carreta/mês <b>+ manutenção</b>, convertidos pela quilometragem real por carreta do painel.</li>
-      <li><b>Cenários:</b> capital — Ambev 1,00% · Meio-termo 1,15% · Optas 1,33%; manutenção — Ambev 0,19 · Optas 0,25 · Meio-termo 0,22 (ponto médio). <b>▲</b> = remuneração do cenário − nosso Real (positivo = cobre com folga; negativo = não cobre).</li>
+      <li><b>Comparativo OPTAS (período vencido 2025–2029):</b> <b>Conlog</b> = nosso custo Real de carroceria — R$/km ponderado do pós-contrato (Σ Custo ÷ Σ Km, do painel, sem capital). Cada cenário = <b>capital (REM K)</b> = % × R$ 170.000/carreta/mês <b>+ manutenção</b>, convertidos com <b>10.000 km/mês por carreta</b> (parâmetro referencial OPTAS). O <b>R$/Equipamento por carreta/ano</b> = R$/km × 12 × 10.000.</li>
+      <li><b>Cenários:</b> capital — Ambev 1,00% · Meio-termo 1,15% · Optas 1,33%; manutenção — Ambev 0,19 · Optas 0,25 · Meio-termo 0,22 (ponto médio). <b>▲</b> = remuneração do cenário − nosso Real (positivo = cobre com folga; negativo = não cobre). <i>Obs.: o nº de Equipamentos do painel é de outra unidade, por isso a conversão usa a km referencial, não a km/equip do painel.</i></li>
     </ul>
   </div>
 </main>
@@ -271,7 +271,10 @@ const END_YEAR=2029;    // 10 anos (2020–2029)
 
 // ── Comparativo OPTAS (período vencido / pós-contrato) — CONSTANTES EDITÁVEIS ──
 const VALOR_CAP=170000;            // valor da carreta 2021 (base do capital / REM K)
+const KM_MES=10000;                // km/mês por carreta (parâmetro referencial OPTAS — editável)
 const CMP_DE=2025, CMP_ATE=END_YEAR;   // período vencido (pós-contrato) usado no comparativo
+// OBS: o nº de Equipamentos do painel NÃO é a mesma unidade "carreta" da OPTAS (km/equip do painel ≠ 10.000),
+// então a conversão do capital usa KM_MES (10.000), e do painel usamos só o R$/km Real (Conlog).
 // Cada cenário: pct = REM K (capital) sobre VALOR_CAP · manut = manutenção proposta em R$/km.
 // Meio-termo = ponto médio entre Ambev e Optas (capital 1,15% ~ média; manut 0,22 = média de 0,19 e 0,25).
 const CENARIOS=[
@@ -475,11 +478,14 @@ function renderTables(){
 }
 
 // ── Comparativo OPTAS: Conlog (nosso Real, pós-contrato) vs cenários (capital + manutenção) ──
-// Base Conlog = razão ponderada do pós-contrato (Σ Custo ÷ Σ Km e ÷ Σ nº Equip.), puxada do próprio painel.
+// Conlog = R$/km Real ponderado do pós-contrato (Σ Custo ÷ Σ Km), puxado do painel.
+// A conversão do capital (R$/mês/carreta) usa KM_MES (parâmetro OPTAS), pois o nº de Equip. do painel
+// é de outra unidade. R$/Equipamento por carreta = R$/km × 12 × KM_MES (consistente com a tabela de R$/km).
 function cmpBase(){
-  let sC=0,sK=0,sE=0;
-  for(let y=CMP_DE;y<=CMP_ATE;y++){ sC+=driverVal('custoTot',y); sK+=driverVal('km',y); sE+=driverVal('nEq',y); }
-  return { rkm:sK?sC/sK:null, req:sE?sC/sE:null, kmMes:sE?(sK/sE)/12:null, kmAno:sE?(sK/sE):null };
+  let sC=0,sK=0;
+  for(let y=CMP_DE;y<=CMP_ATE;y++){ sC+=driverVal('custoTot',y); sK+=driverVal('km',y); }
+  const rkm=sK?sC/sK:null;
+  return { rkm, req:rkm==null?null:rkm*12*KM_MES };   // Conlog: R$/km real + R$/Equip por carreta/ano
 }
 function renderComparativo(){
   const B=cmpBase();
@@ -494,17 +500,16 @@ function renderComparativo(){
   let he=`<tr class="cmp-base"><td class="ano">Conlog · nosso Real</td><td class="num">—</td><td class="num">${nf0(B.req)}</td><td class="num">—</td></tr>`;
   CENARIOS.forEach(c=>{
     const capMes=c.pct*VALOR_CAP;
-    const propRkm=B.kmMes? c.manut + capMes/B.kmMes : null;   // manutenção (R$/km) + capital convertido pela km real/carreta
-    const propEq =B.kmAno!=null? c.manut*B.kmAno + capMes*12 : null;
-    const dRkm=propRkm!=null? propRkm-B.rkm : null;
-    const dEq =propEq !=null? propEq -B.req : null;
+    const propRkm=c.manut + capMes/KM_MES;      // manutenção (R$/km) + capital convertido por KM_MES
+    const propEq =propRkm*12*KM_MES;            // por carreta/ano (consistente com R$/km)
+    const dRkm=propRkm-B.rkm, dEq=propEq-B.req;
     const pctTxt=(c.pct*100).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2})+'%';
-    const ck=dRkm==null?'':(dRkm>=0?'cg':'cr'), ce=dEq==null?'':(dEq>=0?'cg':'cr');
+    const ck=dRkm>=0?'cg':'cr', ce=dEq>=0?'cg':'cr';
     hk+=`<tr><td class="ano">${c.nome} · ${pctTxt}</td><td class="num">${money0(capMes)}</td><td class="num">${nf2(propRkm)}</td><td class="num ${ck}">${p2(dRkm)}</td></tr>`;
     he+=`<tr><td class="ano">${c.nome} · ${pctTxt}</td><td class="num">${money0(capMes)}</td><td class="num">${nf0(propEq)}</td><td class="num ${ce}">${p0(dEq)}</td></tr>`;
   });
   tbK.innerHTML=hk; tbE.innerHTML=he;
-  set('cmp-km-note', B.kmMes? `km/carreta ≈ ${Math.round(B.kmMes).toLocaleString('pt-BR')}/mês (real do painel · pós-contrato ${CMP_DE}–${CMP_ATE}).` : '');
+  set('cmp-km-note', `Parâmetro: ${KM_MES.toLocaleString('pt-BR')} km/mês por carreta (referencial OPTAS). Conlog R$/km = real ponderado do pós-contrato ${CMP_DE}–${CMP_ATE} (do painel).`);
 }
 
 // Card grande: GERAL do período 2020–2029 (real + projetado) — igual ao Total da tabela.
