@@ -81,6 +81,23 @@ async function main(){
   console.log('          Total: Rem=Σrem/ΣnEq=',Math.round(te.totRem),' Real=Σcusto/ΣnEq=',Math.round(te.totReal),' | Total Impacto:',Math.round(te.tImp).toLocaleString('pt-BR'));
   console.log('          Σcusto=',Math.round(te.sCusto).toLocaleString('pt-BR'),' ΣnEq=',Math.round(te.sDenom).toLocaleString('pt-BR'));
 
+  // ===== COMPARATIVO OPTAS (período vencido 2025–2029) =====
+  // Conlog = R$/km Real ponderado do pós-contrato (do painel). Capital convertido por KM_MES (param OPTAS).
+  const VALOR_CAP=170000, KM_MES=10000, CMP_DE=2025, CMP_ATE=END_YEAR;
+  const CENARIOS=[{nome:'Ambev',pct:0.0100,manut:0.19},{nome:'Meio-termo',pct:0.0115,manut:0.22},{nome:'Optas',pct:0.0133,manut:0.25}];
+  let sC=0,sK=0;
+  for(let y=CMP_DE;y<=CMP_ATE;y++){ sC+=driverVal('custoTot',y); sK+=driverVal('km',y); }
+  const cRkm=sK?sC/sK:null, cReq=cRkm==null?null:cRkm*12*KM_MES;
+  console.log(`\n== COMPARATIVO OPTAS — período vencido ${CMP_DE}–${CMP_ATE} (KM_MES=${KM_MES}) ==`);
+  console.log(`Conlog (nosso Real): R$/km=${cRkm?.toFixed(3)}  R$/Equip(ano)=${cReq==null?'—':Math.round(cReq).toLocaleString('pt-BR')}`);
+  console.log('Cenário        Capital/mês   R$/km   ▲R$/km    R$/Equip(ano)   ▲Equip');
+  CENARIOS.forEach(c=>{
+    const capMes=c.pct*VALOR_CAP;
+    const pRkm=c.manut+capMes/KM_MES, pEq=pRkm*12*KM_MES;
+    const dR=pRkm-cRkm, dE=pEq-cReq;
+    console.log(`${c.nome.padEnd(12)} ${('R$ '+Math.round(capMes).toLocaleString('pt-BR')).padStart(11)}  ${pRkm.toFixed(3).padStart(6)}  ${(dR>=0?'+':'')+dR.toFixed(3)}   ${String(Math.round(pEq).toLocaleString('pt-BR')).padStart(11)}   ${(dE>=0?'+':'')+Math.round(dE).toLocaleString('pt-BR')}`);
+  });
+
   const r26=D.find(d=>d.ano===2026);
   if(r26) console.log(`\n2026 REALIZADO PARCIAL na planilha: R$/kmReal=${r26.rkmReal}  R$/kmRem=${r26.rkmRem}  EqReal=${r26.eqReal}  EqRem=${r26.eqRem}  (km=${r26.km}, #eq=${r26.eq})`);
   console.log('\nOBS: no painel 2026 é exibido como TENDÊNCIA (tracejado); acima o comparativo com o parcial real.');
