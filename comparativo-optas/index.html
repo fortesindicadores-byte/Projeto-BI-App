@@ -253,7 +253,8 @@ body.light-mode .leg .l-meio{border-top-color:#111;}
     <ul>
       <li><b>km por carreta (nossa realidade):</b> todos os cenários usam a <b>nossa km média por carreta·mês</b> — <b>real 2020–2024</b> e <b>estimada 2025–2029</b> (Km ÷ carretas·mês, do painel). Assim o R$/km e o R$/carreta·mês ficam consistentes (R$/carreta·mês = R$/km × km).</li>
       <li><b>Atual</b> (carreta nova · contrato 2020–2024): FINAME R$ 4.330,80/mês + manutenção 0,11 R$/km × nossa km. REM K entra via FINAME (não soma de novo). É o custo de <i>comprar uma nova</i> — referência, não remuneração.</li>
-      <li><b>Ambev · Meio-termo · Optas</b> (carreta vencida · pós-contrato 2025–2029): capital (REM K) = % × R$ 170.000/carreta/mês + manutenção × nossa km. Ambev 1,00% + 0,19 · Meio-termo 1,15% + 0,22 · Optas 1,33% + 0,25.</li>
+      <li><b>Ambev · Meio-termo · Optas</b> (carreta vencida · pós-contrato 2025–2029): capital (REM K) = % × <b>R$ 221.605</b>/carreta/mês + manutenção × nossa km. Ambev 1,00% + 0,19 · Meio-termo 1,15% + 0,22 · Optas 1,33% + 0,25.</li>
+      <li><b>Valor da carreta (base do REM K):</b> vem da aba <b>'Valor de Compra NF'</b> (planilha de remuneração, coluna <i>valorNfCompra</i>). <b>Valor médio atual = R$ 221.605</b> (média de <b>todos</b> os anos) — é o usado no REM K. <b>Valor inicial = R$ 203.086</b> (média <b>excluindo 2025</b>). Antes usávamos os R$ 170.000 do exemplo da OPTAS; agora é o valor real da nossa frota.</li>
       <li><b>Conlog (nosso real):</b> do painel — R$/km = Custo Total ÷ Km; R$/carreta·mês = Custo Total ÷ carretas·mês. 2020–2025 realizado; 2026–2029 tendência (regressão linear dos drivers).</li>
       <li><b>▲</b> = proposta − Conlog (positivo = remunera acima do nosso custo real; negativo = não cobre). <b>Impacto</b> = ▲/carreta·mês × carretas·mês do ano (frota real); acumulado 2025–2029.</li>
       <li><b>Break-even de capital:</b> % de capital que cada cenário precisaria (mantida a manutenção) para o R$/km igualar o nosso custo real médio do pós-contrato.</li>
@@ -269,7 +270,10 @@ const CMP_DE=2025, CMP_ATE=2029;
 
 // ── Cenários — CONSTANTES EDITÁVEIS ──
 // km = NOSSA km por carreta·mês (real 2020–2024, estimada 2025–2029). manut em R$/km.
-const VALOR_VENCIDA=170000;   // valor carreta 2021 (base do REM K/capital no pós-contrato)
+// Valor das carretas na Conlog (aba 'Valor de Compra NF' · coluna valorNfCompra):
+const VALOR_ATUAL=221605;     // média de TUDO (valor médio atual)
+const VALOR_INICIO=203086;    // média EXCLUINDO 2025 (valor inicial)
+const VALOR_CAP=VALOR_ATUAL;  // base do REM K (capital) no pós-contrato
 const FINAME_ATUAL=4330.80;   // PMT FINAME da carreta NOVA (cenário Atual)
 const CONTRATO_ATE=2024;      // Atual (carreta nova) vale no contrato 2020–2024
 const CENARIOS=[
@@ -343,7 +347,7 @@ function conlogAt(y){ const custo=driverVal('custoTot',y),km=driverVal('km',y),n
 // cenário no ano y (usa NOSSA km): total/carreta·mês = FINAME + REM K·valor + manut·km ; R$/km = total÷km
 function scenAt(c,y){ if(!inPeriodo(c,y)) return {rkm:null,eqMes:null,total:null};
   const km=kmCarOf(y); if(km==null) return {rkm:null,eqMes:null,total:null};
-  const tot=c.finame + c.remK*VALOR_VENCIDA + c.manut*km; return {rkm:tot/km, eqMes:tot, total:tot}; }
+  const tot=c.finame + c.remK*VALOR_CAP + c.manut*km; return {rkm:tot/km, eqMes:tot, total:tot}; }
 
 // ── núcleo do comparativo ──
 function calc(){
@@ -361,7 +365,7 @@ function calc(){
     pos.forEach(d=>{ const s=scenAt(c,d.y); if(s.total!=null){ stn+=s.total*d.nEq; sn+=d.nEq; sk+=(kmCarOf(d.y)||0)*d.nEq; ac+=(s.eqMes-(d.eqMes||0))*d.nEq; } });
     posW[c.key]={ eqMes: sn?stn/sn:null, rkm: sk?stn/sk:null }; acum[c.key]=ac; });
   // break-even de capital: % p/ R$/km da proposta == Conlog médio (na nossa km média)
-  const be=props.map(c=>({nome:c.nome, key:c.key, pct:((conlogPos.rkm - c.manut)*conlogPos.kmCar)/VALOR_VENCIDA }));
+  const be=props.map(c=>({nome:c.nome, key:c.key, pct:((conlogPos.rkm - c.manut)*conlogPos.kmCar)/VALOR_CAP }));
   return {conlog, cen, scen, conlogPos, posW, acum, be};
 }
 
@@ -481,7 +485,7 @@ function renderResumo(R){
       <div class="r-item"><b>Optas (1,33%)</b>: <b>${nf2(w.optas.rkm)} R$/km</b> (${brl0(w.optas.eqMes)}/carreta·mês) → ${gk('optas')>=0?'cobre com folga':'<b>não cobre</b>'} (${p2(gk('optas'))} R$/km). Impacto: <b class="${ac.optas>=0?'cg':'cr'}">${signMoney(ac.optas)}</b>.</div>
     </div>
     <p><b>Optas × Ambev:</b> pedir como Optas em vez da Ambev vale <b class="cg">${signMoney(ac.optas-ac.ambev)}</b> a mais na frota ao longo dos 5 anos.</p>
-    <p class="r-foot"><b>Atual</b> (comprar nova · contrato): FINAME R$ 4.331/mês + manutenção 0,11 R$/km — é <b>custo de referência</b>, não remuneração. &nbsp; <b>Break-even de capital</b> (empatar o R$/km com nosso custo real, mantida a manutenção): Ambev ${pctFmt(beOf('ambev'))} · Meio-termo ${pctFmt(beOf('meio'))} · Optas ${pctFmt(beOf('optas'))}.</p>`;
+    <p class="r-foot"><b>REM K</b> (capital) = % × <b>R$ 221.605</b> (valor médio atual das carretas · aba 'Valor de Compra NF' · média de tudo; inicial sem 2025 = R$ 203.086). &nbsp; <b>Atual</b> (comprar nova · contrato): FINAME R$ 4.331/mês + manut 0,11 R$/km — custo de referência, não remuneração. &nbsp; <b>Break-even de capital</b>: Ambev ${pctFmt(beOf('ambev'))} · Meio-termo ${pctFmt(beOf('meio'))} · Optas ${pctFmt(beOf('optas'))}.</p>`;
   document.getElementById('resumo-body').innerHTML=html;
 }
 
