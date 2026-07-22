@@ -99,6 +99,9 @@ tr.est td.ano::after{content:' · est.';font-size:9px;color:var(--text3);font-st
 tr.total td{color:var(--text);font-weight:700;font-size:12px;border-top:2px solid rgba(255,255,255,.12);padding-top:12px;background:var(--card);}
 .cr{color:var(--red)!important;font-weight:700;}
 .cg{color:var(--green)!important;font-weight:700;}
+tr.cmp-base td{font-weight:700;border-bottom:1px solid rgba(255,255,255,.14);}
+tr.cmp-base td.ano{color:var(--orange);}
+.cmp-head{margin:26px 0 12px;}
 
 /* LIGHT MODE — espelha a Visão Financeira (cards translúcidos, sem borda/sombra) */
 body.light-mode .main{background:#F0F0F0;--text:#1a1a1a;--text2:#444444;--text3:#666666;color:var(--text);--red:#ff0000;--green:#0E8C0E;}
@@ -108,6 +111,7 @@ body.light-mode .hero-card{--text:#1a1a1a;--text2:#444444;--text3:#555555;}
 body.light-mode td{color:var(--text);}
 body.light-mode thead th{border-bottom-color:rgba(0,0,0,.12);background:#F0F0F0;}
 body.light-mode tr.total td{border-top-color:rgba(0,0,0,.20);background:#F0F0F0;}
+body.light-mode tr.cmp-base td{border-bottom-color:rgba(0,0,0,.20);}
 body.light-mode .leg .l-rem{border-top-color:#000;}
 
 @media(max-width:900px){
@@ -207,6 +211,37 @@ body.light-mode .leg .l-rem{border-top-color:#000;}
     </div>
   </div>
 
+  <!-- COMPARATIVO OPTAS — remuneração vs nosso custo real (período vencido) -->
+  <div class="cmp-head">
+    <div class="tbl-title">OPTAS · Remuneração vs nosso custo real — período vencido (2025–2029)</div>
+    <div class="tbl-sub"><b>Conlog = nosso custo Real</b> (do painel). Cada cenário = capital (REM K) = % × R$ 170.000/carreta/mês + manutenção, convertido em R$/km e R$/Equipamento. <span id="cmp-km-note"></span></div>
+  </div>
+  <div class="charts-grid">
+    <!-- CMP 1: R$/km -->
+    <div class="tbl-section">
+      <div class="tbl-title">R$/km</div>
+      <div class="tbl-sub">▲ = remuneração do cenário − nosso Real (verde cobre com folga · vermelho não cobre)</div>
+      <table>
+        <thead><tr>
+          <th>Cenário</th><th class="num">Custo Fixo/mês</th><th class="num">R$/km</th><th class="num">▲ vs Conlog</th>
+        </tr></thead>
+        <tbody id="tb-cmp-rkm"></tbody>
+      </table>
+    </div>
+
+    <!-- CMP 2: R$/Equipamento -->
+    <div class="tbl-section">
+      <div class="tbl-title">R$/Equipamento <span style="font-weight:600;color:var(--text3);font-size:11px">· por ano</span></div>
+      <div class="tbl-sub">▲ = remuneração do cenário − nosso Real (verde cobre com folga · vermelho não cobre)</div>
+      <table>
+        <thead><tr>
+          <th>Cenário</th><th class="num">Custo Fixo/mês</th><th class="num">R$/Equip (ano)</th><th class="num">▲ vs Conlog</th>
+        </tr></thead>
+        <tbody id="tb-cmp-eq"></tbody>
+      </table>
+    </div>
+  </div>
+
   <!-- MEMÓRIA DE CÁLCULO — fora dos cards, ao final -->
   <div class="memoria">
     <div class="memoria-title">Memória de cálculo</div>
@@ -217,6 +252,8 @@ body.light-mode .leg .l-rem{border-top-color:#000;}
       <li><b>Total (10 anos):</b> razão ponderada do período — Σ Custo Total ÷ Σ Km (e ÷ Σ nº Equip.), <i>não</i> a soma nem a média das taxas anuais.</li>
       <li><b>Δ</b> = Rem − Real. &nbsp; <b>Impacto</b> = Remunerado − Custo Total (custo acima/abaixo do remunerado). &nbsp; <b>Impacto Acum.</b> = soma corrente.</li>
       <li><b>Colchetes:</b> Contrato = 2020–2024 · Pós-contrato = 2025–2029 — o valor no colchete é a <b>média</b> do R$/km (ou R$/Equip.) Real do período.</li>
+      <li><b>Comparativo OPTAS (período vencido 2025–2029):</b> <b>Conlog</b> = nosso custo Real (Σ Custo ÷ Σ Km e ÷ Σ nº Equip. do pós-contrato, do próprio painel — sem capital). Cada cenário = <b>capital (REM K)</b> = % × R$ 170.000/carreta/mês <b>+ manutenção</b>, convertidos pela quilometragem real por carreta do painel.</li>
+      <li><b>Cenários:</b> capital — Ambev 1,00% · Meio-termo 1,15% · Optas 1,33%; manutenção — Ambev 0,19 · Optas 0,25 · Meio-termo 0,22 (ponto médio). <b>▲</b> = remuneração do cenário − nosso Real (positivo = cobre com folga; negativo = não cobre).</li>
     </ul>
   </div>
 </main>
@@ -231,6 +268,17 @@ const PROJ_FROM=2026;   // a partir de 2026 é TENDÊNCIA (tracejado) — 2026 s
 const BASE_TO=2026;     // base da regressão: 2020–2026 (usa o YTD de 2026 como piso)
 const ANO_PARC=2026, MESES_PARC=6;   // 2026 anualizado (jan–jun ×12/6) nos totais; a TAXA (YTD) é o piso da tendência
 const END_YEAR=2029;    // 10 anos (2020–2029)
+
+// ── Comparativo OPTAS (período vencido / pós-contrato) — CONSTANTES EDITÁVEIS ──
+const VALOR_CAP=170000;            // valor da carreta 2021 (base do capital / REM K)
+const CMP_DE=2025, CMP_ATE=END_YEAR;   // período vencido (pós-contrato) usado no comparativo
+// Cada cenário: pct = REM K (capital) sobre VALOR_CAP · manut = manutenção proposta em R$/km.
+// Meio-termo = ponto médio entre Ambev e Optas (capital 1,15% ~ média; manut 0,22 = média de 0,19 e 0,25).
+const CENARIOS=[
+  {nome:'Ambev',      pct:0.0100, manut:0.19},
+  {nome:'Meio-termo', pct:0.0115, manut:0.22},
+  {nome:'Optas',      pct:0.0133, manut:0.25},
+];
 
 // ── helpers ──────────────────────────────────────────────
 const set=(id,t)=>{const e=document.getElementById(id);if(e)e.textContent=t;};
@@ -426,6 +474,39 @@ function renderTables(){
   renderTable('tb-eq' ,'eqReal' ,'eqRem' ,'dEq' ,'impEq' ,nf0,'nEq');
 }
 
+// ── Comparativo OPTAS: Conlog (nosso Real, pós-contrato) vs cenários (capital + manutenção) ──
+// Base Conlog = razão ponderada do pós-contrato (Σ Custo ÷ Σ Km e ÷ Σ nº Equip.), puxada do próprio painel.
+function cmpBase(){
+  let sC=0,sK=0,sE=0;
+  for(let y=CMP_DE;y<=CMP_ATE;y++){ sC+=driverVal('custoTot',y); sK+=driverVal('km',y); sE+=driverVal('nEq',y); }
+  return { rkm:sK?sC/sK:null, req:sE?sC/sE:null, kmMes:sE?(sK/sE)/12:null, kmAno:sE?(sK/sE):null };
+}
+function renderComparativo(){
+  const B=cmpBase();
+  const tbK=document.getElementById('tb-cmp-rkm'), tbE=document.getElementById('tb-cmp-eq');
+  if(!tbK||!tbE) return;
+  if(B.rkm==null){ tbK.innerHTML=tbE.innerHTML=`<tr><td class="ano">—</td><td class="num">—</td><td class="num">—</td><td class="num">—</td></tr>`; return; }
+  const money0=v=>v==null?'—':'R$ '+Math.round(v).toLocaleString('pt-BR');
+  const p2=v=>v==null?'—':(v>=0?'+':'')+nf2(v);
+  const p0=v=>v==null?'—':(v>=0?'+':'')+Math.round(v).toLocaleString('pt-BR');
+  // linha base Conlog (nosso Real)
+  let hk=`<tr class="cmp-base"><td class="ano">Conlog · nosso Real</td><td class="num">—</td><td class="num">${nf2(B.rkm)}</td><td class="num">—</td></tr>`;
+  let he=`<tr class="cmp-base"><td class="ano">Conlog · nosso Real</td><td class="num">—</td><td class="num">${nf0(B.req)}</td><td class="num">—</td></tr>`;
+  CENARIOS.forEach(c=>{
+    const capMes=c.pct*VALOR_CAP;
+    const propRkm=B.kmMes? c.manut + capMes/B.kmMes : null;   // manutenção (R$/km) + capital convertido pela km real/carreta
+    const propEq =B.kmAno!=null? c.manut*B.kmAno + capMes*12 : null;
+    const dRkm=propRkm!=null? propRkm-B.rkm : null;
+    const dEq =propEq !=null? propEq -B.req : null;
+    const pctTxt=(c.pct*100).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2})+'%';
+    const ck=dRkm==null?'':(dRkm>=0?'cg':'cr'), ce=dEq==null?'':(dEq>=0?'cg':'cr');
+    hk+=`<tr><td class="ano">${c.nome} · ${pctTxt}</td><td class="num">${money0(capMes)}</td><td class="num">${nf2(propRkm)}</td><td class="num ${ck}">${p2(dRkm)}</td></tr>`;
+    he+=`<tr><td class="ano">${c.nome} · ${pctTxt}</td><td class="num">${money0(capMes)}</td><td class="num">${nf0(propEq)}</td><td class="num ${ce}">${p0(dEq)}</td></tr>`;
+  });
+  tbK.innerHTML=hk; tbE.innerHTML=he;
+  set('cmp-km-note', B.kmMes? `km/carreta ≈ ${Math.round(B.kmMes).toLocaleString('pt-BR')}/mês (real do painel · pós-contrato ${CMP_DE}–${CMP_ATE}).` : '');
+}
+
 // Card grande: GERAL do período 2020–2029 (real + projetado) — igual ao Total da tabela.
 function renderHero(){
   let sC=0,sR=0,sK=0,sE=0;
@@ -444,6 +525,7 @@ function renderAll(){
   chRkm=renderChart('ch-rkm','rkmReal','rkmRem',nf2,chRkm,'km');
   chEq =renderChart('ch-eq','eqReal','eqRem',nf0,chEq,'nEq');
   renderTables();
+  renderComparativo();
 }
 
 async function atualizar(){
