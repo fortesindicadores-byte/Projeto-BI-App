@@ -84,7 +84,7 @@ async function main(){
   // ===== COMPARATIVO OPTAS — novo painel /comparativo-optas/ (NOSSA km por carreta) =====
   // 4 cenários: Atual (nova, contrato) + Ambev/Meio/Optas (vencida, pós). manut × NOSSA km + capital fixo.
   const VALOR_VENCIDA=221605, FINAME_ATUAL=4330.80, CMP_DE=2025, CMP_ATE=END_YEAR, CONTRATO_ATE=2024;  // 221605 = valor médio atual (aba Valor de Compra NF)
-  const CEN=[{nome:'Atual',key:'atual',per:'contrato',finame:FINAME_ATUAL,remK:0,manut:0.11},
+  const CEN=[{nome:'Atual',key:'atual',per:'pos',finame:0,remK:0.0081,manut:0.11},   // hoje: REM K 0,81% + manut, sem FINAME
              {nome:'Ambev',key:'ambev',per:'pos',finame:0,remK:0.0100,manut:0.19},
              {nome:'Meio-termo',key:'meio',per:'pos',finame:0,remK:0.0115,manut:0.22},
              {nome:'Optas',key:'optas',per:'pos',finame:0,remK:0.0133,manut:0.25}];
