@@ -121,7 +121,7 @@ async function main(){
   {
     const FINAME_PMT=4330.80, MANUT_FIN=0.11, FIN_DE=2021, FIN_ATE=2025, EXT_DE=2026, EXT_ATE=2030;
     const remEq=(c,y)=>{const km=kmCar(y);if(km==null)return null;
-      return (y<=FIN_ATE)? FINAME_PMT+MANUT_FIN*km : c.manut*km+c.remK*VALOR_ATUAL_NF;};
+      return (y<=FIN_ATE)? MANUT_FIN*km : c.manut*km+c.remK*VALOR_ATUAL_NF;};   // FINAME fora do contrato
     console.log(`\n== LIFECYCLE CLONES — Q1 (pós ${EXT_DE}–${EXT_ATE}) e Q2 (ciclo ${FIN_DE}–${EXT_ATE}) ==`);
     console.log('Ano   km/car  Conlog/car·mês  RemFin/cen(Amb,Meio,Opt)/car·mês');
     for(let y=FIN_DE;y<=EXT_ATE;y++){
@@ -131,7 +131,7 @@ async function main(){
     }
     CEN.forEach(c=>{ let q1=0,q2=0;
       for(let y=FIN_DE;y<=EXT_ATE;y++){const n=driverVal('nEq',y),eq=driverVal('custoTot',y)/n;
-        const rem=remEq(c,y), conta=eq+((y<=FIN_ATE)?FINAME_PMT:0);
+        const rem=remEq(c,y), conta=eq;   // FINAME fora dos dois lados
         if(y>=EXT_DE) q1+=(rem-eq)*n;
         q2+=(rem-conta)*n; }
       console.log(`  ${c.nome.padEnd(11)} Q1 pós ${EXT_DE}–${EXT_ATE}: ${(q1>=0?'+':'')+Math.round(q1).toLocaleString('pt-BR')} (${q1>=0?'PAGA':'NÃO PAGA'}) · Q2 ciclo: ${(q2>=0?'+':'')+Math.round(q2).toLocaleString('pt-BR')} (${q2>=0?'PAGA':'NÃO PAGA'})`);
