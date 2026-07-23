@@ -106,6 +106,16 @@ tr.total td{color:var(--text);font-weight:700;font-size:12px;border-top:2px soli
 .resumo .r-item{font-size:12.5px;line-height:1.5;color:var(--text);padding-left:16px;position:relative;}
 .resumo .r-item::before{content:'▸';position:absolute;left:0;color:var(--orange);font-weight:800;}
 .resumo .r-foot{font-size:10.5px;color:var(--text2);line-height:1.5;margin-top:8px;border-top:1px solid rgba(255,255,255,.08);padding-top:9px;}
+.dg-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;}
+@media(max-width:768px){.dg-grid{grid-template-columns:1fr;}}
+.dg-card{border:1px solid rgba(255,255,255,.10);border-radius:8px;padding:12px 14px;}
+body.light-mode .dg-card{border-color:rgba(0,0,0,.10);}
+.dg-h{font-size:12px;font-weight:800;color:var(--orange);margin-bottom:8px;}
+.dg-cell{display:flex;justify-content:space-between;align-items:baseline;gap:10px;padding:5px 0;border-bottom:1px solid rgba(255,255,255,.06);}
+body.light-mode .dg-cell{border-bottom-color:rgba(0,0,0,.06);}
+.dg-cell span{font-size:11px;color:var(--text2);font-weight:600;}
+.dg-cell b{font-size:14px;font-weight:800;white-space:nowrap;}
+.dg-foot{font-size:10px;color:var(--text2);margin-top:8px;line-height:1.4;}
 
 /* MEMÓRIA */
 .memoria{margin:4px 2px 0;padding:0;}
@@ -159,89 +169,55 @@ body.light-mode th.sep-l,body.light-mode td.sep-l{border-left-color:rgba(0,0,0,.
 </header>
 
 <main class="main">
-  <!-- HERO: as 2 respostas -->
-  <div class="hero-card">
-    <div class="hero-q">
-      <div class="q-title">1 · Pós-contrato (2026–2030) — os cenários pagam a conta da Conlog, com as nossas variáveis?</div>
-      <div class="hero-metrics">
-        <div class="m-ambev"><span>Ambev · 1,00%</span><b id="q1-ambev">—</b><em id="q1v-ambev">—</em></div>
-        <div class="m-meio"><span>Meio-termo · 1,15%</span><b id="q1-meio">—</b><em id="q1v-meio">—</em></div>
-        <div class="m-optas"><span>Optas · 1,33%</span><b id="q1-optas">—</b><em id="q1v-optas">—</em></div>
-      </div>
-    </div>
-    <div class="hero-q">
-      <div class="q-title">2 · Ciclo completo — finame (2021–2025) + 5 anos (2026–2030) — pagam a conta do ciclo?</div>
-      <div class="hero-metrics">
-        <div class="m-ambev"><span>Ambev · 1,00%</span><b id="q2-ambev">—</b><em id="q2v-ambev">—</em></div>
-        <div class="m-meio"><span>Meio-termo · 1,15%</span><b id="q2-meio">—</b><em id="q2v-meio">—</em></div>
-        <div class="m-optas"><span>Optas · 1,33%</span><b id="q2-optas">—</b><em id="q2v-optas">—</em></div>
-      </div>
-    </div>
-  </div>
-
-  <!-- GRÁFICOS: 1) daqui pra frente · 2) ciclo da carreta Ano 1–10 -->
+  <!-- GRÁFICOS: 1) ciclo COM a taxa fixa · 2) só a linha de manutenção (SEM a taxa fixa) -->
   <div class="charts-grid">
     <div class="chart-card">
-      <div class="tbl-title">Daqui pra frente <span style="font-weight:600;color:var(--text3);font-size:11px">· período faltante 2026–2030</span></div>
-      <div class="tbl-sub">Barras = Conlog (R$/km) · verde = a menor proposta (Ambev) já cobre · linhas = remuneração dos cenários</div>
+      <div class="tbl-title">Ciclo · com a taxa fixa <span style="font-weight:600;color:var(--text3);font-size:11px">· Ano 1–10 · manut + Rem. sobre Capital</span></div>
+      <div class="tbl-sub">Barras = Conlog (nosso custo real R$/km) · linhas = remuneração total = manutenção + Rem. sobre Capital ÷ nossa km</div>
       <div class="leg">
-        <span><i class="b-real"></i>Conlog</span>
-        <span><i class="b-proj"></i>Conlog (tend.)</span>
-        <span><i class="l-meio"></i>Manut contrato · 0,11 × km</span>
-        <span><i class="l-ambev"></i>Ambev · 1,00%</span>
-        <span><i class="l-meio"></i>Meio-termo · 1,15%</span>
-        <span><i class="l-optas"></i>Optas · 1,33%</span>
+        <span><i class="b-real"></i>Conlog</span><span><i class="b-proj"></i>Conlog (tend.)</span>
+        <span><i class="l-meio"></i>Contrato</span><span><i class="l-ambev"></i>Ambev · 1,00%</span>
+        <span><i class="l-meio"></i>Meio-termo · 1,15%</span><span><i class="l-optas"></i>Optas · 1,33%</span>
       </div>
-      <div class="chart-wrap"><canvas id="ch-falt"></canvas></div>
+      <div class="chart-wrap"><canvas id="ch-geral"></canvas></div>
     </div>
     <div class="chart-card">
-      <div class="tbl-title">Ciclo da carreta <span style="font-weight:600;color:var(--text3);font-size:11px">· Ano 1–10 · finame + extensão</span></div>
-      <div class="tbl-sub">Ano 1–5 = finame (remuneração 0,11; FINAME fora do R$/km) · Ano 6–10 = extensão — a linha divide-se nos 3 cenários</div>
+      <div class="tbl-title">Só a linha de manutenção <span style="font-weight:600;color:var(--text3);font-size:11px">· Ano 1–10 · sem a taxa fixa</span></div>
+      <div class="tbl-sub">Só a variável R$/km da manutenção de carroceria — a Rem. sobre Capital vai pra receita (AV), não pra linha</div>
       <div class="leg">
-        <span><i class="b-real"></i>Conlog</span>
-        <span><i class="b-proj"></i>Conlog (tend.)</span>
-        <span><i class="l-meio"></i>Manut contrato · 0,11 × km</span>
-        <span><i class="l-ambev"></i>Ambev · 1,00%</span>
-        <span><i class="l-meio"></i>Meio-termo · 1,15%</span>
-        <span><i class="l-optas"></i>Optas · 1,33%</span>
+        <span><i class="b-real"></i>Conlog</span><span><i class="b-proj"></i>Conlog (tend.)</span>
+        <span><i class="l-meio"></i>Contrato · 0,11</span><span><i class="l-ambev"></i>Ambev · 0,19</span>
+        <span><i class="l-meio"></i>Meio-termo · 0,22</span><span><i class="l-optas"></i>Optas · 0,25</span>
       </div>
-      <div class="chart-wrap"><canvas id="ch-ciclo"></canvas></div>
+      <div class="chart-wrap"><canvas id="ch-linha"></canvas></div>
     </div>
   </div>
 
-  <!-- TABELA 1: pós-contrato 2026–2030 -->
-  <div class="tbl-section">
-    <div class="tbl-title">1 · Pós-contrato (2026–2030) — remuneração vs Conlog (R$/km)</div>
-    <div class="tbl-sub">Conlog = nosso custo real por km · cenários = manut + REM K % × R$ 221.605 ÷ nossa km/carreta · ▲ = cenário − conta · Imp. = ▲ × km rodado no ano</div>
-    <table>
-      <thead><tr>
+  <!-- TABELAS lado a lado, na mesma ordem dos gráficos -->
+  <div class="charts-grid">
+    <div class="tbl-section">
+      <div class="tbl-title">Com a taxa fixa <span style="font-weight:600;color:var(--text3);font-size:11px">· R$/km</span></div>
+      <div class="tbl-sub">Conlog vs remuneração total (manut + Rem. sobre Capital ÷ km) · ▲ = cenário − Conlog</div>
+      <table><thead><tr>
         <th>Ano</th><th class="num">Conlog</th>
-        <th class="num sep-l">Ambev</th><th class="num">Meio-termo</th><th class="num">Optas</th>
-        <th class="num sep-l">▲ Ambev</th><th class="num">▲ Meio</th><th class="num">▲ Optas</th>
-        <th class="num sep-l">Imp. Ambev</th><th class="num">Imp. Meio</th><th class="num">Imp. Optas</th>
-      </tr></thead>
-      <tbody id="tb-q1"></tbody>
-    </table>
+        <th class="num sep-l">Ambev</th><th class="num">Meio</th><th class="num">Optas</th>
+        <th class="num sep-l">▲ Amb</th><th class="num">▲ Meio</th><th class="num">▲ Opt</th>
+      </tr></thead><tbody id="tb-geral"></tbody></table>
+    </div>
+    <div class="tbl-section">
+      <div class="tbl-title">Só manutenção <span style="font-weight:600;color:var(--text3);font-size:11px">· sem a taxa fixa · R$/km</span></div>
+      <div class="tbl-sub">Conlog vs a variável R$/km da manutenção · ▲ = manut − Conlog (a Rem. sobre Capital não entra aqui)</div>
+      <table><thead><tr>
+        <th>Ano</th><th class="num">Conlog</th>
+        <th class="num sep-l">Ambev</th><th class="num">Meio</th><th class="num">Optas</th>
+        <th class="num sep-l">▲ Amb</th><th class="num">▲ Meio</th><th class="num">▲ Opt</th>
+      </tr></thead><tbody id="tb-linha"></tbody></table>
+    </div>
   </div>
 
-  <!-- TABELA 2: ciclo completo 2021–2030 -->
-  <div class="tbl-section">
-    <div class="tbl-title">2 · Ciclo completo (Ano 1–10) — finame + 5 anos (R$/km)</div>
-    <div class="tbl-sub">Ano 1–5 (finame): o FINAME fica FORA do R$/km (PMT fixo, remunerado à parte) — remuneração em R$/km = manut 0,11 (igual nos 3) · Ano 6–10 (extensão): cenários (REM K entra pra pagar a conta) · Imp. = ▲ × km do ano</div>
-    <table>
-      <thead><tr>
-        <th>Ano</th><th class="num">Conlog</th>
-        <th class="num sep-l">Ambev</th><th class="num">Meio-termo</th><th class="num">Optas</th>
-        <th class="num sep-l">▲ Ambev</th><th class="num">▲ Meio</th><th class="num">▲ Optas</th>
-        <th class="num sep-l">Imp. Ambev</th><th class="num">Imp. Meio</th><th class="num">Imp. Optas</th>
-      </tr></thead>
-      <tbody id="tb-q2"></tbody>
-    </table>
-  </div>
-
-  <!-- CAIXA RESUMO (slide) -->
+  <!-- DIAGNÓSTICO (slide) -->
   <div class="resumo" id="resumo">
-    <h3>Resposta — para apresentação</h3>
+    <h3>Diagnóstico</h3>
     <div id="resumo-body"></div>
   </div>
 
@@ -251,8 +227,8 @@ body.light-mode th.sep-l,body.light-mode td.sep-l{border-left-color:rgba(0,0,0,.
     <ul>
       <li><b>Ciclo = Ano 1 a Ano 10</b> (Ano 1–5 finame · Ano 6–10 extensão) — lifecycle da carreta, não anos-calendário. Os valores usam nossas variáveis dos anos correspondentes: Ano 1–5 ≈ realizado 2021–2025; Ano 6–10 ≈ tendência 2026–2030.</li>
       <li><b>Tudo por R$/km</b>, nas <b>nossas variáveis</b>: km por carreta·mês real (até 2025) e estimado (2026–2030, tendência por regressão dos drivers Custo/Km/Carretas; 2026 mensalizado ×12/6).</li>
-      <li><b>Período de finame (2021–2025):</b> o FINAME <b>não entra no R$/km</b> — é PMT fixo (R$ 4.330,80), remunerado à parte. Em R$/km, a remuneração é a manutenção <b>0,11</b> (igual nos 3 cenários) vs nosso custo real por km. Por isso os impactos em R$ deste painel são idênticos aos do painel R$/Equipamento (lá o FINAME aparece dos dois lados e se anula).</li>
-      <li><b>Período faltante / extensão (2026–2030):</b> sem financiamento — a <b>REM K entra para pagar a conta</b>. Remuneração em R$/km = manutenção do cenário + REM K % × <b>R$ 221.605</b> ÷ nossa km/carreta·mês. Ambev 1,00% + 0,19 · Meio-termo 1,15% + 0,22 · Optas 1,33% + 0,25.</li>
+      <li><b>Duas óticas:</b> <b>com a taxa fixa</b> (remuneração total = manutenção + Rem. sobre Capital ÷ km) e <b>sem a taxa fixa</b> (só a variável R$/km da manutenção de carroceria). A <b>Rem. sobre Capital</b> (taxa fixa) vai pra <b>receita</b> — impacta o AV, não a linha de custo de carroceria.</li>
+      <li><b>Rem. sobre Capital (taxa fixa):</b> contrato 0,81% × R$ 203.086 (valor inicial) · extensão Ambev 1,00% · Meio-termo 1,15% · Optas 1,33% × R$ 221.605 (valor atual), por carreta·mês. É o juro por manter o capital na carreta em vez de vender e investir na <b>Selic</b> (referência editável: 15.0%/ano). Manutenção: contrato 0,11 · extensão 0,19 / 0,22 / 0,25 R$/km.</li>
       <li><b>Valor da carreta:</b> aba <b>'Valor de Compra NF'</b> — valor médio atual <b>R$ 221.605</b> (média de tudo) na REM K do pós; valor inicial R$ 203.086 (média sem 2025) documentado como referência.</li>
       <li><b>▲</b> = remuneração − Conlog em R$/km (verde paga · vermelho não paga). <b>Imp. (R$)</b> = ▲ × km rodado no ano (frota real). <b>Resposta</b> = acumulado do período: positivo → o cenário paga a conta.</li>
       <li><b>Lifecycle</b> (análise da carreta): comprar nova custa R$ 5.430,80/carreta·mês (FINAME + manut); estender a vencida custa 3.600 (Ambev) a 4.761 (Optas) — estender é melhor para a Ambev do que comprar nova.</li>
@@ -272,6 +248,8 @@ const VALOR_ATUAL=221605;    // valor médio atual das carretas (aba 'Valor de C
 const VALOR_INICIO=203086;   // valor inicial (média sem 2025) — referência
 const FINAME_PMT=4330.80;    // PMT do financiamento (fora do R$/km; referência)
 const MANUT_FIN=0.11;        // manutenção remunerada nos anos de finame (R$/km)
+const REMK_CONTRATO=0.0081;  // taxa fixa (Rem. sobre Capital) no contrato · sobre VALOR_INICIO
+const SELIC_ANUAL=0.15;      // Selic anual de referência (editável) — comparação da Rem. sobre Capital
 const FIN_DE=2021, FIN_ATE=2025;   // período de finame (5 anos)
 const EXT_DE=2026, EXT_ATE=2030;   // extensão / período faltante (5 anos)
 const CENARIOS=[
@@ -303,7 +281,7 @@ const isLight=()=>document.body.classList.contains('light-mode');
 const tick=(sz=10)=>({color:isLight()?'#444':'#94A3B8',font:{family:'Montserrat',size:sz}});
 const meioCor=()=>isLight()?'#111111':'#F1F5F9';
 
-let DATA=[], chFalt=null, chCiclo=null;
+let DATA=[], chGeral=null, chLinha=null;
 
 async function fetchBase(){
   const url=`https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:json&sheet=${encodeURIComponent(TAB)}`;
@@ -333,78 +311,70 @@ function driverVal(key,y){
 const kmCarOf=y=>{const k=driverVal('km',y),n=driverVal('nEq',y);return n?k/n:null;};
 const conlogRkm=y=>{const c=driverVal('custoTot',y),k=driverVal('km',y);return k?c/k:null;};   // nosso custo real R$/km
 
-// remuneração do cenário no ano y (R$/km) — nossas variáveis; FINAME fica fora do R$/km
-function remRkm(c,y){
-  if(y>=FIN_DE && y<=FIN_ATE) return MANUT_FIN;                                   // finame: 0,11 (igual nos 3)
-  if(y>=EXT_DE && y<=EXT_ATE){ const km=kmCarOf(y); return km?c.manut + c.remK*VALOR_ATUAL/km:null; }
+// componentes de remuneração — R$/km
+// manutRate = variável R$/km que entra na LINHA de manutenção de carroceria (sem a taxa fixa)
+// capitalMes = Rem. sobre Capital (taxa fixa / REM K) por carreta·mês — vai pra RECEITA (AV), não pra linha
+function manutRate(c,y){
+  if(y>=FIN_DE && y<=FIN_ATE) return MANUT_FIN;               // contrato: 0,11 (igual nos 3)
+  if(y>=EXT_DE && y<=EXT_ATE) return c.manut;                 // extensão: manut do cenário
   return null;
 }
+function capitalMes(c,y){
+  if(y>=FIN_DE && y<=FIN_ATE) return REMK_CONTRATO*VALOR_INICIO;   // contrato: 0,81% × valor inicial
+  if(y>=EXT_DE && y<=EXT_ATE) return c.remK*VALOR_ATUAL;           // extensão: REM K% × valor atual
+  return null;
+}
+const remLinha=(c,y)=>manutRate(c,y);                               // SEM a taxa fixa (só a linha)
+function remGeral(c,y){ const km=kmCarOf(y),mn=manutRate(c,y),cap=capitalMes(c,y);
+  return (km&&mn!=null&&cap!=null)? mn+cap/km : null; }            // COM a taxa fixa
 
 function calc(){
   const rows=[];
   for(let y=FIN_DE;y<=EXT_ATE;y++){
-    rows.push({y,km:driverVal('km',y),conta:conlogRkm(y),
-      rem:Object.fromEntries(CENARIOS.map(c=>[c.key,remRkm(c,y)]))});
+    rows.push({y,km:driverVal('km',y),nEq:driverVal('nEq',y),conlog:conlogRkm(y),
+      linha:Object.fromEntries(CENARIOS.map(c=>[c.key,remLinha(c,y)])),
+      geral:Object.fromEntries(CENARIOS.map(c=>[c.key,remGeral(c,y)])),
+      cap  :Object.fromEntries(CENARIOS.map(c=>[c.key,capitalMes(c,y)]))});
   }
-  const q1={},q2={};
-  CENARIOS.forEach(c=>{ let a1=0,a2=0;
-    rows.forEach(r=>{ const rm=r.rem[c.key]; if(rm==null||r.conta==null)return;
-      const imp=(rm-r.conta)*(r.km||0);
-      if(r.y>=EXT_DE) a1+=imp;
-      a2+=imp;
+  // Diagnóstico — daqui pra frente (extensão 2026–2030): 3 óticas por cenário
+  const diag={};
+  CENARIOS.forEach(c=>{ let iL=0,iG=0,cap=0;
+    rows.filter(r=>r.y>=EXT_DE).forEach(r=>{
+      if(r.conlog!=null&&r.linha[c.key]!=null) iL+=(r.linha[c.key]-r.conlog)*(r.km||0);
+      if(r.conlog!=null&&r.geral[c.key]!=null) iG+=(r.geral[c.key]-r.conlog)*(r.km||0);
+      if(r.cap[c.key]!=null) cap+=r.cap[c.key]*(r.nEq||0);
     });
-    q1[c.key]=a1; q2[c.key]=a2;
+    diag[c.key]={linha:iL,geral:iG,capital:cap};
   });
-  return {rows,q1,q2};
+  return {rows,diag};
 }
 
-function renderHero(R){
-  const setQ=(pfx,obj)=>{
-    CENARIOS.forEach(c=>{
-      const v=obj[c.key];
-      const b=document.getElementById(`${pfx}-${c.key}`), e=document.getElementById(`${pfx}v-${c.key}`);
-      if(b){ b.textContent=signMoney(v); b.style.color=v>=0?'var(--green)':'var(--red)'; }
-      if(e){ e.textContent=v>=0?'SIM — paga a conta':'NÃO — não paga'; e.style.color=v>=0?'var(--green)':'var(--red)'; }
-    });
-  };
-  setQ('q1',R.q1); setQ('q2',R.q2);
-}
-
+// Duas tabelas (mesma estrutura): field='geral' (com a taxa fixa) · field='linha' (só manutenção)
 function renderTables(R){
   const K=CENARIOS.map(c=>c.key);
-  const build=(years,lab)=>{
+  const body=(field)=>{
     let h='';
-    R.rows.filter(r=>years.includes(r.y)).forEach(r=>{
+    R.rows.forEach((r,i)=>{
       const proj=r.y>=ANO_PARC?'proj':'';
-      const rotulo=lab?lab(r.y):r.y;
-      const sv=K.map(k=>r.rem[k]);
-      const dl=sv.map(v=>(v==null||r.conta==null)?null:v-r.conta);
-      const imp=dl.map(v=>v==null?null:v*(r.km||0));
-      h+=`<tr class="${proj}"><td class="ano">${rotulo}</td><td class="num" data-v="${r.conta??''}">${nf2(r.conta)}</td>`
+      const sv=K.map(k=>r[field][k]);
+      const dl=sv.map(v=>(v==null||r.conlog==null)?null:v-r.conlog);
+      h+=`<tr class="${proj}"><td class="ano">Ano ${i+1}</td><td class="num" data-v="${r.conlog??''}">${nf2(r.conlog)}</td>`
         + sv.map((v,j)=>`<td class="num ${j===0?'sep-l':''}" data-v="${v??''}">${v==null?'—':nf2(v)}</td>`).join('')
         + dl.map((v,j)=>`<td class="num ${cls(v)} ${j===0?'sep-l':''}" data-v="${v??''}">${v==null?'—':p2(v)}</td>`).join('')
-        + imp.map((v,j)=>`<td class="num ${cls(v)} ${j===0?'sep-l':''}" data-v="${v??''}">${v==null?'—':signMoney(v)}</td>`).join('')
         + '</tr>';
     });
-    return h;
-  };
-  // Acumulado: taxas = média ponderada pela km do período (Σ taxa×km ÷ Σ km); impactos = soma
-  const totalRow=(years,obj)=>{
-    const rs=R.rows.filter(r=>years.includes(r.y));
-    const sKm=rs.reduce((a,r)=>a+(r.km||0),0);
-    const cw=sKm? rs.reduce((a,r)=>a+(r.conta||0)*(r.km||0),0)/sKm : null;
-    const sw=K.map(k=>{ let s=0,kk=0; rs.forEach(r=>{const v=r.rem[k]; if(v!=null){s+=v*(r.km||0);kk+=(r.km||0);}}); return kk?s/kk:null; });
+    const sKm=R.rows.reduce((a,r)=>a+(r.km||0),0);
+    const cw=sKm? R.rows.reduce((a,r)=>a+(r.conlog||0)*(r.km||0),0)/sKm : null;
+    const sw=K.map(k=>{ let s=0,kk=0; R.rows.forEach(r=>{const v=r[field][k]; if(v!=null){s+=v*(r.km||0);kk+=(r.km||0);}}); return kk?s/kk:null; });
     const dw=sw.map(v=>(v==null||cw==null)?null:v-cw);
-    return `<tr class="total"><td class="ano">Acumulado</td><td class="num" data-v="${cw??''}">${nf2(cw)}</td>`
+    h+=`<tr class="total"><td class="ano">Média pond.</td><td class="num" data-v="${cw??''}">${nf2(cw)}</td>`
       + sw.map((v,j)=>`<td class="num ${j===0?'sep-l':''}" data-v="${v??''}">${v==null?'—':nf2(v)}</td>`).join('')
       + dw.map((v,j)=>`<td class="num ${cls(v)} ${j===0?'sep-l':''}" data-v="${v??''}">${v==null?'—':p2(v)}</td>`).join('')
-      + K.map((k,j)=>`<td class="num ${cls(obj[k])} ${j===0?'sep-l':''}" data-v="${obj[k]??''}">${signMoney(obj[k])}</td>`).join('')
       + '</tr>';
+    return h;
   };
-  const yQ1=[]; for(let y=EXT_DE;y<=EXT_ATE;y++)yQ1.push(y);
-  const yQ2=[]; for(let y=FIN_DE;y<=EXT_ATE;y++)yQ2.push(y);
-  document.getElementById('tb-q1').innerHTML=build(yQ1)+totalRow(yQ1,R.q1);
-  document.getElementById('tb-q2').innerHTML=build(yQ2,y=>'Ano '+(y-FIN_DE+1))+totalRow(yQ2,R.q2);
+  document.getElementById('tb-geral').innerHTML=body('geral');
+  document.getElementById('tb-linha').innerHTML=body('linha');
 }
 
 // Gráficos no padrão Tendência: barras condicionais (verde = a menor proposta cobre a conta),
@@ -441,61 +411,55 @@ function renderCharts(R){
     scales:{x:{grid:{display:false},border:{display:false},ticks:tick(11),stacked:true},
       y:{display:false,beginAtZero:true,grace:'14%'}}};
 
-  // ── GRÁFICO 1: daqui pra frente (2026–2030) ──
-  if(chFalt) chFalt.destroy();
-  const yF=[]; for(let y=EXT_DE;y<=EXT_ATE;y++) yF.push(y);
-  const contaF=yF.map(y=>conlogRkm(y));
-  const refF=yF.map(y=>remRkm(CENARIOS[0],y));
-  const linesF=CENARIOS.map(c=>{const cor=corOf(c);
-    return {type:'line',label:c.nome,data:yF.map(y=>remRkm(c,y)),borderColor:cor,backgroundColor:cor,
-      borderWidth:2.5,borderDash:[6,4],tension:.15,order:1,pointRadius:5,pointBackgroundColor:cor,pointBorderWidth:0,pointHoverRadius:8,
-      datalabels:boxDl(c2=>c2.dataIndex===yF.length-1,'right')};});
-  chFalt=new Chart(document.getElementById('ch-falt'),{
-    plugins:[mkBrk([{a:0,b:yF.length-1,txt:`Período faltante · ${nf2(mean(contaF))}`}])],
-    data:{labels:yF,datasets:[...barDs(contaF,refF,yF.map(()=>false)),...linesF]},options:opts});
-
-  // ── GRÁFICO 2: ciclo da carreta (Ano 1–10 = finame + extensão) ──
-  if(chCiclo) chCiclo.destroy();
-  const yC=[]; for(let y=FIN_DE;y<=EXT_ATE;y++) yC.push(y);
-  const labC=yC.map((y,i)=>'Ano '+(i+1));
-  const contaC=yC.map(y=>conlogRkm(y));
-  const refC=yC.map(y=> y<=FIN_ATE? MANUT_FIN : remRkm(CENARIOS[0],y));
-  const solidC=yC.map(y=> y<=REAL_TO);
-  const finIdx=FIN_ATE-FIN_DE;   // Ano 5
-  const finLine={type:'line',label:'Remuneração finame',data:yC.map(y=> y<=FIN_ATE? MANUT_FIN : null),
-    borderColor:meioCor(),backgroundColor:meioCor(),borderWidth:2.5,borderDash:[6,4],tension:.15,order:1,spanGaps:false,
-    pointRadius:5,pointBackgroundColor:meioCor(),pointBorderWidth:0,pointHoverRadius:8,
-    datalabels:boxDl(c2=>c2.dataIndex===0,'left')};
-  const linesC=CENARIOS.map(c=>{const cor=corOf(c);
-    const data=yC.map((y,i)=> i<finIdx? null : (i===finIdx? MANUT_FIN : remRkm(c,y)));   // ancora no Ano 5 e diverge
-    return {type:'line',label:c.nome,data,borderColor:cor,backgroundColor:cor,borderWidth:2.5,borderDash:[6,4],tension:.15,order:1,spanGaps:false,
-      pointRadius:data.map(v=>v==null?0:5),pointBackgroundColor:cor,pointBorderWidth:0,pointHoverRadius:8,
-      datalabels:boxDl(c2=>c2.dataIndex===yC.length-1,'right')};});
-  chCiclo=new Chart(document.getElementById('ch-ciclo'),{
-    plugins:[mkBrk([{a:0,b:finIdx,txt:`Finame · ${nf2(mean(contaC.slice(0,finIdx+1)))}`},
-                    {a:finIdx+1,b:yC.length-1,txt:`Extensão · ${nf2(mean(contaC.slice(finIdx+1)))}`}])],
-    data:{labels:labC,datasets:[...barDs(contaC,refC,solidC),finLine,...linesC]},options:opts});
+  // Um gráfico de ciclo (Ano 1–10) por óptica: field='geral' (com capital) · field='linha' (só manut)
+  const cycle=(canvasId, field)=>{
+    const labC=R.rows.map((r,i)=>'Ano '+(i+1));
+    const conta=R.rows.map(r=>r.conlog);
+    const val=(k,i)=>R.rows[i][field][k];
+    const ref=R.rows.map((r,i)=>val(CENARIOS[0].key,i));   // menor cenário como referência da cor da barra
+    const solid=R.rows.map(r=>r.y<=REAL_TO);
+    const finIdx=FIN_ATE-FIN_DE;   // Ano 5
+    const finLine={type:'line',label:'Contrato',data:R.rows.map((r,i)=> i<=finIdx? val(CENARIOS[0].key,i) : null),
+      borderColor:meioCor(),backgroundColor:meioCor(),borderWidth:2.5,borderDash:[6,4],tension:.15,order:1,spanGaps:false,
+      pointRadius:R.rows.map((r,i)=> i<=finIdx?5:0),pointBackgroundColor:meioCor(),pointBorderWidth:0,pointHoverRadius:8,
+      datalabels:boxDl(c2=>c2.dataIndex===0,'left')};
+    const lines=CENARIOS.map(c=>{const cor=corOf(c);
+      const data=R.rows.map((r,i)=> i<finIdx? null : (i===finIdx? val(CENARIOS[0].key,i) : val(c.key,i)));
+      return {type:'line',label:c.nome,data,borderColor:cor,backgroundColor:cor,borderWidth:2.5,borderDash:[6,4],tension:.15,order:1,spanGaps:false,
+        pointRadius:data.map(v=>v==null?0:5),pointBackgroundColor:cor,pointBorderWidth:0,pointHoverRadius:8,
+        datalabels:boxDl(c2=>c2.dataIndex===R.rows.length-1,'right')};});
+    return new Chart(document.getElementById(canvasId),{
+      plugins:[mkBrk([{a:0,b:finIdx,txt:`Contrato · ${nf2(mean(conta.slice(0,finIdx+1)))}`},
+                      {a:finIdx+1,b:R.rows.length-1,txt:`Extensão · ${nf2(mean(conta.slice(finIdx+1)))}`}])],
+      data:{labels:labC,datasets:[...barDs(conta,ref,solid),finLine,...lines]},options:opts});
+  };
+  if(chGeral) chGeral.destroy(); chGeral=cycle('ch-geral','geral');
+  if(chLinha) chLinha.destroy(); chLinha=cycle('ch-linha','linha');
 }
 
-function renderResumo(R){
-  const nm={ambev:'Ambev (1,00%)',meio:'Meio-termo (1,15%)',optas:'Optas (1,33%)'};
-  const line=(q,k)=>`<b>${nm[k]}</b>: <b class="${q[k]>=0?'cg':'cr'}">${q[k]>=0?'SIM':'NÃO'}</b> (${signMoney(q[k])})`;
-  const html=`
-    <p><b>1 · Pós-contrato (2026–2030), com nossas variáveis (km real por carreta e nosso custo por km):</b></p>
-    <div class="r-list">
-      <div class="r-item">${line(R.q1,'ambev')} · ${line(R.q1,'meio')} · ${line(R.q1,'optas')}</div>
-    </div>
-    <p><b>2 · Ciclo completo — finame (2021–2025) + extensão (2026–2030):</b></p>
-    <div class="r-list">
-      <div class="r-item">${line(R.q2,'ambev')} · ${line(R.q2,'meio')} · ${line(R.q2,'optas')}</div>
-    </div>
-    <p class="r-foot">No finame (2021–25) o FINAME fica <b>fora do R$/km</b> (PMT fixo remunerado à parte) — em R$/km a remuneração é a manut 0,11 vs nosso custo real. Na extensão (2026–30) a <b>REM K entra para pagar a conta</b> (% × R$ 221.605 ÷ nossa km). Lifecycle: comprar nova = R$ 5.430,80/carreta·mês; estender = 3.600 (Ambev) a 4.761 (Optas) — estender é melhor para a Ambev que comprar nova.</p>`;
+// Diagnóstico — daqui pra frente (extensão), 3 óticas por cenário, sem SIM/NÃO
+function renderDiagnostico(R){
+  const nm={ambev:'Ambev',meio:'Meio-termo',optas:'Optas'};
+  const cel=(lbl,v)=>`<div class="dg-cell"><span>${lbl}</span><b class="${v>=0?'cg':'cr'}">${signMoney(v)}</b></div>`;
+  let html='<div class="dg-grid">';
+  CENARIOS.forEach(c=>{
+    const d=R.diag[c.key], anual=c.remK*12;   // taxa fixa mensal → anualizada (×12)
+    const ok=anual>=SELIC_ANUAL;
+    html+=`<div class="dg-card">
+      <div class="dg-h">${nm[c.key]} · ${(c.remK*100).toLocaleString('pt-BR',{minimumFractionDigits:2})}%</div>
+      ${cel('Impacto na linha (sem a taxa fixa)', d.linha)}
+      ${cel('Impacto geral (com a taxa fixa)', d.geral)}
+      ${cel('Rem. sobre Capital (taxa fixa)', d.capital)}
+      <div class="dg-foot">Taxa fixa ≈ <b>${(anual*100).toFixed(1)}%/ano</b> · Selic ${(SELIC_ANUAL*100).toFixed(1)}% → <b class="${ok?'cg':'cr'}">${ok?'acima da Selic':'abaixo da Selic'}</b></div>
+    </div>`;
+  });
+  html+='</div><p class="r-foot">Daqui pra frente (extensão · Ano 6–10). <b>Impacto na linha</b> = só a manutenção (R$/km) − nosso custo real, × km — o que entra na linha de carroceria. <b>Impacto geral</b> = com a Rem. sobre Capital. <b>Rem. sobre Capital</b> = a taxa fixa (juros por manter o capital na carreta em vez de vender e investir na Selic), que entra na receita e impacta o AV.</p>';
   document.getElementById('resumo-body').innerHTML=html;
 }
 
 function renderAll(){
   const R=calc(); window._R=R;
-  renderHero(R); renderCharts(R); renderTables(R); renderResumo(R);
+  renderCharts(R); renderTables(R); renderDiagnostico(R);
 }
 
 async function atualizar(){
