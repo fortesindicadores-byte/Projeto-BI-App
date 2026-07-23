@@ -388,17 +388,23 @@ function renderTables(R){
     });
     return h;
   };
-  const totalRow=(obj)=>{
-    return `<tr class="total"><td class="ano">Acumulado</td><td class="num">—</td>`
-      + K.map((k,j)=>`<td class="num ${j===0?'sep-l':''}">—</td>`).join('')
-      + K.map((k,j)=>`<td class="num ${j===0?'sep-l':''}">—</td>`).join('')
+  // Acumulado: taxas = média ponderada pela km do período (Σ taxa×km ÷ Σ km); impactos = soma
+  const totalRow=(years,obj)=>{
+    const rs=R.rows.filter(r=>years.includes(r.y));
+    const sKm=rs.reduce((a,r)=>a+(r.km||0),0);
+    const cw=sKm? rs.reduce((a,r)=>a+(r.conta||0)*(r.km||0),0)/sKm : null;
+    const sw=K.map(k=>{ let s=0,kk=0; rs.forEach(r=>{const v=r.rem[k]; if(v!=null){s+=v*(r.km||0);kk+=(r.km||0);}}); return kk?s/kk:null; });
+    const dw=sw.map(v=>(v==null||cw==null)?null:v-cw);
+    return `<tr class="total"><td class="ano">Acumulado</td><td class="num" data-v="${cw??''}">${nf2(cw)}</td>`
+      + sw.map((v,j)=>`<td class="num ${j===0?'sep-l':''}" data-v="${v??''}">${v==null?'—':nf2(v)}</td>`).join('')
+      + dw.map((v,j)=>`<td class="num ${cls(v)} ${j===0?'sep-l':''}" data-v="${v??''}">${v==null?'—':p2(v)}</td>`).join('')
       + K.map((k,j)=>`<td class="num ${cls(obj[k])} ${j===0?'sep-l':''}" data-v="${obj[k]??''}">${signMoney(obj[k])}</td>`).join('')
       + '</tr>';
   };
   const yQ1=[]; for(let y=EXT_DE;y<=EXT_ATE;y++)yQ1.push(y);
   const yQ2=[]; for(let y=FIN_DE;y<=EXT_ATE;y++)yQ2.push(y);
-  document.getElementById('tb-q1').innerHTML=build(yQ1)+totalRow(R.q1);
-  document.getElementById('tb-q2').innerHTML=build(yQ2,y=>'Ano '+(y-FIN_DE+1))+totalRow(R.q2);
+  document.getElementById('tb-q1').innerHTML=build(yQ1)+totalRow(yQ1,R.q1);
+  document.getElementById('tb-q2').innerHTML=build(yQ2,y=>'Ano '+(y-FIN_DE+1))+totalRow(yQ2,R.q2);
 }
 
 // Gráficos no padrão Tendência: barras condicionais (verde = a menor proposta cobre a conta),
