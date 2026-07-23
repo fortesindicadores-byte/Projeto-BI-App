@@ -86,7 +86,9 @@ td.qex{color:var(--text3);font-size:11px;white-space:normal;}
 .grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px;}
 @media(max-width:900px){.grid2{grid-template-columns:1fr;}}
 .chart-wrap{position:relative;height:300px;}
-#t-qual td.qex{white-space:normal;color:var(--text2);}
+#t-qual td.qex{white-space:nowrap;max-width:520px;overflow:hidden;text-overflow:ellipsis;color:var(--text2);}
+#t-qual th:nth-child(4),#t-qual th:nth-child(5){width:92px;}
+#t-qual th:nth-child(2){width:120px;}
 
 /* tabela */
 .tbl-tools{display:flex;gap:10px;align-items:center;margin-bottom:12px;flex-wrap:wrap;}
@@ -105,7 +107,6 @@ table{width:100%;border-collapse:collapse;font-size:13px;}
 thead th{position:sticky;top:0;background:var(--card);color:var(--text);font-size:12px;font-weight:700;padding:8px 8px 12px;border-bottom:1px solid rgba(255,255,255,.10);white-space:nowrap;text-transform:uppercase;letter-spacing:.5px;text-align:left;vertical-align:bottom;z-index:2;}
 thead th.num{text-align:right;}
 td{padding:13px 8px;border:none;color:var(--text);white-space:nowrap;}
-tbody tr{border-bottom:1px solid rgba(255,255,255,.05);}
 tbody tr:hover{background:rgba(255,255,255,.035);}
 td.strong{color:var(--text);font-weight:600;}
 td.num{text-align:right;font-variant-numeric:tabular-nums;}
@@ -114,8 +115,9 @@ td.strong{max-width:380px;overflow:hidden;text-overflow:ellipsis;}
 td.fam{max-width:250px;overflow:hidden;text-overflow:ellipsis;}
 .sep-l{border-left:1px solid rgba(255,255,255,.13);}
 tr.total td{color:var(--text);font-weight:700;border-top:2px solid rgba(255,255,255,.12);padding-top:14px;padding-bottom:8px;background:var(--card);}
-body.light-mode thead th,body.light-mode tr.total td{background:#e4e5e7!important;color:#1a1a1a;border-bottom-color:rgba(0,0,0,.12);}
-body.light-mode tbody tr{border-bottom-color:rgba(0,0,0,.06);}
+body.light-mode thead th{background:#F0F0F0!important;color:#1a1a1a;border-bottom-color:rgba(0,0,0,.10);}
+body.light-mode tr.total td{background:#F0F0F0!important;color:#1a1a1a;border-top-color:rgba(0,0,0,.20);}
+
 .tag{display:inline-block;font-size:9px;font-weight:800;padding:2px 7px;border-radius:4px;text-transform:uppercase;letter-spacing:.3px;}
 .t-PEÇA{background:rgba(56,189,248,.15);color:#7dd3fc;} .t-SERVIÇO{background:rgba(249,115,22,.16);color:#fdba74;}
 .t-MATERIAL{background:rgba(148,163,184,.16);color:#cbd5e1;} .t-CONSUMO{background:rgba(59,179,59,.15);color:#86efac;}
@@ -307,9 +309,9 @@ function renderSugTable(s){
   const g=groupFor(s);
   const q=gv('s-'+s.id).toLowerCase(), tp=gv('tp-'+s.id), fm=gv('fm-'+s.id);
   const f=g.filter(x=>(!q||(x.padrao+' '+x.fam).toLowerCase().includes(q))&&(!tp||x.tipo===tp)&&(!fm||x.fam===fm));
-  let h=`<thead><tr><th>Descrição padrão</th><th>Tipo</th><th>Família</th><th class="num">Nº itens</th><th>Exemplos</th></tr></thead><tbody>`;
+  let h=`<thead><tr><th>Descrição padrão</th><th>Tipo</th><th>Família</th><th>Exemplos</th><th class="num">Nº itens</th></tr></thead><tbody>`;
   f.forEach(x=>{
-    h+=`<tr><td class="strong">${esc(x.padrao)}</td><td><span class="tag t-${x.tipo}">${x.tipo}</span></td><td class="fam">${esc(x.fam)}</td><td class="num">${x.n}</td><td class="ex">${esc(x.ex.join('  ·  '))}</td></tr>`;
+    h+=`<tr><td class="strong">${esc(x.padrao)}</td><td><span class="tag t-${x.tipo}">${x.tipo}</span></td><td class="fam">${esc(x.fam)}</td><td class="ex">${esc(x.ex.join('  ·  '))}</td><td class="num" style="font-weight:700">${fmt(x.n)}</td></tr>`;
   });
   h+='</tbody>';
   document.getElementById('t-'+s.id).innerHTML=h;
@@ -351,12 +353,15 @@ function renderDiag(){
     <div class="hero-item"><div class="hero-label">Redução potencial</div><div class="hero-value good">3–90%</div><div class="hero-sub">conforme a composição</div></div>`;
   // Tabela de qualidade — análise crua
   const sevTxt={alto:'Alto',medio:'Médio',baixo:'Baixo'};
-  let h=`<thead><tr><th>Problema detectado</th><th class="num">Itens</th><th class="num">% base</th><th>Severidade</th><th>O que é / exemplos</th></tr></thead><tbody>`;
+  let h=`<thead><tr><th>Problema detectado</th><th>Severidade</th><th>O que é</th><th class="num">Itens</th><th class="num">% base</th></tr></thead><tbody>`;
+  let tot=0;
   (META.qualidade||[]).forEach(q=>{
-    const ex=(q.ex&&q.ex.length)?' · <span style="color:var(--text3)">'+q.ex.slice(0,2).map(e=>esc(e[1])).join(' · ')+'</span>':'';
-    h+=`<tr><td class="strong">${esc(q.t)}</td><td class="qv qc-${q.sev}">${fmt(q.v)}</td><td class="num">${q.p}%</td>`
-     +`<td><span class="sevdot sd-${q.sev}"></span>${sevTxt[q.sev]}</td><td class="qex">${esc(q.d)}${ex}</td></tr>`;
+    tot+=q.v;
+    h+=`<tr><td class="strong">${esc(q.t)}</td><td><span class="sevdot sd-${q.sev}"></span>${sevTxt[q.sev]}</td>`
+     +`<td class="qex">${esc(q.d)}</td>`
+     +`<td class="num qv qc-${q.sev}">${fmt(q.v)}</td><td class="num">${q.p.toLocaleString('pt-BR',{minimumFractionDigits:1,maximumFractionDigits:1})}%</td></tr>`;
   });
+  h+=`<tr class="total"><td>Total de apontamentos</td><td></td><td></td><td class="num">${fmt(tot)}</td><td class="num"></td></tr>`;
   h+='</tbody>';
   document.getElementById('t-qual').innerHTML=h;
   // Gráficos (tema-aware, padrão)
