@@ -6,7 +6,7 @@
 <title>Padronização de Itens — Frota / Suprimentos</title>
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="../assets/excel-export.js"></script>
 <style>
 :root{
   --bg:#0C1017; --card:#141B26; --card2:#1A2335; --border:#1E2D40;
@@ -79,7 +79,12 @@ body{
 .tbl-tools{display:flex;gap:10px;align-items:center;margin-bottom:12px;flex-wrap:wrap;}
 .search{background:#0a0f18;border:1px solid #2a3a50;border-radius:5px;color:var(--text);font-family:'Montserrat';font-size:12px;padding:7px 11px;min-width:240px;}
 .search:focus{outline:none;border-color:var(--orange);}
+.flt{background:#0a0f18;border:1px solid #2a3a50;border-radius:5px;color:var(--text);font-family:'Montserrat';font-size:12px;font-weight:600;padding:7px 9px;cursor:pointer;max-width:260px;}
+.flt:focus{outline:none;border-color:var(--orange);}
+body.light-mode .flt,body.light-mode .search{background:#fff;border-color:#cbd5e1;}
 .pill{font-size:10px;font-weight:700;color:var(--text2);background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);border-radius:12px;padding:4px 10px;}
+.tbl-section{margin:0;}
+.tbl-title{font-size:11px;font-weight:800;color:var(--text2);text-transform:uppercase;letter-spacing:.6px;margin-bottom:8px;}
 .tbl-scroll{overflow:auto;max-height:65vh;border:1px solid rgba(255,255,255,.07);border-radius:8px;}
 table{width:100%;border-collapse:collapse;font-size:11.5px;}
 thead th{position:sticky;top:0;background:#131b28;color:var(--text);font-size:10px;font-weight:700;padding:9px 9px;border-bottom:1px solid rgba(255,255,255,.12);text-transform:uppercase;letter-spacing:.4px;white-space:nowrap;text-align:left;z-index:2;}
@@ -91,6 +96,10 @@ td.num{text-align:right;font-variant-numeric:tabular-nums;color:var(--text);font
 .t-PEÇA{background:rgba(56,189,248,.15);color:#7dd3fc;} .t-SERVIÇO{background:rgba(249,115,22,.16);color:#fdba74;}
 .t-MATERIAL{background:rgba(148,163,184,.16);color:#cbd5e1;} .t-CONSUMO{background:rgba(59,179,59,.15);color:#86efac;}
 .t-IMOBILIZADO{background:rgba(168,85,247,.16);color:#d8b4fe;} .t-MISTO,.t-OUTRO{background:rgba(255,255,255,.06);color:var(--text2);}
+body.light-mode .tag{color:#111!important;}
+body.light-mode .t-PEÇA{background:rgba(56,189,248,.30);} body.light-mode .t-SERVIÇO{background:rgba(249,115,22,.28);}
+body.light-mode .t-MATERIAL{background:rgba(100,116,139,.25);} body.light-mode .t-CONSUMO{background:rgba(59,179,59,.28);}
+body.light-mode .t-IMOBILIZADO{background:rgba(168,85,247,.28);} body.light-mode .t-MISTO,body.light-mode .t-OUTRO{background:rgba(0,0,0,.08);}
 
 .legenda{font-size:11px;color:var(--text2);line-height:1.6;margin-top:6px;}
 .legenda b{color:var(--text);}
@@ -100,6 +109,7 @@ td.num{text-align:right;font-variant-numeric:tabular-nums;color:var(--text);font
 
 /* light */
 body.light-mode{--bg:#eef0f3;--sidebar:#e7e9ee;--text:#1a1a1a;--text2:#475569;--text3:#94a3b8;}
+body.light-mode .header{background:rgba(12,16,23,.97);}
 body.light-mode .main{background:#F0F0F0;}
 body.light-mode .panel,body.light-mode .kpi{background:#fff!important;border-color:rgba(0,0,0,.06)!important;box-shadow:0 1px 8px rgba(0,0,0,.06);}
 body.light-mode thead th{background:#e9edf2;}
@@ -126,10 +136,7 @@ body.light-mode .search{background:#fff;border-color:#cbd5e1;}
   <div class="header-right">
     <button class="theme-btn" id="themeBtn" title="Modo claro/escuro"></button>
     <span class="status-badge" id="status">Carregando…</span>
-    <button class="exp-btn" id="expBtn" title="Exportar tudo para Excel">
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-      Excel
-    </button>
+    <span class="status-badge" style="background:rgba(59,179,59,.15);border-color:rgba(59,179,59,.35);color:#8fe08f" title="Clique com o botão direito em qualquer tabela">botão direito na tabela → Excel / imagem</span>
   </div>
 </header>
 
@@ -169,11 +176,13 @@ body.light-mode .search{background:#fff;border-color:#cbd5e1;}
       <div class="page-title">Relatório — descrição separada em colunas</div>
       <div class="page-sub">Cada item da base atual quebrado em campos estruturados. É a matéria-prima para o Suprimentos decidir a composição. A descrição original é sempre preservada. Use a busca; exporte para ver a lista completa no Excel.</div>
       <div class="tbl-tools">
-        <input class="search" id="s-base" placeholder="Buscar (descrição, família, substantivo…)">
+        <input class="search" id="s-base" placeholder="Buscar (descrição, substantivo…)" oninput="searchBase()">
+        <select class="flt" id="tp-base" onchange="renderBase()"></select>
+        <select class="flt" id="fm-base" onchange="renderBase()"></select>
         <span class="pill" id="cnt-base"></span>
-        <span class="pill">exibindo até 600 linhas · Excel = completo</span>
+        <span class="pill">botão direito na tabela → exportar</span>
       </div>
-      <div class="tbl-scroll"><table id="t-base"></table></div>
+      <div class="tbl-section"><div class="tbl-title">Base — descrição separada em colunas</div><div class="tbl-scroll"><table id="t-base"></table></div></div>
     </section>
   </main>
 </div>
@@ -197,6 +206,12 @@ const SUG=[
 let META=null, ROWS=[], GROUPS={}, charts={};
 
 const fmt=n=>n.toLocaleString('pt-BR');
+const optTipos=()=>'<option value="">Todos os tipos</option>'+META.tipos.map(t=>`<option>${t[0]}</option>`).join('');
+const optFams=()=>'<option value="">Todas as famílias</option>'+META.familias.map(f=>`<option>${esc(f[0])}</option>`).join('');
+const gv=id=>{const e=document.getElementById(id);return e?e.value:'';};
+const _dt={}; function deb(k,fn){clearTimeout(_dt[k]);_dt[k]=setTimeout(fn,180);}
+function searchSug(id){deb('s'+id,()=>filterSug(id));}
+function searchBase(){deb('base',renderBase);}
 function padrao(r,s){
   const parts=[];
   s.fields.forEach(f=>{
@@ -230,6 +245,8 @@ async function boot(){
 
 function buildNav(){
   document.getElementById('b-base').textContent=fmt(META.total);
+  document.getElementById('tp-base').innerHTML=optTipos();
+  document.getElementById('fm-base').innerHTML=optFams();
   const nav=document.getElementById('nav-sug');
   SUG.forEach(s=>{
     const g=groupFor(s);
@@ -256,33 +273,35 @@ function sugHTML(s,g){
       <div class="kpi"><div class="k-lbl">Média de itens por padrão</div><div class="k-val">${(META.total/g.length).toFixed(1)}×</div><div class="k-sub">quanto cada padrão consolida</div></div>
     </div>
     <div class="tbl-tools">
-      <input class="search" id="s-${s.id}" placeholder="Buscar item padrão…" oninput="filterSug('${s.id}')">
+      <input class="search" id="s-${s.id}" placeholder="Buscar item padrão…" oninput="searchSug('${s.id}')">
+      <select class="flt" id="tp-${s.id}" onchange="filterSug('${s.id}')">${optTipos()}</select>
+      <select class="flt" id="fm-${s.id}" onchange="filterSug('${s.id}')">${optFams()}</select>
       <span class="pill" id="cnt-${s.id}"></span>
-      <span class="pill">ordenado por nº de itens consolidados</span>
+      <span class="pill">botão direito na tabela → exportar</span>
     </div>
-    <div class="tbl-scroll"><table id="t-${s.id}"></table></div>`;
+    <div class="tbl-section"><div class="tbl-title">Sugestão ${s.nome} — itens padrão</div><div class="tbl-scroll"><table id="t-${s.id}"></table></div></div>`;
 }
 
-function renderSugTable(s,q){
+function renderSugTable(s){
   const g=groupFor(s);
-  const f=q?g.filter(x=>(x.padrao+' '+x.fam).toLowerCase().includes(q.toLowerCase())):g;
-  const show=f.slice(0,600);
+  const q=gv('s-'+s.id).toLowerCase(), tp=gv('tp-'+s.id), fm=gv('fm-'+s.id);
+  const f=g.filter(x=>(!q||(x.padrao+' '+x.fam).toLowerCase().includes(q))&&(!tp||x.tipo===tp)&&(!fm||x.fam===fm));
   let h=`<thead><tr><th>Descrição padrão</th><th>Tipo</th><th>Família</th><th class="num">Nº itens</th><th>Exemplos (originais)</th></tr></thead><tbody>`;
-  show.forEach(x=>{
+  f.forEach(x=>{
     h+=`<tr><td class="strong">${esc(x.padrao)}</td><td><span class="tag t-${x.tipo}">${x.tipo}</span></td><td>${esc(x.fam)}</td><td class="num">${x.n}</td><td class="ex">${esc(x.ex.join('  ·  '))}</td></tr>`;
   });
   h+='</tbody>';
   document.getElementById('t-'+s.id).innerHTML=h;
-  document.getElementById('cnt-'+s.id).textContent=fmt(f.length)+' padrões'+(f.length>600?' (exibindo 600)':'');
+  document.getElementById('cnt-'+s.id).textContent=fmt(f.length)+' padrões';
 }
-function filterSug(id){ const s=SUG.find(x=>x.id===id); renderSugTable(s,document.getElementById('s-'+id).value); }
+function filterSug(id){ renderSugTable(SUG.find(x=>x.id===id)); }
 
-function renderBase(q){
-  const f=q?ROWS.filter(r=>r.join(' ').toLowerCase().includes(q.toLowerCase())):ROWS;
-  const show=f.slice(0,600);
+function renderBase(){
+  const q=gv('s-base').toLowerCase(), tp=gv('tp-base'), fm=gv('fm-base');
+  const f=ROWS.filter(r=>(!q||r.join(' ').toLowerCase().includes(q))&&(!tp||r[11]===tp)&&(!fm||r[0]===fm));
   const heads=['FAMÍLIA','CÓD ANT.','DESCRIÇÃO ORIGINAL','SUBSTANTIVO','MODIFICADOR','MEDIDA','APLICAÇÃO','MARCA','REFERÊNCIA','EMB.','COND.','TIPO','LC116'];
   let h='<thead><tr>'+heads.map((x,i)=>`<th class="${i===11?'':''}">${x}</th>`).join('')+'</tr></thead><tbody>';
-  show.forEach(r=>{
+  f.forEach(r=>{
     h+='<tr>'+r.map((v,i)=>{
       if(i===11) return `<td><span class="tag t-${v}">${v}</span></td>`;
       const cls=(i===2||i===3)?'strong':'';
@@ -291,14 +310,14 @@ function renderBase(q){
   });
   h+='</tbody>';
   document.getElementById('t-base').innerHTML=h;
-  document.getElementById('cnt-base').textContent=fmt(f.length)+' linhas'+(f.length>600?' (exibindo 600)':'');
+  document.getElementById('cnt-base').textContent=fmt(f.length)+' linhas';
 }
 
 function switchTab(tab){
   document.querySelectorAll('.nav-item').forEach(i=>i.classList.toggle('active',i.dataset.tab===tab));
   document.querySelectorAll('.tabpage').forEach(p=>p.classList.toggle('show',p.id==='tab-'+tab));
   const s=SUG.find(x=>x.id===tab);
-  if(s) renderSugTable(s,document.getElementById('s-'+tab).value||'');
+  if(s) renderSugTable(s);
   if(window.innerWidth<=760) document.getElementById('shell').classList.add('collapsed');
 }
 
@@ -320,6 +339,7 @@ function renderDiag(){
 const tickC=()=>document.body.classList.contains('light-mode')?'#475569':'#94A3B8';
 const gridC=()=>document.body.classList.contains('light-mode')?'rgba(0,0,0,.07)':'rgba(255,255,255,.06)';
 function mkBar(id,labels,data,color,horiz,suffix){
+  if(!window.Chart)return;
   if(charts[id])charts[id].destroy();
   charts[id]=new Chart(document.getElementById(id),{type:'bar',
     data:{labels,datasets:[{data,backgroundColor:color,borderRadius:4,barThickness:'flex',maxBarThickness:24}]},
@@ -329,6 +349,7 @@ function mkBar(id,labels,data,color,horiz,suffix){
               y:{grid:{display:false},ticks:{color:tickC(),font:{family:'Montserrat',size:10}}}}}});
 }
 function mkDonut(id,labels,data){
+  if(!window.Chart)return;
   if(charts[id])charts[id].destroy();
   const cols=['#38BDF8','#94A3B8','#F97316','#3BB33B','#A855F7','#64748b'];
   charts[id]=new Chart(document.getElementById(id),{type:'doughnut',
@@ -340,33 +361,8 @@ function mkDonut(id,labels,data){
 
 function esc(s){return String(s==null?'':s).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));}
 
-// ---- Export Excel (workbook multi-aba) ----
-document.getElementById('expBtn').addEventListener('click',()=>{
-  const wb=XLSX.utils.book_new();
-  // Diagnóstico
-  const diag=[['Padronização de Itens — Frota / Suprimentos'],[],
-    ['Total de itens', META.total],['Famílias', META.nFamilias],[],
-    ['Tipo (sugerido)','Qtd'],...META.tipos,[],
-    ['Família','Qtd'],...META.familias,[],
-    ['Sugestão de composição','Itens padrão','Redução %']];
-  SUG.forEach(s=>{const g=groupFor(s);diag.push([s.nome, g.length, Math.round(100*(META.total-g.length)/META.total)]);});
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(diag),'Diagnóstico');
-  // Base separada
-  const base=[COLS]; ROWS.forEach(r=>base.push(r));
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(base),'Base separada');
-  // cada sugestão
-  SUG.forEach(s=>{
-    const g=groupFor(s);
-    const aoa=[['DESCRICAO_PADRAO','TIPO','FAMILIA','N_ITENS','EXEMPLOS']];
-    g.forEach(x=>aoa.push([x.padrao,x.tipo,x.fam,x.n,x.ex.join(' | ')]));
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(aoa), ('Sug '+s.nome.split(' · ')[0]).slice(0,31));
-  });
-  XLSX.writeFile(wb,'padronizacao-itens-frota.xlsx');
-});
-
 // menu retrátil + tema
 document.getElementById('menuBtn').addEventListener('click',()=>document.getElementById('shell').classList.toggle('collapsed'));
-document.getElementById('s-base').addEventListener('input',e=>renderBase(e.target.value));
 const _sun=`<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.2" y1="4.2" x2="5.6" y2="5.6"/><line x1="18.4" y1="18.4" x2="19.8" y2="19.8"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.2" y1="19.8" x2="5.6" y2="18.4"/><line x1="18.4" y1="5.6" x2="19.8" y2="4.2"/></svg>`;
 const _moon=`<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>`;
 function applyTheme(t){document.body.classList.toggle('light-mode',t==='light');localStorage.setItem('bi_theme',t);
