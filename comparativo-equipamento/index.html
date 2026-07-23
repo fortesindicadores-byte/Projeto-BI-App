@@ -194,11 +194,11 @@ body.light-mode th.sep-l,body.light-mode td.sep-l{border-left-color:rgba(0,0,0,.
     </div>
     <div class="chart-card">
       <div class="tbl-title">Ciclo da carreta <span style="font-weight:600;color:var(--text3);font-size:11px">· Ano 1–10 · finame + extensão · R$/carreta·mês</span></div>
-      <div class="tbl-sub">Ano 1–5 = finame (remuneração = FINAME + 0,11 × km · nossa conta inclui o FINAME) · Ano 6–10 = extensão — a linha divide-se nos 3 cenários</div>
+      <div class="tbl-sub">Ano 1–5 = contrato (remuneração = manut 0,11 × km · FINAME fora, remunerado à parte) · Ano 6–10 = extensão — a linha divide-se nos 3 cenários</div>
       <div class="leg">
         <span><i class="b-real"></i>Nossa conta</span>
         <span><i class="b-proj"></i>Nossa conta (tend.)</span>
-        <span><i class="l-meio"></i>Finame + manut</span>
+        <span><i class="l-meio"></i>Manut · 0,11 × km</span>
         <span><i class="l-ambev"></i>Ambev</span>
         <span><i class="l-meio"></i>Meio-termo</span>
         <span><i class="l-optas"></i>Optas</span>
@@ -225,7 +225,7 @@ body.light-mode th.sep-l,body.light-mode td.sep-l{border-left-color:rgba(0,0,0,.
   <!-- TABELA 2: ciclo completo 2021–2030 -->
   <div class="tbl-section">
     <div class="tbl-title">2 · Ciclo completo (Ano 1–10) — finame + 5 anos</div>
-    <div class="tbl-sub">Ano 1–5 (finame): remuneração = FINAME R$ 4.330,80 + manut 0,11 × nossa km (igual nos 3; finame fora do R$/km) · nossa conta = custo real + FINAME · Ano 6–10 (extensão): cenários (REM K entra pra pagar a conta)</div>
+    <div class="tbl-sub">Ano 1–5 (contrato): remuneração = manut 0,11 × nossa km (FINAME fora — PMT fixo remunerado à parte) · nossa conta = custo real de carroceria · Ano 6–10 (extensão): cenários (REM K entra pra pagar a conta)</div>
     <table>
       <thead><tr>
         <th>Ano</th><th class="num">Nossa conta</th>
@@ -249,7 +249,7 @@ body.light-mode th.sep-l,body.light-mode td.sep-l{border-left-color:rgba(0,0,0,.
     <ul>
       <li><b>Ciclo = Ano 1 a Ano 10</b> (Ano 1–5 finame · Ano 6–10 extensão) — lifecycle da carreta, não anos-calendário. Os valores usam nossas variáveis dos anos correspondentes: Ano 1–5 ≈ realizado 2021–2025; Ano 6–10 ≈ tendência 2026–2030.</li>
       <li><b>Tudo por R$/Equipamento (carreta·mês)</b>, nas <b>nossas variáveis</b>: km por carreta·mês real (até 2025) e estimado (2026–2030, tendência por regressão dos drivers Custo/Km/Carretas; 2026 mensalizado ×12/6).</li>
-      <li><b>Período de finame (2021–2025):</b> o FINAME <b>não entra no R$/km</b> — é PMT fixo. Remuneração/carreta·mês = <b>FINAME R$ 4.330,80</b> + manutenção <b>0,11 R$/km</b> × nossa km (igual nos 3 cenários). Nossa conta = custo real de carroceria (Conlog) + FINAME (nós pagamos o financiamento) — o FINAME aparece dos dois lados e se anula no ▲.</li>
+      <li><b>Período de contrato/finame (Ano 1–5):</b> o FINAME <b>fica FORA da conta</b> — é PMT fixo (R$ 4.330,80) remunerado à parte. Remuneração/carreta·mês = manutenção <b>0,11 R$/km</b> × nossa km (igual nos 3 cenários); nossa conta = custo real de carroceria (Conlog).</li>
       <li><b>Período faltante / extensão (2026–2030):</b> sem financiamento — a <b>REM K entra para ajudar a pagar a conta</b>. Remuneração = REM K % × <b>R$ 221.605</b> + manutenção do cenário × nossa km. Ambev 1,00% + 0,19 · Meio-termo 1,15% + 0,22 · Optas 1,33% + 0,25. Nossa conta = custo real (Conlog).</li>
       <li><b>Valor da carreta:</b> aba <b>'Valor de Compra NF'</b> — valor médio atual <b>R$ 221.605</b> (média de tudo) na REM K do pós; valor inicial R$ 203.086 (média sem 2025) documentado como referência.</li>
       <li><b>▲</b> = remuneração − nossa conta (verde paga · vermelho não paga). <b>Imp. (R$)</b> = ▲ × carretas·mês do ano. <b>Resposta</b> = acumulado do período: positivo → o cenário paga a conta.</li>
@@ -333,18 +333,16 @@ function driverVal(key,y){
 const kmCarOf=y=>{const k=driverVal('km',y),n=driverVal('nEq',y);return n?k/n:null;};
 const conlogEq=y=>{const c=driverVal('custoTot',y),n=driverVal('nEq',y);return n?c/n:null;};   // nosso custo real /carreta·mês
 
-// remuneração do cenário no ano y (R$/carreta·mês) — nossas variáveis
+// remuneração do cenário no ano y (R$/carreta·mês) — nossas variáveis.
+// FINAME FICA FORA do período de contrato (é PMT fixo remunerado à parte, não entra na conta).
 function remEq(c,y){
   const km=kmCarOf(y); if(km==null) return null;
-  if(y>=FIN_DE && y<=FIN_ATE) return FINAME_PMT + MANUT_FIN*km;            // finame: FINAME + 0,11×km (igual nos 3)
+  if(y>=FIN_DE && y<=FIN_ATE) return MANUT_FIN*km;                         // contrato: só manut 0,11×km (igual nos 3)
   if(y>=EXT_DE && y<=EXT_ATE) return c.manut*km + c.remK*VALOR_ATUAL;      // extensão: manut + REM K×valor atual
   return null;
 }
-// nossa conta no ano y (R$/carreta·mês): custo real + FINAME nos anos de financiamento
-function contaEq(y){
-  const e=conlogEq(y); if(e==null) return null;
-  return e + ((y>=FIN_DE&&y<=FIN_ATE)?FINAME_PMT:0);
-}
+// nossa conta no ano y (R$/carreta·mês): custo real de carroceria (sem FINAME)
+function contaEq(y){ return conlogEq(y); }
 
 function calc(){
   const rows=[];
@@ -459,12 +457,12 @@ function renderCharts(R){
   if(chCiclo) chCiclo.destroy();
   const yC=[]; for(let y=FIN_DE;y<=EXT_ATE;y++) yC.push(y);
   const labC=yC.map((y,i)=>'Ano '+(i+1));
-  const contaC=yC.map(y=>contaEq(y));                       // custo real + FINAME nos anos de finame
+  const contaC=yC.map(y=>contaEq(y));                       // custo real de carroceria (FINAME fora)
   const refC=yC.map(y=> y<=FIN_ATE? remEq(CENARIOS[0],y) : remEq(CENARIOS[0],y));
   const solidC=yC.map(y=> y<=REAL_TO);
   const finIdx=FIN_ATE-FIN_DE;   // Ano 5
-  const finVal=y=>remEq(CENARIOS[0],y);                     // FINAME + 0,11×km (igual nos 3)
-  const finLine={type:'line',label:'Finame + manut',data:yC.map(y=> y<=FIN_ATE? finVal(y) : null),
+  const finVal=y=>remEq(CENARIOS[0],y);                     // manut 0,11×km (igual nos 3; FINAME fora)
+  const finLine={type:'line',label:'Manut (contrato)',data:yC.map(y=> y<=FIN_ATE? finVal(y) : null),
     borderColor:meioCor(),backgroundColor:meioCor(),borderWidth:2.5,borderDash:[6,4],tension:.15,order:1,spanGaps:false,
     pointRadius:5,pointBackgroundColor:meioCor(),pointBorderWidth:0,pointHoverRadius:8,
     datalabels:boxDl(c2=>c2.dataIndex===0,'left')};
