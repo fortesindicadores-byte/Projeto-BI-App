@@ -175,10 +175,14 @@
     const body=getComputedStyle(document.body).backgroundColor;
     return (body && alpha(body)>=0.9) ? body : (document.body.classList.contains('light-mode')?'#F0F0F0':'#0C1017');
   }
-  const SCALE=4; // resolução do PNG (4× = bem nítido p/ PowerPoint; re-renderiza o gráfico nessa DPI)
+  const SCALE=4; // fallback
+  // Escala ADAPTATIVA: elementos menores (cards de gráfico) saem muito mais nítidos (até 8×);
+  // elementos grandes (tabelões) limitam a escala para não estourar memória (~32MP alvo).
+  function scaleFor(el){ try{ const r=el.getBoundingClientRect(); const px=Math.max(1,r.width*r.height);
+    return Math.max(3, Math.min(8, Math.sqrt(32e6/px))); }catch(e){ return SCALE; } }
   // Chart.js resiste a mudar DPI em runtime; então re-renderiza o gráfico num canvas temporário
   // em alta DPI (3×) e devolve um dataURL nítido p/ trocar no clone do html2canvas.
-  function chartHiRes(chart){
+  function chartHiRes(chart, scl){
     try{
       const cv=chart.canvas, r=cv.getBoundingClientRect();
       const cssW=Math.round(r.width), cssH=Math.round(r.height);
@@ -186,29 +190,33 @@
       const tmp=document.createElement('canvas'); tmp.style.width=cssW+'px'; tmp.style.height=cssH+'px';
       const host=document.createElement('div'); host.style.cssText='position:fixed;left:-99999px;top:0;width:'+cssW+'px;height:'+cssH+'px;'; host.appendChild(tmp); document.body.appendChild(host);
       const cfg=chart.config;
-      const t=new window.Chart(tmp,{type:cfg.type,data:cfg.data,options:Object.assign({},cfg.options,{responsive:false,animation:false,devicePixelRatio:SCALE}),plugins:cfg.plugins});
+      const t=new window.Chart(tmp,{type:cfg.type,data:cfg.data,options:Object.assign({},cfg.options,{responsive:false,animation:false,devicePixelRatio:scl||SCALE}),plugins:cfg.plugins});
       const url=tmp.toDataURL('image/png');
       t.destroy(); host.remove();
       return {url,cssW,cssH};
     }catch(e){ console.warn('chartHiRes',e); return null; }
   }
-  function capturaImagem(el, nome, chart){
+  function capturaImagem(el, nome, chart, transp){
     ensureH2C(err=>{ if(err){ alert('Não foi possível carregar o componente de imagem. Verifique a conexão.'); return; }
-      const hi = chart ? chartHiRes(chart) : null;
+      const scl=scaleFor(el);                     // escala adaptativa (gráficos até 8×)
+      const hi = chart ? chartHiRes(chart, scl) : null;
       if(hi && chart) chart.canvas.setAttribute('data-hires-tgt','1');
+      el.setAttribute('data-h2c-root','1');
       // html2canvas 1.4.1 NÃO resolve var(--x) em 'color'/'background' (pinta preto).
       // Solução: grava a cor/fundo COMPUTADOS num atributo p/ reaplicar como valor concreto no clone.
       const nodes=[el].concat([].slice.call(el.querySelectorAll('*')));
       nodes.forEach(n=>{ try{ const cs=getComputedStyle(n); n.setAttribute('data-h2c-c',cs.color); n.setAttribute('data-h2c-bg',cs.backgroundColor); }catch(e){} });
-      html2canvas(el,{scale:SCALE,backgroundColor:bgDe(el),useCORS:true,logging:false,scrollX:0,scrollY:-window.scrollY,
+      html2canvas(el,{scale:scl,backgroundColor:transp?null:bgDe(el),useCORS:true,logging:false,scrollX:0,scrollY:-window.scrollY,
         onclone:(doc)=>{
           doc.querySelectorAll('[data-h2c-c]').forEach(n=>{ n.style.color=n.getAttribute('data-h2c-c'); const bg=n.getAttribute('data-h2c-bg'); if(bg&&bg!=='rgba(0, 0, 0, 0)'&&bg!=='transparent') n.style.backgroundColor=bg; });
+          if(transp){ const rc=doc.querySelector('[data-h2c-root="1"]');   // fundo transparente: remove o fundo/sombra do card raiz
+            if(rc){ rc.style.backgroundColor='transparent'; rc.style.boxShadow='none'; rc.style.border='none'; rc.style.backdropFilter='none'; } }
           if(hi){ const c=doc.querySelector('canvas[data-hires-tgt="1"]')||doc.querySelector('canvas');
             if(c&&c.parentNode){ const img=doc.createElement('img'); img.src=hi.url; img.style.width=hi.cssW+'px'; img.style.height=hi.cssH+'px'; img.style.display='block'; c.parentNode.replaceChild(img,c); } }
         }
-      }).then(cv=>{ baixarPNG(cv, nome); })
+      }).then(cv=>{ baixarPNG(cv, transp? nome+'-transparente' : nome); })
         .catch(e=>{ console.error(e); alert('Erro ao gerar imagem: '+(e.message||e)); })
-        .finally(()=>{ if(chart) chart.canvas.removeAttribute('data-hires-tgt'); nodes.forEach(n=>{ n.removeAttribute('data-h2c-c'); n.removeAttribute('data-h2c-bg'); }); });
+        .finally(()=>{ if(chart) chart.canvas.removeAttribute('data-hires-tgt'); el.removeAttribute('data-h2c-root'); nodes.forEach(n=>{ n.removeAttribute('data-h2c-c'); n.removeAttribute('data-h2c-bg'); }); });
     });
   }
   // bloco "exportável como imagem" mais próximo do clique
@@ -261,7 +269,8 @@
       const nome=tituloTabela(sec), alvoImg=sec||table;
       showMenu(e.clientX,e.clientY,[
         {icon:IC_FILE,label:'Exportar Excel',action:()=>baixarTabela(table, nome)},
-        {icon:IC_IMG, label:'Exportar imagem (PNG)',action:()=>capturaImagem(alvoImg, nome)}
+        {icon:IC_IMG, label:'Exportar imagem (PNG)',action:()=>capturaImagem(alvoImg, nome)},
+        {icon:IC_IMG, label:'PNG fundo transparente',action:()=>capturaImagem(alvoImg, nome, undefined, true)}
       ]);
       return;
     }
@@ -275,7 +284,8 @@
         const card=canvas.closest('.chart-card')||canvas.closest('.tbl-section,section')||canvas.parentElement;
         showMenu(e.clientX,e.clientY,[
           {icon:IC_FILE,label:'Exportar Excel',action:()=>baixarGrafico(ch, nome)},
-          {icon:IC_IMG, label:'Exportar imagem (PNG)',action:()=>capturaImagem(card, nome, ch)}
+          {icon:IC_IMG, label:'Exportar imagem (PNG)',action:()=>capturaImagem(card, nome, ch)},
+          {icon:IC_IMG, label:'PNG fundo transparente',action:()=>capturaImagem(card, nome, ch, true)}
         ]);
         return;
       }
@@ -292,6 +302,7 @@
       const cards=cardsDe(e.target);
       if(cards) items.push({icon:IC_FILE,label:'Exportar Excel (cards)',action:()=>baixarCards(cards, 'Cards')});
       items.push({icon:IC_IMG,label:'Exportar imagem (PNG)',action:()=>capturaImagem(bloco, nome)});
+      items.push({icon:IC_IMG,label:'PNG fundo transparente',action:()=>capturaImagem(bloco, nome, undefined, true)});
       showMenu(e.clientX,e.clientY,items);
       return;
     }
