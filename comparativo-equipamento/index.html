@@ -96,6 +96,7 @@ tr.proj td.ano::after{content:' · tend.';font-size:9px;color:var(--text3);font-
 tr.total td{color:var(--text);font-weight:700;font-size:12px;border-top:2px solid rgba(255,255,255,.12);padding-top:12px;background:var(--card);}
 .cr{color:var(--red)!important;font-weight:700;}
 .cg{color:var(--green)!important;font-weight:700;}
+.tbl-scroll{overflow-x:auto;}
 
 /* CAIXA RESUMO (slide) */
 .resumo{background:rgba(20,27,38,.55);border:1px solid rgba(255,255,255,.07);border-radius:8px;padding:18px 22px 20px;margin:6px 0 16px;backdrop-filter:blur(16px);box-shadow:0 2px 12px rgba(0,0,0,.25);}
@@ -193,26 +194,26 @@ body.light-mode th.sep-l,body.light-mode td.sep-l{border-left-color:rgba(0,0,0,.
     </div>
   </div>
 
-  <!-- TABELAS lado a lado, na mesma ordem dos gráficos -->
-  <div class="charts-grid">
-    <div class="tbl-section">
-      <div class="tbl-title">Com a taxa fixa <span style="font-weight:600;color:var(--text3);font-size:11px">· R$/carreta·mês</span></div>
-      <div class="tbl-sub">Conlog vs remuneração total (manut × km + Rem. sobre Capital) · ▲ = cenário − Conlog</div>
-      <table><thead><tr>
-        <th>Ano</th><th class="num">Conlog</th>
-        <th class="num sep-l">Ambev</th><th class="num">Meio</th><th class="num">Optas</th>
-        <th class="num sep-l">▲ Amb</th><th class="num">▲ Meio</th><th class="num">▲ Opt</th>
-      </tr></thead><tbody id="tb-geral"></tbody></table>
-    </div>
-    <div class="tbl-section">
-      <div class="tbl-title">Só manutenção <span style="font-weight:600;color:var(--text3);font-size:11px">· sem a taxa fixa · R$/carreta·mês</span></div>
-      <div class="tbl-sub">Conlog vs a manutenção de carroceria (R$/km × km) · ▲ = manut − Conlog (a Rem. sobre Capital não entra aqui)</div>
-      <table><thead><tr>
-        <th>Ano</th><th class="num">Conlog</th>
-        <th class="num sep-l">Ambev</th><th class="num">Meio</th><th class="num">Optas</th>
-        <th class="num sep-l">▲ Amb</th><th class="num">▲ Meio</th><th class="num">▲ Opt</th>
-      </tr></thead><tbody id="tb-linha"></tbody></table>
-    </div>
+  <!-- TABELAS na mesma ordem dos gráficos, com colunas de impacto (R$) -->
+  <div class="tbl-section">
+    <div class="tbl-title">Com a taxa fixa <span style="font-weight:600;color:var(--text3);font-size:11px">· R$/carreta·mês · impacto em R$</span></div>
+    <div class="tbl-sub">Conlog vs remuneração total (manut × km + Rem. sobre Capital) · ▲ = cenário − Conlog · Imp. = ▲ × carretas·mês do ano · Acumulado = soma dos impactos (ciclo Ano 1–10)</div>
+    <div class="tbl-scroll"><table><thead><tr>
+      <th>Ano</th><th class="num">Conlog</th>
+      <th class="num sep-l">Ambev</th><th class="num">Meio</th><th class="num">Optas</th>
+      <th class="num sep-l">▲ Amb</th><th class="num">▲ Meio</th><th class="num">▲ Opt</th>
+      <th class="num sep-l">Imp. Amb</th><th class="num">Imp. Meio</th><th class="num">Imp. Opt</th>
+    </tr></thead><tbody id="tb-geral"></tbody></table></div>
+  </div>
+  <div class="tbl-section">
+    <div class="tbl-title">Só manutenção <span style="font-weight:600;color:var(--text3);font-size:11px">· sem a taxa fixa · R$/carreta·mês · impacto em R$</span></div>
+    <div class="tbl-sub">Conlog vs a manutenção de carroceria (R$/km × km) · ▲ = manut − Conlog · Imp. = ▲ × carretas·mês (a Rem. sobre Capital não entra aqui)</div>
+    <div class="tbl-scroll"><table><thead><tr>
+      <th>Ano</th><th class="num">Conlog</th>
+      <th class="num sep-l">Ambev</th><th class="num">Meio</th><th class="num">Optas</th>
+      <th class="num sep-l">▲ Amb</th><th class="num">▲ Meio</th><th class="num">▲ Opt</th>
+      <th class="num sep-l">Imp. Amb</th><th class="num">Imp. Meio</th><th class="num">Imp. Opt</th>
+    </tr></thead><tbody id="tb-linha"></tbody></table></div>
   </div>
 
   <!-- DIAGNÓSTICO (slide) -->
@@ -361,18 +362,22 @@ function renderTables(R){
       const proj=r.y>=ANO_PARC?'proj':'';
       const sv=K.map(k=>r[field][k]);
       const dl=sv.map(v=>(v==null||r.conlog==null)?null:v-r.conlog);
+      const im=dl.map(v=>v==null?null:v*(r.nEq||0));
       h+=`<tr class="${proj}"><td class="ano">Ano ${i+1}</td><td class="num" data-v="${r.conlog??''}">${brl0(r.conlog)}</td>`
         + sv.map((v,j)=>`<td class="num ${j===0?'sep-l':''}" data-v="${v??''}">${v==null?'—':brl0(v)}</td>`).join('')
         + dl.map((v,j)=>`<td class="num ${cls(v)} ${j===0?'sep-l':''}" data-v="${v??''}">${v==null?'—':sm(v)}</td>`).join('')
+        + im.map((v,j)=>`<td class="num ${cls(v)} ${j===0?'sep-l':''}" data-v="${v??''}">${v==null?'—':signMoney(v)}</td>`).join('')
         + '</tr>';
     });
     const sN=R.rows.reduce((a,r)=>a+(r.nEq||0),0);
     const cw=sN? R.rows.reduce((a,r)=>a+(r.conlog||0)*(r.nEq||0),0)/sN : null;
     const sw=K.map(k=>{ let s=0,nn=0; R.rows.forEach(r=>{const v=r[field][k]; if(v!=null){s+=v*(r.nEq||0);nn+=(r.nEq||0);}}); return nn?s/nn:null; });
     const dw=sw.map(v=>(v==null||cw==null)?null:v-cw);
-    h+=`<tr class="total"><td class="ano">Média pond.</td><td class="num" data-v="${cw??''}">${brl0(cw)}</td>`
+    const iw=K.map(k=>{ let s=0; R.rows.forEach(r=>{const v=r[field][k]; if(v!=null&&r.conlog!=null)s+=(v-r.conlog)*(r.nEq||0);}); return s; });
+    h+=`<tr class="total"><td class="ano">Acumulado</td><td class="num" data-v="${cw??''}">${brl0(cw)}</td>`
       + sw.map((v,j)=>`<td class="num ${j===0?'sep-l':''}" data-v="${v??''}">${v==null?'—':brl0(v)}</td>`).join('')
       + dw.map((v,j)=>`<td class="num ${cls(v)} ${j===0?'sep-l':''}" data-v="${v??''}">${v==null?'—':sm(v)}</td>`).join('')
+      + iw.map((v,j)=>`<td class="num ${cls(v)} ${j===0?'sep-l':''}" data-v="${v??''}">${signMoney(v)}</td>`).join('')
       + '</tr>';
     return h;
   };
