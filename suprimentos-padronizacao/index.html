@@ -1,0 +1,381 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Padronização de Itens — Frota / Suprimentos</title>
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<style>
+:root{
+  --bg:#0C1017; --card:#141B26; --card2:#1A2335; --border:#1E2D40;
+  --orange:#F97316; --blue:#38BDF8; --text:#F1F5F9; --text2:#94A3B8; --text3:#475569;
+  --green:#3BB33B; --red:#FF6666; --sidebar:#0a0f18;
+}
+*{margin:0;padding:0;box-sizing:border-box;}
+body{
+  background:
+    radial-gradient(ellipse at 10% 25%, rgba(249,115,22,.06) 0%, transparent 50%),
+    radial-gradient(ellipse at 90% 75%, rgba(56,189,248,.05) 0%, transparent 50%),
+    var(--bg);
+  color:var(--text); font-family:'Montserrat',-apple-system,sans-serif; font-size:13px; min-height:100vh;
+}
+.header{
+  background:rgba(12,16,23,.75); border-bottom:1px solid rgba(255,255,255,.07);
+  padding:10px 20px 12px; display:flex; align-items:center; gap:12px;
+  position:sticky; top:0; z-index:200;
+  backdrop-filter:blur(20px); -webkit-backdrop-filter:blur(20px); box-shadow:0 2px 12px rgba(0,0,0,.3);
+}
+.menu-btn{background:rgba(249,115,22,.15);border:1px solid rgba(249,115,22,.3);border-radius:5px;padding:6px 8px;cursor:pointer;color:var(--orange);display:flex;align-items:center;}
+.menu-btn:hover{background:rgba(249,115,22,.32);}
+.brand{flex:1;}
+.brand h1{font-size:15px;font-weight:700;color:var(--orange);}
+.brand p{font-size:10px;color:var(--text2);margin-top:2px;}
+.header-right{display:flex;align-items:center;gap:8px;}
+.status-badge{font-size:9px;color:var(--text);background:rgba(249,115,22,.15);border:1px solid rgba(249,115,22,.3);border-radius:4px;padding:3px 9px;white-space:nowrap;}
+.exp-btn{background:var(--green);border:none;border-radius:5px;padding:7px 13px;cursor:pointer;color:#062a06;font-family:'Montserrat';font-weight:800;font-size:11px;display:flex;align-items:center;gap:6px;}
+.exp-btn:hover{filter:brightness(1.08);}
+.theme-btn{background:rgba(249,115,22,.15);border:1px solid rgba(249,115,22,.3);border-radius:5px;padding:6px 8px;cursor:pointer;color:var(--orange);display:flex;align-items:center;}
+
+.shell{display:flex;min-height:calc(100vh - 46px);}
+/* SIDEBAR retrátil */
+.sidebar{width:230px;flex-shrink:0;background:var(--sidebar);border-right:1px solid rgba(255,255,255,.06);
+  padding:14px 10px;display:flex;flex-direction:column;gap:4px;transition:width .18s ease;position:sticky;top:46px;height:calc(100vh - 46px);overflow-y:auto;}
+.shell.collapsed .sidebar{width:56px;}
+.nav-sec{font-size:9px;font-weight:800;color:var(--text3);text-transform:uppercase;letter-spacing:1.2px;padding:10px 12px 6px;white-space:nowrap;overflow:hidden;}
+.shell.collapsed .nav-sec{opacity:0;}
+.nav-item{display:flex;align-items:center;gap:11px;padding:9px 12px;border-radius:6px;cursor:pointer;color:var(--text2);font-weight:600;font-size:12.5px;white-space:nowrap;border:1px solid transparent;}
+.nav-item:hover{background:rgba(255,255,255,.04);color:var(--text);}
+.nav-item.active{background:rgba(249,115,22,.14);border-color:rgba(249,115,22,.3);color:var(--orange);}
+.nav-item .ico{width:18px;height:18px;flex-shrink:0;display:flex;align-items:center;justify-content:center;}
+.nav-item .lbl{overflow:hidden;text-overflow:ellipsis;}
+.nav-item .badge{margin-left:auto;font-size:9px;font-weight:800;background:rgba(255,255,255,.07);color:var(--text2);border-radius:8px;padding:1px 7px;}
+.shell.collapsed .nav-item .lbl,.shell.collapsed .nav-item .badge{display:none;}
+.shell.collapsed .nav-item{justify-content:center;padding:9px 0;}
+
+.main{flex:1;min-width:0;padding:22px 26px 70px;}
+.tabpage{display:none;}
+.tabpage.show{display:block;}
+.page-title{font-size:19px;font-weight:800;color:var(--text);margin-bottom:3px;}
+.page-sub{font-size:11.5px;color:var(--text2);margin-bottom:20px;max-width:900px;line-height:1.5;}
+
+/* KPIs */
+.kpi-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin-bottom:20px;}
+.kpi{background:rgba(20,27,38,.55);border:1px solid rgba(255,255,255,.07);border-radius:8px;padding:14px 16px;backdrop-filter:blur(16px);}
+.kpi .k-lbl{font-size:10px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.5px;}
+.kpi .k-val{font-size:28px;font-weight:800;color:var(--text);line-height:1.1;margin-top:4px;}
+.kpi .k-sub{font-size:10px;color:var(--text3);margin-top:3px;font-weight:600;}
+.kpi.accent .k-val{color:var(--orange);}
+.kpi.good .k-val{color:var(--green);}
+
+.panel{background:rgba(20,27,38,.55);border:1px solid rgba(255,255,255,.07);border-radius:8px;padding:16px 18px;margin-bottom:16px;backdrop-filter:blur(16px);}
+.panel h3{font-size:13px;font-weight:800;color:var(--text);margin-bottom:12px;}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px;}
+@media(max-width:900px){.grid2{grid-template-columns:1fr;}}
+.chart-wrap{position:relative;height:260px;}
+
+/* tabela */
+.tbl-tools{display:flex;gap:10px;align-items:center;margin-bottom:12px;flex-wrap:wrap;}
+.search{background:#0a0f18;border:1px solid #2a3a50;border-radius:5px;color:var(--text);font-family:'Montserrat';font-size:12px;padding:7px 11px;min-width:240px;}
+.search:focus{outline:none;border-color:var(--orange);}
+.pill{font-size:10px;font-weight:700;color:var(--text2);background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);border-radius:12px;padding:4px 10px;}
+.tbl-scroll{overflow:auto;max-height:65vh;border:1px solid rgba(255,255,255,.07);border-radius:8px;}
+table{width:100%;border-collapse:collapse;font-size:11.5px;}
+thead th{position:sticky;top:0;background:#131b28;color:var(--text);font-size:10px;font-weight:700;padding:9px 9px;border-bottom:1px solid rgba(255,255,255,.12);text-transform:uppercase;letter-spacing:.4px;white-space:nowrap;text-align:left;z-index:2;}
+td{padding:8px 9px;border-bottom:1px solid rgba(255,255,255,.04);color:var(--text2);white-space:nowrap;max-width:340px;overflow:hidden;text-overflow:ellipsis;}
+tbody tr:hover{background:rgba(255,255,255,.03);}
+td.strong{color:var(--text);font-weight:600;}
+td.num{text-align:right;font-variant-numeric:tabular-nums;color:var(--text);font-weight:700;}
+.tag{display:inline-block;font-size:9px;font-weight:800;padding:2px 7px;border-radius:4px;text-transform:uppercase;letter-spacing:.3px;}
+.t-PEÇA{background:rgba(56,189,248,.15);color:#7dd3fc;} .t-SERVIÇO{background:rgba(249,115,22,.16);color:#fdba74;}
+.t-MATERIAL{background:rgba(148,163,184,.16);color:#cbd5e1;} .t-CONSUMO{background:rgba(59,179,59,.15);color:#86efac;}
+.t-IMOBILIZADO{background:rgba(168,85,247,.16);color:#d8b4fe;} .t-MISTO,.t-OUTRO{background:rgba(255,255,255,.06);color:var(--text2);}
+
+.legenda{font-size:11px;color:var(--text2);line-height:1.6;margin-top:6px;}
+.legenda b{color:var(--text);}
+.rule-box{background:rgba(249,115,22,.08);border:1px solid rgba(249,115,22,.25);border-radius:8px;padding:12px 15px;margin-bottom:16px;font-size:12px;line-height:1.6;color:var(--text);}
+.rule-box b{color:var(--orange);}
+.ex{color:var(--text3);font-size:10.5px;}
+
+/* light */
+body.light-mode{--bg:#eef0f3;--sidebar:#e7e9ee;--text:#1a1a1a;--text2:#475569;--text3:#94a3b8;}
+body.light-mode .main{background:#F0F0F0;}
+body.light-mode .panel,body.light-mode .kpi{background:#fff!important;border-color:rgba(0,0,0,.06)!important;box-shadow:0 1px 8px rgba(0,0,0,.06);}
+body.light-mode thead th{background:#e9edf2;}
+body.light-mode .sidebar{background:#e7e9ee;}
+body.light-mode .search{background:#fff;border-color:#cbd5e1;}
+
+@media(max-width:760px){
+  .sidebar{position:fixed;z-index:150;left:0;box-shadow:6px 0 24px rgba(0,0,0,.5);}
+  .shell.collapsed .sidebar{width:0;padding:0;overflow:hidden;}
+  .main{padding:16px 12px 60px;}
+  .brand p{display:none;}
+}
+</style>
+</head>
+<body>
+<header class="header">
+  <button class="menu-btn" id="menuBtn" title="Recolher/expandir menu">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+  </button>
+  <div class="brand">
+    <h1>Padronização de Itens — Frota / Suprimentos</h1>
+    <p>Diagnóstico do cadastro · relatório em colunas · sugestões de composição do item padrão</p>
+  </div>
+  <div class="header-right">
+    <button class="theme-btn" id="themeBtn" title="Modo claro/escuro"></button>
+    <span class="status-badge" id="status">Carregando…</span>
+    <button class="exp-btn" id="expBtn" title="Exportar tudo para Excel">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+      Excel
+    </button>
+  </div>
+</header>
+
+<div class="shell" id="shell">
+  <nav class="sidebar" id="sidebar">
+    <div class="nav-sec">Relatório</div>
+    <div class="nav-item active" data-tab="diag"><span class="ico">📊</span><span class="lbl">Diagnóstico</span></div>
+    <div class="nav-item" data-tab="base"><span class="ico">📋</span><span class="lbl">Relatório (colunas)</span><span class="badge" id="b-base">—</span></div>
+    <div class="nav-sec">Sugestões de composição</div>
+    <div id="nav-sug"></div>
+  </nav>
+
+  <main class="main">
+    <!-- DIAGNÓSTICO -->
+    <section class="tabpage show" id="tab-diag">
+      <div class="page-title">Diagnóstico do cadastro de frota</div>
+      <div class="page-sub">Base atual de itens de frota do Suprimentos. O objetivo é padronizar e reduzir a lista, blindando os processos de compras e fiscal (Reforma Tributária — IBS/CBS por item). Abaixo, o retrato da lista e o quanto cada sugestão de composição reduziria.</div>
+      <div class="kpi-row" id="kpis"></div>
+      <div class="grid2">
+        <div class="panel"><h3>Concentração por família</h3><div class="chart-wrap"><canvas id="chFam"></canvas></div></div>
+        <div class="panel"><h3>Redução por sugestão de composição</h3><div class="chart-wrap"><canvas id="chRed"></canvas></div></div>
+      </div>
+      <div class="grid2">
+        <div class="panel"><h3>Tipo de item (sugerido)</h3><div class="chart-wrap"><canvas id="chTipo"></canvas></div></div>
+        <div class="panel"><h3>Como ler</h3>
+          <div class="legenda">
+            <p>• <b>Duplicidade literal é quase nula</b> — as descrições são quase todas strings distintas. A redução real vem de <b>padronizar</b> e <b>decidir a granularidade</b>: quanto de especificidade fica na identidade do item vs. em colunas de atributo (marca, referência, aplicação).</p>
+            <p style="margin-top:8px">• Cada <b>Sugestão</b> é um nível de composição do item padrão, do mais detalhado (menos redução) ao mais genérico (mais redução). Marca, referência do fabricante e aplicação/veículo saem do nome e viram <b>colunas</b>.</p>
+            <p style="margin-top:8px">• <b>Tipo</b> (peça / serviço / material / consumo / imobilizado) é sugerido automaticamente — serve de base para CST e cClassTrib no fiscal. Revisar antes do cadastro.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- BASE em colunas -->
+    <section class="tabpage" id="tab-base">
+      <div class="page-title">Relatório — descrição separada em colunas</div>
+      <div class="page-sub">Cada item da base atual quebrado em campos estruturados. É a matéria-prima para o Suprimentos decidir a composição. A descrição original é sempre preservada. Use a busca; exporte para ver a lista completa no Excel.</div>
+      <div class="tbl-tools">
+        <input class="search" id="s-base" placeholder="Buscar (descrição, família, substantivo…)">
+        <span class="pill" id="cnt-base"></span>
+        <span class="pill">exibindo até 600 linhas · Excel = completo</span>
+      </div>
+      <div class="tbl-scroll"><table id="t-base"></table></div>
+    </section>
+  </main>
+</div>
+
+<script>
+const COLS=['FAMILIA','COD_ANTIGO','DESCRICAO_ORIGINAL','SUBSTANTIVO','MODIFICADOR','MEDIDA','APLICACAO','MARCA','REFERENCIA','EMBALAGEM','CONDICAO','TIPO','COD_SERVICO_LC116'];
+const IX={}; COLS.forEach((c,i)=>IX[c]=i);
+// campos: 0FAM 1COD 2ORIG 3SUB 4MOD 5MED 6APL 7MAR 8REF 9EMB 10COND 11TIPO 12LC
+const SUG=[
+ {id:'s1',nome:'1 · Detalhada',desc:'Substantivo + Modificador + Medida + Aplicação + Marca. Só a referência do fabricante vira atributo. Máxima rastreabilidade, mínima redução.',
+   fields:[3,4,5,6,7],modWords:null,atrib:['REFERENCIA']},
+ {id:'s2',nome:'2 · Recomendada',desc:'Substantivo + Modificador + Medida + Condição + Embalagem. Aplicação, marca e referência viram atributo. Equilíbrio entre padrão e especificidade.',
+   fields:[3,4,5,10,9],modWords:null,atrib:['APLICACAO','MARCA','REFERENCIA']},
+ {id:'s3',nome:'3 · Modificador completo',desc:'Substantivo + Modificador (texto descritivo), sem medida na identidade. Medida, aplicação, marca e referência viram atributo.',
+   fields:[3,4],modWords:null,atrib:['MEDIDA','APLICACAO','MARCA','REFERENCIA']},
+ {id:'s4',nome:'4 · Enxuta',desc:'Substantivo + os 2 primeiros termos do modificador. Colapsa variações de redação. Todo o detalhe vira atributo.',
+   fields:[3,4],modWords:2,atrib:['MEDIDA','APLICACAO','MARCA','REFERENCIA','EMBALAGEM']},
+ {id:'s5',nome:'5 · Genérica (por substantivo)',desc:'Só o Substantivo, por família (ideia do fiscal: “ÓLEO MOTOR”). Redução máxima, mas exige toda a especificidade em atributos — arriscado para compras.',
+   fields:[3],modWords:null,atrib:['MODIFICADOR','MEDIDA','APLICACAO','MARCA','REFERENCIA','EMBALAGEM']},
+];
+let META=null, ROWS=[], GROUPS={}, charts={};
+
+const fmt=n=>n.toLocaleString('pt-BR');
+function padrao(r,s){
+  const parts=[];
+  s.fields.forEach(f=>{
+    let v=r[f]||'';
+    if(f===4 && s.modWords) v=v.split(' ').slice(0,s.modWords).join(' ');
+    if(v) parts.push(v);
+  });
+  return parts.join(' - ')||'(sem descrição)';
+}
+function groupFor(s){
+  if(GROUPS[s.id]) return GROUPS[s.id];
+  const m=new Map();
+  ROWS.forEach(r=>{
+    const p=padrao(r,s), key=r[0]+'||'+p;
+    let g=m.get(key);
+    if(!g){g={padrao:p,fam:r[0],tipo:r[11],n:0,ex:[]};m.set(key,g);}
+    g.n++; if(g.ex.length<3 && r[2]) g.ex.push(r[2]);
+  });
+  const arr=[...m.values()].sort((a,b)=>b.n-a.n);
+  GROUPS[s.id]=arr; return arr;
+}
+
+async function boot(){
+  try{
+    const r=await fetch('dados.json'); const d=await r.json();
+    META=d.meta; ROWS=d.rows;
+    document.getElementById('status').textContent=fmt(META.total)+' itens · '+META.nFamilias+' famílias';
+    buildNav(); renderDiag(); renderBase('');
+  }catch(e){ document.getElementById('status').textContent='Erro ao carregar dados'; console.error(e); }
+}
+
+function buildNav(){
+  document.getElementById('b-base').textContent=fmt(META.total);
+  const nav=document.getElementById('nav-sug');
+  SUG.forEach(s=>{
+    const g=groupFor(s);
+    const div=document.createElement('div');
+    div.className='nav-item'; div.dataset.tab=s.id;
+    div.innerHTML=`<span class="ico">🔹</span><span class="lbl">${s.nome.replace(/^\d+ · /,'')}</span><span class="badge">${fmt(g.length)}</span>`;
+    nav.appendChild(div);
+    const sec=document.createElement('section');
+    sec.className='tabpage'; sec.id='tab-'+s.id;
+    sec.innerHTML=sugHTML(s,g);
+    document.querySelector('.main').appendChild(sec);
+  });
+  document.querySelectorAll('.nav-item').forEach(it=>it.addEventListener('click',()=>switchTab(it.dataset.tab)));
+}
+function sugHTML(s,g){
+  const red=Math.round(100*(META.total-g.length)/META.total);
+  return `<div class="page-title">Sugestão ${s.nome}</div>
+    <div class="page-sub">${s.desc}</div>
+    <div class="rule-box"><b>Composição do item:</b> ${s.fields.map(f=>f===4&&s.modWords?`MODIFICADOR (${s.modWords} termos)`:COLS[f]).join(' - ')}
+      &nbsp;·&nbsp; <b>Vira atributo (coluna):</b> ${s.atrib.join(', ')||'—'}</div>
+    <div class="kpi-row">
+      <div class="kpi accent"><div class="k-lbl">Itens padrão</div><div class="k-val">${fmt(g.length)}</div><div class="k-sub">antes: ${fmt(META.total)}</div></div>
+      <div class="kpi good"><div class="k-lbl">Redução</div><div class="k-val">−${red}%</div><div class="k-sub">${fmt(META.total-g.length)} itens a menos</div></div>
+      <div class="kpi"><div class="k-lbl">Média de itens por padrão</div><div class="k-val">${(META.total/g.length).toFixed(1)}×</div><div class="k-sub">quanto cada padrão consolida</div></div>
+    </div>
+    <div class="tbl-tools">
+      <input class="search" id="s-${s.id}" placeholder="Buscar item padrão…" oninput="filterSug('${s.id}')">
+      <span class="pill" id="cnt-${s.id}"></span>
+      <span class="pill">ordenado por nº de itens consolidados</span>
+    </div>
+    <div class="tbl-scroll"><table id="t-${s.id}"></table></div>`;
+}
+
+function renderSugTable(s,q){
+  const g=groupFor(s);
+  const f=q?g.filter(x=>(x.padrao+' '+x.fam).toLowerCase().includes(q.toLowerCase())):g;
+  const show=f.slice(0,600);
+  let h=`<thead><tr><th>Descrição padrão</th><th>Tipo</th><th>Família</th><th class="num">Nº itens</th><th>Exemplos (originais)</th></tr></thead><tbody>`;
+  show.forEach(x=>{
+    h+=`<tr><td class="strong">${esc(x.padrao)}</td><td><span class="tag t-${x.tipo}">${x.tipo}</span></td><td>${esc(x.fam)}</td><td class="num">${x.n}</td><td class="ex">${esc(x.ex.join('  ·  '))}</td></tr>`;
+  });
+  h+='</tbody>';
+  document.getElementById('t-'+s.id).innerHTML=h;
+  document.getElementById('cnt-'+s.id).textContent=fmt(f.length)+' padrões'+(f.length>600?' (exibindo 600)':'');
+}
+function filterSug(id){ const s=SUG.find(x=>x.id===id); renderSugTable(s,document.getElementById('s-'+id).value); }
+
+function renderBase(q){
+  const f=q?ROWS.filter(r=>r.join(' ').toLowerCase().includes(q.toLowerCase())):ROWS;
+  const show=f.slice(0,600);
+  const heads=['FAMÍLIA','CÓD ANT.','DESCRIÇÃO ORIGINAL','SUBSTANTIVO','MODIFICADOR','MEDIDA','APLICAÇÃO','MARCA','REFERÊNCIA','EMB.','COND.','TIPO','LC116'];
+  let h='<thead><tr>'+heads.map((x,i)=>`<th class="${i===11?'':''}">${x}</th>`).join('')+'</tr></thead><tbody>';
+  show.forEach(r=>{
+    h+='<tr>'+r.map((v,i)=>{
+      if(i===11) return `<td><span class="tag t-${v}">${v}</span></td>`;
+      const cls=(i===2||i===3)?'strong':'';
+      return `<td class="${cls}">${esc(v)}</td>`;
+    }).join('')+'</tr>';
+  });
+  h+='</tbody>';
+  document.getElementById('t-base').innerHTML=h;
+  document.getElementById('cnt-base').textContent=fmt(f.length)+' linhas'+(f.length>600?' (exibindo 600)':'');
+}
+
+function switchTab(tab){
+  document.querySelectorAll('.nav-item').forEach(i=>i.classList.toggle('active',i.dataset.tab===tab));
+  document.querySelectorAll('.tabpage').forEach(p=>p.classList.toggle('show',p.id==='tab-'+tab));
+  const s=SUG.find(x=>x.id===tab);
+  if(s) renderSugTable(s,document.getElementById('s-'+tab).value||'');
+  if(window.innerWidth<=760) document.getElementById('shell').classList.add('collapsed');
+}
+
+// ---- Diagnóstico ----
+function renderDiag(){
+  const s2=SUG.find(x=>x.id==='s2'), g2=groupFor(s2);
+  document.getElementById('kpis').innerHTML=`
+    <div class="kpi"><div class="k-lbl">Itens hoje</div><div class="k-val">${fmt(META.total)}</div><div class="k-sub">na base de frota</div></div>
+    <div class="kpi"><div class="k-lbl">Famílias</div><div class="k-val">${META.nFamilias}</div><div class="k-sub">já existentes</div></div>
+    <div class="kpi accent"><div class="k-lbl">Concentração</div><div class="k-val">75%</div><div class="k-sub">em “Peças e Acessórios”</div></div>
+    <div class="kpi good"><div class="k-lbl">Redução potencial</div><div class="k-val">3–90%</div><div class="k-sub">conforme a composição escolhida</div></div>`;
+  const fam=META.familias.slice(0,10);
+  mkBar('chFam', fam.map(f=>f[0].length>26?f[0].slice(0,24)+'…':f[0]), fam.map(f=>f[1]), '#F97316', true);
+  const reds=SUG.map(s=>({n:s.nome.replace(/ ·.*/,'·'+s.nome.split('·')[1]),v:Math.round(100*(META.total-groupFor(s).length)/META.total)}));
+  mkBar('chRed', SUG.map(s=>s.nome), SUG.map(s=>Math.round(100*(META.total-groupFor(s).length)/META.total)), '#3BB33B', true, '%');
+  const tp=META.tipos;
+  mkDonut('chTipo', tp.map(t=>t[0]), tp.map(t=>t[1]));
+}
+const tickC=()=>document.body.classList.contains('light-mode')?'#475569':'#94A3B8';
+const gridC=()=>document.body.classList.contains('light-mode')?'rgba(0,0,0,.07)':'rgba(255,255,255,.06)';
+function mkBar(id,labels,data,color,horiz,suffix){
+  if(charts[id])charts[id].destroy();
+  charts[id]=new Chart(document.getElementById(id),{type:'bar',
+    data:{labels,datasets:[{data,backgroundColor:color,borderRadius:4,barThickness:'flex',maxBarThickness:24}]},
+    options:{indexAxis:horiz?'y':'x',responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>fmt(c.parsed[horiz?'x':'y'])+(suffix||'')}}},
+      scales:{x:{grid:{color:gridC()},ticks:{color:tickC(),font:{family:'Montserrat',size:10}}},
+              y:{grid:{display:false},ticks:{color:tickC(),font:{family:'Montserrat',size:10}}}}}});
+}
+function mkDonut(id,labels,data){
+  if(charts[id])charts[id].destroy();
+  const cols=['#38BDF8','#94A3B8','#F97316','#3BB33B','#A855F7','#64748b'];
+  charts[id]=new Chart(document.getElementById(id),{type:'doughnut',
+    data:{labels,datasets:[{data,backgroundColor:cols,borderWidth:0}]},
+    options:{responsive:true,maintainAspectRatio:false,cutout:'60%',
+      plugins:{legend:{position:'right',labels:{color:tickC(),font:{family:'Montserrat',size:11},boxWidth:12}},
+        tooltip:{callbacks:{label:c=>c.label+': '+fmt(c.parsed)}}}}});
+}
+
+function esc(s){return String(s==null?'':s).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));}
+
+// ---- Export Excel (workbook multi-aba) ----
+document.getElementById('expBtn').addEventListener('click',()=>{
+  const wb=XLSX.utils.book_new();
+  // Diagnóstico
+  const diag=[['Padronização de Itens — Frota / Suprimentos'],[],
+    ['Total de itens', META.total],['Famílias', META.nFamilias],[],
+    ['Tipo (sugerido)','Qtd'],...META.tipos,[],
+    ['Família','Qtd'],...META.familias,[],
+    ['Sugestão de composição','Itens padrão','Redução %']];
+  SUG.forEach(s=>{const g=groupFor(s);diag.push([s.nome, g.length, Math.round(100*(META.total-g.length)/META.total)]);});
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(diag),'Diagnóstico');
+  // Base separada
+  const base=[COLS]; ROWS.forEach(r=>base.push(r));
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(base),'Base separada');
+  // cada sugestão
+  SUG.forEach(s=>{
+    const g=groupFor(s);
+    const aoa=[['DESCRICAO_PADRAO','TIPO','FAMILIA','N_ITENS','EXEMPLOS']];
+    g.forEach(x=>aoa.push([x.padrao,x.tipo,x.fam,x.n,x.ex.join(' | ')]));
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(aoa), ('Sug '+s.nome.split(' · ')[0]).slice(0,31));
+  });
+  XLSX.writeFile(wb,'padronizacao-itens-frota.xlsx');
+});
+
+// menu retrátil + tema
+document.getElementById('menuBtn').addEventListener('click',()=>document.getElementById('shell').classList.toggle('collapsed'));
+document.getElementById('s-base').addEventListener('input',e=>renderBase(e.target.value));
+const _sun=`<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.2" y1="4.2" x2="5.6" y2="5.6"/><line x1="18.4" y1="18.4" x2="19.8" y2="19.8"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.2" y1="19.8" x2="5.6" y2="18.4"/><line x1="18.4" y1="5.6" x2="19.8" y2="4.2"/></svg>`;
+const _moon=`<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>`;
+function applyTheme(t){document.body.classList.toggle('light-mode',t==='light');localStorage.setItem('bi_theme',t);
+  document.getElementById('themeBtn').innerHTML=t==='light'?_moon:_sun;
+  if(META){renderDiag();}}
+(function(){const t=localStorage.getItem('bi_theme')||'dark';applyTheme(t);
+  document.getElementById('themeBtn').addEventListener('click',()=>applyTheme(document.body.classList.contains('light-mode')?'dark':'light'));})();
+
+boot();
+</script>
+</body>
+</html>
