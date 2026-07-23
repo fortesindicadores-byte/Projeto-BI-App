@@ -5,7 +5,6 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Padronização de Itens — Frota / Suprimentos</title>
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <script src="../assets/excel-export.js"></script>
 <style>
 :root{
@@ -85,7 +84,7 @@ td.qex{color:var(--text3);font-size:11px;white-space:normal;}
 .panel h3{font-size:13px;font-weight:800;color:var(--text);margin-bottom:12px;}
 .grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px;}
 @media(max-width:900px){.grid2{grid-template-columns:1fr;}}
-.chart-wrap{position:relative;height:300px;}
+.chart-wrap{position:relative;height:210px;}
 #t-qual td.qex{white-space:nowrap;max-width:520px;overflow:hidden;text-overflow:ellipsis;color:var(--text2);}
 #t-qual th:nth-child(4),#t-qual th:nth-child(5){width:92px;}
 #t-qual th:nth-child(2){width:120px;}
@@ -187,11 +186,16 @@ body.light-mode .search{background:#fff;border-color:#cbd5e1;}
         <div class="tbl-scroll"><table id="t-qual"></table></div>
       </div>
 
-      <div class="charts-row">
-        <div class="chart-card"><div class="chart-title">Concentração por família</div><div class="chart-sub">Top 10 famílias por nº de itens</div><div class="chart-wrap"><canvas id="chFam"></canvas></div></div>
-        <div class="chart-card"><div class="chart-title">Tipo de item (sugerido)</div><div class="chart-sub">Base para CST / cClassTrib no fiscal</div><div class="chart-wrap"><canvas id="chTipo"></canvas></div></div>
+      <div class="tbl-section">
+        <div class="tbl-title">Concentração por família</div>
+        <div class="tbl-sub">Ordenado pelo maior nº de itens</div>
+        <div class="tbl-scroll"><table id="t-fam"></table></div>
       </div>
-      <div class="chart-card"><div class="chart-title">Redução por sugestão de composição</div><div class="chart-sub">Itens padrão resultantes e % de redução, do mais detalhado ao mais genérico</div><div class="chart-wrap"><canvas id="chRed"></canvas></div></div>
+      <div class="tbl-section">
+        <div class="tbl-title">Redução por sugestão de composição</div>
+        <div class="tbl-sub">Do mais detalhado ao mais genérico · itens padrão resultantes e % de redução</div>
+        <div class="tbl-scroll"><table id="t-red"></table></div>
+      </div>
     </section>
 
     <!-- BASE em colunas -->
@@ -365,42 +369,19 @@ function renderDiag(){
   h+='</tbody>';
   document.getElementById('t-qual').innerHTML=h;
   // Gráficos (tema-aware, padrão)
-  const fam=META.familias.slice(0,10);
-  const famShort=fam.map(f=>f[0].length>13?f[0].slice(0,12)+'…':f[0]);
-  mkBarV('chFam', famShort, fam.map(f=>f[1]), palFill(fam.length), palBord(fam.length), '', fam.map(f=>f[0]));
-  mkBarV('chTipo', META.tipos.map(t=>t[0]), META.tipos.map(t=>t[1]),
-    META.tipos.map(t=>TIPO_FILL[t[0]]||'rgba(100,116,139,.55)'), META.tipos.map(t=>TIPO_BORD[t[0]]||'#64748b'));
-  mkBarV('chRed', SUG.map(s=>s.nome.replace(/ \(por.*/,'')), SUG.map(s=>Math.round(100*(META.total-groupFor(s).length)/META.total)), palFill(SUG.length), palBord(SUG.length), '%', SUG.map(s=>s.nome));
+  const pc1=v=>v.toLocaleString('pt-BR',{minimumFractionDigits:1,maximumFractionDigits:1})+'%';
+  let hf=`<thead><tr><th>Família</th><th class="num">Itens</th><th class="num">% do total</th></tr></thead><tbody>`;
+  META.familias.forEach(f=>{hf+=`<tr><td class="strong">${esc(f[0])}</td><td class="num" style="font-weight:700">${fmt(f[1])}</td><td class="num">${pc1(100*f[1]/META.total)}</td></tr>`;});
+  hf+=`<tr class="total"><td>Total</td><td class="num">${fmt(META.total)}</td><td class="num">100%</td></tr></tbody>`;
+  document.getElementById('t-fam').innerHTML=hf;
+  let hr=`<thead><tr><th>Sugestão</th><th>Composição do item</th><th class="num">Itens padrão</th><th class="num">Redução</th></tr></thead><tbody>`;
+  SUG.forEach(s=>{const g=groupFor(s);const red=Math.round(100*(META.total-g.length)/META.total);
+    const comp=s.fields.map(f=>f===4&&s.modWords?`MODIFICADOR (${s.modWords} termos)`:COLS[f]).join(' + ');
+    hr+=`<tr><td class="strong">${esc(s.nome)}</td><td style="color:var(--text2)">${comp}</td><td class="num" style="font-weight:700">${fmt(g.length)}</td><td class="num" style="color:var(--green);font-weight:700">−${red}%</td></tr>`;});
+  hr+=`<tr class="total"><td>Base atual</td><td></td><td class="num">${fmt(META.total)}</td><td class="num"></td></tr></tbody>`;
+  document.getElementById('t-red').innerHTML=hr;
 }
-// cores por tipo (mesma paleta do repositório)
-const TIPO_FILL={'PEÇA':'rgba(56,189,248,.65)','MATERIAL':'rgba(148,163,184,.6)','SERVIÇO':'rgba(249,115,22,.65)','CONSUMO':'rgba(59,179,59,.65)','IMOBILIZADO':'rgba(168,85,247,.6)','MISTO':'rgba(100,116,139,.55)','OUTRO':'rgba(100,116,139,.55)'};
-const TIPO_BORD={'PEÇA':'#38BDF8','MATERIAL':'#94A3B8','SERVIÇO':'#F97316','CONSUMO':'#3BB33B','IMOBILIZADO':'#A855F7','MISTO':'#64748b','OUTRO':'#64748b'};
-// paleta cíclica (cores do repositório) p/ barras categóricas
-const PAL=[['rgba(249,115,22,.65)','#F97316'],['rgba(56,189,248,.65)','#38BDF8'],['rgba(59,179,59,.65)','#3BB33B'],
- ['rgba(168,85,247,.60)','#A855F7'],['rgba(255,102,102,.60)','#FF6666'],['rgba(245,158,11,.65)','#F59E0B'],
- ['rgba(29,78,216,.60)','#1D4ED8'],['rgba(16,185,129,.60)','#10B981'],['rgba(148,163,184,.60)','#94A3B8'],['rgba(236,72,153,.60)','#EC4899']];
-const palFill=n=>Array.from({length:n},(_,i)=>PAL[i%PAL.length][0]);
-const palBord=n=>Array.from({length:n},(_,i)=>PAL[i%PAL.length][1]);
-// gráfico de barras VERTICAIS no padrão visao-financeira (grid/tick/tooltip, borderRadius:3, rótulo no topo)
-function mkBarV(id,labels,data,fill,border,suffix,fullLabels){
-  if(!window.Chart)return;
-  if(charts[id])charts[id].destroy();
-  const isL=document.body.classList.contains('light-mode');
-  const grid={color:isL?'rgba(0,0,0,.08)':'rgba(255,255,255,.06)'};
-  const tick={color:isL?'#444444':'#94A3B8',font:{family:'Montserrat',size:12}};
-  const tickY={color:isL?'#444444':'#94A3B8',font:{family:'Montserrat',size:12}};
-  const tooltip={backgroundColor:'#141B26',titleColor:'#F97316',bodyColor:'#F1F5F9',borderColor:'#1E2D40',borderWidth:1,titleFont:{family:'Montserrat'},bodyFont:{family:'Montserrat'}};
-  const lbl={afterDatasetsDraw(ch){const m=ch.getDatasetMeta(0),ctx=ch.ctx;ctx.save();
-    ctx.font='700 11px Montserrat,sans-serif';ctx.fillStyle=isL?'#1a1a1a':'#F1F5F9';ctx.textAlign='center';ctx.textBaseline='bottom';
-    m.data.forEach((bar,i)=>{const v=data[i];if(v==null)return;ctx.fillText(fmt(v)+(suffix||''),bar.x,bar.y-6);});ctx.restore();}};
-  charts[id]=new Chart(document.getElementById(id),{type:'bar',
-    data:{labels,datasets:[{data,backgroundColor:fill,borderColor:border,borderWidth:1,borderRadius:3,maxBarThickness:54}]},
-    plugins:[lbl],
-    options:{responsive:true,maintainAspectRatio:false,layout:{padding:{top:28}},
-      plugins:{legend:{display:false},tooltip:Object.assign({},tooltip,{callbacks:{title:it=>fullLabels?fullLabels[it[0].dataIndex]:it[0].label,label:c=>' '+fmt(c.parsed.y)+(suffix||'')}})},
-      scales:{x:{grid:{display:false},ticks:Object.assign({},tick,{maxRotation:38,minRotation:0,autoSkip:false})},
-              y:{beginAtZero:true,grid,ticks:Object.assign({},tickY,{callback:v=>fmt(v)})}}}});
-}
+
 
 function esc(s){return String(s==null?'':s).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));}
 
