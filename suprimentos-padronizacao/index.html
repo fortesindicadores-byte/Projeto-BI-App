@@ -72,8 +72,8 @@ body{
 .charts-row{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px;}
 @media(max-width:820px){.charts-row{grid-template-columns:1fr;}}
 .chart-card{position:relative;background:rgba(20,27,38,.55);border:1px solid rgba(255,255,255,.07);border-radius:8px;padding:18px 18px 14px;backdrop-filter:blur(16px);box-shadow:0 2px 12px rgba(0,0,0,.25);margin-bottom:16px;}
-.chart-title{font-size:16px;font-weight:800;color:var(--text);text-transform:uppercase;letter-spacing:.5px;}
-.chart-sub{font-size:11px;color:var(--text2);margin-top:3px;margin-bottom:12px;}
+.chart-title{font-size:18px;font-weight:800;color:var(--text);text-transform:uppercase;letter-spacing:.5px;}
+.chart-sub{font-size:13px;color:var(--text2);margin-top:3px;margin-bottom:14px;}
 /* severidade (bolinha na tabela de qualidade) */
 .sevdot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:7px;vertical-align:middle;}
 .sd-alto{background:var(--red);} .sd-medio{background:var(--orange);} .sd-baixo{background:#38BDF8;}
@@ -85,7 +85,12 @@ td.qex{color:var(--text3);font-size:11px;white-space:normal;}
 .panel h3{font-size:13px;font-weight:800;color:var(--text);margin-bottom:12px;}
 .grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px;}
 @media(max-width:900px){.grid2{grid-template-columns:1fr;}}
-.chart-wrap{position:relative;height:260px;}
+.chart-wrap{position:relative;height:300px;}
+/* tabela de qualidade — padrão (mais espaçada) */
+#t-qual{font-size:13px;} #t-qual thead th{font-size:11px;padding:8px 10px 12px;}
+#t-qual td{padding:13px 10px;white-space:normal;}
+.tbl-title{font-size:19px;font-weight:800;color:var(--text);margin-bottom:2px;}
+.tbl-sub{font-size:13px;color:var(--text2);margin-bottom:14px;}
 
 /* tabela */
 .tbl-tools{display:flex;gap:10px;align-items:center;margin-bottom:12px;flex-wrap:wrap;}
@@ -350,31 +355,32 @@ function renderDiag(){
   document.getElementById('t-qual').innerHTML=h;
   // Gráficos (tema-aware, padrão)
   const fam=META.familias.slice(0,10);
-  mkBar('chFam', fam.map(f=>f[0].length>26?f[0].slice(0,24)+'…':f[0]), fam.map(f=>f[1]), '#F97316', true);
-  mkDonut('chTipo', META.tipos.map(t=>t[0]), META.tipos.map(t=>t[1]));
-  mkBar('chRed', SUG.map(s=>s.nome), SUG.map(s=>Math.round(100*(META.total-groupFor(s).length)/META.total)), '#3BB33B', true, '%');
+  mkBarH('chFam', fam.map(f=>f[0].length>26?f[0].slice(0,24)+'…':f[0]), fam.map(f=>f[1]), 'rgba(249,115,22,.65)', '#F97316');
+  mkBarH('chTipo', META.tipos.map(t=>t[0]), META.tipos.map(t=>t[1]),
+    META.tipos.map(t=>TIPO_FILL[t[0]]||'rgba(100,116,139,.55)'), META.tipos.map(t=>TIPO_BORD[t[0]]||'#64748b'));
+  mkBarH('chRed', SUG.map(s=>s.nome.replace(/ \(por.*/,'')), SUG.map(s=>Math.round(100*(META.total-groupFor(s).length)/META.total)), 'rgba(59,179,59,.65)', '#3BB33B', '%');
 }
-const tickC=()=>document.body.classList.contains('light-mode')?'#475569':'#94A3B8';
-const gridC=()=>document.body.classList.contains('light-mode')?'rgba(0,0,0,.07)':'rgba(255,255,255,.06)';
-function mkBar(id,labels,data,color,horiz,suffix){
+// cores por tipo (mesma paleta do repositório)
+const TIPO_FILL={'PEÇA':'rgba(56,189,248,.65)','MATERIAL':'rgba(148,163,184,.6)','SERVIÇO':'rgba(249,115,22,.65)','CONSUMO':'rgba(59,179,59,.65)','IMOBILIZADO':'rgba(168,85,247,.6)','MISTO':'rgba(100,116,139,.55)','OUTRO':'rgba(100,116,139,.55)'};
+const TIPO_BORD={'PEÇA':'#38BDF8','MATERIAL':'#94A3B8','SERVIÇO':'#F97316','CONSUMO':'#3BB33B','IMOBILIZADO':'#A855F7','MISTO':'#64748b','OUTRO':'#64748b'};
+// gráfico de barras horizontais no padrão visao-financeira (grid/tick/tooltip, borderRadius:3, rótulo no fim da barra)
+function mkBarH(id,labels,data,fill,border,suffix){
   if(!window.Chart)return;
   if(charts[id])charts[id].destroy();
+  const isL=document.body.classList.contains('light-mode');
+  const grid={color:isL?'rgba(0,0,0,.08)':'rgba(255,255,255,.06)'};
+  const tick={color:isL?'#444444':'#94A3B8',font:{family:'Montserrat',size:12}};
+  const tickV={color:isL?'#444444':'#94A3B8',font:{family:'Montserrat',size:11}};
+  const tooltip={backgroundColor:'#141B26',titleColor:'#F97316',bodyColor:'#F1F5F9',borderColor:'#1E2D40',borderWidth:1,titleFont:{family:'Montserrat'},bodyFont:{family:'Montserrat'}};
+  const lbl={afterDatasetsDraw(ch){const m=ch.getDatasetMeta(0),ctx=ch.ctx;ctx.save();
+    ctx.font='700 11px Montserrat,sans-serif';ctx.fillStyle=isL?'#1a1a1a':'#F1F5F9';ctx.textAlign='left';ctx.textBaseline='middle';
+    m.data.forEach((bar,i)=>{const v=data[i];if(v==null)return;ctx.fillText(fmt(v)+(suffix||''),bar.x+7,bar.y);});ctx.restore();}};
   charts[id]=new Chart(document.getElementById(id),{type:'bar',
-    data:{labels,datasets:[{data,backgroundColor:color,borderRadius:4,barThickness:'flex',maxBarThickness:24}]},
-    options:{indexAxis:horiz?'y':'x',responsive:true,maintainAspectRatio:false,
-      plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>fmt(c.parsed[horiz?'x':'y'])+(suffix||'')}}},
-      scales:{x:{grid:{color:gridC()},ticks:{color:tickC(),font:{family:'Montserrat',size:10}}},
-              y:{grid:{display:false},ticks:{color:tickC(),font:{family:'Montserrat',size:10}}}}}});
-}
-function mkDonut(id,labels,data){
-  if(!window.Chart)return;
-  if(charts[id])charts[id].destroy();
-  const cols=['#38BDF8','#94A3B8','#F97316','#3BB33B','#A855F7','#64748b'];
-  charts[id]=new Chart(document.getElementById(id),{type:'doughnut',
-    data:{labels,datasets:[{data,backgroundColor:cols,borderWidth:0}]},
-    options:{responsive:true,maintainAspectRatio:false,cutout:'60%',
-      plugins:{legend:{position:'right',labels:{color:tickC(),font:{family:'Montserrat',size:11},boxWidth:12}},
-        tooltip:{callbacks:{label:c=>c.label+': '+fmt(c.parsed)}}}}});
+    data:{labels,datasets:[{data,backgroundColor:fill,borderColor:border,borderWidth:1,borderRadius:3,maxBarThickness:22}]},
+    plugins:[lbl],
+    options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,layout:{padding:{right:48,left:2,top:2,bottom:2}},
+      plugins:{legend:{display:false},tooltip:Object.assign({},tooltip,{callbacks:{label:c=>' '+fmt(c.parsed.x)+(suffix||'')}})},
+      scales:{x:{beginAtZero:true,grid,ticks:Object.assign({},tickV,{callback:v=>fmt(v)})},y:{grid:{display:false},ticks:tick}}}});
 }
 
 function esc(s){return String(s==null?'':s).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));}
