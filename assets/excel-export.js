@@ -42,16 +42,17 @@
   // Rótulos/datas/horas ficam como texto (retorna null). Desambigua ponto milhar×decimal.
   function parseNum(raw){
     if(raw==null) return null;
-    let s=String(raw).trim();
-    if(!s || /^[—–\-]+$/.test(s)) return null;
+    let s=String(raw).trim().replace(/[−–]/g,'-');   // normaliza − (minus) e – (en-dash) p/ ASCII
+    if(!s || /^[—\-]+$/.test(s)) return null;
     if(/[\/:]/.test(s)) return null;                 // datas/horas → texto
     const low=s.toLowerCase();
     const resid=low.replace(/[0-9.,\s%+\-()º°ª]/g,'').replace(/r\$/g,'').replace(/\$/g,'').replace(/milh\w*|mil|mi|bi|pp|k/g,'');
     if(resid.length) return null;                     // sobrou letra → rótulo/texto
     let mult=1;
-    if(/\bbi\b/.test(low)||/[\d\s]bi\b/.test(low)) mult=1e9;
-    else if(/mi|milh/.test(low)) mult=1e6;
-    else if(/\bmil\b/.test(low)||/[\d\s]k\b/.test(low)) mult=1e3;
+    if(/\bbi\b/.test(low)) mult=1e9;
+    else if(/\bmil\b/.test(low)) mult=1e3;               // 'mil' ANTES de 'mi' ('mil' contém 'mi')
+    else if(/\bmi\b/.test(low)||/milh/.test(low)) mult=1e6;
+    else if(/[\d\s]k\b/.test(low)) mult=1e3;
     let t=s.replace(/[^0-9.,-]/g,'');
     const neg=/^-/.test(t); t=t.replace(/-/g,'');
     if(!/[0-9]/.test(t)) return null;
