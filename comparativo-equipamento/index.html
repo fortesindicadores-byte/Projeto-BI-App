@@ -106,7 +106,7 @@ tr.total td{color:var(--text);font-weight:700;font-size:12px;border-top:2px soli
 .resumo .r-item{font-size:12.5px;line-height:1.5;color:var(--text);padding-left:16px;position:relative;}
 .resumo .r-item::before{content:'▸';position:absolute;left:0;color:var(--orange);font-weight:800;}
 .resumo .r-foot{font-size:10.5px;color:var(--text2);line-height:1.5;margin-top:8px;border-top:1px solid rgba(255,255,255,.08);padding-top:9px;}
-.dg-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;}
+.dg-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:16px;}
 @media(max-width:768px){.dg-grid{grid-template-columns:1fr;}}
 .dg-card{border:1px solid rgba(255,255,255,.10);border-radius:8px;padding:12px 14px;}
 body.light-mode .dg-card{border-color:rgba(0,0,0,.10);}
@@ -440,23 +440,27 @@ function renderCharts(R){
   if(chLinha) chLinha.destroy(); chLinha=cycle('ch-linha','linha');
 }
 
-// Diagnóstico — daqui pra frente (extensão), 3 óticas por cenário, sem SIM/NÃO
+// Diagnóstico — daqui pra frente (extensão), dividido nas 2 óticas (como gráficos/tabelas), sem SIM/NÃO
 function renderDiagnostico(R){
   const nm={ambev:'Ambev',meio:'Meio-termo',optas:'Optas'};
   const cel=(lbl,v)=>`<div class="dg-cell"><span>${lbl}</span><b class="${v>=0?'cg':'cr'}">${signMoney(v)}</b></div>`;
-  let html='<div class="dg-grid">';
-  CENARIOS.forEach(c=>{
-    const d=R.diag[c.key], anual=c.remK*12;   // taxa fixa mensal → anualizada (×12)
-    const ok=anual>=SELIC_ANUAL;
-    html+=`<div class="dg-card">
-      <div class="dg-h">${nm[c.key]} · ${(c.remK*100).toLocaleString('pt-BR',{minimumFractionDigits:2})}%</div>
-      ${cel('Impacto na linha (sem a taxa fixa)', d.linha)}
-      ${cel('Impacto geral (com a taxa fixa)', d.geral)}
-      ${cel('Rem. sobre Capital (taxa fixa)', d.capital)}
-      <div class="dg-foot">Taxa fixa ≈ <b>${(anual*100).toFixed(1)}%/ano</b> · Selic ${(SELIC_ANUAL*100).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2})}% → <b class="${ok?'cg':'cr'}">${ok?'acima da Selic':'abaixo da Selic'}</b></div>
-    </div>`;
-  });
-  html+='</div><p class="r-foot">Daqui pra frente (extensão · Ano 6–10). <b>Impacto na linha</b> = só a manutenção (R$/km × km) − nosso custo real, × carretas·mês — o que entra na linha de carroceria. <b>Impacto geral</b> = com a Rem. sobre Capital. <b>Rem. sobre Capital</b> = a taxa fixa (juros por manter o capital na carreta em vez de vender e investir na Selic), que entra na receita e impacta o AV.</p>';
+  const linhas=field=>CENARIOS.map(c=>
+    cel(`${nm[c.key]} · ${(c.remK*100).toLocaleString('pt-BR',{minimumFractionDigits:2})}%`, R.diag[c.key][field])).join('');
+  const selic=CENARIOS.map(c=>{const a=c.remK*12, ok=a>=SELIC_ANUAL;
+    return `${nm[c.key]} <b class="${ok?'cg':'cr'}">${(a*100).toLocaleString('pt-BR',{minimumFractionDigits:1,maximumFractionDigits:1})}%</b>`;}).join(' · ');
+  const html=`<div class="dg-grid">
+    <div class="dg-card">
+      <div class="dg-h">Com a taxa fixa <span style="font-weight:600;color:var(--text2);font-size:10px">· manut + Rem. sobre Capital</span></div>
+      ${linhas('geral')}
+      <div class="dg-foot">Remuneração total − nosso custo real, × carretas·mês. Taxa fixa anualizada vs <b>Selic ${(SELIC_ANUAL*100).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2})}%</b>: ${selic} /ano.</div>
+    </div>
+    <div class="dg-card">
+      <div class="dg-h">Sem a taxa fixa <span style="font-weight:600;color:var(--text2);font-size:10px">· só a linha de manutenção</span></div>
+      ${linhas('linha')}
+      <div class="dg-foot">Só a manutenção de carroceria (R$/km × km) − nosso custo real, × carretas·mês. A Rem. sobre Capital não entra aqui — vai pra receita e impacta o AV.</div>
+    </div>
+  </div>
+  <p class="r-foot">Daqui pra frente (extensão · Ano 6–10). Mesma divisão dos gráficos e tabelas: <b>com a taxa fixa</b> = remuneração total (manutenção + Rem. sobre Capital); <b>sem a taxa fixa</b> = só a manutenção que entra na linha de carroceria. Verde paga a conta · vermelho não paga.</p>`;
   document.getElementById('resumo-body').innerHTML=html;
 }
 
