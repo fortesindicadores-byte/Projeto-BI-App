@@ -347,7 +347,16 @@ function calc(){
     });
     diag[c.key]={linha:iL,geral:iG,capital:cap};
   });
-  return {rows,diag};
+  // Break-even — margem de segurança (com a taxa fixa · extensão): quanto nosso custo pode subir até empatar
+  const ext=rows.filter(r=>r.y>=EXT_DE);
+  const wS=ext.reduce((a,r)=>a+(r.km||0),0);
+  const custoMed=wS? ext.reduce((a,r)=>a+(r.conlog||0)*(r.km||0),0)/wS : null;
+  const be={};
+  CENARIOS.forEach(c=>{ let s=0,w=0; ext.forEach(r=>{const v=r.geral[c.key]; if(v!=null){s+=v*(r.km||0);w+=(r.km||0);}});
+    const remMed=w?s/w:null;
+    be[c.key]={custoMed,remMed,folga:(remMed!=null&&custoMed)?remMed/custoMed-1:null};
+  });
+  return {rows,diag,be};
 }
 
 // Duas tabelas (mesma estrutura): field='geral' (com a taxa fixa) · field='linha' (só manutenção)
@@ -450,6 +459,14 @@ function renderDiagnostico(R){
     cel(`${nm[c.key]} · ${(c.remK*100).toLocaleString('pt-BR',{minimumFractionDigits:2})}%`, R.diag[c.key][field])).join('');
   const selic=CENARIOS.map(c=>{const a=c.remK*12, ok=a>=SELIC_ANUAL;
     return `${nm[c.key]} <b class="${ok?'cg':'cr'}">${(a*100).toLocaleString('pt-BR',{minimumFractionDigits:1,maximumFractionDigits:1})}%</b>`;}).join(' · ');
+  // Break-even: quanto nosso custo pode subir até a proposta (com a taxa fixa) empatar
+  const beCards=CENARIOS.map(c=>{const b=R.be[c.key], f=b.folga, cobre=f!=null&&f>=0;
+    return `<div class="dg-card">
+      <div class="dg-h">${nm[c.key]}</div>
+      <div class="dg-cell"><span>${cobre?'Folga sobre o custo':'Descoberto'}</span><b class="${cobre?'cg':'cr'}">${f==null?'—':(f>=0?'+':'−')+Math.abs(Math.round(f*100))+'%'}</b></div>
+      <div class="dg-cell"><span>Empata se o custo chegar a</span><b>${nf2(b.remMed)}</b></div>
+      <div class="dg-foot">Nosso custo hoje ≈ <b>${nf2(b.custoMed)}</b> · a proposta remunera <b>${nf2(b.remMed)}</b> R$/km. ${cobre?`Nosso custo poderia subir <b>${Math.round(f*100)}%</b> antes de a proposta parar de pagar.`:`A proposta já não cobre — nosso custo teria que <b>cair ${Math.abs(Math.round(f*100))}%</b> pra empatar.`}</div>
+    </div>`;}).join('');
   const html=`<div class="dg-grid">
     <div class="dg-card">
       <div class="dg-h">Com a taxa fixa <span style="font-weight:600;color:var(--text2);font-size:10px">· manut + Rem. sobre Capital</span></div>
@@ -462,7 +479,9 @@ function renderDiagnostico(R){
       <div class="dg-foot">Só a manutenção de carroceria (R$/km) − nosso custo real, × km. A Rem. sobre Capital não entra aqui — vai pra receita e impacta o AV.</div>
     </div>
   </div>
-  <p class="r-foot">Daqui pra frente (extensão · Ano 6–10). Mesma divisão dos gráficos e tabelas: <b>com a taxa fixa</b> = remuneração total (manutenção + Rem. sobre Capital); <b>sem a taxa fixa</b> = só a manutenção que entra na linha de carroceria. Verde paga a conta · vermelho não paga.</p>`;
+  <div class="dg-h" style="margin-top:18px">Break-even · margem de segurança <span style="font-weight:600;color:var(--text2);font-size:10px">· com a taxa fixa · extensão (Ano 6–10)</span></div>
+  <div class="dg-grid" style="grid-template-columns:repeat(3,1fr);margin-top:8px">${beCards}</div>
+  <p class="r-foot">Daqui pra frente (extensão · Ano 6–10). <b>Diagnóstico</b>: com a taxa fixa = remuneração total (manutenção + Rem. sobre Capital); sem a taxa fixa = só a manutenção que entra na linha de carroceria. <b>Break-even</b> = ponto em que a remuneração (com a taxa fixa) empata com o nosso custo: a folga mostra quanto o nosso custo ainda pode subir antes de a proposta deixar de pagar. Verde paga · vermelho não paga.</p>`;
   document.getElementById('resumo-body').innerHTML=html;
 }
 
