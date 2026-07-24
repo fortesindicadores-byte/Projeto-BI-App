@@ -90,6 +90,8 @@ td.qex{color:var(--text3);font-size:11px;white-space:normal;}
 #t-base thead th{font-size:9.5px;padding:6px 6px 9px;overflow:hidden;text-overflow:ellipsis;}
 #t-base td{padding:8px 6px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 #t-base td[title]{cursor:help;}
+#t-red td.red-exp{white-space:normal;color:var(--text2);font-size:11px;line-height:1.45;min-width:300px;max-width:460px;}
+#t-red th:nth-child(2){width:280px;}
 #t-qual th:nth-child(4),#t-qual th:nth-child(5){width:92px;}
 #t-qual th:nth-child(2){width:120px;}
 
@@ -224,15 +226,15 @@ const COLS=['FAMILIA','COD_ANTIGO','DESCRICAO_ORIGINAL','SUBSTANTIVO','MODIFICAD
 const IX={}; COLS.forEach((c,i)=>IX[c]=i);
 // campos: 0FAM 1COD 2ORIG 3SUB 4MOD 5MED 6MAR 7REF 8COND 9TIPO 10LC
 const SUG=[
- {id:'s1',nome:'1 · Detalhada',desc:'Substantivo + Modificador + Medida + Marca. Só a referência do fabricante vira atributo. Máxima rastreabilidade, mínima redução.',
+ {id:'s1',nome:'1 · Detalhada',exp:'Mantém quase tudo na identidade do item; só a referência do fabricante vira atributo. Máxima rastreabilidade, redução mínima.',desc:'Substantivo + Modificador + Medida + Marca. Só a referência do fabricante vira atributo. Máxima rastreabilidade, mínima redução.',
    fields:[3,4,5,6],modWords:null,atrib:['REFERENCIA']},
- {id:'s2',nome:'2 · Recomendada',desc:'Substantivo + Modificador + Medida + Condição. Marca e referência viram atributo. Equilíbrio entre padrão e especificidade.',
+ {id:'s2',nome:'2 · Recomendada',exp:'Equilíbrio: preserva medida e condição no nome; marca e referência viram atributo. Padroniza sem perder o que importa pra comprar.',desc:'Substantivo + Modificador + Medida + Condição. Marca e referência viram atributo. Equilíbrio entre padrão e especificidade.',
    fields:[3,4,5,8],modWords:null,atrib:['MARCA','REFERENCIA']},
- {id:'s3',nome:'3 · Modificador completo',desc:'Substantivo + Modificador (texto descritivo), sem medida na identidade. Medida, marca e referência viram atributo.',
+ {id:'s3',nome:'3 · Modificador completo',exp:'Tira a medida da identidade (vira atributo). Colapsa variações que só diferem na medida escrita.',desc:'Substantivo + Modificador (texto descritivo), sem medida na identidade. Medida, marca e referência viram atributo.',
    fields:[3,4],modWords:null,atrib:['MEDIDA','MARCA','REFERENCIA']},
- {id:'s4',nome:'4 · Enxuta',desc:'Substantivo + os 2 primeiros termos do modificador. Colapsa variações de redação. Todo o detalhe vira atributo.',
+ {id:'s4',nome:'4 · Enxuta',exp:'Só o substantivo + 2 primeiros termos do modificador. Junta itens escritos de formas diferentes; todo detalhe vira atributo.',desc:'Substantivo + os 2 primeiros termos do modificador. Colapsa variações de redação. Todo o detalhe vira atributo.',
    fields:[3,4],modWords:2,atrib:['MEDIDA','MARCA','REFERENCIA']},
- {id:'s5',nome:'5 · Genérica (por substantivo)',desc:'Só o Substantivo, por família (ideia do fiscal: “ÓLEO MOTOR”). Redução máxima, mas exige toda a especificidade em atributos — arriscado para compras.',
+ {id:'s5',nome:'5 · Genérica (por substantivo)',exp:'Só o substantivo, por família (ex.: “ÓLEO”). Reduz ao máximo, mas joga toda a especificidade nos atributos — arriscado para compras.',desc:'Só o Substantivo, por família (ideia do fiscal: “ÓLEO MOTOR”). Redução máxima, mas exige toda a especificidade em atributos — arriscado para compras.',
    fields:[3],modWords:null,atrib:['MODIFICADOR','MEDIDA','MARCA','REFERENCIA']},
 ];
 let META=null, ROWS=[], GROUPS={}, charts={};
@@ -382,11 +384,11 @@ function renderDiag(){
   META.familias.forEach(f=>{hf+=`<tr><td class="strong">${esc(f[0])}</td><td class="num" style="font-weight:700">${fmt(f[1])}</td><td class="num">${pc1(100*f[1]/META.total)}</td></tr>`;});
   hf+=`<tr class="total"><td>Total</td><td class="num">${fmt(META.total)}</td><td class="num">100%</td></tr></tbody>`;
   document.getElementById('t-fam').innerHTML=hf;
-  let hr=`<thead><tr><th>Sugestão</th><th>Composição do item</th><th class="num">Itens padrão</th><th class="num">Redução</th></tr></thead><tbody>`;
+  let hr=`<thead><tr><th>Sugestão</th><th>Composição do item</th><th>O que muda</th><th class="num">Itens padrão</th><th class="num">Redução</th></tr></thead><tbody>`;
   SUG.forEach(s=>{const g=groupFor(s);const red=Math.round(100*(META.total-g.length)/META.total);
     const comp=s.fields.map(f=>f===4&&s.modWords?`MODIFICADOR (${s.modWords} termos)`:COLS[f]).join(' + ');
-    hr+=`<tr><td class="strong">${esc(s.nome)}</td><td style="color:var(--text2)">${comp}</td><td class="num" style="font-weight:700">${fmt(g.length)}</td><td class="num" style="color:var(--green);font-weight:700">−${red}%</td></tr>`;});
-  hr+=`<tr class="total"><td>Base atual</td><td></td><td class="num">${fmt(META.total)}</td><td class="num"></td></tr></tbody>`;
+    hr+=`<tr><td class="strong">${esc(s.nome)}</td><td style="color:var(--text2)">${comp}</td><td class="red-exp">${esc(s.exp||'')}</td><td class="num" style="font-weight:700">${fmt(g.length)}</td><td class="num" style="color:var(--green);font-weight:700">−${red}%</td></tr>`;});
+  hr+=`<tr class="total"><td>Base atual</td><td></td><td></td><td class="num">${fmt(META.total)}</td><td class="num"></td></tr></tbody>`;
   document.getElementById('t-red').innerHTML=hr;
 }
 
