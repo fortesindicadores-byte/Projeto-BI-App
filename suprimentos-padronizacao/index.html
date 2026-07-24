@@ -218,20 +218,20 @@ body.light-mode .search{background:#fff;border-color:#cbd5e1;}
 </div>
 
 <script>
-const COLS=['FAMILIA','COD_ANTIGO','DESCRICAO_ORIGINAL','SUBSTANTIVO','MODIFICADOR','MEDIDA','APLICACAO','MARCA','REFERENCIA','EMBALAGEM','CONDICAO','TIPO','COD_SERVICO_LC116'];
+const COLS=['FAMILIA','COD_ANTIGO','DESCRICAO_ORIGINAL','SUBSTANTIVO','MODIFICADOR','MEDIDA','APLICACAO','MARCA','REFERENCIA','CONDICAO','TIPO','COD_SERVICO_LC116'];
 const IX={}; COLS.forEach((c,i)=>IX[c]=i);
-// campos: 0FAM 1COD 2ORIG 3SUB 4MOD 5MED 6APL 7MAR 8REF 9EMB 10COND 11TIPO 12LC
+// campos: 0FAM 1COD 2ORIG 3SUB 4MOD 5MED 6APL 7MAR 8REF 9COND 10TIPO 11LC
 const SUG=[
  {id:'s1',nome:'1 · Detalhada',desc:'Substantivo + Modificador + Medida + Aplicação + Marca. Só a referência do fabricante vira atributo. Máxima rastreabilidade, mínima redução.',
    fields:[3,4,5,6,7],modWords:null,atrib:['REFERENCIA']},
- {id:'s2',nome:'2 · Recomendada',desc:'Substantivo + Modificador + Medida + Condição + Embalagem. Aplicação, marca e referência viram atributo. Equilíbrio entre padrão e especificidade.',
-   fields:[3,4,5,10,9],modWords:null,atrib:['APLICACAO','MARCA','REFERENCIA']},
+ {id:'s2',nome:'2 · Recomendada',desc:'Substantivo + Modificador + Medida + Condição. Aplicação, marca e referência viram atributo. Equilíbrio entre padrão e especificidade.',
+   fields:[3,4,5,9],modWords:null,atrib:['APLICACAO','MARCA','REFERENCIA']},
  {id:'s3',nome:'3 · Modificador completo',desc:'Substantivo + Modificador (texto descritivo), sem medida na identidade. Medida, aplicação, marca e referência viram atributo.',
    fields:[3,4],modWords:null,atrib:['MEDIDA','APLICACAO','MARCA','REFERENCIA']},
  {id:'s4',nome:'4 · Enxuta',desc:'Substantivo + os 2 primeiros termos do modificador. Colapsa variações de redação. Todo o detalhe vira atributo.',
-   fields:[3,4],modWords:2,atrib:['MEDIDA','APLICACAO','MARCA','REFERENCIA','EMBALAGEM']},
+   fields:[3,4],modWords:2,atrib:['MEDIDA','APLICACAO','MARCA','REFERENCIA']},
  {id:'s5',nome:'5 · Genérica (por substantivo)',desc:'Só o Substantivo, por família (ideia do fiscal: “ÓLEO MOTOR”). Redução máxima, mas exige toda a especificidade em atributos — arriscado para compras.',
-   fields:[3],modWords:null,atrib:['MODIFICADOR','MEDIDA','APLICACAO','MARCA','REFERENCIA','EMBALAGEM']},
+   fields:[3],modWords:null,atrib:['MODIFICADOR','MEDIDA','APLICACAO','MARCA','REFERENCIA']},
 ];
 let META=null, ROWS=[], GROUPS={}, charts={};
 
@@ -257,7 +257,7 @@ function groupFor(s){
   ROWS.forEach(r=>{
     const p=padrao(r,s), key=r[0]+'||'+p;
     let g=m.get(key);
-    if(!g){g={padrao:p,fam:r[0],tipo:r[11],n:0,ex:[]};m.set(key,g);}
+    if(!g){g={padrao:p,fam:r[0],tipo:r[10],n:0,ex:[]};m.set(key,g);}
     g.n++; if(g.ex.length<3 && r[2]) g.ex.push(r[2]);
   });
   const arr=[...m.values()].sort((a,b)=>b.n-a.n);
@@ -328,13 +328,13 @@ function filterSug(id){ renderSugTable(SUG.find(x=>x.id===id)); }
 
 function renderBase(){
   const q=gv('s-base').toLowerCase(), tp=gv('tp-base'), fm=gv('fm-base');
-  const f=ROWS.filter(r=>(!q||r.join(' ').toLowerCase().includes(q))&&(!tp||r[11]===tp)&&(!fm||r[0]===fm));
-  const heads=['DESCRIÇÃO ORIGINAL','SUBSTANTIVO','MODIFICADOR','MEDIDA','APLICAÇÃO','MARCA','REFERÊNCIA','EMB.','COND.','TIPO','LC116'];
+  const f=ROWS.filter(r=>(!q||r.join(' ').toLowerCase().includes(q))&&(!tp||r[10]===tp)&&(!fm||r[0]===fm));
+  const heads=['DESCRIÇÃO ORIGINAL','SUBSTANTIVO','MODIFICADOR','MEDIDA','APLICAÇÃO','MARCA','REFERÊNCIA','COND.','TIPO','LC116'];
   let h='<thead><tr>'+heads.map(x=>`<th>${x}</th>`).join('')+'</tr></thead><tbody>';
   f.forEach(r=>{
     h+='<tr>'+r.map((v,i)=>{
       if(i<2) return '';
-      if(i===11) return `<td><span class="tag t-${v}">${v}</span></td>`;
+      if(i===10) return `<td><span class="tag t-${v}">${v}</span></td>`;
       const cls=(i===2||i===3)?'strong':'';
       return `<td class="${cls}">${esc(v)}</td>`;
     }).join('')+'</tr>';
