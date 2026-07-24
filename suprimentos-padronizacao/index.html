@@ -86,9 +86,10 @@ td.qex{color:var(--text3);font-size:11px;white-space:normal;}
 @media(max-width:900px){.grid2{grid-template-columns:1fr;}}
 .chart-wrap{position:relative;height:210px;}
 #t-qual td.qex{white-space:nowrap;max-width:520px;overflow:hidden;text-overflow:ellipsis;color:var(--text2);}
-#t-base{font-size:10px;}
-#t-base thead th{font-size:9.5px;padding:6px 6px 9px;}
-#t-base td{padding:8px 6px;}
+#t-base{font-size:10px;table-layout:fixed;width:100%;}
+#t-base thead th{font-size:9.5px;padding:6px 6px 9px;overflow:hidden;text-overflow:ellipsis;}
+#t-base td{padding:8px 6px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+#t-base td[title]{cursor:help;}
 #t-qual th:nth-child(4),#t-qual th:nth-child(5){width:92px;}
 #t-qual th:nth-child(2){width:120px;}
 
@@ -330,13 +331,15 @@ function renderBase(){
   const q=gv('s-base').toLowerCase(), tp=gv('tp-base'), fm=gv('fm-base');
   const f=ROWS.filter(r=>(!q||r.join(' ').toLowerCase().includes(q))&&(!tp||r[9]===tp)&&(!fm||r[0]===fm));
   const heads=['DESCRIÇÃO ORIGINAL','SUBSTANTIVO','MODIFICADOR','MEDIDA','MARCA','REFERÊNCIA','COND.','TIPO','LC116'];
-  let h='<thead><tr>'+heads.map(x=>`<th>${x}</th>`).join('')+'</tr></thead><tbody>';
+  const ws=['21%','9%','21%','10%','11%','11%','6%','6%','5%'];
+  let h='<colgroup>'+ws.map(w=>`<col style="width:${w}">`).join('')+'</colgroup>';
+  h+='<thead><tr>'+heads.map((x,i)=>`<th title="${x}">${x}</th>`).join('')+'</tr></thead><tbody>';
   f.forEach(r=>{
     h+='<tr>'+r.map((v,i)=>{
       if(i<2) return '';
       if(i===9) return `<td><span class="tag t-${v}">${v}</span></td>`;
       const cls=(i===2||i===3)?'strong':'';
-      return `<td class="${cls}">${esc(v)}</td>`;
+      return `<td class="${cls}" title="${esc(v)}">${esc(v)}</td>`;
     }).join('')+'</tr>';
   });
   h+='</tbody>';
@@ -387,7 +390,7 @@ function renderDiag(){
 }
 
 
-function esc(s){return String(s==null?'':s).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));}
+function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
 
 // menu retrátil + tema
 document.getElementById('menuBtn').addEventListener('click',()=>document.getElementById('shell').classList.toggle('collapsed'));
