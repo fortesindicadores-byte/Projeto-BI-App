@@ -70,6 +70,8 @@ select.st[data-v="Cancelada"]{background:#333333;color:#fff;border-color:#333333
 .kempty{color:var(--text3);text-align:center;padding:14px 0;font-size:12px;}
 .kcard{background:var(--card);border:1px solid var(--border);border-radius:8px;padding:10px 11px;cursor:grab;box-shadow:0 1px 4px rgba(0,0,0,.2);}
 .kcard:active{cursor:grabbing;} .kcard.dragging{opacity:.4;}
+.kadd{background:rgba(249,115,22,.10);border:1px dashed rgba(249,115,22,.45);border-radius:8px;color:var(--orange);font-family:'Montserrat',sans-serif;font-weight:700;font-size:11.5px;padding:8px 10px;cursor:pointer;width:100%;margin-top:2px;}
+.kadd:hover{background:rgba(249,115,22,.20);}
 .kcard-fato{font-size:12.5px;font-weight:700;color:var(--text);line-height:1.28;}
 .kcard-meta{font-size:10.5px;color:var(--text2);margin-top:7px;} .kcard-meta .dim{color:var(--text3);}
 .kbadge{font-size:8.5px;font-weight:800;padding:1px 6px;border-radius:4px;text-transform:uppercase;letter-spacing:.3px;margin-left:6px;}
@@ -133,7 +135,7 @@ body.light-mode select.st[data-v="Cancelada"]{background:#333333;color:#fff;}
   <a class="btn" href="../" title="Voltar ao hub" style="text-decoration:none">← Hub</a>
   <button class="btn theme" id="themeBtn" title="Modo claro/escuro">☀</button>
   <button class="btn" id="viewBtn" onclick="toggleView()" title="Alternar entre Tabela e Kanban">Kanban</button>
-  <button class="btn" id="addBtn" onclick="addRowTop()" title="Adicionar ação">+ Ação</button>
+  <button class="btn" id="addBtn" onclick="addAction()" title="Adicionar ação">+ Ação</button>
   <button class="btn" id="saveBtn" onclick="saveAll()">Salvar</button>
   <span class="saved-msg" id="savedMsg">Salvo ✓ na nuvem</span>
 </header>
@@ -151,7 +153,7 @@ body.light-mode select.st[data-v="Cancelada"]{background:#333333;color:#fff;}
     <div class="mfield"><label>Status</label><select id="m-status"></select></div>
     <div class="mfield"><label>Acompanhamento</label><textarea id="m-obs"></textarea></div>
     <div class="modal-actions">
-      <button class="mbtn del" onclick="deleteFromModal()">Excluir</button>
+      <button class="mbtn del" id="mDelBtn" onclick="deleteFromModal()">Excluir</button>
       <div style="display:flex;gap:10px;">
         <button class="mbtn cancel" onclick="closeModal()">Cancelar</button>
         <button class="mbtn save" onclick="saveModal()">Salvar</button>
@@ -298,7 +300,7 @@ function kanbanHTML(rows){
     const cards=rows.filter(r=>(r.status||DEFAULT_STATUS)===c.k);
     return `<div class="kcol" data-status="${c.k}">
       <div class="kcol-head ${c.cls}">${c.k}<span class="kcount">${cards.length}</span></div>
-      <div class="kcol-body">${cards.length?cards.map(kcard).join(''):'<div class="kempty">—</div>'}</div>
+      <div class="kcol-body">${cards.length?cards.map(kcard).join(''):'<div class="kempty">—</div>'}<button class="kadd" onclick="openNewModal('${c.k}')">+ nova ação</button></div>
     </div>`;
   }).join('')}</div>`;
 }
@@ -332,24 +334,43 @@ async function moveCard(id,status){
   c.addEventListener('drop',e=>{const col=e.target.closest&&e.target.closest('.kcol');if(!col)return;e.preventDefault();col.classList.remove('kover');const id=e.dataTransfer.getData('text/plain');if(id&&col.dataset.status)moveCard(id,col.dataset.status);});
 })();
 
-// ── Modal (edição a partir do card) ──
+// ── Modal (criar ou editar ação) ──
 let MODAL_ID=null;
+function fillStatus(sel){$('m-status').innerHTML=STATUS.map(s=>`<option${s===sel?' selected':''}>${s}</option>`).join('');}
 function openModal(id){
   const r=ROWS.find(x=>x.id===id); if(!r) return;
   MODAL_ID=id;
+  $('modalTitle').textContent='Editar ação';
   $('m-acao').value=r.acao; $('m-resp').innerHTML=respOptions(r.resp); $('m-prazo').value=r.prazo||'';
-  $('m-status').innerHTML=STATUS.map(s=>`<option${s===r.status?' selected':''}>${s}</option>`).join('');
-  $('m-obs').value=r.obs;
+  fillStatus(r.status); $('m-obs').value=r.obs;
+  $('mDelBtn').style.display='';
   $('modalBg').classList.add('open');
 }
+function openNewModal(status){
+  MODAL_ID=null;
+  $('modalTitle').textContent='Nova ação';
+  $('m-acao').value=''; $('m-resp').innerHTML=respOptions(''); $('m-prazo').value='';
+  fillStatus(status||DEFAULT_STATUS); $('m-obs').value='';
+  $('mDelBtn').style.display='none';
+  $('modalBg').classList.add('open');
+  setTimeout(()=>$('m-acao').focus(),50);
+}
+function addAction(){ if(VIEW==='kanban') openNewModal(DEFAULT_STATUS); else addRowTop(); }
 function closeModal(){$('modalBg').classList.remove('open');MODAL_ID=null;}
 async function saveModal(){
-  const r=ROWS.find(x=>x.id===MODAL_ID); if(!r){closeModal();return;}
   const upd={acao:$('m-acao').value.trim(),responsavel:$('m-resp').value.trim(),prazo:$('m-prazo').value||null,status:$('m-status').value,acompanhamento:$('m-obs').value.trim()};
-  Object.assign(r,fromDB({id:r.id,...upd})); buildFilters(); aplicar();
-  const {error}=await sb.from('planner').update(upd).eq('id',r.id);
-  if(error){alert('Erro ao salvar: '+error.message);}
-  writeCache(); closeModal();
+  if(MODAL_ID){
+    const r=ROWS.find(x=>x.id===MODAL_ID); if(!r){closeModal();return;}
+    Object.assign(r,fromDB({id:r.id,...upd})); buildFilters(); aplicar();
+    const {error}=await sb.from('planner').update(upd).eq('id',r.id);
+    if(error){alert('Erro ao salvar: '+error.message);}
+    writeCache(); closeModal();
+  }else{
+    if(!upd.acao && !upd.responsavel && !upd.acompanhamento){ closeModal(); return; }
+    const {data,error}=await sb.from('planner').insert(upd).select('*').single();
+    if(error){alert('Erro ao criar: '+error.message);return;}
+    ROWS.push(fromDB(data)); writeCache(); buildFilters(); aplicar(); closeModal();
+  }
 }
 async function deleteFromModal(){
   if(!MODAL_ID) return;
