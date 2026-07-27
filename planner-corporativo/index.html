@@ -196,6 +196,8 @@ const PRZ_OPTS=['Vencida','No prazo','Sem prazo'];
 let ROWS=[];            // fonte da verdade (do Supabase)
 let VIEW='tabela';
 let ADMIN_NAMES=[];     // responsáveis possíveis = administradores
+// nome em MAIÚSCULO, ideal "NOME SOBRENOME"; se só um termo, só ele
+function fmtName(s){s=String(s||'').trim().replace(/\s+/g,' ');if(!s)return '';const p=s.split(' ');const pick=p.length>=2?(p[0]+' '+p[p.length-1]):p[0];return pick.toUpperCase();}
 const CACHE='planner_cache_v1';
 
 // carrega a lista de administradores (nome) para o campo Responsável
@@ -216,7 +218,7 @@ async function loadAdmins(){
   if(SESSION&&SESSION.user&&!lbl.get(SESSION.user.id)){
     const me=SESSION.user; lbl.set(me.id,((me.user_metadata&&me.user_metadata.name)||me.email||'').trim());
   }
-  ADMIN_NAMES=[...new Set([...lbl.values()].filter(Boolean))].sort((a,b)=>a.localeCompare(b,'pt'));
+  ADMIN_NAMES=[...new Set([...lbl.values()].map(fmtName).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'pt'));
 }
 function respOptions(sel){
   const list=[...ADMIN_NAMES];
