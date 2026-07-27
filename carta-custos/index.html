@@ -20,6 +20,16 @@ body{background:radial-gradient(ellipse at 10% 25%,rgba(249,115,22,.06) 0%,trans
 .hfilter select{background:#0a0f18;color:var(--text);border:1px solid #2a3a50;border-radius:4px;font-family:'Montserrat',sans-serif;font-size:11px;font-weight:700;padding:6px 10px;cursor:pointer;outline:none;}
 .hfilter select:hover{border-color:var(--orange);}
 .hfilter select option{background:#0f1824;color:#fff;}
+/* filtro padrão Visão Financeira (single-select) */
+.ms-wrap{position:relative;}
+.ms-btn{display:flex;align-items:center;gap:8px;background:#0a0f18;color:var(--text);border:1px solid #2a3a50;border-radius:4px;font-family:'Montserrat',sans-serif;font-size:11px;font-weight:700;padding:6px 12px;cursor:pointer;text-transform:uppercase;letter-spacing:.5px;white-space:nowrap;min-width:92px;}
+.ms-btn:hover{border-color:var(--orange);}
+.ms-lbl{flex:1;text-align:left;}
+.ms-panel{display:none;flex-direction:column;position:absolute;top:calc(100% + 4px);right:0;z-index:500;background:#0f1824;border:1px solid #2a3a50;border-radius:4px;min-width:170px;max-height:340px;overflow-y:auto;box-shadow:0 8px 24px rgba(0,0,0,.7);}
+.ms-panel.open{display:flex;}
+.ms-opt{padding:7px 12px;cursor:pointer;font-size:11px;color:var(--text2);text-transform:uppercase;letter-spacing:.3px;white-space:nowrap;}
+.ms-opt:hover{background:rgba(255,255,255,.05);color:var(--text);}
+.ms-opt.sel{color:var(--orange);font-weight:800;}
 .btn{background:rgba(249,115,22,.15);border:1px solid rgba(249,115,22,.35);border-radius:6px;padding:7px 14px;cursor:pointer;color:var(--orange);font-family:'Montserrat',sans-serif;font-weight:800;font-size:12px;display:flex;align-items:center;gap:6px;text-decoration:none;}
 .btn:hover{background:rgba(249,115,22,.3);}
 .btn.theme{padding:7px 9px;}
@@ -49,7 +59,7 @@ body{background:radial-gradient(ellipse at 10% 25%,rgba(249,115,22,.06) 0%,trans
 /* lançamento form */
 .launch{background:rgba(20,27,38,.55);border:1px solid rgba(249,115,22,.2);border-radius:10px;padding:16px 18px;margin-bottom:16px;backdrop-filter:blur(16px);box-shadow:0 2px 12px rgba(0,0,0,.25);}
 .launch-title{font-size:13px;font-weight:800;color:var(--orange);text-transform:uppercase;letter-spacing:.5px;margin-bottom:12px;}
-.launch-grid{display:grid;grid-template-columns:110px 110px 1fr 1fr 100px 1.2fr 1.2fr 120px auto;gap:10px;align-items:end;}
+.launch-grid{display:grid;grid-template-columns:120px 110px 100px 1fr 1fr 80px 1.1fr 1fr 110px auto;gap:10px;align-items:end;}
 .lf{display:flex;flex-direction:column;gap:4px;}
 .lf label{font-size:9px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:.4px;}
 .lf input,.lf select{background:#0a0f18;border:1px solid #2a3a50;border-radius:6px;color:var(--text);font-family:'Montserrat',sans-serif;font-size:12px;padding:8px 9px;outline:none;width:100%;}
@@ -106,18 +116,13 @@ body.light-mode .lf input,body.light-mode .lf select{background:#fff;border-colo
 <body>
 <header class="header">
   <div class="brand"><h1>Carta de Custos</h1><p>Lançamento de custos por pacote — Frota</p></div>
-  <div class="hfilter"><label>Unidade</label><select id="selUni" onchange="onUniChange()"></select></div>
-  <div class="hfilter"><label>Vigência</label><select id="selVig" onchange="onVigChange()"></select></div>
+  <div class="hfilter"><label>Unidade</label><div class="ms-wrap" id="ms-uni"><button class="ms-btn" onclick="toggleMs('ms-uni')"><span class="ms-lbl" id="lbl-uni">—</span><svg width="10" height="6" viewBox="0 0 10 6"><path d="M0 0l5 6 5-6z" fill="#F97316"/></svg></button><div class="ms-panel"><div class="ms-list" id="list-uni"></div></div></div></div>
+  <div class="hfilter"><label>Vigência</label><div class="ms-wrap" id="ms-vig"><button class="ms-btn" onclick="toggleMs('ms-vig')"><span class="ms-lbl" id="lbl-vig">—</span><svg width="10" height="6" viewBox="0 0 10 6"><path d="M0 0l5 6 5-6z" fill="#F97316"/></svg></button><div class="ms-panel"><div class="ms-list" id="list-vig"></div></div></div></div>
   <a class="btn" href="../" title="Voltar ao hub">← Hub</a>
   <button class="theme-btn" id="themeBtn" title="Modo claro/escuro"></button>
 </header>
 
 <main class="main" id="main">
-  <div class="pac-tabs" id="pacTabs">
-    <div class="pac-tab active" data-pac="Manutenção" onclick="setPac('Manutenção')">🔧 Manutenção</div>
-    <div class="pac-tab" data-pac="Pneus" onclick="setPac('Pneus')">🛞 Pneus</div>
-  </div>
-
   <!-- hero + cards -->
   <section class="hero">
     <div class="hero-main">
@@ -126,13 +131,15 @@ body.light-mode .lf input,body.light-mode .lf select{background:#fff;border-colo
       <div class="hero-deltas">
         <div class="hero-delta">Δ Orç.<b id="h-dorc">—</b></div>
         <div class="hero-delta">Δ Rem.<b id="h-drem">—</b></div>
+        <div class="hero-delta">Ating. Orç %<b id="h-ato">—</b></div>
+        <div class="hero-delta">Ating. Rem %<b id="h-atr">—</b></div>
         <div class="hero-delta">Lançamentos<b id="h-cnt">0</b></div>
       </div>
     </div>
   </section>
   <div class="cards-row">
-    <div class="kpi-card"><div class="card-label">Orçado (tend.)</div><div class="card-value" id="c-orc">—</div><div class="card-meta"><div class="card-meta-item">do DRE · mês</div></div></div>
-    <div class="kpi-card"><div class="card-label">Remunerado (tend.)</div><div class="card-value" id="c-rem">—</div><div class="card-meta"><div class="card-meta-item">do DRE · mês</div></div></div>
+    <div class="kpi-card"><div class="card-label">Orçado</div><div class="card-value" id="c-orc">—</div><div class="card-meta"><div class="card-meta-item">orçado do mês (DRE)</div></div></div>
+    <div class="kpi-card"><div class="card-label">Remunerado (tendência)</div><div class="card-value" id="c-rem">—</div><div class="card-meta"><div class="card-meta-item">projeção vs orçado</div></div></div>
     <div class="kpi-card"><div class="card-label">Realizado</div><div class="card-value" id="c-real">R$ 0</div><div class="card-meta"><div class="card-meta-item">lançado no mês</div></div></div>
     <div class="kpi-card"><div class="card-label">Ating. Orç.</div><div class="card-value" id="c-ato">—</div><div class="card-meta"><div class="card-meta-item">Real ÷ Orç</div></div></div>
     <div class="kpi-card"><div class="card-label">Ating. Rem.</div><div class="card-value" id="c-atr">—</div><div class="card-meta"><div class="card-meta-item">Real ÷ Rem</div></div></div>
@@ -140,8 +147,9 @@ body.light-mode .lf input,body.light-mode .lf select{background:#fff;border-colo
 
   <!-- lançamento -->
   <div class="launch">
-    <div class="launch-title">Novo lançamento — <span id="lf-pac">Manutenção</span></div>
+    <div class="launch-title">Novo lançamento</div>
     <div class="launch-grid">
+      <div class="lf"><label>Pacote</label><select id="lf-pacote" onchange="onPacChange()"><option>Manutenção</option><option>Pneus</option></select></div>
       <div class="lf"><label>Data</label><input type="date" id="lf-data"></div>
       <div class="lf"><label>Projeto</label><select id="lf-projeto"></select></div>
       <div class="lf"><label>Equipamento / Placa</label><input id="lf-equip" placeholder="Ex: ABC1D23"></div>
@@ -189,8 +197,8 @@ const CONTAS={
   'Pneus':['Pneus Novos','Recapagens e Outros Serviços']
 };
 const GRUPOS={
-  'Manutenção':['Motor','Transmissão','Elétrica','Freios','Suspensão','Direção','Arrefecimento','Alimentação/Combustível','Ar-condicionado','Rodagem/Eixos','Carroceria/Funilaria','Pintura','Vidros/Retrovisores','Escapamento/Emissões','Hidráulico','Pneumático','Baú/Implemento','Tacógrafo/Telemetria','Preventiva','Corretiva','Lavação','Engraxamento/Lubrificação','Ferramentas','Solda/Usinagem/Retífica','Guincho/Socorro','Mão de obra/Terceiros','Diversos'],
-  'Pneus':['Pneu novo','Recapagem/Recape','Vulcanização','Reparo/Remendo/Manchão','Conserto de válvula/bico','Câmara/Protetor/Aro','Alinhamento/Balanceamento','Rodízio/Calibragem','Borracharia','Descarte/Sucata']
+  'Manutenção':['Motor','Transmissão','Embreagem','Diferencial','Elétrica','Freios','Suspensão','Direção','Arrefecimento','Combustível','Injeção','Climatização','Rodagem','Eixos','Carroceria','Funilaria','Pintura','Vidros','Escapamento','Hidráulico','Pneumático','Implemento','Telemetria','Preventiva','Corretiva','Lavação','Lubrificação','Ferramentas','Solda','Guincho','Terceiros','Diversos'],
+  'Pneus':['Novos','Recapagem','Vulcanização','Reparo','Manchão','Válvula','Câmara','Alinhamento','Balanceamento','Rodízio','Borracharia','Descarte']
 };
 
 let UNIT='', VIG='', PAC='Manutenção', ROWS=[];
@@ -258,8 +266,18 @@ function buildVigOptions(){
   const now=new Date(); const opts=[];
   for(let i=0;i<=6;i++){const d=new Date(now.getFullYear(),now.getMonth()+i,1);opts.push(d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0'));}
   VIG=VIG||opts[0];
-  $('selVig').innerHTML=opts.map(o=>`<option value="${o}"${o===VIG?' selected':''}>${vigLabel(o)}</option>`).join('');
+  $('list-vig').innerHTML=opts.map(o=>`<div class="ms-opt${o===VIG?' sel':''}" onclick="pickVig('${o}')">${vigLabel(o)}</div>`).join('');
+  $('lbl-vig').textContent=vigLabel(VIG);
 }
+// ── filtro single-select (padrão VF) ──
+function toggleMs(id){document.querySelectorAll('.ms-panel.open').forEach(p=>{if(p.closest('.ms-wrap').id!==id)p.classList.remove('open');});const p=document.querySelector('#'+id+' .ms-panel');if(p)p.classList.toggle('open');}
+document.addEventListener('click',e=>{if(!e.target.closest('.ms-wrap'))document.querySelectorAll('.ms-panel.open').forEach(p=>p.classList.remove('open'));});
+function buildUniFilter(){
+  $('list-uni').innerHTML=ALLOWED.map(u=>`<div class="ms-opt${u===UNIT?' sel':''}" onclick="pickUni('${u}')">${u}</div>`).join('');
+  $('lbl-uni').textContent=UNIT||'—';
+}
+function pickUni(u){UNIT=u;$('lbl-uni').textContent=u;document.querySelectorAll('#list-uni .ms-opt').forEach(o=>o.classList.toggle('sel',o.textContent===u));document.querySelector('#ms-uni .ms-panel').classList.remove('open');loadRows();}
+function pickVig(v){VIG=v;$('lbl-vig').textContent=vigLabel(v);document.querySelectorAll('#list-vig .ms-opt').forEach(o=>o.classList.toggle('sel',o.textContent===vigLabel(v)));document.querySelector('#ms-vig .ms-panel').classList.remove('open');loadRows();}
 
 // ── DB ──
 function fromDB(d){return{id:d.id,unidade:d.unidade,vigencia:d.vigencia,pacote:d.pacote,data:d.data||'',projeto:d.projeto||'',equipamento:(d.equipamento||''),fornecedor:(d.fornecedor||''),nf:d.nf||'',conta:d.conta||'',grupo:d.grupo||'',valor:+d.valor||0};}
@@ -279,9 +297,7 @@ function fillForm(){
   $('lf-grupo').innerHTML=GRUPOS[PAC].map(g=>`<option>${esc(g)}</option>`).join('');
   if(!$('lf-data').value){const t=new Date();$('lf-data').value=t.getFullYear()+'-'+String(t.getMonth()+1).padStart(2,'0')+'-'+String(t.getDate()).padStart(2,'0');}
 }
-function setPac(p){PAC=p;document.querySelectorAll('.pac-tab').forEach(t=>t.classList.toggle('active',t.dataset.pac===p));$('h-pac').textContent=p;$('lf-pac').textContent=p;fillForm();render();}
-function onUniChange(){UNIT=$('selUni').value;loadRows();}
-function onVigChange(){VIG=$('selVig').value;loadRows();}
+function onPacChange(){PAC=$('lf-pacote').value;$('h-pac').textContent=PAC;$('lf-conta').innerHTML=CONTAS[PAC].map(c=>`<option>${esc(c)}</option>`).join('');$('lf-grupo').innerHTML=GRUPOS[PAC].map(g=>`<option>${esc(g)}</option>`).join('');render();}
 
 async function lancar(){
   const valor=parseFloat($('lf-valor').value);
@@ -316,6 +332,7 @@ function render(){
   $('c-orc').textContent=t.orc!=null?fmt(t.orc):'—'; $('c-rem').textContent=t.rem!=null?fmt(t.rem):'—';
   const atO=t.orc?t.real/t.orc*100:null, atR=t.rem?t.real/t.rem*100:null;
   $('c-ato').textContent=atO!=null?pct(atO):'—'; $('c-atr').textContent=atR!=null?pct(atR):'—';
+  $('h-ato').textContent=atO!=null?pct(atO):'—'; $('h-atr').textContent=atR!=null?pct(atR):'—';
   setColored('h-dorc',t.orc!=null?fmt(t.real-t.orc):'—',t.orc!=null&&t.real>t.orc);
   setColored('h-drem',t.rem!=null?fmt(t.real-t.rem):'—',t.rem!=null&&t.real>t.rem);
   renderAcomp(); renderLanc(rows); renderCharts(rows);
@@ -375,14 +392,13 @@ function renderLanc(rows){
 const labelPlugin={afterDatasetsDraw(chart){const isLight=document.body.classList.contains('light-mode');const meta=chart.getDatasetMeta(0),ds=chart.data.datasets[0];if(!meta)return;const ctx=chart.ctx;ctx.save();ctx.font='700 10px Montserrat,sans-serif';ctx.fillStyle=isLight?'#000':'#F1F5F9';ctx.textAlign='center';ctx.textBaseline='bottom';ds.data.forEach((v,i)=>{const pt=meta.data[i];if(!pt||v==null)return;ctx.fillText(fmt(v).replace('R$ ',''),pt.x,pt.y-6);});ctx.restore();}};
 function barChart(id,pairs){
   const isLight=document.body.classList.contains('light-mode');
-  const grid={color:isLight?'rgba(0,0,0,.08)':'rgba(255,255,255,.06)'};
   const tick={color:isLight?'#444':'#94A3B8',font:{family:'Montserrat',size:10}};
-  const top=pairs.slice(0,8);
+  const top=pairs.slice(0,10);
   if(charts[id])charts[id].destroy();
   charts[id]=new Chart($(id),{type:'bar',
     data:{labels:top.map(p=>p[0]),datasets:[{data:top.map(p=>p[1]),backgroundColor:'rgba(249,115,22,.65)',borderColor:'#F97316',borderWidth:1,borderRadius:3}]},
     plugins:[labelPlugin],
-    options:{responsive:true,maintainAspectRatio:false,layout:{padding:{top:22}},plugins:{legend:{display:false},tooltip:{backgroundColor:'#141B26',titleColor:'#F97316',bodyColor:'#F1F5F9',borderColor:'#1E2D40',borderWidth:1,callbacks:{label:c=>fmt(c.raw)}}},scales:{x:{grid:{display:false},ticks:tick},y:{beginAtZero:true,grid,ticks:{...tick,callback:v=>fmt(v).replace('R$ ','')}}}}});
+    options:{responsive:true,maintainAspectRatio:false,layout:{padding:{top:22}},plugins:{legend:{display:false},tooltip:{backgroundColor:'#141B26',titleColor:'#F97316',bodyColor:'#F1F5F9',borderColor:'#1E2D40',borderWidth:1,callbacks:{label:c=>fmt(c.raw)}}},scales:{x:{grid:{display:false},border:{display:false},ticks:tick},y:{display:false,beginAtZero:true,grace:'12%'}}}});
 }
 function renderCharts(rows){
   barChart('ch-grupo',aggBy(rows,'grupo'));
@@ -409,9 +425,7 @@ async function init(){
   ALLOWED=IS_ADMIN?Object.keys(DEPARA):(prof&&prof.unidade?[String(prof.unidade).toUpperCase()]:[]);
   if(!ALLOWED.length){ showRestricted('Seu usuário não tem unidade vinculada. Fale com o corporativo para liberar seu acesso à Carta de Custos.'); return; }
   UNIT=ALLOWED[0];
-  $('selUni').innerHTML=ALLOWED.map(u=>`<option value="${u}"${u===UNIT?' selected':''}>${u} · ${DEPARA[u]}</option>`).join('');
-  if(!IS_ADMIN && ALLOWED.length===1){ $('selUni').disabled=true; }
-  buildVigOptions(); fillForm(); await loadRows();
+  buildUniFilter(); buildVigOptions(); fillForm(); await loadRows();
 }
 init();
 </script>
