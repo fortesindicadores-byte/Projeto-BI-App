@@ -42,6 +42,21 @@ body{background:radial-gradient(ellipse at 10% 25%,rgba(249,115,22,.06) 0%,trans
 .intro{font-size:12px;color:var(--text2);margin-bottom:18px;line-height:1.5;}
 .intro b{color:var(--text);}
 .saved-msg{display:none;font-size:12px;font-weight:700;color:var(--green);margin-left:8px;}
+/* ── Painel de Aderência ── */
+.adere{display:flex;flex-direction:column;gap:12px;margin-bottom:16px;}
+.adere-hero{background:rgba(20,27,38,.55);border:1px solid rgba(255,255,255,.07);border-radius:10px;padding:14px 22px;display:flex;flex-direction:column;align-items:flex-start;backdrop-filter:blur(16px);box-shadow:0 2px 12px rgba(0,0,0,.25);}
+.adere-hero .lbl{font-size:10px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:1px;}
+.adere-hero .val{font-size:42px;font-weight:800;line-height:1;margin-top:5px;}
+.adere-hero .sub{font-size:10px;color:var(--text2);margin-top:6px;font-weight:600;}
+.adere-pcts{display:grid;grid-template-columns:repeat(2,minmax(140px,260px));gap:12px;}
+.adere-counts{display:grid;grid-template-columns:repeat(6,1fr);gap:12px;}
+.adere-card{background:rgba(20,27,38,.55);border:1px solid rgba(255,255,255,.07);border-radius:10px;padding:12px 14px;display:flex;flex-direction:column;gap:2px;backdrop-filter:blur(16px);box-shadow:0 2px 12px rgba(0,0,0,.25);}
+.adere-card .clbl{font-size:9.5px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:.5px;}
+.adere-card .cval{font-size:24px;font-weight:800;line-height:1.1;margin-top:2px;}
+.adere-card .cmeta{font-size:10px;color:var(--text2);font-weight:600;}
+body.light-mode .adere-hero,body.light-mode .adere-card{background:rgba(128,128,128,.14)!important;border:none!important;box-shadow:none!important;--text:#1a1a1a;--text2:#444444;--text3:#666666;}
+@media(max-width:900px){.adere-counts{grid-template-columns:repeat(3,1fr);}}
+@media(max-width:680px){.adere-counts{grid-template-columns:repeat(2,1fr);}.adere-pcts{grid-template-columns:1fr 1fr;}.adere-hero .val{font-size:34px;}}
 .loading{text-align:center;color:var(--text3);padding:50px;font-size:14px;}
 .restrito{max-width:520px;margin:40px auto;text-align:center;background:rgba(255,102,102,.08);border:1px solid rgba(255,102,102,.25);border-radius:12px;padding:34px 30px;}
 .restrito h2{font-size:18px;color:var(--text);margin-bottom:8px;}
@@ -170,6 +185,7 @@ body.light-mode select.st[data-v="Cancelada"]{background:#333333;color:#fff;}
   <span class="saved-msg" id="savedMsg">Salvo ✓ na nuvem</span>
 </header>
 <main class="main">
+  <div class="adere" id="adere" style="display:none"></div>
   <div class="intro" id="intro">Lance aqui as <b>ações do time corporativo</b>: <b>Ação</b>, <b>Responsável</b>, <b>Prazo</b>, <b>Status</b> e <b>Acompanhamento</b>. Alterne para <b>Kanban</b> e arraste os cards entre <i>Não iniciada</i> / <i>Em andamento</i> / <i>Concluída</i>. Ao <b>Salvar</b>, tudo é gravado na nuvem. Este planner é <b>independente do FCA</b> — não entra no cálculo de aderência.</div>
   <div id="list"><div class="loading">Carregando…</div></div>
 </main>
@@ -310,9 +326,45 @@ function filtered(){
 // ── render ──
 function aplicar(){
   const vis=filtered();
+  renderAdere(vis);
   if(VIEW==='kanban'){ $('list').innerHTML=kanbanHTML(vis); return; }
   $('list').innerHTML=tableHTML(vis);
   wireTable();
+}
+// ── Aderência Geral (Prazo + Conclusão) ──
+const adCor=p=>p>=90?'var(--green)':(p>=70?'var(--amber)':'var(--red)');
+function renderAdere(rows){
+  const box=$('adere'); if(!box) return;
+  const ativas=rows.filter(r=>(r.status||DEFAULT_STATUS)!=='Cancelada');
+  const base=ativas.length;
+  if(!base){ box.style.display='none'; return; }
+  const concl=ativas.filter(r=>r.status==='Concluída').length;
+  const venc=ativas.filter(r=>prazoState(r)==='Vencida').length;
+  const andar=ativas.filter(r=>r.status==='Em andamento').length;
+  const nao=ativas.filter(r=>(r.status||DEFAULT_STATUS)==='Não iniciada').length;
+  const pConcl=Math.round(concl/base*100);
+  const pPrazo=Math.round((base-venc)/base*100);
+  const geral=Math.round((pConcl+pPrazo)/2);
+  const noPrazo=base-venc;
+  box.style.display='flex';
+  box.innerHTML=`
+    <div class="adere-hero">
+      <div class="lbl">Aderência Geral (Prazo + Conclusão)</div>
+      <div class="val" style="color:${adCor(geral)}">${geral}%</div>
+      <div class="sub">média de % Prazo e % Conclusão</div>
+    </div>
+    <div class="adere-pcts">
+      <div class="adere-card"><div class="clbl">% Prazo</div><div class="cval" style="color:${adCor(pPrazo)}">${pPrazo}%</div><div class="cmeta">${noPrazo} de ${base} no prazo</div></div>
+      <div class="adere-card"><div class="clbl">% Conclusão</div><div class="cval" style="color:${adCor(pConcl)}">${pConcl}%</div><div class="cmeta">${concl} de ${base} concluídas</div></div>
+    </div>
+    <div class="adere-counts">
+      <div class="adere-card"><div class="clbl">Total de Ações</div><div class="cval">${base}</div></div>
+      <div class="adere-card"><div class="clbl">No prazo</div><div class="cval" style="color:var(--green)">${noPrazo}</div></div>
+      <div class="adere-card"><div class="clbl">Fora do prazo</div><div class="cval" style="color:${venc?'var(--red)':'var(--text)'}">${venc}</div></div>
+      <div class="adere-card"><div class="clbl">Não iniciadas</div><div class="cval" style="color:var(--red)">${nao}</div></div>
+      <div class="adere-card"><div class="clbl">Em andamento</div><div class="cval" style="color:var(--amber)">${andar}</div></div>
+      <div class="adere-card"><div class="clbl">Concluídas</div><div class="cval" style="color:var(--green)">${concl}</div></div>
+    </div>`;
 }
 function tableHTML(rows){
   return `<div class="card-block">
@@ -487,7 +539,7 @@ applyTheme(localStorage.getItem('bi_theme')||'dark');
 
 // ── acesso: só admins ──
 function showRestricted(msg){
-  ['wrapAssunto','wrapResp','wrapStatus','wrapPrazo','viewBtn','addBtn','saveBtn'].forEach(id=>{const el=$(id);if(el)el.style.display='none';});
+  ['wrapAssunto','wrapResp','wrapStatus','wrapPrazo','viewBtn','addBtn','saveBtn','adere'].forEach(id=>{const el=$(id);if(el)el.style.display='none';});
   $('intro').style.display='none';
   $('list').innerHTML=`<div class="restrito"><h2>Acesso restrito</h2><p>${esc(msg||'Este planner é exclusivo para administradores.')}</p><a class="btn" href="../" style="text-decoration:none;display:inline-flex">← Voltar ao hub</a></div>`;
 }
