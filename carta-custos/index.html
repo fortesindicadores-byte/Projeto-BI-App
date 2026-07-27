@@ -77,8 +77,12 @@ table.dre td{padding:12px 8px;border:none;color:var(--text);white-space:nowrap;}
 table.dre td.conta{color:var(--text);font-weight:500;min-width:180px;}
 table.dre td.num{text-align:right;font-variant-numeric:tabular-nums;}
 table.dre tbody tr:hover{background:rgba(255,255,255,.035);}
-table.dre tr.total td{color:var(--text);font-weight:700;border-top:2px solid rgba(255,255,255,.12);padding-top:14px;padding-bottom:8px;}
-table.dre tr.total td.conta{font-weight:800;}
+table.dre tr.grp td{padding:16px 8px 6px;font-size:12px;font-weight:800;color:var(--text2);text-transform:uppercase;letter-spacing:.6px;border-bottom:1px solid rgba(255,255,255,.10);}
+table.dre tr.pac-total td{background:var(--card);color:var(--text);font-weight:800;padding:12px 8px;border-top:1px solid rgba(255,255,255,.10);}
+table.dre tr.total td{background:var(--card);color:var(--text);font-weight:800;font-size:13px;border-top:2px solid rgba(255,255,255,.12);padding-top:14px;padding-bottom:12px;}
+table.dre tr.total td.conta,table.dre tr.pac-total td.conta{font-weight:800;}
+body.light-mode table.dre tr.grp td{border-bottom-color:rgba(0,0,0,.10);}
+body.light-mode table.dre tr.pac-total td,body.light-mode table.dre tr.total td{background:#F0F0F0;}
 .sep-l{border-left:1px solid rgba(255,255,255,.13);padding-left:16px;}
 .cr{color:var(--red)!important;font-weight:700;}.cg{color:var(--green)!important;font-weight:700;}
 .tag-pill{display:inline-block;font-size:11px;font-weight:800;padding:2px 9px;border-radius:10px;min-width:52px;text-align:center;}
@@ -200,9 +204,9 @@ const pct=v=>v==null||!isFinite(v)?'—':v.toFixed(1)+'%';
 const MESES=['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
 function vigLabel(ym){const [y,m]=ym.split('-');return MESES[+m-1]+'/'+y.slice(2);}
 function buildVigOptions(){
-  // últimos 12 meses (sem Date.now dinâmico complexo; usa data local)
+  // gestão à vista: só o mês atual e meses à frente (anteriores não)
   const now=new Date(); const opts=[];
-  for(let i=0;i<12;i++){const d=new Date(now.getFullYear(),now.getMonth()-i,1);opts.push(d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0'));}
+  for(let i=0;i<=6;i++){const d=new Date(now.getFullYear(),now.getMonth()+i,1);opts.push(d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0'));}
   VIG=VIG||opts[0];
   $('selVig').innerHTML=opts.map(o=>`<option value="${o}"${o===VIG?' selected':''}>${vigLabel(o)}</option>`).join('');
 }
@@ -253,7 +257,7 @@ function render(){
   $('h-real').textContent=fmt(totReal); $('c-real').textContent=fmt(totReal);
   $('h-cnt').textContent=rows.length;
   $('h-dorc').textContent='—'; $('h-drem').textContent='—'; $('c-ato').textContent='—'; $('c-atr').textContent='—';
-  renderConta(rows); renderLanc(rows); renderCharts(rows);
+  renderAcomp(); renderLanc(rows); renderCharts(rows);
 }
 function aggBy(rows,key){const m=new Map();rows.forEach(r=>{const k=r[key]||'—';m.set(k,(m.get(k)||0)+r.valor);});return [...m.entries()].sort((a,b)=>b[1]-a[1]);}
 
@@ -263,15 +267,22 @@ function atColor(p){ // custo: >=100 vermelho, >=90 amarelo
   if(p>=90)return 'background:rgba(244,161,0,.18);color:var(--amber);';
   return 'background:rgba(59,179,59,.16);color:var(--green);';
 }
-function renderConta(rows){
-  const byC=new Map(CONTAS[PAC].map(c=>[c,0]));
-  rows.forEach(r=>byC.set(r.conta,(byC.get(r.conta)||0)+r.valor));
-  const tot=[...byC.values()].reduce((a,b)=>a+b,0);
+const PACS=['Manutenção','Pneus'];
+function acompRow(conta,real){
+  return `<tr><td class="conta">${esc(conta)}</td><td class="num">—</td><td class="num">—</td><td class="num">${real?fmt(real):'—'}</td><td class="num">—</td><td class="num">—</td><td class="num">—</td><td class="num">—</td></tr>`;
+}
+function renderAcomp(){
   let h=`<thead><tr><th class="lft">Conta</th><th>Orç</th><th>Rem</th><th>Real</th><th>▲ Orç</th><th>▲ Rem</th><th>Ating. Orç %</th><th>Ating. Rem %</th></tr></thead><tbody>`;
-  [...byC.entries()].forEach(([c,real])=>{
-    h+=`<tr><td class="conta">${esc(c)}</td><td class="num">—</td><td class="num">—</td><td class="num">${real?fmt(real):'—'}</td><td class="num">—</td><td class="num">—</td><td class="num">—</td><td class="num">—</td></tr>`;
+  let gReal=0;
+  PACS.forEach(pac=>{
+    const byC=new Map(CONTAS[pac].map(c=>[c,0]));
+    ROWS.filter(r=>r.pacote===pac).forEach(r=>byC.set(r.conta,(byC.get(r.conta)||0)+r.valor));
+    const tot=[...byC.values()].reduce((a,b)=>a+b,0); gReal+=tot;
+    h+=`<tr class="grp"><td colspan="8">Pacote ${esc(pac)}</td></tr>`;
+    [...byC.entries()].forEach(([c,real])=>{ h+=acompRow(c,real); });
+    h+=`<tr class="pac-total"><td class="conta">Total ${esc(pac)}</td><td class="num">—</td><td class="num">—</td><td class="num">${fmt(tot)}</td><td class="num">—</td><td class="num">—</td><td class="num">—</td><td class="num">—</td></tr>`;
   });
-  h+=`<tr class="total"><td class="conta">Total ${esc(PAC)}</td><td class="num">—</td><td class="num">—</td><td class="num">${fmt(tot)}</td><td class="num">—</td><td class="num">—</td><td class="num">—</td><td class="num">—</td></tr></tbody>`;
+  h+=`<tr class="total"><td class="conta">Total Geral</td><td class="num">—</td><td class="num">—</td><td class="num">${fmt(gReal)}</td><td class="num">—</td><td class="num">—</td><td class="num">—</td><td class="num">—</td></tr></tbody>`;
   $('tbl-conta').innerHTML=h;
 }
 function brDate(iso){if(!iso)return '—';const [y,m,d]=iso.split('-');return `${d}/${m}/${y.slice(2)}`;}
