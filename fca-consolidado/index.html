@@ -432,10 +432,11 @@ function ensureKModal(){
     '<label>Ação</label><textarea id="km-acao" rows="4"></textarea>'+
     '<div class="kmodal-row"><div><label>Responsável</label><input id="km-resp" type="text"></div><div><label>Prazo</label><input id="km-prazo" type="date"></div></div>'+
     '<div class="kmodal-row"><div><label>Status</label><select id="km-status">'+_KM_STS.map(s=>'<option>'+s+'</option>').join('')+'</select></div><div><label>Acompanhamento</label><input id="km-acomp" type="text"></div></div>'+
-    '<div class="kmodal-foot"><button class="btn ghost" onclick="closeKModal()">Cancelar</button><button class="btn" onclick="saveKModal()">Salvar</button></div>'+
+    '<div class="kmodal-foot"><button class="btn ghost" onclick="closeKModal()">Fechar</button></div>'+
   '</div>';
   d.addEventListener('click',e=>{if(e.target===d)closeKModal();});
   document.body.appendChild(d);
+  ['km-causa','km-acao','km-resp','km-prazo','km-status','km-acomp'].forEach(id=>{const el=document.getElementById(id);if(el)el.addEventListener('change',persistKModal);});
 }
 function openKModal(id){
   const r=_ROWS.find(x=>String(x.id)===String(id));if(!r)return;ensureKModal();_kmId=r.id;
@@ -450,12 +451,12 @@ function openKModal(id){
   document.getElementById('kmodal-ov').style.display='flex';
 }
 function closeKModal(){const m=document.getElementById('kmodal-ov');if(m)m.style.display='none';_kmId=null;}
-async function saveKModal(){
+async function persistKModal(){
   const id=_kmId,r=_ROWS.find(x=>String(x.id)===String(id));if(!r)return;
   const upd={causa:document.getElementById('km-causa').value||null,acao:document.getElementById('km-acao').value||null,
     responsavel:document.getElementById('km-resp').value||null,prazo:document.getElementById('km-prazo').value||null,
     status:document.getElementById('km-status').value,acompanhamento:document.getElementById('km-acomp').value||null};
-  Object.assign(r,upd);render();closeKModal();
+  Object.assign(r,upd);render();
   const {error}=await sb.from('fca').update(upd).eq('id',id);
   if(error){flash('Erro ao salvar',true);return;}
   writeCache(CACHE_KEY,_ROWS);flash('Salvo ✓');

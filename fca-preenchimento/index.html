@@ -170,11 +170,10 @@ body.light-mode select.st[data-v="Cancelada"]{background:#333333;color:#fff;}
   <button class="btn theme" id="themeBtn" title="Modo claro/escuro">☀</button>
   <button class="btn" id="viewBtn" onclick="toggleView()" title="Alternar entre Tabela e Kanban">Kanban</button>
   <button class="btn" id="adminBtn" title="Modo admin (edita tudo) — teste; em produção será por RLS">Admin</button>
-  <button class="btn" id="saveBtn">Salvar</button>
-  <span class="saved-msg" id="savedMsg">Salvo ✓ na nuvem</span>
+  <span class="saved-msg" id="savedMsg">Salvo ✓</span>
 </header>
 <main class="main">
-  <div class="intro">Para cada <b>fato</b> (indicador com desvio) preencha uma ou mais <b>ações</b> com <b>Causa</b>, <b>Ação</b>, <b>Responsável</b>, <b>Prazo</b> e <b>Status</b>. Os fatos vêm dos <b>ICs do Gerot</b> e dos <b>Custos da DRE</b> da unidade (Km/L e R$/L entram como causa do Custo Combustível, não como fato próprio). Ao <b>Salvar</b>, as ações são gravadas na <b>nuvem</b> e podem continuar sendo editadas quando precisar.</div>
+  <div class="intro">Para cada <b>fato</b> (indicador com desvio) preencha uma ou mais <b>ações</b> com <b>Causa</b>, <b>Ação</b>, <b>Responsável</b>, <b>Prazo</b> e <b>Status</b>. Os fatos vêm dos <b>ICs do Gerot</b> e dos <b>Custos da DRE</b> da unidade (Km/L e R$/L entram como causa do Custo Combustível, não como fato próprio). As ações são <b>salvas automaticamente</b> na nuvem — digitou, salvou — e podem continuar sendo editadas quando precisar.</div>
   <div id="list"><div class="loading">Carregando fatos da unidade…</div></div>
 </main>
 <script>
@@ -816,10 +815,12 @@ function ensureKModal(){
     '<label>Ação</label><textarea id="km-acao" rows="4"></textarea>'+
     '<div class="kmodal-row"><div><label>Responsável</label><input id="km-resp" type="text"></div><div><label>Prazo</label><input id="km-prazo" type="date"></div></div>'+
     '<div class="kmodal-row"><div><label>Status</label><select id="km-status">'+_KM_STS.map(s=>'<option>'+s+'</option>').join('')+'</select></div><div><label>Acompanhamento</label><input id="km-acomp" type="text"></div></div>'+
-    '<div class="kmodal-foot"><button class="btn ghost" onclick="closeKModal()">Cancelar</button><button class="btn" onclick="saveKModal()">Salvar</button></div>'+
+    '<div class="kmodal-foot"><button class="btn ghost" onclick="closeKModal()">Fechar</button></div>'+
   '</div>';
   d.addEventListener('click',e=>{if(e.target===d)closeKModal();});
   document.body.appendChild(d);
+  // auto-save: cada campo, ao alterar/sair → salvo
+  ['km-causa','km-acao','km-resp','km-prazo','km-status','km-acomp'].forEach(id=>{const el=document.getElementById(id);if(el)el.addEventListener('change',persistKModal);});
 }
 function openKModal(id){
   const hit=_findDbRow(id);if(!hit)return;const r=hit.r;
@@ -837,15 +838,16 @@ function openKModal(id){
   document.getElementById('kmodal-ov').style.display='flex';
 }
 function closeKModal(){const m=document.getElementById('kmodal-ov');if(m)m.style.display='none';_kmId=null;}
-async function saveKModal(){
-  const hit=_findDbRow(_kmId);if(!hit){closeKModal();return;}const r=hit.r;
+async function persistKModal(){
+  const hit=_findDbRow(_kmId);if(!hit)return;const r=hit.r;
   const upd={causa:document.getElementById('km-causa').value||null,acao:document.getElementById('km-acao').value||null,
     responsavel:document.getElementById('km-resp').value||null,prazo:document.getElementById('km-prazo').value||null,
     status:document.getElementById('km-status').value,acompanhamento:document.getElementById('km-acomp').value||null};
-  Object.assign(r,upd);aplicar();closeKModal();
+  Object.assign(r,upd);aplicar();
   if(PREVIEW||!sb)return;
   const {error}=await sb.from('fca').update(upd).eq('id',r.id);if(error){console.error('update modal',error);return;}
   const all=[];for(const k in _DBROWS)all.push(..._DBROWS[k]);writeCache('fca_cache_'+UNIDADE_COD,all);
+  flashSavedPre();
 }
 // Drag-and-drop do Kanban (montado 1x no #list, que persiste entre renders)
 (function(){const c=document.getElementById('list'); if(!c)return;
@@ -884,28 +886,54 @@ async function saveBlock(block){
   for(const d of dbRows){if(!seen.has(d.id)){const {error}=await sb.from('fca').delete().eq('id',d.id);if(error)console.error('delete',error);}}
 }
 
+function flashSavedPre(){const m=document.getElementById('savedMsg');if(!m)return;m.textContent='Salvo ✓';m.style.color='';m.style.display='inline';clearTimeout(m._t);m._t=setTimeout(()=>m.style.display='none',1500);}
+// auto-save de uma linha (digitou/saiu do campo → salvo), mantendo _DBROWS em sincronia
+async function saveRowPre(tr,block){
+  if(!tr||!block) return;
+  if(PREVIEW){ saveBlock(block); flashSavedPre(); return; }   // preview: persiste bloco no localStorage
+  if(!sb) return;
+  const g=k=>{const el=tr.querySelector('[data-k="'+k+'"]');return el?el.value:'';};
+  const payload={causa:g('causa'),acao:g('acao'),responsavel:g('resp'),prazo:g('prazo')||null,status:g('status'),acompanhamento:g('obs'),locked:tr.dataset.locked==='1'};
+  const key=block.dataset.key, id=tr.dataset.id;
+  if(id){
+    const {error}=await sb.from('fca').update(payload).eq('id',id); if(error){console.error('update',error);return;}
+    const row=(_DBROWS[key]||[]).find(x=>String(x.id)===String(id)); if(row) Object.assign(row,payload);
+  }else{
+    if(!payload.causa&&!payload.acao&&!payload.responsavel&&!payload.acompanhamento&&!payload.prazo) return; // vazio -> não cria
+    const ident={unidade:UNIDADE_COD,vigencia:block.dataset.vig,origem:block.dataset.origem,fato:block.dataset.fato,projeto:block.dataset.proj||null,fato_desvio:block.dataset.desvio||null};
+    const {data,error}=await sb.from('fca').insert({...ident,...payload}).select('*').single(); if(error){console.error('insert',error);return;}
+    tr.dataset.id=data.id; (_DBROWS[key]=_DBROWS[key]||[]).push(data);
+  }
+  const all=[];for(const k in _DBROWS)all.push(..._DBROWS[k]);writeCache('fca_cache_'+UNIDADE_COD,all);
+  flashSavedPre();
+}
+async function delRowPre(tr,block){
+  if(!tr||!block) return;
+  const tbody=tr.parentNode, id=tr.dataset.id, key=block.dataset.key;
+  if(id&&sb&&!PREVIEW){
+    if(!confirm('Excluir esta ação?')) return;
+    const {error}=await sb.from('fca').delete().eq('id',id); if(error){console.error('delete',error);alert('Erro ao excluir');return;}
+    if(_DBROWS[key]) _DBROWS[key]=_DBROWS[key].filter(x=>String(x.id)!==String(id));
+    const all=[];for(const k in _DBROWS)all.push(..._DBROWS[k]);writeCache('fca_cache_'+UNIDADE_COD,all);
+  }
+  if(tbody&&tbody.children.length<=1){ // última linha: limpa em vez de remover
+    tr.querySelectorAll('[data-k]').forEach(el=>{if(el.tagName==='SELECT'){el.value=DEFAULT_STATUS;el.dataset.v=DEFAULT_STATUS;}else el.value='';});
+    tr.dataset.id='';
+  }else tr.remove();
+  if(PREVIEW) saveBlock(block);
+  flashSavedPre();
+}
+
 function wireBlock(block){
   block.addEventListener('input',e=>{const el=e.target;if(el.tagName==='TEXTAREA')autoResize(el);if(el.classList.contains('st'))el.dataset.v=el.value;});
-  block.addEventListener('change',e=>{if(e.target.classList.contains('st'))e.target.dataset.v=e.target.value;});
-  // adicionar/remover linhas só no DOM; persiste no Salvar
+  // auto-save: sai do campo de texto → salva; muda status/prazo → salva
+  block.addEventListener('focusout',e=>{const el=e.target;if(el.matches&&el.matches('textarea[data-k],input[type=text][data-k]')){const tr=el.closest('tr');if(tr)saveRowPre(tr,block);}});
+  block.addEventListener('change',e=>{const el=e.target;if(!el.matches)return;if(el.classList.contains('st'))el.dataset.v=el.value;if(el.matches('[data-k="status"],[data-k="prazo"]')){const tr=el.closest('tr');if(tr)saveRowPre(tr,block);}});
   const appendRow=acao=>{const tbody=block.querySelector('tbody');const tmp=document.createElement('tbody');tmp.innerHTML=rowHTML(acao,true);const tr=tmp.firstElementChild;tbody.appendChild(tr);tr.querySelectorAll('textarea').forEach(autoResize);};
   block.querySelector('.add-rep').addEventListener('click',()=>{const rows=block.querySelectorAll('tbody tr');const causa=rows.length?(rows[rows.length-1].querySelector('[data-k="causa"]').value||''):'';appendRow({...blankAcao(),causa});});
   block.querySelector('.add-new').addEventListener('click',()=>appendRow(blankAcao()));
-  block.querySelector('tbody').addEventListener('click',e=>{const btn=e.target.closest('.rm-btn');if(!btn)return;const tr=btn.closest('tr');const tbody=tr.parentNode;if(tbody.children.length<=1)return;tr.remove();});
+  block.querySelector('tbody').addEventListener('click',e=>{const btn=e.target.closest('.rm-btn');if(!btn)return;const tr=btn.closest('tr');delRowPre(tr,block);});
 }
-
-// salvar — grava no Supabase e TRAVA as linhas com conteúdo (depois só Acompanhamento; admin edita tudo)
-const _saveBtn=document.getElementById('saveBtn');
-_saveBtn.addEventListener('click',async ()=>{
-  const m=document.getElementById('savedMsg');_saveBtn.disabled=true;
-  // (a unidade NÃO trava mais ao salvar — pode continuar editando)
-  try{
-    for(const block of document.querySelectorAll('.fato-block')) await saveBlock(block);
-    const rows=await fetchDB(); if(rows) writeCache('fca_cache_'+UNIDADE_COD,rows); aplicar();
-    m.textContent='Salvo ✓ na nuvem';m.style.display='inline';setTimeout(()=>m.style.display='none',2500);
-  }catch(e){console.error(e);m.textContent='Erro ao salvar: '+(e.message||e);m.style.color='var(--red)';m.style.display='inline';setTimeout(()=>{m.style.display='none';m.style.color='';},6000);}
-  _saveBtn.disabled=false;
-});
 // admin: botão só p/ admin; alterna "ver como unidade" (preview do lock)
 function applyAdminUI(){const b=document.getElementById('adminBtn');if(!b)return;if(!REAL_ADMIN){b.style.display='none';return;}b.style.display='';b.textContent=ADMIN?'Admin ✓':'Ver como unidade';b.style.background=ADMIN?'rgba(249,115,22,.4)':'';}
 document.getElementById('adminBtn').addEventListener('click',()=>{if(!REAL_ADMIN)return;ADMIN=!ADMIN;applyAdminUI();aplicar();});
