@@ -190,7 +190,7 @@ const ADMIN_EMAIL='fortesindicadores@gmail.com';
 let sb=null, SESSION=null, IS_ADMIN=false, ALLOWED=[];
 // unidades (mesmo mapa do FCA)
 const DEPARA={CGR:'CAMPO GRANDE',BLC:'BALNEARIO CAMBORIU',CBA:'CUIABA',FLP:'FLORIANOPOLIS',GRL:'GUARULHOS',NFR:'NOVA FRIBURGO',PLT:'PELOTAS',RON:'RONDONOPOLIS',MCC:'CACHOEIRAS DE MACACU',PIR:'PIRAI',ANG:'ANHANGUERA'};
-const PROJETOS=['ROTA','APOIO','EMPURRADA','GERAL'];
+const PROJETOS=['ROTA','APOIO','EMPURRADA','AUTO SERVIÇO','INSUMOS','TERCEIROS','ADMINISTRATIVO','UDC'];
 // contas por pacote (do PACOTES_MAP da Visão Financeira)
 const CONTAS={
   'Manutenção':['Manutenção de Veículos e Equip.','Materiais e Ferramentas de Oficina','Lavação de Veículos','Manutenção de Carrocerias','Personalização/Padronização','Contratos de Manutenção Fabricante'],
@@ -239,13 +239,15 @@ async function loadDRE(){
   if(!UNIT||!VIG)return;
   try{
     const {header,rows}=await getFrota(); const m=mapTab(header);
-    const uniName=(DEPARA[UNIT]||'').toUpperCase();
+    const iUni=ebIdx(header,'unidade');   // coluna própria de unidade (código)
     (rows||[]).forEach(r=>{
       let ym=null; const mn=m.mes>=0?_mesNum(r[m.mes]):null, an=m.ano>=0?parseInt(r[m.ano]):null;
       if(mn&&an)ym=an+'-'+String(mn).padStart(2,'0');
       else if(m.vig>=0){const d=parseVigD(r[m.vig]);if(d)ym=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');}
       if(ym!==VIG)return;
-      if(getUniLabel(m.nv3>=0?r[m.nv3]:'').toUpperCase()!==uniName)return;
+      // no DRE o sufixo do Nível 3 é o CÓDIGO da unidade (ex.: "ROTA - CGR")
+      const uCod=(iUni>=0&&r[iUni]?String(r[iUni]):getUniLabel(m.nv3>=0?r[m.nv3]:'')).toUpperCase().trim();
+      if(uCod!==UNIT)return;
       const conta=canonConta(m.cta>=0?(r[m.cta]||''):'');
       if(!DRE[conta])DRE[conta]={orc:0,rem:0};
       DRE[conta].orc+=(m.orc>=0?_numBR(r[m.orc]):0)||0;
