@@ -53,11 +53,12 @@ table.acoes{width:100%;border-collapse:collapse;font-size:12px;}
 table.acoes thead th{background:var(--card);font-size:10px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:.5px;text-align:left;padding:9px 8px;border-bottom:1px solid rgba(255,255,255,.12);white-space:nowrap;}
 table.acoes td{padding:8px 8px;vertical-align:top;}
 table.acoes tbody tr+tr td{border-top:1px solid rgba(255,255,255,.05);}
-.col-acao{width:34%;}
-.col-acomp{width:24%;}
-.col-resp{width:15%;}
-.col-prazo{width:11%;}
-.col-status{width:12%;}
+.col-assunto{width:13%;}
+.col-acao{width:26%;}
+.col-acomp{width:20%;}
+.col-resp{width:14%;}
+.col-prazo{width:10%;}
+.col-status{width:11%;}
 .col-x{width:26px;}
 .acoes input,.acoes textarea,.acoes select{background:#0a0f18;border:1px solid #2a3a50;border-radius:6px;color:var(--text);font-family:'Montserrat',sans-serif;font-size:12.5px;padding:7px 9px;outline:none;width:100%;min-height:38px;}
 .acoes input:focus,.acoes textarea:focus,.acoes select:focus{border-color:var(--orange);}
@@ -95,6 +96,7 @@ select.st[data-v="Cancelada"]{background:#333333;color:#fff;border-color:#333333
 .kbadge.venc{background:rgba(255,102,102,.18);color:var(--red);}
 .kbadge.ok{background:rgba(59,179,59,.18);color:var(--green);}
 .kbadge.sem{background:rgba(148,163,184,.15);color:var(--text2);}
+.kassunto{display:inline-block;background:rgba(249,115,22,.15);color:var(--orange);border:1px solid rgba(249,115,22,.3);font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:.4px;padding:1px 7px;border-radius:4px;margin-bottom:6px;}
 body.light-mode .kcol{background:#fff;border-color:rgba(0,0,0,.10);}
 body.light-mode .kcard{background:#F7F7F7;border-color:rgba(0,0,0,.10);}
 @media(max-width:768px){.kanban{grid-template-columns:1fr;}}
@@ -138,7 +140,7 @@ body.light-mode select.st[data-v="Cancelada"]{background:#333333;color:#fff;}
   body.light-mode table.acoes tbody tr{border-color:rgba(0,0,0,.12);}
   table.acoes tbody tr+tr td{border-top:none;}
   table.acoes td{padding:5px 0;}
-  .col-acao,.col-acomp,.col-resp,.col-prazo,.col-status,.col-x{width:auto;}
+  .col-assunto,.col-acao,.col-acomp,.col-resp,.col-prazo,.col-status,.col-x{width:auto;}
   .cell-label{display:block;font-size:9.5px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px;}
   .col-x{position:absolute;top:4px;right:4px;padding:0;}
 }
@@ -147,6 +149,7 @@ body.light-mode select.st[data-v="Cancelada"]{background:#333333;color:#fff;}
 <body>
 <header class="header">
   <div class="brand"><div class="brand-eyebrow">Gestão em Movimento · BI Frota</div><h1>Planner Corporativo</h1><p>ações do time corporativo · restrito a admins</p></div>
+  <div class="hfilter" id="wrapAssunto"><label>Assunto</label><div class="ms-wrap" id="ms-assunto"><button class="ms-btn" onclick="toggleMs('ms-assunto')"><span class="ms-lbl">Todos</span><span class="ms-cnt"></span><svg width="10" height="6" viewBox="0 0 10 6"><path d="M0 0l5 6 5-6z" fill="#F97316"/></svg></button><div class="ms-panel"><div class="ms-search"><input type="text" placeholder="Pesquisar…"></div><div class="ms-list"></div></div></div></div>
   <div class="hfilter" id="wrapResp"><label>Responsável</label><div class="ms-wrap" id="ms-resp"><button class="ms-btn" onclick="toggleMs('ms-resp')"><span class="ms-lbl">Todos</span><span class="ms-cnt"></span><svg width="10" height="6" viewBox="0 0 10 6"><path d="M0 0l5 6 5-6z" fill="#F97316"/></svg></button><div class="ms-panel"><div class="ms-search"><input type="text" placeholder="Pesquisar…"></div><div class="ms-list"></div></div></div></div>
   <div class="hfilter" id="wrapStatus"><label>Status</label><div class="ms-wrap" id="ms-status"><button class="ms-btn" onclick="toggleMs('ms-status')"><span class="ms-lbl">Todos</span><span class="ms-cnt"></span><svg width="10" height="6" viewBox="0 0 10 6"><path d="M0 0l5 6 5-6z" fill="#F97316"/></svg></button><div class="ms-panel"><div class="ms-search"><input type="text" placeholder="Pesquisar…"></div><div class="ms-list"></div></div></div></div>
   <div class="hfilter" id="wrapPrazo"><label>Prazo</label><div class="ms-wrap" id="ms-prazo"><button class="ms-btn" onclick="toggleMs('ms-prazo')"><span class="ms-lbl">Todos</span><span class="ms-cnt"></span><svg width="10" height="6" viewBox="0 0 10 6"><path d="M0 0l5 6 5-6z" fill="#F97316"/></svg></button><div class="ms-panel"><div class="ms-search"><input type="text" placeholder="Pesquisar…"></div><div class="ms-list"></div></div></div></div>
@@ -165,6 +168,7 @@ body.light-mode select.st[data-v="Cancelada"]{background:#333333;color:#fff;}
 <div class="modal-bg" id="modalBg">
   <div class="modal">
     <h3 id="modalTitle">Editar ação</h3>
+    <div class="mfield"><label>Assunto</label><select id="m-assunto"></select></div>
     <div class="mfield"><label>Ação</label><textarea id="m-acao"></textarea></div>
     <div class="mfield"><label>Responsável</label><select id="m-resp"></select></div>
     <div class="mfield"><label>Prazo</label><input type="date" id="m-prazo"></div>
@@ -219,6 +223,13 @@ function respOptions(sel){
   if(sel && !list.includes(sel)) list.unshift(sel);   // preserva valor legado fora da lista
   return '<option value="">—</option>'+list.map(n=>`<option${n===sel?' selected':''}>${esc(n)}</option>`).join('');
 }
+// Assunto = blocos de Papéis e Responsabilidades + Manutenção
+const ASSUNTOS=['Governança','Custos','Projetos','Disponibilidade','Xadrez de Frota','Capacitação Técnica','Contratos de Manutenção','Km Rodado','Descarte de Resíduos','Pneus','Stress Test','CIVF','Conformidade da Frota','Estoque','Demarco','DPO/VPO','Combustível','Manutenção'];
+function assuntoOptions(sel){
+  const list=[...ASSUNTOS];
+  if(sel && !list.includes(sel)) list.unshift(sel);
+  return '<option value="">—</option>'+list.map(a=>`<option${a===sel?' selected':''}>${esc(a)}</option>`).join('');
+}
 
 const esc=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const $=id=>document.getElementById(id);
@@ -239,8 +250,8 @@ function prazoBadge(r){
 }
 
 // ── DB <-> memória ──
-function fromDB(d){return{id:d.id,acao:d.acao||'',resp:d.responsavel||'',prazo:d.prazo||'',status:d.status||DEFAULT_STATUS,obs:d.acompanhamento||''};}
-function toDB(r){return{acao:r.acao||'',responsavel:r.resp||'',prazo:r.prazo||null,status:r.status||DEFAULT_STATUS,acompanhamento:r.obs||''};}
+function fromDB(d){return{id:d.id,assunto:d.assunto||'',acao:d.acao||'',resp:d.responsavel||'',prazo:d.prazo||'',status:d.status||DEFAULT_STATUS,obs:d.acompanhamento||''};}
+function toDB(r){return{assunto:r.assunto||'',acao:r.acao||'',responsavel:r.resp||'',prazo:r.prazo||null,status:r.status||DEFAULT_STATUS,acompanhamento:r.obs||''};}
 
 async function loadRows(){
   // pinta do cache primeiro (instantâneo)
@@ -268,13 +279,14 @@ function _buildMs(w,getItems){
 function toggleMs(id){document.querySelectorAll('.ms-panel.open').forEach(p=>{if(p.closest('.ms-wrap').id!==id)p.classList.remove('open');});const p=document.querySelector('#'+id+' .ms-panel');if(p)p.classList.toggle('open');}
 function getMsValues(id){const w=$(id);return w&&w._sel?[...w._sel]:[];}
 document.addEventListener('click',e=>{if(!e.target.closest('.ms-wrap'))document.querySelectorAll('.ms-panel.open').forEach(p=>p.classList.remove('open'));});
-const MSF=[['ms-resp',()=>[...new Set([...ADMIN_NAMES,...ROWS.map(r=>r.resp).filter(Boolean)])].sort((a,b)=>a.localeCompare(b,'pt'))],
+const MSF=[['ms-assunto',()=>[...ASSUNTOS,...ROWS.map(r=>r.assunto).filter(a=>a&&!ASSUNTOS.includes(a))]],
+           ['ms-resp',()=>[...new Set([...ADMIN_NAMES,...ROWS.map(r=>r.resp).filter(Boolean)])].sort((a,b)=>a.localeCompare(b,'pt'))],
            ['ms-status',()=>STATUS],
            ['ms-prazo',()=>PRZ_OPTS]];
 function buildFilters(){ MSF.forEach(([id,get])=>{const w=$(id);if(!w)return;if(!w._render)_buildMs(w,get);else w._render('');}); }
 function filtered(){
-  const fr=getMsValues('ms-resp'), fs=getMsValues('ms-status'), fp=getMsValues('ms-prazo');
-  return ROWS.filter(r=>(!fr.length||fr.includes(r.resp))&&(!fs.length||fs.includes(r.status||DEFAULT_STATUS))&&(!fp.length||fp.includes(prazoState(r))));
+  const fa=getMsValues('ms-assunto'), fr=getMsValues('ms-resp'), fs=getMsValues('ms-status'), fp=getMsValues('ms-prazo');
+  return ROWS.filter(r=>(!fa.length||fa.includes(r.assunto))&&(!fr.length||fr.includes(r.resp))&&(!fs.length||fs.includes(r.status||DEFAULT_STATUS))&&(!fp.length||fp.includes(prazoState(r))));
 }
 
 // ── render ──
@@ -287,7 +299,7 @@ function aplicar(){
 function tableHTML(rows){
   return `<div class="card-block">
     <table class="acoes"><thead><tr>
-      <th class="col-acao">Ação</th><th class="col-resp">Responsável</th><th class="col-prazo">Prazo</th>
+      <th class="col-assunto">Assunto</th><th class="col-acao">Ação</th><th class="col-resp">Responsável</th><th class="col-prazo">Prazo</th>
       <th class="col-status">Status</th><th class="col-acomp">Acompanhamento</th><th class="col-x"></th>
     </tr></thead><tbody id="tbody">${rows.map(rowHTML).join('')||''}</tbody></table>
     <div class="add-row"><button class="add-acao" onclick="addRow()">+ adicionar ação</button></div>
@@ -295,6 +307,7 @@ function tableHTML(rows){
 }
 function rowHTML(r){
   return `<tr data-id="${r.id||''}">
+    <td class="col-assunto"><div class="cell-label">Assunto</div><select class="f-assunto">${assuntoOptions(r.assunto)}</select></td>
     <td class="col-acao"><div class="cell-label">Ação</div><textarea class="f-acao" placeholder="O que será feito?">${esc(r.acao)}</textarea></td>
     <td class="col-resp"><div class="cell-label">Responsável</div><select class="f-resp">${respOptions(r.resp)}</select></td>
     <td class="col-prazo"><div class="cell-label">Prazo</div><input type="date" class="f-prazo" value="${esc(r.prazo)}"></td>
@@ -336,8 +349,9 @@ function kanbanHTML(rows){
 function kcard(r){
   const acao=esc(r.acao)||'<span class="dim">(sem ação)</span>';
   const resp=r.resp?esc(r.resp):'<span class="dim">sem responsável</span>';
+  const ass=r.assunto?`<span class="kassunto">${esc(r.assunto)}</span>`:'';
   return `<div class="kcard" draggable="true" data-id="${r.id}">
-    <div class="kcard-fato">${acao}</div>
+    ${ass}<div class="kcard-fato">${acao}</div>
     <div class="kcard-meta">${resp} · ${prazoBadge(r)}</div>
   </div>`;
 }
@@ -370,6 +384,7 @@ function openModal(id){
   const r=ROWS.find(x=>x.id===id); if(!r) return;
   MODAL_ID=id;
   $('modalTitle').textContent='Editar ação';
+  $('m-assunto').innerHTML=assuntoOptions(r.assunto);
   $('m-acao').value=r.acao; $('m-resp').innerHTML=respOptions(r.resp); $('m-prazo').value=r.prazo||'';
   fillStatus(r.status); $('m-obs').value=r.obs;
   $('mDelBtn').style.display='';
@@ -378,6 +393,7 @@ function openModal(id){
 function openNewModal(status){
   MODAL_ID=null;
   $('modalTitle').textContent='Nova ação';
+  $('m-assunto').innerHTML=assuntoOptions('');
   $('m-acao').value=''; $('m-resp').innerHTML=respOptions(''); $('m-prazo').value='';
   fillStatus(status||DEFAULT_STATUS); $('m-obs').value='';
   $('mDelBtn').style.display='none';
@@ -387,7 +403,7 @@ function openNewModal(status){
 function addAction(){ if(VIEW==='kanban') openNewModal(DEFAULT_STATUS); else addRowTop(); }
 function closeModal(){$('modalBg').classList.remove('open');MODAL_ID=null;}
 async function saveModal(){
-  const upd={acao:$('m-acao').value.trim(),responsavel:$('m-resp').value.trim(),prazo:$('m-prazo').value||null,status:$('m-status').value,acompanhamento:$('m-obs').value.trim()};
+  const upd={assunto:$('m-assunto').value,acao:$('m-acao').value.trim(),responsavel:$('m-resp').value.trim(),prazo:$('m-prazo').value||null,status:$('m-status').value,acompanhamento:$('m-obs').value.trim()};
   if(MODAL_ID){
     const r=ROWS.find(x=>x.id===MODAL_ID); if(!r){closeModal();return;}
     Object.assign(r,fromDB({id:r.id,...upd})); buildFilters(); aplicar();
@@ -395,7 +411,7 @@ async function saveModal(){
     if(error){alert('Erro ao salvar: '+error.message);}
     writeCache(); closeModal();
   }else{
-    if(!upd.acao && !upd.responsavel && !upd.acompanhamento){ closeModal(); return; }
+    if(!upd.acao && !upd.responsavel && !upd.acompanhamento && !upd.assunto){ closeModal(); return; }
     const {data,error}=await sb.from('planner').insert(upd).select('*').single();
     if(error){alert('Erro ao criar: '+error.message);return;}
     ROWS.push(fromDB(data)); writeCache(); buildFilters(); aplicar(); closeModal();
@@ -420,9 +436,9 @@ async function saveAll(){
   try{
     for(const tr of tb.querySelectorAll('tr')){
       const id=tr.dataset.id;
-      const r={acao:tr.querySelector('.f-acao').value.trim(),resp:tr.querySelector('.f-resp').value.trim(),prazo:tr.querySelector('.f-prazo').value,status:tr.querySelector('.f-status').value,obs:tr.querySelector('.f-obs').value.trim()};
+      const r={assunto:tr.querySelector('.f-assunto').value,acao:tr.querySelector('.f-acao').value.trim(),resp:tr.querySelector('.f-resp').value.trim(),prazo:tr.querySelector('.f-prazo').value,status:tr.querySelector('.f-status').value,obs:tr.querySelector('.f-obs').value.trim()};
       const payload=toDB(r);
-      if(!r.acao && !r.resp && !r.obs && !r.prazo){ continue; } // linha vazia -> ignora
+      if(!r.acao && !r.resp && !r.obs && !r.prazo && !r.assunto){ continue; } // linha vazia -> ignora
       if(id){
         seen.add(id);
         const {error}=await sb.from('planner').update(payload).eq('id',id); if(error) throw error;
@@ -448,7 +464,7 @@ applyTheme(localStorage.getItem('bi_theme')||'dark');
 
 // ── acesso: só admins ──
 function showRestricted(msg){
-  ['wrapResp','wrapStatus','wrapPrazo','viewBtn','addBtn','saveBtn'].forEach(id=>{const el=$(id);if(el)el.style.display='none';});
+  ['wrapAssunto','wrapResp','wrapStatus','wrapPrazo','viewBtn','addBtn','saveBtn'].forEach(id=>{const el=$(id);if(el)el.style.display='none';});
   $('intro').style.display='none';
   $('list').innerHTML=`<div class="restrito"><h2>Acesso restrito</h2><p>${esc(msg||'Este planner é exclusivo para administradores.')}</p><a class="btn" href="../" style="text-decoration:none;display:inline-flex">← Voltar ao hub</a></div>`;
 }
