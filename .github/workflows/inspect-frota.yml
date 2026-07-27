@@ -1,0 +1,51 @@
+name: inspect-frota
+on:
+  workflow_dispatch:
+
+jobs:
+  dump:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Fetch and inspect Frota tab
+        run: |
+          SHEET=1qcTy2ppLCGBKKqZCxCYWCTL9kTAuWfHBMyBfWJOyih8
+          curl -sL "https://docs.google.com/spreadsheets/d/$SHEET/gviz/tq?tqx=out:json&sheet=Frota" -o frota.txt
+          echo "bytes: $(wc -c < frota.txt)"
+          python3 - <<'PY'
+          import json,re,collections
+          raw=open('frota.txt',encoding='utf-8').read()
+          body=re.sub(r'^[\s\S]*?\(','',raw); body=re.sub(r'\);?\s*$','',body)
+          j=json.loads(body)
+          cols=[c.get('label','') for c in j['table']['cols']]
+          rows=j['table']['rows']
+          print('N_COLS',len(cols)); print('COLS',cols)
+          print('N_ROWS',len(rows))
+          def val(r,i):
+              c=r['c'][i] if i<len(r['c']) else None
+              return c.get('v') if c else None
+          # indices por nome (fuzzy)
+          def norm(s):
+              import unicodedata
+              return ''.join(ch for ch in unicodedata.normalize('NFD',str(s)) if unicodedata.category(ch)!='Mn').lower().strip()
+          def idx(*names):
+              nc=[norm(c) for c in cols]
+              for n in names:
+                  if norm(n) in nc: return nc.index(norm(n))
+              for n in names:
+                  for k,c in enumerate(nc):
+                      if norm(n) in c: return k
+              return -1
+          iN3=idx('nível 3','nivel 3','nivel3'); iCta=idx('conta gerencial','conta'); iVig=idx('vigência','vigencia'); iMes=idx('mês','mes'); iAno=idx('ano'); iOrc=idx('orçado','orcado'); iRem=idx('remunerado'); iReal=idx('realizado')
+          print('IDX nv3=%d cta=%d vig=%d mes=%d ano=%d orc=%d rem=%d real=%d'%(iN3,iCta,iVig,iMes,iAno,iOrc,iRem,iReal))
+          print('--- 5 primeiras linhas (nv3 | conta | vig/mes/ano | orc | rem | real) ---')
+          for r in rows[:5]:
+              print(repr(val(r,iN3)),'|',repr(val(r,iCta)),'|',repr(val(r,iVig)),repr(val(r,iMes)),repr(val(r,iAno)),'|',val(r,iOrc),val(r,iRem),val(r,iReal))
+          # valores únicos de Nível 3
+          n3=collections.Counter(str(val(r,iN3)) for r in rows)
+          print('--- Nível 3 (top 25) ---')
+          for k,c in n3.most_common(25): print(c,k)
+          # contas únicas
+          ct=collections.Counter(str(val(r,iCta)) for r in rows)
+          print('--- Contas (top 30) ---')
+          for k,c in ct.most_common(30): print(c,k)
+          PY
