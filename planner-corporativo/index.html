@@ -146,7 +146,7 @@ body.light-mode select.st[data-v="Cancelada"]{background:#333333;color:#fff;}
   <div class="modal">
     <h3 id="modalTitle">Editar ação</h3>
     <div class="mfield"><label>Ação</label><textarea id="m-acao"></textarea></div>
-    <div class="mfield"><label>Responsável</label><input id="m-resp"></div>
+    <div class="mfield"><label>Responsável</label><select id="m-resp"></select></div>
     <div class="mfield"><label>Prazo</label><input type="date" id="m-prazo"></div>
     <div class="mfield"><label>Status</label><select id="m-status"></select></div>
     <div class="mfield"><label>Acompanhamento</label><textarea id="m-obs"></textarea></div>
@@ -171,7 +171,34 @@ const DEFAULT_STATUS='Não iniciada';
 const PRZ_OPTS=['Vencida','No prazo','Sem prazo'];
 let ROWS=[];            // fonte da verdade (do Supabase)
 let VIEW='tabela';
+let ADMIN_NAMES=[];     // responsáveis possíveis = administradores
 const CACHE='planner_cache_v1';
+
+// carrega a lista de administradores (nome) para o campo Responsável
+async function loadAdmins(){
+  const lbl=new Map();
+  try{
+    const {data:profs}=await sb.from('fca_profiles').select('user_id,nome').eq('is_admin',true);
+    (profs||[]).forEach(p=>lbl.set(p.user_id,(p.nome||'').trim()));
+    const ids=[...lbl.keys()];
+    if(ids.length){
+      try{
+        const {data:apps}=await sb.from('user_approvals').select('user_id,name,email').in('user_id',ids);
+        (apps||[]).forEach(a=>{ if(!lbl.get(a.user_id)) lbl.set(a.user_id,(a.name||a.email||'').trim()); });
+      }catch(e){}
+    }
+  }catch(e){}
+  // garante o próprio usuário logado (admin)
+  if(SESSION&&SESSION.user&&!lbl.get(SESSION.user.id)){
+    const me=SESSION.user; lbl.set(me.id,((me.user_metadata&&me.user_metadata.name)||me.email||'').trim());
+  }
+  ADMIN_NAMES=[...new Set([...lbl.values()].filter(Boolean))].sort((a,b)=>a.localeCompare(b,'pt'));
+}
+function respOptions(sel){
+  const list=[...ADMIN_NAMES];
+  if(sel && !list.includes(sel)) list.unshift(sel);   // preserva valor legado fora da lista
+  return '<option value="">—</option>'+list.map(n=>`<option${n===sel?' selected':''}>${esc(n)}</option>`).join('');
+}
 
 const esc=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const $=id=>document.getElementById(id);
@@ -208,7 +235,7 @@ function writeCache(){try{localStorage.setItem(CACHE,JSON.stringify(ROWS));}catc
 
 // ── filtros ──
 function buildFilters(){
-  const resps=[...new Set(ROWS.map(r=>r.resp).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'pt'));
+  const resps=[...new Set([...ADMIN_NAMES,...ROWS.map(r=>r.resp).filter(Boolean)])].sort((a,b)=>a.localeCompare(b,'pt'));
   const keep=$('fResp').value;
   $('fResp').innerHTML='<option value="">Todos</option>'+resps.map(r=>`<option${r===keep?' selected':''}>${esc(r)}</option>`).join('');
   if(!$('fStatus').dataset.built){ $('fStatus').innerHTML='<option value="">Todos</option>'+STATUS.map(s=>`<option>${s}</option>`).join(''); $('fStatus').dataset.built='1'; }
@@ -238,7 +265,7 @@ function tableHTML(rows){
 function rowHTML(r){
   return `<tr data-id="${r.id||''}">
     <td class="col-acao"><div class="cell-label">Ação</div><textarea class="f-acao" placeholder="O que será feito?">${esc(r.acao)}</textarea></td>
-    <td class="col-resp"><div class="cell-label">Responsável</div><input class="f-resp" placeholder="Quem" value="${esc(r.resp)}"></td>
+    <td class="col-resp"><div class="cell-label">Responsável</div><select class="f-resp">${respOptions(r.resp)}</select></td>
     <td class="col-prazo"><div class="cell-label">Prazo</div><input type="date" class="f-prazo" value="${esc(r.prazo)}"></td>
     <td class="col-status"><div class="cell-label">Status</div><select class="st f-status" data-v="${esc(r.status)}">${STATUS.map(s=>`<option${s===r.status?' selected':''}>${s}</option>`).join('')}</select></td>
     <td class="col-acomp"><div class="cell-label">Acompanhamento</div><textarea class="f-obs" placeholder="Andamento / observações">${esc(r.obs)}</textarea></td>
@@ -310,7 +337,7 @@ let MODAL_ID=null;
 function openModal(id){
   const r=ROWS.find(x=>x.id===id); if(!r) return;
   MODAL_ID=id;
-  $('m-acao').value=r.acao; $('m-resp').value=r.resp; $('m-prazo').value=r.prazo||'';
+  $('m-acao').value=r.acao; $('m-resp').innerHTML=respOptions(r.resp); $('m-prazo').value=r.prazo||'';
   $('m-status').innerHTML=STATUS.map(s=>`<option${s===r.status?' selected':''}>${s}</option>`).join('');
   $('m-obs').value=r.obs;
   $('modalBg').classList.add('open');
@@ -384,6 +411,7 @@ async function initApp(){
   try{ const r=await sb.from('fca_profiles').select('is_admin').eq('user_id',session.user.id).maybeSingle(); prof=r.data; }catch(e){}
   const admin = (prof && prof.is_admin) || (session.user.email===ADMIN_EMAIL);
   if(!admin){ showRestricted('Você está logado, mas não tem perfil de administrador. Fale com o corporativo para liberar seu acesso.'); return; }
+  await loadAdmins();
   await loadRows();
 }
 initApp();
