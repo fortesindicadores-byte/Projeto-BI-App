@@ -104,14 +104,17 @@ body.light-mode .kcard{background:#F7F7F7;border-color:rgba(0,0,0,.10);}
 /* ── Modal ── */
 .modal-bg{display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:600;align-items:center;justify-content:center;padding:20px;}
 .modal-bg.open{display:flex;}
-.modal{background:#141B26;border:1px solid var(--border);border-radius:12px;width:100%;max-width:520px;padding:22px 24px;box-shadow:0 12px 40px rgba(0,0,0,.6);}
+.modal{background:#141B26;border:1px solid var(--border);border-radius:12px;width:100%;max-width:760px;padding:24px 28px;box-shadow:0 12px 40px rgba(0,0,0,.6);}
 body.light-mode .modal{background:#fff;color:#1a1a1a;}
 .modal h3{font-size:16px;color:var(--orange);margin-bottom:16px;}
-.mfield{margin-bottom:13px;}
+.mfield{margin-bottom:14px;}
+.mrow{display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px;}
 .mfield label{display:block;font-size:10px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:.5px;margin-bottom:5px;}
-.mfield input,.mfield textarea,.mfield select{width:100%;background:#0a0f18;border:1px solid #2a3a50;border-radius:6px;color:var(--text);font-family:'Montserrat',sans-serif;font-size:13px;padding:8px 10px;outline:none;}
+.mfield input,.mfield textarea,.mfield select{width:100%;background:#0a0f18;border:1px solid #2a3a50;border-radius:6px;color:var(--text);font-family:'Montserrat',sans-serif;font-size:13px;padding:9px 11px;outline:none;}
 body.light-mode .mfield input,body.light-mode .mfield textarea,body.light-mode .mfield select{background:#fff;border-color:#ccc;color:#1a1a1a;}
-.mfield textarea{resize:vertical;min-height:60px;line-height:1.4;}
+.mfield textarea{resize:vertical;line-height:1.45;overflow:hidden;}
+#m-acao{min-height:76px;}
+#m-obs{min-height:140px;}
 .modal-actions{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-top:18px;}
 .mbtn{border:none;border-radius:6px;padding:8px 16px;cursor:pointer;font-family:'Montserrat',sans-serif;font-weight:800;font-size:12px;}
 .mbtn.save{background:var(--orange);color:#0C1017;}
@@ -170,9 +173,11 @@ body.light-mode select.st[data-v="Cancelada"]{background:#333333;color:#fff;}
     <h3 id="modalTitle">Editar ação</h3>
     <div class="mfield"><label>Assunto</label><select id="m-assunto"></select></div>
     <div class="mfield"><label>Ação</label><textarea id="m-acao"></textarea></div>
-    <div class="mfield"><label>Responsável</label><select id="m-resp"></select></div>
-    <div class="mfield"><label>Prazo</label><input type="date" id="m-prazo"></div>
-    <div class="mfield"><label>Status</label><select id="m-status"></select></div>
+    <div class="mrow">
+      <div class="mfield"><label>Responsável</label><select id="m-resp"></select></div>
+      <div class="mfield"><label>Prazo</label><input type="date" id="m-prazo"></div>
+      <div class="mfield"><label>Status</label><select id="m-status"></select></div>
+    </div>
     <div class="mfield"><label>Acompanhamento</label><textarea id="m-obs"></textarea></div>
     <div class="modal-actions">
       <button class="mbtn del" id="mDelBtn" onclick="deleteFromModal()">Excluir</button>
@@ -197,7 +202,8 @@ let ROWS=[];            // fonte da verdade (do Supabase)
 let VIEW='tabela';
 let ADMIN_NAMES=[];     // responsáveis possíveis = administradores
 // nome em MAIÚSCULO, ideal "NOME SOBRENOME"; se só um termo, só ele
-function fmtName(s){s=String(s||'').trim().replace(/\s+/g,' ');if(!s)return '';const p=s.split(' ');const pick=p.length>=2?(p[0]+' '+p[p.length-1]):p[0];return pick.toUpperCase();}
+const NAME_FIX={'RENAN':'RENAN FORTES'};   // corrige nomes sem sobrenome no cadastro
+function fmtName(s){s=String(s||'').trim().replace(/\s+/g,' ');if(!s)return '';const p=s.split(' ');const pick=(p.length>=2?(p[0]+' '+p[p.length-1]):p[0]).toUpperCase();return NAME_FIX[pick]||pick;}
 const CACHE='planner_cache_v1';
 
 // carrega a lista de administradores (nome) para o campo Responsável
@@ -382,6 +388,8 @@ async function moveCard(id,status){
 // ── Modal (criar ou editar ação) ──
 let MODAL_ID=null;
 function fillStatus(sel){$('m-status').innerHTML=STATUS.map(s=>`<option${s===sel?' selected':''}>${s}</option>`).join('');}
+function growModal(){['m-acao','m-obs'].forEach(id=>{const t=$(id);if(t){t.style.height='auto';t.style.height=Math.max(t.scrollHeight,id==='m-obs'?140:76)+'px';}});}
+['m-acao','m-obs'].forEach(id=>{const t=$(id);if(t)t.addEventListener('input',()=>growModal());});
 function openModal(id){
   const r=ROWS.find(x=>x.id===id); if(!r) return;
   MODAL_ID=id;
@@ -391,6 +399,7 @@ function openModal(id){
   fillStatus(r.status); $('m-obs').value=r.obs;
   $('mDelBtn').style.display='';
   $('modalBg').classList.add('open');
+  setTimeout(growModal,10);
 }
 function openNewModal(status){
   MODAL_ID=null;
@@ -400,6 +409,7 @@ function openNewModal(status){
   fillStatus(status||DEFAULT_STATUS); $('m-obs').value='';
   $('mDelBtn').style.display='none';
   $('modalBg').classList.add('open');
+  setTimeout(growModal,10);
   setTimeout(()=>$('m-acao').focus(),50);
 }
 function addAction(){ if(VIEW==='kanban') openNewModal(DEFAULT_STATUS); else addRowTop(); }
