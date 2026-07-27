@@ -95,6 +95,7 @@ body.light-mode table.dre tr.grp td{border-bottom-color:rgba(0,0,0,.10);}
 body.light-mode table.dre tr.pac-total td,body.light-mode table.dre tr.total td{background:#F0F0F0;}
 .sep-l{border-left:1px solid rgba(255,255,255,.13);padding-left:16px;}
 .cr{color:var(--red)!important;font-weight:700;}.cg{color:var(--green)!important;font-weight:700;}
+.dash{color:var(--text3);font-size:10px;opacity:.7;}
 .tag-pill{display:inline-block;font-size:11px;font-weight:800;padding:2px 9px;border-radius:10px;min-width:52px;text-align:center;}
 .rm-btn{background:transparent;border:none;color:var(--text3);font-size:17px;line-height:1;cursor:pointer;padding:2px 6px;border-radius:5px;}
 .rm-btn:hover{color:var(--red);background:rgba(255,102,102,.12);}
@@ -118,6 +119,7 @@ body.light-mode .lf input,body.light-mode .lf select{background:#fff;border-colo
   <div class="brand"><h1>Carta de Custos</h1><p>Lançamento de custos por pacote — Frota</p></div>
   <div class="hfilter"><label>Unidade</label><div class="ms-wrap" id="ms-uni"><button class="ms-btn" onclick="toggleMs('ms-uni')"><span class="ms-lbl" id="lbl-uni">—</span><svg width="10" height="6" viewBox="0 0 10 6"><path d="M0 0l5 6 5-6z" fill="#F97316"/></svg></button><div class="ms-panel"><div class="ms-list" id="list-uni"></div></div></div></div>
   <div class="hfilter"><label>Vigência</label><div class="ms-wrap" id="ms-vig"><button class="ms-btn" onclick="toggleMs('ms-vig')"><span class="ms-lbl" id="lbl-vig">—</span><svg width="10" height="6" viewBox="0 0 10 6"><path d="M0 0l5 6 5-6z" fill="#F97316"/></svg></button><div class="ms-panel"><div class="ms-list" id="list-vig"></div></div></div></div>
+  <div class="hfilter"><label>Projeto</label><div class="ms-wrap" id="ms-proj"><button class="ms-btn" onclick="toggleMs('ms-proj')"><span class="ms-lbl" id="lbl-proj">Todos</span><svg width="10" height="6" viewBox="0 0 10 6"><path d="M0 0l5 6 5-6z" fill="#F97316"/></svg></button><div class="ms-panel"><div class="ms-list" id="list-proj"></div></div></div></div>
   <a class="btn" href="../" title="Voltar ao hub">← Hub</a>
   <button class="theme-btn" id="themeBtn" title="Modo claro/escuro"></button>
 </header>
@@ -201,7 +203,7 @@ const GRUPOS={
   'Pneus':['Novos','Recapagem','Vulcanização','Reparo','Manchão','Válvula','Câmara','Alinhamento','Balanceamento','Rodízio','Borracharia','Descarte']
 };
 
-let UNIT='', VIG='', PAC='Manutenção', ROWS=[];
+let UNIT='', VIG='', PAC='Manutenção', PROJ='', ROWS=[];
 const charts={};
 
 // ── DRE (Orçado / Remunerado por unidade × conta × vigência) ──
@@ -212,7 +214,8 @@ const _numBR=v=>{if(v==null||v==='')return null;if(typeof v==='number')return v;
 const _MESN={jan:1,fev:2,mar:3,abr:4,mai:5,jun:6,jul:7,ago:8,set:9,out:10,nov:11,dez:12};
 function _mesNum(m){if(m==null)return null;if(typeof m==='number'&&m>=1&&m<=12)return m;const s=_normEb(m).slice(0,3);if(_MESN[s])return _MESN[s];const n=parseInt(m);return n>=1&&n<=12?n:null;}
 function parseVigD(v){if(v==null)return null;if(v instanceof Date)return v;const s=String(v);let m=s.match(/(\d{1,2})[\/\-](\d{4})/);if(m)return new Date(+m[2],+m[1]-1,1);m=s.match(/(\d{4})[\/\-](\d{1,2})/);if(m)return new Date(+m[1],+m[2]-1,1);const d=new Date(s);return isNaN(d)?null:d;}
-const getUniLabel=v=>{if(!v)return '';const i=v.indexOf('-');const s=i>=0?v.slice(i+1).trim():v.trim();return s.replace(/\s*\(INATIVO\)\s*/i,'').trim();};
+const getUniLabel=v=>{if(!v)return '';v=String(v);const i=v.lastIndexOf('-');const s=i>=0?v.slice(i+1).trim():v.trim();return s.replace(/\s*\(INATIVO\)\s*/i,'').trim();};
+const getNv3Prefix=v=>v?String(v).split('-')[0].trim():'';
 const CONTAS_ALIAS={'Manutenção de Veículos e Equipamentos':'Manutenção de Veículos e Equip.','Consertos e Recapagens de Pneus':'Recapagens e Outros Serviços','Pneus e Camaras':'Pneus Novos','Personalização/Padronização de Veículos':'Personalização/Padronização','Personalização e Padronização de Veículos':'Personalização/Padronização'};
 const canonConta=c=>CONTAS_ALIAS[c]||c;
 function mapTab(h){return{orc:ebIdx(h,'orçado','orcado'),rem:ebIdx(h,'remunerado'),real:ebIdx(h,'realizado'),vig:ebIdx(h,'vigência','vigencia'),nv3:ebIdx(h,'nível 3','nivel 3','nivel3'),cta:ebIdx(h,'conta gerencial','conta'),mes:ebIdx(h,'mês','mes'),ano:ebIdx(h,'ano')};}
@@ -233,26 +236,33 @@ async function getFrota(){
   try{localStorage.setItem('cc_frota_v1',JSON.stringify({t:Date.now(),d:FROTA}));}catch(e){}
   return FROTA;
 }
-let DRE={}; // conta canônica -> {orc,rem} para UNIT+VIG
+let DRE={}; // conta canônica -> {orc(mês), rem(tendência)} para UNIT+VIG(+PROJ)
 async function loadDRE(){
   DRE={};
   if(!UNIT||!VIG)return;
+  const [vy,vm]=VIG.split('-');
   try{
     const {header,rows}=await getFrota(); const m=mapTab(header);
-    const iUni=ebIdx(header,'unidade');   // coluna própria de unidade (código)
+    const orcMes={}, remAcc={}, orcAcc={};   // custos vêm NEGATIVOS no DRE -> uso |valor|
     (rows||[]).forEach(r=>{
-      let ym=null; const mn=m.mes>=0?_mesNum(r[m.mes]):null, an=m.ano>=0?parseInt(r[m.ano]):null;
-      if(mn&&an)ym=an+'-'+String(mn).padStart(2,'0');
-      else if(m.vig>=0){const d=parseVigD(r[m.vig]);if(d)ym=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');}
-      if(ym!==VIG)return;
-      // no DRE o sufixo do Nível 3 é o CÓDIGO da unidade (ex.: "ROTA - CGR")
-      const uCod=(iUni>=0&&r[iUni]?String(r[iUni]):getUniLabel(m.nv3>=0?r[m.nv3]:'')).toUpperCase().trim();
-      if(uCod!==UNIT)return;
+      const nv3=m.nv3>=0?String(r[m.nv3]||''):'';
+      if(getUniLabel(nv3).toUpperCase().trim()!==UNIT)return;         // sufixo Nível 3 = código da unidade
+      if(PROJ && getNv3Prefix(nv3).toUpperCase()!==PROJ)return;       // projeto filtrado
+      let ry=m.ano>=0?parseInt(r[m.ano]):null, rm=m.mes>=0?_mesNum(r[m.mes]):null;
+      if((!ry||!rm)&&m.vig>=0){const d=parseVigD(r[m.vig]);if(d){ry=d.getFullYear();rm=d.getMonth()+1;}}
+      if(!ry||!rm)return;
       const conta=canonConta(m.cta>=0?(r[m.cta]||''):'');
-      if(!DRE[conta])DRE[conta]={orc:0,rem:0};
-      DRE[conta].orc+=(m.orc>=0?_numBR(r[m.orc]):0)||0;
-      DRE[conta].rem+=(m.rem>=0?_numBR(r[m.rem]):0)||0;
+      const o=Math.abs(_numBR(m.orc>=0?r[m.orc]:null)||0);
+      const rr=_numBR(m.rem>=0?r[m.rem]:null);
+      if(String(ry)===vy && String(rm).padStart(2,'0')===vm) orcMes[conta]=(orcMes[conta]||0)+o;   // orçado do mês
+      if(String(ry)===vy && rr!=null){ orcAcc[conta]=(orcAcc[conta]||0)+o; remAcc[conta]=(remAcc[conta]||0)+Math.abs(rr); } // meses fechados -> razão
     });
+    let tR=0,tO=0; for(const c in remAcc){tR+=remAcc[c];tO+=orcAcc[c];}
+    const overall=tO?tR/tO:1;   // razão geral rem/orç (tendência)
+    for(const c in orcMes){
+      const ratio=orcAcc[c]?remAcc[c]/orcAcc[c]:overall;
+      DRE[c]={orc:orcMes[c], rem:orcMes[c]*ratio};   // remunerado tendência = orçado × razão
+    }
   }catch(e){console.warn('DRE/Frota indisponível:',e); DRE={};}
 }
 const $=id=>document.getElementById(id);
@@ -280,6 +290,11 @@ function buildUniFilter(){
 }
 function pickUni(u){UNIT=u;$('lbl-uni').textContent=u;document.querySelectorAll('#list-uni .ms-opt').forEach(o=>o.classList.toggle('sel',o.textContent===u));document.querySelector('#ms-uni .ms-panel').classList.remove('open');loadRows();}
 function pickVig(v){VIG=v;$('lbl-vig').textContent=vigLabel(v);document.querySelectorAll('#list-vig .ms-opt').forEach(o=>o.classList.toggle('sel',o.textContent===vigLabel(v)));document.querySelector('#ms-vig .ms-panel').classList.remove('open');loadRows();}
+function buildProjFilter(){
+  const opts=['Todos',...PROJETOS];
+  $('list-proj').innerHTML=opts.map(p=>`<div class="ms-opt${(p==='Todos'&&!PROJ)||p===PROJ?' sel':''}" onclick="pickProj('${p}')">${p}</div>`).join('');
+}
+async function pickProj(p){PROJ=(p==='Todos')?'':p;$('lbl-proj').textContent=p;document.querySelectorAll('#list-proj .ms-opt').forEach(o=>o.classList.toggle('sel',o.textContent===p));document.querySelector('#ms-proj .ms-panel').classList.remove('open');await loadDRE();render();}
 
 // ── DB ──
 function fromDB(d){return{id:d.id,unidade:d.unidade,vigencia:d.vigencia,pacote:d.pacote,data:d.data||'',projeto:d.projeto||'',equipamento:(d.equipamento||''),fornecedor:(d.fornecedor||''),nf:d.nf||'',conta:d.conta||'',grupo:d.grupo||'',valor:+d.valor||0};}
@@ -319,7 +334,7 @@ async function removerLanc(id){
 }
 
 // ── render ──
-function curRows(){return ROWS.filter(r=>r.pacote===PAC);}
+function curRows(){return ROWS.filter(r=>r.pacote===PAC&&(!PROJ||r.projeto===PROJ));}
 function pacTotals(pac){
   const real=ROWS.filter(r=>r.pacote===pac).reduce((s,r)=>s+r.valor,0);
   let orc=0,rem=0,hasO=false;
@@ -348,22 +363,23 @@ function atColor(p){ // custo: >=100 vermelho, >=90 amarelo
   return 'background:rgba(59,179,59,.16);color:var(--green);';
 }
 const PACS=['Manutenção','Pneus'];
-const nOr=(v,alt)=>v!=null?fmt(v):(alt||'—');
+const D='<span class="dash">—</span>';   // traço vazio menor
+const nOr=v=>v!=null?fmt(v):D;
 function acompCells(orc,rem,real){
   const dOrc=orc!=null?real-orc:null, dRem=rem!=null?real-rem:null;
   const atO=orc?real/orc*100:null, atR=rem?real/rem*100:null;
-  return `<td class="num">${nOr(orc)}</td><td class="num">${nOr(rem)}</td><td class="num">${real?fmt(real):'—'}</td>`+
-    `<td class="num ${dOrc!=null?(dOrc>0?'cr':'cg'):''}">${dOrc!=null?fmt(dOrc):'—'}</td>`+
-    `<td class="num ${dRem!=null?(dRem>0?'cr':'cg'):''}">${dRem!=null?fmt(dRem):'—'}</td>`+
-    `<td class="num">${atO!=null?`<span class="tag-pill" style="${atColor(atO)}">${pct(atO)}</span>`:'—'}</td>`+
-    `<td class="num">${atR!=null?`<span class="tag-pill" style="${atColor(atR)}">${pct(atR)}</span>`:'—'}</td>`;
+  return `<td class="num">${nOr(orc)}</td><td class="num">${nOr(rem)}</td><td class="num">${real?fmt(real):D}</td>`+
+    `<td class="num ${dOrc!=null?(dOrc>0?'cr':'cg'):''}">${dOrc!=null?fmt(dOrc):D}</td>`+
+    `<td class="num ${dRem!=null?(dRem>0?'cr':'cg'):''}">${dRem!=null?fmt(dRem):D}</td>`+
+    `<td class="num">${atO!=null?`<span class="tag-pill" style="${atColor(atO)}">${pct(atO)}</span>`:D}</td>`+
+    `<td class="num">${atR!=null?`<span class="tag-pill" style="${atColor(atR)}">${pct(atR)}</span>`:D}</td>`;
 }
 function renderAcomp(){
   let h=`<thead><tr><th class="lft">Conta</th><th>Orç</th><th>Rem</th><th>Real</th><th>▲ Orç</th><th>▲ Rem</th><th>Ating. Orç %</th><th>Ating. Rem %</th></tr></thead><tbody>`;
   let gR=0,gO=0,gRe=0,gHas=false;
   PACS.forEach(pac=>{
     const byC=new Map(CONTAS[pac].map(c=>[c,0]));
-    ROWS.filter(r=>r.pacote===pac).forEach(r=>byC.set(r.conta,(byC.get(r.conta)||0)+r.valor));
+    ROWS.filter(r=>r.pacote===pac&&(!PROJ||r.projeto===PROJ)).forEach(r=>byC.set(r.conta,(byC.get(r.conta)||0)+r.valor));
     let tR=0,tO=0,tRe=0,tHas=false;
     h+=`<tr class="grp"><td colspan="8">Pacote ${esc(pac)}</td></tr>`;
     [...byC.entries()].forEach(([c,real])=>{
@@ -427,7 +443,7 @@ async function init(){
   ALLOWED=IS_ADMIN?Object.keys(DEPARA):(prof&&prof.unidade?[String(prof.unidade).toUpperCase()]:[]);
   if(!ALLOWED.length){ showRestricted('Seu usuário não tem unidade vinculada. Fale com o corporativo para liberar seu acesso à Carta de Custos.'); return; }
   UNIT=ALLOWED[0];
-  buildUniFilter(); buildVigOptions(); fillForm(); await loadRows();
+  buildUniFilter(); buildVigOptions(); buildProjFilter(); fillForm(); await loadRows();
 }
 init();
 </script>
