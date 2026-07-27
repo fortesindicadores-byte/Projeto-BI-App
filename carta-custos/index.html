@@ -7,6 +7,8 @@
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.2/dist/jspdf.umd.min.js"></script>
 <script src="../assets/excel-export.js"></script>
 <style>
 :root{--bg:#0C1017;--card:#141B26;--card2:#1A2335;--border:#1E2D40;--orange:#F97316;--blue:#38BDF8;--text:#F1F5F9;--text2:#94A3B8;--text3:#475569;--green:#3BB33B;--red:#FF6666;--amber:#F4A100;--gold:#C4911A;}
@@ -14,7 +16,9 @@
 body{background:radial-gradient(ellipse at 10% 25%,rgba(249,115,22,.06) 0%,transparent 50%),radial-gradient(ellipse at 90% 75%,rgba(56,189,248,.05) 0%,transparent 50%),var(--bg);color:var(--text);font-family:'Montserrat',-apple-system,sans-serif;font-size:13px;min-height:100vh;}
 /* header */
 .header{background:rgba(12,16,23,.75);border-bottom:1px solid rgba(255,255,255,.07);padding:10px 24px 12px;display:flex;flex-wrap:wrap;align-items:center;gap:10px;position:sticky;top:0;z-index:100;backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);box-shadow:0 2px 12px rgba(0,0,0,.3);}
-.brand{flex:1;}.brand h1{font-size:18px;font-weight:800;color:var(--orange);line-height:1.1;}.brand p{font-size:10px;color:var(--text2);margin-top:2px;font-style:italic;}
+.brand{flex-shrink:0;margin-right:16px;}.brand h1{font-size:18px;font-weight:800;color:var(--orange);line-height:1.1;}.brand p{font-size:10px;color:var(--text2);margin-top:2px;font-style:italic;}
+.header-filters{display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap;flex:1;}
+.header-right{display:flex;align-items:center;gap:8px;flex-shrink:0;}
 .hfilter{display:flex;flex-direction:column;gap:2px;}
 .hfilter label{font-size:9px;color:var(--text2);text-transform:uppercase;letter-spacing:.5px;}
 .hfilter select{background:#0a0f18;color:var(--text);border:1px solid #2a3a50;border-radius:4px;font-family:'Montserrat',sans-serif;font-size:11px;font-weight:700;padding:6px 10px;cursor:pointer;outline:none;}
@@ -117,11 +121,16 @@ body.light-mode .lf input,body.light-mode .lf select{background:#fff;border-colo
 <body>
 <header class="header">
   <div class="brand"><h1>Carta de Custos</h1><p>Lançamento de custos por pacote — Frota</p></div>
-  <div class="hfilter"><label>Unidade</label><div class="ms-wrap" id="ms-uni"><button class="ms-btn" onclick="toggleMs('ms-uni')"><span class="ms-lbl" id="lbl-uni">—</span><svg width="10" height="6" viewBox="0 0 10 6"><path d="M0 0l5 6 5-6z" fill="#F97316"/></svg></button><div class="ms-panel"><div class="ms-list" id="list-uni"></div></div></div></div>
-  <div class="hfilter"><label>Vigência</label><div class="ms-wrap" id="ms-vig"><button class="ms-btn" onclick="toggleMs('ms-vig')"><span class="ms-lbl" id="lbl-vig">—</span><svg width="10" height="6" viewBox="0 0 10 6"><path d="M0 0l5 6 5-6z" fill="#F97316"/></svg></button><div class="ms-panel"><div class="ms-list" id="list-vig"></div></div></div></div>
-  <div class="hfilter"><label>Projeto</label><div class="ms-wrap" id="ms-proj"><button class="ms-btn" onclick="toggleMs('ms-proj')"><span class="ms-lbl" id="lbl-proj">Todos</span><svg width="10" height="6" viewBox="0 0 10 6"><path d="M0 0l5 6 5-6z" fill="#F97316"/></svg></button><div class="ms-panel"><div class="ms-list" id="list-proj"></div></div></div></div>
-  <a class="btn" href="../" title="Voltar ao hub">← Hub</a>
-  <button class="theme-btn" id="themeBtn" title="Modo claro/escuro"></button>
+  <div class="header-filters">
+    <div class="hfilter"><label>Unidade</label><div class="ms-wrap" id="ms-uni"><button class="ms-btn" onclick="toggleMs('ms-uni')"><span class="ms-lbl" id="lbl-uni">—</span><svg width="10" height="6" viewBox="0 0 10 6"><path d="M0 0l5 6 5-6z" fill="#F97316"/></svg></button><div class="ms-panel"><div class="ms-list" id="list-uni"></div></div></div></div>
+    <div class="hfilter"><label>Vigência</label><div class="ms-wrap" id="ms-vig"><button class="ms-btn" onclick="toggleMs('ms-vig')"><span class="ms-lbl" id="lbl-vig">—</span><svg width="10" height="6" viewBox="0 0 10 6"><path d="M0 0l5 6 5-6z" fill="#F97316"/></svg></button><div class="ms-panel"><div class="ms-list" id="list-vig"></div></div></div></div>
+    <div class="hfilter"><label>Projeto</label><div class="ms-wrap" id="ms-proj"><button class="ms-btn" onclick="toggleMs('ms-proj')"><span class="ms-lbl" id="lbl-proj">Todos</span><svg width="10" height="6" viewBox="0 0 10 6"><path d="M0 0l5 6 5-6z" fill="#F97316"/></svg></button><div class="ms-panel"><div class="ms-list" id="list-proj"></div></div></div></div>
+  </div>
+  <div class="header-right">
+    <button class="btn" onclick="exportarPDF()" title="Exportar PDF">PDF</button>
+    <a class="btn" href="../" title="Voltar ao hub">← Hub</a>
+    <button class="theme-btn" id="themeBtn" title="Modo claro/escuro"></button>
+  </div>
 </header>
 
 <main class="main" id="main">
@@ -193,6 +202,7 @@ let sb=null, SESSION=null, IS_ADMIN=false, ALLOWED=[];
 // unidades (mesmo mapa do FCA)
 const DEPARA={CGR:'CAMPO GRANDE',BLC:'BALNEARIO CAMBORIU',CBA:'CUIABA',FLP:'FLORIANOPOLIS',GRL:'GUARULHOS',NFR:'NOVA FRIBURGO',PLT:'PELOTAS',RON:'RONDONOPOLIS',MCC:'CACHOEIRAS DE MACACU',PIR:'PIRAI',ANG:'ANHANGUERA'};
 const PROJETOS=['ROTA','APOIO','EMPURRADA','AUTO SERVIÇO','INSUMOS','TERCEIROS','ADMINISTRATIVO','UDC'];
+let UNIT_PROJETOS=PROJETOS.slice();   // projetos reais da unidade (do DRE)
 // contas por pacote (do PACOTES_MAP da Visão Financeira)
 const CONTAS={
   'Manutenção':['Manutenção de Veículos e Equip.','Materiais e Ferramentas de Oficina','Lavação de Veículos','Manutenção de Carrocerias','Personalização/Padronização','Contratos de Manutenção Fabricante'],
@@ -291,8 +301,8 @@ function buildUniFilter(){
 function pickUni(u){UNIT=u;$('lbl-uni').textContent=u;document.querySelectorAll('#list-uni .ms-opt').forEach(o=>o.classList.toggle('sel',o.textContent===u));document.querySelector('#ms-uni .ms-panel').classList.remove('open');loadRows();}
 function pickVig(v){VIG=v;$('lbl-vig').textContent=vigLabel(v);document.querySelectorAll('#list-vig .ms-opt').forEach(o=>o.classList.toggle('sel',o.textContent===vigLabel(v)));document.querySelector('#ms-vig .ms-panel').classList.remove('open');loadRows();}
 function buildProjFilter(){
-  const opts=['Todos',...PROJETOS];
-  $('list-proj').innerHTML=opts.map(p=>`<div class="ms-opt${(p==='Todos'&&!PROJ)||p===PROJ?' sel':''}" onclick="pickProj('${p}')">${p}</div>`).join('');
+  const opts=['Todos',...UNIT_PROJETOS];
+  $('list-proj').innerHTML=opts.map(p=>`<div class="ms-opt${(p==='Todos'&&!PROJ)||p===PROJ?' sel':''}" onclick="pickProj('${esc(p)}')">${esc(p)}</div>`).join('');
 }
 async function pickProj(p){PROJ=(p==='Todos')?'':p;$('lbl-proj').textContent=p;document.querySelectorAll('#list-proj .ms-opt').forEach(o=>o.classList.toggle('sel',o.textContent===p));document.querySelector('#ms-proj .ms-panel').classList.remove('open');await loadDRE();render();}
 
@@ -304,12 +314,26 @@ async function loadRows(){
   if(error){ console.error(error); ROWS=[]; }
   else ROWS=(data||[]).map(fromDB);
   await loadDRE();
+  refreshProjetos();
   render();
+}
+// projetos reais da unidade (prefixo do Nível 3 no DRE) — interliga filtros
+function projetosDaUnidade(){
+  if(!FROTA) return PROJETOS;
+  const m=mapTab(FROTA.header); const s=new Set();
+  (FROTA.rows||[]).forEach(r=>{const nv3=m.nv3>=0?String(r[m.nv3]||''):'';if(getUniLabel(nv3).toUpperCase().trim()===UNIT){const p=getNv3Prefix(nv3).toUpperCase();if(p)s.add(p);}});
+  return s.size?[...s].sort():PROJETOS;
+}
+function refreshProjetos(){
+  UNIT_PROJETOS=projetosDaUnidade();
+  if(PROJ && !UNIT_PROJETOS.includes(PROJ)){PROJ='';const lp=$('lbl-proj');if(lp)lp.textContent='Todos';}
+  buildProjFilter();
+  const g=$('lf-projeto'); if(g){const cur=g.value; g.innerHTML=UNIT_PROJETOS.map(p=>`<option>${esc(p)}</option>`).join(''); if(UNIT_PROJETOS.includes(cur))g.value=cur;}
 }
 
 // ── selectors / form ──
 function fillForm(){
-  $('lf-projeto').innerHTML=PROJETOS.map(p=>`<option>${p}</option>`).join('');
+  $('lf-projeto').innerHTML=UNIT_PROJETOS.map(p=>`<option>${esc(p)}</option>`).join('');
   $('lf-conta').innerHTML=CONTAS[PAC].map(c=>`<option>${esc(c)}</option>`).join('');
   $('lf-grupo').innerHTML=GRUPOS[PAC].map(g=>`<option>${esc(g)}</option>`).join('');
   if(!$('lf-data').value){const t=new Date();$('lf-data').value=t.getFullYear()+'-'+String(t.getMonth()+1).padStart(2,'0')+'-'+String(t.getDate()).padStart(2,'0');}
@@ -446,6 +470,24 @@ async function init(){
   buildUniFilter(); buildVigOptions(); buildProjFilter(); fillForm(); await loadRows();
 }
 init();
+
+// ── export PDF ──
+async function exportarPDF(){
+  if(typeof html2canvas==='undefined'||!window.jspdf){alert('Biblioteca de PDF ainda carregando — tente de novo em instantes.');return;}
+  const {jsPDF}=window.jspdf;
+  const el=$('main');
+  const bg=getComputedStyle(document.body).backgroundColor||'#0C1017';
+  const canvas=await html2canvas(el,{backgroundColor:bg,scale:2,useCORS:true,windowWidth:el.scrollWidth});
+  const pdf=new jsPDF({unit:'mm',orientation:'landscape',format:'a4'});
+  const pw=pdf.internal.pageSize.getWidth(), ph=pdf.internal.pageSize.getHeight();
+  const imgH=canvas.height*pw/canvas.width;
+  const img=canvas.toDataURL('image/png');
+  let hLeft=imgH, pos=0;
+  pdf.addImage(img,'PNG',0,pos,pw,imgH); hLeft-=ph;
+  while(hLeft>0){pos-=ph;pdf.addPage();pdf.addImage(img,'PNG',0,pos,pw,imgH);hLeft-=ph;}
+  pdf.save('carta-custos-'+UNIT+'-'+vigLabel(VIG).replace('/','-')+'.pdf');
+}
 </script>
+<script src="../assets/filters-toggle.js"></script>
 </body>
 </html>
