@@ -96,6 +96,9 @@ select.st[data-v="Cancelada"]{background:#333333;color:#fff;border-color:#333333
 .kbadge.venc{background:rgba(255,102,102,.18);color:var(--red);}
 .kbadge.ok{background:rgba(59,179,59,.18);color:var(--green);}
 .kbadge.sem{background:rgba(148,163,184,.15);color:var(--text2);}
+.kdays{font-size:8.5px;font-weight:800;margin-left:6px;letter-spacing:.3px;}
+.kdays.venc{color:var(--red);}
+.kdays.ok{color:var(--text2);}
 .kassunto{display:inline-block;background:rgba(249,115,22,.15);color:var(--orange);border:1px solid rgba(249,115,22,.3);font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:.4px;padding:1px 7px;border-radius:4px;margin-bottom:6px;}
 body.light-mode .kcol{background:#fff;border-color:rgba(0,0,0,.10);}
 body.light-mode .kcard{background:#F7F7F7;border-color:rgba(0,0,0,.10);}
@@ -253,11 +256,15 @@ function prazoState(r){
   return p<hoje ? 'Vencida' : 'No prazo';
 }
 function prazoBR(iso){ if(!iso) return '—'; const [y,m,d]=iso.split('-'); return `${d}/${m}/${y}`; }
+function diasVenc(iso){ const h=new Date(); h.setHours(0,0,0,0); const p=new Date(iso+'T00:00:00'); return Math.round((p-h)/86400000); }
 function prazoBadge(r){
   const st=prazoState(r);
   const cls=st==='Vencida'?'venc':(st==='Sem prazo'?'sem':'ok');
   const dt=r.prazo?prazoBR(r.prazo):'sem prazo';
-  return `${dt}<span class="kbadge ${cls}">${st}</span>`;
+  let dias='';
+  const ativa=r.status!=='Concluída'&&r.status!=='Cancelada';
+  if(r.prazo&&ativa){ const d=diasVenc(r.prazo); dias=`<span class="kdays ${d<0?'venc':'ok'}">${d>=0?'':''}${d}D</span>`; }
+  return `${dt}<span class="kbadge ${cls}">${st}</span>${dias}`;
 }
 
 // ── DB <-> memória ──
@@ -350,7 +357,8 @@ function addRowTop(){
 const KCOLS=[{k:'Não iniciada',cls:'nao'},{k:'Em andamento',cls:'and'},{k:'Concluída',cls:'con'}];
 function kanbanHTML(rows){
   return `<div class="kanban">${KCOLS.map(c=>{
-    const cards=rows.filter(r=>(r.status||DEFAULT_STATUS)===c.k);
+    const cards=rows.filter(r=>(r.status||DEFAULT_STATUS)===c.k)
+      .sort((a,b)=>(a.prazo||'9999-99-99').localeCompare(b.prazo||'9999-99-99'));
     return `<div class="kcol" data-status="${c.k}">
       <div class="kcol-head ${c.cls}">${c.k}<span class="kcount">${cards.length}</span></div>
       <div class="kcol-body">${cards.length?cards.map(kcard).join(''):'<div class="kempty">—</div>'}<button class="kadd" onclick="openNewModal('${c.k}')">+ nova ação</button></div>
