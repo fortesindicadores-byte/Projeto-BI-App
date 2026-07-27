@@ -131,8 +131,8 @@ body.light-mode .lf input,body.light-mode .lf select{background:#fff;border-colo
     </div>
   </section>
   <div class="cards-row">
-    <div class="kpi-card"><div class="card-label">Orçado (tend.)</div><div class="card-value" id="c-orc">—</div><div class="card-meta"><div class="card-meta-item">a conectar</div></div></div>
-    <div class="kpi-card"><div class="card-label">Remunerado (tend.)</div><div class="card-value" id="c-rem">—</div><div class="card-meta"><div class="card-meta-item">a conectar</div></div></div>
+    <div class="kpi-card"><div class="card-label">Orçado (tend.)</div><div class="card-value" id="c-orc">—</div><div class="card-meta"><div class="card-meta-item">do DRE · mês</div></div></div>
+    <div class="kpi-card"><div class="card-label">Remunerado (tend.)</div><div class="card-value" id="c-rem">—</div><div class="card-meta"><div class="card-meta-item">do DRE · mês</div></div></div>
     <div class="kpi-card"><div class="card-label">Realizado</div><div class="card-value" id="c-real">R$ 0</div><div class="card-meta"><div class="card-meta-item">lançado no mês</div></div></div>
     <div class="kpi-card"><div class="card-label">Ating. Orç.</div><div class="card-value" id="c-ato">—</div><div class="card-meta"><div class="card-meta-item">Real ÷ Orç</div></div></div>
     <div class="kpi-card"><div class="card-label">Ating. Rem.</div><div class="card-value" id="c-atr">—</div><div class="card-meta"><div class="card-meta-item">Real ÷ Rem</div></div></div>
@@ -163,7 +163,7 @@ body.light-mode .lf input,body.light-mode .lf select{background:#fff;border-colo
 
   <!-- acompanhamento por conta -->
   <div class="tbl-section">
-    <div class="tbl-head"><div><div class="tbl-title">Acompanhamento por Conta</div><div class="tbl-sub">Orçado e Remunerado (tendência) a conectar · botão direito → exportar</div></div></div>
+    <div class="tbl-head"><div><div class="tbl-title">Acompanhamento por Conta</div><div class="tbl-sub">Orçado e Remunerado do DRE (aba Frota) · Ating. ≥90% amarelo, ≥100% vermelho · botão direito → exportar</div></div></div>
     <div class="tbl-wrap"><table class="dre" id="tbl-conta"></table></div>
   </div>
 
@@ -186,7 +186,7 @@ const PROJETOS=['ROTA','APOIO','EMPURRADA','GERAL'];
 // contas por pacote (do PACOTES_MAP da Visão Financeira)
 const CONTAS={
   'Manutenção':['Manutenção de Veículos e Equip.','Materiais e Ferramentas de Oficina','Lavação de Veículos','Manutenção de Carrocerias','Personalização/Padronização','Contratos de Manutenção Fabricante'],
-  'Pneus':['Pneus Novos','Recapagens e Outros Serviços','Consertos e Recapagens de Pneus']
+  'Pneus':['Pneus Novos','Recapagens e Outros Serviços']
 };
 const GRUPOS={
   'Manutenção':['Motor','Transmissão','Elétrica','Freios','Suspensão','Direção','Arrefecimento','Alimentação/Combustível','Ar-condicionado','Rodagem/Eixos','Carroceria/Funilaria','Pintura','Vidros/Retrovisores','Escapamento/Emissões','Hidráulico','Pneumático','Baú/Implemento','Tacógrafo/Telemetria','Preventiva','Corretiva','Lavação','Engraxamento/Lubrificação','Ferramentas','Solda/Usinagem/Retífica','Guincho/Socorro','Mão de obra/Terceiros','Diversos'],
@@ -195,6 +195,56 @@ const GRUPOS={
 
 let UNIT='', VIG='', PAC='Manutenção', ROWS=[];
 const charts={};
+
+// ── DRE (Orçado / Remunerado por unidade × conta × vigência) ──
+const SHEET_ID='1qcTy2ppLCGBKKqZCxCYWCTL9kTAuWfHBMyBfWJOyih8', TAB_FROTA='Frota';
+const _normEb=s=>String(s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').trim();
+function ebIdx(h,...names){const nc=h.map(_normEb);for(const n of names){const i=nc.indexOf(_normEb(n));if(i>=0)return i;}for(const n of names){const nn=_normEb(n);const i=nc.findIndex(c=>c.includes(nn));if(i>=0)return i;}return -1;}
+const _numBR=v=>{if(v==null||v==='')return null;if(typeof v==='number')return v;let s=String(v).replace(/\s|R\$/g,'');if(s.indexOf(',')>=0)s=s.replace(/\./g,'').replace(',','.');const f=parseFloat(s);return isNaN(f)?null:f;};
+const _MESN={jan:1,fev:2,mar:3,abr:4,mai:5,jun:6,jul:7,ago:8,set:9,out:10,nov:11,dez:12};
+function _mesNum(m){if(m==null)return null;if(typeof m==='number'&&m>=1&&m<=12)return m;const s=_normEb(m).slice(0,3);if(_MESN[s])return _MESN[s];const n=parseInt(m);return n>=1&&n<=12?n:null;}
+function parseVigD(v){if(v==null)return null;if(v instanceof Date)return v;const s=String(v);let m=s.match(/(\d{1,2})[\/\-](\d{4})/);if(m)return new Date(+m[2],+m[1]-1,1);m=s.match(/(\d{4})[\/\-](\d{1,2})/);if(m)return new Date(+m[1],+m[2]-1,1);const d=new Date(s);return isNaN(d)?null:d;}
+const getUniLabel=v=>{if(!v)return '';const i=v.indexOf('-');const s=i>=0?v.slice(i+1).trim():v.trim();return s.replace(/\s*\(INATIVO\)\s*/i,'').trim();};
+const CONTAS_ALIAS={'Manutenção de Veículos e Equipamentos':'Manutenção de Veículos e Equip.','Consertos e Recapagens de Pneus':'Recapagens e Outros Serviços','Pneus e Camaras':'Pneus Novos','Personalização/Padronização de Veículos':'Personalização/Padronização','Personalização e Padronização de Veículos':'Personalização/Padronização'};
+const canonConta=c=>CONTAS_ALIAS[c]||c;
+function mapTab(h){return{orc:ebIdx(h,'orçado','orcado'),rem:ebIdx(h,'remunerado'),real:ebIdx(h,'realizado'),vig:ebIdx(h,'vigência','vigencia'),nv3:ebIdx(h,'nível 3','nivel 3','nivel3'),cta:ebIdx(h,'conta gerencial','conta'),mes:ebIdx(h,'mês','mes'),ano:ebIdx(h,'ano')};}
+async function fetchTab(tab){
+  const url=`https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:json&sheet=${encodeURIComponent(tab)}`;
+  const res=await fetch(url); const raw=await res.text();
+  const json=JSON.parse(raw.replace(/^[\s\S]*?\(/,'').replace(/\);?\s*$/,''));
+  let header=(json.table.cols||[]).map(c=>c&&c.label?c.label:'');
+  let rows=json.table.rows.map(r=>r.c.map(c=>c&&c.v!=null?c.v:null));
+  if(!header.some(x=>_normEb(x).includes('realizado'))&&rows.length){header=rows[0].map(x=>x==null?'':String(x));rows=rows.slice(1);}
+  return {header,rows};
+}
+let FROTA=null; // {header,rows} da aba Frota (fetch 1x/sessão, cache 1h)
+async function getFrota(){
+  if(FROTA)return FROTA;
+  try{const c=JSON.parse(localStorage.getItem('cc_frota_v1')||'null');if(c&&Date.now()-c.t<36e5){FROTA=c.d;return FROTA;}}catch(e){}
+  FROTA=await fetchTab(TAB_FROTA);
+  try{localStorage.setItem('cc_frota_v1',JSON.stringify({t:Date.now(),d:FROTA}));}catch(e){}
+  return FROTA;
+}
+let DRE={}; // conta canônica -> {orc,rem} para UNIT+VIG
+async function loadDRE(){
+  DRE={};
+  if(!UNIT||!VIG)return;
+  try{
+    const {header,rows}=await getFrota(); const m=mapTab(header);
+    const uniName=(DEPARA[UNIT]||'').toUpperCase();
+    (rows||[]).forEach(r=>{
+      let ym=null; const mn=m.mes>=0?_mesNum(r[m.mes]):null, an=m.ano>=0?parseInt(r[m.ano]):null;
+      if(mn&&an)ym=an+'-'+String(mn).padStart(2,'0');
+      else if(m.vig>=0){const d=parseVigD(r[m.vig]);if(d)ym=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');}
+      if(ym!==VIG)return;
+      if(getUniLabel(m.nv3>=0?r[m.nv3]:'').toUpperCase()!==uniName)return;
+      const conta=canonConta(m.cta>=0?(r[m.cta]||''):'');
+      if(!DRE[conta])DRE[conta]={orc:0,rem:0};
+      DRE[conta].orc+=(m.orc>=0?_numBR(r[m.orc]):0)||0;
+      DRE[conta].rem+=(m.rem>=0?_numBR(r[m.rem]):0)||0;
+    });
+  }catch(e){console.warn('DRE/Frota indisponível:',e); DRE={};}
+}
 const $=id=>document.getElementById(id);
 const esc=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const fmt=v=>{const neg=+v<0,a=Math.abs(+v);let s;if(a>=1e6)s=(a/1e6).toFixed(2)+' mi';else if(a>=1e5)s=(a/1e3).toFixed(1)+'k';else s=Math.round(a).toLocaleString('pt-BR');return 'R$ '+(neg?'-':'')+s;};
@@ -218,6 +268,7 @@ async function loadRows(){
   const {data,error}=await sb.from('carta_custos').select('*').eq('unidade',UNIT).eq('vigencia',VIG).order('data',{ascending:false}).order('created_at',{ascending:false});
   if(error){ console.error(error); ROWS=[]; }
   else ROWS=(data||[]).map(fromDB);
+  await loadDRE();
   render();
 }
 
@@ -251,12 +302,22 @@ async function removerLanc(id){
 
 // ── render ──
 function curRows(){return ROWS.filter(r=>r.pacote===PAC);}
+function pacTotals(pac){
+  const real=ROWS.filter(r=>r.pacote===pac).reduce((s,r)=>s+r.valor,0);
+  let orc=0,rem=0,hasO=false;
+  CONTAS[pac].forEach(c=>{const d=DRE[c];if(d){orc+=d.orc;rem+=d.rem;hasO=true;}});
+  return {real,orc:hasO?orc:null,rem:hasO?rem:null};
+}
+function setColored(id,val,bad){const e=$(id);if(!e)return;e.textContent=val;e.className='';e.style.color=val==='—'?'':(bad?'var(--red)':'var(--green)');}
 function render(){
   const rows=curRows();
-  const totReal=rows.reduce((s,r)=>s+r.valor,0);
-  $('h-real').textContent=fmt(totReal); $('c-real').textContent=fmt(totReal);
-  $('h-cnt').textContent=rows.length;
-  $('h-dorc').textContent='—'; $('h-drem').textContent='—'; $('c-ato').textContent='—'; $('c-atr').textContent='—';
+  const t=pacTotals(PAC);
+  $('h-real').textContent=fmt(t.real); $('c-real').textContent=fmt(t.real); $('h-cnt').textContent=rows.length;
+  $('c-orc').textContent=t.orc!=null?fmt(t.orc):'—'; $('c-rem').textContent=t.rem!=null?fmt(t.rem):'—';
+  const atO=t.orc?t.real/t.orc*100:null, atR=t.rem?t.real/t.rem*100:null;
+  $('c-ato').textContent=atO!=null?pct(atO):'—'; $('c-atr').textContent=atR!=null?pct(atR):'—';
+  setColored('h-dorc',t.orc!=null?fmt(t.real-t.orc):'—',t.orc!=null&&t.real>t.orc);
+  setColored('h-drem',t.rem!=null?fmt(t.real-t.rem):'—',t.rem!=null&&t.real>t.rem);
   renderAcomp(); renderLanc(rows); renderCharts(rows);
 }
 function aggBy(rows,key){const m=new Map();rows.forEach(r=>{const k=r[key]||'—';m.set(k,(m.get(k)||0)+r.valor);});return [...m.entries()].sort((a,b)=>b[1]-a[1]);}
@@ -268,21 +329,33 @@ function atColor(p){ // custo: >=100 vermelho, >=90 amarelo
   return 'background:rgba(59,179,59,.16);color:var(--green);';
 }
 const PACS=['Manutenção','Pneus'];
-function acompRow(conta,real){
-  return `<tr><td class="conta">${esc(conta)}</td><td class="num">—</td><td class="num">—</td><td class="num">${real?fmt(real):'—'}</td><td class="num">—</td><td class="num">—</td><td class="num">—</td><td class="num">—</td></tr>`;
+const nOr=(v,alt)=>v!=null?fmt(v):(alt||'—');
+function acompCells(orc,rem,real){
+  const dOrc=orc!=null?real-orc:null, dRem=rem!=null?real-rem:null;
+  const atO=orc?real/orc*100:null, atR=rem?real/rem*100:null;
+  return `<td class="num">${nOr(orc)}</td><td class="num">${nOr(rem)}</td><td class="num">${real?fmt(real):'—'}</td>`+
+    `<td class="num ${dOrc!=null?(dOrc>0?'cr':'cg'):''}">${dOrc!=null?fmt(dOrc):'—'}</td>`+
+    `<td class="num ${dRem!=null?(dRem>0?'cr':'cg'):''}">${dRem!=null?fmt(dRem):'—'}</td>`+
+    `<td class="num">${atO!=null?`<span class="tag-pill" style="${atColor(atO)}">${pct(atO)}</span>`:'—'}</td>`+
+    `<td class="num">${atR!=null?`<span class="tag-pill" style="${atColor(atR)}">${pct(atR)}</span>`:'—'}</td>`;
 }
 function renderAcomp(){
   let h=`<thead><tr><th class="lft">Conta</th><th>Orç</th><th>Rem</th><th>Real</th><th>▲ Orç</th><th>▲ Rem</th><th>Ating. Orç %</th><th>Ating. Rem %</th></tr></thead><tbody>`;
-  let gReal=0;
+  let gR=0,gO=0,gRe=0,gHas=false;
   PACS.forEach(pac=>{
     const byC=new Map(CONTAS[pac].map(c=>[c,0]));
     ROWS.filter(r=>r.pacote===pac).forEach(r=>byC.set(r.conta,(byC.get(r.conta)||0)+r.valor));
-    const tot=[...byC.values()].reduce((a,b)=>a+b,0); gReal+=tot;
+    let tR=0,tO=0,tRe=0,tHas=false;
     h+=`<tr class="grp"><td colspan="8">Pacote ${esc(pac)}</td></tr>`;
-    [...byC.entries()].forEach(([c,real])=>{ h+=acompRow(c,real); });
-    h+=`<tr class="pac-total"><td class="conta">Total ${esc(pac)}</td><td class="num">—</td><td class="num">—</td><td class="num">${fmt(tot)}</td><td class="num">—</td><td class="num">—</td><td class="num">—</td><td class="num">—</td></tr>`;
+    [...byC.entries()].forEach(([c,real])=>{
+      const d=DRE[c]; const orc=d?d.orc:null, rem=d?d.rem:null;
+      tR+=real; if(d){tO+=orc;tRe+=rem;tHas=true;}
+      h+=`<tr><td class="conta">${esc(c)}</td>${acompCells(orc,rem,real)}</tr>`;
+    });
+    gR+=tR; if(tHas){gO+=tO;gRe+=tRe;gHas=true;}
+    h+=`<tr class="pac-total"><td class="conta">Total ${esc(pac)}</td>${acompCells(tHas?tO:null,tHas?tRe:null,tR)}</tr>`;
   });
-  h+=`<tr class="total"><td class="conta">Total Geral</td><td class="num">—</td><td class="num">—</td><td class="num">${fmt(gReal)}</td><td class="num">—</td><td class="num">—</td><td class="num">—</td><td class="num">—</td></tr></tbody>`;
+  h+=`<tr class="total"><td class="conta">Total Geral</td>${acompCells(gHas?gO:null,gHas?gRe:null,gR)}</tr></tbody>`;
   $('tbl-conta').innerHTML=h;
 }
 function brDate(iso){if(!iso)return '—';const [y,m,d]=iso.split('-');return `${d}/${m}/${y.slice(2)}`;}
