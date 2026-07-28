@@ -138,6 +138,11 @@ body{background:radial-gradient(ellipse at 15% 20%,rgba(249,115,22,.07) 0%,trans
 .btn-remove{background:transparent;border:1px solid rgba(255,255,255,.1);border-radius:6px;padding:7px 12px;font-family:'Montserrat',sans-serif;font-size:10px;font-weight:700;color:var(--text3);cursor:pointer;text-transform:uppercase;letter-spacing:.5px;transition:all .2s;}
 .btn-remove:hover{border-color:var(--red);color:var(--red);}
 .admin-empty{text-align:center;padding:48px 24px;color:var(--text3);font-size:12px;}
+.admin-search-wrap{position:relative;margin:0 0 18px;max-width:440px;}
+.admin-search-wrap input{width:100%;background:#0a0f18;border:1px solid #2a3a50;border-radius:7px;color:var(--text);font-family:'Montserrat',sans-serif;font-size:13px;padding:10px 14px 10px 38px;outline:none;}
+.admin-search-wrap input:focus{border-color:var(--orange);}
+.admin-search-wrap input::placeholder{color:var(--text3);}
+.admin-search-wrap svg{position:absolute;left:13px;top:50%;transform:translateY(-50%);width:15px;height:15px;stroke:var(--text3);pointer-events:none;}
 
 @media(max-width:768px){
   .hub-main{padding:20px 16px;}
@@ -337,6 +342,10 @@ body{background:radial-gradient(ellipse at 15% 20%,rgba(249,115,22,.07) 0%,trans
       <button class="admin-tab active" id="atab-pending" onclick="switchAdminTab('pending')">Pendentes <span class="admin-cnt" id="admin-cnt-pending">0</span></button>
       <button class="admin-tab" id="atab-approved" onclick="switchAdminTab('approved')">Usuários <span class="admin-cnt" id="admin-cnt-approved">0</span></button>
       <button class="admin-tab" id="atab-blocked" onclick="switchAdminTab('blocked')">Bloqueados <span class="admin-cnt" id="admin-cnt-blocked">0</span></button>
+    </div>
+    <div class="admin-search-wrap">
+      <svg viewBox="0 0 24 24" fill="none" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+      <input type="text" id="admin-search" placeholder="Pesquisar por nome ou e-mail…" oninput="onAdminSearch(this.value)" autocomplete="off">
     </div>
     <div id="admin-users-list"></div>
   </main>
@@ -767,11 +776,16 @@ function switchAdminTab(tab) {
   renderAdminUsers();
 }
 
+let adminSearch = '';
+function onAdminSearch(v) { adminSearch = (v || '').toLowerCase().trim(); renderAdminUsers(); }
 function renderAdminUsers() {
-  const filtered = allApprovals.filter(u => u.status === adminTabActive);
+  let filtered = allApprovals.filter(u => u.status === adminTabActive);
+  if (adminSearch) filtered = filtered.filter(u => ((u.name || '') + ' ' + (u.email || '')).toLowerCase().includes(adminSearch));
   const list = document.getElementById('admin-users-list');
   if (filtered.length === 0) {
-    const msg = {pending:'Nenhum cadastro aguardando aprovação.',approved:'Nenhum usuário ativo.',blocked:'Nenhum usuário bloqueado.'}[adminTabActive];
+    const msg = adminSearch
+      ? `Nenhum usuário encontrado para “${adminSearch.replace(/[<>&]/g, '')}”.`
+      : {pending:'Nenhum cadastro aguardando aprovação.',approved:'Nenhum usuário ativo.',blocked:'Nenhum usuário bloqueado.'}[adminTabActive];
     list.innerHTML = `<div class="admin-empty">${msg}</div>`;
     return;
   }
