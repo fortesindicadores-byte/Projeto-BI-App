@@ -108,7 +108,8 @@ body.light-mode table.dre tr.pac-total td,body.light-mode table.dre tr.total td{
 .lanc-edit{background:#0a0f18;border:1px solid #2a3a50;border-radius:5px;color:var(--text);font-family:'Montserrat',sans-serif;font-size:11px;padding:6px 7px;outline:none;width:100%;}
 .lanc-edit:focus{border-color:var(--orange);}
 .lanc-edit::placeholder{color:var(--text3);}
-.lanc-edit.num-in{text-align:right;font-variant-numeric:tabular-nums;}
+.lanc-edit.num-in{text-align:right;font-variant-numeric:tabular-nums;-moz-appearance:textfield;appearance:textfield;}
+.lanc-edit.num-in::-webkit-outer-spin-button,.lanc-edit.num-in::-webkit-inner-spin-button{-webkit-appearance:none;margin:0;}
 select.lanc-edit option{background:#0f1824;color:#fff;}
 /* larguras mínimas por tipo de campo (a tabela rola na horizontal) */
 .lanc-edit[data-f="data"]{min-width:132px;}
@@ -336,7 +337,8 @@ function refreshProjetos(){
 const selOpts=(list,sel)=>list.map(o=>`<option${o===sel?' selected':''}>${esc(o)}</option>`).join('');
 function lancRowHTML(r){
   const pac='Manutenção', id=r.id||'';
-  return `<tr data-id="${id}">
+  const pend=!counts(r);   // sem NF/valor → pendente (não conta no realizado)
+  return `<tr data-id="${id}"${pend?' class="pend"':''}>
     <td><input type="date" class="lanc-edit" data-f="data" value="${esc(r.data)}" onchange="saveLancCell(this)"></td>
     <td><select class="lanc-edit" data-f="projeto" onchange="saveLancCell(this)">${selOpts(UNIT_PROJETOS,r.projeto||UNIT_PROJETOS[0]||'')}</select></td>
     <td><input class="lanc-edit" data-f="equipamento" value="${esc(r.equipamento)}" placeholder="Placa" oninput="this.value=this.value.toUpperCase()" onchange="saveLancCell(this)"></td>
@@ -362,6 +364,7 @@ async function saveLancRow(tr){
     const r=ROWS.find(x=>x.id===id); if(r)Object.assign(r,payload);
     const {error}=await sb.from('carta_custos').update(payload).eq('id',id);
     if(error){alert('Erro ao salvar: '+error.message);return;}
+    tr.classList.toggle('pend', !(payload.nf && valor>0));   // NF removido → volta a pendente
     renderStats();
   }else{
     if(!payload.nf || !(valor>0)){ tr.classList.add('pend'); return; }   // só sobe ao DRE com NF + Valor
@@ -392,8 +395,10 @@ async function removerLanc(btn){
 // ── render ──
 const PACS=['Manutenção'];
 function curRows(){return ROWS.filter(r=>(!PROJ||r.projeto===PROJ));}
+// só entra no Realizado/DRE quem tem número de NF (e valor)
+const counts=r=>!!(r&&r.nf&&String(r.nf).trim())&&r.valor>0;
 function geralTotals(){
-  const real=curRows().reduce((s,r)=>s+r.valor,0);
+  const real=curRows().filter(counts).reduce((s,r)=>s+r.valor,0);
   let orc=0,rem=0,hasO=false;
   PACS.forEach(pac=>CONTAS[pac].forEach(c=>{const d=DRE[c];if(d){orc+=d.orc;rem+=d.rem;hasO=true;}}));
   return {real,orc:hasO?orc:null,rem:hasO?rem:null};
@@ -409,7 +414,7 @@ function updateHero(){
 }
 function render(){const rows=curRows();updateHero();renderAcomp();renderLanc(rows);renderCharts(rows);}
 // atualiza hero/acomp/gráficos/total sem reconstruir a grade (preserva foco e linhas em edição)
-function renderStats(){const rows=curRows();updateHero();renderAcomp();renderCharts(rows);const lt=$('lanc-total');if(lt)lt.textContent=fmt(rows.reduce((s,r)=>s+r.valor,0));}
+function renderStats(){const rows=curRows();updateHero();renderAcomp();renderCharts(rows);const lt=$('lanc-total');if(lt)lt.textContent=fmt(rows.filter(counts).reduce((s,r)=>s+r.valor,0));}
 function aggBy(rows,key){const m=new Map();rows.forEach(r=>{const k=r[key]||'—';m.set(k,(m.get(k)||0)+r.valor);});return [...m.entries()].sort((a,b)=>b[1]-a[1]);}
 
 function atColor(p){ // custo: >=100 vermelho, >=90 amarelo
@@ -434,7 +439,7 @@ function renderAcomp(){
   let gR=0,gO=0,gRe=0,gHas=false;
   PACS.forEach(pac=>{
     const byC=new Map(CONTAS[pac].map(c=>[c,0]));
-    ROWS.filter(r=>(PACS.length===1||r.pacote===pac)&&(!PROJ||r.projeto===PROJ)).forEach(r=>byC.set(r.conta,(byC.get(r.conta)||0)+r.valor));
+    ROWS.filter(r=>(PACS.length===1||r.pacote===pac)&&(!PROJ||r.projeto===PROJ)&&counts(r)).forEach(r=>byC.set(r.conta,(byC.get(r.conta)||0)+r.valor));
     let tR=0,tO=0,tRe=0,tHas=false;
     if(PACS.length>1) h+=`<tr class="grp"><td colspan="8">Pacote ${esc(pac)}</td></tr>`;
     [...byC.entries()].forEach(([c,real])=>{
@@ -455,27 +460,51 @@ function renderLanc(rows){
   let h=`<thead><tr><th class="lft">Data</th><th class="lft">Projeto</th><th class="lft">Equipamento</th><th class="lft">Fornecedor</th><th class="lft">RC</th><th class="lft">OC</th><th class="lft">NF</th><th class="lft">Conta</th><th class="lft">Grupo</th><th class="lft">Descrição</th><th>Valor</th><th></th></tr></thead><tbody>`;
   if(!rows.length){ h+=`<tr class="empty-row"><td colspan="12"><div class="empty">Nenhum custo lançado neste mês. Clique em “+ adicionar lançamento”.</div></td></tr>`; }
   h+=rows.map(lancRowHTML).join('');
-  const tot=rows.reduce((s,r)=>s+r.valor,0);
+  const tot=rows.filter(counts).reduce((s,r)=>s+r.valor,0);
   h+=`</tbody><tfoot><tr class="total"><td class="conta">Total</td>${'<td></td>'.repeat(9)}<td class="num" id="lanc-total">${fmt(tot)}</td><td></td></tr></tfoot>`;
   $('tbl-lanc').innerHTML=h;
 }
 
-// ── charts (barras verticais, laranja, rótulo no topo) ──
-const labelPlugin={afterDatasetsDraw(chart){const isLight=document.body.classList.contains('light-mode');const meta=chart.getDatasetMeta(0),ds=chart.data.datasets[0];if(!meta)return;const ctx=chart.ctx;ctx.save();ctx.font='700 10px Montserrat,sans-serif';ctx.fillStyle=isLight?'#000':'#F1F5F9';ctx.textAlign='center';ctx.textBaseline='bottom';ds.data.forEach((v,i)=>{const pt=meta.data[i];if(!pt||v==null)return;ctx.fillText(fmt(v).replace('R$ ',''),pt.x,pt.y-6);});ctx.restore();}};
+// ── charts ──
+// interpola cor hex→hex (t de 0 a 1)
+function hexLerp(c1,c2,t){const p=h=>[parseInt(h.slice(1,3),16),parseInt(h.slice(3,5),16),parseInt(h.slice(5,7),16)];const a=p(c1),b=p(c2);const m=a.map((v,i)=>Math.round(v+(b[i]-v)*t));return `rgb(${m[0]},${m[1]},${m[2]})`;}
+// rótulo do valor no topo de cada barra
+const labelPlugin={afterDatasetsDraw(chart){const isLight=document.body.classList.contains('light-mode');const meta=chart.getDatasetMeta(0),ds=chart.data.datasets[0];if(!meta)return;const ctx=chart.ctx;ctx.save();ctx.font='700 10px Montserrat,sans-serif';ctx.fillStyle=isLight?'#000':'#F1F5F9';ctx.textAlign='center';ctx.textBaseline='bottom';ds.data.forEach((v,i)=>{const pt=meta.data[i];if(!pt||v==null)return;ctx.fillText(fmt(v),pt.x,pt.y-6);});ctx.restore();}};
+// barras: brancas (escuro) / cinza quase preto (claro)
 function barChart(id,pairs){
   const isLight=document.body.classList.contains('light-mode');
   const tick={color:isLight?'#444':'#94A3B8',font:{family:'Montserrat',size:10}};
+  const barFill=isLight?'rgba(45,45,45,.92)':'rgba(241,245,249,.92)';
+  const barBorder=isLight?'#2d2d2d':'#F1F5F9';
   const top=pairs.slice(0,10);
   if(charts[id])charts[id].destroy();
   charts[id]=new Chart($(id),{type:'bar',
-    data:{labels:top.map(p=>p[0]),datasets:[{data:top.map(p=>p[1]),backgroundColor:'rgba(249,115,22,.65)',borderColor:'#F97316',borderWidth:1,borderRadius:3}]},
+    data:{labels:top.map(p=>p[0]),datasets:[{data:top.map(p=>p[1]),backgroundColor:barFill,borderColor:barBorder,borderWidth:1,borderRadius:3}]},
     plugins:[labelPlugin],
     options:{responsive:true,maintainAspectRatio:false,layout:{padding:{top:22}},plugins:{legend:{display:false},tooltip:{backgroundColor:'#141B26',titleColor:'#F97316',bodyColor:'#F1F5F9',borderColor:'#1E2D40',borderWidth:1,callbacks:{label:c=>fmt(c.raw)}}},scales:{x:{grid:{display:false},border:{display:false},ticks:tick},y:{display:false,beginAtZero:true,grace:'12%'}}}});
 }
+// rosca: laranja (maior fatia) → branco (escuro) / cinza (claro), total no centro
+function doughnutChart(id,pairs){
+  const isLight=document.body.classList.contains('light-mode');
+  const top=pairs.slice(0,10), n=top.length;
+  const END=isLight?'#BDBDBD':'#FFFFFF';
+  const colors=top.map((_,i)=>hexLerp('#F97316',END,n>1?i/(n-1):0));
+  const total=top.reduce((s,p)=>s+p[1],0);
+  if(charts[id])charts[id].destroy();
+  charts[id]=new Chart($(id),{type:'doughnut',
+    data:{labels:top.map(p=>p[0]),datasets:[{data:top.map(p=>p[1]),backgroundColor:colors,borderColor:isLight?'#EDEDED':'#0C1017',borderWidth:2,hoverOffset:4}]},
+    options:{responsive:true,maintainAspectRatio:false,cutout:'60%',plugins:{
+      legend:{position:'right',labels:{color:isLight?'#1a1a1a':'#F1F5F9',font:{family:'Montserrat',size:10},boxWidth:10,boxHeight:10,padding:7,usePointStyle:true,pointStyle:'rectRounded'}},
+      tooltip:{backgroundColor:'#141B26',titleColor:'#F97316',bodyColor:'#F1F5F9',borderColor:'#1E2D40',borderWidth:1,callbacks:{label:c=>` ${c.label}: ${fmt(c.raw)} (${total?(c.raw/total*100).toFixed(1):0}%)`}}
+    }},
+    plugins:[{id:'ctr',afterDraw(chart){const meta=chart.getDatasetMeta(0);if(!meta||!meta.data||!meta.data[0])return;const cx=meta.data[0].x,cy=meta.data[0].y,ctx=chart.ctx;ctx.save();ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillStyle=isLight?'#1a1a1a':'#F1F5F9';ctx.font='800 15px Montserrat,sans-serif';ctx.fillText(fmt(total),cx,cy-3);ctx.fillStyle=isLight?'#666':'#94A3B8';ctx.font='700 8px Montserrat,sans-serif';ctx.fillText('TOTAL',cx,cy+12);ctx.restore();}}]
+  });
+}
 function renderCharts(rows){
-  barChart('ch-grupo',aggBy(rows,'grupo'));
-  barChart('ch-placa',aggBy(rows,'equipamento').filter(p=>p[0]!=='—'));
-  barChart('ch-forn',aggBy(rows,'fornecedor').filter(p=>p[0]!=='—'));
+  const cr=rows.filter(counts);   // gráficos = só custos realizados (com NF)
+  doughnutChart('ch-grupo',aggBy(cr,'grupo'));
+  barChart('ch-placa',aggBy(cr,'equipamento').filter(p=>p[0]!=='—'));
+  barChart('ch-forn',aggBy(cr,'fornecedor').filter(p=>p[0]!=='—'));
 }
 
 // ── tema ──
