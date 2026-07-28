@@ -108,6 +108,12 @@ body{background:radial-gradient(ellipse at 15% 20%,rgba(249,115,22,.07) 0%,trans
 .user-name{font-size:13px;font-weight:700;color:var(--text);}
 .user-email{font-size:11px;color:var(--text2);margin-top:2px;}
 .user-phone{font-size:11px;color:var(--text3);margin-top:2px;}
+.user-phone a{color:var(--text3);text-decoration:none;display:inline-flex;align-items:center;gap:5px;}
+.user-phone a:hover{color:#25D366;}
+.user-phone a:hover .wa-ico{stroke:#25D366;}
+.wa-ico{width:13px;height:13px;stroke:var(--text3);fill:none;flex-shrink:0;}
+.edit-name{background:none;border:none;color:var(--text3);cursor:pointer;font-size:12px;padding:1px 5px;margin-left:6px;border-radius:4px;line-height:1;}
+.edit-name:hover{color:var(--orange);background:rgba(249,115,22,.14);}
 .user-date{font-size:10px;color:var(--text3);margin-top:4px;}
 .user-fca{margin-top:8px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
 .user-fca label{font-size:10px;font-weight:700;color:var(--orange);text-transform:uppercase;letter-spacing:.5px;}
@@ -138,7 +144,11 @@ body{background:radial-gradient(ellipse at 15% 20%,rgba(249,115,22,.07) 0%,trans
 .btn-remove{background:transparent;border:1px solid rgba(255,255,255,.1);border-radius:6px;padding:7px 12px;font-family:'Montserrat',sans-serif;font-size:10px;font-weight:700;color:var(--text3);cursor:pointer;text-transform:uppercase;letter-spacing:.5px;transition:all .2s;}
 .btn-remove:hover{border-color:var(--red);color:var(--red);}
 .admin-empty{text-align:center;padding:48px 24px;color:var(--text3);font-size:12px;}
-.admin-search-wrap{position:relative;margin:0 0 18px;max-width:440px;}
+.admin-toolbar{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin:0 0 18px;}
+.admin-search-wrap{position:relative;flex:1;min-width:240px;max-width:440px;}
+.admin-export{display:inline-flex;align-items:center;gap:7px;background:rgba(59,179,59,.15);border:1px solid rgba(59,179,59,.4);color:#3BB33B;border-radius:7px;padding:9px 16px;font-family:'Montserrat',sans-serif;font-weight:800;font-size:12px;cursor:pointer;white-space:nowrap;}
+.admin-export:hover{background:rgba(59,179,59,.28);}
+.admin-export svg{width:15px;height:15px;stroke:currentColor;fill:none;}
 .admin-search-wrap input{width:100%;background:#0a0f18;border:1px solid #2a3a50;border-radius:7px;color:var(--text);font-family:'Montserrat',sans-serif;font-size:13px;padding:10px 14px 10px 38px;outline:none;}
 .admin-search-wrap input:focus{border-color:var(--orange);}
 .admin-search-wrap input::placeholder{color:var(--text3);}
@@ -195,7 +205,7 @@ body{background:radial-gradient(ellipse at 15% 20%,rgba(249,115,22,.07) 0%,trans
     <div id="form-register" style="display:none;">
       <div class="field"><label>Nome completo</label><input type="text" id="reg-name" placeholder="Seu nome completo"></div>
       <div class="field"><label>E-mail</label><input type="email" id="reg-email" placeholder="seu@email.com" autocomplete="email"></div>
-      <div class="field"><label>Celular (WhatsApp)</label><input type="tel" id="reg-phone" placeholder="51 99999-9999"></div>
+      <div class="field"><label>Celular (WhatsApp)</label><input type="tel" id="reg-phone" placeholder="(51) 99999-9999"></div>
       <div class="field"><label>Senha</label><div class="pass-wrap"><input type="password" id="reg-pass" placeholder="mínimo 6 caracteres" autocomplete="new-password"><button type="button" class="eye-btn" onclick="togglePass('reg-pass',this)" tabindex="-1"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button></div></div>
       <button class="auth-btn" id="btn-register" onclick="doRegister()">Criar conta</button>
     </div>
@@ -343,9 +353,15 @@ body{background:radial-gradient(ellipse at 15% 20%,rgba(249,115,22,.07) 0%,trans
       <button class="admin-tab" id="atab-approved" onclick="switchAdminTab('approved')">Usuários <span class="admin-cnt" id="admin-cnt-approved">0</span></button>
       <button class="admin-tab" id="atab-blocked" onclick="switchAdminTab('blocked')">Bloqueados <span class="admin-cnt" id="admin-cnt-blocked">0</span></button>
     </div>
-    <div class="admin-search-wrap">
-      <svg viewBox="0 0 24 24" fill="none" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-      <input type="text" id="admin-search" placeholder="Pesquisar por nome ou e-mail…" oninput="onAdminSearch(this.value)" autocomplete="off">
+    <div class="admin-toolbar">
+      <div class="admin-search-wrap">
+        <svg viewBox="0 0 24 24" fill="none" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        <input type="text" id="admin-search" placeholder="Pesquisar por nome ou e-mail…" oninput="onAdminSearch(this.value)" autocomplete="off">
+      </div>
+      <button class="admin-export" onclick="exportUsersExcel()" title="Exportar nome, e-mail e telefone de todos os usuários">
+        <svg viewBox="0 0 24 24" fill="none" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        Exportar Excel
+      </button>
     </div>
     <div id="admin-users-list"></div>
   </main>
@@ -365,6 +381,13 @@ let allApprovals   = [];
 // Acesso FCA por usuário (perfil): código de unidade ou admin
 const FCA_UNITS = ['CGR','BLC','CBA','FLP','GRL','NFR','PLT','RON','MCC','PIR'];
 let _fcaProf = {};   // user_id -> { unidade, is_admin }
+
+// ── Telefone: formatação BR + link WhatsApp + máscara de digitação ──
+function phoneDigits(s){ let d = String(s == null ? '' : s).replace(/\D/g, ''); if (d.length > 11 && d.startsWith('55')) d = d.slice(2); return d; }
+function fmtPhone(s){ const d = phoneDigits(s); if (d.length === 11) return `(${d.slice(0,2)}) ${d.slice(2,7)}-${d.slice(7)}`; if (d.length === 10) return `(${d.slice(0,2)}) ${d.slice(2,6)}-${d.slice(6)}`; return String(s == null ? '' : s).trim(); }
+function waLink(s){ const d = phoneDigits(s); return d.length >= 10 ? 'https://wa.me/55' + d : null; }
+function maskPhone(v){ let d = String(v || '').replace(/\D/g, ''); if (d.startsWith('55') && d.length > 11) d = d.slice(2); d = d.slice(0, 11); if (!d) return ''; if (d.length <= 2) return '(' + d; if (d.length <= 6) return `(${d.slice(0,2)}) ${d.slice(2)}`; if (d.length <= 10) return `(${d.slice(0,2)}) ${d.slice(2,6)}-${d.slice(6)}`; return `(${d.slice(0,2)}) ${d.slice(2,7)}-${d.slice(7)}`; }
+(function(){ const el = document.getElementById('reg-phone'); if (el) el.addEventListener('input', () => { el.value = maskPhone(el.value); }); })();
 let isRegistering  = false;
 let isApproved     = false;
 let pollingInterval = null;
@@ -817,12 +840,17 @@ function renderAdminUsers() {
         </select></div>`;
       farolSel = renderFarolPicker(u.user_id, p.farol_unidades, nm);
     }
+    const waHref = waLink(u.phone);
+    const phoneFmt = fmtPhone(u.phone);
+    const phoneHtml = waHref
+      ? `<a href="${waHref}" target="_blank" rel="noopener" title="Abrir no WhatsApp"><svg class="wa-ico" viewBox="0 0 24 24" stroke-width="2"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>${phoneFmt}</a>`
+      : (phoneFmt || '—');
     return `<div class="user-card">
       <div class="user-avatar">${initial}</div>
       <div class="user-info">
-        <div class="user-name">${u.name || '—'}</div>
+        <div class="user-name">${u.name || '—'} <button class="edit-name" title="Editar nome" onclick="editUserName(${idx})">✎</button></div>
         <div class="user-email">${u.email}</div>
-        <div class="user-phone">${u.phone || '—'}</div>
+        <div class="user-phone">${phoneHtml}</div>
         <div class="user-date">Cadastro: ${dt}</div>
         ${fcaSel}
         ${farolSel}
@@ -830,6 +858,35 @@ function renderAdminUsers() {
       <div class="user-actions">${actions}</div>
     </div>`;
   }).join('');
+}
+
+async function editUserName(idx) {
+  const u = allApprovals[idx];
+  const nv = prompt('Editar nome do usuário:', u.name || '');
+  if (nv === null) return;
+  const name = nv.trim().replace(/\s+/g, ' ');
+  if (!name) { alert('O nome não pode ficar vazio.'); return; }
+  if (name === (u.name || '')) return;
+  const { error } = await sb.from('user_approvals').update({ name }).eq('id', u.id);
+  if (error) { alert('Erro ao salvar o nome: ' + error.message); return; }
+  try { if (u.user_id) await sb.from('fca_profiles').update({ nome: name }).eq('user_id', u.user_id); } catch (e) {}
+  await loadAdminData();
+}
+
+function exportUsersExcel() {
+  const rows = allApprovals.slice().sort((a, b) => String(a.name || '').localeCompare(String(b.name || ''), 'pt'));
+  if (!rows.length) { alert('Não há usuários para exportar.'); return; }
+  const statusMap = { pending: 'Pendente', approved: 'Ativo', blocked: 'Bloqueado' };
+  const cell = v => { v = String(v == null ? '' : v); return /[";\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; };
+  const lines = [['Nome', 'E-mail', 'Telefone', 'Status'].join(';')];
+  rows.forEach(u => lines.push([u.name || '', u.email || '', fmtPhone(u.phone), statusMap[u.status] || u.status || ''].map(cell).join(';')));
+  const csv = '﻿' + lines.join('\r\n');
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'usuarios-gestao-em-movimento.csv';
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
 }
 
 async function approveUser(idx) {
