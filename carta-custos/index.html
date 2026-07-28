@@ -161,7 +161,7 @@ body.light-mode .lf input,body.light-mode .lf select{background:#fff;border-colo
   <!-- hero + cards -->
   <section class="hero">
     <div class="hero-main">
-      <div class="hero-label">Realizado no mês · Frota (todos os pacotes)</div>
+      <div class="hero-label">Realizado no mês · Manutenção</div>
       <div class="hero-value" id="h-real">0</div>
       <div class="hero-deltas">
         <div class="hero-delta">Δ Orç.:<b id="h-dorc">—</b></div>
@@ -335,10 +335,9 @@ function refreshProjetos(){
 // ── grade de lançamentos (edição inline) ──
 const selOpts=(list,sel)=>list.map(o=>`<option${o===sel?' selected':''}>${esc(o)}</option>`).join('');
 function lancRowHTML(r){
-  const pac=r.pacote||'Manutenção', id=r.id||'';
+  const pac='Manutenção', id=r.id||'';
   return `<tr data-id="${id}">
     <td><input type="date" class="lanc-edit" data-f="data" value="${esc(r.data)}" onchange="saveLancCell(this)"></td>
-    <td><select class="lanc-edit" data-f="pacote" onchange="onRowPac(this)">${selOpts(PACS,pac)}</select></td>
     <td><select class="lanc-edit" data-f="projeto" onchange="saveLancCell(this)">${selOpts(UNIT_PROJETOS,r.projeto||UNIT_PROJETOS[0]||'')}</select></td>
     <td><input class="lanc-edit" data-f="equipamento" value="${esc(r.equipamento)}" placeholder="Placa" oninput="this.value=this.value.toUpperCase()" onchange="saveLancCell(this)"></td>
     <td><input class="lanc-edit" data-f="fornecedor" value="${esc(r.fornecedor)}" placeholder="FORNECEDOR" oninput="this.value=this.value.toUpperCase()" onchange="saveLancCell(this)"></td>
@@ -357,7 +356,7 @@ async function saveLancRow(tr){
   if(!sb) return;
   const g=f=>{const el=tr.querySelector('[data-f="'+f+'"]');return el?el.value:'';};
   const valor=parseFloat(g('valor'))||0;
-  const payload={unidade:UNIT,vigencia:VIG,pacote:g('pacote'),data:g('data')||null,projeto:g('projeto'),equipamento:g('equipamento').trim().toUpperCase(),fornecedor:g('fornecedor').trim().toUpperCase(),rc:g('rc').trim(),oc:g('oc').trim(),nf:g('nf').trim(),conta:g('conta'),grupo:g('grupo'),descricao:g('descricao').trim(),valor:valor};
+  const payload={unidade:UNIT,vigencia:VIG,pacote:'Manutenção',data:g('data')||null,projeto:g('projeto'),equipamento:g('equipamento').trim().toUpperCase(),fornecedor:g('fornecedor').trim().toUpperCase(),rc:g('rc').trim(),oc:g('oc').trim(),nf:g('nf').trim(),conta:g('conta'),grupo:g('grupo'),descricao:g('descricao').trim(),valor:valor};
   const id=tr.dataset.id;
   if(id){
     const r=ROWS.find(x=>x.id===id); if(r)Object.assign(r,payload);
@@ -370,12 +369,6 @@ async function saveLancRow(tr){
     if(error){alert('Erro ao lançar: '+error.message);return;}
     tr.dataset.id=data.id; tr.classList.remove('pend'); ROWS.unshift(fromDB(data)); renderStats();
   }
-}
-function onRowPac(sel){
-  const tr=sel.closest('tr'), pac=sel.value;
-  tr.querySelector('[data-f="conta"]').innerHTML=selOpts(CONTAS[pac],CONTAS[pac][0]);
-  tr.querySelector('[data-f="grupo"]').innerHTML=selOpts(GRUPOS[pac],GRUPOS[pac][0]);
-  saveLancRow(tr);
 }
 function addLancRow(){
   const tb=$('tbl-lanc').querySelector('tbody'); if(!tb)return;
@@ -397,7 +390,7 @@ async function removerLanc(btn){
 }
 
 // ── render ──
-const PACS=['Manutenção','Pneus'];
+const PACS=['Manutenção'];
 function curRows(){return ROWS.filter(r=>(!PROJ||r.projeto===PROJ));}
 function geralTotals(){
   const real=curRows().reduce((s,r)=>s+r.valor,0);
@@ -441,9 +434,9 @@ function renderAcomp(){
   let gR=0,gO=0,gRe=0,gHas=false;
   PACS.forEach(pac=>{
     const byC=new Map(CONTAS[pac].map(c=>[c,0]));
-    ROWS.filter(r=>r.pacote===pac&&(!PROJ||r.projeto===PROJ)).forEach(r=>byC.set(r.conta,(byC.get(r.conta)||0)+r.valor));
+    ROWS.filter(r=>(PACS.length===1||r.pacote===pac)&&(!PROJ||r.projeto===PROJ)).forEach(r=>byC.set(r.conta,(byC.get(r.conta)||0)+r.valor));
     let tR=0,tO=0,tRe=0,tHas=false;
-    h+=`<tr class="grp"><td colspan="8">Pacote ${esc(pac)}</td></tr>`;
+    if(PACS.length>1) h+=`<tr class="grp"><td colspan="8">Pacote ${esc(pac)}</td></tr>`;
     [...byC.entries()].forEach(([c,real])=>{
       const d=DRE[c]; const orc=d?d.orc:null, rem=d?d.rem:null;
       tR+=real; if(d){tO+=orc;tRe+=rem;tHas=true;}
@@ -452,17 +445,18 @@ function renderAcomp(){
     gR+=tR; if(tHas){gO+=tO;gRe+=tRe;gHas=true;}
     h+=`<tr class="pac-total"><td class="conta">Total ${esc(pac)}</td>${acompCells(tHas?tO:null,tHas?tRe:null,tR)}</tr>`;
   });
-  h+=`<tr class="total"><td class="conta">Total Geral</td>${acompCells(gHas?gO:null,gHas?gRe:null,gR)}</tr></tbody>`;
+  if(PACS.length>1) h+=`<tr class="total"><td class="conta">Total Geral</td>${acompCells(gHas?gO:null,gHas?gRe:null,gR)}</tr>`;
+  h+='</tbody>';
   $('tbl-conta').innerHTML=h;
 }
 function brDate(iso){if(!iso)return '—';const [y,m,d]=iso.split('-');return `${d}/${m}/${y.slice(2)}`;}
 function renderLanc(rows){
   $('lanc-sub').textContent=rows.length+' lançamento(s) · edite direto na linha · a linha só sobe ao ter NF + Valor · botão direito → exportar Excel';
-  let h=`<thead><tr><th class="lft">Data</th><th class="lft">Pacote</th><th class="lft">Projeto</th><th class="lft">Equipamento</th><th class="lft">Fornecedor</th><th class="lft">RC</th><th class="lft">OC</th><th class="lft">NF</th><th class="lft">Conta</th><th class="lft">Grupo</th><th class="lft">Descrição</th><th>Valor</th><th></th></tr></thead><tbody>`;
-  if(!rows.length){ h+=`<tr class="empty-row"><td colspan="13"><div class="empty">Nenhum custo lançado neste mês. Clique em “+ adicionar lançamento”.</div></td></tr>`; }
+  let h=`<thead><tr><th class="lft">Data</th><th class="lft">Projeto</th><th class="lft">Equipamento</th><th class="lft">Fornecedor</th><th class="lft">RC</th><th class="lft">OC</th><th class="lft">NF</th><th class="lft">Conta</th><th class="lft">Grupo</th><th class="lft">Descrição</th><th>Valor</th><th></th></tr></thead><tbody>`;
+  if(!rows.length){ h+=`<tr class="empty-row"><td colspan="12"><div class="empty">Nenhum custo lançado neste mês. Clique em “+ adicionar lançamento”.</div></td></tr>`; }
   h+=rows.map(lancRowHTML).join('');
   const tot=rows.reduce((s,r)=>s+r.valor,0);
-  h+=`</tbody><tfoot><tr class="total"><td class="conta">Total</td>${'<td></td>'.repeat(10)}<td class="num" id="lanc-total">${fmt(tot)}</td><td></td></tr></tfoot>`;
+  h+=`</tbody><tfoot><tr class="total"><td class="conta">Total</td>${'<td></td>'.repeat(9)}<td class="num" id="lanc-total">${fmt(tot)}</td><td></td></tr></tfoot>`;
   $('tbl-lanc').innerHTML=h;
 }
 
