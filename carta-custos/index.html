@@ -51,9 +51,11 @@ body{background:radial-gradient(ellipse at 10% 25%,rgba(249,115,22,.06) 0%,trans
 .hero-main{padding:4px 0 16px;flex:0 0 auto;}
 .hero-label{font-size:10px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;}
 .hero-value{font-size:52px;font-weight:800;color:var(--text);line-height:1;}
-.hero-deltas{display:flex;gap:20px;margin-top:12px;}
-.hero-delta{font-size:11px;color:var(--text2);display:flex;align-items:baseline;gap:5px;}
-.hero-delta b{font-size:14px;font-weight:700;color:var(--text);}
+.hero-cols{display:flex;gap:52px;margin-top:16px;flex-wrap:wrap;}
+.hero-col{display:flex;flex-direction:column;gap:7px;}
+.hero-line{font-size:12px;color:var(--text2);display:flex;align-items:baseline;gap:8px;}
+.hero-line span{min-width:44px;}
+.hero-line b{font-size:13px;font-weight:800;color:var(--text);white-space:nowrap;}
 .cards-row{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin-bottom:24px;}
 .kpi-card{background:rgba(20,27,38,.55);border:1px solid rgba(255,255,255,.07);border-radius:8px;padding:14px 16px;display:flex;flex-direction:column;gap:3px;backdrop-filter:blur(16px);box-shadow:0 2px 12px rgba(0,0,0,.25);}
 .card-label{font-size:10px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.5px;}
@@ -162,14 +164,19 @@ body.light-mode .lf input,body.light-mode .lf select{background:#fff;border-colo
   <!-- hero + cards -->
   <section class="hero">
     <div class="hero-main">
-      <div class="hero-label">Realizado no mês · Manutenção</div>
+      <div class="hero-label">Realizado</div>
       <div class="hero-value" id="h-real">0</div>
-      <div class="hero-deltas">
-        <div class="hero-delta">Δ Orç.:<b id="h-dorc">—</b></div>
-        <div class="hero-delta">Δ Rem.:<b id="h-drem">—</b></div>
-        <div class="hero-delta">Ating. Orç %:<b id="h-ato">—</b></div>
-        <div class="hero-delta">Ating. Rem %:<b id="h-atr">—</b></div>
-        <div class="hero-delta">Lançamentos:<b id="h-cnt">0</b></div>
+      <div class="hero-cols">
+        <div class="hero-col">
+          <div class="hero-line"><span>Orç:</span><b id="h-orc">—</b></div>
+          <div class="hero-line"><span>Δ Orç:</span><b id="h-dorc">—</b></div>
+          <div class="hero-line"><span>Ating.:</span><b id="h-ato">—</b></div>
+        </div>
+        <div class="hero-col">
+          <div class="hero-line"><span>Rem:</span><b id="h-rem">—</b></div>
+          <div class="hero-line"><span>Δ Rem:</span><b id="h-drem">—</b></div>
+          <div class="hero-line"><span>Ating.:</span><b id="h-atr">—</b></div>
+        </div>
       </div>
     </div>
   </section>
@@ -404,13 +411,21 @@ function geralTotals(){
   return {real,orc:hasO?orc:null,rem:hasO?rem:null};
 }
 function setColored(id,val,bad){const e=$(id);if(!e)return;e.textContent=val;e.className='';e.style.color=val==='—'?'':(bad?'var(--red)':'var(--green)');}
+const fmtFull=v=>Math.round(+v||0).toLocaleString('pt-BR');
+const atCol=p=>p==null||!isFinite(p)?'':(p>=100?'var(--red)':p>=90?'var(--amber)':'var(--green)');
 function updateHero(){
-  const rows=curRows(), t=geralTotals();
-  $('h-real').textContent=fmt(t.real); $('h-cnt').textContent=rows.length;
+  const t=geralTotals();
+  $('h-real').textContent=fmtFull(t.real);
+  $('h-orc').textContent=t.orc!=null?fmtFull(t.orc):'—';
+  $('h-rem').textContent=t.rem!=null?fmtFull(t.rem):'—';
+  // Δ = orçado/remunerado − realizado (economia vs referência): positivo/verde = abaixo, negativo/vermelho = estouro
+  const dO=t.orc!=null?t.orc-t.real:null, dR=t.rem!=null?t.rem-t.real:null;
+  setColored('h-dorc',dO!=null?fmtFull(dO):'—',dO!=null&&dO<0);
+  setColored('h-drem',dR!=null?fmtFull(dR):'—',dR!=null&&dR<0);
   const atO=t.orc?t.real/t.orc*100:null, atR=t.rem?t.real/t.rem*100:null;
-  $('h-ato').textContent=atO!=null?pct(atO):'—'; $('h-atr').textContent=atR!=null?pct(atR):'—';
-  setColored('h-dorc',t.orc!=null?fmt(t.real-t.orc):'—',t.orc!=null&&t.real>t.orc);
-  setColored('h-drem',t.rem!=null?fmt(t.real-t.rem):'—',t.rem!=null&&t.real>t.rem);
+  const eO=$('h-ato'),eR=$('h-atr');
+  eO.textContent=atO!=null?Math.round(atO)+'%':'—'; eO.style.color=atCol(atO);
+  eR.textContent=atR!=null?Math.round(atR)+'%':'—'; eR.style.color=atCol(atR);
 }
 function render(){const rows=curRows();updateHero();renderAcomp();renderLanc(rows);renderCharts(rows);}
 // atualiza hero/acomp/gráficos/total sem reconstruir a grade (preserva foco e linhas em edição)
@@ -474,8 +489,8 @@ const labelPlugin={afterDatasetsDraw(chart){const isLight=document.body.classLis
 function barChart(id,pairs){
   const isLight=document.body.classList.contains('light-mode');
   const tick={color:isLight?'#444':'#94A3B8',font:{family:'Montserrat',size:10}};
-  const barFill=isLight?'rgba(45,45,45,.92)':'rgba(241,245,249,.92)';
-  const barBorder=isLight?'#2d2d2d':'#F1F5F9';
+  const barFill='rgba(249,115,22,.9)';   // laranja da marca — igual à rosca, nos dois temas
+  const barBorder='#F97316';
   const top=pairs.slice(0,10);
   if(charts[id])charts[id].destroy();
   charts[id]=new Chart($(id),{type:'bar',
@@ -483,7 +498,11 @@ function barChart(id,pairs){
     plugins:[labelPlugin],
     options:{responsive:true,maintainAspectRatio:false,layout:{padding:{top:22}},plugins:{legend:{display:false},tooltip:{backgroundColor:'#141B26',titleColor:'#F97316',bodyColor:'#F1F5F9',borderColor:'#1E2D40',borderWidth:1,callbacks:{label:c=>fmt(c.raw)}}},scales:{x:{grid:{display:false},border:{display:false},ticks:tick},y:{display:false,beginAtZero:true,grace:'12%'}}}});
 }
-// rosca: laranja (maior fatia) → branco (escuro) / cinza (claro), total no centro
+// valor compacto em milhar: 50000 -> "50,0K"
+const fmtK=v=>(( +v||0)/1000).toFixed(1).replace('.',',')+'K';
+// cor de texto legível sobre a fatia (branco em fatia escura, escuro em fatia clara)
+const textOn=rgb=>{const m=String(rgb).match(/(\d+)[,\s]+(\d+)[,\s]+(\d+)/);if(!m)return '#fff';const L=0.299*+m[1]+0.587*+m[2]+0.114*+m[3];return L>158?'#1a1a1a':'#fff';};
+// rosca com rótulos nas fatias: "valorK (%)"; laranja (maior) → branco/cinza; legenda embaixo
 function doughnutChart(id,pairs){
   const isLight=document.body.classList.contains('light-mode');
   const top=pairs.slice(0,10), n=top.length;
@@ -493,11 +512,35 @@ function doughnutChart(id,pairs){
   if(charts[id])charts[id].destroy();
   charts[id]=new Chart($(id),{type:'doughnut',
     data:{labels:top.map(p=>p[0]),datasets:[{data:top.map(p=>p[1]),backgroundColor:colors,borderColor:isLight?'#EDEDED':'#0C1017',borderWidth:2,hoverOffset:4}]},
-    options:{responsive:true,maintainAspectRatio:false,cutout:'60%',plugins:{
-      legend:{position:'right',labels:{color:isLight?'#1a1a1a':'#F1F5F9',font:{family:'Montserrat',size:10},boxWidth:10,boxHeight:10,padding:7,usePointStyle:true,pointStyle:'rectRounded'}},
-      tooltip:{backgroundColor:'#141B26',titleColor:'#F97316',bodyColor:'#F1F5F9',borderColor:'#1E2D40',borderWidth:1,callbacks:{label:c=>` ${c.label}: ${fmt(c.raw)} (${total?(c.raw/total*100).toFixed(1):0}%)`}}
+    options:{responsive:true,maintainAspectRatio:false,cutout:'56%',layout:{padding:{top:8,bottom:6,left:44,right:44}},plugins:{
+      legend:{position:'bottom',labels:{color:isLight?'#1a1a1a':'#F1F5F9',font:{family:'Montserrat',size:10},boxWidth:8,boxHeight:8,padding:8,usePointStyle:true,pointStyle:'circle'}},
+      tooltip:{backgroundColor:'#141B26',titleColor:'#F97316',bodyColor:'#F1F5F9',borderColor:'#1E2D40',borderWidth:1,callbacks:{label:c=>` ${c.label}: ${fmtK(c.raw)} (${total?(c.raw/total*100).toFixed(1):0}%)`}}
     }},
-    plugins:[{id:'ctr',afterDraw(chart){const meta=chart.getDatasetMeta(0);if(!meta||!meta.data||!meta.data[0])return;const cx=meta.data[0].x,cy=meta.data[0].y,ctx=chart.ctx;ctx.save();ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillStyle=isLight?'#1a1a1a':'#F1F5F9';ctx.font='800 15px Montserrat,sans-serif';ctx.fillText(fmt(total),cx,cy-3);ctx.fillStyle=isLight?'#666':'#94A3B8';ctx.font='700 8px Montserrat,sans-serif';ctx.fillText('TOTAL',cx,cy+12);ctx.restore();}}]
+    plugins:[{id:'dlab',afterDraw(chart){
+      const meta=chart.getDatasetMeta(0); if(!meta||!meta.data)return;
+      const ds=chart.data.datasets[0].data, cols=chart.data.datasets[0].backgroundColor;
+      const tot=ds.reduce((s,v)=>s+(+v||0),0); if(!tot)return;
+      const ctx=chart.ctx; ctx.save(); ctx.font='700 9.5px Montserrat,sans-serif';
+      meta.data.forEach((arc,i)=>{
+        const v=+ds[i]||0; if(!v)return;
+        const p=v/tot*100, lab=fmtK(v)+' ('+(p<1?p.toFixed(1):Math.round(p))+'%)';
+        const mid=(arc.startAngle+arc.endAngle)/2, cos=Math.cos(mid), sin=Math.sin(mid);
+        if(p>=9){
+          const r=(arc.outerRadius+arc.innerRadius)/2, x=arc.x+cos*r, y=arc.y+sin*r;
+          ctx.fillStyle=textOn(cols[i]); ctx.textAlign='center'; ctx.textBaseline='middle';
+          ctx.fillText(lab,x,y);
+        }else{
+          const x1=arc.x+cos*arc.outerRadius, y1=arc.y+sin*arc.outerRadius;
+          const x2=arc.x+cos*(arc.outerRadius+10), y2=arc.y+sin*(arc.outerRadius+10);
+          const right=cos>=0, x3=x2+(right?14:-14);
+          ctx.strokeStyle=isLight?'#aaa':'#8892a0'; ctx.lineWidth=1;
+          ctx.beginPath();ctx.moveTo(x1,y1);ctx.lineTo(x2,y2);ctx.lineTo(x3,y2);ctx.stroke();
+          ctx.fillStyle=isLight?'#333':'#cbd5e1'; ctx.textAlign=right?'left':'right'; ctx.textBaseline='middle';
+          ctx.fillText(lab,x3+(right?3:-3),y2);
+        }
+      });
+      ctx.restore();
+    }}]
   });
 }
 function renderCharts(rows){
