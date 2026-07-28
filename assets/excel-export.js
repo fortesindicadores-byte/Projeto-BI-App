@@ -68,8 +68,11 @@
   function cellVal(cell){
     const dv=cell.getAttribute&&cell.getAttribute('data-v');
     if(dv!=null && dv!=='' && isFinite(+dv)) return +dv;
-    const n=parseNum(cell.textContent);
-    return n==null ? cell.textContent.trim() : n;
+    // células editáveis: usa o valor do campo, não o textContent (que é vazio)
+    const fld=cell.querySelector&&cell.querySelector('input,select,textarea');
+    const raw=fld ? (fld.value||'') : cell.textContent;
+    const n=parseNum(raw);
+    return n==null ? String(raw).trim() : n;
   }
   function baixarTabela(table, nome){
     ensureXLSX(err=>{ if(err){alert('Não foi possível carregar o componente de Excel. Verifique a conexão.');return;}

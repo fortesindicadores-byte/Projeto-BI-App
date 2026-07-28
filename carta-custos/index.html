@@ -63,7 +63,7 @@ body{background:radial-gradient(ellipse at 10% 25%,rgba(249,115,22,.06) 0%,trans
 /* lançamento form */
 .launch{background:rgba(20,27,38,.55);border:1px solid rgba(249,115,22,.2);border-radius:10px;padding:16px 18px;margin-bottom:16px;backdrop-filter:blur(16px);box-shadow:0 2px 12px rgba(0,0,0,.25);}
 .launch-title{font-size:13px;font-weight:800;color:var(--orange);text-transform:uppercase;letter-spacing:.5px;margin-bottom:12px;}
-.launch-grid{display:grid;grid-template-columns:120px 110px 100px 1fr 1fr 80px 1.1fr 1fr 110px auto;gap:10px;align-items:end;}
+.launch-grid{display:grid;grid-template-columns:110px 108px 100px 1.2fr 1.3fr 78px 78px 78px 1.1fr 1fr 100px auto;gap:10px;align-items:end;}
 .lf{display:flex;flex-direction:column;gap:4px;}
 .lf label{font-size:9px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:.4px;}
 .lf input,.lf select{background:#0a0f18;border:1px solid #2a3a50;border-radius:6px;color:var(--text);font-family:'Montserrat',sans-serif;font-size:12px;padding:8px 9px;outline:none;width:100%;}
@@ -105,6 +105,10 @@ body.light-mode table.dre tr.pac-total td,body.light-mode table.dre tr.total td{
 .rm-btn:hover{color:var(--red);background:rgba(255,102,102,.12);}
 .empty{text-align:center;color:var(--text3);padding:26px;font-size:13px;}
 .grp-badge{display:inline-block;background:rgba(249,115,22,.14);color:var(--orange);border:1px solid rgba(249,115,22,.3);font-size:10px;font-weight:700;padding:1px 7px;border-radius:4px;}
+.lanc-edit{background:#0a0f18;border:1px solid #2a3a50;border-radius:5px;color:var(--text);font-family:'Montserrat',sans-serif;font-size:11px;padding:5px 7px;outline:none;width:100%;max-width:110px;}
+.lanc-edit:focus{border-color:var(--orange);}
+.lanc-edit::placeholder{color:var(--text3);}
+body.light-mode .lanc-edit{background:#fff;border-color:#ccc;color:#1a1a1a;}
 /* light mode */
 body.light-mode .header{background:rgba(12,16,23,.97);}
 body.light-mode .main{background:#F0F0F0;--text:#1a1a1a;--text2:#444444;--text3:#666666;color:var(--text);--red:#ff0000;--green:#0E8C0E;}
@@ -115,7 +119,9 @@ body.light-mode table.dre tr.total td{border-top-color:rgba(0,0,0,.20);backgroun
 body.light-mode .sep-l{border-left-color:rgba(0,0,0,.10);}
 body.light-mode .lf input,body.light-mode .lf select{background:#fff;border-color:#ccc;color:#1a1a1a;}
 .theme-btn{background:rgba(249,115,22,.15);border:1px solid rgba(249,115,22,.3);border-radius:6px;padding:7px 9px;cursor:pointer;color:var(--orange);display:flex;align-items:center;}
+@media(max-width:1500px){.launch-grid{grid-template-columns:repeat(6,1fr);}.launch-btn{grid-column:1/-1;}}
 @media(max-width:1100px){.launch-grid{grid-template-columns:repeat(4,1fr);}.launch-btn{grid-column:1/-1;}}
+@media(max-width:640px){.launch-grid{grid-template-columns:repeat(2,1fr);}}
 </style>
 </head>
 <body>
@@ -158,6 +164,8 @@ body.light-mode .lf input,body.light-mode .lf select{background:#fff;border-colo
       <div class="lf"><label>Projeto</label><select id="lf-projeto"></select></div>
       <div class="lf"><label>Equipamento / Placa</label><input id="lf-equip" placeholder="Ex: ABC1D23"></div>
       <div class="lf"><label>Fornecedor</label><input id="lf-forn" placeholder="NOME DO FORNECEDOR" oninput="this.value=this.value.toUpperCase()"></div>
+      <div class="lf"><label>RC</label><input id="lf-rc" placeholder="nº"></div>
+      <div class="lf"><label>OC</label><input id="lf-oc" placeholder="nº"></div>
       <div class="lf"><label>NF</label><input id="lf-nf" placeholder="nº"></div>
       <div class="lf"><label>Conta</label><select id="lf-conta"></select></div>
       <div class="lf"><label>Grupo</label><select id="lf-grupo"></select></div>
@@ -300,7 +308,7 @@ function buildProjFilter(){
 async function pickProj(p){PROJ=(p==='Todos')?'':p;$('lbl-proj').textContent=p;document.querySelectorAll('#list-proj .ms-opt').forEach(o=>o.classList.toggle('sel',o.textContent===p));document.querySelector('#ms-proj .ms-panel').classList.remove('open');await loadDRE();render();}
 
 // ── DB ──
-function fromDB(d){return{id:d.id,unidade:d.unidade,vigencia:d.vigencia,pacote:d.pacote,data:d.data||'',projeto:d.projeto||'',equipamento:(d.equipamento||''),fornecedor:(d.fornecedor||''),nf:d.nf||'',conta:d.conta||'',grupo:d.grupo||'',valor:+d.valor||0};}
+function fromDB(d){return{id:d.id,unidade:d.unidade,vigencia:d.vigencia,pacote:d.pacote,data:d.data||'',projeto:d.projeto||'',equipamento:(d.equipamento||''),fornecedor:(d.fornecedor||''),rc:d.rc||'',oc:d.oc||'',nf:d.nf||'',conta:d.conta||'',grupo:d.grupo||'',valor:+d.valor||0};}
 async function loadRows(){
   if(!sb||!UNIT) return;
   const {data,error}=await sb.from('carta_custos').select('*').eq('unidade',UNIT).eq('vigencia',VIG).order('data',{ascending:false}).order('created_at',{ascending:false});
@@ -336,11 +344,11 @@ function onPacChange(){PAC=$('lf-pacote').value;$('h-pac').textContent=PAC;$('lf
 async function lancar(){
   const valor=parseFloat($('lf-valor').value);
   if(!valor||valor<=0){alert('Informe um valor válido.');return;}
-  const payload={unidade:UNIT,vigencia:VIG,pacote:PAC,data:$('lf-data').value||null,projeto:$('lf-projeto').value,equipamento:$('lf-equip').value.trim().toUpperCase(),fornecedor:$('lf-forn').value.trim().toUpperCase(),nf:$('lf-nf').value.trim(),conta:$('lf-conta').value,grupo:$('lf-grupo').value,valor:valor};
+  const payload={unidade:UNIT,vigencia:VIG,pacote:PAC,data:$('lf-data').value||null,projeto:$('lf-projeto').value,equipamento:$('lf-equip').value.trim().toUpperCase(),fornecedor:$('lf-forn').value.trim().toUpperCase(),rc:$('lf-rc').value.trim(),oc:$('lf-oc').value.trim(),nf:$('lf-nf').value.trim(),conta:$('lf-conta').value,grupo:$('lf-grupo').value,valor:valor};
   const {data,error}=await sb.from('carta_custos').insert(payload).select('*').single();
   if(error){alert('Erro ao lançar: '+error.message);return;}
   ROWS.unshift(fromDB(data));
-  $('lf-equip').value='';$('lf-forn').value='';$('lf-nf').value='';$('lf-valor').value='';
+  $('lf-equip').value='';$('lf-forn').value='';$('lf-rc').value='';$('lf-oc').value='';$('lf-nf').value='';$('lf-valor').value='';
   render(); $('lf-valor').focus();
 }
 async function removerLanc(id){
@@ -410,15 +418,24 @@ function renderAcomp(){
 }
 function brDate(iso){if(!iso)return '—';const [y,m,d]=iso.split('-');return `${d}/${m}/${y.slice(2)}`;}
 function renderLanc(rows){
-  $('lanc-sub').textContent=rows.length+' lançamento(s) · botão direito na tabela → exportar Excel';
-  let h=`<thead><tr><th class="lft">Data</th><th class="lft">Projeto</th><th class="lft">Equipamento</th><th class="lft">Fornecedor</th><th class="lft">NF</th><th class="lft">Conta</th><th class="lft">Grupo</th><th>Valor</th><th></th></tr></thead><tbody>`;
-  if(!rows.length){ h+=`<tr><td colspan="9"><div class="empty">Nenhum custo lançado ainda neste pacote/mês. Use o formulário acima.</div></td></tr>`; }
+  $('lanc-sub').textContent=rows.length+' lançamento(s) · RC · OC · NF editáveis · botão direito na tabela → exportar Excel';
+  let h=`<thead><tr><th class="lft">Data</th><th class="lft">Projeto</th><th class="lft">Equipamento</th><th class="lft">Fornecedor</th><th class="lft">RC</th><th class="lft">OC</th><th class="lft">NF</th><th class="lft">Conta</th><th class="lft">Grupo</th><th>Valor</th><th></th></tr></thead><tbody>`;
+  if(!rows.length){ h+=`<tr><td colspan="11"><div class="empty">Nenhum custo lançado ainda neste pacote/mês. Use o formulário acima.</div></td></tr>`; }
   rows.forEach(r=>{
-    h+=`<tr><td>${brDate(r.data)}</td><td>${esc(r.projeto)}</td><td>${esc(r.equipamento)||'—'}</td><td>${esc(r.fornecedor)||'—'}</td><td>${esc(r.nf)||'—'}</td><td>${esc(r.conta)}</td><td><span class="grp-badge">${esc(r.grupo)}</span></td><td class="num">${fmt(r.valor)}</td><td class="num"><button class="rm-btn" title="Excluir" onclick="removerLanc('${r.id}')">×</button></td></tr>`;
+    const ed=(f,v)=>`<input class="lanc-edit" value="${esc(v)}" placeholder="nº" onchange="editLanc('${r.id}','${f}',this.value)">`;
+    h+=`<tr><td>${brDate(r.data)}</td><td>${esc(r.projeto)}</td><td>${esc(r.equipamento)||'—'}</td><td>${esc(r.fornecedor)||'—'}</td><td>${ed('rc',r.rc)}</td><td>${ed('oc',r.oc)}</td><td>${ed('nf',r.nf)}</td><td>${esc(r.conta)}</td><td><span class="grp-badge">${esc(r.grupo)}</span></td><td class="num">${fmt(r.valor)}</td><td class="num"><button class="rm-btn" title="Excluir" onclick="removerLanc('${r.id}')">×</button></td></tr>`;
   });
   const tot=rows.reduce((s,r)=>s+r.valor,0);
-  h+=`<tr class="total"><td class="conta">Total</td><td></td><td></td><td></td><td></td><td></td><td></td><td class="num">${fmt(tot)}</td><td></td></tr></tbody>`;
+  h+=`<tr class="total"><td class="conta">Total</td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td class="num">${fmt(tot)}</td><td></td></tr></tbody>`;
   $('tbl-lanc').innerHTML=h;
+}
+async function editLanc(id,field,value){
+  const r=ROWS.find(x=>x.id===id); if(!r) return;
+  const v=String(value||'').trim();
+  if(r[field]===v) return;
+  r[field]=v;
+  const {error}=await sb.from('carta_custos').update({[field]:v}).eq('id',id);
+  if(error){alert('Erro ao salvar: '+error.message);}
 }
 
 // ── charts (barras verticais, laranja, rótulo no topo) ──
