@@ -74,14 +74,11 @@ body{background:radial-gradient(ellipse at 10% 25%,rgba(249,115,22,.06) 0%,trans
 .launch-btn{background:var(--orange);color:#0C1017;border:none;border-radius:6px;font-family:'Montserrat',sans-serif;font-weight:800;font-size:12px;padding:9px 16px;cursor:pointer;height:36px;white-space:nowrap;}
 .launch-btn:hover{filter:brightness(1.08);}
 /* charts */
-.charts-row{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:16px;}
+.charts-row{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:16px;}
 .chart-card{background:rgba(20,27,38,.55);border:1px solid rgba(255,255,255,.07);border-radius:8px;padding:16px 18px;backdrop-filter:blur(16px);box-shadow:0 2px 12px rgba(0,0,0,.25);}
-.chart-head{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;}
-.chart-toggle{background:rgba(249,115,22,.15);border:1px solid rgba(249,115,22,.35);color:var(--orange);border-radius:6px;font-family:'Montserrat',sans-serif;font-weight:700;font-size:10px;padding:6px 11px;cursor:pointer;white-space:nowrap;text-transform:uppercase;letter-spacing:.4px;}
-.chart-toggle:hover{background:rgba(249,115,22,.3);}
 .chart-title{font-size:13px;font-weight:800;color:var(--text);margin-bottom:2px;}
 .chart-sub{font-size:10px;color:var(--text2);margin-bottom:12px;}
-.chart-wrap{position:relative;height:320px;}
+.chart-wrap{position:relative;height:250px;}
 @media(max-width:900px){.charts-row{grid-template-columns:1fr;}.cards-row{grid-template-columns:repeat(2,1fr);}}
 /* tabelas */
 .tbl-section{background:rgba(20,27,38,.55);border:1px solid rgba(255,255,255,.07);border-radius:8px;padding:18px 20px 16px;margin-bottom:16px;backdrop-filter:blur(16px);box-shadow:0 2px 12px rgba(0,0,0,.25);}
@@ -187,13 +184,8 @@ body.light-mode .lf input,body.light-mode .lf select{background:#fff;border-colo
   <!-- charts -->
   <div class="charts-row">
     <div class="chart-card"><div class="chart-title">Custo por Grupo</div><div class="chart-sub">no mês · top 10 grupos</div><div class="chart-wrap"><canvas id="ch-grupo"></canvas></div></div>
-    <div class="chart-card">
-      <div class="chart-head">
-        <div><div class="chart-title" id="bar-title">Custo por Fornecedor</div><div class="chart-sub" id="bar-sub">top 10 fornecedores</div></div>
-        <button class="chart-toggle" id="barToggle" onclick="toggleBar()">Ver por Placa</button>
-      </div>
-      <div class="chart-wrap"><canvas id="ch-bar"></canvas></div>
-    </div>
+    <div class="chart-card"><div class="chart-title">Custo por Placa</div><div class="chart-sub">top 10 equipamentos</div><div class="chart-wrap"><canvas id="ch-placa"></canvas></div></div>
+    <div class="chart-card"><div class="chart-title">Custo por Fornecedor</div><div class="chart-sub">top 10 fornecedores</div><div class="chart-wrap"><canvas id="ch-forn"></canvas></div></div>
   </div>
 
   <!-- acompanhamento por conta -->
@@ -520,52 +512,31 @@ function doughnutChart(id,pairs){
   if(charts[id])charts[id].destroy();
   charts[id]=new Chart($(id),{type:'doughnut',
     data:{labels:top.map(p=>p[0]),datasets:[{data:top.map(p=>p[1]),backgroundColor:colors,borderColor:isLight?'#EDEDED':'#0C1017',borderWidth:2,hoverOffset:4}]},
-    options:{responsive:true,maintainAspectRatio:false,cutout:'56%',layout:{padding:{top:8,bottom:6,left:44,right:44}},plugins:{
+    options:{responsive:true,maintainAspectRatio:false,cutout:'58%',layout:{padding:{top:4,bottom:4}},plugins:{
       legend:{position:'bottom',labels:{color:isLight?'#1a1a1a':'#F1F5F9',font:{family:'Montserrat',size:10},boxWidth:8,boxHeight:8,padding:8,usePointStyle:true,pointStyle:'circle'}},
       tooltip:{backgroundColor:'#141B26',titleColor:'#F97316',bodyColor:'#F1F5F9',borderColor:'#1E2D40',borderWidth:1,callbacks:{label:c=>` ${c.label}: ${fmtK(c.raw)} (${total?(c.raw/total*100).toFixed(1):0}%)`}}
     }},
     plugins:[{id:'dlab',afterDraw(chart){
       const meta=chart.getDatasetMeta(0); if(!meta||!meta.data)return;
-      const ds=chart.data.datasets[0].data;
+      const ds=chart.data.datasets[0].data, cols=chart.data.datasets[0].backgroundColor;
       const tot=ds.reduce((s,v)=>s+(+v||0),0); if(!tot)return;
-      const ctx=chart.ctx, isL=document.body.classList.contains('light-mode');
-      ctx.save(); ctx.font='700 10px Montserrat,sans-serif';
-      // todas as fatias com rótulo FORA + linha-guia (sem rótulo dentro)
-      const items=[];
-      meta.data.forEach((arc,i)=>{
+      const ctx=chart.ctx; ctx.save(); ctx.font='800 11px Montserrat,sans-serif'; ctx.textAlign='center'; ctx.textBaseline='middle';
+      meta.data.forEach((arc,i)=>{             // só o % dentro de cada fatia
         const v=+ds[i]||0; if(!v)return;
-        const p=v/tot*100, lab=fmtK(v)+' ('+(p<1?p.toFixed(1):Math.round(p))+'%)';
-        const mid=(arc.startAngle+arc.endAngle)/2, cos=Math.cos(mid), sin=Math.sin(mid);
-        items.push({lab,cos,sin,cx:arc.x,cy:arc.y,or:arc.outerRadius,ex:arc.x+cos*arc.outerRadius,ey:arc.y+sin*arc.outerRadius,side:cos>=0?1:-1,ty:arc.y+sin*arc.outerRadius});
-      });
-      // anti-sobreposição vertical por lado
-      const GAP=15;
-      [-1,1].forEach(sd=>{const arr=items.filter(it=>it.side===sd).sort((a,b)=>a.ey-b.ey);for(let i=1;i<arr.length;i++){if(arr[i].ty-arr[i-1].ty<GAP)arr[i].ty=arr[i-1].ty+GAP;}});
-      ctx.strokeStyle=isL?'#b0b0b0':'#8892a0'; ctx.lineWidth=1; ctx.fillStyle=isL?'#333':'#e2e8f0';
-      items.forEach(it=>{
-        const kneeX=it.cx+it.cos*(it.or+12), kneeY=it.cy+it.sin*(it.or+12);
-        const labelX=it.cx+it.side*(it.or+24);
-        ctx.beginPath();ctx.moveTo(it.ex,it.ey);ctx.lineTo(kneeX,kneeY);ctx.lineTo(labelX,it.ty);ctx.stroke();
-        ctx.textAlign=it.side>0?'left':'right'; ctx.textBaseline='middle';
-        ctx.fillText(it.lab,labelX+it.side*4,it.ty);
+        const p=v/tot*100; if(p<3)return;      // fatias muito finas ficam só no tooltip/legenda
+        const mid=(arc.startAngle+arc.endAngle)/2, r=(arc.outerRadius+arc.innerRadius)/2;
+        ctx.fillStyle=textOn(cols[i]);
+        ctx.fillText((p<1?p.toFixed(1):Math.round(p))+'%', arc.x+Math.cos(mid)*r, arc.y+Math.sin(mid)*r);
       });
       ctx.restore();
     }}]
   });
 }
-let barMode='fornecedor';
-function toggleBar(){
-  barMode=barMode==='fornecedor'?'placa':'fornecedor';
-  $('barToggle').textContent=barMode==='fornecedor'?'Ver por Placa':'Ver por Fornecedor';
-  $('bar-title').textContent=barMode==='fornecedor'?'Custo por Fornecedor':'Custo por Placa';
-  $('bar-sub').textContent=barMode==='fornecedor'?'top 10 fornecedores':'top 10 equipamentos';
-  renderCharts(curRows());
-}
 function renderCharts(rows){
   const cr=rows.filter(counts);   // gráficos = só custos realizados (com NF)
   doughnutChart('ch-grupo',aggBy(cr,'grupo'));
-  const key=barMode==='fornecedor'?'fornecedor':'equipamento';
-  barChart('ch-bar',aggBy(cr,key).filter(p=>p[0]!=='—'));
+  barChart('ch-placa',aggBy(cr,'equipamento').filter(p=>p[0]!=='—'));
+  barChart('ch-forn',aggBy(cr,'fornecedor').filter(p=>p[0]!=='—'));
 }
 
 // ── tema ──
