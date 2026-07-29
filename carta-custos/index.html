@@ -420,6 +420,20 @@ function refreshProjetos(){
 
 // ── grade de lançamentos (edição inline) ──
 const selOpts=(list,sel)=>list.map(o=>`<option${o===sel?' selected':''}>${esc(o)}</option>`).join('');
+// ── campo Valor em formato pt-BR (milhar com ".", decimal com ",") ──
+const fmtValorBR=n=>Number(n||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
+function parseValor(str){ if(str==null)return 0; let s=String(str).replace(/\./g,'').replace(',','.').replace(/[^\d.]/g,''); const f=parseFloat(s); return isNaN(f)?0:f; }
+// agrupa milhar ao vivo enquanto digita (mantém 1 vírgula, no máx. 2 decimais)
+function fmtValorInput(el){
+  let v=el.value.replace(/[^\d,]/g,'');
+  const i=v.indexOf(',');
+  if(i>=0) v=v.slice(0,i+1)+v.slice(i+1).replace(/,/g,'');   // só a 1ª vírgula
+  let [ip,dp]=v.split(',');
+  ip=(ip||'').replace(/^0+(?=\d)/,'').replace(/\B(?=(\d{3})+(?!\d))/g,'.');
+  el.value = v.indexOf(',')>=0 ? (ip||'0')+','+(dp||'').slice(0,2) : ip;
+}
+// ao sair do campo: normaliza p/ 0,00 e salva
+function normValor(el){ const v=parseValor(el.value); el.value=v?fmtValorBR(v):''; saveLancCell(el); }
 function lancRowHTML(r){
   const pac='Manutenção', id=r.id||'';
   const pend=!counts(r);   // sem NF/valor → pendente (não conta no realizado)
@@ -435,7 +449,7 @@ function lancRowHTML(r){
     <td><select class="lanc-edit" data-f="conta" onchange="saveLancCell(this)">${selOpts(CONTAS[pac],r.conta||CONTAS[pac][0])}</select></td>
     <td><select class="lanc-edit" data-f="grupo" onchange="saveLancCell(this)">${selOpts(GRUPOS[pac],r.grupo||GRUPOS[pac][0])}</select></td>
     <td><input class="lanc-edit" data-f="descricao" value="${esc(r.descricao)}" placeholder="descrição do serviço" onchange="saveLancCell(this)"></td>
-    <td class="num"><input type="number" step="0.01" min="0" inputmode="decimal" class="lanc-edit num-in" data-f="valor" value="${r.valor?r.valor:''}" placeholder="0,00" onchange="saveLancCell(this)"></td>
+    <td class="num"><input type="text" inputmode="decimal" class="lanc-edit num-in" data-f="valor" value="${r.valor?fmtValorBR(r.valor):''}" placeholder="0,00" oninput="fmtValorInput(this)" onchange="normValor(this)"></td>
     <td class="num"><button class="rm-btn" title="Excluir" onclick="removerLanc(this)">×</button></td>
   </tr>`;
 }
@@ -443,7 +457,7 @@ function saveLancCell(el){const tr=el.closest('tr');if(tr)saveLancRow(tr);}
 async function saveLancRow(tr){
   if(!sb) return;
   const g=f=>{const el=tr.querySelector('[data-f="'+f+'"]');return el?el.value:'';};
-  const valor=parseFloat(g('valor'))||0;
+  const valor=parseValor(g('valor'));
   const payload={unidade:curUnits()[0],vigencia:curVigs()[0],pacote:'Manutenção',data:g('data')||null,projeto:g('projeto'),equipamento:g('equipamento').trim().toUpperCase(),fornecedor:g('fornecedor').trim().toUpperCase(),rc:g('rc').trim(),oc:g('oc').trim(),nf:g('nf').trim(),conta:g('conta'),grupo:g('grupo'),descricao:g('descricao').trim(),valor:valor};
   const id=tr.dataset.id;
   if(id){
