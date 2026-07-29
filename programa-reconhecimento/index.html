@@ -1015,6 +1015,12 @@ function renderIndChart(data) {
   const face   = v => v >= 98 ? 'rgba(59,179,59,.85)'  : v >= 85 ? 'rgba(250,204,21,.85)' : 'rgba(255,102,102,.85)';
   const edge   = v => v >= 98 ? 'rgba(59,179,59,1)'    : v >= 85 ? 'rgba(250,204,21,1)'   : 'rgba(255,102,102,1)';
 
+  // Escala Y adaptável — MESMA regra do gráfico temporal (não começa do 0)
+  const minV = vals.length ? Math.min(...vals) : 0;
+  const maxV = vals.length ? Math.max(...vals) : 100;
+  const yMin = Math.max(0,   Math.floor((minV - 10) / 10) * 10);
+  const yMax = Math.min(130, Math.ceil((Math.max(maxV, 100) + 8) / 10) * 10);
+
   const ctx = document.getElementById('chartIndicadores').getContext('2d');
   if (chartIndicadores) chartIndicadores.destroy();
   chartIndicadores = new Chart(ctx, {
@@ -1039,11 +1045,10 @@ function renderIndChart(data) {
     options: {
       responsive: true,
       maintainAspectRatio: false,
-      layout: {padding: {top: 18}},
       plugins: {legend: {display:false}, tooltip, datalabels: {}},
       scales: {
         x: {grid:{display:false}, ticks:{color:tickC, font:{family:'Montserrat',size:10}, autoSkip:false}},
-        y: {grid:{color:gridC}, ticks:{color:tickC, font:{family:'Montserrat',size:10}, callback: v => v+'%'}, min:0, max:100},
+        y: {grid:{color:gridC}, ticks:{color:tickC, font:{family:'Montserrat',size:10}, callback: v => v+'%'}, min:yMin, max:yMax},
       },
     },
   });
