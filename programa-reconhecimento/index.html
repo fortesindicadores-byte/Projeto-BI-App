@@ -1002,6 +1002,7 @@ function renderIndChart(data) {
   const gridC   = isLight ? 'rgba(0,0,0,.08)' : 'rgba(255,255,255,.06)';
   const tickC   = isLight ? '#444' : '#94A3B8';
   const tooltip = {backgroundColor:'#141B26',titleColor:'#F97316',bodyColor:'#F1F5F9',borderColor:'#1E2D40',borderWidth:1,titleFont:{family:'Montserrat'},bodyFont:{family:'Montserrat'}};
+  const metaClr = isLight ? 'rgba(0,0,0,.60)' : 'rgba(255,255,255,.70)';
 
   // média de cada indicador no período filtrado; descarta os sem dado; ordena pior → melhor
   const items = FIELD_ORDER
@@ -1027,25 +1028,30 @@ function renderIndChart(data) {
     type: 'bar',
     data: {
       labels,
-      datasets: [{
-        label: 'Pontuação média',
-        data: vals,
-        backgroundColor: vals.map(face),
-        borderColor: vals.map(edge),
-        borderWidth: 1,
-        borderRadius: 4,
-        datalabels: {
-          anchor: 'end', align: 'end', offset: 2,
-          color: isLight ? '#1a1a1a' : '#F1F5F9',
-          font: {family:'Montserrat', size:13, weight:'700'},
-          formatter: v => v != null ? v.toFixed(1) : '',
+      datasets: [
+        {
+          label: 'Pontuação média',
+          data: vals,
+          backgroundColor: vals.map(face),
+          borderColor: vals.map(edge),
+          borderWidth: 1,
+          borderRadius: 4,
+          order: 3,
+          datalabels: {
+            anchor: 'end', align: 'end', offset: 2,
+            color: isLight ? '#1a1a1a' : '#F1F5F9',
+            font: {family:'Montserrat', size:13, weight:'700'},
+            formatter: v => v != null ? v.toFixed(1) : '',
+          },
         },
-      }],
+        { label:'Meta 85%', data: labels.map(()=>85), type:'line', borderColor:metaClr, borderWidth:2, borderDash:[5,3], tension:0, fill:false, pointRadius:0, order:1, datalabels:{display:false} },
+        { label:'Meta 98%', data: labels.map(()=>98), type:'line', borderColor:metaClr, borderWidth:2, borderDash:[5,3], tension:0, fill:false, pointRadius:0, order:2, datalabels:{display:false} },
+      ],
     },
     options: {
       responsive: true,
       maintainAspectRatio: false,
-      plugins: {legend: {display:false}, tooltip, datalabels: {}},
+      plugins: {legend: {labels:{color: isLight?'#1a1a1a':'#F1F5F9', font:{family:'Montserrat',size:10}, boxWidth:12, padding:16}}, tooltip, datalabels: {}},
       scales: {
         x: {grid:{display:false}, ticks:{color:tickC, font:{family:'Montserrat',size:10}, autoSkip:false}},
         y: {grid:{color:gridC}, ticks:{color:tickC, font:{family:'Montserrat',size:10}, callback: v => v+'%'}, min:yMin, max:yMax},
