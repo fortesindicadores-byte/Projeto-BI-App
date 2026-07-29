@@ -632,3 +632,24 @@ Situação atual do código: a Árvore lê a aba `Árvore Comb.` (`GV_ID=1wCoRGs
 - Gerot, Auditorias, FCA
 - Programa de Reconhecimento, Aderência ao FCA, Painel de Metas
 - Sub-hubs para clusters com múltiplos painéis
+
+---
+
+## Condução Econômica (gamificação do motorista) — visão de longo prazo
+
+Painel em `/combustivel/conducao-economica/` (dentro do hub Combustível). **Clone do Frota de Elite** (`programa-reconhecimento/`) — mesma estrutura (hero "Pontuação Total Média", ranking, gráfico de evolução, tabela de Regras de Pontuação), mas **por MOTORISTA** e com indicadores de **condução econômica** no lugar dos do Gerot. **Sem pódio** (removido). Card no hub Combustível fica **visível só para admin** por enquanto (checa `fca_profiles.is_admin`). Hoje é **protótipo com dados de exemplo** (`generateRawRows()`), lendo só 2026.
+
+**Pilares atuais (peso):** Faixa Verde de RPM 25 · Marcha Lenta/idle 20 · Aceleração 15 · Freada 10 · Velocidade 15 · Freio Motor & Banguela 10 · Câmbio 5. Score = média ponderada (0–100), redistribuindo o peso dos pilares ausentes. Freio Motor e Câmbio **só existem na vFleets** (Geotab não entrega → ficam ausentes). Cada célula mostra **pontos (grande) + resultado medido (pequeno)**, estilo termômetro. Pesos/indicadores só serão fechados **quando lermos a telemetria de verdade**.
+
+**Duas telemetrias (cada motorista usa só UMA):**
+- **Geotab MyGeotab** — JSON-RPC `POST /apiv1` (Authenticate → sessão 2 sem.; Get/GetFeed). Comportamento via ExceptionEvent (regras precisam estar habilitadas) + engine (RPM/idle/combustível).
+- **vFleets / PS Latam "Condução Detalhada – DaaS"** — `GET https://api.vfleets.com.br/integrationcore-conducao/conducoes/detalhada?dia=YYYY-MM-DD`, token no header `Authorization`; **1 req/5 min**; agregado diário por motorista/veículo (CPF/CNH), muitos campos prontos (RPM em faixas, motorOcioso, aceleracoes, frenagens, velocidade em faixas, freioMotor, banguela, batendoTransmissao…). Endpoint `/processamentos` avisa dias reprocessados.
+
+**Arquitetura combinada:** HTML público não pode ter segredo → **coletor** roda em **GitHub Actions (cron diário)** ou **Supabase Edge Function**, grava normalizado no **Supabase**; o painel troca `generateRawRows()` por leitura da tabela. De-para motorista ↔ unidade ↔ fonte (casar CPF/CNH do vFleets com Driver do Geotab).
+
+**Roteiro em fases (definido pelo usuário):**
+1. **Fase 1** — este painel de BI (ranking/score de condução econômica). ← em andamento
+2. **Fase 2** — app do motorista: ele se cadastra e acompanha como está.
+3. **Fase 3** — gamificação com dinheiro envolvido; app focado no motorista ver **quanto está deixando de ganhar**.
+4. **Fase 4** — unir **condução segura + econômica** (aí entram os pilares de segurança: cinto, celular, colisão, fadiga…).
+5. **Fase 5** — propor à **Ambev** usar o app e gamificar o **Brasil todo**, com piloto por **Geo**.
