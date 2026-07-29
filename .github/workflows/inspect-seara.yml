@@ -1,0 +1,82 @@
+name: inspect-seara
+on:
+  workflow_dispatch:
+
+jobs:
+  dump:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Inspect Frota / Seara / Dispersão for R$/km
+        run: |
+          python3 - <<'PY'
+          import json,re,urllib.request,collections
+          def gviz(id, sheet=None, gid=None, tq=None):
+              base=f"https://docs.google.com/spreadsheets/d/{id}/gviz/tq?tqx=out:json"
+              if sheet: base+="&sheet="+urllib.parse.quote(sheet)
+              if gid is not None: base+=f"&gid={gid}&headers=1"
+              if tq: base+="&tq="+urllib.parse.quote(tq)
+              raw=urllib.request.urlopen(base, timeout=60).read().decode('utf-8')
+              body=re.sub(r'^[\s\S]*?\(','',raw); body=re.sub(r'\);?\s*$','',body)
+              j=json.loads(body)
+              return [[ (c.get('v') if c else None) for c in (r.get('c') or []) ] for r in j['table']['rows']]
+          import urllib.parse
+          def uniLabel(v):
+              if not v: return ''
+              v=str(v); i=v.find('-'); s=(v[i+1:] if i>=0 else v).strip()
+              return re.sub(r'\s*\(INATIVO\)\s*','',s,flags=re.I).strip()
+
+          # ---- FROTA (custo) ----
+          COST='1qcTy2ppLCGBKKqZCxCYWCTL9kTAuWfHBMyBfWJOyih8'
+          frota=gviz(COST, sheet='Frota')
+          # cols: vig=0 nv3=4 cta=5 orc=8 rem=9 real=10
+          unis=collections.Counter()
+          seara_by_month=collections.defaultdict(lambda:[0.0,0.0])  # vig -> [rem,real]
+          for r in frota:
+              nv3=r[4] if len(r)>4 else None
+              u=uniLabel(nv3)
+              rem=abs(float(r[9] or 0)) if len(r)>9 else 0
+              real=abs(float(r[10] or 0)) if len(r)>10 else 0
+              if rem or real: unis[u]+=1
+              if u and ('SEA' in u.upper()):
+                  seara_by_month[str(r[0])][0]+=rem; seara_by_month[str(r[0])][1]+=real
+          print("=== FROTA · unidades com custo (label) ===")
+          for u,c in sorted(unis.items()): print(f"  {u!r}: {c} linhas")
+          print("=== FROTA · Seara (label contém SEA) · custo por vigência ===")
+          for v,(rm,rl) in sorted(seara_by_month.items()): print(f"  vig={v!r} rem={rm:.0f} real={rl:.0f}")
+
+          # ---- DISPERSÃO DE KM (fonte atual do R$/km) ----
+          KM='1wCoRGsvOgmIvfLW4F9Sxr-5AX9Go-aFlRVjrQ_B2ilM'
+          disp=gviz(KM, sheet='Dispersão de km')
+          dunis=collections.Counter()
+          for r in disp:
+              nv3=r[14] if len(r)>14 else None
+              u=uniLabel(nv3)
+              if u: dunis[u]+=1
+          print("=== DISPERSÃO DE KM · unidades (col 14) ===")
+          for u,c in sorted(dunis.items()): print(f"  {u!r}: {c}")
+          print("  Seara presente?", any('SEA' in u.upper() for u in dunis))
+
+          # ---- SEARA (km rem via CTEs sum(Z), km real via Combustível km rodado) ----
+          SEA='1Rlwc0MZiupQI38gSN8VyBq_zMADgX9R_ZbfygNP-OXE'
+          ctes=gviz(SEA, gid=1672208132, tq='select C, year(D), month(D), sum(Z), sum(S) group by C, year(D), month(D)')
+          rem_by=collections.defaultdict(float)  # 'MM/YYYY' -> sum Z
+          for r in ctes:
+              yr=r[1]; mo=r[2]
+              if yr is None or mo is None: continue
+              vig=f"{int(mo)+1:02d}/{int(yr)}"
+              rem_by[vig]+=float(r[3] or 0)
+          comb=gviz(SEA, gid=1982300845)
+          MES=['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez']
+          real_by=collections.defaultdict(float) # 'MM/YYYY' -> sum km rodado
+          for r in comb:
+              try: mi=MES.index(str(r[5] or '').lower()[:3])
+              except: continue
+              yr=r[6]; real=float(r[10] or 0)
+              if yr is None or real<=0: continue
+              vig=f"{mi+1:02d}/{int(yr)}"
+              real_by[vig]+=real
+          print("=== SEARA · km REM (CTEs sum Z) por vigência ===")
+          for v in sorted(rem_by): print(f"  {v}: {rem_by[v]:.0f}")
+          print("=== SEARA · km REAL (Combustível km rodado) por vigência ===")
+          for v in sorted(real_by): print(f"  {v}: {real_by[v]:.0f}")
+          PY
