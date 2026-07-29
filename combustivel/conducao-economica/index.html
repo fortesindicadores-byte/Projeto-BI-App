@@ -201,6 +201,11 @@ table td:first-child,table th:first-child{text-align:left;}
 .rk-ind .v{color:var(--text3);font-size:9.5px;font-weight:600;display:block;margin-top:1px;white-space:nowrap;}
 .pont-cell{display:flex;flex-direction:column;align-items:flex-end;gap:2px;}
 .pont-cls{font-size:9px;font-weight:800;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;}
+/* cabeçalhos do ranking clicáveis (ordenar) */
+#ranking-table th.sortable{cursor:pointer;user-select:none;white-space:nowrap;}
+#ranking-table th.sortable:hover{color:var(--orange);}
+#ranking-table th.sorted{color:var(--orange);}
+.sort-ar{font-size:8px;margin-left:3px;vertical-align:middle;}
 /* regras (bom/ruim) na caixa lateral */
 .reg-item{padding:9px 6px;border-bottom:1px solid rgba(255,255,255,.05);}
 .reg-item:last-child{border-bottom:none;}
@@ -488,6 +493,7 @@ let RAW = [];
 let selVig = [];
 let chartTemporal = null;
 let activeInd = 'media_geral';
+let sortKey = 'pont', sortDir = 'desc';   // ordenação do ranking (clique no cabeçalho)
 
 /* ── Fetch ── */
 const CACHE_KEY='bi_cache_reconhecimento_v6';
@@ -665,13 +671,34 @@ function getRankingData(data) {
 /* ── Ranking table ── */
 function buildRankHead(){
   const h = document.getElementById('rank-head'); if(!h) return;
-  h.innerHTML = `<th style="width:32px;">#</th><th style="text-align:left;">Motorista</th>`+
-    FIELD_ORDER.map(k=>`<th class="num ind-col" title="${PILAR[k].full}">${PILAR[k].nome}</th>`).join('')+
-    `<th class="num">Pontuação</th>`;
+  const arr = k => sortKey===k ? `<span class="sort-ar">${sortDir==='asc'?'▲':'▼'}</span>` : '';
+  const cls = k => 'sortable'+(sortKey===k?' sorted':'');
+  h.innerHTML = `<th style="width:32px;">#</th>`+
+    `<th class="${cls('unit')}" style="text-align:left;" onclick="setSort('unit')">Motorista${arr('unit')}</th>`+
+    FIELD_ORDER.map(k=>`<th class="num ind-col ${cls(k)}" title="${PILAR[k].full}" onclick="setSort('${k}')">${PILAR[k].nome}${arr(k)}</th>`).join('')+
+    `<th class="num ${cls('pont')}" onclick="setSort('pont')">Pontuação${arr('pont')}</th>`;
+}
+// clique no cabeçalho: alterna asc/desc (texto começa em A→Z, número em maior→menor)
+function setSort(k){
+  if(sortKey===k) sortDir = sortDir==='asc' ? 'desc' : 'asc';
+  else { sortKey = k; sortDir = (k==='unit') ? 'asc' : 'desc'; }
+  renderRanking(getFiltered());
+}
+function sortRankRows(rows){
+  const dir = sortDir==='asc' ? 1 : -1;
+  return rows.slice().sort((a,b)=>{
+    if(sortKey==='unit') return dir * String(a.unit).localeCompare(String(b.unit),'pt');
+    const av=a[sortKey], bv=b[sortKey];
+    if(av==null && bv==null) return 0;
+    if(av==null) return 1;                 // sem dado sempre por último
+    if(bv==null) return -1;
+    return dir*(av-bv);
+  });
 }
 function renderRanking(data) {
   buildRankHead();
-  const rows = getRankingData(data);
+  const rows = sortRankRows(getRankingData(data));
+  const canonical = sortKey==='pont' && sortDir==='desc';   // só mostra medalhas na ordem oficial
   const tbody = document.getElementById('ranking-tbody');
   const medals = ['🥇','🥈','🥉'];
   // célula estilo termômetro: pontos como número principal, resultado pequeno embaixo
@@ -681,8 +708,8 @@ function renderRanking(data) {
   tbody.innerHTML = rows.map((r, i) => {
     const rank = i+1;
     const cls = r.pont==null ? '—' : r.pont>=85 ? 'Elite' : r.pont>=70 ? 'Bom' : 'Atenção';
-    return `<tr class="rank-${rank<=3?rank:'x'}">
-      <td class="rank-num">${rank<=3?medals[i]:rank}</td>
+    return `<tr class="rank-${canonical&&rank<=3?rank:'x'}">
+      <td class="rank-num">${canonical&&rank<=3?medals[i]:rank}</td>
       <td style="font-weight:600">${r.unit}<div style="font-size:9px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.4px;margin-top:1px;">${UNI_OF[r.unit]||''} · ${SRC_OF[r.unit]||''}</div></td>
       ${FIELD_ORDER.map(k=>cell(k,r[k])).join('')}
       <td class="num"><div class="pont-cell">${scorePill(r.pont)}<span class="pont-cls">${cls}</span></div></td>
@@ -862,12 +889,12 @@ function renderChart() {
     return `rgba(255,102,102,${op})`;
   });
 
-  // Escala Y — MESMA regra do Frota de Elite
+  // Escala Y adaptável — cola nos dados + linhas de meta (70/85), sem headroom vazio
   const vals = avgByMonth.filter(v => v != null);
-  const minVal = vals.length ? Math.min(...vals) : 0;
-  const maxVal = vals.length ? Math.max(...vals) : 100;
-  const yMin = Math.max(0,   Math.floor((minVal - 10) / 10) * 10);
-  const yMax = Math.min(130, Math.ceil((Math.max(maxVal, 100) + 8) / 10) * 10);
+  const shown = vals.length ? vals.concat([70,85]) : [60,85];
+  const dMin = Math.min(...shown), dMax = Math.max(...shown);
+  const yMin = Math.max(0,   Math.floor((dMin - 5) / 5) * 5);
+  const yMax = Math.min(100, Math.ceil((dMax + 5) / 5) * 5);
 
   // Meta lines: mesmo valor para todos os 12 meses
   const meta85 = Array(12).fill(70);
