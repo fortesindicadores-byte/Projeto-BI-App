@@ -740,13 +740,14 @@ const pctInt = v => v==null||!isFinite(v) ? '-' : (v>=0?'+':'')+Math.round(v)+'%
 const pp   = v => v==null||!isFinite(v) ? '-' : (v>=0?'+':'')+v.toFixed(2)+' pp';
 const set  = (id,val) => { const e=document.getElementById(id); if(e) e.textContent=val; };
 const colI = (el,bad) => { if(el) el.style.color = bad ? 'var(--red)' : 'var(--green)'; };
-// sub-valor de card (custo): seta ▲ vermelha se positivo (pior), ▼ verde se negativo (melhor); número sem sinal
-const setArr = (el, text, sign) => {
+// seta direcional (▲ positivo / ▼ negativo) + cor. Número sem sinal (a seta indica a direção).
+// bad omitido → convenção de custo (positivo=pior=vermelho). No hero (receita/EBITDA), passar bad=valor<0.
+const setArr = (el, text, sign, bad) => {
   if(!el) return;
   if(sign==null||!isFinite(sign)){ el.textContent=text; el.style.color=''; return; }
   const t = String(text).replace(/^[+\-]/,'');
   el.textContent = (sign>0?'▲ ':sign<0?'▼ ':'') + t;
-  colI(el, sign>0);
+  colI(el, bad===undefined ? sign>0 : bad);
 };
 
 // ═══════════════════════════════════
@@ -1221,9 +1222,9 @@ function renderHeroCards(mes, prev){
   const dRem = r.rem  ? (r.real-r.rem) /Math.abs(r.rem) *100 : null;
   const yoy  = rp.real? (r.real-rp.real)/Math.abs(rp.real)*100: null;
   const eDorc=document.getElementById('h-dorc'), eDrem=document.getElementById('h-drem'), eYoy=document.getElementById('h-yoy');
-  if(eDorc){eDorc.textContent=pct(dOrc);colI(eDorc,dOrc<0);}
-  if(eDrem){eDrem.textContent=pct(dRem);colI(eDrem,dRem<0);}
-  if(eYoy) {eYoy.textContent =pct(yoy); colI(eYoy, yoy<0); }
+  setArr(eDorc, pct(dOrc), dOrc, dOrc<0);
+  setArr(eDrem, pct(dRem), dRem, dRem<0);
+  setArr(eYoy,  pct(yoy),  yoy,  yoy<0);
 
   const cust = Object.entries(mes).filter(([k])=>k!=='Receita Líquida')
     .reduce((a,[,v])=>({orc:a.orc+v.orc,rem:a.rem+v.rem,real:a.real+v.real}),{orc:0,rem:0,real:0});
@@ -1270,11 +1271,11 @@ function renderEbitdaHero(cur, prev, rec){
   const ppO = (avR!=null&&avO!=null) ? avR-avO : null;
   const ppR = (avR!=null&&avM!=null) ? avR-avM : null;
   const eO=S('he-dorc'), ePO=S('he-porc'), eR=S('he-drem'), ePR=S('he-prem'), eY=S('he-yoy');
-  if(eO){eO.textContent=pct(dOrc);colI(eO,dOrc<0);}
-  if(ePO){ePO.textContent=pp(ppO);colI(ePO,ppO<0);}
-  if(eR){eR.textContent=pct(dRem);colI(eR,dRem<0);}
-  if(ePR){ePR.textContent=pp(ppR);colI(ePR,ppR<0);}
-  if(eY){eY.textContent=pct(yoy); colI(eY, yoy<0);}
+  setArr(eO,  pct(dOrc), dOrc, dOrc<0);
+  setArr(ePO, pp(ppO),   ppO,  ppO<0);
+  setArr(eR,  pct(dRem), dRem, dRem<0);
+  setArr(ePR, pp(ppR),   ppR,  ppR<0);
+  setArr(eY,  pct(yoy),  yoy,  yoy<0);
 }
 
 // ═══════════════════════════════════
