@@ -137,6 +137,7 @@ body.light-mode .cell.v-red{color:#cc0000;}
     <div class="ms-wrap" id="ms-tier"><button class="ms-btn" onclick="toggleMs('ms-tier')"><span class="ms-lbl">Tier</span><span class="ms-cnt"></span><svg width="10" height="6" viewBox="0 0 10 6"><path d="M0 0l5 6 5-6z" fill="#F97316"/></svg></button><div class="ms-panel"><div class="ms-search"><input type="text" placeholder="Pesquisar…"></div><div class="ms-list"></div></div></div>
     <div class="ms-wrap" id="ms-kpi"><button class="ms-btn" onclick="toggleMs('ms-kpi')"><span class="ms-lbl">KPI</span><span class="ms-cnt"></span><svg width="10" height="6" viewBox="0 0 10 6"><path d="M0 0l5 6 5-6z" fill="#F97316"/></svg></button><div class="ms-panel"><div class="ms-search"><input type="text" placeholder="Pesquisar…"></div><div class="ms-list"></div></div></div>
     <div class="ms-wrap" id="ms-geo"><button class="ms-btn" onclick="toggleMs('ms-geo')"><span class="ms-lbl">GEO</span><span class="ms-cnt"></span><svg width="10" height="6" viewBox="0 0 10 6"><path d="M0 0l5 6 5-6z" fill="#F97316"/></svg></button><div class="ms-panel"><div class="ms-search"><input type="text" placeholder="Pesquisar…"></div><div class="ms-list"></div></div></div>
+    <div class="ms-wrap" id="ms-uni"><button class="ms-btn" onclick="toggleMs('ms-uni')"><span class="ms-lbl">Unidade</span><span class="ms-cnt"></span><svg width="10" height="6" viewBox="0 0 10 6"><path d="M0 0l5 6 5-6z" fill="#F97316"/></svg></button><div class="ms-panel"><div class="ms-search"><input type="text" placeholder="Pesquisar…"></div><div class="ms-list"></div></div></div>
   </div>
 </header>
 
@@ -512,7 +513,7 @@ function group(ind,label,unitKey,isGeo,monthsFn,acumFn){
 
 function render(){
   if(!INDS.length){document.getElementById('tbl').innerHTML='<div class="loading">Sem dados do termômetro.</div>';return;}
-  const kpiSel=new Set(getMsValues('ms-kpi')), geoSel=new Set(getMsValues('ms-geo')), tierSel=getMsValues('ms-tier');
+  const kpiSel=new Set(getMsValues('ms-kpi')), geoSel=new Set(getMsValues('ms-geo')), uniSel=new Set(getMsValues('ms-uni')), tierSel=getMsValues('ms-tier');
   const ts=tierSel.length?new Set(tierSel):null;                                   // tier filtrado (cascata)
   const inds=INDS.filter(i=>!kpiSel.size||kpiSel.has(indShort(i)));
   let h=`<table class="mpr">${colgroup()}<tbody>`;
@@ -521,7 +522,7 @@ function render(){
     // só GEOs/unidades que TÊM esse indicador no(s) tier(s) filtrado(s)
     const geoUnits={};
     Object.keys(GEOS).sort().forEach(g=>{ if(geoSel.size&&!geoSel.has(g))return;
-      const us=GEOS[g].filter(u=>unitHasInd(ind,u,ts)); if(us.length)geoUnits[g]=us; });
+      const us=GEOS[g].filter(u=>unitHasInd(ind,u,ts)&&(!uniSel.size||uniSel.has(u))); if(us.length)geoUnits[g]=us; });
     const geos=Object.keys(geoUnits); if(!geos.length)return; any=true;
     const dir=DIR_MENOR.has(ind)?'▼ menor é melhor':'▲ maior é melhor';
     h+=`<tr class="kpi-row"><td colspan="${NCOLS}"><span class="kpi-name">${indShort(ind)}</span><span class="kpi-dir">${dir}</span></td></tr>`;
@@ -546,17 +547,17 @@ function toggleGeo(ind,geo){const id=ind+'||'+geo;if(EXPANDED.has(id))EXPANDED.d
 // ── exportar para Excel (.xls via HTML) — mesmas colunas do painel, respeita os filtros ──
 function exportExcel(){
   if(!INDS.length){alert('Sem dados para exportar. Aguarde carregar.');return;}
-  const kpiSel=new Set(getMsValues('ms-kpi')), geoSel=new Set(getMsValues('ms-geo')), tierSel=getMsValues('ms-tier');
+  const kpiSel=new Set(getMsValues('ms-kpi')), geoSel=new Set(getMsValues('ms-geo')), uniSel=new Set(getMsValues('ms-uni')), tierSel=getMsValues('ms-tier');
   const ts=tierSel.length?new Set(tierSel):null;
   const inds=INDS.filter(i=>!kpiSel.size||kpiSel.has(indShort(i)));
   const vc=(c,kind)=>c&&c.num!=null?esc(fmtKind(c.num,kind)):'';
   let body='';
   inds.forEach(ind=>{
     const kind=fmtOf(ind), meta=metaFor(ind)||'';
-    const geos=Object.keys(GEOS).sort().filter(g=>(!geoSel.size||geoSel.has(g))&&GEOS[g].some(u=>unitHasInd(ind,u,ts)));
+    const geos=Object.keys(GEOS).sort().filter(g=>(!geoSel.size||geoSel.has(g))&&GEOS[g].some(u=>unitHasInd(ind,u,ts)&&(!uniSel.size||uniSel.has(u))));
     if(!geos.length)return;
     geos.forEach(g=>{
-      const us=GEOS[g].filter(u=>unitHasInd(ind,u,ts));
+      const us=GEOS[g].filter(u=>unitHasInd(ind,u,ts)&&(!uniSel.size||uniSel.has(u)));
       const gy=acumGeo(ind,us,ts), gm=[];for(let m=1;m<=12;m++)gm.push(geoMonth(ind,us,m,ts));
       body+=`<tr><td>${esc(indShort(ind))}</td><td><b>GEO ${esc(g)}</b></td><td>${esc(meta)}</td><td>${gy&&gy.num!=null?esc(fmtKind(gy.num,kind)):''}</td>${gm.map(c=>`<td>${vc(c,kind)}</td>`).join('')}<td></td><td></td><td></td><td></td></tr>`;
       us.forEach(u=>tiersOf(ind,u,ts).forEach(t=>{
@@ -595,6 +596,7 @@ async function atualizar(){
     buildMs('ms-tier',TIERS.filter(t=>rows.some(r=>r.tier===t)));
     buildMs('ms-kpi',INDS.map(indShort));
     buildMs('ms-geo',Object.keys(GEOS).sort());
+    buildMs('ms-uni',UNITS);
     if(!EXPANDED.size&&INDS.length){Object.keys(GEOS).sort().forEach(g=>EXPANDED.add(INDS[0]+'||'+g));}  // abre o 1º KPI
     render();
     if(window._mprNoTbl) document.getElementById('status-badge').textContent='⚠ Rode scripts/mpr-supabase.sql (campos ainda só locais)';

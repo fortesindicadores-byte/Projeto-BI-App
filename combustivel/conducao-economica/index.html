@@ -6,102 +6,299 @@
 <title>Condução Econômica · Gestão em Movimento</title>
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.2/dist/jspdf.umd.min.js"></script>
+<script src="../../assets/pdf-export.js"></script>
+<script src="../../assets/excel-export.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0"></script>
 <style>
-:root{--bg:#0C1017;--card:#141B26;--card2:#1A2335;--border:#1E2D40;--orange:#F97316;--blue:#38BDF8;--text:#F1F5F9;--text2:#94A3B8;--text3:#475569;--green:#3BB33B;--red:#FF6666;--amber:#F4A100;--gold:#FFCE54;--silver:#CBD5E1;--bronze:#D9915B;}
+:root{
+  --bg:#0C1017;--card:#141B26;--card2:#1A2335;--border:#1E2D40;
+  --orange:#F97316;--blue:#38BDF8;--text:#F1F5F9;--text2:#94A3B8;--text3:#475569;
+  --green:#3BB33B;--red:#FF6666;--yellow:#FACC15;
+  --gold:#F59E0B;--gold2:#D97706;
+}
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
-body{background:radial-gradient(ellipse at 10% 25%,rgba(249,115,22,.06) 0%,transparent 50%),radial-gradient(ellipse at 90% 75%,rgba(56,189,248,.05) 0%,transparent 50%),var(--bg);color:var(--text);font-family:'Montserrat',-apple-system,sans-serif;font-size:13px;min-height:100vh;}
+body{
+  background:
+    radial-gradient(ellipse at 15% 20%,rgba(196,145,26,.07) 0%,transparent 45%),
+    radial-gradient(ellipse at 85% 80%,rgba(249,115,22,.05) 0%,transparent 45%),
+    #080C12;
+  color:var(--text);font-family:'Montserrat',-apple-system,sans-serif;font-size:13px;min-height:100vh;
+}
 
-/* header */
-.header{background:rgba(12,16,23,.75);border-bottom:1px solid rgba(255,255,255,.07);padding:10px 24px 12px;display:flex;flex-wrap:wrap;align-items:center;gap:10px;position:sticky;top:0;z-index:100;backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);box-shadow:0 2px 12px rgba(0,0,0,.3);}
-.brand{flex:1;min-width:0;order:1;margin-right:16px;}
+/* ── Header ── */
+.header{
+  background:rgba(12,16,23,.75);border-bottom:1px solid rgba(255,255,255,.07);
+  padding:10px 24px 12px;display:flex;flex-wrap:wrap;align-items:center;
+  position:sticky;top:0;z-index:100;
+  backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);
+  box-shadow:0 2px 12px rgba(0,0,0,.3);
+}
+.brand{flex:1;order:1;}
 .brand h1{font-size:16px;font-weight:700;color:var(--orange);}
 .brand p{font-size:10px;color:var(--text2);margin-top:2px;}
-.header-right{display:flex;align-items:center;gap:8px;flex-shrink:0;order:2;}
-.status-badge{font-size:10px;color:var(--text);background:rgba(249,115,22,.15);border:1px solid rgba(249,115,22,.3);border-radius:4px;padding:3px 10px;white-space:nowrap;}
-.back-btn{background:rgba(249,115,22,.15);border:1px solid rgba(249,115,22,.3);border-radius:4px;padding:5px 8px;display:flex;align-items:center;color:var(--orange);text-decoration:none;}
-.back-btn:hover{background:rgba(249,115,22,.32);}
-.theme-btn{background:rgba(249,115,22,.15);border:1px solid rgba(249,115,22,.3);border-radius:4px;padding:5px 7px;cursor:pointer;color:var(--orange);display:flex;align-items:center;}
+.header-right{flex-shrink:0;order:2;display:flex;align-items:center;gap:8px;}
+.status-badge{font-size:9px;color:var(--text);background:rgba(249,115,22,.15);border:1px solid rgba(249,115,22,.3);border-radius:4px;padding:2px 8px;white-space:nowrap;}
+.access-badge{font-size:9px;color:var(--text2);background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);border-radius:4px;padding:2px 8px;white-space:nowrap;}
+.refresh-btn{background:rgba(249,115,22,.15);border:1px solid rgba(249,115,22,.3);border-radius:4px;padding:4px 8px;cursor:pointer;color:var(--orange);display:flex;align-items:center;}
+.refresh-btn:hover{background:rgba(249,115,22,.32);}
+.theme-btn{background:rgba(249,115,22,.15);border:1px solid rgba(249,115,22,.3);border-radius:4px;padding:4px 6px;cursor:pointer;color:var(--orange);display:flex;align-items:center;}
 .theme-btn:hover{background:rgba(249,115,22,.25);}
-/* filtros */
+.back-btn{background:rgba(249,115,22,.15);border:1px solid rgba(249,115,22,.3);border-radius:4px;padding:4px 8px;display:flex;align-items:center;color:var(--orange);text-decoration:none;}
+.back-btn:hover{background:rgba(249,115,22,.32);}
+
+/* ── Filters ── */
 .header-filters{flex-basis:100%;order:3;margin-top:10px;display:flex;gap:10px;flex-wrap:wrap;align-items:flex-start;}
-.hfilter{display:flex;flex-direction:column;gap:3px;}
-.hfilter label{font-size:9px;color:var(--text2);text-transform:uppercase;letter-spacing:.5px;padding-left:2px;}
-.hfilter select{background:#0a0f18;color:var(--text);border:1px solid #2a3a50;border-radius:4px;font-family:'Montserrat',sans-serif;font-size:11px;font-weight:700;padding:6px 12px;cursor:pointer;outline:none;min-width:150px;}
-.hfilter select:hover{border-color:var(--orange);}
-.hfilter select option{background:#0f1824;color:#fff;}
+.filter-group{display:flex;flex-direction:column;gap:3px;}
+.filter-label{display:none;}
+.ms-wrap{position:relative;}
+.ms-btn{display:flex;align-items:center;gap:8px;background:#0a0f18;color:var(--text);border:1px solid #2a3a50;border-radius:4px;font-family:'Montserrat',sans-serif;font-size:11px;font-weight:700;padding:6px 12px;cursor:pointer;text-transform:uppercase;letter-spacing:.5px;white-space:nowrap;min-width:140px;}
+.ms-btn:hover{border-color:var(--orange);}
+.ms-lbl{flex:1;}
+.ms-cnt{background:var(--orange);color:#000;border-radius:10px;padding:1px 6px;font-size:9px;font-weight:800;display:none;}
+.ms-btn svg{flex-shrink:0;opacity:.8;}
+.ms-panel{display:none;flex-direction:column;position:absolute;top:calc(100% + 4px);left:0;z-index:500;background:#0f1824;border:1px solid #2a3a50;border-radius:4px;min-width:200px;max-height:300px;box-shadow:0 8px 24px rgba(0,0,0,.7);}
+.ms-panel.open{display:flex;}
+.ms-list{overflow-y:auto;max-height:260px;}
+.ms-list::-webkit-scrollbar{width:4px;}
+.ms-list::-webkit-scrollbar-thumb{background:#2a3a50;border-radius:2px;}
+.ms-opt{display:flex;align-items:center;gap:8px;padding:7px 12px;cursor:pointer;font-size:11px;color:var(--text2);}
+.ms-opt:hover{background:rgba(255,255,255,.05);color:var(--text);}
+.ms-opt.all-opt{border-bottom:1px solid #1e2d40;color:var(--text);font-weight:700;}
+.ms-opt input[type=checkbox]{accent-color:var(--orange);cursor:pointer;width:14px;height:14px;flex-shrink:0;}
+.ms-only{display:none;font-size:9px;font-weight:700;color:var(--orange);padding:2px 6px;border:1px solid rgba(249,115,22,.4);border-radius:3px;white-space:nowrap;cursor:pointer;letter-spacing:.3px;}
+.ms-opt:hover .ms-only{display:inline-block;}
 
-.main{padding:20px 24px 60px;}
+/* ── Main ── */
+.main{padding:20px 24px;}
 
-/* HERO */
-.hero{display:flex;align-items:flex-end;gap:28px;margin-bottom:22px;flex-wrap:wrap;}
-.hero-main{padding:2px 0 4px;}
-.hero-label{font-size:10px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;}
-.hero-value{font-size:56px;font-weight:800;line-height:1;letter-spacing:-1px;}
-.hero-sub{font-size:11px;color:var(--text2);margin-top:8px;}
-.hero-deltas{display:flex;gap:24px;margin-left:auto;flex-wrap:wrap;}
-.hero-delta{font-size:10px;color:var(--text2);text-transform:uppercase;letter-spacing:.5px;}
-.hero-delta b{font-size:16px;font-weight:800;display:block;margin-top:3px;color:var(--text);}
-.hero-delta small{font-size:9px;color:var(--text3);font-weight:600;}
+/* ── Hero ── */
+.hero{margin-bottom:20px;padding:0 4px;display:flex;align-items:flex-end;gap:32px;flex-wrap:wrap;}
+.hero-main{}
+.hero-label{font-size:10px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:1px;}
+.hero-value{font-size:52px;font-weight:800;color:var(--text);line-height:1;margin:4px 0 0;}
+.hero-sub{font-size:11px;color:var(--text3);margin-top:4px;}
+.hero-badge{display:inline-flex;align-items:center;gap:6px;background:rgba(245,158,11,.12);border:1px solid rgba(245,158,11,.3);border-radius:6px;padding:6px 14px;font-size:11px;font-weight:700;color:var(--gold);margin-top:12px;}
+.hero-badge svg{width:14px;height:14px;}
 
-/* regras de score */
-.rules{background:rgba(20,27,38,.55);border:1px solid rgba(255,255,255,.07);border-radius:10px;padding:14px 16px;margin-bottom:16px;backdrop-filter:blur(16px);box-shadow:0 2px 12px rgba(0,0,0,.25);}
-.rules-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:12px;flex-wrap:wrap;}
-.rules-title{font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.6px;color:var(--text);}
-.rules-note{font-size:10px;color:var(--text3);font-style:italic;}
-.rules-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;}
-.rule{background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.06);border-radius:8px;padding:10px 12px;display:flex;flex-direction:column;gap:4px;}
-.rule-top{display:flex;align-items:center;justify-content:space-between;gap:6px;}
-.rule-name{font-size:11px;font-weight:800;color:var(--text);}
-.rule-w{font-size:10px;font-weight:800;color:var(--orange);background:rgba(249,115,22,.12);border-radius:10px;padding:1px 7px;}
-.rule-desc{font-size:9.5px;color:var(--text2);line-height:1.45;}
-
-/* seções */
-.grid2{display:grid;grid-template-columns:1.35fr 1fr;gap:16px;align-items:start;}
-.panel{background:rgba(20,27,38,.55);border:1px solid rgba(255,255,255,.07);border-radius:10px;padding:16px 18px;backdrop-filter:blur(16px);box-shadow:0 2px 12px rgba(0,0,0,.25);}
-.panel-title{font-size:14px;font-weight:800;color:var(--text);}
-.panel-sub{font-size:10px;color:var(--text2);margin-top:2px;margin-bottom:12px;}
-.chart-wrap{position:relative;height:300px;}
-
-/* ranking */
-table{width:100%;border-collapse:collapse;font-size:12px;}
-thead th{color:var(--text);font-size:10px;font-weight:700;padding:6px 8px 10px;border-bottom:1px solid rgba(255,255,255,.10);text-transform:uppercase;letter-spacing:.5px;white-space:nowrap;text-align:right;}
-thead th.lft{text-align:left;}
-td{padding:9px 8px;color:var(--text);white-space:nowrap;text-align:right;}
-td.lft{text-align:left;}
-tbody tr{border-bottom:1px solid rgba(255,255,255,.04);}
-tbody tr:hover{background:rgba(255,255,255,.035);}
-.pos{font-weight:800;color:var(--text3);width:34px;text-align:center;}
-.medal{font-size:15px;}
-.drv{display:flex;flex-direction:column;gap:1px;}
-.drv b{font-size:12px;font-weight:700;color:var(--text);}
-.drv span{font-size:9px;color:var(--text2);text-transform:uppercase;letter-spacing:.4px;}
-.pill{font-size:11px;font-weight:700;font-variant-numeric:tabular-nums;}
-.tot-wrap{display:flex;align-items:center;gap:8px;justify-content:flex-end;}
-.tot-bar{width:52px;height:6px;border-radius:3px;background:rgba(255,255,255,.08);overflow:hidden;flex-shrink:0;}
-.tot-bar>i{display:block;height:100%;border-radius:3px;}
-.tot-num{font-size:15px;font-weight:800;font-variant-numeric:tabular-nums;min-width:34px;}
-.trend{font-size:10px;font-weight:800;width:42px;text-align:right;}
-
-.legend-scale{display:flex;gap:14px;margin-top:12px;flex-wrap:wrap;font-size:9px;color:var(--text2);text-transform:uppercase;letter-spacing:.4px;}
-.legend-scale i{display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:5px;vertical-align:middle;}
-
-/* light mode — troca as variáveis só dentro do .main; header permanece escuro (padrão do repo) */
-body.light-mode .main{background:#F0F0F0;--text:#1a1a1a;--text2:#444;--text3:#666;}
-body.light-mode .rules,body.light-mode .panel{background:#fff!important;border-color:transparent!important;box-shadow:0 2px 12px rgba(0,0,0,.10)!important;}
-body.light-mode .rule{background:#f4f6f9;border-color:#e6eaf0;}
-body.light-mode .header{background:rgba(12,16,23,.92);}
-body.light-mode .header .brand h1{color:var(--orange);}
-body.light-mode .header .status-badge{color:#fff;}
-
-@media(max-width:900px){
-  .grid2{grid-template-columns:1fr;}
-  .rules-grid{grid-template-columns:repeat(2,1fr);}
-  .hero-value{font-size:44px;}
-  .col-pillar{display:none;}
+/* ── Pódio — fundo temático dramático ── */
+.podio-section{
+  margin-top:8px;margin-bottom:32px;
+  padding:48px 24px 0;
+  position:relative;
+  border-radius:16px;
+  overflow:hidden;
+  background:
+    radial-gradient(ellipse at 50% 0%,  rgba(196,145,26,.18) 0%,transparent 55%),
+    radial-gradient(ellipse at 20% 100%,rgba(120,60,10,.20) 0%,transparent 50%),
+    radial-gradient(ellipse at 80% 100%,rgba(120,60,10,.20) 0%,transparent 50%),
+    linear-gradient(180deg,#0a0c0e 0%,#050608 100%);
 }
+.podio-section::before{content:'';}
+/* logo marca-d'água centralizado */
+.podio-section::after{
+  content:'';position:absolute;
+  top:50%;left:50%;transform:translate(-50%,-55%);
+  width:600px;height:600px;
+  background:none;
+  opacity:.09;pointer-events:none;z-index:0;
+}
+.podio-title-row{display:flex;flex-direction:column;gap:4px;margin-bottom:36px;position:relative;z-index:2;}
+.podio-title{font-size:32px;font-weight:800;color:#fff;text-transform:uppercase;letter-spacing:2px;text-shadow:0 0 30px rgba(196,145,26,.5);}
+.podio-sub{font-size:13px;color:#fff;font-weight:600;letter-spacing:.5px;}
+.podio-wrap{display:flex;align-items:flex-end;justify-content:center;gap:0;position:relative;z-index:2;}
+
+/* Slots */
+.podio-slot{display:flex;flex-direction:column;align-items:center;position:relative;}
+.podio-slot.primeiro{order:2;z-index:3;}
+.podio-slot.segundo{order:1;z-index:2;}
+.podio-slot.terceiro{order:3;z-index:1;}
+
+/* Avatar */
+.avatar-wrap{position:relative;margin-bottom:-2px;z-index:2;}
+.avatar-img{width:200px;height:240px;object-fit:contain;object-position:bottom center;mix-blend-mode:multiply;filter:drop-shadow(0 16px 40px rgba(0,0,0,.9));transition:transform .25s;background:transparent;}
+.podio-slot.segundo .avatar-img,.podio-slot.terceiro .avatar-img{width:170px;height:200px;}
+.avatar-wrap:hover .avatar-img{transform:translateY(-8px);}
+.crown{position:absolute;top:-18px;left:50%;transform:translateX(-50%);font-size:26px;z-index:3;}
+
+/* Pedestal — cilindro escuro estilo Frota de Elite */
+.pedestal{
+  position:relative;display:flex;flex-direction:column;
+  align-items:center;justify-content:flex-start;
+  padding:18px 16px 20px;cursor:default;width:220px;
+  background:linear-gradient(180deg,#1c1c1e 0%,#0d0d0f 100%);
+  border-top:3px solid rgba(255,255,255,.12);
+  border-left:1px solid rgba(255,255,255,.06);
+  border-right:1px solid rgba(255,255,255,.06);
+  box-shadow:inset 0 2px 0 rgba(255,255,255,.07), 0 -2px 20px rgba(0,0,0,.6);
+}
+.podio-slot.segundo .pedestal,.podio-slot.terceiro .pedestal{width:185px;}
+.podio-slot.primeiro .pedestal{
+  min-height:140px;
+  border-top-color:rgba(196,145,26,.5);
+  box-shadow:inset 0 2px 0 rgba(196,145,26,.2), 0 -4px 30px rgba(196,145,26,.15);
+}
+.podio-slot.segundo .pedestal{min-height:105px;}
+.podio-slot.terceiro .pedestal{min-height:85px;}
+
+.pedestal-place{
+  font-size:11px;font-weight:800;color:rgba(255,255,255,.45);
+  text-transform:uppercase;letter-spacing:2px;margin-bottom:8px;
+  border-bottom:1px solid rgba(255,255,255,.1);padding-bottom:6px;width:100%;text-align:center;
+}
+.podio-slot.primeiro .pedestal-place{color:rgba(196,145,26,.9);border-bottom-color:rgba(196,145,26,.25);}
+.pedestal-name{font-size:16px;font-weight:800;color:#fff;text-align:center;line-height:1.2;margin-top:2px;}
+.podio-slot.primeiro .pedestal-name{font-size:20px;}
+.pedestal-unit{font-size:10px;font-weight:600;color:rgba(255,255,255,.45);text-align:center;margin-top:5px;text-transform:uppercase;letter-spacing:.5px;}
+.pedestal-score{font-size:13px;font-weight:800;color:rgba(255,255,255,.7);margin-top:8px;}
+.podio-slot.primeiro .pedestal-score{font-size:16px;color:rgba(196,145,26,.9);}
+.podio-floor{height:5px;background:rgba(255,255,255,.04);width:100%;}
+
+/* ── Ranking table ── */
+.tbl-section{background:rgba(20,27,38,.55);border:1px solid rgba(255,255,255,.07);border-radius:8px;padding:18px 20px 16px;margin-bottom:16px;backdrop-filter:blur(16px);box-shadow:0 2px 12px rgba(0,0,0,.25);}
+.tbl-title{font-size:16px;font-weight:800;color:var(--text);margin-bottom:3px;}
+.tbl-sub{font-size:10px;color:var(--text2);margin-bottom:16px;}
+.tbl-notes{font-size:9px;color:var(--text3);margin-top:12px;line-height:1.6;font-style:italic;}
+table{width:100%;border-collapse:collapse;font-size:13px;}
+thead th{background:var(--card);color:var(--text);font-size:13px;font-weight:700;padding:8px 8px 12px;border-bottom:1px solid rgba(255,255,255,.10);text-transform:uppercase;letter-spacing:.5px;white-space:nowrap;}
+td{padding:11px 8px;border:none;color:var(--text);white-space:nowrap;font-size:13px;font-weight:600;}
+tbody tr:hover{background:rgba(255,255,255,.035);}
+td.num,th.num{text-align:right;}
+table td:first-child,table th:first-child{text-align:left;}
+.rank-num{font-size:13px;font-weight:700;color:var(--text3);width:28px;}
+.rank-1 .rank-num{color:var(--gold);}
+.rank-2 .rank-num{color:#9CA3AF;}
+.rank-3 .rank-num{color:#92400E;}
+.score-pill{display:inline-block;padding:3px 10px;border-radius:12px;font-size:13px;font-weight:800;min-width:46px;text-align:center;color:#111;border:none;}
+.score-green{background:#3BB33B;}
+.score-yellow{background:#F4A100;}
+.score-red{background:#FF6666;}
+/* legenda de cores */
+.color-legend{display:flex;flex-wrap:wrap;align-items:center;gap:16px;margin-bottom:14px;font-size:11px;color:var(--text2);}
+.cl-item{display:flex;align-items:center;gap:6px;font-weight:600;}
+.cl-dot{width:11px;height:11px;border-radius:50%;display:inline-block;flex-shrink:0;}
+.cl-green{background:#3BB33B;} .cl-yellow{background:#F4A100;} .cl-red{background:#FF6666;}
+.cl-note{color:var(--text3);font-style:italic;}
+.ind-pct{font-size:11px;font-weight:600;}
+.ind-green{color:var(--green);}
+.ind-yellow{color:var(--yellow);}
+.ind-red{color:var(--red);}
+.ind-dash{color:var(--text3);}
+.medal-icon{font-size:14px;}
+
+/* peso-box */
+.pesos-chart-row{display:flex;gap:12px;align-items:flex-start;margin-bottom:0;}
+.peso-box{background:rgba(20,27,38,.55);border:1px solid rgba(249,115,22,.2);border-radius:8px;padding:16px 20px;margin-bottom:16px;backdrop-filter:blur(16px);flex:0 0 300px;min-width:0;align-self:stretch;display:flex;flex-direction:column;}
+.peso-title{font-size:12px;font-weight:800;color:var(--orange);margin-bottom:10px;text-transform:uppercase;letter-spacing:.5px;}
+.peso-grid{display:flex;flex-direction:column;flex:1;}
+.peso-item{font-size:13px;color:var(--text2);display:flex;justify-content:space-between;align-items:center;flex:1;padding:0 6px;border-bottom:1px solid rgba(255,255,255,.05);}
+.peso-item:last-child{border-bottom:none;}
+.peso-item span{color:var(--text2);}
+.peso-item b{color:var(--text);font-weight:800;margin-left:12px;white-space:nowrap;font-size:14px;}
+.peso-header{display:flex;justify-content:space-between;font-size:10px;font-weight:800;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;padding:0 6px 8px;border-bottom:1px solid rgba(249,115,22,.25);margin-bottom:2px;}
+
+/* ── Chart ── */
+.chart-card{background:rgba(20,27,38,.55);border:1px solid rgba(255,255,255,.07);border-radius:8px;padding:18px 20px;margin-bottom:16px;backdrop-filter:blur(16px);box-shadow:0 2px 12px rgba(0,0,0,.25);}
+.chart-header{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:4px;flex-wrap:wrap;gap:8px;}
+.chart-title{font-size:16px;font-weight:800;color:var(--text);}
+.chart-sub{font-size:10px;color:var(--text2);margin-bottom:16px;}
+.chart-wrap{position:relative;height:340px;}
+.ind-selector{display:flex;gap:6px;flex-wrap:wrap;}
+.ind-btn{padding:4px 10px;font-family:'Montserrat',sans-serif;font-size:9px;font-weight:800;border:1px solid rgba(255,255,255,.1);border-radius:4px;cursor:pointer;background:transparent;color:var(--text2);text-transform:uppercase;letter-spacing:.5px;transition:all .2s;}
+.ind-btn:hover{border-color:rgba(249,115,22,.4);color:var(--orange);}
+.ind-btn.active{background:rgba(249,115,22,.15);border-color:rgba(249,115,22,.4);color:var(--orange);}
+
+/* ── Light mode ── */
+body.light-mode .main{background:#F0F0F0;--text:#1a1a1a;--text2:#444444;--text3:#666666;color:var(--text);--red:#ff0000;--green:#0E8C0E;}body.light-mode .hero-sep{background:rgba(0,0,0,.18)!important;color:rgba(0,0,0,.2)!important;}
+body.light-mode .kpi-card,body.light-mode .chart-card,body.light-mode .tbl-section,body.light-mode .peso-box{background:rgba(128,128,128,.14)!important;border:none!important;box-shadow:none!important;--text:#1a1a1a;--text2:#444444;--text3:#555555;}
+/* Pódio: fundo SEMPRE escuro (idêntico ao modo escuro), no claro e no escuro */
+body.light-mode td{color:var(--text);}
+body.light-mode thead th{border-bottom-color:rgba(0,0,0,.10);background:#F0F0F0;}
+body.light-mode tbody tr{border-bottom:1px solid rgba(0,0,0,.06);}
+/* pontuação: mesma cor de fundo e letra preta nos dois temas */
+body.light-mode .score-green{background:#3BB33B;}
+body.light-mode .score-yellow{background:#F4A100;}
+body.light-mode .score-red{background:#FF6666;}
+body.light-mode .ind-yellow{color:#b45309;}
+body.light-mode .ind-btn{border-color:rgba(0,0,0,.15);color:#666;}
+body.light-mode .ind-btn.active{background:rgba(217,94,8,.1);border-color:rgba(217,94,8,.4);color:#D95E08;}
+body.light-mode .podio-slot.primeiro .pedestal{box-shadow:0 -4px 24px rgba(196,145,26,.25);}
+
+/* ── Toggle indicadores (só mobile) ── */
+.tbl-ind-toggle{display:none;}
+
+/* ── Mobile ── */
 @media(max-width:768px){
-  .main{padding:16px 14px 50px;}
-  .hfilter select{min-width:0;font-size:10px;}
+  .header{padding:8px 12px 10px;}
+  .header-right{gap:4px;}
+  .header-right .refresh-btn{display:none;}
+  .brand h1{font-size:14px;}
+  .status-badge,.access-badge{font-size:8px;padding:2px 6px;}
+  .theme-btn{padding:3px 5px;}
+  .theme-btn svg{width:13px;height:13px;}
+  .header-filters{gap:5px;margin-top:8px;}
+  .filter-group{flex:0 0 calc(50% - 3px);}
+  .ms-wrap{width:100%;}
+  .ms-btn{width:100%;min-width:0;font-size:8px;padding:3px 6px;}
+  .main{padding:12px;}
+
+  /* Hero */
+  .hero-value{font-size:36px;}
+
+  /* Pesos + Chart: empilhar verticalmente */
+  .pesos-chart-row{flex-direction:column;}
+  .peso-box{flex:none;width:100%;}
+  .chart-wrap{height:220px;}
+  .ind-selector{gap:3px;justify-content:flex-start;}
+  .ind-btn{font-size:7px;padding:3px 6px;}
+
+  /* Pódio */
+  .podio-section{padding:24px 12px 0;}
+  .podio-title{font-size:22px;}
+  .podio-sub{font-size:11px;}
+  .podio-wrap{gap:0;justify-content:center;}
+  .avatar-img{width:110px;height:130px;}
+  .podio-slot.segundo .avatar-img,.podio-slot.terceiro .avatar-img{width:90px;height:108px;}
+  .pedestal{width:110px;padding:10px 6px 12px;}
+  .podio-slot.segundo .pedestal,.podio-slot.terceiro .pedestal{width:90px;}
+  .podio-slot.primeiro .pedestal{height:auto;min-height:130px;overflow:visible;}
+  .podio-slot.segundo .pedestal{height:auto;min-height:105px;overflow:visible;}
+  .podio-slot.terceiro .pedestal{height:auto;min-height:80px;overflow:visible;}
+  .pedestal-place{font-size:8px;}
+  .pedestal-name{font-size:11px;}
+  .podio-slot.primeiro .pedestal-name{font-size:13px;}
+  .pedestal-unit{font-size:7px;}
+  .pedestal-score{font-size:10px;}
+  .podio-slot.primeiro .pedestal-score{font-size:12px;}
+  .pedestal-place{font-size:9px;}
+  .pedestal-name{font-size:10px;}
+  .podio-slot.primeiro .pedestal-name{font-size:12px;}
+  .pedestal-unit{font-size:7px;}
+  .pedestal-score{font-size:10px;}
+  .podio-slot.primeiro .pedestal-score{font-size:12px;}
+
+  /* Ranking: ocultar colunas de indicadores por padrão */
+  .ind-col{display:none;}
+  table{width:100%;font-size:13px;}
+  thead th{font-size:12px;padding:8px 6px 10px;}
+  td{padding:10px 6px;font-size:13px;}
+
+  /* Botão toggle indicadores */
+  .tbl-ind-toggle{
+    display:inline-flex;align-items:center;gap:6px;
+    margin-bottom:10px;
+    background:rgba(249,115,22,.12);border:1px solid rgba(249,115,22,.3);
+    border-radius:4px;padding:5px 12px;
+    font-family:'Montserrat',sans-serif;font-size:10px;font-weight:700;
+    color:var(--orange);cursor:pointer;text-transform:uppercase;letter-spacing:.5px;
+  }
+
+  /* Quando expandido: mostrar colunas e permitir scroll horizontal */
+  .tbl-expanded .ind-col{display:table-cell;}
+  .tbl-expanded table{font-size:10px;}
+  .tbl-expanded thead th{font-size:10px;padding:6px 4px;}
+  .tbl-expanded td{padding:8px 4px;font-size:10px;}
 }
 </style>
 <script>try{if(!sessionStorage.getItem("gem_hub"))location.replace("../../");}catch(e){}</script>
@@ -110,18 +307,34 @@ body.light-mode .header .status-badge{color:#fff;}
 
 <header class="header">
   <div class="brand">
-    <h1>Condução Econômica</h1>
-    <p>Gamificação do modo de condução — ranking de motoristas</p>
+    <h1>CONDUÇÃO ECONÔMICA</h1>
+    <p>Gamificação do modo de condução · Frota</p>
   </div>
   <div class="header-right">
-    <a href="../" class="back-btn" title="Voltar ao Combustível"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg></a>
+    <a href="../" class="back-btn" title="Voltar ao Combustível">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+    </a>
     <button class="theme-btn" id="themeBtn" title="Modo claro/escuro"></button>
-    <span class="status-badge" id="status-badge">Prévia · dados de exemplo</span>
+    <button class="refresh-btn" onclick="atualizar()" title="Atualizar dados">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><polyline points="23 20 23 14 17 14"/><path d="M20.49 9A9 9 0 0 0 5.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 0 1 3.51 15"/></svg>
+    </button>
+    <span class="status-badge" id="status-badge">Carregando…</span>
+    <span class="access-badge" id="access-badge" style="display:none"></span>
   </div>
   <div class="header-filters">
-    <div class="hfilter"><label>Ano</label><select id="f-ano"><option>2026</option></select></div>
-    <div class="hfilter"><label>Unidade</label><select id="f-uni" onchange="render()"></select></div>
-    <div class="hfilter"><label>Período</label><select id="f-per" onchange="render()"></select></div>
+    <div class="filter-group">
+      <span class="filter-label">Vigência</span>
+      <div class="ms-wrap" id="ms-vig-wrap">
+        <button class="ms-btn" id="ms-vig-btn" onclick="toggleMs('vig')">
+          <span class="ms-lbl" id="ms-vig-lbl">Todas</span>
+          <span class="ms-cnt" id="ms-vig-cnt"></span>
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+        </button>
+        <div class="ms-panel" id="ms-vig-panel">
+          <div class="ms-list" id="ms-vig-list"></div>
+        </div>
+      </div>
+    </div>
   </div>
 </header>
 
@@ -130,189 +343,656 @@ body.light-mode .header .status-badge{color:#fff;}
   <!-- HERO -->
   <div class="hero">
     <div class="hero-main">
-      <div class="hero-label" id="h-label">Score de Condução · Frota — Acumulado 2026</div>
-      <div class="hero-value" id="h-score">—</div>
-      <div class="hero-sub" id="h-sub">—</div>
-    </div>
-    <div class="hero-deltas">
-      <div class="hero-delta">🏆 Líder<b id="h-best">—</b><small id="h-best-uni">—</small></div>
-      <div class="hero-delta">Δ vs mês ant.<b id="h-delta">—</b><small>pontos</small></div>
-      <div class="hero-delta">Motoristas<b id="h-count">—</b><small id="h-src">telemetria</small></div>
+      <div class="hero-label">Pontuação Total Média</div>
+      <div class="hero-value" id="hero-score">—</div>
+      <div class="hero-sub" id="hero-period">—</div>
     </div>
   </div>
 
-  <!-- REGRAS DE SCORE -->
-  <div class="rules">
-    <div class="rules-head">
-      <div class="rules-title">Regras de Score</div>
-      <div class="rules-note">média ponderada dos pilares (0–100) · normalizado por 100 km / % do tempo · foco no <b>modo de condução</b>, não no Km/L</div>
+  <!-- RANKING -->
+  <div class="tbl-section">
+    <div class="tbl-title">Ranking Geral</div>
+    <div class="tbl-sub" id="ranking-sub">—</div>
+    <div class="color-legend">
+      <span class="cl-item"><i class="cl-dot cl-green"></i>≥ 85 — Elite</span>
+      <span class="cl-item"><i class="cl-dot cl-yellow"></i>70 a 84,9 — Bom</span>
+      <span class="cl-item"><i class="cl-dot cl-red"></i>&lt; 70 — Atenção</span>
+      <span class="cl-note">Vale para os pilares (0–100) e para a pontuação final.</span>
     </div>
-    <div class="rules-grid" id="rules-grid"></div>
+    <button class="tbl-ind-toggle" id="tbl-ind-toggle" onclick="toggleIndCols()">+ Ver indicadores</button>
+    <div style="overflow-x:auto;">
+      <table id="ranking-table">
+        <thead>
+          <tr>
+            <th style="width:32px;">#</th>
+            <th style="text-align:left;">Motorista</th>
+            <th class="num ind-col">Faixa Verde</th>
+            <th class="num ind-col">Marcha Lenta</th>
+            <th class="num ind-col">Aceleração</th>
+            <th class="num ind-col">Velocidade</th>
+            <th class="num ind-col">Freio Motor</th>
+            <th class="num">Pontuação</th>
+          </tr>
+        </thead>
+        <tbody id="ranking-tbody"></tbody>
+      </table>
+    </div>
+    <div class="tbl-notes">
+      * Cada pilar é um score de 0–100 do modo de condução (faixa de RPM, aceleração, marcha lenta, velocidade, freio motor). A pontuação final é a média ponderada pelos pesos abaixo.<br>
+      * Caso o motorista não tenha um dos pilares (ex.: fonte de telemetria sem freio motor), os pesos são redistribuídos proporcionalmente.
+    </div>
   </div>
 
-  <!-- RANKING + EVOLUÇÃO -->
-  <div class="grid2">
-    <div class="panel">
-      <div class="panel-title">Ranking de Motoristas</div>
-      <div class="panel-sub" id="rank-sub">—</div>
-      <div style="overflow-x:auto"><table id="tbl-rank"></table></div>
-      <div class="legend-scale">
-        <span><i style="background:var(--green)"></i>Elite ≥ 85</span>
-        <span><i style="background:var(--amber)"></i>Bom 70–84</span>
-        <span><i style="background:var(--red)"></i>Atenção &lt; 70</span>
+  <!-- GRÁFICO + PESOS lado a lado -->
+  <div class="pesos-chart-row">
+    <!-- GRÁFICO TEMPORAL (esquerda, maior) -->
+    <div class="chart-card" style="flex:1;min-width:0;margin-bottom:16px;">
+      <div class="chart-header">
+        <div>
+          <div class="chart-title">Evolução Temporal</div>
+          <div class="chart-sub">Média mensal por pilar · 2026</div>
+        </div>
+        <div class="ind-selector" id="ind-selector"></div>
       </div>
+      <div class="chart-wrap"><canvas id="chartTemporal"></canvas></div>
     </div>
-    <div class="panel">
-      <div class="panel-title">Evolução no Ano</div>
-      <div class="panel-sub" id="evo-sub">Score médio da frota mês a mês (2026)</div>
-      <div class="chart-wrap"><canvas id="ch-evo"></canvas></div>
+
+    <!-- PESOS (direita, estreito) -->
+    <div class="peso-box">
+      <div class="peso-title">Distribuição dos Pesos</div>
+      <div class="peso-header"><span>Indicador</span><span>Peso</span></div>
+      <div class="peso-grid" id="peso-grid"></div>
+    </div>
+  </div>
+
+  <!-- PÓDIO — sem card, estilo dramático -->
+  <div class="podio-section" id="podio-section">
+    <div class="podio-title-row">
+      <div class="podio-title">Pódio · Condução Econômica</div>
+      <div class="podio-sub" id="podio-period">—</div>
+    </div>
+    <div class="podio-wrap" id="podio-wrap">
+      <!-- renderizado via JS -->
     </div>
   </div>
 
 </main>
 
 <script>
-/* =====================================================================
-   PROTÓTIPO — dados de EXEMPLO gerados localmente (deterministicamente).
-   Quando o coletor das APIs (Geotab / vFleets DaaS) estiver gravando no
-   Supabase, troca-se apenas fetchData() por uma leitura da tabela real.
-   ===================================================================== */
-const $=id=>document.getElementById(id);
-const UNIDADES=['CGR','BLC','CBA','GRL','RON'];
-const MESES=['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
-const NMES=new Date().getMonth()+1;             // só até o mês atual (2026)
+Chart.register(ChartDataLabels);
 
-// pilares de condução econômica + pesos (ponderação)
-const PILARES=[
-  {key:'rpm',  nome:'Faixa Verde',  peso:.30, desc:'% do tempo dirigindo na faixa verde de RPM (econômica/potência) vs. sobregiro.'},
-  {key:'idle', nome:'Marcha Lenta', peso:.20, desc:'Motor ligado parado (idle) — quanto menos, melhor. % do tempo de motor ligado.'},
-  {key:'acel', nome:'Aceleração',   peso:.20, desc:'Acelerações bruscas por 100 km — arrancada progressiva gasta menos.'},
-  {key:'vel',  nome:'Velocidade',   peso:.20, desc:'Tempo acima do limite (faixas 1/2/3) por 100 km — cruzeiro econômico.'},
-  {key:'freio',nome:'Freio Motor',  peso:.10, desc:'Uso de freio motor e ausência de banguela — desacelera sem gastar.'},
+/* ── Base: nova planilha Gerot/Frota de Elite (1 aba = 1 indicador) ──
+   Carregada via assets/gerot-base.js (GerotBase.load). Cada indicador já vem
+   com o atingimento (real/meta) por filial+vigência. Combustível saiu. */
+
+/* ── Motoristas (protótipo — dados de exemplo) ──
+   No painel real virão do coletor (Geotab / vFleets DaaS → Supabase).
+   `unit` no modelo do Frota de Elite = nome do MOTORISTA aqui. */
+const DRIVERS = [
+  {nome:'Anderson Souza', un:'CGR', src:'vFleets'},
+  {nome:'Bruno Lima',     un:'BLC', src:'Geotab'},
+  {nome:'Carlos Andrade', un:'CBA', src:'vFleets'},
+  {nome:'Diego Ferreira', un:'GRL', src:'Geotab'},
+  {nome:'Eduardo Reis',   un:'RON', src:'Geotab'},
+  {nome:'Fábio Nunes',    un:'CGR', src:'vFleets'},
+  {nome:'Gustavo Rocha',  un:'BLC', src:'vFleets'},
+  {nome:'Hélio Barros',   un:'CBA', src:'Geotab'},
+  {nome:'Igor Martins',   un:'GRL', src:'vFleets'},
+  {nome:'João Pereira',   un:'RON', src:'Geotab'},
+  {nome:'Luís Cardoso',   un:'CGR', src:'Geotab'},
+  {nome:'Marcos Vinícius',un:'BLC', src:'vFleets'},
+  {nome:'Nelson Tavares', un:'CBA', src:'vFleets'},
+  {nome:'Otávio Ramos',   un:'GRL', src:'vFleets'},
+  {nome:'Paulo Henrique', un:'RON', src:'vFleets'},
+  {nome:'Rafael Gomes',   un:'CGR', src:'vFleets'},
+  {nome:'Sérgio Antunes', un:'BLC', src:'Geotab'},
+  {nome:'Thiago Mendes',  un:'CBA', src:'vFleets'},
 ];
+const UNI_OF = {}, SRC_OF = {}, NOMES = {}, AVATARES = {};
+DRIVERS.forEach(d=>{UNI_OF[d.nome]=d.un;SRC_OF[d.nome]=d.src;NOMES[d.nome]=d.nome;});
 
-// RNG determinístico (mesmos dados a cada carregamento)
+/* ── Pontuação (Frota de Elite) ──────────────────────────────────────
+   Pesos nominais por indicador. Combustível (antes 10%) saiu da nova base;
+   calcScore_ normaliza por `den`, então o peso é redistribuído
+   proporcionalmente entre os indicadores presentes de cada unidade. */
+const FIELD_WEIGHTS = { rpm:30, idle:20, acel:20, vel:20, freio:10 };
+const FIELD_ORDER   = Object.keys(FIELD_WEIGHTS);
+
+// média ponderada (0-100), redistribuindo o peso dos indicadores ausentes.
+function calcScore_(fields){ let num=0,den=0;
+  for(const f of FIELD_ORDER){ const w=FIELD_WEIGHTS[f]/100; const v=fields[f];
+    if(v==null) continue; den+=w; let v01=v/100; if(v01>1)v01=1; num+=w*v01; }
+  return den>0?(num/den)*100:null; }
+
+const IND_LABELS = {
+  media_geral: 'Média Geral',
+  pontuacao:   'Pontuação',
+  rpm:   'Faixa Verde',
+  idle:  'Marcha Lenta',
+  acel:  'Aceleração',
+  vel:   'Velocidade',
+  freio: 'Freio Motor',
+};
+
+// rótulos completos p/ a caixa de pesos
+const PESO_LABELS = {
+  rpm:'Faixa Verde de RPM', idle:'Marcha Lenta (idle)', acel:'Aceleração', vel:'Velocidade', freio:'Freio Motor',
+};
+
+/* ── Estado ── */
+let RAW = [];
+let selVig = [];
+let chartTemporal = null;
+let activeInd = 'media_geral';
+
+/* ── Fetch ── */
+const CACHE_KEY='bi_cache_reconhecimento_v6';
+const CACHE_TTL=60*60*1000; // 1 hora
+
+/* ── PROTÓTIPO: gera RAW (1 linha por motorista+vigência) determinístico.
+   Trocar generateRawRows() por leitura do Supabase quando o coletor existir. ── */
 function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return ((t^t>>>14)>>>0)/4294967296;};}
-const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
-const nomes=['Anderson Souza','Bruno Lima','Carlos Andrade','Diego Ferreira','Eduardo Reis','Fábio Nunes','Gustavo Rocha','Hélio Barros','Igor Martins','João Pereira','Luís Cardoso','Marcos Vinícius','Nelson Tavares','Otávio Ramos','Paulo Henrique','Rafael Gomes','Sérgio Antunes','Thiago Mendes'];
-
-let DB=[];   // [{nome,unidade,src, meses:[{scores:{...},total}] }]
-function fetchData(){
+function generateRawRows(){
   const rng=mulberry32(20260729);
-  DB=nomes.map((nome,i)=>{
-    const unidade=UNIDADES[i%UNIDADES.length];
-    const src=(rng()<.55)?'vFleets':'Geotab';          // cada motorista usa 1 fonte
-    const base=.55+rng()*.4;                            // habilidade base do motorista
-    const off={};PILARES.forEach(p=>off[p.key]=(rng()-.5)*22);  // viés por pilar
-    const meses=[];
-    for(let m=0;m<NMES;m++){
-      const trend=m*1.1;                                // leve melhora ao longo do ano
-      const scores={};let total=0;
-      PILARES.forEach(p=>{
-        // Geotab não entrega "freio motor": neutraliza esse pilar (score médio) p/ não penalizar
-        let v=(p.key==='freio'&&src==='Geotab') ? 72+ (rng()-.5)*6
-              : clamp(base*100+off[p.key]+trend+(rng()-.5)*14, 8, 100);
-        scores[p.key]=Math.round(v);
-        total+=p.peso*v;
+  const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+  const NMES=(new Date().getFullYear()===2026)?(new Date().getMonth()+1):12;   // só 2026, até o mês atual
+  const out=[];
+  DRIVERS.forEach(d=>{
+    const base=.55+rng()*.4;
+    const off={};FIELD_ORDER.forEach(f=>off[f]=(rng()-.5)*22);
+    for(let m=1;m<=NMES;m++){
+      const trend=(m-1)*1.1, f={};
+      FIELD_ORDER.forEach(k=>{
+        let v=(k==='freio'&&d.src==='Geotab') ? 72+(rng()-.5)*6                 // Geotab não tem freio motor → neutro
+              : clamp(base*100+off[k]+trend+(rng()-.5)*14, 8, 100);
+        f[k]=Math.round(v);
       });
-      meses.push({scores,total:Math.round(total)});
+      out.push(Object.assign({vig:`2026/${String(m).padStart(2,'0')}/01`, unit:d.nome}, f, {pont:calcScore_(f)}));
     }
-    return {nome,unidade,src,meses};
   });
+  return out;
+}
+async function fetchData() {
+  RAW = generateRawRows();
+  populateFilters();
+  renderAll();
 }
 
-// agrega um motorista no recorte (mês específico ou "ano" = média dos meses)
-function aggDriver(d,per){
-  if(per==='ano'){
-    const n=d.meses.length||1;const s={};let tot=0;
-    PILARES.forEach(p=>{s[p.key]=Math.round(d.meses.reduce((a,m)=>a+m.scores[p.key],0)/n);});
-    tot=Math.round(d.meses.reduce((a,m)=>a+m.total,0)/n);
-    // Δ = último mês vs penúltimo
-    const L=d.meses.length;const delta=L>1?d.meses[L-1].total-d.meses[L-2].total:0;
-    return {scores:s,total:tot,delta};
+function initData(){ atualizar(); }   // protótipo: regenera sempre (sem cache do Frota de Elite)
+
+
+/* ── Filtros ── */
+function vigLabel(vig) {
+  const MESES = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+  const parts = vig.split('/');
+  let m, y;
+  if (parts[0].length === 4) { y = parts[0]; m = parts[1]; }
+  else { m = parts[0]; y = parts[1]; }
+  return (MESES[parseInt(m,10)-1] || vig) + '/' + y;
+}
+
+function populateFilters() {
+  const vigs = [...new Set(RAW.map(r => r.vig))].sort((a,b) => {
+    const pa = a.split('/'), pb = b.split('/');
+    const [ya,ma] = pa[0].length===4 ? [pa[0],pa[1]] : [pa[1],pa[0]];
+    const [yb,mb] = pb[0].length===4 ? [pb[0],pb[1]] : [pb[1],pb[0]];
+    return (+yb*12 + +mb) - (+ya*12 + +ma);
+  });
+  buildMsFilter('vig', vigs);
+  // abre com TODAS as vigências que têm dados selecionadas (estado "Todas").
+  updateMsBtn('vig');
+}
+
+function buildMsFilter(key, opts) {
+  const list = document.getElementById(`ms-${key}-list`);
+  list.innerHTML =
+    `<div class="ms-opt all-opt" onclick="toggleAll('${key}')"><input type="checkbox" id="chk-${key}-all"> <label style="cursor:pointer" for="chk-${key}-all">Todas</label></div>` +
+    opts.map(o => {
+      const lbl = key === 'vig' ? vigLabel(o) : o;
+      const safe = o.replace(/\//g,'_');
+      return `<div class="ms-opt" onclick="toggleOpt('${key}','${o}')">
+        <input type="checkbox" id="chk-${key}-${safe}" value="${o}">
+        <label style="cursor:pointer;flex:1" for="chk-${key}-${safe}">${lbl}</label>
+        <span class="ms-only" onclick="event.stopPropagation();onlyOpt('${key}','${o}')">Apenas</span>
+      </div>`;
+    }).join('');
+}
+
+function toggleAll(key) {
+  const cur = getSelArr(key);
+  const opts = getOpts(key);
+  setSelArr(key, cur.length === opts.length ? [] : [...opts]);
+  updateMsBtn(key); renderAll();
+}
+
+function toggleOpt(key, val) {
+  const cur = getSelArr(key);
+  const idx = cur.indexOf(val);
+  if (idx >= 0) cur.splice(idx,1); else cur.push(val);
+  setSelArr(key, cur); updateMsBtn(key); renderAll();
+}
+
+function onlyOpt(key, val) {
+  setSelArr(key, [val]);
+  updateMsBtn(key); renderAll();
+}
+
+function getSelArr(key) { return key==='vig'?selVig:[]; }
+function setSelArr(key,v){ if(key==='vig') selVig=v; }
+function getOpts(key) {
+  const list = document.getElementById(`ms-${key}-list`);
+  return [...list.querySelectorAll('.ms-opt:not(.all-opt) input')].map(i=>i.value);
+}
+
+function updateMsBtn(key) {
+  const sel = getSelArr(key);
+  const opts = getOpts(key);
+  const all = sel.length === 0 || sel.length === opts.length;
+  const lbl = document.getElementById(`ms-${key}-lbl`);
+  const cnt = document.getElementById(`ms-${key}-cnt`);
+  const dispLbl = all ? 'Todas' : (sel.length===1 ? vigLabel(sel[0]) : `${sel.length} selecionadas`);
+  lbl.textContent = dispLbl;
+  cnt.style.display = (!all && sel.length>0) ? '' : 'none';
+  cnt.textContent = sel.length;
+  const list = document.getElementById(`ms-${key}-list`);
+  list.querySelectorAll('.ms-opt:not(.all-opt) input').forEach(inp => {
+    inp.checked = sel.includes(inp.value) || all;
+  });
+  const allChk = document.getElementById(`chk-${key}-all`);
+  if (allChk) allChk.checked = all;
+}
+
+function toggleMs(key) {
+  const panel = document.getElementById(`ms-${key}-panel`);
+  panel.classList.toggle('open');
+}
+
+document.addEventListener('click', e => {
+  ['vig'].forEach(key => {
+    const wrap = document.getElementById(`ms-${key}-wrap`);
+    if (wrap && !wrap.contains(e.target)) {
+      document.getElementById(`ms-${key}-panel`)?.classList.remove('open');
+    }
+  });
+});
+
+/* ── Filtragem ── */
+function getFiltered() {
+  return RAW.filter(r => selVig.length===0 || selVig.includes(r.vig));
+}
+
+/* ── Render All ── */
+function renderAll() {
+  const data = getFiltered();
+  renderHero(data);
+  renderRanking(data);
+  renderPodio(data);
+  renderChart();
+}
+
+/* ── Hero ── */
+function renderHero(data) {
+  const pts = data.filter(r=>r.pont!=null).map(r=>r.pont);
+  const avg = pts.length ? (pts.reduce((a,b)=>a+b,0)/pts.length) : null;
+  document.getElementById('hero-score').textContent = avg != null ? avg.toFixed(2) : '—';
+  const period = selVig.length===0 ? 'Todos os períodos' : (selVig.length===1 ? vigLabel(selVig[0]) : `${selVig.length} períodos`);
+  document.getElementById('hero-period').textContent = period;
+  document.getElementById('podio-period').textContent = period;
+  document.getElementById('ranking-sub').textContent = period;
+}
+
+/* ── Ranking por unidade (média se multi-vig) ── */
+function getRankingData(data) {
+  const byUnit = {};
+  data.forEach(r => {
+    if (!byUnit[r.unit]) byUnit[r.unit] = {unit:r.unit, rows:[]};
+    byUnit[r.unit].rows.push(r);
+  });
+  const result = Object.values(byUnit).map(({unit, rows}) => {
+    const avg = (field) => {
+      const vals = rows.map(r=>r[field]).filter(v=>v!=null);
+      return vals.length ? vals.reduce((a,b)=>a+b,0)/vals.length : null;
+    };
+    return {
+      unit,
+      rpm: avg('rpm'), idle: avg('idle'), acel: avg('acel'), vel: avg('vel'), freio: avg('freio'),
+      pont: avg('pont'),
+    };
+  });
+  result.sort((a,b) => (b.pont||0) - (a.pont||0));
+  return result;
+}
+
+/* ── Ranking table ── */
+function renderRanking(data) {
+  const rows = getRankingData(data);
+  const tbody = document.getElementById('ranking-tbody');
+  const medals = ['🥇','🥈','🥉'];
+  tbody.innerHTML = rows.map((r, i) => {
+    const rank = i+1;
+    const sc = scorePill(r.pont);
+    const p = (v) => v==null ? '<span class="ind-dash">—</span>' : `<span class="${indClass(v)}">${v.toFixed(0)}</span>`;
+    return `<tr class="rank-${rank<=3?rank:'x'}">
+      <td class="rank-num">${rank<=3?medals[i]:rank}</td>
+      <td style="font-weight:600">${r.unit}<div style="font-size:9px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.4px;margin-top:1px;">${UNI_OF[r.unit]||''} · ${SRC_OF[r.unit]||''}</div></td>
+      <td class="num ind-col">${p(r.rpm)}</td>
+      <td class="num ind-col">${p(r.idle)}</td>
+      <td class="num ind-col">${p(r.acel)}</td>
+      <td class="num ind-col">${p(r.vel)}</td>
+      <td class="num ind-col">${p(r.freio)}</td>
+      <td class="num">${sc}</td>
+    </tr>`;
+  }).join('');
+}
+
+let indColsVisible = false;
+function toggleIndCols() {
+  indColsVisible = !indColsVisible;
+  const wrap = document.querySelector('.tbl-section');
+  wrap.classList.toggle('tbl-expanded', indColsVisible);
+  const btn = document.getElementById('tbl-ind-toggle');
+  if (btn) btn.textContent = indColsVisible ? '− Ocultar indicadores' : '+ Ver indicadores';
+}
+
+function indClass(v) {
+  if (v==null) return 'ind-dash';
+  if (v>=85) return 'ind-green';
+  if (v>=70) return 'ind-yellow';
+  return 'ind-red';
+}
+
+function scorePill(v) {
+  if (v==null) return '<span class="ind-dash">—</span>';
+  const cls = v>=85 ? 'score-green' : v>=70 ? 'score-yellow' : 'score-red';
+  return `<span class="score-pill ${cls}">${v.toFixed(1)}</span>`;
+}
+
+/* ── Caixa de pesos (distribuição após redistribuir Combustível) ── */
+function renderPesos() {
+  const grid = document.getElementById('peso-grid');
+  if (!grid) return;
+  const total = FIELD_ORDER.reduce((s,f)=>s+FIELD_WEIGHTS[f], 0);
+  // redistribui proporcionalmente p/ somar 100 (maior resto p/ arredondar exato)
+  const raw = FIELD_ORDER.map(f => ({f, exact: FIELD_WEIGHTS[f]/total*100}));
+  raw.forEach(o => { o.base = Math.floor(o.exact); o.rem = o.exact - o.base; });
+  let left = 100 - raw.reduce((s,o)=>s+o.base, 0);
+  raw.slice().sort((a,b)=>b.rem-a.rem).forEach(o => { if (left>0) { o.base++; left--; } });
+  grid.innerHTML = raw.map(o =>
+    `<div class="peso-item"><span>${PESO_LABELS[o.f]||o.f}</span><b>${o.base}%</b></div>`
+  ).join('');
+}
+
+/* ── Pódio ── */
+function renderPodio(data) {
+  const rows = getRankingData(data);
+  const wrap = document.getElementById('podio-wrap');
+  if (rows.length < 1) { wrap.innerHTML = '<p style="color:var(--text3);padding:20px;">Sem dados para o período.</p>'; return; }
+
+  const top3 = rows.slice(0,3);
+  const crowns = ['👑','🥈','🥉'];
+  const places = ['1º LUGAR','2º LUGAR','3º LUGAR'];
+  const classes = ['primeiro','segundo','terceiro'];
+
+  // ordem visual: 2º | 1º | 3º
+  const order = top3.length >= 3 ? [top3[1],top3[0],top3[2]] : top3.length===2 ? [top3[1],top3[0]] : [top3[0]];
+  const orderClass = top3.length>=3 ? ['segundo','primeiro','terceiro'] : top3.length===2 ? ['segundo','primeiro'] : ['primeiro'];
+  const orderCrowns= top3.length>=3 ? [crowns[1],crowns[0],crowns[2]] : top3.length===2 ? [crowns[1],crowns[0]] : [crowns[0]];
+  const orderPlaces= top3.length>=3 ? [places[1],places[0],places[2]] : top3.length===2 ? [places[1],places[0]] : [places[0]];
+
+  wrap.innerHTML = order.map((r, i) => {
+    const cl   = orderClass[i];
+    const nome = r.unit;                          // no modelo do Frota de Elite, unit = nome do motorista
+    const uni  = UNI_OF[nome] || '';
+    const ini  = nome.split(' ').filter(Boolean).map(w=>w[0]).slice(0,2).join('').toUpperCase();
+    const sc   = r.pont!=null ? r.pont.toFixed(1) : '—';
+    const dim  = cl==='primeiro' ? 150 : 120;
+    const bg   = cl==='primeiro' ? 'linear-gradient(160deg,#FFE08A,#F59E0B)'
+               : cl==='segundo'  ? 'linear-gradient(160deg,#E8EDF5,#9AA6B8)'
+               :                   'linear-gradient(160deg,#E6B98A,#B5764A)';
+    return `
+    <div class="podio-slot ${cl}">
+      <div class="avatar-wrap">
+        <div style="width:${dim}px;height:${dim}px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:${Math.round(dim*0.38)}px;font-weight:800;color:#0C1017;background:${bg};box-shadow:0 14px 34px rgba(0,0,0,.6);margin-bottom:6px;">${ini}</div>
+      </div>
+      <div class="pedestal">
+        <div class="pedestal-place">${orderPlaces[i]}</div>
+        <div class="pedestal-name">${nome}</div>
+        <div class="pedestal-unit">${uni}</div>
+        <div class="pedestal-score">${sc} pts</div>
+      </div>
+      <div class="podio-floor"></div>
+    </div>`;
+  }).join('');
+}
+
+/* ── Gráfico Temporal ── */
+function buildIndSelector() {
+  const sel = document.getElementById('ind-selector');
+  sel.innerHTML = Object.entries(IND_LABELS).map(([k,v]) =>
+    `<button class="ind-btn${k===activeInd?' active':''}" onclick="setActiveInd('${k}')">${v}</button>`
+  ).join('');
+}
+
+function setActiveInd(ind) {
+  activeInd = ind;
+  buildIndSelector();
+  renderChart();
+}
+
+function getFieldAvg(rows, key) {
+  if (key === 'media_geral') {
+    const fields = ['rpm','idle','acel','vel','freio'];
+    const allVals = rows.flatMap(r => fields.map(f=>r[f]).filter(v=>v!=null));
+    return allVals.length ? allVals.reduce((a,b)=>a+b,0)/allVals.length : null;
   }
-  const mi=+per;const m=d.meses[mi]||d.meses[d.meses.length-1];
-  const delta=mi>0&&d.meses[mi-1]?m.total-d.meses[mi-1].total:0;
-  return {scores:m.scores,total:m.total,delta};
+  const field = key === 'pontuacao' ? 'pont' : key;
+  const vals = rows.map(r=>r[field]).filter(v=>v!=null);
+  return vals.length ? vals.reduce((a,b)=>a+b,0)/vals.length : null;
 }
 
-const scoreColor=v=>v>=85?'var(--green)':v>=70?'var(--amber)':'var(--red)';
-const medals=['🥇','🥈','🥉'];
+function vigMonth(vig) {
+  // YYYY/MM/DD → returns integer month 1-12
+  const parts = vig.split('/');
+  return parts[0].length === 4 ? parseInt(parts[1], 10) : parseInt(parts[0], 10);
+}
 
-function render(){
-  const uni=$('f-uni').value, per=$('f-per').value;
-  let rows=DB.filter(d=>uni==='__all'||d.unidade===uni).map(d=>({d,a:aggDriver(d,per)}));
-  rows.sort((x,y)=>y.a.total-x.a.total);
+function renderChart() {
+  const isLight  = document.body.classList.contains('light-mode');
+  const gridC    = isLight ? 'rgba(0,0,0,.08)' : 'rgba(255,255,255,.06)';
+  const tickC    = isLight ? '#444' : '#94A3B8';
+  const tooltip  = {backgroundColor:'#141B26',titleColor:'#F97316',bodyColor:'#F1F5F9',borderColor:'#1E2D40',borderWidth:1,titleFont:{family:'Montserrat'},bodyFont:{family:'Montserrat'}};
+  const metaClr  = isLight ? 'rgba(0,0,0,.60)' : 'rgba(255,255,255,.70)';
 
-  // hero (média ponderada da frota no recorte)
-  const avg=rows.length?Math.round(rows.reduce((s,r)=>s+r.a.total,0)/rows.length):0;
-  $('h-score').textContent=avg; $('h-score').style.color=scoreColor(avg);
-  const perLbl=per==='ano'?'Acumulado 2026':MESES[+per].toUpperCase()+'/26';
-  $('h-label').textContent=`Score de Condução · ${uni==='__all'?'Frota':uni} — ${perLbl}`;
-  $('h-sub').textContent=`${rows.length} motoristas no recorte · ${DB.filter(d=>d.src==='vFleets').length} via vFleets · ${DB.filter(d=>d.src==='Geotab').length} via Geotab`;
-  if(rows.length){$('h-best').textContent=rows[0].d.nome.split(' ')[0]+' '+(rows[0].d.nome.split(' ')[1]||'');$('h-best-uni').textContent=rows[0].d.unidade+' · '+rows[0].a.total+' pts';}
-  const dAvg=rows.length?Math.round(rows.reduce((s,r)=>s+r.a.delta,0)/rows.length):0;
-  $('h-delta').textContent=(dAvg>0?'+':'')+dAvg; $('h-delta').style.color=dAvg>=0?'var(--green)':'var(--red)';
-  $('h-count').textContent=rows.length;
+  // Eixo X fixo: 12 meses
+  const LABELS   = ['jan.','fev.','mar.','abr.','mai.','jun.','jul.','ago.','set.','out.','nov.','dez.'];
 
-  // ranking table
-  let h=`<thead><tr><th class="pos">#</th><th class="lft">Motorista</th>`+
-        PILARES.map(p=>`<th class="col-pillar" title="${p.desc}">${p.nome}<br><span style="font-weight:700;color:var(--text3);font-size:8px">peso ${Math.round(p.peso*100)}%</span></th>`).join('')+
-        `<th>Score</th><th>Δ</th></tr></thead><tbody>`;
-  rows.forEach((r,i)=>{
-    const pos=i<3?`<span class="medal">${medals[i]}</span>`:(i+1);
-    h+=`<tr><td class="pos">${pos}</td>`+
-       `<td class="lft"><div class="drv"><b>${r.d.nome}</b><span>${r.d.unidade} · ${r.d.src}</span></div></td>`+
-       PILARES.map(p=>{const v=r.a.scores[p.key];return `<td class="col-pillar"><span class="pill" style="color:${scoreColor(v)}">${v}</span></td>`;}).join('')+
-       `<td><div class="tot-wrap"><div class="tot-bar"><i style="width:${r.a.total}%;background:${scoreColor(r.a.total)}"></i></div><span class="tot-num" style="color:${scoreColor(r.a.total)}">${r.a.total}</span></div></td>`+
-       `<td class="trend" style="color:${r.a.delta>=0?'var(--green)':'var(--red)'}">${r.a.delta>0?'▲':r.a.delta<0?'▼':'–'} ${Math.abs(r.a.delta)}</td></tr>`;
+  // Mapa: mês(1-12) → lista de vigs com esse mês
+  const vigsByMonth = {};
+  RAW.forEach(r => {
+    const m = vigMonth(r.vig);
+    if (!vigsByMonth[m]) vigsByMonth[m] = new Set();
+    vigsByMonth[m].add(r.vig);
   });
-  h+='</tbody>';
-  $('tbl-rank').innerHTML=h;
-  $('rank-sub').textContent=`${rows.length} motoristas · ordenado por score ponderado · ${perLbl}`;
 
-  renderEvo(uni);
+  // filtro ativo?
+  const allVigs      = [...new Set(RAW.map(r=>r.vig))];
+  const filtroAtivo  = selVig.length > 0 && selVig.length < allVigs.length;
+
+  // Para cada posição de mês (0=jan..11=dez): calcular avg das rows com esse mês
+  const avgByMonth = Array.from({length:12}, (_, i) => {
+    const m = i + 1;
+    const rows = RAW.filter(r => vigMonth(r.vig) === m);
+    return rows.length ? getFieldAvg(rows, activeInd) : null;
+  });
+
+  // Vig correspondente a cada posição de mês (para checar filtro)
+  const vigByMonthPos = Array.from({length:12}, (_, i) => {
+    const m = i + 1;
+    const vigs = [...(vigsByMonth[m] || [])];
+    return vigs[0] || null;
+  });
+
+  const barColor = avgByMonth.map((val, i) => {
+    const vig = vigByMonthPos[i];
+    const selected = !filtroAtivo || (vig && selVig.includes(vig));
+    const alpha = selected ? '.85' : '.18';
+    if (val == null) return `rgba(100,100,100,${alpha})`;
+    if (val >= 85)   return `rgba(59,179,59,${alpha})`;
+    if (val >= 70)   return `rgba(250,204,21,${alpha})`;
+    return `rgba(255,102,102,${alpha})`;
+  });
+  const barBorder = avgByMonth.map((val, i) => {
+    const vig = vigByMonthPos[i];
+    const selected = !filtroAtivo || (vig && selVig.includes(vig));
+    const op = selected ? '1' : '.25';
+    if (val == null) return `rgba(100,100,100,${op})`;
+    if (val >= 85)   return `rgba(59,179,59,${op})`;
+    if (val >= 70)   return `rgba(250,204,21,${op})`;
+    return `rgba(255,102,102,${op})`;
+  });
+
+  // Escala Y adaptável
+  const vals = avgByMonth.filter(v => v != null);
+  const minVal = vals.length ? Math.min(...vals) : 0;
+  const maxVal = vals.length ? Math.max(...vals) : 100;
+  const yMin = Math.max(0,   Math.floor((minVal - 10) / 10) * 10);
+  const yMax = Math.min(130, Math.ceil((Math.max(maxVal, 100) + 8) / 10) * 10);
+
+  // Meta lines: mesmo valor para todos os 12 meses
+  const meta85 = Array(12).fill(70);
+  const meta98 = Array(12).fill(85);
+
+  const ctx = document.getElementById('chartTemporal').getContext('2d');
+  if (chartTemporal) chartTemporal.destroy();
+  chartTemporal = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: LABELS,
+      datasets: [
+        {
+          label: IND_LABELS[activeInd] || activeInd,
+          data: avgByMonth,
+          backgroundColor: barColor,
+          borderColor: barBorder,
+          borderWidth: 1,
+          borderRadius: 4,
+          order: 3,
+          datalabels: {
+            display: (ctx) => {
+              const vig = vigByMonthPos[ctx.dataIndex];
+              return avgByMonth[ctx.dataIndex] != null && (!filtroAtivo || (vig && selVig.includes(vig)));
+            },
+            color: isLight ? '#1a1a1a' : '#F1F5F9',
+            font: {family:'Montserrat', size:15, weight:'700'},
+            formatter: v => v != null ? v.toFixed(1) : '',
+            anchor: 'end', align: 'end', offset: 2,
+          },
+        },
+        {
+          label: 'Bom 70',
+          data: meta85,
+          type: 'line',
+          borderColor: metaClr,
+          borderWidth: 2,
+          borderDash: [5, 3],
+          tension: 0,
+          fill: false,
+          pointRadius: 4,
+          pointBackgroundColor: metaClr,
+          pointBorderColor: metaClr,
+          pointBorderWidth: 1,
+          order: 1,
+          datalabels: {display: false},
+        },
+        {
+          label: 'Elite 85',
+          data: meta98,
+          type: 'line',
+          borderColor: metaClr,
+          borderWidth: 2,
+          borderDash: [5, 3],
+          tension: 0,
+          fill: false,
+          pointRadius: 4,
+          pointBackgroundColor: metaClr,
+          pointBorderColor: metaClr,
+          pointBorderWidth: 1,
+          order: 2,
+          datalabels: {display: false},
+        },
+      ],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: {labels: {color: isLight?'#1a1a1a':'#F1F5F9', font:{family:'Montserrat',size:10}, boxWidth:12, padding:16}},
+        tooltip,
+        datalabels: {display: false},
+      },
+      scales: {
+        x: {grid:{color:gridC}, ticks:{color:tickC, font:{family:'Montserrat',size:13}}},
+        y: {
+          grid: {color:gridC},
+          ticks: {color:tickC, font:{family:'Montserrat',size:10}, callback: v => v},
+          min: yMin,
+          max: yMax,
+        },
+      },
+    },
+  });
 }
 
-let chEvo=null;
-function renderEvo(uni){
-  const isLight=document.body.classList.contains('light-mode');
-  const set=DB.filter(d=>uni==='__all'||d.unidade===uni);
-  const labels=MESES.slice(0,NMES).map(m=>m.toUpperCase());
-  const fleet=labels.map((_,m)=>{const v=set.map(d=>d.meses[m].total);return v.length?Math.round(v.reduce((a,b)=>a+b,0)/v.length):0;});
-  // líder do ano (maior média)
-  const leader=[...set].sort((a,b)=>{const ma=a.meses.reduce((s,x)=>s+x.total,0),mb=b.meses.reduce((s,x)=>s+x.total,0);return mb-ma;})[0];
-  const ldData=leader?labels.map((_,m)=>leader.meses[m].total):[];
-  const grid={color:isLight?'rgba(0,0,0,.08)':'rgba(255,255,255,.06)'};
-  const tick={color:isLight?'#444':'#94A3B8',font:{family:'Montserrat',size:10}};
-  if(chEvo)chEvo.destroy();
-  chEvo=new Chart($('ch-evo'),{type:'line',
-    data:{labels,datasets:[
-      {label:'Frota (média)',data:fleet,borderColor:'#F97316',backgroundColor:'rgba(249,115,22,.12)',borderWidth:3,tension:.35,fill:true,pointRadius:3,pointBackgroundColor:'#F97316'},
-      {label:leader?('Líder · '+leader.nome.split(' ')[0]):'Líder',data:ldData,borderColor:'#38BDF8',borderWidth:2,tension:.35,fill:false,borderDash:[5,3],pointRadius:2}
-    ]},
-    options:{responsive:true,maintainAspectRatio:false,interaction:{intersect:false,mode:'index'},
-      plugins:{legend:{labels:{color:isLight?'#1a1a1a':'#F1F5F9',font:{family:'Montserrat',size:10},boxWidth:14,usePointStyle:true}},
-        tooltip:{backgroundColor:'#141B26',titleColor:'#F97316',bodyColor:'#F1F5F9',borderColor:'#1E2D40',borderWidth:1,titleFont:{family:'Montserrat'},bodyFont:{family:'Montserrat'}}},
-      scales:{y:{min:40,max:100,grid,ticks:tick,title:{display:true,text:'Score',color:tick.color,font:{family:'Montserrat',size:9}}},x:{grid:{display:false},ticks:tick}}}});
+/* ── Atualizar ── */
+async function atualizar() {
+  set('status-badge','Carregando…');
+  try {
+    await fetchData();
+    set('status-badge','Prévia · dados de exemplo');
+  } catch(e) {
+    set('status-badge','Erro ao carregar dados');
+  }
 }
 
-function buildFilters(){
-  $('f-uni').innerHTML=`<option value="__all">Todas</option>`+UNIDADES.map(u=>`<option value="${u}">${u}</option>`).join('');
-  $('f-per').innerHTML=`<option value="ano">Ano (acumulado)</option>`+MESES.slice(0,NMES).map((m,i)=>`<option value="${i}">${m.toUpperCase()}/26</option>`).join('');
-}
-function buildRules(){
-  $('rules-grid').innerHTML=PILARES.map(p=>`<div class="rule"><div class="rule-top"><span class="rule-name">${p.nome}</span><span class="rule-w">${Math.round(p.peso*100)}%</span></div><div class="rule-desc">${p.desc}</div></div>`).join('');
+function set(id,v){ const el=document.getElementById(id); if(el) el.textContent=v; }
+
+/* ── Último acesso ── */
+function initAccessLog() {
+  let name = localStorage.getItem('bi_user_name');
+  if (!name) { name = prompt('Qual é o seu nome?')||'Desconhecido'; localStorage.setItem('bi_user_name',name); }
+  const lastRaw = localStorage.getItem('bi_last_access');
+  if (lastRaw) {
+    const d = new Date(lastRaw);
+    const lastUser = localStorage.getItem('bi_last_user')||name;
+    const badge = document.getElementById('access-badge');
+    if (badge) { badge.textContent=`Último acesso: ${d.toLocaleDateString('pt-BR')} ${d.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})} · ${lastUser}`; badge.style.display=''; }
+  }
+  localStorage.setItem('bi_last_access',new Date().toISOString());
+  localStorage.setItem('bi_last_user',name);
 }
 
-// tema
+/* ── Tema ── */
 const _sun=`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>`;
 const _moon=`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>`;
-function applyTheme(t){document.body.classList.toggle('light-mode',t==='light');localStorage.setItem('bi_theme',t);const b=$('themeBtn');if(b)b.innerHTML=t==='light'?_moon:_sun;if(DB.length)render();}
-$('themeBtn').addEventListener('click',()=>applyTheme(document.body.classList.contains('light-mode')?'dark':'light'));
+function applyTheme(t){
+  document.body.classList.toggle('light-mode',t==='light');
+  localStorage.setItem('bi_theme',t);
+  const b=document.getElementById('themeBtn');
+  if(b) b.innerHTML=t==='light'?_moon:_sun;
+  if(RAW.length) renderChart();
+}
+(function(){
+  const t=localStorage.getItem('bi_theme')||'dark';
+  applyTheme(t);
+  document.getElementById('themeBtn').addEventListener('click',
+    ()=>applyTheme(document.body.classList.contains('light-mode')?'dark':'light'));
+})();
 
-// init
-fetchData();buildFilters();buildRules();applyTheme(localStorage.getItem('bi_theme')||'dark');
+buildIndSelector();
+renderPesos();
+document.addEventListener('DOMContentLoaded',()=>{ initAccessLog(); initData(); setInterval(atualizar,CACHE_TTL); });
 </script>
+<script>(function(){function go(){try{initPdfExport();}catch(e){console.error(e);}}if(document.readyState!=='loading')go();else document.addEventListener('DOMContentLoaded',go);})();</script>
+<script src="../../assets/filters-toggle.js"></script>
 </body>
 </html>

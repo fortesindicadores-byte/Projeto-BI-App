@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Combustível · Gestão em Movimento</title>
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
 :root{--bg:#0C1017;--card:#141B26;--border:#1E2D40;--orange:#F97316;--blue:#38BDF8;--text:#F1F5F9;--text2:#94A3B8;--text3:#475569;--green:#3BB33B;--red:#FF6666;}
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
@@ -118,10 +119,10 @@ body{background:radial-gradient(ellipse at 15% 20%,rgba(249,115,22,.07) 0%,trans
         <a class="card-link" href="co2/">Abrir <svg viewBox="0 0 24 24" fill="none" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg></a>
       </div>
 
-      <div class="dash-card active">
+      <div class="dash-card active" id="cond-card" style="display:none">
         <div class="card-top">
           <div class="card-icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="6"/><path d="M15.477 12.89 17 22l-5-3-5 3 1.523-9.11"/></svg></div>
-          <span class="badge" style="background:rgba(244,161,0,.18);color:#F4A100;border:1px solid rgba(244,161,0,.5)">Prévia</span>
+          <span class="badge" style="background:rgba(244,161,0,.18);color:#F4A100;border:1px solid rgba(244,161,0,.5)">Prévia · só admin</span>
         </div>
         <div class="card-title">Condução Econômica</div>
         <div class="card-desc">Gamificação do modo de condução — ranking de motoristas por faixa de RPM, aceleração, idle e velocidade, com evolução no ano.</div>
@@ -143,6 +144,22 @@ function syncLine(){
 }
 window.addEventListener('resize',syncLine);
 setTimeout(syncLine,100);
+
+// Card "Condução Econômica" visível apenas para admin (por enquanto)
+(async function(){
+  try{
+    const SB_URL='https://lozwipoeacpvplgkrxkq.supabase.co';
+    const SB_KEY='sb_publishable_ggKEEebc5zjgQDVsF92Upw_6uoLmKe9';
+    const ADMIN_EMAIL='fortesindicadores@gmail.com';
+    if(!window.supabase) return;
+    const sb=supabase.createClient(SB_URL,SB_KEY);
+    const { data:{ session } }=await sb.auth.getSession();
+    if(!session) return;
+    let isAdmin = session.user.email===ADMIN_EMAIL;
+    if(!isAdmin){ try{ const { data:prof }=await sb.from('fca_profiles').select('is_admin').eq('user_id',session.user.id).maybeSingle(); isAdmin=!!(prof&&prof.is_admin); }catch(e){} }
+    if(isAdmin){ const c=document.getElementById('cond-card'); if(c){ c.style.display=''; syncLine(); } }
+  }catch(e){}
+})();
 </script>
 </body>
 </html>
