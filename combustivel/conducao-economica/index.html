@@ -196,6 +196,21 @@ table td:first-child,table th:first-child{text-align:left;}
 .peso-item:last-child{border-bottom:none;}
 .peso-item span{color:var(--text2);}
 .peso-item b{color:var(--text);font-weight:800;margin-left:12px;white-space:nowrap;font-size:14px;}
+/* célula de indicador estilo termômetro: pontos grande + resultado pequeno embaixo */
+.rk-ind .p{font-weight:800;font-size:13.5px;display:block;line-height:1.05;}
+.rk-ind .v{color:var(--text3);font-size:9.5px;font-weight:600;display:block;margin-top:1px;white-space:nowrap;}
+.pont-cell{display:flex;flex-direction:column;align-items:flex-end;gap:2px;}
+.pont-cls{font-size:9px;font-weight:800;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;}
+/* regras (bom/ruim) na caixa lateral */
+.reg-item{padding:9px 6px;border-bottom:1px solid rgba(255,255,255,.05);}
+.reg-item:last-child{border-bottom:none;}
+.reg-top{display:flex;justify-content:space-between;align-items:baseline;gap:10px;}
+.reg-nome{font-size:12px;font-weight:800;color:var(--text);}
+.reg-nome em{font-size:9px;font-weight:700;color:var(--orange);font-style:normal;}
+.reg-peso{font-size:13px;font-weight:800;color:var(--text);white-space:nowrap;}
+.reg-gb{display:flex;flex-direction:column;gap:1px;margin-top:3px;}
+.reg-gb .gd{font-size:10px;color:var(--green);font-weight:600;line-height:1.3;}
+.reg-gb .bd{font-size:10px;color:var(--red);font-weight:600;line-height:1.3;}
 .peso-header{display:flex;justify-content:space-between;font-size:10px;font-weight:800;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;padding:0 6px 8px;border-bottom:1px solid rgba(249,115,22,.25);margin-bottom:2px;}
 
 /* ── Chart ── */
@@ -363,23 +378,14 @@ body.light-mode .podio-slot.primeiro .pedestal{box-shadow:0 -4px 24px rgba(196,1
     <div style="overflow-x:auto;">
       <table id="ranking-table">
         <thead>
-          <tr>
-            <th style="width:32px;">#</th>
-            <th style="text-align:left;">Motorista</th>
-            <th class="num ind-col">Faixa Verde</th>
-            <th class="num ind-col">Marcha Lenta</th>
-            <th class="num ind-col">Aceleração</th>
-            <th class="num ind-col">Velocidade</th>
-            <th class="num ind-col">Freio Motor</th>
-            <th class="num">Pontuação</th>
-          </tr>
+          <tr id="rank-head"></tr>
         </thead>
         <tbody id="ranking-tbody"></tbody>
       </table>
     </div>
     <div class="tbl-notes">
-      * Cada pilar é um score de 0–100 do modo de condução (faixa de RPM, aceleração, marcha lenta, velocidade, freio motor). A pontuação final é a média ponderada pelos pesos abaixo.<br>
-      * Caso o motorista não tenha um dos pilares (ex.: fonte de telemetria sem freio motor), os pesos são redistribuídos proporcionalmente.
+      * Cada pilar mostra os <b>pontos</b> (0–100) e, logo abaixo, o <b>resultado medido</b> — igual ao termômetro. A pontuação final é a média ponderada pelos pesos ao lado.<br>
+      * <b>Freio Motor</b> e <b>Câmbio</b> só existem na telemetria vFleets; para motoristas Geotab esses pilares ficam ausentes e o peso é redistribuído proporcionalmente.
     </div>
   </div>
 
@@ -399,8 +405,8 @@ body.light-mode .podio-slot.primeiro .pedestal{box-shadow:0 -4px 24px rgba(196,1
 
     <!-- PESOS (direita, estreito) -->
     <div class="peso-box">
-      <div class="peso-title">Distribuição dos Pesos</div>
-      <div class="peso-header"><span>Indicador</span><span>Peso</span></div>
+      <div class="peso-title">Regras de Pontuação</div>
+      <div class="peso-header"><span>Pilar · o que é bom / ruim</span><span>Peso</span></div>
       <div class="peso-grid" id="peso-grid"></div>
     </div>
   </div>
@@ -451,33 +457,33 @@ const DRIVERS = [
 const UNI_OF = {}, SRC_OF = {}, NOMES = {}, AVATARES = {};
 DRIVERS.forEach(d=>{UNI_OF[d.nome]=d.un;SRC_OF[d.nome]=d.src;NOMES[d.nome]=d.nome;});
 
-/* ── Pontuação (Frota de Elite) ──────────────────────────────────────
-   Pesos nominais por indicador. Combustível (antes 10%) saiu da nova base;
-   calcScore_ normaliza por `den`, então o peso é redistribuído
-   proporcionalmente entre os indicadores presentes de cada unidade. */
-const FIELD_WEIGHTS = { rpm:30, idle:20, acel:20, vel:20, freio:10 };
-const FIELD_ORDER   = Object.keys(FIELD_WEIGHTS);
+/* ── Pilares de Condução Econômica (fonte única) ──────────────────────
+   Cada pilar: peso, formato do RESULTADO (derivado do score p/ o protótipo —
+   no real vem o valor medido da API), e o que é BOM / RUIM. `both` = a
+   telemetria Geotab também entrega (Freio Motor e Câmbio são só vFleets).
+   calcScore_ redistribui o peso dos pilares ausentes. */
+const br=(v,d)=>(+v||0).toFixed(d).replace('.',',');
+const PILAR = {
+  rpm:   {nome:'Faixa Verde', full:'Faixa Verde de RPM',    peso:25, both:true,  fmt:s=>Math.round(s)+'%',         bom:'muito tempo na faixa verde (econômica)', ruim:'sobregiro / subgiro (fora da verde)'},
+  idle:  {nome:'Marcha Lenta', full:'Marcha Lenta (idle)',   peso:20, both:true,  fmt:s=>br((100-s)/4,1)+'%',       bom:'pouco motor ligado parado',              ruim:'muito tempo parado com motor ligado'},
+  acel:  {nome:'Aceleração',   full:'Aceleração',            peso:15, both:true,  fmt:s=>br((100-s)/6,1)+'/100km',  bom:'arrancada progressiva',                  ruim:'acelerações bruscas (pico de consumo)'},
+  frea:  {nome:'Freada',       full:'Freada Brusca',         peso:10, both:true,  fmt:s=>br((100-s)/6,1)+'/100km',  bom:'antecipa e freia suave',                 ruim:'freadas bruscas (desperdiça energia)'},
+  vel:   {nome:'Velocidade',   full:'Velocidade',            peso:15, both:true,  fmt:s=>br((100-s)/5,1)+'%',       bom:'dentro do limite',                       ruim:'tempo em excesso de velocidade'},
+  freio: {nome:'Freio Motor',  full:'Freio Motor & Banguela',peso:10, both:false, fmt:s=>Math.round(s)+'%',         bom:'usa freio motor, sem banguela',          ruim:'banguela / desengata sem freio motor'},
+  cambio:{nome:'Câmbio',       full:'Marcha / Câmbio',       peso:5,  both:false, fmt:s=>br((100-s)/6,1)+'%t',      bom:'marcha certa para o RPM',                ruim:'força o câmbio (marcha errada)'},
+};
+const FIELD_ORDER   = Object.keys(PILAR);
+const FIELD_WEIGHTS = {}; FIELD_ORDER.forEach(k=>FIELD_WEIGHTS[k]=PILAR[k].peso);
 
-// média ponderada (0-100), redistribuindo o peso dos indicadores ausentes.
+// média ponderada (0-100), redistribuindo o peso dos pilares ausentes.
 function calcScore_(fields){ let num=0,den=0;
   for(const f of FIELD_ORDER){ const w=FIELD_WEIGHTS[f]/100; const v=fields[f];
     if(v==null) continue; den+=w; let v01=v/100; if(v01>1)v01=1; num+=w*v01; }
   return den>0?(num/den)*100:null; }
 
-const IND_LABELS = {
-  media_geral: 'Média Geral',
-  pontuacao:   'Pontuação',
-  rpm:   'Faixa Verde',
-  idle:  'Marcha Lenta',
-  acel:  'Aceleração',
-  vel:   'Velocidade',
-  freio: 'Freio Motor',
-};
-
-// rótulos completos p/ a caixa de pesos
-const PESO_LABELS = {
-  rpm:'Faixa Verde de RPM', idle:'Marcha Lenta (idle)', acel:'Aceleração', vel:'Velocidade', freio:'Freio Motor',
-};
+const IND_LABELS = Object.assign({media_geral:'Média Geral', pontuacao:'Pontuação'},
+  Object.fromEntries(FIELD_ORDER.map(k=>[k,PILAR[k].nome])));
+const PESO_LABELS = Object.fromEntries(FIELD_ORDER.map(k=>[k,PILAR[k].full]));
 
 /* ── Estado ── */
 let RAW = [];
@@ -503,9 +509,8 @@ function generateRawRows(){
     for(let m=1;m<=NMES;m++){
       const trend=(m-1)*1.1, f={};
       FIELD_ORDER.forEach(k=>{
-        let v=(k==='freio'&&d.src==='Geotab') ? 72+(rng()-.5)*6                 // Geotab não tem freio motor → neutro
-              : clamp(base*100+off[k]+trend+(rng()-.5)*14, 8, 100);
-        f[k]=Math.round(v);
+        if(!PILAR[k].both && d.src==='Geotab'){ f[k]=null; return; }              // fonte não entrega esse pilar → ausente (redistribui peso)
+        f[k]=Math.round(clamp(base*100+off[k]+trend+(rng()-.5)*14, 8, 100));
       });
       out.push(Object.assign({vig:`2026/${String(m).padStart(2,'0')}/01`, unit:d.nome}, f, {pont:calcScore_(f)}));
     }
@@ -653,34 +658,38 @@ function getRankingData(data) {
       const vals = rows.map(r=>r[field]).filter(v=>v!=null);
       return vals.length ? vals.reduce((a,b)=>a+b,0)/vals.length : null;
     };
-    return {
-      unit,
-      rpm: avg('rpm'), idle: avg('idle'), acel: avg('acel'), vel: avg('vel'), freio: avg('freio'),
-      pont: avg('pont'),
-    };
+    const o = { unit, pont: avg('pont') };
+    FIELD_ORDER.forEach(k => o[k] = avg(k));
+    return o;
   });
   result.sort((a,b) => (b.pont||0) - (a.pont||0));
   return result;
 }
 
 /* ── Ranking table ── */
+function buildRankHead(){
+  const h = document.getElementById('rank-head'); if(!h) return;
+  h.innerHTML = `<th style="width:32px;">#</th><th style="text-align:left;">Motorista</th>`+
+    FIELD_ORDER.map(k=>`<th class="num ind-col" title="${PILAR[k].full}">${PILAR[k].nome}</th>`).join('')+
+    `<th class="num">Pontuação</th>`;
+}
 function renderRanking(data) {
+  buildRankHead();
   const rows = getRankingData(data);
   const tbody = document.getElementById('ranking-tbody');
   const medals = ['🥇','🥈','🥉'];
+  // célula estilo termômetro: pontos como número principal, resultado pequeno embaixo
+  const cell = (k,v) => v==null
+    ? `<td class="num ind-col rk-ind"><span class="ind-dash">—</span></td>`
+    : `<td class="num ind-col rk-ind"><span class="p ${indClass(v)}">${v.toFixed(0)}</span><span class="v">${PILAR[k].fmt(v)}</span></td>`;
   tbody.innerHTML = rows.map((r, i) => {
     const rank = i+1;
-    const sc = scorePill(r.pont);
-    const p = (v) => v==null ? '<span class="ind-dash">—</span>' : `<span class="${indClass(v)}">${v.toFixed(0)}</span>`;
+    const cls = r.pont==null ? '—' : r.pont>=85 ? 'Elite' : r.pont>=70 ? 'Bom' : 'Atenção';
     return `<tr class="rank-${rank<=3?rank:'x'}">
       <td class="rank-num">${rank<=3?medals[i]:rank}</td>
       <td style="font-weight:600">${r.unit}<div style="font-size:9px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.4px;margin-top:1px;">${UNI_OF[r.unit]||''} · ${SRC_OF[r.unit]||''}</div></td>
-      <td class="num ind-col">${p(r.rpm)}</td>
-      <td class="num ind-col">${p(r.idle)}</td>
-      <td class="num ind-col">${p(r.acel)}</td>
-      <td class="num ind-col">${p(r.vel)}</td>
-      <td class="num ind-col">${p(r.freio)}</td>
-      <td class="num">${sc}</td>
+      ${FIELD_ORDER.map(k=>cell(k,r[k])).join('')}
+      <td class="num"><div class="pont-cell">${scorePill(r.pont)}<span class="pont-cls">${cls}</span></div></td>
     </tr>`;
   }).join('');
 }
@@ -717,9 +726,13 @@ function renderPesos() {
   raw.forEach(o => { o.base = Math.floor(o.exact); o.rem = o.exact - o.base; });
   let left = 100 - raw.reduce((s,o)=>s+o.base, 0);
   raw.slice().sort((a,b)=>b.rem-a.rem).forEach(o => { if (left>0) { o.base++; left--; } });
-  grid.innerHTML = raw.map(o =>
-    `<div class="peso-item"><span>${PESO_LABELS[o.f]||o.f}</span><b>${o.base}%</b></div>`
-  ).join('');
+  grid.innerHTML = raw.map(o => {
+    const P = PILAR[o.f];
+    return `<div class="reg-item">
+      <div class="reg-top"><span class="reg-nome">${P.full}${P.both?'':' <em>· só vFleets</em>'}</span><b class="reg-peso">${o.base}%</b></div>
+      <div class="reg-gb"><span class="gd">▲ ${P.bom}</span><span class="bd">▼ ${P.ruim}</span></div>
+    </div>`;
+  }).join('');
 }
 
 /* ── Pódio ── */
@@ -781,7 +794,7 @@ function setActiveInd(ind) {
 
 function getFieldAvg(rows, key) {
   if (key === 'media_geral') {
-    const fields = ['rpm','idle','acel','vel','freio'];
+    const fields = FIELD_ORDER;
     const allVals = rows.flatMap(r => fields.map(f=>r[f]).filter(v=>v!=null));
     return allVals.length ? allVals.reduce((a,b)=>a+b,0)/allVals.length : null;
   }
