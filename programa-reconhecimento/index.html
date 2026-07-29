@@ -420,7 +420,7 @@ body.light-mode .podio-slot.primeiro .pedestal{box-shadow:0 -4px 24px rgba(196,1
         <div class="chart-sub">Média por indicador no período · do pior para o melhor</div>
       </div>
     </div>
-    <div class="chart-wrap" style="height:420px;"><canvas id="chartIndicadores"></canvas></div>
+    <div class="chart-wrap" style="height:360px;"><canvas id="chartIndicadores"></canvas></div>
   </div>
 
   <!-- PÓDIO — sem card, estilo dramático -->
@@ -1005,12 +1005,13 @@ function renderIndChart(data) {
 
   // média de cada indicador no período filtrado; descarta os sem dado; ordena pior → melhor
   const items = FIELD_ORDER
-    .map(f => ({label: PESO_LABELS[f] || IND_LABELS[f] || f, v: getFieldAvg(data, f)}))
+    .map(f => ({label: IND_LABELS[f] || f, v: getFieldAvg(data, f)}))
     .filter(o => o.v != null)
     .sort((a, b) => a.v - b.v);
 
   const labels = items.map(o => o.label);
   const vals   = items.map(o => o.v);
+  // cores condicionais padrão do painel (mesma regra do gráfico temporal)
   const face   = v => v >= 98 ? 'rgba(59,179,59,.85)'  : v >= 85 ? 'rgba(250,204,21,.85)' : 'rgba(255,102,102,.85)';
   const edge   = v => v >= 98 ? 'rgba(59,179,59,1)'    : v >= 85 ? 'rgba(250,204,21,1)'   : 'rgba(255,102,102,1)';
 
@@ -1028,22 +1029,21 @@ function renderIndChart(data) {
         borderWidth: 1,
         borderRadius: 4,
         datalabels: {
-          anchor: 'end', align: 'end', offset: 4,
+          anchor: 'end', align: 'end', offset: 2,
           color: isLight ? '#1a1a1a' : '#F1F5F9',
-          font: {family:'Montserrat', size:12, weight:'700'},
+          font: {family:'Montserrat', size:13, weight:'700'},
           formatter: v => v != null ? v.toFixed(1) : '',
         },
       }],
     },
     options: {
-      indexAxis: 'y',
       responsive: true,
       maintainAspectRatio: false,
-      layout: {padding: {right: 36}},
+      layout: {padding: {top: 18}},
       plugins: {legend: {display:false}, tooltip, datalabels: {}},
       scales: {
-        x: {grid:{color:gridC}, ticks:{color:tickC, font:{family:'Montserrat',size:10}, callback: v => v+'%'}, min:0, max:100},
-        y: {grid:{display:false}, ticks:{color:tickC, font:{family:'Montserrat',size:11}}},
+        x: {grid:{display:false}, ticks:{color:tickC, font:{family:'Montserrat',size:10}, autoSkip:false}},
+        y: {grid:{color:gridC}, ticks:{color:tickC, font:{family:'Montserrat',size:10}, callback: v => v+'%'}, min:0, max:100},
       },
     },
   });
