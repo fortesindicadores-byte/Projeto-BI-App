@@ -213,15 +213,14 @@ table td:first-child,table th:first-child{text-align:left;}
 .reg-gb .bd{font-size:10px;color:var(--red);font-weight:600;line-height:1.3;}
 .peso-header{display:flex;justify-content:space-between;font-size:10px;font-weight:800;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;padding:0 6px 8px;border-bottom:1px solid rgba(249,115,22,.25);margin-bottom:2px;}
 /* Regras de Pontuação — tabela Indicador · Descrição · Peso */
-.reg-table{width:100%;border-collapse:collapse;font-size:11px;flex:1;}
+.reg-table{width:100%;border-collapse:collapse;font-size:11px;flex:1;table-layout:fixed;}
 .reg-table thead th{text-align:left;font-size:9px;font-weight:800;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;padding:0 6px 8px;border-bottom:1px solid rgba(249,115,22,.25);}
 .reg-table thead th:last-child{text-align:right;}
-.reg-table td{padding:8px 6px;border-bottom:1px solid rgba(255,255,255,.05);vertical-align:top;}
+.reg-table td{padding:9px 6px;border-bottom:1px solid rgba(255,255,255,.05);vertical-align:top;overflow-wrap:break-word;word-break:break-word;}
 .reg-table tbody tr:last-child td{border-bottom:none;}
-.ri-nome{font-weight:800;color:var(--text);white-space:nowrap;}
+.ri-nome{font-weight:800;color:var(--text);white-space:normal;}
 .ri-vf{display:block;font-size:8.5px;font-weight:700;color:var(--orange);text-transform:uppercase;letter-spacing:.3px;margin-top:1px;}
-.ri-desc .gd{display:block;color:var(--green);font-weight:600;font-size:10px;line-height:1.35;}
-.ri-desc .bd{display:block;color:var(--red);font-weight:600;font-size:10px;line-height:1.35;}
+.ri-desc{color:var(--text2);font-size:10.5px;line-height:1.4;white-space:normal;}
 .ri-peso{text-align:right;font-weight:800;color:var(--text);white-space:nowrap;font-size:13px;}
 
 /* ── Chart ── */
@@ -474,13 +473,13 @@ DRIVERS.forEach(d=>{UNI_OF[d.nome]=d.un;SRC_OF[d.nome]=d.src;NOMES[d.nome]=d.nom
    calcScore_ redistribui o peso dos pilares ausentes. */
 const br=(v,d)=>(+v||0).toFixed(d).replace('.',',');
 const PILAR = {
-  rpm:   {nome:'Faixa Verde', full:'Faixa Verde de RPM',    peso:25, both:true,  fmt:s=>Math.round(s)+'%',         bom:'muito tempo na faixa verde (econômica)', ruim:'sobregiro / subgiro (fora da verde)'},
-  idle:  {nome:'Marcha Lenta', full:'Marcha Lenta (idle)',   peso:20, both:true,  fmt:s=>br((100-s)/4,1)+'%',       bom:'pouco motor ligado parado',              ruim:'muito tempo parado com motor ligado'},
-  acel:  {nome:'Aceleração',   full:'Aceleração',            peso:15, both:true,  fmt:s=>br((100-s)/6,1)+'/100km',  bom:'arrancada progressiva',                  ruim:'acelerações bruscas (pico de consumo)'},
-  frea:  {nome:'Freada',       full:'Freada Brusca',         peso:10, both:true,  fmt:s=>br((100-s)/6,1)+'/100km',  bom:'antecipa e freia suave',                 ruim:'freadas bruscas (desperdiça energia)'},
-  vel:   {nome:'Velocidade',   full:'Velocidade',            peso:15, both:true,  fmt:s=>br((100-s)/5,1)+'%',       bom:'dentro do limite',                       ruim:'tempo em excesso de velocidade'},
-  freio: {nome:'Freio Motor',  full:'Freio Motor & Banguela',peso:10, both:false, fmt:s=>Math.round(s)+'%',         bom:'usa freio motor, sem banguela',          ruim:'banguela / desengata sem freio motor'},
-  cambio:{nome:'Câmbio',       full:'Marcha / Câmbio',       peso:5,  both:false, fmt:s=>br((100-s)/6,1)+'%t',      bom:'marcha certa para o RPM',                ruim:'força o câmbio (marcha errada)'},
+  rpm:   {nome:'Faixa Verde', full:'Faixa Verde de RPM',    peso:25, both:true,  fmt:s=>Math.round(s)+'%',        calc:'% do tempo em movimento com o RPM na faixa verde (econômica/potência).'},
+  idle:  {nome:'Marcha Lenta', full:'Marcha Lenta (idle)',   peso:20, both:true,  fmt:s=>br((100-s)/4,1)+'%',      calc:'% do tempo de motor ligado em marcha lenta (parado, sem rodar).'},
+  acel:  {nome:'Aceleração',   full:'Aceleração',            peso:15, both:true,  fmt:s=>br((100-s)/6,1)+'/100km', calc:'nº de acelerações bruscas a cada 100 km rodados.'},
+  frea:  {nome:'Freada',       full:'Freada Brusca',         peso:10, both:true,  fmt:s=>br((100-s)/6,1)+'/100km', calc:'nº de freadas bruscas a cada 100 km rodados.'},
+  vel:   {nome:'Velocidade',   full:'Velocidade',            peso:15, both:true,  fmt:s=>br((100-s)/5,1)+'%',      calc:'% do tempo acima do limite (faixas 1/2/3; excesso maior pesa mais).'},
+  freio: {nome:'Freio Motor',  full:'Freio Motor & Banguela',peso:10, both:false, fmt:s=>Math.round(s)+'%',        calc:'% de uso de freio motor nas desacelerações, penalizado por tempo de banguela.'},
+  cambio:{nome:'Câmbio',       full:'Marcha / Câmbio',       peso:5,  both:false, fmt:s=>br((100-s)/6,1)+'%t',     calc:'% do tempo com marcha inadequada para o RPM (batendo transmissão).'},
 };
 const FIELD_ORDER   = Object.keys(PILAR);
 const FIELD_WEIGHTS = {}; FIELD_ORDER.forEach(k=>FIELD_WEIGHTS[k]=PILAR[k].peso);
@@ -736,12 +735,12 @@ function renderPesos() {
   raw.forEach(o => { o.base = Math.floor(o.exact); o.rem = o.exact - o.base; });
   let left = 100 - raw.reduce((s,o)=>s+o.base, 0);
   raw.slice().sort((a,b)=>b.rem-a.rem).forEach(o => { if (left>0) { o.base++; left--; } });
-  grid.innerHTML = `<table class="reg-table"><thead><tr><th>Indicador</th><th>Descrição</th><th>Peso</th></tr></thead><tbody>`+
+  grid.innerHTML = `<table class="reg-table"><colgroup><col style="width:86px"><col><col style="width:50px"></colgroup><thead><tr><th>Indicador</th><th>Descrição do cálculo</th><th>Peso</th></tr></thead><tbody>`+
     raw.map(o => {
       const P = PILAR[o.f];
       return `<tr>
         <td class="ri-nome">${P.nome}${P.both?'':'<span class="ri-vf">só vFleets</span>'}</td>
-        <td class="ri-desc"><span class="gd">▲ ${P.bom}</span><span class="bd">▼ ${P.ruim}</span></td>
+        <td class="ri-desc">${P.calc}</td>
         <td class="ri-peso">${o.base}%</td>
       </tr>`;
     }).join('')+`</tbody></table>`;
