@@ -204,7 +204,10 @@ table td:first-child,table th:first-child{text-align:left;}
 /* cabeçalhos do ranking clicáveis (ordenar) */
 #ranking-table th.sortable{cursor:pointer;user-select:none;white-space:nowrap;}
 #ranking-table th.sortable:hover{color:var(--orange);}
-#ranking-table th.sorted{color:var(--orange);}
+/* rolagem do ranking: mostra ~10 linhas, resto na barra de rolagem; cabeçalho fixo */
+.rank-scroll{overflow-x:auto;overflow-y:auto;}
+#ranking-table thead th{position:sticky;top:0;z-index:2;background:#111826;}
+body.light-mode #ranking-table thead th{background:#e8e8e8;}
 .sort-ar{font-size:8px;margin-left:3px;vertical-align:middle;}
 /* regras (bom/ruim) na caixa lateral */
 .reg-item{padding:9px 6px;border-bottom:1px solid rgba(255,255,255,.05);}
@@ -390,7 +393,7 @@ body.light-mode .podio-slot.primeiro .pedestal{box-shadow:0 -4px 24px rgba(196,1
       <span class="cl-note">Vale para os pilares (0–100) e para a pontuação final.</span>
     </div>
     <button class="tbl-ind-toggle" id="tbl-ind-toggle" onclick="toggleIndCols()">+ Ver indicadores</button>
-    <div style="overflow-x:auto;">
+    <div class="rank-scroll" id="rank-scroll">
       <table id="ranking-table">
         <thead>
           <tr id="rank-head"></tr>
@@ -715,6 +718,18 @@ function renderRanking(data) {
       <td class="num"><div class="pont-cell">${scorePill(r.pont)}<span class="pont-cls">${cls}</span></div></td>
     </tr>`;
   }).join('');
+  fitRankScroll();
+}
+
+// limita a área visível a ~10 linhas; o resto fica na barra de rolagem (cabeçalho fica fixo)
+function fitRankScroll(){
+  const sc = document.getElementById('rank-scroll'); if(!sc) return;
+  const rows = document.getElementById('ranking-tbody').rows;
+  const thead = document.querySelector('#ranking-table thead');
+  if(rows.length <= 10){ sc.style.maxHeight = ''; return; }
+  let h = thead ? thead.offsetHeight : 0;
+  for(let i=0;i<10;i++) h += rows[i].offsetHeight;
+  sc.style.maxHeight = (h + 2) + 'px';
 }
 
 let indColsVisible = false;
