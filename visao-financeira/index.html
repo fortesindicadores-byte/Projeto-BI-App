@@ -586,12 +586,12 @@ body.light-mode table.dre tbody tr{border-bottom:none;}
     <div class="kpi-card">
       <div class="card-label">Δ AVO</div>
       <div class="card-delta-v" id="c-davo-v">—</div>
-      <div class="card-imp">Impacto (BRL): <b id="c-davo-imp">—</b></div>
+      <div class="card-imp">BRL: <b id="c-davo-imp">—</b></div>
     </div>
     <div class="kpi-card">
       <div class="card-label">Δ AVR</div>
       <div class="card-delta-v" id="c-davr-v">—</div>
-      <div class="card-imp">Impacto (BRL): <b id="c-davr-imp">—</b></div>
+      <div class="card-imp">BRL: <b id="c-davr-imp">—</b></div>
     </div>
   </div>
 
@@ -740,6 +740,14 @@ const pctInt = v => v==null||!isFinite(v) ? '-' : (v>=0?'+':'')+Math.round(v)+'%
 const pp   = v => v==null||!isFinite(v) ? '-' : (v>=0?'+':'')+v.toFixed(2)+' pp';
 const set  = (id,val) => { const e=document.getElementById(id); if(e) e.textContent=val; };
 const colI = (el,bad) => { if(el) el.style.color = bad ? 'var(--red)' : 'var(--green)'; };
+// sub-valor de card (custo): seta ▲ vermelha se positivo (pior), ▼ verde se negativo (melhor); número sem sinal
+const setArr = (el, text, sign) => {
+  if(!el) return;
+  if(sign==null||!isFinite(sign)){ el.textContent=text; el.style.color=''; return; }
+  const t = String(text).replace(/^[+\-]/,'');
+  el.textContent = (sign>0?'▲ ':sign<0?'▼ ':'') + t;
+  colI(el, sign>0);
+};
 
 // ═══════════════════════════════════
 // ESTADO
@@ -1228,8 +1236,7 @@ function renderHeroCards(mes, prev){
 
   function yoyCusto(id, cur, prv){
     const v = prv ? (Math.abs(cur)-Math.abs(prv))/Math.abs(prv)*100 : null;
-    const e = document.getElementById(id); if(!e) return;
-    e.textContent=pct(v); colI(e, v>0);
+    setArr(document.getElementById(id), pct(v), v);
   }
   yoyCusto('c-orc-yoy',  cust.orc,  custP.orc);
   yoyCusto('c-rem-yoy',  cust.rem,  custP.rem);
@@ -1240,9 +1247,9 @@ function renderHeroCards(mes, prev){
   const eDOrcV=document.getElementById('c-dorc-v'), eDOrcP=document.getElementById('c-dorc-p');
   const eDRemV=document.getElementById('c-drem-v'), eDRemP=document.getElementById('c-drem-p');
   if(eDOrcV){eDOrcV.textContent=fmtD(dCOrcV);colI(eDOrcV,dCOrcV>0);}
-  if(eDOrcP){eDOrcP.textContent=pct(dCOrcP); colI(eDOrcP,dCOrcP>0);}
+  setArr(eDOrcP, pct(dCOrcP), dCOrcP);
   if(eDRemV){eDRemV.textContent=fmtD(dCRemV);colI(eDRemV,dCRemV>0);}
-  if(eDRemP){eDRemP.textContent=pct(dCRemP); colI(eDRemP,dCRemP>0);}
+  setArr(eDRemP, pct(dCRemP), dCRemP);
 }
 
 // ═══════════════════════════════════
@@ -1288,8 +1295,8 @@ function renderAVCards(mes, prev){
   set('c-avreal', avReal.toFixed(2)+'%');
   function yoyAV(id, cur, prv){
     const e=document.getElementById(id); if(!e) return;
-    if(prv==null){e.textContent='—';return;}
-    const d=cur-prv; e.textContent=pp(d); colI(e,d>0);
+    if(prv==null){ setArr(e,'—',null); return; }
+    const d=cur-prv; setArr(e, pp(d), d);
   }
   yoyAV('c-avo-yoy',    avOrc,  avPrevOrc);
   yoyAV('c-avr-yoy',    avRem,  avPrevRem);
@@ -1300,8 +1307,8 @@ function renderAVCards(mes, prev){
   const eIAVO=document.getElementById('c-davo-imp'), eIAVR=document.getElementById('c-davr-imp');
   if(eDAVO){eDAVO.textContent=pp(dAVO);    colI(eDAVO,dAVO>0);}
   if(eDAVR){eDAVR.textContent=pp(dAVR);    colI(eDAVR,dAVR>0);}
-  if(eIAVO){eIAVO.textContent=fmt(impAVO); colI(eIAVO,dAVO>0);}
-  if(eIAVR){eIAVR.textContent=fmt(impAVR); colI(eIAVR,dAVR>0);}
+  setArr(eIAVO, fmt(impAVO), dAVO);
+  setArr(eIAVR, fmt(impAVR), dAVR);
 }
 
 // ═══════════════════════════════════
