@@ -308,6 +308,11 @@ const COST_ID  = '1qcTy2ppLCGBKKqZCxCYWCTL9kTAuWfHBMyBfWJOyih8';
 const COST_TAB = 'Frota';   // migrado de "Consolidado DRE" (aposentada) — mesmos custos por conta
 const KM_ID    = '1wCoRGsvOgmIvfLW4F9Sxr-5AX9Go-aFlRVjrQ_B2ilM';
 const KM_TAB   = 'Dispersão de km';
+// Seara = unidade ANG no DRE, mas o km NÃO está na Dispersão — vem da base própria da Seara.
+// Considerar Seara apenas de abr/2026 em diante (quando entra o remunerado).
+const SEARA_ID='1Rlwc0MZiupQI38gSN8VyBq_zMADgX9R_ZbfygNP-OXE';
+const SEARA_GID_COMB=1982300845, SEARA_GID_CTES=1672208132;
+const SEARA_UNI='ANG', SEARA_PROJ='DISTRIBUIÇÃO URBANA', SEARA_MIN_VK='2026-04';
 // Layout da aba Frota: orçado=8, remunerado=9, realizado=10, vigência=0, nível3=4, conta=5
 const C = {orc:8,rem:9,real:10,vig:0,nv3:4,cta:5};
 
@@ -434,6 +439,37 @@ async function fetchSheet(id,tab){
   const res=await fetch(url),raw=await res.text();
   const json=JSON.parse(raw.replace(/^[\s\S]*?\(/,'').replace(/\);\s*$/,''));
   return json.table.rows.map(r=>r.c.map(c=>c&&c.v!=null?c.v:null));
+}
+// gviz por gid (base da Seara) — mesma leitura do painel seara-km
+async function gvizGid(id,gid,tq){
+  const q=tq?'&tq='+encodeURIComponent(tq):'';
+  const url=`https://docs.google.com/spreadsheets/d/${id}/gviz/tq?gid=${gid}${q}&headers=1&tqx=out:json`;
+  const raw=await (await fetch(url)).text();
+  const json=JSON.parse(raw.replace(/^[\s\S]*?setResponse\(/,'').replace(/\);?\s*$/,''));
+  const cols=(json.table.cols||[]).map(c=>String((c&&(c.label||c.id))||'').trim());
+  let rows=(json.table.rows||[]).map(x=>(x.c||[]).map(c=>c?c.v:null));
+  if(cols.every(c=>!c||/^[A-Z]{1,3}$/.test(c))&&rows.length)rows=rows.slice(1);
+  return rows;
+}
+// km da Seara (unidade ANG): rem = Σ(coluna Z) da Base CTEs · real = Σ km rodado da aba Combustível
+// → linhas de km {vk,yr,uni:'ANG',proj:'DISTRIBUIÇÃO URBANA',kmRem,kmReal}, só de abr/2026 em diante
+async function fetchSearaKm(){
+  try{
+    const [ctes,comb]=await Promise.all([
+      gvizGid(SEARA_ID,SEARA_GID_CTES,'select year(D), month(D), sum(Z) group by year(D), month(D)'),
+      gvizGid(SEARA_ID,SEARA_GID_COMB)
+    ]);
+    const rem={},real={};
+    ctes.forEach(r=>{const yr=r[0],mo=r[1];if(yr==null||mo==null)return;const vk=`${yr}-${String(+mo+1).padStart(2,'0')}`;rem[vk]=(rem[vk]||0)+(+r[2]||0);});
+    const M3=['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
+    comb.forEach(r=>{const mi=M3.indexOf(String(r[5]||'').toLowerCase().slice(0,3));const yr=r[6],v=+r[10]||0;if(mi<0||yr==null||v<=0)return;const vk=`${yr}-${String(mi+1).padStart(2,'0')}`;real[vk]=(real[vk]||0)+v;});
+    const out=[];
+    new Set([...Object.keys(rem),...Object.keys(real)]).forEach(vk=>{
+      if(vk<SEARA_MIN_VK)return;
+      out.push({vk,yr:vk.slice(0,4),uni:SEARA_UNI,proj:SEARA_PROJ,kmRem:rem[vk]||0,kmReal:real[vk]||0});
+    });
+    return out;
+  }catch(e){console.warn('Seara km indisponível:',e);return [];}
 }
 function parseKmRow(r){
   const d=parseVig(r[0]);if(!d)return null;
@@ -861,8 +897,8 @@ function useData(cost,km){
 async function recarregar(){
   set('status-badge','Carregando…');
   try{
-    const[rawCost,rawKm]=await Promise.all([fetchSheet(COST_ID,COST_TAB),fetchSheet(KM_ID,KM_TAB)]);
-    const km=rawKm.map(parseKmRow).filter(Boolean);
+    const[rawCost,rawKm,searaKm]=await Promise.all([fetchSheet(COST_ID,COST_TAB),fetchSheet(KM_ID,KM_TAB),fetchSearaKm()]);
+    const km=rawKm.map(parseKmRow).filter(Boolean).concat(searaKm);
     try{ localStorage.setItem(CACHE_KEY,JSON.stringify({t:Date.now(),cost:rawCost,km})); }catch(e){}
     useData(rawCost,km);
   }catch(e){console.error(e);set('status-badge','Erro ao carregar dados');}
