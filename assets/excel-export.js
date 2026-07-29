@@ -213,6 +213,10 @@
       html2canvas(el,{scale:scl,backgroundColor:transp?null:bgDe(el),useCORS:true,logging:false,scrollX:0,scrollY:-window.scrollY,
         onclone:(doc)=>{
           doc.querySelectorAll('[data-h2c-c]').forEach(n=>{ n.style.color=n.getAttribute('data-h2c-c'); const bg=n.getAttribute('data-h2c-bg'); if(bg&&bg!=='rgba(0, 0, 0, 0)'&&bg!=='transparent') n.style.backgroundColor=bg; });
+          // canto do raiz DETERMINÍSTICO: o html2canvas 1.4.1 clipa o border-radius do elemento raiz
+          // de forma inconsistente (às vezes arredonda, às vezes sai quadrado) → forçamos reto p/ o PNG
+          // sair sempre igual, independentemente do conteúdo/estado.
+          const _root=doc.querySelector('[data-h2c-root="1"]'); if(_root) _root.style.borderRadius='0';
           if(transp){ const rc=doc.querySelector('[data-h2c-root="1"]');   // fundo transparente: remove o fundo/sombra do card raiz
             if(rc){ rc.style.backgroundColor='transparent'; rc.style.boxShadow='none'; rc.style.border='none'; rc.style.backdropFilter='none'; } }
           if(hi){ const c=doc.querySelector('canvas[data-hires-tgt="1"]')||doc.querySelector('canvas');
