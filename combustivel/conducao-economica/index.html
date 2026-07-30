@@ -530,6 +530,44 @@ async function fetchData() {
   renderAll();
 }
 
+/* ══════════════════════════════════════════════════════════════════════════
+   HÍBRIDO — ler do Supabase (ce_scores_mensais) no lugar de generateRawRows().
+   RASCUNHO INATIVO: só ativar quando o coletor (etl/conducao-economica/) estiver
+   populando a tabela. Para ativar:
+     1) carregar o supabase-js no <head> (CDN), via tag script src=:
+        https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2
+     2) trocar o corpo de fetchData() por:  RAW = await fetchFromSupabase();
+   ────────────────────────────────────────────────────────────────────────── */
+// const SB_URL = 'https://lozwipoeacpvplgkrxkq.supabase.co';
+// const SB_KEY = 'sb_publishable_ggKEEebc5zjgQDVsF92Upw_6uoLmKe9';   // chave publishable (só leitura via RLS)
+// let _sb = null;
+// function sbClient(){ return _sb || (_sb = supabase.createClient(SB_URL, SB_KEY)); }
+//
+// async function fetchFromSupabase() {
+//   const { data, error } = await sbClient()
+//     .from('ce_scores_mensais')
+//     .select('competencia,motorista,unidade,fonte,rpm_pontos,idle_pontos,acel_pontos,frea_pontos,vel_pontos,freio_pontos,cambio_pontos,pontuacao')
+//     .order('competencia', { ascending: true });
+//   if (error) { console.error('Supabase:', error); return []; }
+//
+//   // reconstrói o de-para unidade/fonte a partir das próprias linhas (dispensa DRIVERS)
+//   data.forEach(r => { UNI_OF[r.motorista] = r.unidade; SRC_OF[r.motorista] = r.fonte; NOMES[r.motorista] = r.motorista; });
+//
+//   // mapeia 1:1 para o formato que o painel já usa (mesmo shape do generateRawRows)
+//   return data.map(r => ({
+//     vig:  String(r.competencia).replace(/-/g, '/'),   // '2026-07-01' -> '2026/07/01'
+//     unit: r.motorista,
+//     rpm:    r.rpm_pontos,
+//     idle:   r.idle_pontos,
+//     acel:   r.acel_pontos,
+//     frea:   r.frea_pontos,
+//     vel:    r.vel_pontos,
+//     freio:  r.freio_pontos,   // null p/ motoristas Geotab (peso redistribuído no score)
+//     cambio: r.cambio_pontos,  // null p/ motoristas Geotab
+//     pont:   r.pontuacao,
+//   }));
+// }
+
 function initData(){ atualizar(); }   // protótipo: regenera sempre (sem cache do Frota de Elite)
 
 
