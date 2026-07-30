@@ -220,7 +220,26 @@ table td:first-child,table th:first-child{text-align:left;}
 
 /* ── Light mode ── */
 body.light-mode .main{background:#F0F0F0;--text:#1a1a1a;--text2:#444444;--text3:#666666;color:var(--text);--red:#ff0000;--green:#0E8C0E;}body.light-mode .hero-sep{background:rgba(0,0,0,.18)!important;color:rgba(0,0,0,.2)!important;}
-body.light-mode .kpi-card,body.light-mode .chart-card,body.light-mode .tbl-section,body.light-mode .peso-box{background:rgba(128,128,128,.14)!important;border:none!important;box-shadow:none!important;--text:#1a1a1a;--text2:#444444;--text3:#555555;}
+body.light-mode .kpi-card,body.light-mode .chart-card,body.light-mode .tbl-section,body.light-mode .peso-box,body.light-mode .resumo-section{background:rgba(128,128,128,.14)!important;border:none!important;box-shadow:none!important;--text:#1a1a1a;--text2:#444444;--text3:#555555;}
+body.light-mode .resumo-card{background:#FFFFFF!important;border-color:transparent!important;}
+
+/* Resumo executivo (para slide) */
+.resumo-section{margin:8px 4px 40px;padding:22px 24px;border-radius:12px;background:rgba(20,27,38,.55);border:1px solid rgba(255,255,255,.07);box-shadow:0 2px 12px rgba(0,0,0,.25);backdrop-filter:blur(16px);}
+.resumo-title{font-size:20px;font-weight:800;color:var(--text);letter-spacing:.3px;}
+.resumo-sub{font-size:11px;color:var(--text2);margin-top:3px;margin-bottom:18px;}
+.resumo-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(215px,1fr));gap:14px;}
+.resumo-card{background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.06);border-radius:10px;padding:14px 16px;}
+.rc-h{font-size:10px;font-weight:800;color:var(--orange);text-transform:uppercase;letter-spacing:.8px;margin-bottom:12px;}
+.rc-big{font-size:30px;font-weight:800;color:var(--text);line-height:1;}
+.rc-big span{font-size:15px;font-weight:800;margin-left:6px;}
+.rc-note{font-size:10px;color:var(--text3);margin-top:7px;}
+.rc-list{list-style:none;display:flex;flex-direction:column;gap:10px;margin:0;padding:0;}
+.rc-list li{display:flex;align-items:baseline;gap:8px;font-size:12px;}
+.rl-nome{color:var(--text);font-weight:600;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.rl-delta{font-weight:800;font-size:13px;white-space:nowrap;}
+.rl-from{font-size:10px;color:var(--text3);white-space:nowrap;}
+.rl-up{color:var(--green);} .rl-down{color:var(--red);}
+.rc-empty{font-size:11px;color:var(--text3);}
 /* Pódio: fundo SEMPRE escuro (idêntico ao modo escuro), no claro e no escuro */
 body.light-mode td{color:var(--text);}
 body.light-mode thead th{border-bottom-color:rgba(0,0,0,.10);background:#F0F0F0;}
@@ -452,6 +471,13 @@ body.light-mode .podio-slot.primeiro .pedestal{box-shadow:0 -4px 24px rgba(196,1
       <!-- renderizado via JS -->
     </div>
   </div>
+
+  <!-- RESUMO EXECUTIVO (para slide) -->
+  <section class="resumo-section" id="resumo-section">
+    <div class="resumo-title">Resumo Executivo · Frota de Elite</div>
+    <div class="resumo-sub" id="resumo-sub">—</div>
+    <div class="resumo-grid" id="resumo"></div>
+  </section>
 
 </main>
 
@@ -697,6 +723,63 @@ function renderAll() {
   renderPodio(data);
   renderChart();
   renderIndChart(data);
+  renderResumo(data);
+}
+
+/* ── Resumo executivo (para slide): evolução por unidade e por indicador ── */
+function renderResumo(data) {
+  const box = document.getElementById('resumo'); if (!box) return;
+  const subEl = document.getElementById('resumo-sub');
+  // usa o filtrado se tiver ≥2 períodos; senão o histórico completo (RAW)
+  const src  = (new Set(data.map(r => r.vig))).size >= 2 ? data : RAW;
+  const vigs = [...new Set(src.map(r => r.vig))].sort();
+  if (vigs.length < 2) {
+    if (subEl) subEl.textContent = 'Selecione ao menos dois períodos para comparar a evolução.';
+    box.innerHTML = '';
+    return;
+  }
+  const first = vigs[0], last = vigs[vigs.length - 1];
+  if (subEl) subEl.textContent = `Evolução de ${vigLabel(first)} → ${vigLabel(last)}`;
+
+  const rowsAt = v => src.filter(r => r.vig === v);
+  const media  = a => a.length ? a.reduce((s, x) => s + x, 0) / a.length : null;
+  const dfmt   = d => (d >= 0 ? '+' : '') + d.toFixed(1);
+  const cls    = d => d >= 0 ? 'rl-up' : 'rl-down';
+
+  // ── por unidade: pontuação na 1ª e na última ponta ──
+  const scoreByUnit = v => { const m = {}; rowsAt(v).forEach(r => { if (r.pont != null) m[r.unit] = r.pont; }); return m; };
+  const sf = scoreByUnit(first), sl = scoreByUnit(last);
+  const deltas = Object.keys(sl).filter(u => u in sf).map(u => ({ u, a: sf[u], b: sl[u], d: sl[u] - sf[u] }));
+
+  const evol  = deltas.filter(x => x.d > 0).sort((a, b) => b.d - a.d).slice(0, 4);
+  const caiu  = deltas.filter(x => x.a >= 90 && x.d < 0).sort((a, b) => a.d - b.d).slice(0, 4); // estava bem e caiu
+  const gFirst = media(Object.values(sf)), gLast = media(Object.values(sl));
+  const gDelta = (gLast != null && gFirst != null) ? gLast - gFirst : 0;
+
+  // ── por indicador: média na 1ª e na última ponta ──
+  const indAvg = (v, f) => media(rowsAt(v).map(r => r[f]).filter(x => x != null));
+  const indD = FIELD_ORDER
+    .map(f => ({ label: IND_LABELS[f] || f, a: indAvg(first, f), b: indAvg(last, f) }))
+    .filter(x => x.a != null && x.b != null)
+    .map(x => ({ ...x, d: x.b - x.a }));
+  const indUp   = indD.filter(x => x.d > 0).sort((a, b) => b.d - a.d).slice(0, 4);
+  const indDown = indD.filter(x => x.d < 0).sort((a, b) => a.d - b.d).slice(0, 4);
+
+  const lista = (arr, emptyMsg) => arr.length
+    ? `<ul class="rc-list">${arr.map(x => `<li><span class="rl-nome">${x.u || x.label}</span><span class="rl-delta ${cls(x.d)}">${dfmt(x.d)}</span><span class="rl-from">${x.a.toFixed(1)}→${x.b.toFixed(1)}</span></li>`).join('')}</ul>`
+    : `<div class="rc-empty">${emptyMsg}</div>`;
+
+  box.innerHTML = `
+    <div class="resumo-card">
+      <div class="rc-h">Pontuação geral</div>
+      <div class="rc-big">${gLast != null ? gLast.toFixed(1) : '—'}<span class="${cls(gDelta)}">${dfmt(gDelta)}</span></div>
+      <div class="rc-note">média das unidades · ${gFirst != null ? gFirst.toFixed(1) : '—'} → ${gLast != null ? gLast.toFixed(1) : '—'}</div>
+    </div>
+    <div class="resumo-card"><div class="rc-h">Quem mais evoluiu</div>${lista(evol, 'Sem evolução no período.')}</div>
+    <div class="resumo-card"><div class="rc-h">Estava bem e caiu</div>${lista(caiu, 'Ninguém que estava bem recuou.')}</div>
+    <div class="resumo-card"><div class="rc-h">Indicadores em evolução</div>${lista(indUp, 'Nenhum indicador subiu.')}</div>
+    <div class="resumo-card"><div class="rc-h">Indicadores em involução</div>${lista(indDown, 'Nenhum indicador caiu.')}</div>
+  `;
 }
 
 /* ── Cards dos 11 indicadores (pontuação média · padrão scorecard) ── */
