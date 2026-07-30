@@ -584,10 +584,10 @@ function anoVigente(f){
 // soma orc/real (abs) de um conjunto de linhas, por conta canônica e por pacote
 function sumBy(rows, keyFn){
   const m={};
-  rows.forEach(r=>{ if((r[C.cta]||'')==='Receita Líquida') return; const k=keyFn(r); if(!k) return; if(!m[k]) m[k]={orc:0,real:0,rem:0}; m[k].orc+=+(r[refCol()]||0); m[k].real+=+(r[C.real]||0); m[k].rem+=+(r[C.rem]||0); });
+  rows.forEach(r=>{ if((r[C.cta]||'')==='Receita Líquida') return; const k=keyFn(r); if(!k) return; if(!m[k]) m[k]={orc:0,real:0,rem:0}; m[k].orc+=+(r[C.orc]||0); m[k].real+=+(r[C.real]||0); m[k].rem+=+(r[C.rem]||0); });
   return m;
 }
-function receitaOf(rows){ let o=0,rem=0,real=0; rows.forEach(r=>{ if((r[C.cta]||'')!=='Receita Líquida') return; o+=+(r[refCol()]||0); rem+=+(r[C.rem]||0); real+=+(r[C.real]||0); }); return {orc:o,rem,real}; }
+function receitaOf(rows){ let o=0,rem=0,real=0; rows.forEach(r=>{ if((r[C.cta]||'')!=='Receita Líquida') return; o+=+(r[C.orc]||0); rem+=+(r[C.rem]||0); real+=+(r[C.real]||0); }); return {orc:o,rem,real}; }
 
 // Constrói toda a estrutura de dados do painel para o estado de filtros f.
 function computeModel(f){
@@ -604,12 +604,19 @@ function computeModel(f){
   // ── Impacto acumulado (Análise vs Orçado), por conta canônica → agregado por pacote ──
   const accByCta = sumBy(rowsClosed, r=>r[C.cta]);       // por conta gerencial crua
   const rlAcc = receitaOf(rowsClosed);
-  const rlRefOrc=Math.abs(rlAcc.orc), rlReal=Math.abs(rlAcc.real);
+  const isRem = REF==='rem';
+  // tendência (modo REM): razão rem/orç dos meses fechados por conta (fallback geral) — igual à Carta de Custos
+  let _tR=0,_tO=0; Object.values(accByCta).forEach(d=>{ _tR+=Math.abs(d.rem); _tO+=Math.abs(d.orc); });
+  const remOverall=_tO?_tR/_tO:1;
+  const remRatio=cta=>{ const dd=accByCta[cta]; return (dd&&Math.abs(dd.orc))?Math.abs(dd.rem)/Math.abs(dd.orc):remOverall; };
+  const recRatio=Math.abs(rlAcc.orc)?Math.abs(rlAcc.rem)/Math.abs(rlAcc.orc):remOverall;
+  const refAcc = d => isRem ? d.rem : d.orc;   // baseline do acumulado fechado (REM=rem real, ORÇ=orçado)
+  const rlRefOrc=Math.abs(isRem?rlAcc.rem:rlAcc.orc), rlReal=Math.abs(rlAcc.real);
   // impacto por conta = Δpp/100 × ReceitaRealizada ; Δpp = AVreal − AVorc
   const impByCta={};
   Object.entries(accByCta).forEach(([cta,d])=>{
-    const avRef=rlRefOrc?d.orc/rlRefOrc*100:0, avReal=rlReal?d.real/rlReal*100:0;
-    impByCta[cta]={orcAcc:d.orc, realAcc:d.real, avRef, avReal, dPp:avReal-avRef, imp:(avReal-avRef)/100*rlReal};
+    const avRef=rlRefOrc?refAcc(d)/rlRefOrc*100:0, avReal=rlReal?d.real/rlReal*100:0;
+    impByCta[cta]={orcAcc:refAcc(d), realAcc:d.real, avRef, avReal, dPp:avReal-avRef, imp:(avReal-avRef)/100*rlReal};
   });
 
   // orçado por conta nos meses que faltam: abs (pesos/exibição) + net com sinal (projeção AV)
@@ -620,11 +627,12 @@ function computeModel(f){
   remMonths.forEach(mo=>{
     const mRows=rowsMonth(mo), byC=sumBy(mRows, r=>r[C.cta]);
     Object.entries(byC).forEach(([cta,d])=>{
-      const a=Math.abs(d.orc);
+      const proj = isRem ? d.orc*remRatio(cta) : d.orc;   // futuro: REM = orçado × razão (tendência); mantém o sinal
+      const a=Math.abs(proj);
       orcRemByCta[cta]=(orcRemByCta[cta]||0)+a;
-      orcRemNetByCta[cta]=(orcRemNetByCta[cta]||0)+d.orc;
+      orcRemNetByCta[cta]=(orcRemNetByCta[cta]||0)+proj;
       (orcByCtaMonth[cta]=orcByCtaMonth[cta]||{})[mo]=a;
-      (orcByCtaMonthNet[cta]=orcByCtaMonthNet[cta]||{})[mo]=d.orc;
+      (orcByCtaMonthNet[cta]=orcByCtaMonthNet[cta]||{})[mo]=proj;
     });
   });
 
@@ -654,7 +662,7 @@ function computeModel(f){
 
   // receita orçada dos meses restantes (total + por mês) p/ projeção e AV mensal
   let recRem=0; const recByMonth={};
-  remMonths.forEach(mo=>{ const v=Math.abs(receitaOf(rowsMonth(mo)).orc); recByMonth[mo]=v; recRem+=v; });
+  remMonths.forEach(mo=>{ const ro=Math.abs(receitaOf(rowsMonth(mo)).orc); const v=isRem?ro*recRatio:ro; recByMonth[mo]=v; recRem+=v; });
 
   return { year, lrm, remMonths, closedMonths, pacs, rlAcc, rlRefOrc, rlReal, recRem, recByMonth, yrRows, rowsClosed };
 }
