@@ -74,6 +74,10 @@ body{
 .pdf-btn{display:flex;align-items:center;gap:5px;background:rgba(249,115,22,.15);border:1px solid rgba(249,115,22,.3);border-radius:4px;padding:5px 9px;cursor:pointer;color:var(--orange);font-family:'Montserrat',sans-serif;font-size:11px;font-weight:800;letter-spacing:.5px;}
 .pdf-btn:hover{background:rgba(249,115,22,.32);}
 .pdf-btn:disabled{opacity:.55;cursor:default;}
+.ref-toggle{display:flex;align-items:center;gap:5px;background:rgba(249,115,22,.15);border:1px solid rgba(249,115,22,.3);border-radius:4px;padding:4px 9px;cursor:pointer;color:var(--orange);font-family:'Montserrat',sans-serif;font-size:11px;font-weight:800;letter-spacing:.5px;}
+.ref-toggle:hover{background:rgba(249,115,22,.3);}
+.ref-toggle .rt-lbl{color:var(--text2);font-weight:700;}
+body.exporting .ref-toggle{display:none!important;}
 .pdf-wrap{position:relative;}
 .pdf-menu{display:none;position:absolute;top:calc(100% + 4px);right:0;z-index:600;flex-direction:column;background:#0f1824;border:1px solid #2a3a50;border-radius:6px;overflow:hidden;box-shadow:0 8px 24px rgba(0,0,0,.7);min-width:118px;}
 .pdf-menu.open{display:flex;}
@@ -254,6 +258,7 @@ body.light-mode table.dre tbody tr{border-bottom:1px solid rgba(0,0,0,.06);}
   </div>
   <div class="header-right">
     <a href="../visao-financeira/" class="back-btn" title="Voltar à Visão Financeira"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg></a>
+    <button class="ref-toggle" id="ref-ana" onclick="toggleAnaRef()" title="Referência de toda a análise: comparar Realizado vs Orçado ou vs Remunerado"><span class="rt-lbl">vs</span> <span id="ref-ana-v">ORÇ</span></button>
     <div class="pdf-wrap">
       <button class="pdf-btn" id="pdfBtn" onclick="togglePdfMenu(event)" title="Exportar relatório PDF (estado filtrado)">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><polyline points="9 15 12 18 15 15"/></svg>
@@ -325,6 +330,10 @@ body.light-mode table.dre tbody tr{border-bottom:1px solid rgba(0,0,0,.06);}
 const SHEET_ID='1qcTy2ppLCGBKKqZCxCYWCTL9kTAuWfHBMyBfWJOyih8';
 const TAB_FROTA='Frota', TAB_RECEITA='Receita Líquida';
 const C={orc:0,rem:1,real:2,vig:9,uni:10,nv3:11,cta:12};
+// referência da análise: 'orc' (vs Orçado, padrão) | 'rem' (vs Remunerado) — troca a base de toda a análise
+let REF='orc';
+const refCol=()=>REF==='rem'?C.rem:C.orc, refAb=()=>REF==='rem'?'Rem':'Orç', refLbl=()=>REF==='rem'?'Remunerado':'Orçado';
+function toggleAnaRef(){ REF=REF==='rem'?'orc':'rem'; const e=document.getElementById('ref-ana-v'); if(e) e.textContent=REF==='rem'?'REM':'ORÇ'; if(typeof atualizar==='function') atualizar(); }
 
 // Pacotes do YTG — ICMS é pacote PRÓPRIO (5º), separado de Combustíveis.
 const PAC_YTG={
@@ -575,10 +584,10 @@ function anoVigente(f){
 // soma orc/real (abs) de um conjunto de linhas, por conta canônica e por pacote
 function sumBy(rows, keyFn){
   const m={};
-  rows.forEach(r=>{ if((r[C.cta]||'')==='Receita Líquida') return; const k=keyFn(r); if(!k) return; if(!m[k]) m[k]={orc:0,real:0,rem:0}; m[k].orc+=+(r[C.orc]||0); m[k].real+=+(r[C.real]||0); m[k].rem+=+(r[C.rem]||0); });
+  rows.forEach(r=>{ if((r[C.cta]||'')==='Receita Líquida') return; const k=keyFn(r); if(!k) return; if(!m[k]) m[k]={orc:0,real:0,rem:0}; m[k].orc+=+(r[refCol()]||0); m[k].real+=+(r[C.real]||0); m[k].rem+=+(r[C.rem]||0); });
   return m;
 }
-function receitaOf(rows){ let o=0,rem=0,real=0; rows.forEach(r=>{ if((r[C.cta]||'')!=='Receita Líquida') return; o+=+(r[C.orc]||0); rem+=+(r[C.rem]||0); real+=+(r[C.real]||0); }); return {orc:o,rem,real}; }
+function receitaOf(rows){ let o=0,rem=0,real=0; rows.forEach(r=>{ if((r[C.cta]||'')!=='Receita Líquida') return; o+=+(r[refCol()]||0); rem+=+(r[C.rem]||0); real+=+(r[C.real]||0); }); return {orc:o,rem,real}; }
 
 // Constrói toda a estrutura de dados do painel para o estado de filtros f.
 function computeModel(f){
@@ -732,7 +741,7 @@ function renderWaterfall(model){
   const forecast=totYTG-cc.alvo;
   const sum=document.getElementById('wf-summary');
   if(sum) sum.innerHTML=[
-    {l:'Orçado a realizar (YTG)',v:fmt(totYTG)},
+    {l:refLbl()+' a realizar (YTG)',v:fmt(totYTG)},
     {l:'Economia total (alvo)',v:fmt(cc.alvo)},
     {l:'Target reprojetado',v:fmt(forecast)},
     {l:'Redução',v:(totYTG?(cc.alvo/totYTG*100).toFixed(1):'0')+'%'},
@@ -743,7 +752,7 @@ function drawWf(model, cen, canvasId){
   let totYTG=0; PAC_ORDER.forEach(p=>{ if(pacs[p]) totYTG+=pacs[p].orcRem; });
   const steps=cc.parts.map(p=>({name:p, eco:(cc.out[p]?cc.out[p].economia:0)}));
   const forecast=totYTG-cc.alvo;
-  const labels=['Orçado YTG',...steps.map(s=>s.name),'Target'];
+  const labels=[refLbl()+' YTG',...steps.map(s=>s.name),'Target'];
   const isLight0=document.body.classList.contains('light-mode');
   const bars=[], colors=[], meta=[]; let run=totYTG;
   bars.push([0,totYTG]); colors.push(isLight0?'#111111':'#FFFFFF'); meta.push({top:'-'+fmt(totYTG),hi:totYTG});
@@ -863,7 +872,7 @@ function tblCenarioMerged(model, cen, titulo, sub){
   const partSet=new Set(cc.parts);
   const pctS = v => (v==null||!isFinite(v))?'—':v.toFixed(2)+'%';
   const monthHead=remMonths.map(mo=>`<th class="num">${MESES[mo-1]}/${String(year).slice(2)}</th>`).join('').replace('<th class="num"','<th class="num sep-l"',1);
-  const head=`<tr><th class="conta">Pacotes</th><th class="num">Orç - YTD</th><th class="num">Real - YTD</th><th class="num">Δ pp</th><th class="num sep-l">Impacto</th>${monthHead}<th class="num sep-l">Orç - ${year}</th><th class="num">TGT - ${year}</th><th class="num">Δ pp</th><th class="num">Impacto</th></tr>`;
+  const head=`<tr><th class="conta">Pacotes</th><th class="num">${refAb()} - YTD</th><th class="num">Real - YTD</th><th class="num">Δ pp</th><th class="num sep-l">Impacto</th>${monthHead}<th class="num sep-l">${refAb()} - ${year}</th><th class="num">TGT - ${year}</th><th class="num">Δ pp</th><th class="num">Impacto</th></tr>`;
   // bloco final 2026 (com economia aplicada): valores reais de Δpp/Impacto (Total fecha em 0)
   const fbCells=(orcAccS,orcRemAbs,realAccS,ecoAbs,muted)=>{
     const fb=fbCalc(model,orcAccS,orcRemAbs,realAccS,ecoAbs);
@@ -981,7 +990,7 @@ function tableShell(title, tag, sub, cols, rows, isCen, year){
     <div class="tbl-title">Pacotes Frota · ${title}</div>
     <div class="tbl-sub">${sub}</div>
     <div class="tbl-wrap"><table class="dre">${colGroup(cols.length)}<thead>
-      <tr><th class="conta">Pacotes</th><th class="num">Orç - YTD</th><th class="num">Real - YTD</th><th class="num">Δ pp</th><th class="num sep-l">Impacto</th>${firstMonth}<th class="num sep-l">Orç - ${year}</th><th class="num">YTG</th><th class="num">Δ pp</th><th class="num">Impacto</th></tr>
+      <tr><th class="conta">Pacotes</th><th class="num">${refAb()} - YTD</th><th class="num">Real - YTD</th><th class="num">Δ pp</th><th class="num sep-l">Impacto</th>${firstMonth}<th class="num sep-l">${refAb()} - ${year}</th><th class="num">YTG</th><th class="num">Δ pp</th><th class="num">Impacto</th></tr>
     </thead><tbody>${rows}</tbody></table></div></div>`;
 }
 function toggleDrill(tr){
@@ -1055,7 +1064,7 @@ function renderCompare(model, Fo, Ft){
   document.getElementById('fc-sub').textContent=`Ano ${model.year} · fechado até ${MESES[model.lrm-1]}/${String(model.year).slice(2)}. Mesmos custos, duas premissas de receita (orçada × tendência). Edite receita e custos e veja a aterrissagem mudar.`;
   const impMeta = v => `impacto <span class="${v<0?'cr':'cg'}">${fmtA(v)}</span>`;
   const cards=[
-    {l:'Orçado 2026', v:pctN(Fo.avOrc), m:'meta orçamentária'},
+    {l:refLbl()+' 2026', v:pctN(Fo.avOrc), m:'meta orçamentária'},
     {l:'Se nada mudar', v:pctN(Fo.avNada), m:impMeta(Fo.impNada), cls:(Fo.avNada-Fo.avOrc)<0?'cr':'cg'},
     {l:'Forecast · Rec. Orçada', v:pctN(Fo.avFc), m:impMeta(Fo.impFc), cls:(Fo.avFc-Fo.avOrc)<0?'cr':'cg'},
     {l:'Forecast · Rec. Tendência', v:pctN(Ft.avFc), m:impMeta(Ft.impFc), hi:true, cls:(Ft.avFc-Ft.avOrc)<0?'cr':'cg'},
@@ -1104,7 +1113,7 @@ function tblFull(model, F, opts){
     <div class="tbl-title">${opts.title}</div>
     <div class="tbl-sub">${opts.sub}</div>
     <div class="tbl-wrap"><table class="dre" style="table-layout:auto;min-width:100%;"><thead>
-      <tr><th class="conta">Receita / Pacotes</th><th class="num">Orç - YTD</th><th class="num">Real - YTD</th><th class="num">Δ</th><th class="num">Impacto</th>${monthHead}<th class="num sep-l">Orç - ${year}</th><th class="num">FCT - ${year}</th><th class="num">Δ</th><th class="num">Impacto</th></tr>
+      <tr><th class="conta">Receita / Pacotes</th><th class="num">${refAb()} - YTD</th><th class="num">Real - YTD</th><th class="num">Δ</th><th class="num">Impacto</th>${monthHead}<th class="num sep-l">${refAb()} - ${year}</th><th class="num">FCT - ${year}</th><th class="num">Δ</th><th class="num">Impacto</th></tr>
     </thead><tbody>${rows}</tbody></table></div></div>
     <div class="strat-section">
       <div class="strat-h">Estratégia / Observações · Cenário ${opts.note} <span class="strat-hint">— o que será feito para reduzir custos neste cenário. Salvo junto do cenário.</span></div>
