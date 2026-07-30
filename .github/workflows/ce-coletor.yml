@@ -1,0 +1,40 @@
+name: Condução Econômica · coletor
+
+# Estreia do modelo híbrido: puxa a telemetria diária e grava no Supabase.
+# Só roda de fato quando os segredos (tokens/acessos) estiverem configurados;
+# sem eles, o coletor faz "dry-run" (não escreve nada) e o job passa.
+
+on:
+  schedule:
+    - cron: "30 6 * * *"      # todo dia ~03:30 BRT (06:30 UTC)
+  workflow_dispatch:          # permite rodar manualmente (com um dia opcional)
+    inputs:
+      dia:
+        description: "Dia a coletar (YYYY-MM-DD). Vazio = ontem."
+        required: false
+        default: ""
+
+jobs:
+  coletar:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Instalar dependências
+        run: pip install -r etl/conducao-economica/requirements.txt
+
+      - name: Rodar coletor
+        env:
+          SUPABASE_URL:         ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          VFLEETS_TOKEN:        ${{ secrets.VFLEETS_TOKEN }}
+          VFLEETS_UO_IDS:       ${{ secrets.VFLEETS_UO_IDS }}
+          GEOTAB_SERVER:        ${{ secrets.GEOTAB_SERVER }}
+          GEOTAB_DATABASE:      ${{ secrets.GEOTAB_DATABASE }}
+          GEOTAB_USER:          ${{ secrets.GEOTAB_USER }}
+          GEOTAB_PASSWORD:      ${{ secrets.GEOTAB_PASSWORD }}
+        run: python etl/conducao-economica/coletor.py "${{ github.event.inputs.dia }}"
