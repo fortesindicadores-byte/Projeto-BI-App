@@ -207,17 +207,10 @@ async function loadPneus(){
   let lista=Object.entries(porPneu).map(([tid,arr])=>{
     const c=cad[tid]||{},rec=arr.reduce((a,b)=>new Date(b.dataInspecao)>new Date(a.dataInspecao)?b:a);
     const menor=_avg(arr,i=>i.menorMM),st=menor==null?null:menor<2?'Bloquear':menor<=3?'Recapar':menor<=6?'Regular':'Bom';
-    // previsão de troca: taxa de desgaste real (1ª vs última aferição) → dias até PULL_POINT
-    const byDt=arr.slice().sort((x,y)=>new Date(x.dataInspecao)-new Date(y.dataInspecao));
-    const fI=byDt[0],lI=byDt[byDt.length-1];
-    const mmF=num(fI.menorMM),mmL=num(lI.menorMM);
-    const dds=(new Date(lI.dataInspecao)-new Date(fI.dataInspecao))/864e5;
-    let prev=null;
-    if(menor!=null){ if(menor<=PULL_POINT) prev=0; else if(dds>=7&&mmF!=null&&mmL!=null&&mmF>mmL){ const tx=(mmF-mmL)/dds; if(tx>0) prev=Math.round((menor-PULL_POINT)/tx); } }
-    return {cod:c._cod||rec._cod,tier:c._tier||rec._tier||'',status:c.status||null,placa:rec.placa||c.placa||'',veiculoId:rec.veiculoId??c.veiculoId,posicao:rec.posicao??c.posicao,nomePosicao:c.nomePosicao||rec.nomePosicao||null,serial:rec.serial||c.serial||'',
+    return {id:+tid,cod:c._cod||rec._cod,tier:c._tier||rec._tier||'',status:c.status||null,placa:rec.placa||c.placa||'',veiculoId:rec.veiculoId??c.veiculoId,posicao:rec.posicao??c.posicao,nomePosicao:c.nomePosicao||rec.nomePosicao||null,serial:rec.serial||c.serial||'',
       marca:c.marca||'',vida:c.cicloVida??null,bandaMarca:c.bandaMarca||'',banda:c.banda||'',
       mm1:_avg(arr,i=>i.mm1),mm2:_avg(arr,i=>i.mm2),mm3:_avg(arr,i=>i.mm3),mm4:_avg(arr,i=>i.mm4),amp:_avg(arr,i=>i.amplitude),
-      menor,st,desv:_avg(arr,i=>i.desvioPressao),pIdeal:_avg(arr,i=>i.pressaoIdeal),pAtual:_avg(arr,i=>i.pressaoMedida),prev,dt:rec.dataInspecao};
+      menor,st,desv:_avg(arr,i=>i.desvioPressao),pIdeal:_avg(arr,i=>i.pressaoIdeal),pAtual:_avg(arr,i=>i.pressaoMedida),prev:null,dt:rec.dataInspecao};
   });
   const inUse=lista.filter(t=>statusAmigavel(t.status)==='Em uso');
   if(inUse.length) lista=inUse;                 // guarda: se o cadastro não trouxe status, não zera o painel
@@ -226,8 +219,100 @@ async function loadPneus(){
   const tires=Object.values(porPos);
   // aferição por veículo (última data) p/ aderência
   const veic={};merged.inspections.forEach(i=>{if(i.veiculoId==null)return;const d=new Date(i.dataInspecao);const cur=veic[i.veiculoId];if(!cur||d>cur.dt)veic[i.veiculoId]={cod:i._cod,tier:i._tier||'',dt:d};});
+  // PREVISÃO DE TROCA — motor idêntico ao painel /pneus/ (km/dia da Km/L + cascata de taxa de desgaste)
+  let KMDIA={placa:{},modelo:{},cidade:{}};
+  try{ KMDIA=await loadKmDiaFarol(); }catch(e){ console.warn('Km/L não carregou — previsão usa km/dia do odômetro.',e); }
+  try{ calcPrevisaoFarol(tires, merged.inspections, merged.vehicles, KMDIA); }catch(e){ console.error('previsão de troca',e); }
   DATA.pneus={tires,veic:Object.values(veic),ult:ult||Date.now()};
   return DATA.pneus;
+}
+
+// ── PREVISÃO DE TROCA (portado 1:1 do painel /pneus/: calcPrevisao + kmDiaVeiculo + loadKmDia) ──
+const KMDIA_SHEET_ID='1ZZdvG_RK5cTBLdPl3TWCbNeqw-Y4fTYwWsQV4w-e__A', KMDIA_TAB='Km/L', KMDIA_DIAS_VIG=25, KMDIA_EMPILHADEIRA=250;
+const CIDADE_PNEUS={'CBA T1 WH':'CUIABA','CBA T1':'CUIABA','CBA T2':'CUIABA','MCC T1':'CACHOEIRAS DE MACACU','MCC T2':'CACHOEIRAS DE MACACU','CGR':'CAMPO GRANDE','BLC':'BALNEARIO CAMBORIU','FLP':'FLORIANOPOLIS','GRL':'GUARULHOS','NFR':'NOVA FRIBURGO','PLT':'PELOTAS','RON':'RONDONOPOLIS','PIR':'PIRAI','ANG':'ANHANGUERA'};
+const _normP=s=>(s==null?'':String(s)).trim().toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+const _medP=a=>{const v=a.filter(x=>isFinite(x)).slice().sort((x,y)=>x-y);if(!v.length)return 0;const m=Math.floor(v.length/2);return v.length%2?v[m]:(v[m-1]+v[m])/2;};
+async function loadKmDiaFarol(){
+  const out={placa:{},modelo:{},cidade:{}};
+  const T=await gvizAny(KMDIA_SHEET_ID,KMDIA_TAB);   // cols: 15 cidade · 16 placa · 19 modelo · 22 km rodado (como no /pneus/)
+  const porPlaca={};
+  (T.rows||[]).forEach(r=>{
+    const placa=_normP(r[16]); const km=num(r[22]);
+    if(!placa||!(km>0))return;
+    const p=porPlaca[placa]||(porPlaca[placa]={soma:0,n:0,modelo:'',cidade:''});
+    p.soma+=km/KMDIA_DIAS_VIG; p.n++;
+    if(!p.modelo)p.modelo=_normP(r[19]); if(!p.cidade)p.cidade=_normP(r[15]);
+  });
+  const porModelo={},porCidade={};
+  Object.entries(porPlaca).forEach(([pl,p])=>{ if(!p.n)return; const kd=p.soma/p.n; out.placa[pl]=kd;
+    if(p.modelo)(porModelo[p.modelo]=porModelo[p.modelo]||[]).push(kd);
+    if(p.cidade)(porCidade[p.cidade]=porCidade[p.cidade]||[]).push(kd); });
+  const avgP=a=>{const v=a.filter(x=>x>0);return v.length?v.reduce((s2,x)=>s2+x,0)/v.length:0;};
+  Object.entries(porModelo).forEach(([k,a])=>out.modelo[k]=avgP(a));
+  Object.entries(porCidade).forEach(([k,a])=>out.cidade[k]=avgP(a));
+  return out;
+}
+function calcPrevisaoFarol(tires,inspections,vehicles,KMDIA){
+  const hist={};
+  (inspections||[]).forEach(i=>{ if(!i.tireId||!(i.menorMM>0)||!(i.odometro>0))return; (hist[i.tireId]=hist[i.tireId]||[]).push(i); });
+  Object.values(hist).forEach(a=>a.sort((x,y)=>new Date(x.dataInspecao)-new Date(y.dataInspecao)));
+  const vehPl={};(vehicles||[]).forEach(v=>{const k=_normP(v.placa);if(k&&!vehPl[k])vehPl[k]=v;});
+  const eixoDe=t=>{const nome=String(t.nomePosicao||'').toUpperCase().trim();if(!nome)return String(t.posicao||'')[0]||null;if(/ESTEPE|STEP|RESERV/.test(nome))return null;const m=nome.match(/^(\d+)/);return m?m[1]:(String(t.posicao||'')[0]||null);};
+  const kmDiaVeic=t=>{
+    const plN=_normP(t.placa),veh=vehPl[plN];
+    if(_normP(veh&&veh.tipo).includes('EMPILHADEIRA'))return KMDIA_EMPILHADEIRA;
+    if(plN&&KMDIA.placa[plN]>0)return KMDIA.placa[plN];
+    const moN=_normP(veh&&veh.modelo); if(moN&&KMDIA.modelo[moN]>0)return KMDIA.modelo[moN];
+    const key=(t.cod||'')+(t.tier?' '+t.tier:''); const ciN=_normP(CIDADE_PNEUS[key]||CIDADE_PNEUS[t.cod]||'');
+    if(ciN&&KMDIA.cidade[ciN]>0)return KMDIA.cidade[ciN];
+    return 0;
+  };
+  const alvo=tires.filter(t=>t.menor>0);
+  const _pk=t=>_normP(t.placa)||'', _ek=t=>eixoDe(t)||'', _vk=t=>String(t.vida!=null?t.vida:''), _bk=t=>_normP(t.banda)||'', _mk=t=>_normP(t.marca)||'';
+  // 1ª passada: taxa própria (regressão mm × km) + confiabilidade
+  const calc=[];
+  alvo.forEach(t=>{
+    const h=hist[t.id]; let wearProprio=0,kmDiaOdo=0,confiavel=false;
+    if(h&&h.length>=3){
+      const pts=h.map(i=>({km:i.odometro,mm:i.menorMM}));
+      const kmDist=new Set(pts.map(pp=>pp.km)).size;
+      const a=h[0],b=h[h.length-1];
+      const dKm=b.odometro-a.odometro, dDia=(new Date(b.dataInspecao)-new Date(a.dataInspecao))/864e5;
+      kmDiaOdo=(dKm>0&&dDia>0)?dKm/dDia:0;
+      if(kmDist>=3&&dKm>=2000){
+        const n=pts.length,sx=pts.reduce((s2,pp)=>s2+pp.km,0),sy=pts.reduce((s2,pp)=>s2+pp.mm,0),sxx=pts.reduce((s2,pp)=>s2+pp.km*pp.km,0),sxy=pts.reduce((s2,pp)=>s2+pp.km*pp.mm,0);
+        const den=n*sxx-sx*sx, slope=den!==0?(n*sxy-sx*sy)/den:0;   // mm por km
+        if(slope<0){const w=-slope*1000; if(w<=2.5){wearProprio=w; const kd=kmDiaVeic(t)||kmDiaOdo; if(kd>0&&kd<=2000)confiavel=true;}}
+      }
+    }
+    calc.push({t,wearProprio,kmDiaOdo,confiavel});
+  });
+  const pool=calc.filter(c=>c.confiavel&&c.wearProprio>0);
+  const medianaFrota=_medP(pool.map(c=>c.wearProprio))||1.0;
+  const taxaGrupo=pred=>{const g=pool.filter(c=>pred(c.t));if(g.length<3)return null;return _medP(g.map(c=>c.wearProprio));};
+  const kmDiaFrota=_medP(calc.map(c=>kmDiaVeic(c.t)||c.kmDiaOdo).filter(v=>v>0&&v<=2000))||100;
+  // 2ª passada: cascata (placa·similar → placa·eixo → placa → frota·similar → frota·eixo → mediana frota)
+  calc.forEach(c=>{
+    const t=c.t; let wear1000,proprio=false;
+    if(c.confiavel){wear1000=c.wearProprio;proprio=true;}
+    else{
+      const tent=[
+        cc=>_pk(cc)===_pk(t)&&_mk(cc)===_mk(t)&&_vk(cc)===_vk(t)&&_bk(cc)===_bk(t)&&_ek(cc)===_ek(t),
+        cc=>_pk(cc)===_pk(t)&&_ek(cc)===_ek(t),
+        cc=>_pk(cc)===_pk(t),
+        cc=>_mk(cc)===_mk(t)&&_vk(cc)===_vk(t)&&_bk(cc)===_bk(t)&&_ek(cc)===_ek(t),
+        cc=>_ek(cc)===_ek(t),
+      ];
+      let achou=null;
+      for(const pred of tent){const tx=taxaGrupo(pred);if(tx!=null&&tx>0){achou=tx;break;}}
+      wear1000=achou!=null?achou:medianaFrota;
+    }
+    let kmDia=kmDiaVeic(t)||c.kmDiaOdo; if(!(kmDia>0)||kmDia>2000)kmDia=kmDiaFrota; if(!(kmDia>0))kmDia=100;
+    const kmAte=wear1000>0?Math.max(0,t.menor-PULL_POINT)/(wear1000/1000):Infinity;
+    const dias=kmDia>0?kmAte/kmDia:Infinity;
+    t.prev=isFinite(dias)?Math.round(dias):null;
+    t.prevEst=!proprio;
+  });
 }
 // normaliza segmento (MECANICA/MECÂNICA_, QUALIDADE_, etc.)
 function _seg(v){return _n(v).replace(/_+$/,'').trim();}
@@ -606,7 +691,8 @@ async function renderPneusMM(el,cod){
   const lista=tires.filter(t=>t.menor!=null&&t.st&&t.st!=='Bom')
     .sort((a,b)=>{const pa=a.prev==null?1e9:a.prev,pb=b.prev==null?1e9:b.prev;return pa-pb||a.menor-b.menor;}).slice(0,80);
   const ampC=v=>v==null?'':v>5?'cr':v>3?'cy':'cg';
-  const prevTxt=t=>t.prev==null?'—':t.prev<=0?'Imediata':_pnData(P.ult+t.prev*864e5);
+  const prevTxt=t=>t.prev==null?'—':t.prev<=0?'Imediata':(t.prevEst?'≈ ':'')+_pnData(Date.now()+t.prev*864e5);
+  const prevCor=d=>d==null?'':d<=30?'#FF6666':d<=60?'#F97316':d<=90?'#EAB308':'#3BB33B';
   h+=wrapT('<table>'+_pnTh(['Nº de Fogo',cod?'Placa':'Unidade · Placa',['Posição'],['Marca'],['Vida'],['Marca Banda'],['Banda'],['mm1'],['mm2'],['mm3'],['mm4'],['Amplitude'],['Menor MM'],['Status'],['Prev. troca'],['Última afer.']])+'<tbody>'+
     lista.map(t=>{const c=COR_ST[t.st]||'#94A3B8';
       return `<tr><td><b>${escF(t.serial||'—')}</b></td><td>${_pnPl(t,cod)}</td><td class="ctr">${_pnPos(t)}</td>
@@ -616,9 +702,9 @@ async function renderPneusMM(el,cod){
       <td class="ctr ${ampC(t.amp)}" style="font-weight:700">${_pnF1(t.amp)}</td>
       <td class="ctr" style="color:${c};font-weight:700">${_pnF1(t.menor)}</td>
       <td class="ctr" style="white-space:nowrap">${_pnDot(c)}${escF(t.st)}</td>
-      <td class="ctr ${t.prev!=null&&t.prev<=30?'cr':''}">${prevTxt(t)}</td>
+      <td class="ctr" style="color:${prevCor(t.prev)};font-weight:700">${prevTxt(t)}</td>
       <td class="ctr">${_pnData(t.dt)}</td></tr>`;}).join('')+'</tbody></table>');
-  el.innerHTML=h+_pnFoot(P,' Milimetragem: &lt;2 Bloquear · ≤3 Recapar · ≤6 Regular · &gt;6 Bom. Amplitude: &gt;5 vermelho · &gt;3 amarelo · senão verde. Prev. troca = data em que o pneu chega a '+PULL_POINT+'mm pela taxa de desgaste real entre as aferições.');
+  el.innerHTML=h+_pnFoot(P,' Milimetragem: &lt;2 Bloquear · ≤3 Recapar · ≤6 Regular · &gt;6 Bom. Amplitude: &gt;5 vermelho · &gt;3 amarelo · senão verde. Prev. troca = data em que o pneu chega a '+PULL_POINT+'mm — mesmo motor do painel Pneus (taxa de desgaste real por regressão + km/dia do combustível, com cascata de fallbacks; ≈ = taxa estimada por grupo).');
 }
 
 // 3) CALIBRAGEM — pressão ideal × real, ranking pelo maior desvio
