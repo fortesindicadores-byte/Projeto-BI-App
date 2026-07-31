@@ -128,6 +128,7 @@ async function farolLoad(){
     DATA.os=T.os.rows.map(r=>({dias:num(r[i.dias]),os:String(r[i.os]||'').trim(),cod:codDe(r[i.fil]),fil:String(r[i.fil]||'').trim(),ori:String(r[i.ori]||'').trim(),tipo:String(r[i.tip]||'').trim(),crit:String(r[i.cri]||'').trim(),seg:_seg(r[i.seg]),forn:String(r[i.forn]||'').trim(),mec:String(r[i.mec]||'').trim(),placa:String(r[i.pla]||'').trim(),obs:String(r[i.obs]||'').trim()})).filter(r=>r.os);
   }
   await loadDisp();
+  try{ await loadPneus(); }catch(e){ console.error('pneus load',e); }
   return DATA;
 }
 // nome da unidade na planilha de Disponibilidade → [código Farol, tier]
@@ -435,6 +436,20 @@ function renderOS(el,cod){
 }
 
 // ── RANKING DE UNIDADES (geral) ──
+// pneus por unidade (da API/Supabase) — mesmas fórmulas da seção Pneus
+function pneusStats(cod){
+  const P=DATA.pneus; if(!P) return {af:null,mm:null,ca:null};
+  const tires=P.tires.filter(t=>cod?t.cod===cod:true);
+  const veic=P.veic.filter(v=>cod?v.cod===cod:true);
+  const ref=P.ult;
+  const af=veic.length?veic.filter(v=>(ref-v.dt.getTime())<=30*864e5).length/veic.length*100:null;
+  const cnt={Bloquear:0,Recapar:0,Regular:0,Bom:0}; tires.forEach(t=>{if(t.st)cnt[t.st]++;});
+  const totMM=tires.filter(t=>t.st).length, crit=cnt.Bloquear+cnt.Recapar;
+  const mm=totMM?(totMM-crit)/totMM*100:null;
+  const comP=tires.filter(t=>t.pIdeal>0&&t.desv!=null);
+  const ca=comP.length?comP.filter(t=>Math.abs(t.desv)<=10).length/comP.length*100:null;
+  return {af,mm,ca};
+}
 function unitStats(cod){
   const sv=stressVPct(byCod(DATA.stressV,cod));
   const se=(()=>{const a=byCod(DATA.stressE,cod).filter(r=>r.contratada);if(!a.length)return null;return ((a.filter(r=>!(r.d1>0)).length+a.filter(r=>!(r.d2>0)).length)/(2*a.length))*100;})();
@@ -444,26 +459,27 @@ function unitStats(cod){
   const os=(()=>{const a=byCod(DATA.os,cod);return a.length?a.filter(r=>(r.dias??0)<=OS_META).length/a.length*100:100;})();
   const cu=(()=>{const a=byCod(DATA.custos,cod);if(!a.length)return null;const o=sumA(a.map(r=>r.orc)),re=sumA(a.map(r=>r.rea));return Math.abs(o)>0?(Math.abs(re)-Math.abs(o))/Math.abs(o)*100:null;})();
   const dp=(()=>{const a=(DATA.disp||[]).filter(r=>r.cod===cod);if(!a.length)return null;const at=sumA(a.map(r=>r.ativos)),ind=sumA(a.map(r=>r.indisp));return at>0?(at-ind)/at*100:null;})();
-  return {sv,se,cf,pv,al,os,cu,dp};
+  const _ps=pneusStats(cod);
+  return {sv,se,cf,pv,al,os,cu,dp,af:_ps.af,mm:_ps.mm,ca:_ps.ca};
 }
 function renderRanking(el){
   const list=codsFiltrados().map(cod=>{
     const s=unitStats(cod);
-    const score=avgA([s.sv,s.se,s.cf,s.pv,s.al,s.os,s.dp]);
+    const score=avgA([s.sv,s.se,s.cf,s.pv,s.al,s.os,s.dp,s.af,s.mm,s.ca]);
     return {cod,...s,score};
   }).sort((a,b)=>(b.score??-1)-(a.score??-1));
   const cell=(v,cls)=>`<td class="num ${cls}">${pct1(v)}</td>`;
   const cCu=v=>v==null?'mut':v<=0?'cg':v<=5?'cy':'cr';
-  const rkHead='<thead><tr>'+['#','Unidade','Média','Stress Veíc.','Stress Emp.','CIFV','Preventivas','Alinhamento','OS no prazo','Disponib.','Custos Δ Orç %'].map((h,i)=>`<th${i>=2?' class="num"':''}>${h}</th>`).join('')+'</tr></thead>';
+  const rkHead='<thead><tr>'+['#','Unidade','Média','Stress Veíc.','Stress Emp.','CIFV','Preventivas','Alinhamento','OS no prazo','Disponib.','Aferições','Milimetr.','Calibr.','Custos Δ Orç %'].map((h,i)=>`<th${i>=2?' class="num"':''}>${h}</th>`).join('')+'</tr></thead>';
   el.innerHTML=wrapT('<table>'+rkHead+'<tbody>'+
     list.map((u,i)=>{
       const sc=u.score==null?'mut':u.score>=97?'#3BB33B':u.score>=90?'#EAB308':'#FF6666';
       return `<tr><td class="mut">${i+1}</td><td><b>${u.cod}</b></td>
       <td class="num">${u.score==null?'—':`<span class="pill" style="background:${sc}">${pct1(u.score)}</span>`}</td>
       ${cell(u.sv,clsPctMeta(u.sv))}${cell(u.se,clsPctMeta(u.se))}${cell(u.cf,clsPctMeta(u.cf))}${cell(u.pv,clsPctMeta(u.pv))}
-      ${cell(u.al,u.al==null?'mut':u.al>=80?'cg':'cr')}${cell(u.os,u.os==null?'mut':u.os>=90?'cg':u.os>=70?'cy':'cr')}${cell(u.dp,dispCls(u.dp))}
+      ${cell(u.al,u.al==null?'mut':u.al>=80?'cg':'cr')}${cell(u.os,u.os==null?'mut':u.os>=90?'cg':u.os>=70?'cy':'cr')}${cell(u.dp,dispCls(u.dp))}${cell(u.af,clsPctMeta(u.af,95,85))}${cell(u.mm,clsPctMeta(u.mm,90,75))}${cell(u.ca,clsPctMeta(u.ca,90,75))}
       <td class="num ${cCu(u.cu)}">${u.cu==null?'—':(u.cu>0?'+':'')+pct1(u.cu)}</td></tr>`;}).join('')+'</tbody></table>')+
-    '<div class="tbl-sub" style="margin-top:8px">Média = aderências (Stress V/E, CIFV, Preventivas, Alinhamento, OS no prazo, Disponibilidade). Custos é informativo (Δ Real vs Orç do mês). Pneus tem seção própria (foto Prolog).</div>';
+    '<div class="tbl-sub" style="margin-top:8px">Média = aderências (Stress V/E, CIFV, Preventivas, Alinhamento, OS no prazo, Disponibilidade, Aferições, Milimetragem e Calibragem). Custos é informativo (Δ Real vs Orç do mês). Aferições/Milimetragem/Calibragem vêm da API (foto Prolog); detalhe na seção Pneus abaixo.</div>';
 }
 
 // ── RESUMO EXECUTIVO (geral) ──
@@ -597,7 +613,7 @@ function renderHeroDots(el,cod){
   const stats=cod?unitStats(cod):(()=>{ // geral = média das unidades (respeita o filtro)
     const all=codsFiltrados().map(unitStats);
     const m=k=>avgA(all.map(a=>a[k]));
-    return {sv:m('sv'),se:m('se'),cf:m('cf'),pv:m('pv'),al:m('al'),os:m('os'),cu:m('cu'),dp:m('dp')};
+    return {sv:m('sv'),se:m('se'),cf:m('cf'),pv:m('pv'),al:m('al'),os:m('os'),cu:m('cu'),dp:m('dp'),af:m('af'),mm:m('mm'),ca:m('ca')};
   })();
   const dot=(v,cls)=>`<span class="dot ${cls==='cg'?'g':cls==='cy'?'y':cls==='cr'?'r':''}" style="${cls==='mut'?'background:#475569':''}"></span>`;
   const item=(lb,v,cls)=>`<div class="hero-delta"><span>${lb}</span><b class="${cls}">${dot(v,cls)} ${pct1(v)}</b></div>`;
@@ -609,6 +625,9 @@ function renderHeroDots(el,cod){
     item('Alinhamento',stats.al,stats.al==null?'mut':stats.al>=80?'cg':'cr')+
     item('OS no prazo',stats.os,stats.os==null?'mut':stats.os>=90?'cg':stats.os>=70?'cy':'cr')+
     item('Disponib.',stats.dp,dispCls(stats.dp))+
+    item('Aferições',stats.af,clsPctMeta(stats.af,95,85))+
+    item('Milimetragem',stats.mm,clsPctMeta(stats.mm,90,75))+
+    item('Calibragem',stats.ca,clsPctMeta(stats.ca,90,75))+
     `<div class="hero-delta"><span>Custos Δ Orç</span><b class="${stats.cu==null?'mut':stats.cu<=0?'cg':stats.cu<=5?'cy':'cr'}">${stats.cu==null?'—':(stats.cu>0?'+':'')+pct1(stats.cu)}</b></div>`;
   return stats;
 }
