@@ -568,23 +568,39 @@ async function renderPneus(el,cod){
     ${card('Calibragem OK',pct1(calOk),clsPctMeta(calOk,90,75),'±10% ideal')}
     ${card('Críticos',String(crit),crit?'cr':'cg','bloquear+recapar')}
   </div>`;
-  // distribuição milimetragem
-  h+=`<div class="blk-t">Milimetragem · sulco (menor)</div>
+  const stCls=s=>s==='Bloquear'?'cr':s==='Recapar'?'cy':s==='Regular'?'':'cg';
+  const pl=t=>cod?escF(t.placa):escF(t.cod)+(t.tier?' '+escF(t.tier):'')+' · '+escF(t.placa);
+  const pos=t=>escF(String(t.nomePosicao||t.posicao||'—'));
+
+  // 1) AFERIÇÕES · Ranking de Placas — placa aferida há mais tempo primeiro
+  const byPl={}; tires.forEach(t=>{ if(!t.placa)return; const c=byPl[t.placa]; if(!c||new Date(t.dt)>new Date(c.dt)) byPl[t.placa]={placa:t.placa,cod:t.cod,tier:t.tier,dt:t.dt}; });
+  const placas=Object.values(byPl).map(p=>({...p,dias:Math.round((P.ult-new Date(p.dt).getTime())/864e5)})).sort((a,b)=>b.dias-a.dias).slice(0,50);
+  h+=`<div class="blk-t">Aferições · Ranking de Placas</div>`+
+    wrapT('<table>'+th(cod?'Placa':'Unidade · Placa','Última aferição','Dias','Situação')+'<tbody>'+
+    placas.map(p=>`<tr><td><b>${cod?escF(p.placa):escF(p.cod)+(p.tier?' '+escF(p.tier):'')+' · '+escF(p.placa)}</b></td>
+      <td>${new Date(p.dt).toLocaleDateString('pt-BR')}</td>
+      <td class="num ${p.dias<=30?'cg':'cr'}">${p.dias}</td>
+      <td class="${p.dias<=30?'cg':'cr'}">${p.dias<=30?'Em dia':'Aferir'}</td></tr>`).join('')+'</tbody></table>');
+
+  // 2) MILIMETRAGEM · Ranking por Nº de Fogo — menor sulco primeiro (Previsão de Troca completa vem na próxima etapa)
+  const mmRank=tires.filter(t=>t.menor!=null).sort((a,b)=>a.menor-b.menor).slice(0,50);
+  h+=`<div class="blk-t">Milimetragem · Ranking por Nº de Fogo</div>
     <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px">
       <span class="pill" style="background:#FF6666">${cnt.Bloquear} Bloquear</span>
       <span class="pill" style="background:#EAB308">${cnt.Recapar} Recapar</span>
       <span class="pill" style="background:#38BDF8">${cnt.Regular} Regular</span>
-      <span class="pill" style="background:#3BB33B">${cnt.Bom} Bom</span></div>`;
-  // piores pneus
-  const worst=tires.filter(t=>t.menor!=null).sort((a,b)=>a.menor-b.menor).slice(0,50);
-  const stCls=s=>s==='Bloquear'?'cr':s==='Recapar'?'cy':s==='Regular'?'':'cg';
-  h+=`<div class="blk-t">Bottom | Pneus críticos</div>`+
-    wrapT('<table>'+th(cod?'Placa':'Unidade · Placa','Posição','Serial','Sulco mm','Status','Desvio pressão')+'<tbody>'+
-    worst.map(t=>`<tr><td><b>${cod?escF(t.placa):escF(t.cod)+(t.tier?' '+escF(t.tier):'')+' · '+escF(t.placa)}</b></td>
-      <td>${escF(String(t.nomePosicao||t.posicao||'—'))}</td><td>${escF(t.serial||'—')}</td>
-      <td class="num ${t.menor<2?'cr':t.menor<=3?'cy':'cg'}">${t.menor==null?'—':t.menor.toFixed(1)}</td>
-      <td class="${stCls(t.st)}">${escF(t.st||'—')}</td>
-      <td class="num ${t.desv==null?'mut':Math.abs(t.desv)>10?'cr':'cg'}">${t.desv==null?'—':(t.desv>0?'+':'')+Math.round(t.desv)+'%'}</td></tr>`).join('')+'</tbody></table>');
+      <span class="pill" style="background:#3BB33B">${cnt.Bom} Bom</span></div>`+
+    wrapT('<table>'+th('Nº de Fogo',cod?'Placa':'Unidade · Placa','Posição','Sulco mm','Status')+'<tbody>'+
+    mmRank.map(t=>`<tr><td><b>${escF(t.serial||'—')}</b></td><td>${pl(t)}</td><td>${pos(t)}</td>
+      <td class="num ${t.menor<2?'cr':t.menor<=3?'cy':'cg'}">${t.menor.toFixed(1)}</td>
+      <td class="${stCls(t.st)}">${escF(t.st||'—')}</td></tr>`).join('')+'</tbody></table>');
+
+  // 3) CALIBRAGEM · Ranking por Nº de Fogo — maior desvio de pressão primeiro
+  const calRank=tires.filter(t=>t.desv!=null).sort((a,b)=>Math.abs(b.desv)-Math.abs(a.desv)).slice(0,50);
+  h+=`<div class="blk-t">Calibragem · Ranking por Nº de Fogo</div>`+
+    wrapT('<table>'+th('Nº de Fogo',cod?'Placa':'Unidade · Placa','Posição','Desvio pressão')+'<tbody>'+
+    calRank.map(t=>`<tr><td><b>${escF(t.serial||'—')}</b></td><td>${pl(t)}</td><td>${pos(t)}</td>
+      <td class="num ${Math.abs(t.desv)>10?'cr':'cg'}">${(t.desv>0?'+':'')+Math.round(t.desv)+'%'}</td></tr>`).join('')+'</tbody></table>');
   const dt=new Date(P.ult);
   h+=`<div class="tbl-sub" style="margin-top:8px">Foto Prolog de ${dt.toLocaleDateString('pt-BR')} ${dt.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})} · 1 leitura por posição (aferição mais recente, só pneus em uso). Milimetragem: &lt;2 Bloquear · ≤3 Recapar · ≤6 Regular · &gt;6 Bom. Calibragem OK = ±10% da ideal.</div>`;
   el.innerHTML=h;
