@@ -197,18 +197,22 @@ async function loadPneus(){
     const res=await Promise.all(batch.map(async bid=>{for(let a=0;a<5;a++){const o=await fetchB(bid);if(o!==null)return o;await sleep(700);}return [];}));
     res.flat().forEach(r=>{const ct=PNEUS_BRANCH[r.branch_id];if(!ct||!merged[r.endpoint])return;if(r.updated_at)ult=Math.max(ult,new Date(r.updated_at).getTime());(Array.isArray(r.data)?r.data:[]).forEach(rec=>{rec._cod=ct[0];rec._tier=ct[1];merged[r.endpoint].push(rec);}); });
   }
-  // reconstrói pneu atual: 1 por (veículo+posição), aferição mais recente
-  const porPos={};
-  merged.inspections.forEach(i=>{
-    if(i.veiculoId==null||i.posicao==null)return;
-    const k=i.veiculoId+'|'+i.posicao,cur=porPos[k];
-    if(!cur||new Date(i.dataInspecao)>new Date(cur.dataInspecao))porPos[k]=i;
+  // reconstrói como no painel /pneus/: 1 linha por tireId (média das leituras),
+  // junta o cadastro (status/nomePosicao), fica só com pneus EM USO e deduplica por veículo+posição.
+  const statusAmigavel=x=>{const k=String(x||'').toUpperCase().trim();return ({INSTALLED:'Em uso',RODANDO:'Em uso',STOCK:'Estoque',ESTOQUE:'Estoque',SCRAP:'Sucata',SUCATA:'Sucata'})[k]||(k||'Sem status');};
+  const cad={};merged.tires.forEach(t=>{if(t.id!=null)cad[t.id]=t;});
+  const _avg=(arr,f)=>{const v=arr.map(f).filter(x=>typeof x==='number'&&!isNaN(x));return v.length?v.reduce((a,b)=>a+b,0)/v.length:null;};
+  const porPneu={};merged.inspections.forEach(i=>{if(i.tireId==null)return;(porPneu[i.tireId]=porPneu[i.tireId]||[]).push(i);});
+  let lista=Object.entries(porPneu).map(([tid,arr])=>{
+    const c=cad[tid]||{},rec=arr.reduce((a,b)=>new Date(b.dataInspecao)>new Date(a.dataInspecao)?b:a);
+    const menor=_avg(arr,i=>i.menorMM),st=menor==null?null:menor<2?'Bloquear':menor<=3?'Recapar':menor<=6?'Regular':'Bom';
+    return {cod:c._cod||rec._cod,tier:c._tier||rec._tier||'',status:c.status||null,placa:rec.placa||c.placa||'',veiculoId:rec.veiculoId??c.veiculoId,posicao:rec.posicao??c.posicao,nomePosicao:c.nomePosicao||rec.nomePosicao||null,serial:rec.serial||c.serial||'',menor,st,desv:_avg(arr,i=>i.desvioPressao),pIdeal:_avg(arr,i=>i.pressaoIdeal),dt:rec.dataInspecao};
   });
-  const tires=Object.values(porPos).map(i=>{
-    const menor=num(i.menorMM);const st=menor==null?null:menor<2?'Bloquear':menor<=3?'Recapar':menor<=6?'Regular':'Bom';
-    const desv=num(i.desvioPressao);const pIdeal=num(i.pressaoIdeal);
-    return {cod:i._cod,tier:i._tier||'',placa:i.placa||'',posicao:i.posicao,serial:i.serial||'',menor,st,desv,pIdeal,dt:i.dataInspecao};
-  });
+  const inUse=lista.filter(t=>statusAmigavel(t.status)==='Em uso');
+  if(inUse.length) lista=inUse;                 // guarda: se o cadastro não trouxe status, não zera o painel
+  // deduplica por veículo+posição (aferição mais recente) — descarta pneu trocado/removido
+  const porPos={};lista.forEach(t=>{const k=(t.veiculoId==null||t.posicao==null)?('sem|'+(t.serial||t.dt)):(t.veiculoId+'|'+t.posicao);const cur=porPos[k];if(!cur||new Date(t.dt)>new Date(cur.dt))porPos[k]=t;});
+  const tires=Object.values(porPos);
   // aferição por veículo (última data) p/ aderência
   const veic={};merged.inspections.forEach(i=>{if(i.veiculoId==null)return;const d=new Date(i.dataInspecao);const cur=veic[i.veiculoId];if(!cur||d>cur.dt)veic[i.veiculoId]={cod:i._cod,tier:i._tier||'',dt:d};});
   DATA.pneus={tires,veic:Object.values(veic),ult:ult||Date.now()};
@@ -577,12 +581,12 @@ async function renderPneus(el,cod){
   h+=`<div class="blk-t">Bottom | Pneus críticos</div>`+
     wrapT('<table>'+th(cod?'Placa':'Unidade · Placa','Posição','Serial','Sulco mm','Status','Desvio pressão')+'<tbody>'+
     worst.map(t=>`<tr><td><b>${cod?escF(t.placa):escF(t.cod)+(t.tier?' '+escF(t.tier):'')+' · '+escF(t.placa)}</b></td>
-      <td>${escF(String(t.posicao))}</td><td>${escF(t.serial||'—')}</td>
+      <td>${escF(String(t.nomePosicao||t.posicao||'—'))}</td><td>${escF(t.serial||'—')}</td>
       <td class="num ${t.menor<2?'cr':t.menor<=3?'cy':'cg'}">${t.menor==null?'—':t.menor.toFixed(1)}</td>
       <td class="${stCls(t.st)}">${escF(t.st||'—')}</td>
       <td class="num ${t.desv==null?'mut':Math.abs(t.desv)>10?'cr':'cg'}">${t.desv==null?'—':(t.desv>0?'+':'')+Math.round(t.desv)+'%'}</td></tr>`).join('')+'</tbody></table>');
   const dt=new Date(P.ult);
-  h+=`<div class="tbl-sub" style="margin-top:8px">Foto Prolog de ${dt.toLocaleDateString('pt-BR')} ${dt.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})} · 1 leitura por posição (aferição mais recente). Milimetragem: &lt;2 Bloquear · ≤3 Recapar · ≤6 Regular · &gt;6 Bom. Calibragem OK = ±10% da ideal.</div>`;
+  h+=`<div class="tbl-sub" style="margin-top:8px">Foto Prolog de ${dt.toLocaleDateString('pt-BR')} ${dt.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})} · 1 leitura por posição (aferição mais recente, só pneus em uso). Milimetragem: &lt;2 Bloquear · ≤3 Recapar · ≤6 Regular · &gt;6 Bom. Calibragem OK = ±10% da ideal.</div>`;
   el.innerHTML=h;
 }
 
