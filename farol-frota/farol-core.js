@@ -366,6 +366,21 @@ const byCod=(rows,cod)=>{
 const codsFiltrados=()=>Object.keys(UNIDADES).filter(passU);
 
 // ── CUSTOS ──
+// Pacotes — MESMO mapa do visão financeira (PACOTES_MAP); conta fora do mapa cai em 'Outros'
+const FAROL_PACOTES={
+  'Combustíveis Veiculos e Equipamentos':'Combustíveis','Combustíveis':'Combustíveis',
+  'Estorno de ICMS não Aproveitado':'ICMS','Fluídos (Arla)':'Combustíveis',
+  'Arla':'Combustíveis','ICMS Crédito Presumido':'ICMS',
+  'Manutenção de Veículos e Equipamentos':'Manutenções','Manutenção de Veículos e Equip.':'Manutenções',
+  'Materiais e Ferramentas de Oficina':'Manutenções','Lavação de Veículos':'Manutenções',
+  'Manutenção de Carrocerias':'Manutenções','Personalização/Padronização de Veículos':'Manutenções',
+  'Personalização/Padronização':'Manutenções','Personalização e Padronização de Veículos':'Manutenções',
+  'Contratos de Manutenção Fabricante':'Manutenções','Consertos e Recapagens de Pneus':'Pneus',
+  'Pneus e Camaras':'Pneus','Recapagens e Outros Serviços':'Pneus','Pneus Novos':'Pneus',
+  'IPVA e Licenciamento de Veículos':'Seguros e licenças','IPVA e Licenciamento':'Seguros e licenças',
+  'Seguro de Veículos e Equipamentos':'Seguros e licenças','Seguros':'Seguros e licenças',
+};
+const getPacF=conta=>FAROL_PACOTES[conta]||'Outros';
 function renderCustos(el,cod){
   const rs=byCod(DATA.custos,cod);
   if(!rs.length){el.innerHTML='<div class="loading">Sem dados de custos para o recorte.</div>';return;}
@@ -387,11 +402,11 @@ function renderCustos(el,cod){
   // tabela agrupada: geral → por UNIDADE; unidade → por NÍVEL 3 (projeto)
   const key=cod?'n3':'uni';
   const grupos={};rs.forEach(r=>{(grupos[r[key]]=grupos[r[key]]||[]).push(r);});
-  h+='<table>'+th(cod?'Projeto':'Unidade','Conta Gerencial','Orç.','Rem','Real','Δ Orç.','Δ Rem','Δ Orç %','Δ Rem %')+'<tbody>';
+  h+='<table>'+th(cod?'Projeto':'Unidade','Pacote','Orç.','Rem','Real','Δ Orç.','Δ Rem','Δ Orç %','Δ Rem %')+'<tbody>';
   Object.keys(grupos).sort().forEach(g=>{
-    // soma por CONTA dentro do grupo (evita a mesma conta repetida por projeto/nível 3)
-    const byConta={};grupos[g].forEach(r=>{const a=byConta[r.conta]=byConta[r.conta]||{conta:r.conta,orc:0,rem:0,rea:0};a.orc+=r.orc;a.rem+=r.rem;a.rea+=r.rea;});
-    const rows=Object.values(byConta).sort((a,b)=>a.orc-b.orc);
+    // soma por PACOTE dentro do grupo (visão pacotes — mesma lógica do visão financeira)
+    const byPac={};grupos[g].forEach(r=>{const pk=getPacF(r.conta);const a=byPac[pk]=byPac[pk]||{conta:pk,orc:0,rem:0,rea:0};a.orc+=r.orc;a.rem+=r.rem;a.rea+=r.rea;});
+    const rows=Object.values(byPac).sort((a,b)=>a.orc-b.orc);
     rows.forEach((r,i)=>{
       const dO=Math.abs(r.rea)-Math.abs(r.orc), dR=Math.abs(r.rea)-Math.abs(r.rem);
       const pO=Math.abs(r.orc)>0?dO/Math.abs(r.orc)*100:null, pR=Math.abs(r.rem)>0?dR/Math.abs(r.rem)*100:null;
