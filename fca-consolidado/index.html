@@ -387,9 +387,12 @@ function kcardHTML(r){
     <div class="kcard-meta">${r.responsavel?esc(r.responsavel):'<span class="dim">sem resp.</span>'} · ${r.prazo?esc(r.prazo.split('-').reverse().join('/')):'<span class="dim">sem prazo</span>'}</div>
   </div>`;
 }
+// FCA automático = ação ainda não preenchida (gerado do Gerot/DRE e não tratado) — vai primeiro no Kanban
+const isAutoAcao=r=>!String((r&&r.acao)||'').trim();
 function kanbanHTML(vis){
   return `<div class="kanban">${KCOLS.map(c=>{
     const items=vis.filter(r=>(r.status||DEFAULT_STATUS)===c.k);
+    items.sort((a,b)=>(isAutoAcao(a)?0:1)-(isAutoAcao(b)?0:1));
     return `<div class="kcol" data-status="${esc(c.k)}">
       <div class="kcol-head ${c.cls}">${c.k}<span class="kcount">${items.length}</span></div>
       <div class="kcol-body">${items.map(kcardHTML).join('')||'<div class="kempty">—</div>'}</div>

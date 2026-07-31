@@ -12,22 +12,29 @@ const DISP_META=93, DISP_SONHO=97;   // <93 vermelho · 93–97 amarelo · ≥97
 // Pneus — mesmo Supabase (Conlog) do painel /pneus/
 const PNEUS_SB_URL='https://ewbzeqsneeylwkxtcpme.supabase.co';
 const PNEUS_SB_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImV3YnplcXNuZWV5bHdreHRjcG1lIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE4NzY2MTcsImV4cCI6MjA5NzQ1MjYxN30.W8W6Yunt6Z8NB73qpOD8eqYlrsgMRgEG-siYsJFwDwE';
-// branch_id (Prolog) → [código Farol, tier]  (2550 ANG fora do escopo Farol)
-const PNEUS_BRANCH={1676:['MCC','T1'],1677:['MCC','T2'],37:['CGR',''],1906:['CBA','T1 WH'],1907:['CBA','T1'],1878:['CBA','T2'],20:['FLP',''],30:['GRL',''],24:['BLC',''],2517:['NFR',''],26:['PLT',''],38:['PIR',''],2277:['RON','']};
+// branch_id (Prolog) → código Farol (2550 ANG fora do escopo Farol)
+const PNEUS_BRANCH={1676:'MCC T1',1677:'MCC T2',37:'CGR',1906:'CBA T1 WH',1907:'CBA T1',1878:'CBA T2',20:'FLP',30:'GRL',24:'BLC',2517:'NFR',26:'PLT',38:'PIR',2277:'RON'};
 
 // ── unidades (código do portal → nome exibido) ──
+// CBA e MCC são separadas por projeto/tier: cada recorte é uma unidade própria
+// (dropdown, farol, ranking e média independentes).
 const UNIDADES={
-  'BLC':'Balneário Camboriú','CBA':'Cuiabá','CGR':'Campo Grande','FLP':'Florianópolis','GRL':'Guarulhos',
-  'MCC':'Cachoeiras de Macacu','NFR':'Nova Friburgo','PIR':'Piraí','PLT':'Pelotas','RON':'Rondonópolis'
+  'BLC':'Balneário Camboriú',
+  'CBA T1':'Cuiabá — Empurrada (T1)','CBA T1 WH':'Cuiabá — Apoio/Empilhadeiras (T1 WH)','CBA T2':'Cuiabá — CDD (T2)',
+  'CGR':'Campo Grande','FLP':'Florianópolis','GRL':'Guarulhos',
+  'MCC T1':'Cachoeiras de Macacu — Empurrada (T1)','MCC T2':'Cachoeiras de Macacu — CDI (T2)',
+  'NFR':'Nova Friburgo','PIR':'Piraí','PLT':'Pelotas','RON':'Rondonópolis'
 };
 // nomes usados nas abas do Farol → código do portal (CDD/CDI, cidades e variações)
+// Cuiabá/Macacu: o nome da filial já define o tier (CUIABA EMPURRADA=T1,
+// CUIABA=Apoio/T1 WH, CDD CUIABA=T2; MACACU EMPURRADA=T1, CDI MACACU=T2).
 const FAROL2COD={
   'CDD CAMBORIU':'BLC','BALNEARIO CAMBORIU':'BLC',
-  'CDD CUIABA':'CBA','CUIABA':'CBA','CUIABA EMPURRADA':'CBA',
+  'CDD CUIABA':'CBA T2','CUIABA':'CBA T1 WH','CUIABA EMPURRADA':'CBA T1',
   'CDD RIO DE JANEIRO':'CGR','CAMPO GRANDE':'CGR',
   'CDD FLORIANOPOLIS':'FLP','FLORIANOPOLIS':'FLP',
   'CDD GUARULHOS':'GRL','GUARULHOS':'GRL',
-  'CDI MACACU':'MCC','MACACU EMPURRADA':'MCC','CACHOEIRAS DE MACACU':'MCC',
+  'CDI MACACU':'MCC T2','MACACU EMPURRADA':'MCC T1','CACHOEIRAS DE MACACU':'MCC T2',
   'CDD NOVA FRIBURGO':'NFR','NOVA FRIBURGO':'NFR',
   'PIRAI EMPURRADA':'PIR','PIRAI':'PIR',
   'CDD PELOTAS':'PLT','PELOTAS':'PLT',
@@ -38,6 +45,25 @@ const FAROL2COD={
 const escF=s=>String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 const _n=s=>String(s==null?'':s).normalize('NFD').replace(/[̀-ͯ]/g,'').toUpperCase().replace(/\s+/g,' ').trim();
 const codDe=nome=>FAROL2COD[_n(nome)]||null;
+// Refina o tier de CBA/MCC pelo PROJETO da linha (quando a aba traz projeto):
+// EMPURRADA→T1 · APOIO/empilhadeira→T1 WH (só CBA) · ROTA/CDD/CDI→T2.
+// Sem pista no projeto, mantém o tier derivado do nome da filial.
+function refineCod(cod,proj){
+  if(!cod)return cod;
+  const p=_n(proj);
+  if(cod.startsWith('CBA')){
+    if(/EMPURRAD/.test(p))return 'CBA T1';
+    if(/APOIO|EMPILHADEIRA|\bWH\b/.test(p))return 'CBA T1 WH';
+    if(/ROTA|CDD|AUTO SERVICO/.test(p))return 'CBA T2';
+    return cod;
+  }
+  if(cod.startsWith('MCC')){
+    if(/EMPURRAD/.test(p))return 'MCC T1';
+    if(/ROTA|CDI|CDD/.test(p))return 'MCC T2';
+    return cod;
+  }
+  return cod;
+}
 function parseD(v){if(v==null)return null;const m=String(v).match(/Date\((\d+),(\d+),(\d+)/);return m?new Date(+m[1],+m[2],+m[3]):null;}
 function parseAnyD(v){const d=parseD(v);if(d)return d;const p=String(v||'').trim().split(/[\/\-]/);if(p.length>=3){const dd=+p[0]>31?new Date(+p[0],+p[1]-1,+p[2]):new Date(+p[2],+p[1]-1,+p[0]);if(!isNaN(dd))return dd;}return null;}
 const fmtD=d=>d?d.toLocaleDateString('pt-BR'):'—';
@@ -90,7 +116,7 @@ async function farolLoad(){
   // Custos: Δ ORÇ. | Δ FCT | Vigência | ESTRUTURA | UNIDADE | NÍVEL 3 | CONTA GERENCIAL | MÊS | ANO | ORÇADO | REMUNERADO | REALIZADO
   if(T.custos){const c=T.custos.cols;
     const i={vig:idxDe(c,'Vigência'),uni:idxDe(c,'UNIDADE'),n3:idxDe(c,'NÍVEL 3','NIVEL 3'),cta:idxDe(c,'CONTA GERENCIAL'),orc:idxDe(c,'ORÇADO','ORCADO'),rem:idxDe(c,'REMUNERADO'),rea:idxDe(c,'REALIZADO')};
-    let rs=T.custos.rows.map(r=>({vig:parseD(r[i.vig]),cod:codDe(r[i.uni]),uni:String(r[i.uni]||'').trim(),n3:String(r[i.n3]||'').trim(),conta:String(r[i.cta]||'').trim(),orc:num(r[i.orc])||0,rem:num(r[i.rem])||0,rea:num(r[i.rea])||0})).filter(r=>r.conta);
+    let rs=T.custos.rows.map(r=>({vig:parseD(r[i.vig]),cod:refineCod(codDe(r[i.uni]),r[i.n3]),uni:String(r[i.uni]||'').trim(),n3:String(r[i.n3]||'').trim(),conta:String(r[i.cta]||'').trim(),orc:num(r[i.orc])||0,rem:num(r[i.rem])||0,rea:num(r[i.rea])||0})).filter(r=>r.conta);
     const mx=Math.max(...rs.map(r=>r.vig?r.vig.getTime():0));
     DATA.custos=rs.filter(r=>!r.vig||r.vig.getTime()===mx);
     DATA.custosVig=mx>0?new Date(mx):null;
@@ -98,24 +124,26 @@ async function farolLoad(){
   // Stress Test Veículos: Período | Empresa | Filial Freightech | Placa Freightech | Freightech | Projeto | Pallets | Última Saída | Saída | Saída na FIlial | Total Viagens | Justificativa | Status | Desconto
   if(T.stressV){const c=T.stressV.cols;
     const i={per:idxDe(c,'Período','Periodo'),fil:idxDe(c,'Filial Freightech'),pla:idxDe(c,'Placa Freightech'),proj:idxDe(c,'Projeto'),sai:idxDe(c,'Saída','Saida'),saiF:idxDe(c,'Saída na FIlial','Saida na Filial'),via:idxDe(c,'Total Viagens'),jus:idxDe(c,'Justificativa'),des:idxDe(c,'Desconto')};
-    let rs=T.stressV.rows.map(r=>({per:parseD(r[i.per]),cod:codDe(r[i.fil]),fil:String(r[i.fil]||'').trim(),placa:String(r[i.pla]||'').trim(),proj:String(r[i.proj]||'').trim(),saida:_n(r[i.sai]),saidaF:String(r[i.saiF]||'').trim(),viagens:num(r[i.via]),jus:String(r[i.jus]||'').trim(),desc:num(r[i.des])||0})).filter(r=>r.placa);
+    let rs=T.stressV.rows.map(r=>({per:parseD(r[i.per]),cod:refineCod(codDe(r[i.fil]),r[i.proj]),fil:String(r[i.fil]||'').trim(),placa:String(r[i.pla]||'').trim(),proj:String(r[i.proj]||'').trim(),saida:_n(r[i.sai]),saidaF:String(r[i.saiF]||'').trim(),viagens:num(r[i.via]),jus:String(r[i.jus]||'').trim(),desc:num(r[i.des])||0})).filter(r=>r.placa);
     const mx=Math.max(...rs.map(r=>r.per?r.per.getTime():0));
     DATA.stressV=rs.filter(r=>!r.per||r.per.getTime()===mx);
   }
   // Stress Test Empilhadeiras
   if(T.stressE){const c=T.stressE.cols;
     const i={fil:idxDe(c,'Filial GINFO','Filial FT'),pla:idxDe(c,'Placa Ginfo'),emp:idxDe(c,'Empresa FT'),ctr:idxDe(c,'Contratada'),p1:idxDe(c,'Parada 1Q?','Parada 1Q'),d1:idxDe(c,'Desconto 1Q'),p2:idxDe(c,'Parada 2Q?','Parada 2Q'),d2:idxDe(c,'Desconto 2Q'),dt:idxDe(c,'Desc. Total','Desc Total')};
-    DATA.stressE=T.stressE.rows.map(r=>({cod:codDe(r[i.fil]),fil:String(r[i.fil]||'').trim(),placa:String(r[i.pla]||'').trim(),empresa:String(r[i.emp]||'').trim(),contratada:_n(r[i.ctr])==='SIM',d1:num(r[i.d1])||0,d2:num(r[i.d2])||0,dt:num(r[i.dt])||0})).filter(r=>r.placa);
+    // empilhadeiras contratadas de Cuiabá são a operação Apoio/warehouse (T1 WH)
+    const codEmp=v=>{const c=codDe(v);return c&&c.startsWith('CBA')?'CBA T1 WH':c;};
+    DATA.stressE=T.stressE.rows.map(r=>({cod:codEmp(r[i.fil]),fil:String(r[i.fil]||'').trim(),placa:String(r[i.pla]||'').trim(),empresa:String(r[i.emp]||'').trim(),contratada:_n(r[i.ctr])==='SIM',d1:num(r[i.d1])||0,d2:num(r[i.d2])||0,dt:num(r[i.dt])||0})).filter(r=>r.placa);
   }
   // CIFV: Aderência | Filial Freightech | Veículo | Projeto | Data CIVF | Status | ... | Desconto Manutenção | Desconto Lavagem | Desconto Total
   if(T.cifv){const c=T.cifv.cols;
     const i={ad:idxDe(c,'Aderência','Aderencia'),fil:idxDe(c,'Filial Freightech'),vei:idxDe(c,'Veículo','Veiculo'),proj:idxDe(c,'Projeto'),st:idxDe(c,'Status'),dm:idxDe(c,'Desconto Manutenção','Desconto Manutencao'),dl:idxDe(c,'Desconto Lavagem'),dt:idxDe(c,'Desconto Total')};
-    DATA.cifv=T.cifv.rows.map(r=>({ad:num(r[i.ad]),cod:codDe(r[i.fil]),fil:String(r[i.fil]||'').trim(),placa:String(r[i.vei]||'').trim(),proj:String(r[i.proj]||'').trim(),st:String(r[i.st]||'').trim(),dm:num(r[i.dm])||0,dl:num(r[i.dl])||0,dt:num(r[i.dt])||0})).filter(r=>r.placa);
+    DATA.cifv=T.cifv.rows.map(r=>({ad:num(r[i.ad]),cod:refineCod(codDe(r[i.fil]),r[i.proj]),fil:String(r[i.fil]||'').trim(),placa:String(r[i.vei]||'').trim(),proj:String(r[i.proj]||'').trim(),st:String(r[i.st]||'').trim(),dm:num(r[i.dm])||0,dl:num(r[i.dl])||0,dt:num(r[i.dt])||0})).filter(r=>r.placa);
   }
   // Preventivas: Aderência | Placa Mercosul | Projeto | Unidade | Placa | Marca | Modelo | ... | DIAS P/ Próxima | KM/HR P/ Próxima | Status | N° OS Aberta
   if(T.prev){const c=T.prev.cols;
     const i={ad:idxDe(c,'Aderência','Aderencia'),uni:idxDe(c,'Unidade'),proj:idxDe(c,'Projeto'),pla:idxDe(c,'Placa'),mar:idxDe(c,'Marca'),mod:idxDe(c,'Modelo'),dias:idxDe(c,'DIAS P/ Próxima','DIAS P/ Proxima'),km:idxDe(c,'KM / HR P/ Próxima','KM/HR P/ Proxima'),st:idxDe(c,'Status'),os:idxDe(c,'N° OS Aberta','Nº OS Aberta','No OS Aberta')};
-    DATA.prev=T.prev.rows.map(r=>({ad:num(r[i.ad]),cod:codDe(r[i.uni]),fil:String(r[i.uni]||'').trim(),proj:String(r[i.proj]||'').trim(),placa:String(r[i.pla]||'').trim(),marca:String(r[i.mar]||'').trim(),modelo:String(r[i.mod]||'').trim(),dias:num(r[i.dias]),km:num(r[i.km]),st:String(r[i.st]||'').trim(),os:String(r[i.os]||'').trim()})).filter(r=>r.placa);
+    DATA.prev=T.prev.rows.map(r=>({ad:num(r[i.ad]),cod:refineCod(codDe(r[i.uni]),r[i.proj]),fil:String(r[i.uni]||'').trim(),proj:String(r[i.proj]||'').trim(),placa:String(r[i.pla]||'').trim(),marca:String(r[i.mar]||'').trim(),modelo:String(r[i.mod]||'').trim(),dias:num(r[i.dias]),km:num(r[i.km]),st:String(r[i.st]||'').trim(),os:String(r[i.os]||'').trim()})).filter(r=>r.placa);
   }
   // Alinhamentos: Filial | Placa | Próx. Evento | Status | Dias | Documento
   if(T.alinh){const c=T.alinh.cols;
@@ -131,10 +159,10 @@ async function farolLoad(){
   try{ await loadPneus(); }catch(e){ console.error('pneus load',e); }
   return DATA;
 }
-// nome da unidade na planilha de Disponibilidade → [código Farol, tier]
+// nome da unidade na planilha de Disponibilidade → [código Farol (já com tier), tier de exibição]
 const DISP2CT={
-  'CUIABA EMPURRADA':['CBA','T1'],'CUIABA':['CBA','T1 WH'],'CDD CUIABA':['CBA','T2'],
-  'MACACU EMPURRADA':['MCC','T1'],'CDI MACACU':['MCC','T2'],'CACHOEIRAS DE MACACU':['MCC','T2'],
+  'CUIABA EMPURRADA':['CBA T1','T1'],'CUIABA':['CBA T1 WH','T1 WH'],'CDD CUIABA':['CBA T2','T2'],
+  'MACACU EMPURRADA':['MCC T1','T1'],'CDI MACACU':['MCC T2','T2'],'CACHOEIRAS DE MACACU':['MCC T2','T2'],
   'CDD FLORIANOPOLIS':['FLP',''],'CDD RONDONOPOLIS':['RON',''],'CDD RIO DE JANEIRO':['CGR',''],
   'CDD GUARULHOS':['GRL',''],'CDD PELOTAS':['PLT',''],'PIRAI EMPURRADA':['PIR',''],
   'CDD NOVA FRIBURGO':['NFR',''],'CDD CAMBORIU':['BLC','']
@@ -158,8 +186,8 @@ async function loadDisp(){
 const IND_CITY={'RONDONOPOLIS':'RON','GUARULHOS':'GRL','FLORIANOPOLIS':'FLP','PELOTAS':'PLT','NOVA FRIBURGO':'NFR','BALNEARIO CAMBORIU':'BLC','CAMPO GRANDE':'CGR','PIRAI':'PIR'};
 function mapIndCT(uni,proj,tipo){
   const u=_n(uni),p=_n(proj),t=_n(tipo);
-  if(u==='CUIABA'){ if(p==='APOIO'||t.includes('EMPILHADEIRA'))return['CBA','T1 WH']; if(p==='EMPURRADA')return['CBA','T1']; return['CBA','T2']; }
-  if(u==='CACHOEIRAS DE MACACU'||u==='MACACU'){ return p==='EMPURRADA'?['MCC','T1']:['MCC','T2']; }
+  if(u==='CUIABA'){ if(p==='APOIO'||t.includes('EMPILHADEIRA'))return['CBA T1 WH','T1 WH']; if(p==='EMPURRADA')return['CBA T1','T1']; return['CBA T2','T2']; }
+  if(u==='CACHOEIRAS DE MACACU'||u==='MACACU'){ return p==='EMPURRADA'?['MCC T1','T1']:['MCC T2','T2']; }
   return [IND_CITY[u]||codDe(uni),''];
 }
 // placas indisponíveis (cenário atual = última data do relatório)
@@ -196,7 +224,7 @@ async function loadPneus(){
   for(let k=0;k<bids.length;k+=3){
     const batch=bids.slice(k,k+3);
     const res=await Promise.all(batch.map(async bid=>{for(let a=0;a<5;a++){const o=await fetchB(bid);if(o!==null)return o;await sleep(700);}return [];}));
-    res.flat().forEach(r=>{const ct=PNEUS_BRANCH[r.branch_id];if(!ct||!merged[r.endpoint])return;if(r.updated_at)ult=Math.max(ult,new Date(r.updated_at).getTime());(Array.isArray(r.data)?r.data:[]).forEach(rec=>{rec._cod=ct[0];rec._tier=ct[1];merged[r.endpoint].push(rec);}); });
+    res.flat().forEach(r=>{const ct=PNEUS_BRANCH[r.branch_id];if(!ct||!merged[r.endpoint])return;if(r.updated_at)ult=Math.max(ult,new Date(r.updated_at).getTime());(Array.isArray(r.data)?r.data:[]).forEach(rec=>{rec._cod=ct;rec._tier='';merged[r.endpoint].push(rec);}); });
   }
   // reconstrói como no painel /pneus/: 1 linha por tireId (média das leituras),
   // junta o cadastro (status/nomePosicao), fica só com pneus EM USO e deduplica por veículo+posição.
@@ -650,7 +678,7 @@ function renderDisp(el,cod){
     const dCls=d=>d==null?'mut':d>7?'cr':d>3?'cy':'cg';
     h+=`<div class="blk-t" style="margin-top:14px">Placas indisponíveis <span class="cr">· ${indL.length}</span></div>`+
       wrapT('<table>'+th(cod?'Placa':'Unidade · Placa','Projeto','Grupo','Problema','Status','Parada em','Previsão','Dias parado')+'<tbody>'+
-      indL.slice(0,80).map(r=>`<tr><td><b>${cod?escF(r.placa):(escF(r.cod)+(r.tier?' '+escF(r.tier):'')+' · '+escF(r.placa))}</b></td>
+      indL.slice(0,80).map(r=>`<tr><td><b>${cod?escF(r.placa):(escF(r.cod)+' · '+escF(r.placa))}</b></td>
         <td>${escF(r.proj||'—')}</td><td>${escF(r.grupo||'—')}</td>
         <td style="white-space:normal;max-width:280px">${escF((r.desc||'—').slice(0,110))}</td>
         <td>${escF(r.st||'—')}</td><td>${escF(r.dPar||'—')}</td><td>${escF(r.prev||'—')}</td>
