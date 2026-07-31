@@ -186,6 +186,7 @@ async function loadInd(){
   DATA.dispInd=mx>0?rs.filter(r=>r.dt===mx):rs;
 }
 // ── PNEUS (Supabase Conlog) — foto atual, carga sob demanda ──
+const PULL_POINT=3; // mm — ponto ideal de retirada p/ recape (igual ao painel /pneus/)
 async function loadPneus(){
   if(DATA.pneus)return DATA.pneus;
   const sleep=ms=>new Promise(r=>setTimeout(r,ms));
@@ -206,7 +207,17 @@ async function loadPneus(){
   let lista=Object.entries(porPneu).map(([tid,arr])=>{
     const c=cad[tid]||{},rec=arr.reduce((a,b)=>new Date(b.dataInspecao)>new Date(a.dataInspecao)?b:a);
     const menor=_avg(arr,i=>i.menorMM),st=menor==null?null:menor<2?'Bloquear':menor<=3?'Recapar':menor<=6?'Regular':'Bom';
-    return {cod:c._cod||rec._cod,tier:c._tier||rec._tier||'',status:c.status||null,placa:rec.placa||c.placa||'',veiculoId:rec.veiculoId??c.veiculoId,posicao:rec.posicao??c.posicao,nomePosicao:c.nomePosicao||rec.nomePosicao||null,serial:rec.serial||c.serial||'',menor,st,desv:_avg(arr,i=>i.desvioPressao),pIdeal:_avg(arr,i=>i.pressaoIdeal),dt:rec.dataInspecao};
+    // previsão de troca: taxa de desgaste real (1ª vs última aferição) → dias até PULL_POINT
+    const byDt=arr.slice().sort((x,y)=>new Date(x.dataInspecao)-new Date(y.dataInspecao));
+    const fI=byDt[0],lI=byDt[byDt.length-1];
+    const mmF=num(fI.menorMM),mmL=num(lI.menorMM);
+    const dds=(new Date(lI.dataInspecao)-new Date(fI.dataInspecao))/864e5;
+    let prev=null;
+    if(menor!=null){ if(menor<=PULL_POINT) prev=0; else if(dds>=7&&mmF!=null&&mmL!=null&&mmF>mmL){ const tx=(mmF-mmL)/dds; if(tx>0) prev=Math.round((menor-PULL_POINT)/tx); } }
+    return {cod:c._cod||rec._cod,tier:c._tier||rec._tier||'',status:c.status||null,placa:rec.placa||c.placa||'',veiculoId:rec.veiculoId??c.veiculoId,posicao:rec.posicao??c.posicao,nomePosicao:c.nomePosicao||rec.nomePosicao||null,serial:rec.serial||c.serial||'',
+      marca:c.marca||'',vida:c.cicloVida??null,bandaMarca:c.bandaMarca||'',banda:c.banda||'',
+      mm1:_avg(arr,i=>i.mm1),mm2:_avg(arr,i=>i.mm2),mm3:_avg(arr,i=>i.mm3),mm4:_avg(arr,i=>i.mm4),amp:_avg(arr,i=>i.amplitude),
+      menor,st,desv:_avg(arr,i=>i.desvioPressao),pIdeal:_avg(arr,i=>i.pressaoIdeal),pAtual:_avg(arr,i=>i.pressaoMedida),prev,dt:rec.dataInspecao};
   });
   const inUse=lista.filter(t=>statusAmigavel(t.status)==='Em uso');
   if(inUse.length) lista=inUse;                 // guarda: se o cadastro não trouxe status, não zera o painel
@@ -543,67 +554,93 @@ function renderDisp(el,cod){
   }
   el.innerHTML=h;
 }
-// ── PNEUS (foto Prolog — gestão à vista) ──
-async function renderPneus(el,cod){
+// ── PNEUS (foto Prolog — 3 blocos: Aferições · Milimetragem · Calibragem, como no painel /pneus/) ──
+const COR_ST={Bloquear:'#FF6666',Recapar:'#F97316',Regular:'#EAB308',Bom:'#3BB33B'};
+const _pnDot=c=>`<span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:${c};margin-right:6px"></span>`;
+const _pnCard=(lb,val,cls,sub)=>`<div class="ch-min"><span>${lb}</span><b class="${cls}">${val}</b>${sub?`<small class="mut">${sub}</small>`:''}</div>`;
+const _pnTh=cols=>'<thead><tr>'+cols.map(c=>Array.isArray(c)?`<th class="ctr">${c[0]}</th>`:`<th>${c}</th>`).join('')+'</tr></thead>';
+async function _pneusBase(el,cod){
   el.innerHTML='<div class="loading">Lendo a base de Pneus (Prolog/Conlog)…</div>';
-  let P;try{P=await loadPneus();}catch(e){el.innerHTML='<div class="loading">Não consegui ler a base de Pneus agora. Tente atualizar.</div>';return;}
+  let P;try{P=await loadPneus();}catch(e){el.innerHTML='<div class="loading">Não consegui ler a base de Pneus agora. Tente atualizar.</div>';return null;}
   const tires=P.tires.filter(t=>cod?t.cod===cod:true);
-  if(!tires.length){el.innerHTML='<div class="loading">Sem pneus no recorte.</div>';return;}
-  // aferições: % da frota aferida nos últimos 30 dias
+  if(!tires.length){el.innerHTML='<div class="loading">Sem pneus no recorte.</div>';return null;}
+  return {P,tires};
+}
+const _pnFoot=(P,extra)=>{const dt=new Date(P.ult);return `<div class="tbl-sub" style="margin-top:8px">Foto Prolog de ${dt.toLocaleDateString('pt-BR')} ${dt.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})} · só pneus em uso · 1 leitura por posição (aferição mais recente).${extra||''}</div>`;};
+const _pnPl=(t,cod)=>cod?escF(t.placa):escF(t.cod)+(t.tier?' '+escF(t.tier):'')+' · '+escF(t.placa);
+const _pnPos=t=>escF(String(t.nomePosicao||t.posicao||'—'));
+const _pnData=d=>d?new Date(d).toLocaleDateString('pt-BR'):'—';
+const _pnF1=v=>v==null?'—':(Math.round(v*100)/100).toLocaleString('pt-BR');
+
+// 1) AFERIÇÕES — ranking de placas (última aferição · dias · situação)
+async function renderPneusAfer(el,cod){
+  const B=await _pneusBase(el,cod);if(!B)return;const {P,tires}=B;
   const veic=P.veic.filter(v=>cod?v.cod===cod:true);
-  const ref=P.ult;const afer=veic.length?veic.filter(v=>(ref-v.dt.getTime())<=30*864e5).length/veic.length*100:null;
-  // milimetragem
-  const cnt={Bloquear:0,Recapar:0,Regular:0,Bom:0};
-  tires.forEach(t=>{if(t.st)cnt[t.st]++;});
-  const totMM=tires.filter(t=>t.st).length;
-  const crit=cnt.Bloquear+cnt.Recapar;
+  const afer=veic.length?veic.filter(v=>(P.ult-v.dt.getTime())<=30*864e5).length/veic.length*100:null;
+  const byPl={};tires.forEach(t=>{if(!t.placa)return;const c=byPl[t.placa];if(!c||new Date(t.dt)>new Date(c.dt))byPl[t.placa]={placa:t.placa,cod:t.cod,tier:t.tier,dt:t.dt};});
+  const placas=Object.values(byPl).map(p=>({...p,dias:Math.round((P.ult-new Date(p.dt).getTime())/864e5)})).sort((a,b)=>b.dias-a.dias).slice(0,50);
+  let h=`<div class="custos-hero">${_pnCard('Aferições (30d)',pct1(afer),clsPctMeta(afer,95,85),veic.length+' veículos')}</div>`;
+  h+=wrapT('<table>'+_pnTh([cod?'Placa':'Unidade · Placa',['Última aferição'],['Dias'],['Situação']])+'<tbody>'+
+    placas.map(p=>`<tr><td><b>${cod?escF(p.placa):escF(p.cod)+(p.tier?' '+escF(p.tier):'')+' · '+escF(p.placa)}</b></td>
+      <td class="ctr">${_pnData(p.dt)}</td>
+      <td class="ctr ${p.dias<=30?'cg':'cr'}">${p.dias}</td>
+      <td class="ctr ${p.dias<=30?'cg':'cr'}">${p.dias<=30?'Em dia':'Aferir'}</td></tr>`).join('')+'</tbody></table>');
+  el.innerHTML=h+_pnFoot(P);
+}
+
+// 2) MILIMETRAGEM — previsão de troca (desgaste real → 3mm) + menor sulco; lista só Bloquear/Recapar/Regular
+async function renderPneusMM(el,cod){
+  const B=await _pneusBase(el,cod);if(!B)return;const {P,tires}=B;
+  const cnt={Bloquear:0,Recapar:0,Regular:0,Bom:0};tires.forEach(t=>{if(t.st)cnt[t.st]++;});
+  const totMM=tires.filter(t=>t.st).length,crit=cnt.Bloquear+cnt.Recapar;
   const mmOk=totMM?(totMM-crit)/totMM*100:null;
-  // calibragem
+  let h=`<div class="custos-hero">
+    ${_pnCard('Milimetragem OK',pct1(mmOk),clsPctMeta(mmOk,90,75),totMM+' pneus')}
+    ${_pnCard('Críticos',String(crit),crit?'cr':'cg','bloquear+recapar')}
+  </div>`;
+  h+=`<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px">
+    <span class="pill" style="background:${COR_ST.Bloquear}">${cnt.Bloquear} Bloquear · sulco &lt;2mm</span>
+    <span class="pill" style="background:${COR_ST.Recapar}">${cnt.Recapar} Recapar · ≤3mm</span>
+    <span class="pill" style="background:${COR_ST.Regular};color:#111">${cnt.Regular} Regular · 3–6mm</span>
+    <span class="pill" style="background:${COR_ST.Bom}">${cnt.Bom} Bom · &gt;6mm</span></div>`;
+  const lista=tires.filter(t=>t.menor!=null&&t.st&&t.st!=='Bom')
+    .sort((a,b)=>{const pa=a.prev==null?1e9:a.prev,pb=b.prev==null?1e9:b.prev;return pa-pb||a.menor-b.menor;}).slice(0,80);
+  const ampC=v=>v==null?'':v>5?'cr':v>3?'cy':'cg';
+  const prevTxt=t=>t.prev==null?'—':t.prev<=0?'Imediata':_pnData(P.ult+t.prev*864e5);
+  h+=wrapT('<table>'+_pnTh(['Nº de Fogo',cod?'Placa':'Unidade · Placa',['Posição'],['Marca'],['Vida'],['Marca Banda'],['Banda'],['mm1'],['mm2'],['mm3'],['mm4'],['Amplitude'],['Menor MM'],['Status'],['Prev. troca'],['Última afer.']])+'<tbody>'+
+    lista.map(t=>{const c=COR_ST[t.st]||'#94A3B8';
+      return `<tr><td><b>${escF(t.serial||'—')}</b></td><td>${_pnPl(t,cod)}</td><td class="ctr">${_pnPos(t)}</td>
+      <td class="ctr">${escF(t.marca||'—')}</td><td class="ctr">${t.vida?('V'+t.vida):'—'}</td>
+      <td class="ctr">${t.vida>1?escF(t.bandaMarca||'—'):'—'}</td><td class="ctr">${t.vida>1?escF(t.banda||'—'):'—'}</td>
+      <td class="ctr">${_pnF1(t.mm1)}</td><td class="ctr">${_pnF1(t.mm2)}</td><td class="ctr">${_pnF1(t.mm3)}</td><td class="ctr">${_pnF1(t.mm4)}</td>
+      <td class="ctr ${ampC(t.amp)}" style="font-weight:700">${_pnF1(t.amp)}</td>
+      <td class="ctr" style="color:${c};font-weight:700">${_pnF1(t.menor)}</td>
+      <td class="ctr" style="white-space:nowrap">${_pnDot(c)}${escF(t.st)}</td>
+      <td class="ctr ${t.prev!=null&&t.prev<=30?'cr':''}">${prevTxt(t)}</td>
+      <td class="ctr">${_pnData(t.dt)}</td></tr>`;}).join('')+'</tbody></table>');
+  el.innerHTML=h+_pnFoot(P,' Milimetragem: &lt;2 Bloquear · ≤3 Recapar · ≤6 Regular · &gt;6 Bom. Amplitude: &gt;5 vermelho · &gt;3 amarelo · senão verde. Prev. troca = data em que o pneu chega a '+PULL_POINT+'mm pela taxa de desgaste real entre as aferições.');
+}
+
+// 3) CALIBRAGEM — pressão ideal × real, ranking pelo maior desvio
+async function renderPneusCal(el,cod){
+  const B=await _pneusBase(el,cod);if(!B)return;const {P,tires}=B;
   const comP=tires.filter(t=>t.pIdeal>0&&t.desv!=null);
   const calOk=comP.length?comP.filter(t=>Math.abs(t.desv)<=10).length/comP.length*100:null;
-  const card=(lb,val,cls,sub)=>`<div class="ch-min"><span>${lb}</span><b class="${cls}">${val}</b>${sub?`<small class="mut">${sub}</small>`:''}</div>`;
-  let h=`<div class="custos-hero">
-    ${card('Aferições (30d)',pct1(afer),clsPctMeta(afer,95,85),veic.length+' veículos')}
-    ${card('Milimetragem OK',pct1(mmOk),clsPctMeta(mmOk,90,75),totMM+' pneus')}
-    ${card('Calibragem OK',pct1(calOk),clsPctMeta(calOk,90,75),'±10% ideal')}
-    ${card('Críticos',String(crit),crit?'cr':'cg','bloquear+recapar')}
-  </div>`;
-  const stCls=s=>s==='Bloquear'?'cr':s==='Recapar'?'cy':s==='Regular'?'':'cg';
-  const pl=t=>cod?escF(t.placa):escF(t.cod)+(t.tier?' '+escF(t.tier):'')+' · '+escF(t.placa);
-  const pos=t=>escF(String(t.nomePosicao||t.posicao||'—'));
-
-  // 1) AFERIÇÕES · Ranking de Placas — placa aferida há mais tempo primeiro
-  const byPl={}; tires.forEach(t=>{ if(!t.placa)return; const c=byPl[t.placa]; if(!c||new Date(t.dt)>new Date(c.dt)) byPl[t.placa]={placa:t.placa,cod:t.cod,tier:t.tier,dt:t.dt}; });
-  const placas=Object.values(byPl).map(p=>({...p,dias:Math.round((P.ult-new Date(p.dt).getTime())/864e5)})).sort((a,b)=>b.dias-a.dias).slice(0,50);
-  h+=`<div class="blk-t">Aferições · Ranking de Placas</div>`+
-    wrapT('<table>'+th(cod?'Placa':'Unidade · Placa','Última aferição','Dias','Situação')+'<tbody>'+
-    placas.map(p=>`<tr><td><b>${cod?escF(p.placa):escF(p.cod)+(p.tier?' '+escF(p.tier):'')+' · '+escF(p.placa)}</b></td>
-      <td>${new Date(p.dt).toLocaleDateString('pt-BR')}</td>
-      <td class="num ${p.dias<=30?'cg':'cr'}">${p.dias}</td>
-      <td class="${p.dias<=30?'cg':'cr'}">${p.dias<=30?'Em dia':'Aferir'}</td></tr>`).join('')+'</tbody></table>');
-
-  // 2) MILIMETRAGEM · Ranking por Nº de Fogo — menor sulco primeiro (Previsão de Troca completa vem na próxima etapa)
-  const mmRank=tires.filter(t=>t.menor!=null).sort((a,b)=>a.menor-b.menor).slice(0,50);
-  h+=`<div class="blk-t">Milimetragem · Ranking por Nº de Fogo</div>
-    <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px">
-      <span class="pill" style="background:#FF6666">${cnt.Bloquear} Bloquear</span>
-      <span class="pill" style="background:#EAB308">${cnt.Recapar} Recapar</span>
-      <span class="pill" style="background:#38BDF8">${cnt.Regular} Regular</span>
-      <span class="pill" style="background:#3BB33B">${cnt.Bom} Bom</span></div>`+
-    wrapT('<table>'+th('Nº de Fogo',cod?'Placa':'Unidade · Placa','Posição','Sulco mm','Status')+'<tbody>'+
-    mmRank.map(t=>`<tr><td><b>${escF(t.serial||'—')}</b></td><td>${pl(t)}</td><td>${pos(t)}</td>
-      <td class="num ${t.menor<2?'cr':t.menor<=3?'cy':'cg'}">${t.menor.toFixed(1)}</td>
-      <td class="${stCls(t.st)}">${escF(t.st||'—')}</td></tr>`).join('')+'</tbody></table>');
-
-  // 3) CALIBRAGEM · Ranking por Nº de Fogo — maior desvio de pressão primeiro
-  const calRank=tires.filter(t=>t.desv!=null).sort((a,b)=>Math.abs(b.desv)-Math.abs(a.desv)).slice(0,50);
-  h+=`<div class="blk-t">Calibragem · Ranking por Nº de Fogo</div>`+
-    wrapT('<table>'+th('Nº de Fogo',cod?'Placa':'Unidade · Placa','Posição','Desvio pressão')+'<tbody>'+
-    calRank.map(t=>`<tr><td><b>${escF(t.serial||'—')}</b></td><td>${pl(t)}</td><td>${pos(t)}</td>
-      <td class="num ${Math.abs(t.desv)>10?'cr':'cg'}">${(t.desv>0?'+':'')+Math.round(t.desv)+'%'}</td></tr>`).join('')+'</tbody></table>');
-  const dt=new Date(P.ult);
-  h+=`<div class="tbl-sub" style="margin-top:8px">Foto Prolog de ${dt.toLocaleDateString('pt-BR')} ${dt.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})} · 1 leitura por posição (aferição mais recente, só pneus em uso). Milimetragem: &lt;2 Bloquear · ≤3 Recapar · ≤6 Regular · &gt;6 Bom. Calibragem OK = ±10% da ideal.</div>`;
-  el.innerHTML=h;
+  let h=`<div class="custos-hero">${_pnCard('Calibragem OK',pct1(calOk),clsPctMeta(calOk,98,85),'±10% da ideal')}</div>`;
+  h+=`<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px">
+    <span class="pill" style="background:#3BB33B">≥ 98%</span>
+    <span class="pill" style="background:#EAB308;color:#111">85% a 98%</span>
+    <span class="pill" style="background:#FF6666">&lt; 85%</span></div>`;
+  const lista=comP.slice().sort((a,b)=>Math.abs(b.desv)-Math.abs(a.desv)).slice(0,80);
+  h+=wrapT('<table>'+_pnTh(['#','Nº de Fogo',cod?'Placa':'Unidade · Placa',['Posição'],['Marca'],['Vida'],['Pressão Ideal'],['Pressão Atual'],['Desvio'],['Status']])+'<tbody>'+
+    lista.map((t,i)=>{const st=t.desv>10?'Alta Pressão':t.desv<-10?'Baixa Pressão':'OK';
+      const cor=st==='Alta Pressão'?'#FF6666':st==='Baixa Pressão'?'#EAB308':'#3BB33B';
+      return `<tr><td class="mut">${i+1}</td><td><b>${escF(t.serial||'—')}</b></td><td>${_pnPl(t,cod)}</td><td class="ctr">${_pnPos(t)}</td>
+      <td class="ctr">${escF(t.marca||'—')}</td><td class="ctr">${t.vida?('V'+t.vida):'—'}</td>
+      <td class="ctr">${_pnF1(t.pIdeal)} PSI</td><td class="ctr">${_pnF1(t.pAtual)} PSI</td>
+      <td class="ctr" style="color:${cor};font-weight:700">${(t.desv>0?'+':'')+_pnF1(t.desv)}%</td>
+      <td class="ctr" style="white-space:nowrap">${_pnDot(cor)}${st}</td></tr>`;}).join('')+'</tbody></table>');
+  el.innerHTML=h+_pnFoot(P,' Calibragem OK = ±10% da pressão ideal. Meta: ≥98% verde · 85–98% amarelo · &lt;85% vermelho.');
 }
 
 // ═══════════════ MONTAGEM DAS PÁGINAS ═══════════════
@@ -618,14 +655,18 @@ function renderFarol(el,cod){
   S.push(['alinh','Alinhamento','No prazo vs vencidos · placas por próximo evento']);
   S.push(['os','Gestão de OS','% no prazo (≤8 dias) · OSs em aberto']);
   S.push(['disp','Disponibilidade','Foto da última vigência — veículos disponíveis da frota']);
-  S.push(['pneus','Pneus','Aferições · Milimetragem · Calibragem (foto Prolog, como no painel Pneus)']);
+  S.push(['pneus-afer','Pneus','<i>Aferições</i>']);
+  S.push(['pneus-mm','Pneus','<i>Milimetragem</i>']);
+  S.push(['pneus-cal','Pneus','<i>Calibragem</i>']);
   el.innerHTML=S.map(([id,t,sub])=>secBox(id,t,sub)).join('');
   const put=(id,fn)=>{const b=document.getElementById('body-'+id);try{fn(b,cod);}catch(e){console.error(id,e);b.innerHTML='<div class="loading">Erro ao montar esta seção.</div>';}};
   if(!cod){put('resumo',el2=>renderResumo(el2));put('ranking',el2=>renderRanking(el2));}
   put('custos',renderCustos);put('stressv',renderStressV);put('stresse',renderStressE);
   put('prev',renderPrev);put('cifv',renderCIFV);put('alinh',renderAlinh);put('os',renderOS);
   put('disp',renderDisp);
-  renderPneus(document.getElementById('body-pneus'),cod).catch(e=>{console.error('pneus',e);});
+  renderPneusAfer(document.getElementById('body-pneus-afer'),cod).catch(e=>{console.error('pneus-afer',e);});
+  renderPneusMM(document.getElementById('body-pneus-mm'),cod).catch(e=>{console.error('pneus-mm',e);});
+  renderPneusCal(document.getElementById('body-pneus-cal'),cod).catch(e=>{console.error('pneus-cal',e);});
 }
 
 // hero da página: dots por indicador
