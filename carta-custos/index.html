@@ -383,9 +383,21 @@ function fromDB(d){return{id:d.id,unidade:d.unidade,vigencia:d.vigencia,pacote:d
 // farol de aprovação do coordenador (verde=aprovado, vermelho=pendente). Toggle só p/ admin/coordenador e linha já salva.
 function aprvHTML(r){
   const on=!!r.aprovado, saved=!!r.id;
-  if(!saved) return `<span class="aprv dis" title="Salve a linha (NF + Valor) para poder aprovar"></span>`;
+  if(!saved){
+    // RC digitada já marca PENDENTE (vermelho); aprovar (verde) é só admin e após salvar
+    if(String(r.rc||'').trim()) return `<span class="aprv ro" title="RC lançada — aguardando aprovação do coordenador (salva com NF + Valor)"></span>`;
+    return `<span class="aprv dis" title="Salve a linha (NF + Valor) para poder aprovar"></span>`;
+  }
   if(!IS_ADMIN) return `<span class="aprv ro${on?' on':''}" title="${on?'Aprovado pelo coordenador':'Aguardando aprovação'}"></span>`;
   return `<span class="aprv${on?' on':''}" onclick="toggleAprv(this)" title="${on?'Aprovado — clique para reprovar':'Clique para aprovar'}"></span>`;
+}
+// ao digitar a RC numa linha ainda não salva, o farol vira PENDENTE (vermelho) na hora
+function rcDot(el){
+  const tr=el.closest('tr'); if(!tr||tr.dataset.id) return;      // linha salva: farol já é vermelho/verde
+  const av=tr.querySelector('.aprv'); if(!av) return;
+  const tem=String(el.value||'').trim();
+  av.className='aprv '+(tem?'ro':'dis');
+  av.title=tem?'RC lançada — aguardando aprovação do coordenador (salva com NF + Valor)':'Salve a linha (NF + Valor) para poder aprovar';
 }
 async function toggleAprv(el){
   if(!IS_ADMIN||!sb) return;
@@ -444,7 +456,7 @@ function lancRowHTML(r){
     <td><select class="lanc-edit" data-f="projeto" onchange="saveLancCell(this)">${selOpts(UNIT_PROJETOS,r.projeto||UNIT_PROJETOS[0]||'')}</select></td>
     <td><input class="lanc-edit" data-f="equipamento" value="${esc(r.equipamento)}" placeholder="Placa" oninput="this.value=this.value.toUpperCase()" onchange="saveLancCell(this)"></td>
     <td><input class="lanc-edit" data-f="fornecedor" value="${esc(r.fornecedor)}" placeholder="FORNECEDOR" oninput="this.value=this.value.toUpperCase()" onchange="saveLancCell(this)"></td>
-    <td><input class="lanc-edit" data-f="rc" value="${esc(r.rc)}" placeholder="nº" onchange="saveLancCell(this)"></td>
+    <td><input class="lanc-edit" data-f="rc" value="${esc(r.rc)}" placeholder="nº" oninput="rcDot(this)" onchange="saveLancCell(this)"></td>
     <td class="num">${aprvHTML(r)}</td>
     <td><input class="lanc-edit" data-f="oc" value="${esc(r.oc)}" placeholder="nº" onchange="saveLancCell(this)"></td>
     <td><input class="lanc-edit" data-f="nf" value="${esc(r.nf)}" placeholder="nº" onchange="saveLancCell(this)"></td>
