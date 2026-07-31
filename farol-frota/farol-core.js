@@ -467,7 +467,13 @@ function renderStressE(el,cod){
 // ── CIFV ──
 function renderCIFV(el,cod){
   const rs=byCod(DATA.cifv,cod);
-  if(!rs.length){el.innerHTML='<div class="loading">Sem dados para o recorte.</div>';return;}
+  if(!rs.length){
+    // sem registro no recorte = sem desconto = aderência 100% (só mostra 'sem dados' se a aba nem carregou)
+    el.innerHTML=(DATA.cifv&&DATA.cifv.length)
+      ? heroAder(100,100)+'<div class="tbl-sub" style="margin-top:8px">Sem descontos no recorte — aderência 100%.</div>'
+      : '<div class="loading">Sem dados para o recorte.</div>';
+    return;
+  }
   const p=avgA(rs.map(r=>r.ad))*100;
   const projs=[...new Set(rs.map(r=>r.proj))].filter(Boolean).sort();
   const nc=rs.filter(r=>r.dt>0||r.ad===0).sort((a,b)=>b.dt-a.dt);
@@ -568,7 +574,7 @@ function pneusStats(cod){
 function unitStats(cod){
   const sv=stressVPct(byCod(DATA.stressV,cod));
   const se=(()=>{const a=byCod(DATA.stressE,cod).filter(r=>r.contratada);if(!a.length)return null;return ((a.filter(r=>!(r.d1>0)).length+a.filter(r=>!(r.d2>0)).length)/(2*a.length))*100;})();
-  const cf=(()=>{const a=byCod(DATA.cifv,cod);return a.length?avgA(a.map(r=>r.ad))*100:null;})();
+  const cf=(()=>{const a=byCod(DATA.cifv,cod);if(a.length)return avgA(a.map(r=>r.ad))*100;return (DATA.cifv&&DATA.cifv.length)?100:null;})();  // sem registro = sem desconto = 100%
   const pv=(()=>{const a=byCod(DATA.prev,cod);return a.length?avgA(a.map(r=>r.ad))*100:null;})();
   const al=(()=>{const a=byCod(DATA.alinh,cod);return a.length?a.filter(r=>_n(r.st)!=='VENCIDO').length/a.length*100:null;})();
   const os=(()=>{const a=byCod(DATA.os,cod);return a.length?a.filter(r=>(r.dias??0)<=OS_META).length/a.length*100:100;})();
@@ -750,7 +756,8 @@ function renderFarol(el,cod){
   if(!cod){S.push(['resumo','Resumo Executivo','Leitura automática do farol da semana']);S.push(['ranking','Ranking das Unidades','Aderências por indicador — melhor → pior']);}
   S.push(['custos','Custos','Realizado × Remunerado × Orçado — '+(cod?'por projeto':'por unidade')]);
   S.push(['stressv','Stress Test — Veículos','Aderência (com saída) vs meta 100% · descontos por placa']);
-  S.push(['stresse','Stress Test — Empilhadeiras','Aderência 1ª/2ª quinzena · descontos por equipamento']);
+  const temEmp=byCod(DATA.stressE,cod).filter(r=>r.contratada).length>0;
+  if(temEmp) S.push(['stresse','Stress Test — Empilhadeiras','Aderência 1ª/2ª quinzena · descontos por equipamento']);
   S.push(['prev','Preventivas','Aderência vs 100% · placas por status, dias e km']);
   S.push(['cifv','CIFV','Aderência das fotos da frota vs 100% · descontos por veículo']);
   S.push(['alinh','Alinhamento','No prazo vs vencidos · placas por próximo evento']);
@@ -762,7 +769,7 @@ function renderFarol(el,cod){
   el.innerHTML=S.map(([id,t,sub])=>secBox(id,t,sub)).join('');
   const put=(id,fn)=>{const b=document.getElementById('body-'+id);try{fn(b,cod);}catch(e){console.error(id,e);b.innerHTML='<div class="loading">Erro ao montar esta seção.</div>';}};
   if(!cod){put('resumo',el2=>renderResumo(el2));put('ranking',el2=>renderRanking(el2));}
-  put('custos',renderCustos);put('stressv',renderStressV);put('stresse',renderStressE);
+  put('custos',renderCustos);put('stressv',renderStressV);if(temEmp)put('stresse',renderStressE);
   put('prev',renderPrev);put('cifv',renderCIFV);put('alinh',renderAlinh);put('os',renderOS);
   put('disp',renderDisp);
   renderPneusAfer(document.getElementById('body-pneus-afer'),cod).catch(e=>{console.error('pneus-afer',e);});
@@ -779,9 +786,10 @@ function renderHeroDots(el,cod){
   })();
   const dot=(v,cls)=>`<span class="dot ${cls==='cg'?'g':cls==='cy'?'y':cls==='cr'?'r':''}" style="${cls==='mut'?'background:#475569':''}"></span>`;
   const item=(lb,v,cls)=>`<div class="hero-delta"><span>${lb}</span><b class="${cls}">${dot(v,cls)} ${pct1(v)}</b></div>`;
+  const _temEmpH=!cod||byCod(DATA.stressE,cod).filter(r=>r.contratada).length>0;
   el.innerHTML=
     item('Stress Veíc.',stats.sv,clsPctMeta(stats.sv))+
-    item('Stress Emp.',stats.se,clsPctMeta(stats.se))+
+    (_temEmpH?item('Stress Emp.',stats.se,clsPctMeta(stats.se)):'')+
     item('CIFV',stats.cf,clsPctMeta(stats.cf))+
     item('Preventivas',stats.pv,clsPctMeta(stats.pv))+
     item('Alinhamento',stats.al,stats.al==null?'mut':stats.al>=80?'cg':'cr')+
