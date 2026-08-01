@@ -153,7 +153,7 @@ function getPacote(conta){
 // Mesma lógica do FCA Preenchimento: Km/L e R$/L são CAUSA do Combustível, não fato próprio — não aparecem aqui.
 function isDriverCombust(fato){const s=String(fato||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'');if(/km\s*\/?\s*l/.test(s))return true;if(/r\$\s*\/?\s*l/.test(s))return true;if(/preco/.test(s)&&/(litro|\/\s*l|r\$)/.test(s))return true;return false;}
 // Projeto "limpo": corta no '-' (ex.: "ROTA - BLC" → "ROTA"). RPM já vem limpo.
-function projLabel(s){const t=String(s==null?'':s).trim();if(!t)return '';const i=t.indexOf('-');return i>=0?(t.substring(0,i).trim()||t):t;}
+function projLabel(s){const t=String(s==null?'':s).replace(/\s*\(INATIVO\)\s*/gi,' ').replace(/\s+/g,' ').trim();if(!t)return '';const i=t.indexOf('-');return i>=0?(t.substring(0,i).trim()||t):t;}
 
 const FILTROS=[
   {id:'unidade',label:'Unidade'},
@@ -268,7 +268,7 @@ async function carregar(){
     ALL=(data||[]).filter(r=>!isDriverCombust(r.fato)).map(r=>{
       const vigD=vigToDate(r.vigencia),prazoD=dateOnly(r.prazo);
       const conta=(String(r.fato||'').split('\n')[0]||'').trim();
-      const o={origem:String(r.origem||'').trim(),vigD,vig:r.vigencia||vigLbl(vigD),unidade:String(r.unidade||'').trim(),projeto:projLabel(r.projeto),conta,pacote:getPacote(conta),fato:r.fato||'',desvio:String(r.fato_desvio||'').trim(),causa:r.causa||'',acao:r.acao||'',prazoD,status:String(r.status||'').trim()};
+      const o={origem:String(r.origem||'').trim(),vigD,vig:r.vigencia||vigLbl(vigD),unidade:String(r.unidade||'').replace(/\s*\(INATIVO\)\s*/gi,' ').replace(/\s+/g,' ').trim(),projeto:projLabel(r.projeto),conta,pacote:getPacote(conta),fato:r.fato||'',desvio:String(r.fato_desvio||'').trim(),causa:r.causa||'',acao:r.acao||'',prazoD,status:String(r.status||'').trim()};
       o.sprazo=statusPrazo(o);
       return o;
     });

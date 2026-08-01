@@ -48,8 +48,23 @@
       btn.textContent=open?'− Ocultar detalhes':'+ Detalhar';
     });
   }
+  /* ── 3) "(INATIVO)" nunca aparece na tela ──
+     Vassoura global: remove o texto "(INATIVO)" de qualquer nó de texto
+     renderizado (painéis, filtros, tabelas, cards). Só cosmética — os
+     valores internos de filtro/dados não são alterados. */
+  var RE_INAT=/\s*\(INATIVO\)/gi;
+  function scrubInativo(){
+    if(!document.body||document.body.textContent.indexOf('(INATIVO)')<0)return;
+    var w=d.createTreeWalker(d.body,NodeFilter.SHOW_TEXT,null),n;
+    while((n=w.nextNode())){
+      if(n.nodeValue&&n.nodeValue.indexOf('(INATIVO)')>=0)
+        n.nodeValue=n.nodeValue.replace(RE_INAT,'');
+    }
+  }
+
   var t0=null;
   function scan(){
+    scrubInativo();
     if(!MQ.matches){ /* desktop / rotação: reabre e esconde os botões */
       d.querySelectorAll('[data-mt-wrap]').forEach(function(w){w.style.display='';});
       d.querySelectorAll('.mt-detail-btn').forEach(function(b){b.style.display='none';});
