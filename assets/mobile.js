@@ -27,6 +27,24 @@
       '.mt-detail-btn{display:inline-flex;align-items:center;gap:6px;margin:2px 0 10px;background:rgba(249,115,22,.12);border:1px solid rgba(249,115,22,.3);border-radius:4px;padding:6px 12px;font-family:Montserrat,sans-serif;font-size:10px;font-weight:700;color:#F97316;cursor:pointer;text-transform:uppercase;letter-spacing:.5px;}'+
       '@media(max-width:768px){'+
         'html,body{overflow-x:hidden;}'+
+        /* tipografia de app: heros, cards, títulos e chips menores no mobile
+           (classes compartilhadas por todos os painéis clonados do visão-financeira) */
+        '.hero-value{font-size:30px!important;}'+
+        '.hero-label{font-size:9px!important;letter-spacing:.6px!important;}'+
+        '.hero-deltas{gap:8px 16px!important;flex-wrap:wrap!important;}'+
+        '.hero-delta{font-size:8.5px!important;}'+
+        '.hero-delta b{font-size:12px!important;}'+
+        '.kpi-card{padding:9px 10px!important;}'+
+        '.card-label{font-size:8px!important;}'+
+        '.card-value{font-size:15px!important;}'+
+        '.card-delta-v{font-size:13px!important;}'+
+        '.card-delta-p,.card-meta,.card-imp{font-size:9px!important;}'+
+        '.tbl-title{font-size:13px!important;}'+
+        '.tbl-sub{font-size:9px!important;}'+
+        '.chart-title{font-size:12px!important;padding-right:64px;}'+
+        '.chart-leg{font-size:9px!important;}'+
+        '.ref-toggle{font-size:9px!important;padding:3px 8px!important;}'+
+        '.dim-btn,.seg-btn{font-size:9px!important;padding:4px 8px!important;}'+
         '[data-mt-wrap]{overflow-x:auto;max-width:100%;}'+
         '[data-mt-box] table{table-layout:auto!important;}'+
         /* compacta: só as colunas escolhidas, fonte menor, sem estouro */
@@ -119,6 +137,27 @@
     return box;
   }
 
+  /* ── 2b) Chart.js no mobile: eixos/legendas menores (todas as páginas) ──
+     Plugin global registrado antes dos gráficos serem criados (eles nascem
+     depois do fetch). No desktop não interfere. */
+  function setupChartMobile(){
+    if(!window.Chart||!Chart.register||Chart._mtMobile)return;
+    Chart._mtMobile=true;
+    var shrinkF=function(o,key){var f=o[key];if(f&&typeof f!=='object')return;f=o[key]=f||{};f.size=Math.min(f.size||12,8);};
+    Chart.register({id:'mtMobileFonts',beforeInit:function(c){
+      if(!MQ.matches)return;
+      try{
+        var o=c.options||{};
+        var sc=o.scales||{};
+        Object.keys(sc).forEach(function(k){var s=sc[k]||{};if(s.ticks){shrinkF(s.ticks,'font');if(s.ticks.padding==null)s.ticks.padding=2;}});
+        var pl=o.plugins||{};
+        if(pl.legend&&pl.legend.labels){shrinkF(pl.legend.labels,'font');if(pl.legend.labels.boxWidth)pl.legend.labels.boxWidth=Math.min(pl.legend.labels.boxWidth,10);}
+        if(pl.datalabels)shrinkF(pl.datalabels,'font');
+        if(pl.title)shrinkF(pl.title,'font');
+      }catch(e){}
+    }});
+  }
+
   var t0=null;
   function scan(){
     scrubInativo();
@@ -154,6 +193,7 @@
   function schedule(){clearTimeout(t0);t0=setTimeout(scan,250);}
   function start(){
     lockZoom();
+    setupChartMobile();
     new MutationObserver(schedule).observe(d.documentElement,{childList:true,subtree:true});
     window.addEventListener('resize',schedule);
     window.addEventListener('orientationchange',schedule);
