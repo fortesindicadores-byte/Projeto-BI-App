@@ -146,6 +146,7 @@ const PACOTES_MAP={
   'Seguro de Veículos e Equipamentos':'Seguros e licenças','Seguros':'Seguros e licenças',
 };
 function getPacote(conta){
+  const m=String(conta||'').match(/^pacote\s+(.+)$/i); if(m)return m[1].trim();   // fato novo: 'Pacote Manutenções'
   if(PACOTES_MAP[conta])return PACOTES_MAP[conta];
   if(/^I[VC]\s*:/i.test(conta))return 'Indicadores';
   return 'Outros';
@@ -228,6 +229,7 @@ function chipStatus(st){
   if(/n[ãa]o inici/i.test(st))return `<span class="chip" style="background:rgba(227,52,52,.85);color:#2a0606">${st}</span>`;
   return `<span class="chip" style="background:rgba(148,163,184,.25);color:var(--text)">${st}</span>`;
 }
+const tri=h=>String(h==null?'':h).replace(/▲/g,'<span style="color:var(--red)">▲</span>').replace(/▼/g,'<span style="color:var(--green)">▼</span>');
 function fatoCell(fato){
   const linhas=String(fato||'').split('\n').map(l=>l.trim()).filter(Boolean);
   const met=linhas.filter(l=>/^(desvio|atingimento)/i.test(l));
@@ -246,8 +248,8 @@ function render(){
       `<td class="center">${o.origem||'-'}</td>`+
       `<td class="center">${o.unidade||'-'}</td>`+
       `<td class="center">${o.projeto||'-'}</td>`+
-      `<td class="txt">${fatoCell(o.fato)}${o.desvio?`<span class="metric">${o.desvio}</span>`:''}</td>`+
-      `<td class="txtsm">${(o.causa||'-').replace(/\n/g,'<br>')}</td>`+
+      `<td class="txt">${tri(fatoCell(o.fato))}${o.desvio?`<span class="metric">${tri(o.desvio)}</span>`:''}</td>`+
+      `<td class="txtsm">${tri((o.causa||'-').replace(/\n/g,'<br>'))}</td>`+
       `<td class="txtsm">${(o.acao||'-').replace(/\n/g,'<br>')}</td>`+
       `<td class="center">${o.prazoD?fmtD(o.prazoD):'-'}</td>`+
       `<td class="center"><span class="dot" style="background:${spCor}"></span>${sp}</td>`+

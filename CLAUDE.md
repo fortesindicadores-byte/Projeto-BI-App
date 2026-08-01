@@ -617,6 +617,15 @@ Situação atual do código: a Árvore lê a aba `Árvore Comb.` (`GV_ID=1wCoRGs
 
 ---
 
+## FCA & unidades — regras vigentes (ago/2026)
+
+- **Unidades com tier:** CBA → `CBA T1` (Empurrada) · `CBA T1 WH` (Apoio/Empilhadeiras) · `CBA T2` (CDD); MCC → `MCC T1` (Empurrada) · `MCC T2` (CDI). Tier derivado do projeto: EMPURRADA→T1 · APOIO→T1 WH (só CBA) · demais→T2. A **RPM também é separada por tier**: a Base RPM vem por unidade do Gerot (`CUIABA EMPURRADA`/`CUIABA`/`CDD CUIABA`/`MACACU EMPURRADA`/`CDI MACACU`) e cai no recorte certo via `RPM_UNIT_MAP` do fca-preenchimento.
+- **Acesso FCA multi-unidade:** `fca_profiles.unidade` é lista separada por vírgula (ex.: `CBA T1,MCC T1`); RLS via `fca_has_unit()` (scripts/split-cba-mcc.sql). Gestão por flags no Gerenciar Acessos do hub.
+- **Custos por PACOTE (fca-preenchimento):** o fato gerado é o **pacote líquido** que estourou vs remunerado (`Pacote Manutenções` + `Desvio: ▲ R$ X · ▲ -Y%`); a **causa automática desdobra as contas** do maior desvio ao maior saving — ▲ estouro (vermelho) · ▼ saving (verde), coloridos nas visões de leitura via helper `tri()`. Combustíveis mantém os drivers (Dispersão de km + Km/L com bottom 3 placas + R$/L) antes das contas; Manutenções/Pneus trazem custo/placa ativa do pacote. Vale para as **próximas gerações**; o histórico por conta fica como está (não re-rodar `?gen=all` em vigência já gerada no modelo antigo — criaria os dois formatos).
+- **Kanban primeiro:** fca-preenchimento e fca-consolidado abrem no **Kanban** (botões Fatos/Tabela ao lado, padrão Planner); FCAs automáticos (sem ação) no topo das colunas, depois por vencimento; cards mostram prazo + badge de status + dias p/ vencer ou "vencida há Xd". Status inicial dos automáticos: `Não iniciada`.
+- **"(INATIVO)" nunca aparece:** mesclado na unidade/projeto base — dados via `scripts/limpar-inativo.sql`, telas via vassoura global no `assets/mobile.js`.
+- **Mobile tipo app:** `assets/mobile.js` incluído em TODAS as páginas (zoom travado + tabela larga vira "+ Detalhar" no mobile). Páginas novas devem incluir o script.
+
 ## Roadmap
 
 **Painéis ativos:** Visão Financeira, Painel KM, Árvore de Combustível, Financeiro Pessoal (acesso direto)
