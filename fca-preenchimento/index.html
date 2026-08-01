@@ -89,6 +89,13 @@ body.light-mode .rel-section{background:rgba(128,128,128,.14)!important;border:n
 .kcard-meta{font-size:10px;color:var(--text2);margin-top:7px;} .kcard-meta .dim{color:var(--text3);}
 body.light-mode .kcol{background:#fff;border-color:rgba(0,0,0,.10);}
 body.light-mode .kcard{background:#F7F7F7;border-color:rgba(0,0,0,.10);}
+.kbadge{font-size:8.5px;font-weight:800;padding:1px 6px;border-radius:4px;text-transform:uppercase;letter-spacing:.3px;margin-left:6px;}
+.kbadge.venc{background:rgba(255,102,102,.18);color:var(--red);}
+.kbadge.ok{background:rgba(59,179,59,.18);color:var(--green);}
+.kbadge.sem{background:rgba(148,163,184,.15);color:var(--text2);}
+.kdays{font-size:8.5px;font-weight:800;margin-left:6px;letter-spacing:.3px;white-space:nowrap;}
+.kdays.venc{color:var(--red);}
+.kdays.ok{color:var(--text2);}
 @media(max-width:768px){.kanban{grid-template-columns:1fr;}}
 .fato-head{padding:14px 18px;border-bottom:1px solid rgba(255,255,255,.07);}
 .fato-unit{font-size:22px;font-weight:800;color:var(--text);line-height:1;margin-bottom:12px;}
@@ -184,7 +191,7 @@ body.light-mode select.st[data-v="Cancelada"]{background:#333333;color:#fff;}
   <a class="btn" id="backUnits" href="./" title="Trocar de unidade" style="display:none;text-decoration:none">← Unidades</a>
   <a class="btn" href="../" title="Voltar ao hub" style="text-decoration:none">← Hub</a>
   <button class="btn theme" id="themeBtn" title="Modo claro/escuro">☀</button>
-  <button class="btn" id="viewBtn" onclick="toggleView()" title="Alternar entre Fatos e Kanban">Kanban</button>
+  <button class="btn" id="viewBtn" onclick="toggleView()" title="Alternar entre Fatos e Kanban">Fatos</button>
   <button class="btn" id="flatBtn" onclick="showTabelaPre()" title="Ver as ações em formato de tabela (como no Planner)">Tabela</button>
   <button class="btn" id="adminBtn" title="Modo admin (edita tudo) — teste; em produção será por RLS">Admin</button>
   <span class="saved-msg" id="savedMsg">Salvo ✓</span>
@@ -390,6 +397,21 @@ function pushGerot(rows,fatos,deParaMap){
     fatos.push({vig,fato:kpi,proj,sev,desvio,causaAuto:'',origem:'RPM'});
   });
 }
+// Mapeamento conta → pacote (mesmo PACOTES_MAP da Visão Financeira / FCAs Total)
+const PACOTES_MAP={
+  'Combustíveis Veiculos e Equipamentos':'Combustíveis','Combustíveis':'Combustíveis',
+  'Estorno de ICMS não Aproveitado':'Combustíveis','Fluídos (Arla)':'Combustíveis',
+  'Arla':'Combustíveis','ICMS Crédito Presumido':'Combustíveis',
+  'Manutenção de Veículos e Equipamentos':'Manutenções','Manutenção de Veículos e Equip.':'Manutenções',
+  'Materiais e Ferramentas de Oficina':'Manutenções','Lavação de Veículos':'Manutenções',
+  'Manutenção de Carrocerias':'Manutenções','Personalização/Padronização de Veículos':'Manutenções',
+  'Personalização/Padronização':'Manutenções','Personalização e Padronização de Veículos':'Manutenções',
+  'Contratos de Manutenção Fabricante':'Manutenções','Consertos e Recapagens de Pneus':'Pneus',
+  'Pneus e Camaras':'Pneus','Recapagens e Outros Serviços':'Pneus','Pneus Novos':'Pneus',
+  'IPVA e Licenciamento de Veículos':'Seguros e licenças','IPVA e Licenciamento':'Seguros e licenças',
+  'Seguro de Veículos e Equipamentos':'Seguros e licenças','Seguros':'Seguros e licenças',
+};
+const getPacote=c=>PACOTES_MAP[String(c||'').trim()]||'Outros';
 function pushDRE(dre,fatos,kmlCausas,dispCausas,frotaMaps){
   kmlCausas=kmlCausas||{};dispCausas=dispCausas||{};frotaMaps=frotaMaps||{mes:{},porMes:{}};
   const _nc=s=>String(s||'').normalize('NFD').replace(/[̀-ͯ]/g,'').toUpperCase().replace(/\s+/g,' ').trim();
@@ -402,33 +424,45 @@ function pushDRE(dre,fatos,kmlCausas,dispCausas,frotaMaps){
   const yrMax=Math.floor(maxK/100);
   const acc={};
   drRows.filter(r=>vigKeyN(parseD(r[0]))===maxK).forEach(r=>{const conta=String(r[5]||'—').trim();const niv=String(r[4]||'').replace(/\s*\(INATIVO\)\s*/i,'').trim();const rem=r[9]!=null?+r[9]:0,real=r[10]!=null?+r[10]:0;const key=niv+'||'+conta;if(!acc[key])acc[key]={conta,niv,rem:0,real:0};acc[key].rem+=rem;acc[key].real+=real;});
-  // Manutenção/Pneus/Recapagem/Lavação: custo de CADA mês do ano (YTD) por projeto+conta, p/ a média do custo/placa ativa
+  // Manutenção/Pneus/Recapagem/Lavação: custo de CADA mês do ano (YTD) por projeto+PACOTE, p/ a média do custo/placa ativa
   const isMP=c=>/MANUTEN|PNEU|RECAP|LAVA/.test(_nc(c));
-  const custoPorMes={}; // key proj||conta -> { vigKey: custo }
-  drRows.forEach(r=>{const k=vigKeyN(parseD(r[0]));if(Math.floor(k/100)!==yrMax||k>maxK)return;const conta=String(r[5]||'').trim();if(!isMP(conta))return;const key=projKey(r[4])+'||'+_nc(conta);(custoPorMes[key]=custoPorMes[key]||{});custoPorMes[key][k]=(custoPorMes[key][k]||0)+Math.abs(r[10]!=null?+r[10]:0);});
+  const custoPorMes={}; // key proj||pacote -> { vigKey: custo }
+  drRows.forEach(r=>{const k=vigKeyN(parseD(r[0]));if(Math.floor(k/100)!==yrMax||k>maxK)return;const conta=String(r[5]||'').trim();if(!isMP(conta))return;const key=projKey(r[4])+'||'+_nc(getPacote(conta));(custoPorMes[key]=custoPorMes[key]||{});custoPorMes[key][k]=(custoPorMes[key][k]||0)+Math.abs(r[10]!=null?+r[10]:0);});
+  // ── FATO = PACOTE (líquido) · CAUSA desdobra as contas ──
   // Custos na DRE são negativos: gasto ACIMA do remunerado => (rem - real) > 0.
-  // Referência = REMUNERADO. Só sobem ▲ positivos (gasto acima do remunerado);
-  // saving (over<0) NÃO vira fato. Linhas "(INATIVO)" já mescladas na unidade base.
-  Object.values(acc).map(o=>{const over=o.rem-o.real,base=Math.abs(o.rem);return {...o,over,dpct:base>0?over/base*100:0};})
-    .filter(o=>o.over>0&&o.rem!==0).sort((a,b)=>b.over-a.over)
-    .forEach(o=>{const sev=o.dpct>=5?'crit':'aten';
-      // Fato financeiro: "Desvio: ▲ R$ X · ▲ -Y%"
-      const brlFull='R$ '+Math.round(Math.abs(o.over)).toLocaleString('pt-BR');
-      const desvio=`<span class="dn">Desvio: </span><span class="val ${sev==='aten'?'am':''}">▲ ${brlFull} · ▲ -${Math.round(o.dpct)}%</span>`;
-      const fato={vig,fato:o.conta,proj:o.niv,desvio,sev,origem:'Custos'};
-      // Combustível: causa automática = Dispersão de km (Painel KM) + Eficiência Km/L (+3 piores placas) + Preço R$/L do projeto
-      if(/COMBUST/.test(_nc(o.conta))){const parts=[];const d=dispCausas[projKey(o.niv)];if(d)parts.push(d);const c=kmlCausas[projKey(o.niv)];if(c)parts.push(c);if(parts.length)fato.causaAuto=parts.join('\n');}
-      // Manutenção veíc./equip., Carrocerias, Pneus, Recapagem e Lavação: custo/placa ativa do mês vs média do ano (referência)
-      else if(isMP(o.conta)){
-        const pk=projKey(o.niv);const fMes=frotaMaps.mes[pk]||0;
-        const cpMes=fMes>0?Math.abs(o.real)/fMes:null;
-        // média ano = média dos (custo do mês ÷ frota ativa do mês) dos meses do ano
-        const cm=custoPorMes[pk+'||'+_nc(o.conta)]||{},fm=frotaMaps.porMes[pk]||{};
+  // O fato sobe quando o PACOTE líquido estoura vs remunerado — uma conta pode ter
+  // saving e o pacote ainda fechar negativo. A causa lista as contas do maior
+  // desvio (▲) ao maior saving (▼).
+  const porPac={};
+  Object.values(acc).forEach(o=>{const pac=getPacote(o.conta);const k=projKey(o.niv)+'||'+pac;
+    const g=porPac[k]=porPac[k]||{pac,niv:o.niv,rem:0,real:0,contas:[]};
+    g.rem+=o.rem;g.real+=o.real;g.contas.push(o);});
+  Object.values(porPac).map(g=>{const over=g.rem-g.real,base=Math.abs(g.rem);return {...g,over,dpct:base>0?over/base*100:0};})
+    .filter(g=>g.over>0&&g.rem!==0).sort((a,b)=>b.over-a.over)
+    .forEach(g=>{const sev=g.dpct>=5?'crit':'aten';
+      // Fato financeiro: "Pacote X — Desvio: ▲ R$ X · ▲ -Y%"
+      const brlFull='R$ '+Math.round(Math.abs(g.over)).toLocaleString('pt-BR');
+      const desvio=`<span class="dn">Desvio: </span><span class="val ${sev==='aten'?'am':''}">▲ ${brlFull} · ▲ -${Math.round(g.dpct)}%</span>`;
+      const fato={vig,fato:'Pacote '+g.pac,proj:g.niv,desvio,sev,origem:'Custos'};
+      const causas=[];
+      // desdobramento por conta: ▲ estouros (maior→menor), depois ▼ savings (maior→menor)
+      const det=g.contas.map(o=>{const ov=o.rem-o.real,b=Math.abs(o.rem);return {conta:o.conta,ov,p:b>0?Math.round(Math.abs(ov)/b*100):null};}).filter(o=>Math.round(o.ov)!==0);
+      det.sort((a,b)=>{const pa=a.ov>0,pb=b.ov>0;if(pa&&pb)return b.ov-a.ov;if(pa)return -1;if(pb)return 1;return a.ov-b.ov;});
+      if(det.length){causas.push('Contas do pacote (maior desvio → maior saving):');
+        det.forEach(o=>{const s=o.ov>0?'▲':'▼';causas.push(`- ${o.conta}: ${s} ${impFmt(o.ov)}${o.p!=null?' | '+s+' '+o.p+'%':''}${o.ov<0?' (saving)':''}`);});}
+      // Combustíveis: mantém os drivers (Dispersão de km + Km/L com 3 piores placas + R$/L) ANTES das contas
+      if(/COMBUST/.test(_nc(g.pac))){const parts=[];const dd=dispCausas[projKey(g.niv)];if(dd)parts.push(dd);const c=kmlCausas[projKey(g.niv)];if(c)parts.push(c);if(parts.length)causas.unshift(parts.join('\n'));}
+      // Manutenções/Pneus: custo/placa ativa do PACOTE (mês vs média do ano)
+      else if(/MANUTEN|PNEUS/.test(_nc(g.pac))){
+        const pk=projKey(g.niv);const fMes=frotaMaps.mes[pk]||0;
+        const cpMes=fMes>0?Math.abs(g.real)/fMes:null;
+        const cm=custoPorMes[pk+'||'+_nc(g.pac)]||{},fm=frotaMaps.porMes[pk]||{};
         const ratios=[];Object.keys(cm).forEach(k=>{const f=fm[k];if(f>0)ratios.push(cm[k]/f);});
         const cpAno=ratios.length?ratios.reduce((a,b)=>a+b,0)/ratios.length:null;
         if(cpMes!=null){const gap=cpAno?Math.round((cpMes/cpAno-1)*100):null;
-          fato.causaAuto=`Custo/placa ativa: ${brl(cpMes)} (mês)`+(cpAno!=null?` vs ${brl(cpAno)} (média ano)${gap!=null?' | ▲ '+gap+'%':''}`:'');}
+          causas.push(`Custo/placa ativa: ${brl(cpMes)} (mês)`+(cpAno!=null?` vs ${brl(cpAno)} (média ano)${gap!=null?' | ▲ '+gap+'%':''}`:''));}
       }
+      if(causas.length)fato.causaAuto=causas.join('\n');
       fatos.push(fato);});
 }
 // Causas automáticas de Combustível por projeto — Km/L e R$/L NÃO são mais fatos próprios;
@@ -783,8 +817,22 @@ function aplicar(){
   autoResizeAll(list);
 }
 
-// ── Views: 'tabela' (fatos em blocos, padrão) · 'kanban' · 'flat' (tabela/relatório) ──
-let VIEW='tabela';
+// ── Views: 'kanban' (padrão) · 'tabela' (fatos em blocos) · 'flat' (tabela/relatório) ──
+let VIEW='kanban';
+// prazo no card do Kanban (padrão do Planner): data + status + dias p/ vencer ou vencida
+function diasVenc(iso){const h=new Date();h.setHours(0,0,0,0);const p=new Date(String(iso).slice(0,10)+'T00:00:00');return Math.round((p-h)/864e5);}
+function prazoBadgeK(r){
+  const st=prazoState(r);
+  const cls=st==='Vencida'?'venc':(st==='Sem prazo'?'sem':'ok');
+  const dt=r.prazo?String(r.prazo).slice(0,10).split('-').reverse().join('/'):'sem prazo';
+  let dias='';
+  const ativa=!/conclu|cancel/i.test(String(r.status||DEFAULT_STATUS));
+  if(r.prazo&&ativa){const d=diasVenc(r.prazo);dias=`<span class="kdays ${d<0?'venc':'ok'}">${d<0?'vencida há '+(-d)+'d':(d===0?'vence hoje':d+'d p/ vencer')}</span>`;}
+  return `${dt}<span class="kbadge ${cls}">${st}</span>${dias}`;
+}
+// setas coloridas nos textos gerados: ▲ estouro (vermelho) · ▼ saving (verde)
+const tri=h=>String(h==null?'':h).replace(/▲/g,'<span style="color:var(--red)">▲</span>').replace(/▼/g,'<span style="color:var(--green)">▼</span>');
+
 function updateViewBtnsPre(){const b=document.getElementById('viewBtn');if(b)b.textContent=VIEW==='kanban'?'Fatos':'Kanban';const f=document.getElementById('flatBtn');if(f)f.classList.toggle('active',VIEW==='flat');}
 function toggleView(){VIEW=VIEW==='kanban'?'tabela':'kanban';updateViewBtnsPre();aplicar();}
 function showTabelaPre(){VIEW=VIEW==='flat'?'tabela':'flat';updateViewBtnsPre();aplicar();}
@@ -796,7 +844,7 @@ function kcardHTMLpre(x){const r=x.r,f=x.f,org=String(f.origem||'').toUpperCase(
     <div class="kcard-top"><span class="korg ${org}">${esc(f.origem||'')}</span> ${esc(UNIDADE_COD)} · ${esc(projLabel(f.proj))} · ${esc(f.vig)}${r.locked?' 🔒':''}</div>
     <div class="kcard-fato">${esc(_firstLine(f.nome||f.fato))}</div>
     ${r.acao?`<div class="kcard-ac">${esc(r.acao)}</div>`:''}
-    <div class="kcard-meta">${r.responsavel?esc(r.responsavel):'<span class="dim">sem resp.</span>'} · ${r.prazo?esc(String(r.prazo).split('-').reverse().join('/')):'<span class="dim">sem prazo</span>'}</div>
+    <div class="kcard-meta">${r.responsavel?esc(r.responsavel):'<span class="dim">sem resp.</span>'} · ${prazoBadgeK(r)}</div>
   </div>`;}
 function kanbanHTMLpre(vis){
   const fs=getMsValues('ms-st'), fpz=getMsValues('ms-prazo');
@@ -804,7 +852,7 @@ function kanbanHTMLpre(vis){
   const cards=[]; vis.forEach(f=>{const key=keyOf(f);(_DBROWS[key]||[]).forEach(r=>{if(acMatch(r))cards.push({r,f});});});
   const COLS=[{k:'Não iniciada',cls:'nao'},{k:'Em andamento',cls:'and'},{k:'Concluída',cls:'con'}];
   return `<div class="kanban">${COLS.map(c=>{const items=cards.filter(x=>(x.r.status||DEFAULT_STATUS)===c.k);
-    items.sort((a,b)=>(isAutoAcao(a.r)?0:1)-(isAutoAcao(b.r)?0:1));   // FCAs automáticos (sem ação) sempre primeiro
+    items.sort((a,b)=>((isAutoAcao(a.r)?0:1)-(isAutoAcao(b.r)?0:1))||String(a.r.prazo||'9999').localeCompare(String(b.r.prazo||'9999')));   // automáticos primeiro; depois por vencimento
     return `<div class="kcol" data-status="${esc(c.k)}"><div class="kcol-head ${c.cls}">${c.k}<span class="kcount">${items.length}</span></div>
       <div class="kcol-body">${items.map(kcardHTMLpre).join('')||'<div class="kempty">—</div>'}</div></div>`;}).join('')}</div>`;
 }
@@ -836,8 +884,8 @@ function relatorioHTMLpre(vis){
       `<td class="center">${esc(projLabel(f.proj))}</td>`+
       `<td class="center">${esc((f.vig||'').toUpperCase())}</td>`+
       `<td class="txt"><b>${esc(_firstLine(f.nome||f.fato))}</b></td>`+
-      `<td class="txtsm">${(esc(a.causa)||'—').replace(/\n/g,'<br>')}</td>`+
-      `<td class="txt">${(esc(a.acao)||'—').replace(/\n/g,'<br>')}</td>`+
+      `<td class="txtsm">${tri((esc(a.causa)||'—').replace(/\n/g,'<br>'))}</td>`+
+      `<td class="txt">${tri((esc(a.acao)||'—').replace(/\n/g,'<br>'))}</td>`+
       `<td class="center">${esc(a.resp)||'—'}</td>`+
       `<td class="center">${prazoBR(a.prazo)}</td>`+
       `<td class="center"><span class="dot" style="background:${spCor}"></span>${sp}</td>`+
