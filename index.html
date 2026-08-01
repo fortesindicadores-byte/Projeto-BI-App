@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
@@ -115,8 +115,11 @@ body{background:radial-gradient(ellipse at 15% 20%,rgba(249,115,22,.07) 0%,trans
 .edit-name{background:none;border:none;color:var(--text3);cursor:pointer;font-size:12px;padding:1px 5px;margin-left:6px;border-radius:4px;line-height:1;}
 .edit-name:hover{color:var(--orange);background:rgba(249,115,22,.14);}
 .user-date{font-size:10px;color:var(--text3);margin-top:4px;}
-.user-fca{margin-top:8px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+.user-fca{margin-top:8px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;position:relative;}
 .user-fca label{font-size:10px;font-weight:700;color:var(--orange);text-transform:uppercase;letter-spacing:.5px;}
+.user-fca .farol-btn:hover{border-color:var(--orange);}
+.user-fca .farol-btn .fcnt{background:var(--orange);color:#000;}
+.user-fca .farol-opt input{accent-color:var(--orange);}
 .user-farol{margin-top:8px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;position:relative;}
 .user-farol>label{font-size:10px;font-weight:700;color:#38BDF8;text-transform:uppercase;letter-spacing:.5px;}
 .farol-btn{background:#0a0f18;color:var(--text);border:1px solid #2a3a50;border-radius:6px;font-family:'Montserrat',sans-serif;font-size:11px;font-weight:700;padding:5px 10px;cursor:pointer;outline:none;display:flex;align-items:center;gap:7px;min-width:150px;}
@@ -378,8 +381,10 @@ const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 let currentUser    = null;
 let adminTabActive = 'pending';
 let allApprovals   = [];
-// Acesso FCA por usuário (perfil): código de unidade ou admin
-const FCA_UNITS = ['CGR','BLC','CBA','FLP','GRL','NFR','PLT','RON','MCC','PIR'];
+// Acesso FCA por usuário (perfil): uma ou mais unidades (lista com vírgula) ou admin.
+// CBA e MCC são separadas por projeto/tier (unidades independentes).
+const FCA_UNITS = ['CGR','BLC','CBA T1','CBA T1 WH','CBA T2','FLP','GRL','NFR','PLT','RON','MCC T1','MCC T2','PIR'];
+const FCA_ALL   = [...FCA_UNITS, 'ANG'];   // ANG só tem Custos (sem Gerot) — entra no acesso FCA
 let _fcaProf = {};   // user_id -> { unidade, is_admin }
 
 // ── Telefone: formatação BR + link WhatsApp + máscara de digitação ──
@@ -692,19 +697,63 @@ async function loadAdminData() {
   updateAdminCounts();
 }
 
-// Define o acesso FCA do usuário (Admin / unidade / sem acesso) — grava no fca_profiles
-async function setUserUnit(userId, value, nome) {
+// ── Acesso FCA — seleção múltipla de unidades (flags) ou Admin (todas) ──
+// fca_profiles.unidade guarda a lista separada por vírgula (ex.: 'CBA T1,MCC T1').
+// A pessoa pode acessar mais de um FCA; zero flags + sem admin = sem acesso.
+const fcaUnitsOf = p => String((p && p.unidade) || '').toUpperCase().split(',').map(s => s.trim()).filter(Boolean);
+function fcaSummary(isAdm, units) {
+  if (isAdm) return 'Admin (todas)';
+  if (!units.length) return '— sem acesso —';
+  return units.length === 1 ? units[0] : units.length + ' unidades';
+}
+function renderFcaPicker(userId, p, nm) {
+  const units = fcaUnitsOf(p), isAdm = !!(p && p.is_admin), cnt = isAdm ? 0 : units.length;
+  const opts = `<label class="farol-opt all-opt">
+      <input type="checkbox" class="fa-adm" ${isAdm ? 'checked' : ''} onchange="onFcaChange('${userId}','${nm}')"> Admin (todas)</label>` +
+    FCA_ALL.map(c => `<label class="farol-opt">
+      <input type="checkbox" class="fa-unit" value="${c}" ${!isAdm && units.includes(c) ? 'checked' : ''} ${isAdm ? 'disabled' : ''} onchange="onFcaChange('${userId}','${nm}')"> ${c}</label>`).join('');
+  return `<div class="user-fca">
+    <label>Acesso FCA:</label>
+    <button type="button" class="farol-btn" onclick="toggleFcaPanel('${userId}')">
+      <span id="fasum-${userId}">${fcaSummary(isAdm, units)}</span>
+      <span class="fcnt" id="facnt-${userId}" style="${cnt ? '' : 'display:none'}">${cnt}</span>
+    </button>
+    <div class="farol-panel" id="fapanel-${userId}">${opts}</div>
+  </div>`;
+}
+function toggleFcaPanel(userId) {
+  const panel = document.getElementById('fapanel-' + userId);
+  const card = panel.closest('.user-card');
+  const open = panel.classList.toggle('open');
+  if (card) card.classList.toggle('farol-open', open);
+  if (open) {
+    setTimeout(() => document.addEventListener('click', function h(e) {
+      if (!panel.parentElement.contains(e.target)) { panel.classList.remove('open'); if (card) card.classList.remove('farol-open'); document.removeEventListener('click', h); }
+    }), 0);
+  }
+}
+function onFcaChange(userId, nm) {
+  const panel = document.getElementById('fapanel-' + userId);
+  const adm = panel.querySelector('.fa-adm');
+  const units = [...panel.querySelectorAll('.fa-unit')];
+  if (adm.checked) units.forEach(u => { u.checked = false; u.disabled = true; });
+  else units.forEach(u => { u.disabled = false; });
+  const checked = units.filter(u => u.checked).map(u => u.value);
+  const csv = adm.checked ? '' : checked.join(',');
+  document.getElementById('fasum-' + userId).textContent = fcaSummary(adm.checked, checked);
+  const badge = document.getElementById('facnt-' + userId);
+  badge.textContent = checked.length; badge.style.display = (!adm.checked && checked.length) ? '' : 'none';
+  setUserUnit(userId, adm.checked, csv, nm);
+}
+// Grava o acesso FCA no fca_profiles. Mantém a linha mesmo sem acesso (unidade
+// null) para não perder o "Recebe Farol" já configurado.
+async function setUserUnit(userId, isAdmin, csv, nome) {
   if (!userId) return;
   try {
-    if (value === '') {
-      await sb.from('fca_profiles').delete().eq('user_id', userId);
-      delete _fcaProf[userId];
-    } else {
-      const row = { user_id: userId, nome: nome || null, unidade: value === '__ADMIN__' ? null : value, is_admin: value === '__ADMIN__' };
-      const { error } = await sb.from('fca_profiles').upsert(row, { onConflict: 'user_id' });
-      if (error) throw error;
-      _fcaProf[userId] = row;
-    }
+    const row = { user_id: userId, nome: nome || null, unidade: isAdmin ? null : (csv || null), is_admin: !!isAdmin };
+    const { error } = await sb.from('fca_profiles').upsert(row, { onConflict: 'user_id' });
+    if (error) throw error;
+    _fcaProf[userId] = { ..._fcaProf[userId], ...row };
   } catch (e) { alert('Erro ao salvar acesso FCA: ' + (e.message || e)); }
 }
 
@@ -830,14 +879,8 @@ function renderAdminUsers() {
     let fcaSel = '', farolSel = '';
     if (u.status === 'approved' && u.user_id) {
       const p = _fcaProf[u.user_id] || {};
-      const cur = p.is_admin ? '__ADMIN__' : (p.unidade ? String(p.unidade).toUpperCase() : '');
       const nm = (u.name || '').replace(/'/g, '’');
-      fcaSel = `<div class="user-fca"><label>Acesso FCA:</label>
-        <select onchange="setUserUnit('${u.user_id}', this.value, '${nm}')">
-          <option value="" ${cur === '' ? 'selected' : ''}>— sem acesso —</option>
-          <option value="__ADMIN__" ${cur === '__ADMIN__' ? 'selected' : ''}>Admin (todas)</option>
-          ${[...FCA_UNITS, 'ANG'].map(c => `<option value="${c}" ${cur === c ? 'selected' : ''}>${c}</option>`).join('')}
-        </select></div>`;
+      fcaSel = renderFcaPicker(u.user_id, p, nm);
       farolSel = renderFarolPicker(u.user_id, p.farol_unidades, nm);
     }
     const waHref = waLink(u.phone);
@@ -967,5 +1010,6 @@ setTimeout(syncCategoryLines, 100);
 
 init();
 </script>
+<script src="assets/mobile.js"></script>
 </body>
 </html>

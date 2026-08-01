@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <title>Carta de Custos</title>
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -218,8 +218,14 @@ const SUPABASE_URL='https://lozwipoeacpvplgkrxkq.supabase.co';
 const SUPABASE_KEY='sb_publishable_ggKEEebc5zjgQDVsF92Upw_6uoLmKe9';
 const ADMIN_EMAIL='fortesindicadores@gmail.com';
 let sb=null, SESSION=null, IS_ADMIN=false, ALLOWED=[];
-// unidades (mesmo mapa do FCA)
-const DEPARA={CGR:'CAMPO GRANDE',BLC:'BALNEARIO CAMBORIU',CBA:'CUIABA',FLP:'FLORIANOPOLIS',GRL:'GUARULHOS',NFR:'NOVA FRIBURGO',PLT:'PELOTAS',RON:'RONDONOPOLIS',MCC:'CACHOEIRAS DE MACACU',PIR:'PIRAI',ANG:'ANHANGUERA'};
+// unidades (mesmo mapa do FCA) — CBA e MCC separadas por projeto/tier
+const DEPARA={CGR:'CAMPO GRANDE',BLC:'BALNEARIO CAMBORIU','CBA T1':'CUIABA — EMPURRADA (T1)','CBA T1 WH':'CUIABA — APOIO (T1 WH)','CBA T2':'CUIABA — CDD (T2)',FLP:'FLORIANOPOLIS',GRL:'GUARULHOS',NFR:'NOVA FRIBURGO',PLT:'PELOTAS',RON:'RONDONOPOLIS','MCC T1':'MACACU — EMPURRADA (T1)','MCC T2':'MACACU — CDI (T2)',PIR:'PIRAI',ANG:'ANHANGUERA'};
+// base = código antigo (sufixo do Nível 3 no DRE) · tier vem do prefixo (projeto):
+// EMPURRADA→T1 · APOIO→T1 WH (só CBA) · demais→T2
+const UNIT_BASE=c=>{c=String(c||'');return c.startsWith('CBA ')?'CBA':c.startsWith('MCC ')?'MCC':c;};
+const UNIT_TIER=c=>{c=String(c||'');return (c.startsWith('CBA ')||c.startsWith('MCC '))?c.slice(4):'';};
+const tierOfPrefix=(base,p)=>{p=String(p||'').toUpperCase();if(/EMPURRAD/.test(p))return 'T1';if(base==='CBA'&&/APOIO/.test(p))return 'T1 WH';return 'T2';};
+const unitMatchNv3=(unit,nv3)=>{const b=UNIT_BASE(unit),t=UNIT_TIER(unit);if(getUniLabel(nv3).toUpperCase().trim()!==b)return false;return !t||tierOfPrefix(b,getNv3Prefix(nv3).toUpperCase())===t;};
 const PROJETOS=['ROTA','APOIO','EMPURRADA','AUTO SERVIÇO','INSUMOS','TERCEIROS','ADMINISTRATIVO','UDC'];
 let UNIT_PROJETOS=PROJETOS.slice();   // projetos reais da unidade (do DRE)
 // contas por pacote (do PACOTES_MAP da Visão Financeira)
@@ -279,7 +285,7 @@ function accDreForUnit(rows,m,unit,vigSet,years,projs){
   const orcMes={}, remAcc={}, orcAcc={};   // custos vêm NEGATIVOS no DRE -> uso |valor|
   (rows||[]).forEach(r=>{
     const nv3=m.nv3>=0?String(r[m.nv3]||''):'';
-    if(getUniLabel(nv3).toUpperCase().trim()!==unit)return;            // sufixo Nível 3 = código da unidade
+    if(!unitMatchNv3(unit,nv3))return;                                 // sufixo Nível 3 = base + tier pelo projeto
     if(projs && !projs.includes(getNv3Prefix(nv3).toUpperCase()))return; // projeto filtrado
     let ry=m.ano>=0?parseInt(r[m.ano]):null, rm=m.mes>=0?_mesNum(r[m.mes]):null;
     if((!ry||!rm)&&m.vig>=0){const d=parseVigD(r[m.vig]);if(d){ry=d.getFullYear();rm=d.getMonth()+1;}}
@@ -423,7 +429,7 @@ async function loadRows(){
 function projetosDaUnidade(){
   if(!FROTA) return PROJETOS;
   const m=mapTab(FROTA.header); const s=new Set(); const units=curUnits();
-  (FROTA.rows||[]).forEach(r=>{const nv3=m.nv3>=0?String(r[m.nv3]||''):'';if(units.includes(getUniLabel(nv3).toUpperCase().trim())){const p=getNv3Prefix(nv3).toUpperCase();if(p)s.add(p);}});
+  (FROTA.rows||[]).forEach(r=>{const nv3=m.nv3>=0?String(r[m.nv3]||''):'';if(units.some(u=>unitMatchNv3(u,nv3))){const p=getNv3Prefix(nv3).toUpperCase();if(p)s.add(p);}});
   return s.size?[...s].sort():PROJETOS;
 }
 function refreshProjetos(){
@@ -692,7 +698,7 @@ async function init(){
   let prof=null;
   try{ const r=await sb.from('fca_profiles').select('is_admin,unidade').eq('user_id',session.user.id).maybeSingle(); prof=r.data; }catch(e){}
   IS_ADMIN=(prof&&prof.is_admin)||session.user.email===ADMIN_EMAIL;
-  ALLOWED=IS_ADMIN?Object.keys(DEPARA):(prof&&prof.unidade?[String(prof.unidade).toUpperCase()]:[]);
+  ALLOWED=IS_ADMIN?Object.keys(DEPARA):(prof&&prof.unidade?String(prof.unidade).toUpperCase().split(',').map(s=>s.trim()).filter(c=>DEPARA[c]):[]);
   if(!ALLOWED.length){ showRestricted('Seu usuário não tem unidade vinculada. Fale com o corporativo para liberar seu acesso à Carta de Custos.'); return; }
   selUni.add(ALLOWED[0]);   // default = 1ª unidade permitida (edição habilitada); marque "Todas" p/ agregar
   buildUniFilter(); buildVigFilter(); buildProjFilter(); await loadRows();
@@ -719,5 +725,6 @@ async function exportarPDF(){
 }
 </script>
 <script src="../assets/filters-toggle.js"></script>
+<script src="../assets/mobile.js"></script>
 </body>
 </html>

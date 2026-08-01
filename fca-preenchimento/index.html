@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <title>FCA · Preenchimento</title>
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -42,6 +42,22 @@ body{background:radial-gradient(ellipse at 10% 25%,rgba(249,115,22,.06) 0%,trans
 .ms-opt input[type=checkbox]{accent-color:var(--orange);cursor:pointer;width:14px;height:14px;flex-shrink:0;}
 .uni-badge{font-size:12px;font-weight:800;color:#fff;background:rgba(249,115,22,.22);border:1px solid rgba(249,115,22,.4);border-radius:6px;padding:5px 12px;}
 .btn{background:rgba(249,115,22,.15);border:1px solid rgba(249,115,22,.35);border-radius:6px;padding:7px 14px;cursor:pointer;color:var(--orange);font-family:'Montserrat',sans-serif;font-weight:800;font-size:12px;display:flex;align-items:center;gap:6px;}
+.btn.active{background:rgba(249,115,22,.4);}
+/* ── Tabela (relatório, como no Planner) ── */
+.rel-section{background:rgba(20,27,38,.55);border:1px solid rgba(255,255,255,.07);border-radius:10px;padding:8px 12px 12px;backdrop-filter:blur(16px);box-shadow:0 2px 12px rgba(0,0,0,.25);}
+.rel-wrap{overflow-x:auto;}
+table.rel{width:100%;border-collapse:collapse;font-size:12px;min-width:1000px;}
+table.rel thead th{position:sticky;top:0;background:#141B26;color:var(--text);font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;text-align:left;padding:10px 8px;border-bottom:1px solid rgba(255,255,255,.12);white-space:nowrap;z-index:2;}
+table.rel tbody td{padding:11px 8px;border-bottom:1px solid rgba(255,255,255,.06);vertical-align:top;color:var(--text);line-height:1.45;}
+table.rel tbody tr:hover{background:rgba(255,255,255,.03);}
+table.rel td.txt{white-space:normal;min-width:200px;}
+table.rel td.txtsm{white-space:normal;min-width:160px;color:var(--text2);}
+table.rel td.center{text-align:left;white-space:nowrap;}
+.rel .dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px;vertical-align:middle;}
+.rel .chip{display:inline-block;padding:3px 9px;border-radius:5px;font-weight:700;font-size:11px;white-space:nowrap;}
+body.light-mode table.rel thead th{background:#F0F0F0;}
+body.light-mode table.rel tbody td{border-bottom-color:rgba(0,0,0,.08);}
+body.light-mode .rel-section{background:rgba(128,128,128,.14)!important;border:none!important;box-shadow:none!important;--text:#1a1a1a;--text2:#444444;--text3:#666666;}
 .btn:hover{background:rgba(249,115,22,.3);}
 .btn.theme{padding:7px 9px;}
 .main{padding:20px 24px 60px;}
@@ -168,7 +184,8 @@ body.light-mode select.st[data-v="Cancelada"]{background:#333333;color:#fff;}
   <a class="btn" id="backUnits" href="./" title="Trocar de unidade" style="display:none;text-decoration:none">← Unidades</a>
   <a class="btn" href="../" title="Voltar ao hub" style="text-decoration:none">← Hub</a>
   <button class="btn theme" id="themeBtn" title="Modo claro/escuro">☀</button>
-  <button class="btn" id="viewBtn" onclick="toggleView()" title="Alternar entre Tabela e Kanban">Kanban</button>
+  <button class="btn" id="viewBtn" onclick="toggleView()" title="Alternar entre Fatos e Kanban">Kanban</button>
+  <button class="btn" id="flatBtn" onclick="showTabelaPre()" title="Ver as ações em formato de tabela (como no Planner)">Tabela</button>
   <button class="btn" id="adminBtn" title="Modo admin (edita tudo) — teste; em produção será por RLS">Admin</button>
   <span class="saved-msg" id="savedMsg">Salvo ✓</span>
 </header>
@@ -188,21 +205,26 @@ function writeCache(k,v){try{localStorage.setItem(k,JSON.stringify(v));}catch(e)
 // ── Unidade (vem do perfil; admin pode trocar via ?u=COD ou no seletor) ──
 // De-para por código → nome na DRE (cidade, col10) e nome(s) no Gerot/ICs (col unidade).
 // Fonte: scorecard (UNI2COD/UNI2CID). A Dispersão/Ativação usa o próprio código.
+// CBA e MCC são separadas por projeto/tier: cada recorte é uma unidade própria do FCA.
+// `base` = código antigo (sufixo do Nível 3 na DRE/Dispersão) · `tier` = recorte pelo projeto.
 const DEPARA={
   'CGR':{dre:'CAMPO GRANDE',         ger:['CDD RIO DE JANEIRO']},
   'BLC':{dre:'BALNEARIO CAMBORIU',   ger:['CDD CAMBORIU']},
-  'CBA':{dre:'CUIABA',               ger:['CDD CUIABA','CUIABA','CUIABA EMPURRADA']},
+  'CBA T1':   {dre:'CUIABA', base:'CBA', tier:'T1',    ger:['CUIABA EMPURRADA']},
+  'CBA T1 WH':{dre:'CUIABA', base:'CBA', tier:'T1 WH', ger:['CUIABA']},
+  'CBA T2':   {dre:'CUIABA', base:'CBA', tier:'T2',    ger:['CDD CUIABA']},
   'FLP':{dre:'FLORIANOPOLIS',        ger:['CDD FLORIANOPOLIS']},
   'GRL':{dre:'GUARULHOS',            ger:['CDD GUARULHOS']},
   'NFR':{dre:'NOVA FRIBURGO',        ger:['CDD NOVA FRIBURGO']},
   'PLT':{dre:'PELOTAS',              ger:['CDD PELOTAS']},
   'RON':{dre:'RONDONOPOLIS',         ger:['CDD RONDONOPOLIS']},
-  'MCC':{dre:'CACHOEIRAS DE MACACU', ger:['CDI MACACU','MACACU EMPURRADA']},
+  'MCC T1':{dre:'CACHOEIRAS DE MACACU', base:'MCC', tier:'T1', ger:['MACACU EMPURRADA']},
+  'MCC T2':{dre:'CACHOEIRAS DE MACACU', base:'MCC', tier:'T2', ger:['CDI MACACU']},
   'PIR':{dre:'PIRAI',                ger:['PIRAI EMPURRADA']},
   'ANG':{dre:'ANHANGUERA',           ger:[]},   // só Custos (sem dados no Gerot)
 };
-let UNIDADE_COD='CGR', UNIDADE_DRE='CAMPO GRANDE', UNIDADE_GER=['CDD RIO DE JANEIRO'];
-function applyDepara(cod){const d=DEPARA[cod]; if(d){UNIDADE_DRE=d.dre; UNIDADE_GER=d.ger;}}
+let UNIDADE_COD='CGR', UNIDADE_DRE='CAMPO GRANDE', UNIDADE_GER=['CDD RIO DE JANEIRO'], UNIDADE_BASE='', UNIDADE_TIER='';
+function applyDepara(cod){const d=DEPARA[cod]; if(d){UNIDADE_DRE=d.dre; UNIDADE_GER=d.ger; UNIDADE_BASE=d.base||''; UNIDADE_TIER=d.tier||'';}}
 
 // Gerot (ICs + IVs): mesma planilha dos ICs, aba gid=0 — formato longo bloco|unidade|vig|kpi|un|meta|real|atg.
 // Cada bloco tem 1 IC e seus IVs; o kpi começa com "IC"/"IV". UNIDADE_GER (do de-para) casa com a coluna 'unidade' do Gerot.
@@ -247,7 +269,11 @@ const _normU=s=>String(s||'').normalize('NFD').replace(/[̀-ͯ]/g,'').toUpperCas
 const _g2=v=>v==null||!isFinite(v)?'—':(+v).toLocaleString('pt-BR',{maximumFractionDigits:2});
 // Chave de projeto = parte antes do "-" (nível3 da DRE inclui "- UNIDADE"); unidade aceita código (CGR) ou nome (CAMPO GRANDE).
 const projKey=s=>_normU(String(s||'').split('-')[0]);
-const uniMatch=v=>{const n=_normU(String(v||'').replace(/\s*\(INATIVO\)\s*/i,''));return n===_normU(UNIDADE_DRE)||n===_normU(UNIDADE_COD);};
+const uniMatch=v=>{const n=_normU(String(v||'').replace(/\s*\(INATIVO\)\s*/i,''));return n===_normU(UNIDADE_DRE)||n===_normU(UNIDADE_COD)||(!!UNIDADE_BASE&&n===_normU(UNIDADE_BASE));};
+// Tier do projeto (prefixo do Nível 3): EMPURRADA→T1 · APOIO→T1 WH (só CBA) · demais→T2.
+// Unidades sem tier (UNIDADE_TIER vazio) aceitam qualquer projeto.
+function tierOfProj(proj){const p=projKey(proj);if(/EMPURRAD/.test(p))return 'T1';if(UNIDADE_BASE==='CBA'&&/APOIO/.test(p))return 'T1 WH';return 'T2';}
+const tierMatch=proj=>!UNIDADE_TIER||tierOfProj(proj)===UNIDADE_TIER;
 // Chave de fato robusta: casa importado (projeto "ROTA") com gerado (nivel3 "ROTA - BLC") e ignora linhas extras do fato
 const fatoKey=s=>_normU(String(s||'').split('\n')[0]);
 const fkey=(vig,origem,proj,fato)=>`${vig}||${origem||''}||${projKey(proj)}||${fatoKey(fato)}`;
@@ -272,11 +298,11 @@ function parseDePara(rows){
 // Mapa FIXO da RPM (informado): unidade do Gerot → { abrev=código, projeto }. Fonte da verdade (não depende da aba De-Para).
 // "Muitas Rotas têm Auto Serviço/Apoio dentro, mas p/ a RPM engloba tudo na Rota"; só o Apoio "CUIABA" fica separado.
 const RPM_UNIT_MAP={
-  'CUIABA':            {abrev:'CBA', projeto:'APOIO'},
-  'CUIABA EMPURRADA':  {abrev:'CBA', projeto:'EMPURRADA'},
-  'CDD CUIABA':        {abrev:'CBA', projeto:'ROTA'},
-  'MACACU EMPURRADA':  {abrev:'MCC', projeto:'EMPURRADA'},
-  'CDI MACACU':        {abrev:'MCC', projeto:'ROTA'},
+  'CUIABA':            {abrev:'CBA T1 WH', projeto:'APOIO'},
+  'CUIABA EMPURRADA':  {abrev:'CBA T1', projeto:'EMPURRADA'},
+  'CDD CUIABA':        {abrev:'CBA T2', projeto:'ROTA'},
+  'MACACU EMPURRADA':  {abrev:'MCC T1', projeto:'EMPURRADA'},
+  'CDI MACACU':        {abrev:'MCC T2', projeto:'ROTA'},
   'CDD RIO DE JANEIRO':{abrev:'CGR', projeto:'ROTA'},
   'CDD RONDONOPOLIS':  {abrev:'RON', projeto:'ROTA'},
   'CDD GUARULHOS':     {abrev:'GRL', projeto:'ROTA'},
@@ -368,7 +394,7 @@ function pushDRE(dre,fatos,kmlCausas,dispCausas,frotaMaps){
   kmlCausas=kmlCausas||{};dispCausas=dispCausas||{};frotaMaps=frotaMaps||{mes:{},porMes:{}};
   const _nc=s=>String(s||'').normalize('NFD').replace(/[̀-ͯ]/g,'').toUpperCase().replace(/\s+/g,' ').trim();
   const EXCL=new Set(['RECEITA LIQUIDA','ICMS CREDITO PRESUMIDO','IPVA E LICENCIAMENTO DE VEICULOS','ESTORNO ICMS NAO APROVEITADO']);
-  const drRows=(dre||[]).filter(r=>parseD(r[0])&&uniMatch(r[3])&&!EXCL.has(_nc(r[5])));
+  const drRows=(dre||[]).filter(r=>parseD(r[0])&&uniMatch(r[3])&&tierMatch(r[4])&&!EXCL.has(_nc(r[5])));
   if(!drRows.length)return;
   // Frota tem meses ORÇADOS futuros (rem/real=0); mês de análise = última vigência COM realizado ≠ 0.
   let maxK=0;drRows.forEach(r=>{const real=r[10]!=null?+r[10]:0;if(real!==0){const k=vigKeyN(parseD(r[0]));if(k>maxK)maxK=k;}});
@@ -411,7 +437,7 @@ function kmlCausasPorProj(kml){
   const out={};
   const f2=v=>(+v).toFixed(2).replace('.',',');
   const norm=s=>String(s||'').normalize('NFD').replace(/[̀-ͯ]/g,'').toUpperCase().replace(/\s+/g,' ').trim();
-  const rows=(kml||[]).filter(r=>parseD(r[0])&&uniMatch(r[15]));
+  const rows=(kml||[]).filter(r=>parseD(r[0])&&uniMatch(r[15])&&tierMatch(r[14]));
   if(!rows.length)return out;
   let maxK=0;rows.forEach(r=>{const k=vigKeyN(parseD(r[0]));if(k>maxK)maxK=k;});
   const acc={}; // por projeto (col14)
@@ -458,7 +484,7 @@ function kmlCausasPorProj(kml){
 function dispCausasPorProj(disp){
   const out={};
   const norm=s=>String(s||'').normalize('NFD').replace(/[̀-ͯ]/g,'').toUpperCase().replace(/\s+/g,' ').trim();
-  const rows=(disp||[]).filter(r=>{const u=String(r[14]||'').includes('-')?String(r[14]).split('-').slice(1).join('-').trim():String(r[13]||'').trim();return vigDisp(r[0])&&uniMatch(u);});
+  const rows=(disp||[]).filter(r=>{const u=String(r[14]||'').includes('-')?String(r[14]).split('-').slice(1).join('-').trim():String(r[13]||'').trim();return vigDisp(r[0])&&uniMatch(u)&&tierMatch(r[14]);});
   if(!rows.length)return out;
   let maxK=0;rows.forEach(r=>{const k=vigKeyN(vigDisp(r[0]));if(k>maxK)maxK=k;});
   const acc={};
@@ -479,7 +505,7 @@ function dispCausasPorProj(disp){
 function frotaAtivaPorProj(disp){
   const res={mes:{},porMes:{}};
   const norm=s=>String(s||'').normalize('NFD').replace(/[̀-ͯ]/g,'').toUpperCase().replace(/\s+/g,' ').trim();
-  const rows=(disp||[]).filter(r=>{const u=String(r[14]||'').includes('-')?String(r[14]).split('-').slice(1).join('-').trim():String(r[13]||'').trim();return vigDisp(r[0])&&uniMatch(u);});
+  const rows=(disp||[]).filter(r=>{const u=String(r[14]||'').includes('-')?String(r[14]).split('-').slice(1).join('-').trim():String(r[13]||'').trim();return vigDisp(r[0])&&uniMatch(u)&&tierMatch(r[14]);});
   if(!rows.length)return res;
   let maxK=0;rows.forEach(r=>{const k=vigKeyN(vigDisp(r[0]));if(k>maxK)maxK=k;});
   const yr=Math.floor(maxK/100);
@@ -532,7 +558,7 @@ function isDriverCombust(fato){
   return false;
 }
 // Projeto "limpo": corta no '-' (ex.: "AUTO SERVIÇO - CGR" → "AUTO SERVIÇO"). RPM já vem limpo.
-function projLabel(s){const t=String(s==null?'':s).trim();if(!t)return '—';const i=t.indexOf('-');return i>=0?(t.substring(0,i).trim()||'—'):t;}
+function projLabel(s){const t=String(s==null?'':s).replace(/\s*\(INATIVO\)\s*/gi,' ').replace(/\s+/g,' ').trim();if(!t)return '—';const i=t.indexOf('-');return i>=0?(t.substring(0,i).trim()||'—'):t;}
 // Formata o desvio (o Fato) como "▲ R$ nominal · ▲ %". Para desvios de custo (têm R$);
 // RPM/atingimento (sem R$) fica como veio. Extrai os números do texto salvo.
 function fmtDesvio(txt){
@@ -579,7 +605,7 @@ async function carregar(){
 async function gerarTodas(){
   const list=document.getElementById('list');
   document.querySelectorAll('.hfilter').forEach(e=>e.style.display='none');
-  ['uniBadge','uniSel','adminBtn','saveBtn','savedMsg','backUnits','viewBtn'].forEach(id=>{const e=document.getElementById(id);if(e)e.style.display='none';});
+  ['uniBadge','uniSel','adminBtn','saveBtn','savedMsg','backUnits','viewBtn','flatBtn'].forEach(id=>{const e=document.getElementById(id);if(e)e.style.display='none';});
   const intro=document.querySelector('.intro'); if(intro)intro.style.display='none';
   list.innerHTML='<div class="loading">Baixando planilhas…</div>';
   // RPM recriado por (unidade, vigência) dentro do seedUnidade — meses anteriores e Custos preservados
@@ -603,7 +629,7 @@ async function gerarTodas(){
 async function importarFCATotal(){
   const list=document.getElementById('list');
   document.querySelectorAll('.hfilter').forEach(e=>e.style.display='none');
-  ['uniBadge','uniSel','adminBtn','saveBtn','savedMsg','backUnits','viewBtn'].forEach(id=>{const e=document.getElementById(id);if(e)e.style.display='none';});
+  ['uniBadge','uniSel','adminBtn','saveBtn','savedMsg','backUnits','viewBtn','flatBtn'].forEach(id=>{const e=document.getElementById(id);if(e)e.style.display='none';});
   const intro=document.querySelector('.intro'); if(intro)intro.style.display='none';
   list.innerHTML='<div class="loading">Lendo FCA Total…</div>';
   let rows; try{ rows=await gviz(SRC_FCATOTAL); }catch(e){ list.innerHTML='<div class="empty">Erro ao ler o FCA Total.</div>'; return; }
@@ -632,7 +658,7 @@ async function importarFCATotal(){
 async function sincronizarRPM(){
   const list=document.getElementById('list');
   document.querySelectorAll('.hfilter').forEach(e=>e.style.display='none');
-  ['uniBadge','uniSel','adminBtn','saveBtn','savedMsg','backUnits','viewBtn'].forEach(id=>{const e=document.getElementById(id);if(e)e.style.display='none';});
+  ['uniBadge','uniSel','adminBtn','saveBtn','savedMsg','backUnits','viewBtn','flatBtn'].forEach(id=>{const e=document.getElementById(id);if(e)e.style.display='none';});
   const intro=document.querySelector('.intro'); if(intro)intro.style.display='none';
   list.innerHTML='<div class="loading">Lendo a Base RPM…</div>';
   let payload;
@@ -729,6 +755,7 @@ function aplicar(){
     &&(!(fs.length||fpz.length) || (_DBROWS[keyOf(f)]||[]).some(acMatch)));
   if(!vis.length){list.innerHTML='<div class="empty">Nenhum fato para o filtro selecionado.</div>';return;}
   if(VIEW==='kanban'){ list.innerHTML=kanbanHTMLpre(vis); return; }
+  if(VIEW==='flat'){ list.innerHTML=relatorioHTMLpre(vis); return; }
   list.innerHTML=vis.map(f=>{
     const key=keyOf(f);
     const acoes=loadAcoes(key,f.causaAuto);
@@ -756,10 +783,14 @@ function aplicar(){
   autoResizeAll(list);
 }
 
-// ── Kanban (3 buckets) ──
+// ── Views: 'tabela' (fatos em blocos, padrão) · 'kanban' · 'flat' (tabela/relatório) ──
 let VIEW='tabela';
-function toggleView(){VIEW=VIEW==='kanban'?'tabela':'kanban';const b=document.getElementById('viewBtn');if(b)b.textContent=VIEW==='kanban'?'Tabela':'Kanban';aplicar();}
+function updateViewBtnsPre(){const b=document.getElementById('viewBtn');if(b)b.textContent=VIEW==='kanban'?'Fatos':'Kanban';const f=document.getElementById('flatBtn');if(f)f.classList.toggle('active',VIEW==='flat');}
+function toggleView(){VIEW=VIEW==='kanban'?'tabela':'kanban';updateViewBtnsPre();aplicar();}
+function showTabelaPre(){VIEW=VIEW==='flat'?'tabela':'flat';updateViewBtnsPre();aplicar();}
 function _firstLine(s){return String(s==null?'':s).split('\n')[0].trim();}
+// FCA automático = ação ainda não preenchida (gerado do Gerot/DRE e não tratado)
+const isAutoAcao=r=>!String((r&&r.acao)||'').trim();
 function kcardHTMLpre(x){const r=x.r,f=x.f,org=String(f.origem||'').toUpperCase()==='RPM'?'rpm':'cst',lk=false;
   return `<div class="kcard${lk?' klock':''}"${lk?'':' draggable="true"'} data-id="${esc(r.id||'')}">
     <div class="kcard-top"><span class="korg ${org}">${esc(f.origem||'')}</span> ${esc(UNIDADE_COD)} · ${esc(projLabel(f.proj))} · ${esc(f.vig)}${r.locked?' 🔒':''}</div>
@@ -773,8 +804,48 @@ function kanbanHTMLpre(vis){
   const cards=[]; vis.forEach(f=>{const key=keyOf(f);(_DBROWS[key]||[]).forEach(r=>{if(acMatch(r))cards.push({r,f});});});
   const COLS=[{k:'Não iniciada',cls:'nao'},{k:'Em andamento',cls:'and'},{k:'Concluída',cls:'con'}];
   return `<div class="kanban">${COLS.map(c=>{const items=cards.filter(x=>(x.r.status||DEFAULT_STATUS)===c.k);
+    items.sort((a,b)=>(isAutoAcao(a.r)?0:1)-(isAutoAcao(b.r)?0:1));   // FCAs automáticos (sem ação) sempre primeiro
     return `<div class="kcol" data-status="${esc(c.k)}"><div class="kcol-head ${c.cls}">${c.k}<span class="kcount">${items.length}</span></div>
       <div class="kcol-body">${items.map(kcardHTMLpre).join('')||'<div class="kempty">—</div>'}</div></div>`;}).join('')}</div>`;
+}
+// ── Tabela (relatório, formato do Planner — somente leitura; edição nos Fatos/Kanban) ──
+function chipStatusRel(st){
+  st=String(st||'').trim();
+  if(!st)return '<span style="color:var(--text3)">—</span>';
+  if(/conclu/i.test(st))return `<span class="chip" style="background:rgba(59,179,59,.85);color:#06210a">${esc(st)}</span>`;
+  if(/andamento/i.test(st))return `<span class="chip" style="background:rgba(244,161,0,.9);color:#241900">${esc(st)}</span>`;
+  if(/cancel/i.test(st))return `<span class="chip" style="background:rgba(120,120,120,.5);color:#fff">${esc(st)}</span>`;
+  if(/n[ãa]o inici/i.test(st))return `<span class="chip" style="background:rgba(227,52,52,.85);color:#2a0606">${esc(st)}</span>`;
+  return `<span class="chip" style="background:rgba(148,163,184,.25);color:var(--text)">${esc(st)}</span>`;
+}
+function relatorioHTMLpre(vis){
+  const fs=getMsValues('ms-st'), fpz=getMsValues('ms-prazo');
+  const acMatch=r=>(!fs.length||fs.includes(r.status||DEFAULT_STATUS))&&(!fpz.length||fpz.includes(prazoState(r)));
+  const rows=[]; vis.forEach(f=>{const key=keyOf(f);loadAcoes(key,f.causaAuto).forEach(a=>{if(acMatch(a))rows.push({f,a});});});
+  if(!rows.length)return '<div class="empty">Nenhuma ação com os filtros selecionados.</div>';
+  // automáticos (sem ação) primeiro; depois por prazo
+  rows.sort((x,y)=>((isAutoAcao(x.a)?0:1)-(isAutoAcao(y.a)?0:1))||String(x.a.prazo||'9999').localeCompare(String(y.a.prazo||'9999')));
+  const prazoBR=p=>p?String(p).slice(0,10).split('-').reverse().join('/'):'—';
+  let h='<div class="rel-section"><div class="rel-wrap"><table class="rel"><thead><tr>'+
+    '<th>Origem</th><th>Projeto</th><th>Vigência</th><th>Fato</th><th>Causa</th><th>Ação</th><th>Responsável</th><th>Prazo</th><th>Status Prazo</th><th>Status</th><th>Acompanhamento</th>'+
+    '</tr></thead><tbody>';
+  rows.forEach(({f,a})=>{
+    const sp=prazoState({status:a.status,prazo:a.prazo}), spCor=sp==='Vencida'?'var(--red)':'var(--green)';
+    h+='<tr>'+
+      `<td class="center">${esc(f.origem||'—')}</td>`+
+      `<td class="center">${esc(projLabel(f.proj))}</td>`+
+      `<td class="center">${esc((f.vig||'').toUpperCase())}</td>`+
+      `<td class="txt"><b>${esc(_firstLine(f.nome||f.fato))}</b></td>`+
+      `<td class="txtsm">${(esc(a.causa)||'—').replace(/\n/g,'<br>')}</td>`+
+      `<td class="txt">${(esc(a.acao)||'—').replace(/\n/g,'<br>')}</td>`+
+      `<td class="center">${esc(a.resp)||'—'}</td>`+
+      `<td class="center">${prazoBR(a.prazo)}</td>`+
+      `<td class="center"><span class="dot" style="background:${spCor}"></span>${sp}</td>`+
+      `<td class="center">${chipStatusRel(a.status||DEFAULT_STATUS)}</td>`+
+      `<td class="txtsm">${(esc(a.obs)||'—').replace(/\n/g,'<br>')}</td>`+
+    '</tr>';
+  });
+  return h+'</tbody></table></div></div>';
 }
 async function moveCardPre(id,status){
   if(!id||PREVIEW||!sb)return;
@@ -969,8 +1040,10 @@ async function initApp(){
   const {data:prof,error:profErr}=await sb.from('fca_profiles').select('*').eq('user_id',session.user.id).maybeSingle();
   if(profErr){ enterPreview(); return; }                   // tabela ainda não existe -> pré-visualização
   PROFILE=prof||{}; REAL_ADMIN=!!PROFILE.is_admin; ADMIN=REAL_ADMIN;
-  // unidades que o usuário pode acessar: admin = todas; gestor = a sua
-  const allowed = REAL_ADMIN ? Object.keys(DEPARA) : (PROFILE.unidade?[String(PROFILE.unidade).toUpperCase()]:[]);
+  // unidades que o usuário pode acessar: admin = todas; gestor = a(s) sua(s)
+  // (fca_profiles.unidade aceita lista separada por vírgula, ex.: 'CBA T1,MCC T1')
+  const allowed = REAL_ADMIN ? Object.keys(DEPARA)
+    : String(PROFILE.unidade||'').toUpperCase().split(',').map(s=>s.trim()).filter(c=>c&&DEPARA[c]);
   const params=new URLSearchParams(location.search);
   if((params.get('gen')||'')==='all'){                       // ── geração de TODAS as unidades (só admin) ──
     if(!REAL_ADMIN){ document.getElementById('list').innerHTML='<div class="empty">Apenas administradores podem gerar os fatos.</div>'; return; }
@@ -1003,12 +1076,12 @@ async function initApp(){
 // Mini-hub: um card por unidade liberada + card Admin (consolidado) só p/ admin
 function renderSubHub(allowed){
   document.querySelectorAll('.hfilter').forEach(e=>e.style.display='none');
-  ['uniBadge','uniSel','adminBtn','saveBtn','savedMsg','backUnits','viewBtn'].forEach(id=>{const e=document.getElementById(id);if(e)e.style.display='none';});
+  ['uniBadge','uniSel','adminBtn','saveBtn','savedMsg','backUnits','viewBtn','flatBtn'].forEach(id=>{const e=document.getElementById(id);if(e)e.style.display='none';});
   const intro=document.querySelector('.intro'); if(intro)intro.textContent='Selecione a unidade para preencher o FCA do mês.';
   const list=document.getElementById('list');
   if(!REAL_ADMIN && !allowed.length){ list.innerHTML='<div class="empty">Seu usuário ainda não tem unidade liberada. Fale com o administrador.</div>'; return; }
   const adminCard = REAL_ADMIN ? `<a class="uhub-card admin" href="../fca-consolidado/"><div class="uhub-cod">★ Admin</div><div class="uhub-name">Todas as unidades — editar qualquer ação</div><div class="uhub-go">Abrir →</div></a>` : '';
-  const cards = allowed.map(c=>`<a class="uhub-card" href="?u=${c}"><div class="uhub-cod">${esc(c)}</div><div class="uhub-name">${DEPARA[c]?esc(DEPARA[c].dre):''}</div><div class="uhub-go">Abrir FCA →</div></a>`).join('');
+  const cards = allowed.map(c=>`<a class="uhub-card" href="?u=${encodeURIComponent(c)}"><div class="uhub-cod">${esc(c)}</div><div class="uhub-name">${DEPARA[c]?esc(DEPARA[c].dre+(DEPARA[c].tier?' · '+DEPARA[c].tier:'')):''}</div><div class="uhub-go">Abrir FCA →</div></a>`).join('');
   list.innerHTML=`<div class="uhub-grid">${adminCard}${cards}</div>`;
 }
 // Seletor de unidade (só admin): troca a unidade exibida sem mexer na URL
@@ -1021,5 +1094,6 @@ function setupUniSel(){
 }
 initApp();
 </script>
+<script src="../assets/mobile.js"></script>
 </body>
 </html>

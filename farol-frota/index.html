@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <title>Farol Frota — Gestão em Movimento</title>
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -47,10 +47,13 @@ body{background:radial-gradient(ellipse at 10% 25%,rgba(249,115,22,.06) 0%,trans
 <script>
 const SUPABASE_URL='https://lozwipoeacpvplgkrxkq.supabase.co';
 const SUPABASE_KEY='sb_publishable_ggKEEebc5zjgQDVsF92Upw_6uoLmKe9';
-// mesmas unidades do portal (códigos do FCA)
+// mesmas unidades do portal (códigos do FCA) — CBA e MCC separadas por projeto/tier
 const UNIDADES={
-  'BLC':'Balneário Camboriú','CBA':'Cuiabá','CGR':'Campo Grande','FLP':'Florianópolis','GRL':'Guarulhos',
-  'MCC':'Cachoeiras de Macacu','NFR':'Nova Friburgo','PIR':'Piraí','PLT':'Pelotas','RON':'Rondonópolis'
+  'BLC':'Balneário Camboriú',
+  'CBA T1':'Cuiabá — Empurrada (T1)','CBA T1 WH':'Cuiabá — Apoio/Empilhadeiras (T1 WH)','CBA T2':'Cuiabá — CDD (T2)',
+  'CGR':'Campo Grande','FLP':'Florianópolis','GRL':'Guarulhos',
+  'MCC T1':'Cachoeiras de Macacu — Empurrada (T1)','MCC T2':'Cachoeiras de Macacu — CDI (T2)',
+  'NFR':'Nova Friburgo','PIR':'Piraí','PLT':'Pelotas','RON':'Rondonópolis'
 };
 function gate(t,m){document.getElementById('content').innerHTML=`<div class="gate"><h2>${t}</h2><p>${m}</p></div>`;}
 (async function(){
@@ -61,7 +64,7 @@ function gate(t,m){document.getElementById('content').innerHTML=`<div class="gat
   const {data:prof}=await sb.from('fca_profiles').select('is_admin').eq('user_id',session.user.id).maybeSingle();
   if(!prof||!prof.is_admin){ gate('Apenas administradores','O Farol é acessado pelos admins. As unidades recebem o farol da sua operação <b>por e-mail</b>, toda segunda-feira às 14h.'); return; }
   const cards=Object.keys(UNIDADES).sort().map(c=>
-    `<a class="fcard" href="unidade.html?u=${c}"><div class="cod">${c}</div><div class="nome">${UNIDADES[c]}</div><div class="go">Abrir farol →</div></a>`).join('');
+    `<a class="fcard" href="unidade.html?u=${encodeURIComponent(c)}"><div class="cod">${c}</div><div class="nome">${UNIDADES[c]}</div><div class="go">Abrir farol →</div></a>`).join('');
   document.getElementById('content').innerHTML=`
     <div class="intro">Retrato semanal dos indicadores da frota. O e-mail automático sai <b>toda segunda-feira às 14h</b> para os destinatários liberados no
     <b>Gerenciar Acessos</b> — cada gestor recebe o farol da(s) sua(s) unidade(s); quem tem "Todas" recebe o consolidado. Aqui dentro a visão é ao vivo.</div>
@@ -71,5 +74,6 @@ function gate(t,m){document.getElementById('content').innerHTML=`<div class="gat
     <div class="grid">${cards}</div>`;
 })();
 </script>
+<script src="../assets/mobile.js"></script>
 </body>
 </html>

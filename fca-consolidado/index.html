@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <title>FCA · Admin</title>
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -224,7 +224,7 @@ function gateSetup(){gate('🛠️','Banco ainda não configurado','<p>As tabela
 function gateError(msg){gate('⚠️','Não foi possível carregar',`<p>${esc(msg||'Erro inesperado ao consultar o Supabase.')}</p>`);}
 
 // Projeto "limpo": corta no '-' (ex.: "AUTO SERVIÇO - CGR" → "AUTO SERVIÇO"). RPM já vem limpo. Unifica exibição e filtro.
-function projLabel(s){const t=String(s==null?'':s).trim();if(!t)return '—';const i=t.indexOf('-');return i>=0?(t.substring(0,i).trim()||'—'):t;}
+function projLabel(s){const t=String(s==null?'':s).replace(/\s*\(INATIVO\)\s*/gi,' ').replace(/\s+/g,' ').trim();if(!t)return '—';const i=t.indexOf('-');return i>=0?(t.substring(0,i).trim()||'—'):t;}
 // ── Multi-select (padrão Gestão em Movimento) ──
 function syncBadge(w){const c=w.querySelector('.ms-cnt'),n=w._sel?w._sel.size:0;if(c){c.textContent=n;c.style.display=n?'':'none';}}
 function _buildMs(w,getItems,after){
@@ -387,9 +387,12 @@ function kcardHTML(r){
     <div class="kcard-meta">${r.responsavel?esc(r.responsavel):'<span class="dim">sem resp.</span>'} · ${r.prazo?esc(r.prazo.split('-').reverse().join('/')):'<span class="dim">sem prazo</span>'}</div>
   </div>`;
 }
+// FCA automático = ação ainda não preenchida (gerado do Gerot/DRE e não tratado) — vai primeiro no Kanban
+const isAutoAcao=r=>!String((r&&r.acao)||'').trim();
 function kanbanHTML(vis){
   return `<div class="kanban">${KCOLS.map(c=>{
     const items=vis.filter(r=>(r.status||DEFAULT_STATUS)===c.k);
+    items.sort((a,b)=>(isAutoAcao(a)?0:1)-(isAutoAcao(b)?0:1));
     return `<div class="kcol" data-status="${esc(c.k)}">
       <div class="kcol-head ${c.cls}">${c.k}<span class="kcount">${items.length}</span></div>
       <div class="kcol-body">${items.map(kcardHTML).join('')||'<div class="kempty">—</div>'}</div>
@@ -486,10 +489,12 @@ function wireDelegation(){
 }
 
 // ── Carregar TODOS os registros (RLS devolve tudo p/ admin) ──
+// mescla unidades "(INATIVO)" na unidade base — nunca aparecem em painel/filtro
+const _fixInativo=r=>{r.unidade=String(r.unidade||'').replace(/\s*\(INATIVO\)\s*/gi,' ').replace(/\s+/g,' ').trim();return r;};
 async function carregar(){
   // 1) pinta na hora com o cache (se houver) — stale-while-revalidate
   const cached=readCache(CACHE_KEY);
-  if(cached&&cached.length){ _ROWS=cached.filter(r=>!isDriverCombust(r.fato)); popFiltros(); render(); }
+  if(cached&&cached.length){ _ROWS=cached.filter(r=>!isDriverCombust(r.fato)).map(_fixInativo); popFiltros(); render(); }
   else document.getElementById('content').innerHTML='<div class="loading">Carregando ações de todas as unidades…</div>';
   // 2) revalida do Supabase em segundo plano
   const {data,error}=await sb.from('fca').select('*').order('unidade',{ascending:true}).order('vigencia',{ascending:false}).order('created_at',{ascending:true});
@@ -499,7 +504,7 @@ async function carregar(){
     else gateError(error.message);
     return;
   }
-  _ROWS=(data||[]).filter(r=>!isDriverCombust(r.fato));
+  _ROWS=(data||[]).filter(r=>!isDriverCombust(r.fato)).map(_fixInativo);
   writeCache(CACHE_KEY,_ROWS);
   popFiltros();
   render();
@@ -553,5 +558,6 @@ async function initApp(){
 initApp();
 </script>
 <script src="../assets/filters-toggle.js"></script>
+<script src="../assets/mobile.js"></script>
 </body>
 </html>
