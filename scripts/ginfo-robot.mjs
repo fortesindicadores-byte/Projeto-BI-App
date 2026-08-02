@@ -95,9 +95,10 @@ const ABAS = [
   // (Mapa | Data do mapa | Data OS | Início/Fim técnico | Problema | Nº OS |
   // Tipo Checklist | Status | Filial | Motorista | Placa | Tipo Veículo |
   // Projeto). Alimenta o farol NOVO "Checklist" (Saída com OS Crítica do mês).
-  // (a página tem outros grids pequenos — mirar pela coluna "Data do mapa")
+  // (a página tem outros grids pequenos — mirar pelas colunas candidatas; os
+  // nomes NA TELA podem diferir dos campos do export — pedir print se falhar)
   { chave: 'checklist-031120', url: 'https://bi.ginfo.app.br/bi/76e82774-d5d4-4cda-bb13-65a1a64387ef?autoAuth=true&ctid=c16300de-7070-4b58-80c8-af99af1e1f65',
-    menu: ['FROTA', '1.3 - ADERÊNCIA FROTA - 031120'], header: 'Data do mapa' },
+    menu: ['FROTA', '1.3 - ADERÊNCIA FROTA - 031120'], header: ['Data do mapa', 'Problema', 'Motorista', 'Mapa'] },
 ];
 
 const ART = 'ginfo-artifacts';
@@ -217,13 +218,15 @@ async function acharAlvo(page, aba) {
         return t;
       }
     } else if (aba.header) {
-      const alvo = await emFrames(page, async fr => {
-        const g = fr.locator(SEL_TABELA)
-          .filter({ has: fr.locator(`[role="columnheader"]:has-text("${aba.header}")`) })
-          .filter({ visible: true }).first();
-        return (await g.count()) ? { fr, v: g } : null;
-      });
-      if (alvo) { log(`tabela com a coluna "${aba.header}" encontrada`); return alvo; }
+      for (const hd of (Array.isArray(aba.header) ? aba.header : [aba.header])) {
+        const alvo = await emFrames(page, async fr => {
+          const g = fr.locator(SEL_TABELA)
+            .filter({ has: fr.locator(`[role="columnheader"]:has-text("${hd}")`) })
+            .filter({ visible: true }).first();
+          return (await g.count()) ? { fr, v: g } : null;
+        });
+        if (alvo) { log(`tabela com a coluna "${hd}" encontrada`); return alvo; }
+      }
     } else if (aba.indice) {
       const tabs = await tabelasVisiveis();
       if (tabs.length >= aba.indice) {
@@ -303,37 +306,35 @@ async function clicarMenu(page, secao, item) {
 async function drillThrough(page, cardTexto, itemMenu) {
   // o card pode demorar a renderizar → polling de até 45s
   // só nos frames do Power BI — o texto do card também existe no menu lateral
-  // do portal (ex.: "VEÍCUL OS" em "2.1 - INDISP. MANUT. VEÍCULOS") e clicar lá
+  // do portal (ex.: "VEÍCULOS" em "2.1 - INDISP. MANUT. VEÍCULOS") e clicar lá
   // é interceptado pelo iframe do relatório.
   const pbiFrames = () => page.frames().filter(f => /powerbi|reportEmbed/i.test(f.url()));
-  let alvo = null;
-  for (let t = 0; t < 9 && !alvo; t++) {
+  const escRe = s => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  // acha o RÓTULO EXATO do card, com caixa (case-sensitive): "NÃO EXECUTADAS"
+  // (card) não pode casar com a coluna "Não Executadas" da tabela ao lado.
+  let lbl = null;
+  for (let t = 0; t < 9 && !lbl; t++) {
     for (const fr of pbiFrames()) {
       try {
-        const cont = fr.locator(`visual-container:has-text("${cardTexto}")`).first();
-        if (await cont.count()) {
-          // botão direito no NÚMERO do card — no rótulo o menu vem
-          // "(Nenhuma ação disponível)" e o drill não aparece
-          let el = cont.getByText(/^\s*[\d.,]+\s*%?\s*$/).filter({ visible: true }).first();
-          if (!(await el.count())) el = cont.locator('tspan, .value, [class*="value" i]').filter({ visible: true }).first();
-          if (!(await el.count())) el = fr.getByText(cardTexto, { exact: false }).filter({ visible: true }).first();
-          if (await el.count()) { alvo = { fr, c: el }; break; }
-        } else {
-          const el = fr.getByText(cardTexto, { exact: false }).filter({ visible: true }).first();
-          if (await el.count()) { alvo = { fr, c: el }; break; }
-        }
+        const l = fr.getByText(new RegExp('^\\s*' + escRe(cardTexto) + '\\s*$')).filter({ visible: true }).first();
+        if (await l.count()) { lbl = l; break; }
       } catch (e) {}
     }
-    if (!alvo) await page.waitForTimeout(5000);
+    if (!lbl) await page.waitForTimeout(5000);
   }
-  if (!alvo) throw new Error(`card "${cardTexto}" não encontrado p/ drill-through`);
+  if (!lbl) throw new Error(`card "${cardTexto}" não encontrado p/ drill-through`);
   const buscarItem = () => emFrames(page, async fr => {
     const i = fr.locator(`[role="menuitem"]:has-text("${itemMenu}"), button:has-text("${itemMenu}"), [title*="${itemMenu}"]`).filter({ visible: true }).first();
     return (await i.count()) ? i : null;
   });
   let item = null;
+  const OFFS = [28, 46, 64, 14];   // deslocamentos p/ acertar o NÚMERO abaixo do rótulo
   for (let t = 0; t < 4 && !item; t++) {   // até 4 tentativas de abrir o menu
-    await alvo.c.click({ button: 'right' });
+    // botão direito POR COORDENADA logo abaixo do rótulo (onde fica o número
+    // do card) — clicar no rótulo dá menu "(Nenhuma ação disponível)"
+    const box = await lbl.boundingBox();
+    if (!box) throw new Error(`rótulo do card "${cardTexto}" sem posição na tela`);
+    await page.mouse.click(box.x + box.width / 2, box.y + box.height + OFFS[t], { button: 'right' });
     await page.waitForTimeout(1500);
     const drill = await emFrames(page, async fr => {
       const d = fr.locator('[role="menuitem"]:has-text("Drill"), [role="menuitem"]:has-text("Detalhamento")').filter({ visible: true }).first();
