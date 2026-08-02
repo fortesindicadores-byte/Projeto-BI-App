@@ -32,10 +32,31 @@ const SB_KEY = (process.env.GEM_SUPABASE_SERVICE_KEY || '').trim();
 // chave = linha em ginfo_snapshot · url = deep-link do relatório · visual = título do
 // visual (opcional; sem título, o robô exporta a PRIMEIRA tabela da página).
 // Regra: o dado fica SÓ no Supabase — o arquivo baixado é apagado após gravar.
+const MES_LBL = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+const mesSlicer = d => MES_LBL[d.getMonth()] + '-' + String(d.getFullYear()).slice(2);   // ex.: 'Jul-26'
 const ABAS = [
   // 1.1 DOCUMENTOS → drill-through "Detalhes Veículos" → tabela = base ATIVOS
   // (Filial | Projeto | Placa | Marca | Modelo | Tipo Veículo | Estado | Ano Fabricação)
   { chave: 'ativos', url: 'https://bi.ginfo.app.br/bi/99029b42-f690-451b-95b1-9fad2c9b670d?autoAuth=true&ctid=c16300de-7070-4b58-80c8-af99af1e1f65' },
+  // STRESS TEST FROTA → tabela detalhada por placa (a de mais colunas da página).
+  // Regra de período: até o dia 10, Mês = mês anterior e Quinzena = Segunda.
+  // (Do dia 11 em diante: regra a confirmar com o Renan — por ora fica o padrão da página.)
+  { chave: 'stress-test-frota', url: 'https://bi.ginfo.app.br/bi/ce4f37f8-1c4c-499f-a80c-3a3ce80594cb?autoAuth=true&ctid=c16300de-7070-4b58-80c8-af99af1e1f65',
+    slicers: () => {
+      const h = new Date();
+      if (h.getDate() > 10) return [];
+      const ant = new Date(h.getFullYear(), h.getMonth() - 1, 1);
+      return [{ campo: 'Mês', valor: mesSlicer(ant) }, { campo: 'Quinzena', valor: 'Segunda' }];
+    } },
+  // STRESS TEST EMPILHADEIRA → tabela "Análise Descontos" (a de mais colunas).
+  // Regra de período: até o dia 10, só Mês = mês anterior (não tem slicer de Quinzena).
+  { chave: 'stress-test-empilhadeira', url: 'https://bi.ginfo.app.br/bi/d1cead3d-e28a-487b-a1bd-8b72cdd6da55?autoAuth=true&ctid=c16300de-7070-4b58-80c8-af99af1e1f65',
+    slicers: () => {
+      const h = new Date();
+      if (h.getDate() > 10) return [];
+      const ant = new Date(h.getFullYear(), h.getMonth() - 1, 1);
+      return [{ campo: 'Mês', valor: mesSlicer(ant) }];
+    } },
 ];
 
 const ART = 'ginfo-artifacts';
@@ -105,6 +126,77 @@ async function login(page) {
   if (/\/login/i.test(url)) log('ATENÇÃO: continuamos na tela de login — confira Empresa/usuário/senha nos screenshots.');
 }
 
+// Seletores de tabela do Power BI (variam por versão do embed)
+const SEL_TABELA = '[role="grid"], [role="table"], .tableEx, [class*="tableEx"], .pivotTable, [class*="pivotTable"]';
+// espera a página do Power BI renderizar e acha o alvo (polling de até 60s).
+// Sem título de visual, escolhe a tabela com MAIS COLUNAS (a detalhada da página).
+async function acharAlvo(page, aba) {
+  const selTitulo = aba.visual
+    ? `[aria-label*="${aba.visual}"], .visualTitle:has-text("${aba.visual}"), visual-container:has-text("${aba.visual}")`
+    : null;
+  for (let tent = 0; tent < 12; tent++) {
+    if (selTitulo) {
+      const alvo = await emFrames(page, async fr => {
+        const v = fr.locator(selTitulo).first();
+        return (await v.count()) ? { fr, v } : null;
+      });
+      if (alvo) return alvo;
+    } else {
+      let best = null;
+      for (const fr of page.frames()) {
+        try {
+          const grids = fr.locator(SEL_TABELA);
+          const n = await grids.count();
+          for (let i = 0; i < n; i++) {
+            const g = grids.nth(i);
+            const cols = await g.locator('[role="columnheader"]').count();
+            const score = cols || 1;
+            if (!best || score > best.score) best = { fr, v: g, score };
+          }
+        } catch (e) {}
+      }
+      if (best) { log(`tabela escolhida: ${best.score} coluna(s)`); return best; }
+    }
+    await page.waitForTimeout(5000);
+  }
+  // diagnóstico: o que cada frame contém (sai no log do Actions)
+  for (const fr of page.frames()) {
+    try {
+      const vc = await fr.locator('visual-container, [class*="visualContainer"], [class*="visual-container"]').count();
+      const gr = await fr.locator('[role="grid"], [role="table"]').count();
+      const rows = await fr.locator('[role="row"]').count();
+      log('frame:', (fr.url() || '(sem url)').slice(0, 100), '| visuais:', vc, '| grids:', gr, '| rows:', rows);
+    } catch (e) {}
+  }
+  return null;
+}
+
+// aplica um slicer dropdown do Power BI: abre o dropdown do campo e clica no item.
+// No PBI, clicar num item de slicer de caixinhas SUBSTITUI a seleção (não soma).
+async function aplicarSlicer(page, campo, valor) {
+  const hit = await emFrames(page, async fr => {
+    const dd = fr.locator(`.slicer-dropdown-menu:below(:text("${campo}"))`).first();
+    if (await dd.count()) return { fr, dd };
+    const alt = fr.locator(`[aria-label="${campo}"]`).first();
+    if (await alt.count()) return { fr, dd: alt };
+    return null;
+  });
+  if (!hit) { log(`slicer "${campo}" não encontrado`); return false; }
+  await hit.dd.click({ timeout: 10000 });
+  await page.waitForTimeout(1500);
+  const item = await emFrames(page, async fr => {
+    const i = fr.locator(`.slicerItemContainer:has-text("${valor}"), [role="option"]:has-text("${valor}"), .slicerText:text-is("${valor}"), span:text-is("${valor}")`).first();
+    return (await i.count()) ? i : null;
+  });
+  if (!item) { log(`item "${valor}" do slicer "${campo}" não encontrado`); await page.keyboard.press('Escape'); return false; }
+  await item.click();
+  await page.waitForTimeout(1500);
+  await page.keyboard.press('Escape');   // fecha o dropdown
+  await page.waitForTimeout(4000);       // dá tempo dos visuais recarregarem
+  log(`slicer "${campo}" = "${valor}" aplicado`);
+  return true;
+}
+
 // exporta os dados de UM visual: hover → menu "Mais opções (...)" → Exportar dados
 async function exportarVisual(page, aba) {
   log('abrindo aba', aba.chave, aba.url);
@@ -112,20 +204,31 @@ async function exportarVisual(page, aba) {
   await page.waitForTimeout(15000);           // Power BI renderiza depois do load
   await shot(page, '10-' + aba.chave);
 
-  // acha o visual (dentro dos iframes do Power BI): pelo título, ou a 1ª tabela da página
-  const alvo = await emFrames(page, async fr => {
-    const v = aba.visual
-      ? fr.locator(`[aria-label*="${aba.visual}"], .visualTitle:has-text("${aba.visual}"), visual-container:has-text("${aba.visual}")`).first()
-      : fr.locator('[role="grid"], .tableEx, .pivotTable, [role="table"]').first();
-    return (await v.count()) ? { fr, v } : null;
-  });
-  if (!alvo) throw new Error(`visual ${aba.visual ? `"${aba.visual}"` : '(tabela)'} não encontrado em ${aba.chave}`);
+  // filtros/slicers da aba (ex.: Mês anterior + Quinzena Segunda até o dia 10)
+  if (typeof aba.slicers === 'function') {
+    for (const s of aba.slicers()) {
+      await aplicarSlicer(page, s.campo, s.valor);
+      await shot(page, '11-' + aba.chave + '-' + s.campo.toLowerCase().replace(/[^a-z0-9]+/gi, '-'));
+    }
+  }
+
+  const alvo = await acharAlvo(page, aba);
+  if (!alvo) { await shot(page, '98-sem-visual-' + aba.chave); throw new Error(`visual ${aba.visual ? `"${aba.visual}"` : '(tabela)'} não encontrado em ${aba.chave}`); }
   await alvo.v.hover();
-  // botão "..." (Mais opções) do visual
-  const opts = alvo.fr.locator('[aria-label*="Mais opções" i], [aria-label*="More options" i], [data-testid="visual-more-options-btn"]').first();
+  await page.waitForTimeout(800);
+  // botão "..." (Mais opções) do visual — pode estar no frame do PBI ou na página do portal
+  const SEL_OPTS = '[aria-label*="Mais opções" i], [aria-label*="More options" i], [data-testid="visual-more-options-btn"], [title*="Mais opções" i]';
+  let opts = alvo.fr.locator(SEL_OPTS).first();
+  if (!(await opts.count())) opts = page.locator(SEL_OPTS).first();
   await opts.click({ timeout: 15000 });
-  const item = alvo.fr.locator('button:has-text("Exportar dados"), [role="menuitem"]:has-text("Exportar dados"), [role="menuitem"]:has-text("Export data")').first();
-  await item.click({ timeout: 15000 });
+  await page.waitForTimeout(800);
+  // item "Exportar dados" — o flyout pode renderizar no frame ou no topo do documento
+  const SEL_ITEM = 'button:has-text("Exportar dados"), [role="menuitem"]:has-text("Exportar dados"), [role="menuitem"]:has-text("Export data"), [title*="Exportar dados" i]';
+  const itemHit = await emFrames(page, async fr => {
+    const i = fr.locator(SEL_ITEM).first();
+    return (await i.count()) ? i : null;
+  }) || page.locator(SEL_ITEM).first();
+  await itemHit.click({ timeout: 15000 });
   await shot(page, '11-' + aba.chave + '-dialogo');
   // diálogo de exportação: confirmar (baixa .xlsx)
   const [download] = await Promise.all([
