@@ -67,7 +67,7 @@ const ABAS = [
   // Desconto Manutenção | Desconto Lavagem | Desconto Total) = aba CIFV do Farol.
   // Regra de período: até o dia 10, só Mês = mês anterior.
   { chave: 'civf', url: 'https://bi.ginfo.app.br/bi/5bd5e3ac-7ebc-4c7b-963e-1c3d20ba4acd?autoAuth=true&ctid=c16300de-7070-4b58-80c8-af99af1e1f65',
-    menu: ['CIVF', 'CIVF'],
+    menu: ['CIVF', 'CIVF'], ultima: true,
     slicers: () => {
       const h = new Date();
       if (h.getDate() > 10) return [];
@@ -173,18 +173,19 @@ const SEL_TABELA = '[role="grid"], [role="table"], .tableEx, [class*="tableEx"],
 // com MAIS COLUNAS (a detalhada da página). Só considera elementos VISÍVEIS —
 // o embed mantém visuais fora de tela/ocultos que resolvem no seletor mas não clicam.
 async function acharAlvo(page, aba) {
-  // lista as tabelas visíveis de todos os frames, com posição e nº de colunas
+  // lista os VISUAIS de tabela visíveis (1 por visual-container que contém um
+  // grid — evita contar wrappers/divs internos do mesmo visual várias vezes)
   const tabelasVisiveis = async () => {
     const tabs = [];
     for (const fr of page.frames()) {
       try {
-        const grids = fr.locator(SEL_TABELA);
+        let grids = fr.locator('visual-container:has([role="grid"]), visual-container:has([role="table"])');
+        if (!(await grids.count())) grids = fr.locator(SEL_TABELA);
         const n = await grids.count();
         for (let i = 0; i < n; i++) {
           const g = grids.nth(i);
           const box = await g.boundingBox().catch(() => null);
           if (!box || box.width < 60 || box.height < 40) continue;   // oculto/decorativo
-          // evita contar 2x o mesmo visual (wrapper + grid interno no mesmo lugar)
           if (tabs.some(t => Math.abs(t.x - box.x) < 8 && Math.abs(t.y - box.y) < 8)) continue;
           const cols = await g.locator('[role="columnheader"]').count();
           tabs.push({ fr, v: g, x: box.x, y: box.y, cols });
@@ -196,12 +197,23 @@ async function acharAlvo(page, aba) {
   };
   for (let tent = 0; tent < 12; tent++) {
     if (aba.visual) {
-      const selTitulo = `[aria-label*="${aba.visual}"], .visualTitle:has-text("${aba.visual}"), visual-container:has-text("${aba.visual}")`;
+      // preferência: o CONTAINER do visual que tem o título E um grid dentro
+      // (hover nele faz o botão "..." aparecer); só depois o título solto.
       const alvo = await emFrames(page, async fr => {
-        const v = fr.locator(selTitulo).filter({ visible: true }).first();
+        let v = fr.locator(`visual-container:has([role="grid"]):has-text("${aba.visual}"), visual-container:has([role="table"]):has-text("${aba.visual}")`).filter({ visible: true }).first();
+        if (!(await v.count())) v = fr.locator(`visual-container:has-text("${aba.visual}"), [aria-label*="${aba.visual}"], .visualTitle:has-text("${aba.visual}")`).filter({ visible: true }).first();
         return (await v.count()) ? { fr, v } : null;
       });
       if (alvo) return alvo;
+    } else if (aba.ultima) {
+      // "última tabela da página" (a detalhada fica embaixo) — espera pelo menos
+      // 2 visuais de tabela p/ não pegar o resumo enquanto o resto ainda carrega
+      const tabs = await tabelasVisiveis();
+      if (tabs.length >= 2) {
+        const t = tabs[tabs.length - 1];
+        log(`última tabela escolhida (${tabs.length} na página, ${t.cols} colunas)`);
+        return t;
+      }
     } else if (aba.header) {
       const alvo = await emFrames(page, async fr => {
         const g = fr.locator(SEL_TABELA)
@@ -287,22 +299,50 @@ async function clicarMenu(page, secao, item) {
 }
 // drill-through: botão direito no card → (Drill through/Detalhamento) → página de detalhe
 async function drillThrough(page, cardTexto, itemMenu) {
-  const alvo = await emFrames(page, async fr => {
-    const c = fr.locator(`visual-container:has-text("${cardTexto}"), [aria-label*="${cardTexto}"]`).filter({ visible: true }).first();
-    return (await c.count()) ? { fr, c } : null;
-  });
+  // o card pode demorar a renderizar → polling de até 45s
+  let alvo = null;
+  for (let t = 0; t < 9 && !alvo; t++) {
+    alvo = await emFrames(page, async fr => {
+      const c = fr.locator(`visual-container:has-text("${cardTexto}"), [aria-label*="${cardTexto}"]`).filter({ visible: true }).first();
+      return (await c.count()) ? { fr, c } : null;
+    });
+    if (!alvo) await page.waitForTimeout(5000);
+  }
   if (!alvo) throw new Error(`card "${cardTexto}" não encontrado p/ drill-through`);
-  await alvo.c.click({ button: 'right' });
-  await page.waitForTimeout(1500);
-  const drill = await emFrames(page, async fr => {
-    const d = fr.locator('[role="menuitem"]:has-text("Drill"), [role="menuitem"]:has-text("Detalhamento"), [role="menuitem"]:has-text("Drill-through")').filter({ visible: true }).first();
-    return (await d.count()) ? d : null;
-  });
-  if (drill) { await drill.hover(); await page.waitForTimeout(1000); }
-  const item = await emFrames(page, async fr => {
+  const buscarItem = () => emFrames(page, async fr => {
     const i = fr.locator(`[role="menuitem"]:has-text("${itemMenu}"), button:has-text("${itemMenu}"), [title*="${itemMenu}"]`).filter({ visible: true }).first();
     return (await i.count()) ? i : null;
   });
+  let item = null;
+  for (let t = 0; t < 4 && !item; t++) {   // até 4 tentativas de abrir o menu
+    await alvo.c.click({ button: 'right' });
+    await page.waitForTimeout(1500);
+    const drill = await emFrames(page, async fr => {
+      const d = fr.locator('[role="menuitem"]:has-text("Drill"), [role="menuitem"]:has-text("Detalhamento")').filter({ visible: true }).first();
+      return (await d.count()) ? d : null;
+    });
+    if (drill) {
+      try { await drill.hover(); } catch (e) {}
+      await page.waitForTimeout(1200);
+      item = await buscarItem();
+      if (!item) { try { await drill.click(); await page.waitForTimeout(1200); item = await buscarItem(); } catch (e) {} }
+    } else {
+      item = await buscarItem();   // alguns embeds põem o destino direto no menu
+    }
+    if (!item) {
+      const its = [];
+      for (const fr of page.frames()) {
+        try {
+          const ms = fr.locator('[role="menuitem"]').filter({ visible: true });
+          const n = Math.min(await ms.count(), 15);
+          for (let i = 0; i < n; i++) its.push((await ms.nth(i).innerText().catch(() => '')).trim().replace(/\s+/g, ' '));
+        } catch (e) {}
+      }
+      log('menu do botão direito (tentativa ' + (t + 1) + '):', JSON.stringify(its.filter(Boolean)));
+      await page.keyboard.press('Escape');
+      await page.waitForTimeout(1500);
+    }
+  }
   if (!item) throw new Error(`item de drill "${itemMenu}" não encontrado`);
   await item.click();
   await page.waitForTimeout(15000);           // página de detalhe renderiza
@@ -333,12 +373,22 @@ async function exportarVisual(page, aba) {
 
   const alvo = await acharAlvo(page, aba);
   if (!alvo) { await shot(page, '98-sem-visual-' + aba.chave); throw new Error(`visual ${aba.visual ? `"${aba.visual}"` : '(tabela)'} não encontrado em ${aba.chave}`); }
-  await alvo.v.hover();
-  await page.waitForTimeout(800);
-  // botão "..." (Mais opções) do visual — pode estar no frame do PBI ou na página do portal
-  const SEL_OPTS = '[aria-label*="Mais opções" i], [aria-label*="More options" i], [data-testid="visual-more-options-btn"], [title*="Mais opções" i]';
-  let opts = alvo.fr.locator(SEL_OPTS).first();
-  if (!(await opts.count())) opts = page.locator(SEL_OPTS).first();
+  // botão "..." (Mais opções) só aparece com o mouse sobre o visual — re-hover
+  // com retry (~30s); procura primeiro DENTRO do visual, depois frame e página.
+  const SEL_OPTS = '[aria-label*="Mais opções" i], [aria-label*="More options" i], [data-testid="visual-more-options-btn"], [title*="Mais opções" i], .vcMenuBtn';
+  let opts = null;
+  for (let t = 0; t < 10 && !opts; t++) {
+    try { await alvo.v.hover(); } catch (e) {}
+    await page.waitForTimeout(1200);
+    for (const root of [alvo.v, alvo.fr, page]) {
+      try {
+        const b = root.locator(SEL_OPTS).filter({ visible: true }).first();
+        if (await b.count()) { opts = b; break; }
+      } catch (e) {}
+    }
+    if (!opts) await page.waitForTimeout(1800);
+  }
+  if (!opts) throw new Error('botão "Mais opções (...)" não apareceu ao pairar sobre o visual');
   await opts.click({ timeout: 15000 });
   await page.waitForTimeout(800);
   // item "Exportar dados" — o flyout pode renderizar no frame ou no topo do documento
