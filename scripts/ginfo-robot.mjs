@@ -50,12 +50,13 @@ const ABAS = [
       const ant = new Date(h.getFullYear(), h.getMonth() - 1, 1);
       return [{ campo: 'Mês', valor: mesSlicer(ant) }, { campo: 'Quinzena', valor: 'Segunda' }];
     } },
-  // STRESS TEST EMPILHADEIRA → tabela "Análise Descontos" (pelo TÍTULO — a página
-  // também tem "Análise Horímetros" logo abaixo, que não usamos).
+  // STRESS TEST EMPILHADEIRA → tabela detalhada "Análise Descontos", achada
+  // pela coluna "Chassis" (única dela na página — as tabelas por Transportador/
+  // Filial não têm; mirar pelo TÍTULO não funciona: o container tem caixa 0x0).
   // Regra de período: até o dia 10, só Mês = mês anterior (não tem slicer de Quinzena).
   { chave: 'stress-test-empilhadeira', url: 'https://bi.ginfo.app.br/bi/d1cead3d-e28a-487b-a1bd-8b72cdd6da55?autoAuth=true&ctid=c16300de-7070-4b58-80c8-af99af1e1f65',
     menu: ['STRESS TEST', 'STRESS TEST EMPILHADEIRA'],
-    visual: 'Análise Descontos',
+    header: 'Chassis',
     slicers: () => {
       const h = new Date();
       if (h.getDate() > 10) return [];
@@ -184,14 +185,14 @@ const SEL_TABELA = '[role="grid"], [role="table"], .tableEx, [class*="tableEx"],
 // com MAIS COLUNAS (a detalhada da página). Só considera elementos VISÍVEIS —
 // o embed mantém visuais fora de tela/ocultos que resolvem no seletor mas não clicam.
 async function acharAlvo(page, aba) {
-  // lista os VISUAIS de tabela visíveis (1 por visual-container que contém um
-  // grid — evita contar wrappers/divs internos do mesmo visual várias vezes)
+  // lista as TABELAS visíveis pelos [role=grid/table] — 1 elemento por tabela
+  // real. (Os <visual-container> do embed têm caixa 0x0 — o conteúdo fica em
+  // divs internas — então NÃO servem p/ medir posição/visibilidade.)
   const tabelasVisiveis = async () => {
     const tabs = [];
     for (const fr of page.frames()) {
       try {
-        let grids = fr.locator('visual-container:has([role="grid"]), visual-container:has([role="table"])');
-        if (!(await grids.count())) grids = fr.locator(SEL_TABELA);
+        const grids = fr.locator('[role="grid"], [role="table"]');
         const n = await grids.count();
         for (let i = 0; i < n; i++) {
           const g = grids.nth(i);
@@ -314,8 +315,12 @@ async function drillThrough(page, cardTexto, itemMenu) {
   let alvo = null;
   for (let t = 0; t < 9 && !alvo; t++) {
     alvo = await emFrames(page, async fr => {
-      const c = fr.locator(`visual-container:has-text("${cardTexto}"), [aria-label*="${cardTexto}"]`).filter({ visible: true }).first();
-      return (await c.count()) ? { fr, c } : null;
+      // clica no TEXTO do card (o rótulo/valor tem caixa real; o
+      // visual-container do embed tem caixa 0x0 e não recebe clique)
+      for (const loc of [fr.getByText(cardTexto, { exact: false }), fr.locator(`[aria-label*="${cardTexto}"]`), fr.locator(`visual-container:has-text("${cardTexto}")`)]) {
+        try { const c = loc.filter({ visible: true }).first(); if (await c.count()) return { fr, c }; } catch (e) {}
+      }
+      return null;
     });
     if (!alvo) await page.waitForTimeout(5000);
   }
@@ -365,6 +370,12 @@ async function exportarVisual(page, aba) {
   log('abrindo aba', aba.chave, urlAba);
   await page.goto(urlAba, { waitUntil: 'domcontentloaded', timeout: 90000 });
   await page.waitForTimeout(10000);
+  if (/\/login/i.test(page.url())) {   // sessão derrubada (ex.: outro login no portal)
+    log('sessão caiu — refazendo o login');
+    await login(page);
+    await page.goto(urlAba, { waitUntil: 'domcontentloaded', timeout: 90000 });
+    await page.waitForTimeout(10000);
+  }
   if (aba.menu && (!aba.url || /\/bi\/inicio/.test(page.url()))) {   // app devolveu p/ o início → vai pelo menu
     log('navegando pelo menu:', aba.menu.join(' → '));
     await clicarMenu(page, aba.menu[0], aba.menu[1]);
@@ -478,14 +489,24 @@ async function main() {
     if (!ABAS.length) { log('nenhuma aba configurada ainda em ABAS — mapeie as abas no scripts/ginfo-robot.mjs.'); return; }
     let erros = 0;
     for (const aba of ABAS) {
-      try {
-        const arq = await exportarVisual(page, aba);
-        const linhas = await xlsxParaLinhas(arq);
-        await gravarSupabase(aba.chave, linhas);
-        // o dado fica SÓ no banco: apaga o arquivo baixado (sem service key,
-        // é dry-run e o xlsx fica nos artifacts p/ conferência)
-        if (SB_KEY) { try { fs.unlinkSync(arq); log('arquivo apagado (fica só no banco):', arq); } catch (e) {} }
-      } catch (e) { erros++; log(`ERRO em ${aba.chave}:`, e.message); await shot(page, '99-erro-' + aba.chave); }
+      // 2 tentativas por aba — a sessão do Ginfo pode cair no meio (outro
+      // login no portal derruba a anterior); a 2ª tentativa refaz o login.
+      for (let tent = 1; tent <= 2; tent++) {
+        try {
+          if (/\/login/i.test(page.url())) { log('sessão caiu — refazendo o login'); await login(page); }
+          const arq = await exportarVisual(page, aba);
+          const linhas = await xlsxParaLinhas(arq);
+          await gravarSupabase(aba.chave, linhas);
+          // o dado fica SÓ no banco: apaga o arquivo baixado (sem service key,
+          // é dry-run e o xlsx fica nos artifacts p/ conferência)
+          if (SB_KEY) { try { fs.unlinkSync(arq); log('arquivo apagado (fica só no banco):', arq); } catch (e) {} }
+          break;
+        } catch (e) {
+          log(`ERRO em ${aba.chave} (tentativa ${tent}):`, e.message);
+          await shot(page, '99-erro-' + aba.chave + '-t' + tent);
+          if (tent === 2) erros++;
+        }
+      }
     }
     if (erros) { console.error(`${erros} aba(s) com erro`); process.exit(1); }
   } finally {
