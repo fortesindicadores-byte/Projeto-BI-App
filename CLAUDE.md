@@ -641,6 +641,7 @@ Automatiza a coleta dos dados que hoje são copiados manualmente do BI do Ginfo 
 
 **Abas mapeadas (conforme o Renan mostra):**
 - **Custos** — FORA do escopo do robô: vem do DRE (manual) e será substituída pela **Carta de Custos** no futuro. Não mexer por enquanto. (Colunas: Δ ORÇ. | Δ FCT | Vigência | ESTRUTURA | UNIDADE | NÍVEL 3 | CONTA GERENCIAL | MÊS | ANO | ORÇADO | REMUNERADO | REALIZADO.)
+- **Indisponibilidade** e **Disponibilidade** — FORA do escopo do robô Ginfo: já são automáticas. As unidades preenchem a indisponibilidade diária em planilhas próprias; um **Apps Script** consolida no Sheets **"Consolidado Geral"** e gera diariamente a aba de disponibilidade (compara indisponibilidades × ativos). Desejo registrado: **futuramente espelhar essas duas no Supabase** (job simples Sheets→Supabase, sem login — a planilha é link-readable; painéis Disponibilidade/Farol passariam a ler de lá).
 
 Em paralelo: perguntar ao Ginfo se existe API/export oficial (trocaria o RPA por consulta estável).
 
