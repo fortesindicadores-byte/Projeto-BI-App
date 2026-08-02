@@ -37,11 +37,13 @@ const mesSlicer = d => MES_LBL[d.getMonth()] + '-' + String(d.getFullYear()).sli
 const ABAS = [
   // 1.1 DOCUMENTOS → drill-through "Detalhes Veículos" → tabela = base ATIVOS
   // (Filial | Projeto | Placa | Marca | Modelo | Tipo Veículo | Estado | Ano Fabricação)
-  { chave: 'ativos', url: 'https://bi.ginfo.app.br/bi/99029b42-f690-451b-95b1-9fad2c9b670d?autoAuth=true&ctid=c16300de-7070-4b58-80c8-af99af1e1f65' },
+  { chave: 'ativos', url: 'https://bi.ginfo.app.br/bi/99029b42-f690-451b-95b1-9fad2c9b670d?autoAuth=true&ctid=c16300de-7070-4b58-80c8-af99af1e1f65',
+    menu: ['FROTA', '1.1 - DOCUMENTOS'], drill: { card: 'VEÍCULOS', item: 'Detalhes Veículos' } },
   // STRESS TEST FROTA → tabela detalhada por placa (a de mais colunas da página).
   // Regra de período: até o dia 10, Mês = mês anterior e Quinzena = Segunda.
   // (Do dia 11 em diante: regra a confirmar com o Renan — por ora fica o padrão da página.)
   { chave: 'stress-test-frota', url: 'https://bi.ginfo.app.br/bi/ce4f37f8-1c4c-499f-a80c-3a3ce80594cb?autoAuth=true&ctid=c16300de-7070-4b58-80c8-af99af1e1f65',
+    menu: ['STRESS TEST', 'STRESS TEST FROTA'],
     slicers: () => {
       const h = new Date();
       if (h.getDate() > 10) return [];
@@ -52,6 +54,7 @@ const ABAS = [
   // também tem "Análise Horímetros" logo abaixo, que não usamos).
   // Regra de período: até o dia 10, só Mês = mês anterior (não tem slicer de Quinzena).
   { chave: 'stress-test-empilhadeira', url: 'https://bi.ginfo.app.br/bi/d1cead3d-e28a-487b-a1bd-8b72cdd6da55?autoAuth=true&ctid=c16300de-7070-4b58-80c8-af99af1e1f65',
+    menu: ['STRESS TEST', 'STRESS TEST EMPILHADEIRA'],
     visual: 'Análise Descontos',
     slicers: () => {
       const h = new Date();
@@ -199,12 +202,56 @@ async function aplicarSlicer(page, campo, valor) {
   return true;
 }
 
+// O portal é um app Vue: deep-link recarrega o app e ele VOLTA para /bi/inicio.
+// Caminho confiável = navegar pelo MENU lateral (seção → item), como um humano.
+async function clicarMenu(page, secao, item) {
+  const itemLoc = () => page.getByText(item, { exact: false }).first();
+  if (!(await itemLoc().isVisible().catch(() => false))) {
+    // sidebar fechada? tenta o botão redondo (hambúrguer) e expande a seção
+    if (!(await page.getByText(secao, { exact: true }).first().isVisible().catch(() => false))) {
+      try { await page.locator('button').first().click({ timeout: 4000 }); await page.waitForTimeout(1000); } catch (e) {}
+    }
+    try { await page.getByText(secao, { exact: true }).first().click({ timeout: 8000 }); await page.waitForTimeout(1200); } catch (e) { log('seção', secao, 'não clicável (talvez já aberta)'); }
+  }
+  await itemLoc().click({ timeout: 15000 });
+  await page.waitForTimeout(15000);           // embed do Power BI carrega
+}
+// drill-through: botão direito no card → (Drill through/Detalhamento) → página de detalhe
+async function drillThrough(page, cardTexto, itemMenu) {
+  const alvo = await emFrames(page, async fr => {
+    const c = fr.locator(`visual-container:has-text("${cardTexto}"), [aria-label*="${cardTexto}"]`).first();
+    return (await c.count()) ? { fr, c } : null;
+  });
+  if (!alvo) throw new Error(`card "${cardTexto}" não encontrado p/ drill-through`);
+  await alvo.c.click({ button: 'right' });
+  await page.waitForTimeout(1500);
+  const drill = await emFrames(page, async fr => {
+    const d = fr.locator('[role="menuitem"]:has-text("Drill"), [role="menuitem"]:has-text("Detalhamento"), [role="menuitem"]:has-text("Drill-through")').first();
+    return (await d.count()) ? d : null;
+  });
+  if (drill) { await drill.hover(); await page.waitForTimeout(1000); }
+  const item = await emFrames(page, async fr => {
+    const i = fr.locator(`[role="menuitem"]:has-text("${itemMenu}"), button:has-text("${itemMenu}"), [title*="${itemMenu}"]`).first();
+    return (await i.count()) ? i : null;
+  });
+  if (!item) throw new Error(`item de drill "${itemMenu}" não encontrado`);
+  await item.click();
+  await page.waitForTimeout(15000);           // página de detalhe renderiza
+}
+
 // exporta os dados de UM visual: hover → menu "Mais opções (...)" → Exportar dados
 async function exportarVisual(page, aba) {
   log('abrindo aba', aba.chave, aba.url);
   await page.goto(aba.url, { waitUntil: 'domcontentloaded', timeout: 90000 });
-  await page.waitForTimeout(15000);           // Power BI renderiza depois do load
+  await page.waitForTimeout(10000);
+  if (aba.menu && /\/bi\/inicio/.test(page.url())) {   // app devolveu p/ o início → vai pelo menu
+    log('deep-link voltou para /bi/inicio — navegando pelo menu:', aba.menu.join(' → '));
+    await clicarMenu(page, aba.menu[0], aba.menu[1]);
+  } else {
+    await page.waitForTimeout(5000);
+  }
   await shot(page, '10-' + aba.chave);
+  if (aba.drill) { await drillThrough(page, aba.drill.card, aba.drill.item); await shot(page, '10b-' + aba.chave); }
 
   // filtros/slicers da aba (ex.: Mês anterior + Quinzena Segunda até o dia 10)
   if (typeof aba.slicers === 'function') {
