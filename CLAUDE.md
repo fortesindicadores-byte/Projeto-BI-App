@@ -631,7 +631,7 @@ Situação atual do código: a Árvore lê a aba `Árvore Comb.` (`GV_ID=1wCoRGs
 Automatiza a coleta dos dados que hoje são copiados manualmente do BI do Ginfo (`bi.ginfo.app.br`, Power BI homologado pela Ambev) para as abas que alimentam o Farol.
 
 **Decisões fechadas com o Renan (02/08/2026):**
-- Login: **usuário + senha simples** (sem MFA) — validar com o modo `login` do workflow.
+- Login: **usuário + senha simples** (sem MFA) — validar com o modo `login` do workflow. Tela: `https://bi.ginfo.app.br/login`, com **3 campos: Empresa (dropdown pesquisável = CONLOG) + E-mail + Senha** e botão "Entrar".
 - Destino: **Supabase** (projeto do portal), tabela `ginfo_snapshot` (`scripts/ginfo-supabase.sql`) — leitura para logados, escrita só service_role.
 - Escopo: **aba a aba** — o Renan vai mostrando cada aba do Ginfo e o mapeamento entra em `ABAS` no `scripts/ginfo-robot.mjs`.
 
