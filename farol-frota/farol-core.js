@@ -157,7 +157,37 @@ async function farolLoad(){
   }
   await loadDisp();
   try{ await loadPneus(); }catch(e){ console.error('pneus load',e); }
+  try{ await loadChecklist(); }catch(e){ console.error('checklist load',e); }
   return DATA;
+}
+// ── CHECKLIST (norma FROTA-031120) — 1ª base lida do SUPABASE (robô Ginfo) ──
+// ginfo_snapshot.chave='checklist-031120': export do relatório 1.3 - ADERÊNCIA
+// FROTA - 031120 do Ginfo (Mapa | Data do mapa | Data OS | Início/Fim técnico |
+// Problema | Nº OS | Tipo Checklist | Status | Filial | Motorista | Placa |
+// Tipo Veículo | Projeto). Linhas = problemas críticos apontados no checklist.
+async function loadChecklist(){
+  DATA.chk=null;
+  let sb;try{sb=supabase.createClient(SUPABASE_URL,SUPABASE_KEY);}catch(e){return;}
+  const {data:row}=await sb.from('ginfo_snapshot').select('data,updated_at').eq('chave','checklist-031120').maybeSingle();
+  if(!row||!Array.isArray(row.data)||!row.data.length)return;
+  // acha a chave do JSON pelo nome normalizado (exato → depois "contém")
+  const kDe=(o,...names)=>{const ks=Object.keys(o),N=ks.map(_n);for(const nm of names){const i=N.indexOf(_n(nm));if(i>=0)return ks[i];}for(const nm of names){const t=_n(nm);const i=N.findIndex(k=>k.includes(t));if(i>=0)return ks[i];}return null;};
+  // datas do xlsx: serial do Excel (número) ou string "M/D/YYYY h:mm:ss AM" (export PBI)
+  const parseX=v=>{
+    if(v==null||v==='')return null;
+    if(typeof v==='number')return v>20000&&v<80000?new Date(Date.UTC(1899,11,30)+Math.round(v*864e5)):null;
+    const s=String(v).trim();
+    const m=s.match(/^(\d{1,4})[\/\-](\d{1,2})[\/\-](\d{1,4})/);
+    if(!m)return null;
+    const a=+m[1],b=+m[2],c=+m[3];
+    if(a>31)return new Date(a,b-1,c);                       // YYYY-M-D
+    if(/AM|PM/i.test(s)||b>12)return new Date(c,a-1,b);     // M/D/YYYY
+    return new Date(c,b-1,a);                               // D/M/YYYY
+  };
+  const smp=row.data[0];
+  const K={dt:kDe(smp,'Data do mapa','Data'),prob:kDe(smp,'Problema'),os:kDe(smp,'Nº OS','N° OS','No OS'),tipo:kDe(smp,'Tipo Checklist','Tipo Checkli'),st:kDe(smp,'Status'),fil:kDe(smp,'Filial'),mot:kDe(smp,'Motorista'),pla:kDe(smp,'Placa'),tv:kDe(smp,'Tipo Veículo','Tipo Veicu'),proj:kDe(smp,'Projeto','Proje')};
+  DATA.chk=row.data.map(r=>({dt:parseX(r[K.dt]),prob:String(r[K.prob]||'').trim(),os:String(r[K.os]||'').trim(),tipo:String(r[K.tipo]||'').trim(),st:String(r[K.st]||'').trim(),cod:refineCod(codDe(r[K.fil]),r[K.proj]),fil:String(r[K.fil]||'').trim(),mot:String(r[K.mot]||'').trim(),placa:String(r[K.pla]||'').trim(),tv:String(r[K.tv]||'').trim(),proj:String(r[K.proj]||'').trim()})).filter(r=>r.placa||r.os);
+  DATA.chkAtt=row.updated_at?new Date(row.updated_at):null;
 }
 // nome da unidade na planilha de Disponibilidade → [código Farol (já com tier), tier de exibição]
 const DISP2CT={
@@ -584,6 +614,26 @@ function renderOS(el,cod){
   el.innerHTML=h;
 }
 
+// ── CHECKLIST (Saída com OS Crítica — norma FROTA-031120) ──
+// O relatório traz o ano todo; o farol mostra SÓ as Saídas do MÊS ATUAL
+// (Tipo Checklist = "Saída" → o veículo saiu com OS crítica apontada).
+function renderChk(el,cod){
+  if(!DATA.chk){el.innerHTML='<div class="loading">Aguardando a primeira coleta do robô Ginfo (base <b>checklist-031120</b> no Supabase).</div>';return;}
+  const hoje=new Date(),m0=hoje.getMonth(),a0=hoje.getFullYear();
+  const rs=byCod(DATA.chk,cod).filter(r=>_n(r.tipo).includes('SAIDA')&&r.dt&&r.dt.getMonth()===m0&&r.dt.getFullYear()===a0);
+  const att=DATA.chkAtt?' · atualizado '+DATA.chkAtt.toLocaleDateString('pt-BR'):'';
+  let h=`<div class="mini-hero"><div class="mh-label">SAÍDA COM OS CRÍTICA — ${hoje.toLocaleDateString('pt-BR',{month:'long',year:'numeric'}).toUpperCase()}</div>
+    <div class="mh-val ${rs.length?'cr':'cg'}">${rs.length}</div><div class="mh-meta">saída(s) com OS crítica no mês${att}</div></div>`;
+  if(!rs.length){el.innerHTML=h+'<div class="loading">Nenhuma saída com OS crítica no mês. ✓</div>';return;}
+  const ord=rs.slice().sort((a,b)=>(b.dt?b.dt.getTime():0)-(a.dt?a.dt.getTime():0));
+  h+=`<div class="blk-t">Saídas com OS crítica</div>`+
+    wrapT('<table>'+th('Data','Motorista',cod?'Placa':'Filial · Placa','Tipo Veículo','Projeto','Tipo Checklist','Status','Problema')+'<tbody>'+
+    ord.slice(0,80).map(r=>`<tr><td>${fmtD(r.dt)}</td><td>${escF(r.mot||'—')}</td><td><b>${cod?escF(r.placa):escF(r.fil)+' · '+escF(r.placa)}</b></td>
+      <td>${escF(r.tv||'—')}</td><td>${escF(r.proj||'—')}</td><td>${escF(r.tipo||'—')}</td><td>${escF(r.st||'—')}</td>
+      <td style="white-space:normal;max-width:280px">${escF(r.prob||'—')}</td></tr>`).join('')+'</tbody></table>');
+  el.innerHTML=h;
+}
+
 // ── RANKING DE UNIDADES (geral) ──
 // pneus por unidade (da API/Supabase) — mesmas fórmulas da seção Pneus
 function pneusStats(cod){
@@ -790,6 +840,7 @@ function renderFarol(el,cod){
   S.push(['cifv','CIFV','Aderência das fotos da frota vs 100% · descontos por veículo']);
   S.push(['alinh','Alinhamento','No prazo vs vencidos · placas por próximo evento']);
   S.push(['os','Gestão de OS','% no prazo (≤8 dias) · OSs em aberto']);
+  S.push(['chk','Checklist','Saída com OS Crítica — norma 031120, mês atual']);
   S.push(['disp','Disponibilidade','Foto da última vigência — veículos disponíveis da frota']);
   S.push(['pneus-afer','Pneus','<i>Aferições</i>']);
   S.push(['pneus-mm','Pneus','<i>Milimetragem</i>']);
@@ -798,7 +849,7 @@ function renderFarol(el,cod){
   const put=(id,fn)=>{const b=document.getElementById('body-'+id);try{fn(b,cod);}catch(e){console.error(id,e);b.innerHTML='<div class="loading">Erro ao montar esta seção.</div>';}};
   if(!cod){put('resumo',el2=>renderResumo(el2));put('ranking',el2=>renderRanking(el2));}
   put('custos',renderCustos);put('stressv',renderStressV);if(temEmp)put('stresse',renderStressE);
-  put('prev',renderPrev);put('cifv',renderCIFV);put('alinh',renderAlinh);put('os',renderOS);
+  put('prev',renderPrev);put('cifv',renderCIFV);put('alinh',renderAlinh);put('os',renderOS);put('chk',renderChk);
   put('disp',renderDisp);
   renderPneusAfer(document.getElementById('body-pneus-afer'),cod).catch(e=>{console.error('pneus-afer',e);});
   renderPneusMM(document.getElementById('body-pneus-mm'),cod).catch(e=>{console.error('pneus-mm',e);});
