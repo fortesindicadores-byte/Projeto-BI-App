@@ -11,6 +11,8 @@ Cada painel é um arquivo `index.html` autocontido — sem framework, sem backen
 
 > **Git push:** Hoje `git push origin main` **funciona** normalmente (deploy automático no GitHub Pages). _(Nota histórica: o repo foi renomeado de `Projeto-BI-App`; numa época o proxy local rejeitava o push e era preciso usar `mcp__github__push_files` — não é mais o caso.)_
 
+> **SQL para o Supabase:** sempre que houver um script SQL para o Renan rodar (mesmo que já exista em `scripts/*.sql`), **colar o SQL completo direto no chat** — ele copia dali para o Supabase SQL Editor; não basta apontar o arquivo.
+
 ---
 
 ## Estrutura de pastas
