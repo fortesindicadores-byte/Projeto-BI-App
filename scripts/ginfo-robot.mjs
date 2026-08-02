@@ -90,6 +90,12 @@ const ABAS = [
   // fórmula = AGORA() − Data, mínimo 0 — o leitor recalcula na hora de exibir.
   { chave: 'os-em-aberto', url: 'https://bi.ginfo.app.br/bi/81e8f48c-09f2-4bc7-a84e-0718378732c9?autoAuth=true&ctid=c16300de-7070-4b58-80c8-af99af1e1f65',
     menu: ['FROTA', '2.4 - ORDEM SERVIÇO'], drill: { card: 'NÃO EXECUTADAS', item: 'Detalhes Ordem Serviço' } },
+  // 1.3 ADERÊNCIA FROTA - 031120 → única tabela da página, com o ano todo
+  // (Mapa | Data do mapa | Data OS | Início/Fim técnico | Problema | Nº OS |
+  // Tipo Checklist | Status | Filial | Motorista | Placa | Tipo Veículo |
+  // Projeto). Alimenta o farol NOVO "Checklist" (Saída com OS Crítica do mês).
+  { chave: 'checklist-031120', url: 'https://bi.ginfo.app.br/bi/76e82774-d5d4-4cda-bb13-65a1a64387ef?autoAuth=true&ctid=c16300de-7070-4b58-80c8-af99af1e1f65',
+    menu: ['FROTA', '1.3 - ADERÊNCIA FROTA - 031120'] },
 ];
 
 const ART = 'ginfo-artifacts';
