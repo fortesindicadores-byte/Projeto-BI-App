@@ -23,7 +23,8 @@ import path from 'node:path';
 const MODE  = (process.env.GINFO_MODE || 'login').trim();
 const USER  = (process.env.GINFO_USER || '').trim();
 const PASS  = (process.env.GINFO_PASS || '').trim();
-const ENTRY = (process.env.GINFO_URL  || 'https://bi.ginfo.app.br/').trim();
+const ENTRY = (process.env.GINFO_URL  || 'https://bi.ginfo.app.br/login').trim();
+const EMPRESA = (process.env.GINFO_EMPRESA || 'CONLOG').trim();   // o login exige selecionar a Empresa
 const SB_URL = 'https://lozwipoeacpvplgkrxkq.supabase.co';
 const SB_KEY = (process.env.GEM_SUPABASE_SERVICE_KEY || '').trim();
 
@@ -49,17 +50,39 @@ async function emFrames(page, fazer) {
   return null;
 }
 
+// Campo "Empresa": dropdown pesquisável (não é <select> nativo necessariamente).
+// Tenta select nativo → senão clica no combobox, digita e escolhe a opção.
+async function preencherEmpresa(page) {
+  const sel = page.locator('select').first();
+  if (await sel.count()) {
+    try { await sel.selectOption({ label: EMPRESA }); log('empresa via <select>:', EMPRESA); return true; } catch (e) {}
+  }
+  const combo = page.locator('[role="combobox"], .select__control, .vs__dropdown-toggle, .v-select, input[placeholder*="mpresa" i], input[aria-autocomplete="list"]').first();
+  if (await combo.count()) {
+    try {
+      await combo.click({ timeout: 8000 });
+      await page.keyboard.type(EMPRESA, { delay: 60 });
+      await page.waitForTimeout(1500);
+      const opt = page.locator(`[role="option"]:has-text("${EMPRESA}"), .select__option:has-text("${EMPRESA}"), li:has-text("${EMPRESA}")`).first();
+      if (await opt.count()) await opt.click(); else await page.keyboard.press('Enter');
+      log('empresa via combobox:', EMPRESA);
+      return true;
+    } catch (e) { log('empresa: combobox falhou:', e.message); }
+  }
+  log('empresa: não achei o campo — confira o screenshot 01-entrada.');
+  return false;
+}
+
 async function login(page) {
   log('abrindo', ENTRY);
   await page.goto(ENTRY, { waitUntil: 'domcontentloaded', timeout: 60000 });
   await page.waitForTimeout(4000);
   await shot(page, '01-entrada');
 
-  // campos de login (genérico: 1º campo texto/e-mail + campo senha)
-  const userSel = 'input[type="email"], input[name*="user" i], input[name*="login" i], input[name*="email" i], input[type="text"]';
-  const passSel = 'input[type="password"]';
-  const uInp = page.locator(userSel).first();
-  const pInp = page.locator(passSel).first();
+  // ordem do form do Ginfo: Empresa (dropdown) → E-mail → Senha → Entrar
+  await preencherEmpresa(page);
+  const uInp = page.locator('input[type="email"], input[name*="mail" i], input[placeholder*="mail" i]').first();
+  const pInp = page.locator('input[type="password"]').first();
   if (!(await pInp.count())) {
     log('não achei campo de senha — talvez já esteja logado (sessão) ou o login seja em outra URL.');
     await shot(page, '02-sem-form');
@@ -68,14 +91,14 @@ async function login(page) {
   await uInp.fill(USER);
   await pInp.fill(PASS);
   await shot(page, '02-preenchido');
-  const btn = page.locator('button[type="submit"], input[type="submit"], button:has-text("Entrar"), button:has-text("Login"), button:has-text("Acessar")').first();
+  const btn = page.locator('button:has-text("Entrar"), button[type="submit"], input[type="submit"], button:has-text("Login"), button:has-text("Acessar")').first();
   if (await btn.count()) await btn.click(); else await pInp.press('Enter');
   await page.waitForLoadState('networkidle', { timeout: 60000 }).catch(() => {});
   await page.waitForTimeout(6000);
   await shot(page, '03-pos-login');
   const url = page.url();
   log('pós-login em:', url);
-  if (/senha|password|login/i.test(url)) log('ATENÇÃO: parece que continuamos na tela de login — confira usuário/senha ou se há MFA.');
+  if (/\/login/i.test(url)) log('ATENÇÃO: continuamos na tela de login — confira Empresa/usuário/senha nos screenshots.');
 }
 
 // exporta os dados de UM visual: hover → menu "Mais opções (...)" → Exportar dados
