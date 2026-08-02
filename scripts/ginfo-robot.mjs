@@ -74,6 +74,22 @@ const ABAS = [
       const ant = new Date(h.getFullYear(), h.getMonth() - 1, 1);
       return [{ campo: 'Mês', valor: mesSlicer(ant) }];
     } },
+  // 2.2 PREVENTIVAS → 3ª tabela da página (ordem visual, de cima p/ baixo) = aba
+  // Preventivas do Farol (colunas E–U; A–D da planilha são fórmulas: Placa
+  // Mercosul/Projeto/Unidade = join com a base 'ativos' pela placa; Aderência =
+  // regra da planilha — o LEITOR recalcula; o robô grava só o que o Ginfo traz).
+  { chave: 'preventivas', menu: ['FROTA', '2.2 - PREVENTIVAS'], indice: 3 },
+  // 3.4 PNEUS → tabela de Alinhamentos (Filial | Placa | Próx. Even. | Status |
+  // Dias | Documento) — achada pela coluna "Documento" = aba Alinhamentos do Farol.
+  { chave: 'alinhamentos', url: 'https://bi.ginfo.app.br/bi/3ab8927b-b1c5-4f10-8f36-dad6bb8a8a22?autoAuth=true&ctid=c16300de-7070-4b58-80c8-af99af1e1f65',
+    menu: ['FROTA', '3.4 - PNEUS'], header: 'Documento' },
+  // 2.4 ORDEM SERVIÇO → botão direito no card "NÃO EXECUTADAS" → Drill-through →
+  // "Detalhes Ordem Serviço" → tabela (Nº OS | Data | Status | Filial | Origem |
+  // Tipo | Criticidade | SLAs | Segmento | Fornecedor | Mecânico | Motorista |
+  // Placa) = aba OS em Aberto do Farol. "Dias em Aberto" (col. A da planilha) é
+  // fórmula = AGORA() − Data, mínimo 0 — o leitor recalcula na hora de exibir.
+  { chave: 'os-em-aberto', url: 'https://bi.ginfo.app.br/bi/81e8f48c-09f2-4bc7-a84e-0718378732c9?autoAuth=true&ctid=c16300de-7070-4b58-80c8-af99af1e1f65',
+    menu: ['FROTA', '2.4 - ORDEM SERVIÇO'], drill: { card: 'NÃO EXECUTADAS', item: 'Detalhes Ordem Serviço' } },
 ];
 
 const ART = 'ginfo-artifacts';
@@ -146,33 +162,62 @@ async function login(page) {
 // Seletores de tabela do Power BI (variam por versão do embed)
 const SEL_TABELA = '[role="grid"], [role="table"], .tableEx, [class*="tableEx"], .pivotTable, [class*="pivotTable"]';
 // espera a página do Power BI renderizar e acha o alvo (polling de até 60s).
-// Sem título de visual, escolhe a tabela com MAIS COLUNAS (a detalhada da página).
+// Modos (na ordem): visual = pelo TÍTULO · header = tabela que tem essa COLUNA ·
+// indice = N-ésima tabela na ordem visual (de cima p/ baixo) · padrão = a tabela
+// com MAIS COLUNAS (a detalhada da página). Só considera elementos VISÍVEIS —
+// o embed mantém visuais fora de tela/ocultos que resolvem no seletor mas não clicam.
 async function acharAlvo(page, aba) {
-  const selTitulo = aba.visual
-    ? `[aria-label*="${aba.visual}"], .visualTitle:has-text("${aba.visual}"), visual-container:has-text("${aba.visual}")`
-    : null;
+  // lista as tabelas visíveis de todos os frames, com posição e nº de colunas
+  const tabelasVisiveis = async () => {
+    const tabs = [];
+    for (const fr of page.frames()) {
+      try {
+        const grids = fr.locator(SEL_TABELA);
+        const n = await grids.count();
+        for (let i = 0; i < n; i++) {
+          const g = grids.nth(i);
+          const box = await g.boundingBox().catch(() => null);
+          if (!box || box.width < 60 || box.height < 40) continue;   // oculto/decorativo
+          // evita contar 2x o mesmo visual (wrapper + grid interno no mesmo lugar)
+          if (tabs.some(t => Math.abs(t.x - box.x) < 8 && Math.abs(t.y - box.y) < 8)) continue;
+          const cols = await g.locator('[role="columnheader"]').count();
+          tabs.push({ fr, v: g, x: box.x, y: box.y, cols });
+        }
+      } catch (e) {}
+    }
+    tabs.sort((a, b) => (a.y - b.y) || (a.x - b.x));
+    return tabs;
+  };
   for (let tent = 0; tent < 12; tent++) {
-    if (selTitulo) {
+    if (aba.visual) {
+      const selTitulo = `[aria-label*="${aba.visual}"], .visualTitle:has-text("${aba.visual}"), visual-container:has-text("${aba.visual}")`;
       const alvo = await emFrames(page, async fr => {
-        const v = fr.locator(selTitulo).first();
+        const v = fr.locator(selTitulo).filter({ visible: true }).first();
         return (await v.count()) ? { fr, v } : null;
       });
       if (alvo) return alvo;
-    } else {
-      let best = null;
-      for (const fr of page.frames()) {
-        try {
-          const grids = fr.locator(SEL_TABELA);
-          const n = await grids.count();
-          for (let i = 0; i < n; i++) {
-            const g = grids.nth(i);
-            const cols = await g.locator('[role="columnheader"]').count();
-            const score = cols || 1;
-            if (!best || score > best.score) best = { fr, v: g, score };
-          }
-        } catch (e) {}
+    } else if (aba.header) {
+      const alvo = await emFrames(page, async fr => {
+        const g = fr.locator(SEL_TABELA)
+          .filter({ has: fr.locator(`[role="columnheader"]:has-text("${aba.header}")`) })
+          .filter({ visible: true }).first();
+        return (await g.count()) ? { fr, v: g } : null;
+      });
+      if (alvo) { log(`tabela com a coluna "${aba.header}" encontrada`); return alvo; }
+    } else if (aba.indice) {
+      const tabs = await tabelasVisiveis();
+      if (tabs.length >= aba.indice) {
+        log(`tabela nº ${aba.indice} de ${tabs.length} escolhida (${tabs[aba.indice - 1].cols} colunas)`);
+        return tabs[aba.indice - 1];
       }
-      if (best) { log(`tabela escolhida: ${best.score} coluna(s)`); return best; }
+      if (tabs.length) log(`aguardando: só ${tabs.length} tabela(s) visíveis (preciso de ${aba.indice})`);
+    } else {
+      const tabs = await tabelasVisiveis();
+      if (tabs.length) {
+        const best = tabs.reduce((a, b) => (b.cols > a.cols ? b : a));
+        log(`tabela escolhida: ${best.cols} coluna(s)`);
+        return best;
+      }
     }
     await page.waitForTimeout(5000);
   }
@@ -237,19 +282,19 @@ async function clicarMenu(page, secao, item) {
 // drill-through: botão direito no card → (Drill through/Detalhamento) → página de detalhe
 async function drillThrough(page, cardTexto, itemMenu) {
   const alvo = await emFrames(page, async fr => {
-    const c = fr.locator(`visual-container:has-text("${cardTexto}"), [aria-label*="${cardTexto}"]`).first();
+    const c = fr.locator(`visual-container:has-text("${cardTexto}"), [aria-label*="${cardTexto}"]`).filter({ visible: true }).first();
     return (await c.count()) ? { fr, c } : null;
   });
   if (!alvo) throw new Error(`card "${cardTexto}" não encontrado p/ drill-through`);
   await alvo.c.click({ button: 'right' });
   await page.waitForTimeout(1500);
   const drill = await emFrames(page, async fr => {
-    const d = fr.locator('[role="menuitem"]:has-text("Drill"), [role="menuitem"]:has-text("Detalhamento"), [role="menuitem"]:has-text("Drill-through")').first();
+    const d = fr.locator('[role="menuitem"]:has-text("Drill"), [role="menuitem"]:has-text("Detalhamento"), [role="menuitem"]:has-text("Drill-through")').filter({ visible: true }).first();
     return (await d.count()) ? d : null;
   });
   if (drill) { await drill.hover(); await page.waitForTimeout(1000); }
   const item = await emFrames(page, async fr => {
-    const i = fr.locator(`[role="menuitem"]:has-text("${itemMenu}"), button:has-text("${itemMenu}"), [title*="${itemMenu}"]`).first();
+    const i = fr.locator(`[role="menuitem"]:has-text("${itemMenu}"), button:has-text("${itemMenu}"), [title*="${itemMenu}"]`).filter({ visible: true }).first();
     return (await i.count()) ? i : null;
   });
   if (!item) throw new Error(`item de drill "${itemMenu}" não encontrado`);
@@ -259,11 +304,12 @@ async function drillThrough(page, cardTexto, itemMenu) {
 
 // exporta os dados de UM visual: hover → menu "Mais opções (...)" → Exportar dados
 async function exportarVisual(page, aba) {
-  log('abrindo aba', aba.chave, aba.url);
-  await page.goto(aba.url, { waitUntil: 'domcontentloaded', timeout: 90000 });
+  const urlAba = aba.url || 'https://bi.ginfo.app.br/bi/inicio';   // sem deep-link conhecido → começa do início
+  log('abrindo aba', aba.chave, urlAba);
+  await page.goto(urlAba, { waitUntil: 'domcontentloaded', timeout: 90000 });
   await page.waitForTimeout(10000);
-  if (aba.menu && /\/bi\/inicio/.test(page.url())) {   // app devolveu p/ o início → vai pelo menu
-    log('deep-link voltou para /bi/inicio — navegando pelo menu:', aba.menu.join(' → '));
+  if (aba.menu && (!aba.url || /\/bi\/inicio/.test(page.url()))) {   // app devolveu p/ o início → vai pelo menu
+    log('navegando pelo menu:', aba.menu.join(' → '));
     await clicarMenu(page, aba.menu[0], aba.menu[1]);
   } else {
     await page.waitForTimeout(5000);
@@ -296,19 +342,40 @@ async function exportarVisual(page, aba) {
     return (await i.count()) ? i : null;
   }) || page.locator(SEL_ITEM).first();
   await itemHit.click({ timeout: 15000 });
+  await page.waitForTimeout(2500);
   await shot(page, '11-' + aba.chave + '-dialogo');
-  // diálogo de exportação: confirmar (baixa .xlsx)
-  const [download] = await Promise.all([
-    page.waitForEvent('download', { timeout: 60000 }),
-    (async () => {
-      const ok = await emFrames(page, async fr => {
-        const b = fr.locator('button:has-text("Exportar"), button:has-text("Export")').last();
-        if (await b.count()) { await b.click(); return true; }
-        return null;
-      });
-      if (!ok) log('não achei botão de confirmação — o download pode ter começado direto.');
-    })(),
-  ]);
+  // diálogo de exportação: confirmar (baixa .xlsx). O diálogo pode renderizar no
+  // frame do PBI OU na página do portal, e pode demorar a montar → tenta por ~30s.
+  const SEL_CONF = 'button:has-text("Exportar"), button:has-text("Export"), button:has-text("Baixar"), button:has-text("Download"), button:has-text("OK"), button:has-text("Continuar")';
+  const dlPromise = page.waitForEvent('download', { timeout: 120000 });
+  let confirmado = false;
+  for (let t = 0; t < 12 && !confirmado; t++) {
+    const tentar = async root => {
+      try {
+        const b = root.locator(SEL_CONF).filter({ visible: true }).filter({ hasNotText: 'Exportar dados' }).last();
+        if (await b.count()) { await b.click({ timeout: 3000 }); return true; }
+      } catch (e) {}
+      return false;
+    };
+    confirmado = await tentar(page);
+    if (!confirmado) for (const fr of page.frames()) { if (await tentar(fr)) { confirmado = true; break; } }
+    if (!confirmado) await page.waitForTimeout(2500);
+  }
+  if (!confirmado) {
+    // diagnóstico p/ o log: que botões existem na tela? (o download ainda pode vir direto)
+    const textos = [];
+    const coleta = async root => {
+      try {
+        const bs = root.locator('button').filter({ visible: true });
+        const n = Math.min(await bs.count(), 40);
+        for (let i = 0; i < n; i++) textos.push((await bs.nth(i).innerText().catch(() => '')).trim().replace(/\s+/g, ' ').slice(0, 40));
+      } catch (e) {}
+    };
+    await coleta(page);
+    for (const fr of page.frames()) await coleta(fr);
+    log('sem botão de confirmação — botões visíveis:', JSON.stringify([...new Set(textos.filter(Boolean))]));
+  }
+  const download = await dlPromise;
   const arq = path.join(ART, aba.chave + '.xlsx');
   await download.saveAs(arq);
   log('baixado:', arq);
