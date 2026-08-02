@@ -639,6 +639,11 @@ Automatiza a coleta dos dados que hoje são copiados manualmente do BI do Ginfo 
 
 **Fluxo real hoje:** Ginfo (Power BI) → Renan copia manualmente → planilha **"Farol Semanal"** (Sheets, `FAROL_SHEET_ID`) → Farol lê as abas. O robô substitui o passo manual, aba a aba. Abas no rodapé da planilha: `De-para · Custos · Indisponibilidade · Disponibilidade · Ativos · Stress Test Veículos · Stress Test Empilhadeiras · CIFV · Preventivas · Alinhamentos · OS em Aberto`.
 
+**Navegação no portal do Ginfo:** após o login cai em `/bi/inicio`; menu lateral esquerdo (seção FROTA) lista os dashboards: `1.1 - DOCUMENTOS · 1.2 - ADERÊNCIA CONFORMIDADE · 1.3 - ADERÊNCIA FROTA-031120 / FROTA-2ART / ARMAZÉM / APOIO / EMPURRADA · 1.4 - RESÍDUOS · 2.1 - INDISP. MANUT. VEÍCULOS · 2.1 - DISP. EMPILHADEIRA · 2.2 - PREVENTIVAS · …`. Os relatórios são Power BI embutidos; alguns dados exigem **drill-through** (botão direito num card → Drill-through → página de detalhe) antes de exportar.
+
+**Receitas de coleta no Ginfo (conforme o Renan mostra):**
+- **1.1 - DOCUMENTOS**: abrir pelo menu → botão direito no NÚMERO do card **VEÍCULOS** → Drill-through → **"Detalhes Veículos"** → exportar a tabela da página de detalhe. (Tela inicial tem filtros Empresa/Regional/Filial/Tier/Projeto/Tipo Veículo/Documento/Prazo/Data Vencimento; cards Conformes %, Veículos, Vencidos, Vencendo 30 dias, Vencendo +30 dias, Doc. Pendente; aba do Sheets de destino: a confirmar.)
+
 **Abas mapeadas (conforme o Renan mostra):**
 - **Custos** — FORA do escopo do robô: vem do DRE (manual) e será substituída pela **Carta de Custos** no futuro. Não mexer por enquanto. (Colunas: Δ ORÇ. | Δ FCT | Vigência | ESTRUTURA | UNIDADE | NÍVEL 3 | CONTA GERENCIAL | MÊS | ANO | ORÇADO | REMUNERADO | REALIZADO.)
 - **Ativos** — automática (IMPORTRANGE do **Consolidado Geral**, mesmo workbook da Disponibilidade/`DISP_SHEET_ID`; colunas: Placa Mercosul | Filial | Projeto | Placa | Marca | Modelo | Tipo Veículo | Estado | Ano Fabricação). Papel: **base de-para por placa** — a aba Preventivas usa PROCV nela p/ preencher Projeto/Unidade, que o relatório do Ginfo NÃO traz → quando o robô exportar Preventivas, precisa reproduzir esse join (placa → Filial/Projeto via Ativos). Desejo futuro: **painel "Ativos/Frota"** no cluster Visão Geral (idade da frota, ativos por unidade/tipo/modelo).
