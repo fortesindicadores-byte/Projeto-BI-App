@@ -48,9 +48,11 @@ const ABAS = [
       const ant = new Date(h.getFullYear(), h.getMonth() - 1, 1);
       return [{ campo: 'Mês', valor: mesSlicer(ant) }, { campo: 'Quinzena', valor: 'Segunda' }];
     } },
-  // STRESS TEST EMPILHADEIRA → tabela "Análise Descontos" (a de mais colunas).
+  // STRESS TEST EMPILHADEIRA → tabela "Análise Descontos" (pelo TÍTULO — a página
+  // também tem "Análise Horímetros" logo abaixo, que não usamos).
   // Regra de período: até o dia 10, só Mês = mês anterior (não tem slicer de Quinzena).
   { chave: 'stress-test-empilhadeira', url: 'https://bi.ginfo.app.br/bi/d1cead3d-e28a-487b-a1bd-8b72cdd6da55?autoAuth=true&ctid=c16300de-7070-4b58-80c8-af99af1e1f65',
+    visual: 'Análise Descontos',
     slicers: () => {
       const h = new Date();
       if (h.getDate() > 10) return [];
