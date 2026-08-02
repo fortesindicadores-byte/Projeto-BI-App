@@ -95,8 +95,9 @@ const ABAS = [
   // (Mapa | Data do mapa | Data OS | Início/Fim técnico | Problema | Nº OS |
   // Tipo Checklist | Status | Filial | Motorista | Placa | Tipo Veículo |
   // Projeto). Alimenta o farol NOVO "Checklist" (Saída com OS Crítica do mês).
+  // (a página tem outros grids pequenos — mirar pela coluna "Data do mapa")
   { chave: 'checklist-031120', url: 'https://bi.ginfo.app.br/bi/76e82774-d5d4-4cda-bb13-65a1a64387ef?autoAuth=true&ctid=c16300de-7070-4b58-80c8-af99af1e1f65',
-    menu: ['FROTA', '1.3 - ADERÊNCIA FROTA - 031120'] },
+    menu: ['FROTA', '1.3 - ADERÊNCIA FROTA - 031120'], header: 'Data do mapa' },
 ];
 
 const ART = 'ginfo-artifacts';
@@ -301,16 +302,28 @@ async function clicarMenu(page, secao, item) {
 // drill-through: botão direito no card → (Drill through/Detalhamento) → página de detalhe
 async function drillThrough(page, cardTexto, itemMenu) {
   // o card pode demorar a renderizar → polling de até 45s
+  // só nos frames do Power BI — o texto do card também existe no menu lateral
+  // do portal (ex.: "VEÍCUL OS" em "2.1 - INDISP. MANUT. VEÍCULOS") e clicar lá
+  // é interceptado pelo iframe do relatório.
+  const pbiFrames = () => page.frames().filter(f => /powerbi|reportEmbed/i.test(f.url()));
   let alvo = null;
   for (let t = 0; t < 9 && !alvo; t++) {
-    alvo = await emFrames(page, async fr => {
-      // clica no TEXTO do card (o rótulo/valor tem caixa real; o
-      // visual-container do embed tem caixa 0x0 e não recebe clique)
-      for (const loc of [fr.getByText(cardTexto, { exact: false }), fr.locator(`[aria-label*="${cardTexto}"]`), fr.locator(`visual-container:has-text("${cardTexto}")`)]) {
-        try { const c = loc.filter({ visible: true }).first(); if (await c.count()) return { fr, c }; } catch (e) {}
-      }
-      return null;
-    });
+    for (const fr of pbiFrames()) {
+      try {
+        const cont = fr.locator(`visual-container:has-text("${cardTexto}")`).first();
+        if (await cont.count()) {
+          // botão direito no NÚMERO do card — no rótulo o menu vem
+          // "(Nenhuma ação disponível)" e o drill não aparece
+          let el = cont.getByText(/^\s*[\d.,]+\s*%?\s*$/).filter({ visible: true }).first();
+          if (!(await el.count())) el = cont.locator('tspan, .value, [class*="value" i]').filter({ visible: true }).first();
+          if (!(await el.count())) el = fr.getByText(cardTexto, { exact: false }).filter({ visible: true }).first();
+          if (await el.count()) { alvo = { fr, c: el }; break; }
+        } else {
+          const el = fr.getByText(cardTexto, { exact: false }).filter({ visible: true }).first();
+          if (await el.count()) { alvo = { fr, c: el }; break; }
+        }
+      } catch (e) {}
+    }
     if (!alvo) await page.waitForTimeout(5000);
   }
   if (!alvo) throw new Error(`card "${cardTexto}" não encontrado p/ drill-through`);
