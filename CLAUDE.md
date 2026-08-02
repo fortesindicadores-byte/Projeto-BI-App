@@ -626,6 +626,22 @@ Situação atual do código: a Árvore lê a aba `Árvore Comb.` (`GV_ID=1wCoRGs
 - **"(INATIVO)" nunca aparece:** mesclado na unidade/projeto base — dados via `scripts/limpar-inativo.sql`, telas via vassoura global no `assets/mobile.js`.
 - **Mobile tipo app:** `assets/mobile.js` incluído em TODAS as páginas (zoom travado + tabela larga vira "+ Detalhar" no mobile). Páginas novas devem incluir o script.
 
+## Robô Ginfo (Power BI → Farol) — em construção (ago/2026)
+
+Automatiza a coleta dos dados que hoje são copiados manualmente do BI do Ginfo (`bi.ginfo.app.br`, Power BI homologado pela Ambev) para as abas que alimentam o Farol.
+
+**Decisões fechadas com o Renan (02/08/2026):**
+- Login: **usuário + senha simples** (sem MFA) — validar com o modo `login` do workflow.
+- Destino: **Supabase** (projeto do portal), tabela `ginfo_snapshot` (`scripts/ginfo-supabase.sql`) — leitura para logados, escrita só service_role.
+- Escopo: **aba a aba** — o Renan vai mostrando cada aba do Ginfo e o mapeamento entra em `ABAS` no `scripts/ginfo-robot.mjs`.
+
+**Peças:** `scripts/ginfo-robot.mjs` (Playwright: login → menu "..." do visual → Exportar dados → xlsx → Supabase) · `.github/workflows/ginfo-robot.yml` (dispatch com modo login/run; cron comentado até validar; screenshots nos artifacts) · Secrets: `GINFO_USER`, `GINFO_PASS`, `GINFO_URL` (opcional), `GEM_SUPABASE_SERVICE_KEY`.
+
+**Abas mapeadas (preencher conforme o Renan mostrar):**
+- _(nenhuma ainda — 1ª candidata: Stress Test)_
+
+Em paralelo: perguntar ao Ginfo se existe API/export oficial (trocaria o RPA por consulta estável).
+
 ## Roadmap
 
 **Painéis ativos:** Visão Financeira, Painel KM, Árvore de Combustível, Financeiro Pessoal (acesso direto)

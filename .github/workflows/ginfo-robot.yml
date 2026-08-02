@@ -1,0 +1,52 @@
+name: Ginfo Robot (Power BI -> Supabase)
+
+# Exporta os visuais do BI do Ginfo e grava em ginfo_snapshot (Supabase).
+# 1ª fase: rodar manualmente no modo "login" p/ validar o acesso (screenshots
+# ficam nos artifacts do run). Depois de mapear as abas, ativar o cron.
+on:
+  workflow_dispatch:
+    inputs:
+      modo:
+        description: "login = só testa o acesso · run = exporta e grava"
+        required: true
+        default: "login"
+        type: choice
+        options: [login, run]
+  # cron entra quando o robô estiver validado (ex.: segunda ~08h BRT):
+  # schedule:
+  #   - cron: '23 11 * * 1'
+
+concurrency:
+  group: ginfo-robot
+  cancel-in-progress: false
+
+jobs:
+  robo:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Instalar Playwright + xlsx
+        run: |
+          npm init -y >/dev/null 2>&1
+          npm i --no-audit --no-fund playwright xlsx
+          npx playwright install --with-deps chromium
+      - name: Rodar robô
+        run: node scripts/ginfo-robot.mjs
+        env:
+          GINFO_MODE:               ${{ github.event.inputs.modo || 'login' }}
+          GINFO_USER:               ${{ secrets.GINFO_USER }}
+          GINFO_PASS:               ${{ secrets.GINFO_PASS }}
+          GINFO_URL:                ${{ secrets.GINFO_URL }}
+          GEM_SUPABASE_SERVICE_KEY: ${{ secrets.GEM_SUPABASE_SERVICE_KEY }}
+      - name: Publicar screenshots/downloads (debug)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ginfo-artifacts
+          path: ginfo-artifacts/
+          if-no-files-found: ignore
+          retention-days: 7
