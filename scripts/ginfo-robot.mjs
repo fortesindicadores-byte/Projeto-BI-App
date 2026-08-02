@@ -29,9 +29,13 @@ const SB_URL = 'https://lozwipoeacpvplgkrxkq.supabase.co';
 const SB_KEY = (process.env.GEM_SUPABASE_SERVICE_KEY || '').trim();
 
 // ── ABAS DO GINFO (preencher conforme o mapeamento aba a aba) ──
-// chave  = linha em ginfo_snapshot · url = link do relatório · visual = título do visual a exportar
+// chave = linha em ginfo_snapshot · url = deep-link do relatório · visual = título do
+// visual (opcional; sem título, o robô exporta a PRIMEIRA tabela da página).
+// Regra: o dado fica SÓ no Supabase — o arquivo baixado é apagado após gravar.
 const ABAS = [
-  // { chave:'stress-test', url:'https://bi.ginfo.app.br/bi/…', visual:'Stress Test' },
+  // 1.1 DOCUMENTOS → drill-through "Detalhes Veículos" → tabela = base ATIVOS
+  // (Filial | Projeto | Placa | Marca | Modelo | Tipo Veículo | Estado | Ano Fabricação)
+  { chave: 'ativos', url: 'https://bi.ginfo.app.br/bi/99029b42-f690-451b-95b1-9fad2c9b670d?autoAuth=true&ctid=c16300de-7070-4b58-80c8-af99af1e1f65' },
 ];
 
 const ART = 'ginfo-artifacts';
@@ -108,12 +112,14 @@ async function exportarVisual(page, aba) {
   await page.waitForTimeout(15000);           // Power BI renderiza depois do load
   await shot(page, '10-' + aba.chave);
 
-  // acha o visual pelo título (dentro dos iframes do Power BI)
+  // acha o visual (dentro dos iframes do Power BI): pelo título, ou a 1ª tabela da página
   const alvo = await emFrames(page, async fr => {
-    const v = fr.locator(`[aria-label*="${aba.visual}"], .visualTitle:has-text("${aba.visual}"), visual-container:has-text("${aba.visual}")`).first();
+    const v = aba.visual
+      ? fr.locator(`[aria-label*="${aba.visual}"], .visualTitle:has-text("${aba.visual}"), visual-container:has-text("${aba.visual}")`).first()
+      : fr.locator('[role="grid"], .tableEx, .pivotTable, [role="table"]').first();
     return (await v.count()) ? { fr, v } : null;
   });
-  if (!alvo) throw new Error(`visual "${aba.visual}" não encontrado em ${aba.chave}`);
+  if (!alvo) throw new Error(`visual ${aba.visual ? `"${aba.visual}"` : '(tabela)'} não encontrado em ${aba.chave}`);
   await alvo.v.hover();
   // botão "..." (Mais opções) do visual
   const opts = alvo.fr.locator('[aria-label*="Mais opções" i], [aria-label*="More options" i], [data-testid="visual-more-options-btn"]').first();
@@ -172,6 +178,9 @@ async function main() {
         const arq = await exportarVisual(page, aba);
         const linhas = await xlsxParaLinhas(arq);
         await gravarSupabase(aba.chave, linhas);
+        // o dado fica SÓ no banco: apaga o arquivo baixado (sem service key,
+        // é dry-run e o xlsx fica nos artifacts p/ conferência)
+        if (SB_KEY) { try { fs.unlinkSync(arq); log('arquivo apagado (fica só no banco):', arq); } catch (e) {} }
       } catch (e) { erros++; log(`ERRO em ${aba.chave}:`, e.message); await shot(page, '99-erro-' + aba.chave); }
     }
     if (erros) { console.error(`${erros} aba(s) com erro`); process.exit(1); }

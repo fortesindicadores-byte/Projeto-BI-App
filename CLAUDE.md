@@ -634,6 +634,7 @@ Automatiza a coleta dos dados que hoje são copiados manualmente do BI do Ginfo 
 - Login: **usuário + senha simples** (sem MFA) — validar com o modo `login` do workflow. Tela: `https://bi.ginfo.app.br/login`, com **3 campos: Empresa (dropdown pesquisável = CONLOG) + E-mail + Senha** e botão "Entrar".
 - Destino: **Supabase** (projeto do portal), tabela `ginfo_snapshot` (`scripts/ginfo-supabase.sql`) — leitura para logados, escrita só service_role.
 - Escopo: **aba a aba** — o Renan vai mostrando cada aba do Ginfo e o mapeamento entra em `ABAS` no `scripts/ginfo-robot.mjs`.
+- **Regra geral (02/08/2026): todo export vai SÓ para o Supabase** — o robô grava em `ginfo_snapshot` e apaga o xlsx; nada mais é colado no Sheets. Painéis/Farol passarão a ler essas bases do Supabase conforme cada aba for migrada. 1ª aba plugada: **`ativos`** (Detalhes Veículos do 1.1 DOCUMENTOS).
 
 **Peças:** `scripts/ginfo-robot.mjs` (Playwright: login → menu "..." do visual → Exportar dados → xlsx → Supabase) · `.github/workflows/ginfo-robot.yml` (dispatch com modo login/run; cron comentado até validar; screenshots nos artifacts) · Secrets: `GINFO_USER`, `GINFO_PASS`, `GINFO_URL` (opcional), `GEM_SUPABASE_SERVICE_KEY`.
 
