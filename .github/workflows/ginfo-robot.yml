@@ -12,9 +12,10 @@ on:
         default: "login"
         type: choice
         options: [login, run]
-  # cron entra quando o robô estiver validado (ex.: segunda ~08h BRT):
-  # schedule:
-  #   - cron: '23 11 * * 1'
+  # todo dia às 7:00 BRT (10:00 UTC) — baixa as 7 abas e atualiza o Supabase.
+  # (só roda a partir da branch main — agendamento do GitHub é sempre na default)
+  schedule:
+    - cron: '0 10 * * *'
 
 concurrency:
   group: ginfo-robot
@@ -37,7 +38,8 @@ jobs:
       - name: Rodar robô
         run: node scripts/ginfo-robot.mjs
         env:
-          GINFO_MODE:               ${{ github.event.inputs.modo || 'login' }}
+          # dispatch manual usa o modo escolhido; o cron diário roda em 'run'
+          GINFO_MODE:               ${{ github.event.inputs.modo || 'run' }}
           GINFO_USER:               ${{ secrets.GINFO_USER }}
           GINFO_PASS:               ${{ secrets.GINFO_PASS }}
           GINFO_URL:                ${{ secrets.GINFO_URL }}
