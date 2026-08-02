@@ -62,6 +62,18 @@ const ABAS = [
       const ant = new Date(h.getFullYear(), h.getMonth() - 1, 1);
       return [{ campo: 'Mês', valor: mesSlicer(ant) }];
     } },
+  // CIVF → última tabela da página (detalhada por veículo: Transportador | Filial
+  // Freightech | Veículo | Projeto | Data CIVF | Status | Manutenção | Lavação |
+  // Desconto Manutenção | Desconto Lavagem | Desconto Total) = aba CIFV do Farol.
+  // Regra de período: até o dia 10, só Mês = mês anterior.
+  { chave: 'civf', url: 'https://bi.ginfo.app.br/bi/5bd5e3ac-7ebc-4c7b-963e-1c3d20ba4acd?autoAuth=true&ctid=c16300de-7070-4b58-80c8-af99af1e1f65',
+    menu: ['CIVF', 'CIVF'],
+    slicers: () => {
+      const h = new Date();
+      if (h.getDate() > 10) return [];
+      const ant = new Date(h.getFullYear(), h.getMonth() - 1, 1);
+      return [{ campo: 'Mês', valor: mesSlicer(ant) }];
+    } },
 ];
 
 const ART = 'ginfo-artifacts';
@@ -205,6 +217,12 @@ async function aplicarSlicer(page, campo, valor) {
 // O portal é um app Vue: deep-link recarrega o app e ele VOLTA para /bi/inicio.
 // Caminho confiável = navegar pelo MENU lateral (seção → item), como um humano.
 async function clicarMenu(page, secao, item) {
+  if (secao === item) {   // ex.: CIVF > CIVF — expande a seção e clica na 2ª ocorrência
+    try { await page.getByText(secao, { exact: true }).first().click({ timeout: 8000 }); await page.waitForTimeout(1200); } catch (e) {}
+    await page.getByText(item, { exact: true }).last().click({ timeout: 15000 });
+    await page.waitForTimeout(15000);
+    return;
+  }
   const itemLoc = () => page.getByText(item, { exact: false }).first();
   if (!(await itemLoc().isVisible().catch(() => false))) {
     // sidebar fechada? tenta o botão redondo (hambúrguer) e expande a seção
