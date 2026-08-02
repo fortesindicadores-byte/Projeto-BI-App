@@ -24,8 +24,6 @@
     var st=d.createElement('style');
     st.textContent=
       'html{touch-action:manipulation;-webkit-text-size-adjust:100%;}'+
-      /* visão clara: cabeçalho das tabelas em laranja fraco translúcido (teste) */
-      'body.light-mode thead th{background:rgba(249,115,22,.35)!important;}'+
       '.mt-detail-btn{display:inline-flex;align-items:center;gap:6px;margin:2px 0 10px;background:rgba(249,115,22,.12);border:1px solid rgba(249,115,22,.3);border-radius:4px;padding:6px 12px;font-family:Montserrat,sans-serif;font-size:10px;font-weight:700;color:#F97316;cursor:pointer;text-transform:uppercase;letter-spacing:.5px;}'+
       '@media(max-width:768px){'+
         'html,body{overflow-x:hidden;}'+
