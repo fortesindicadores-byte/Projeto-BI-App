@@ -62,6 +62,17 @@ const ABAS = [
       const ant = new Date(h.getFullYear(), h.getMonth() - 1, 1);
       return [{ campo: 'Mês', valor: mesSlicer(ant) }];
     } },
+  // STRESS TEST EMPILHADEIRA → também a 2ª tabela da página (por FILIAL, abaixo
+  // dos cards: Filial | Emp. Ginfo | Emp. Freightech | Divergência | 1ª/2ª QZ
+  // Paradas/Coletas/Stress Test/Desconto | Desconto Total). Mesma regra de Mês.
+  { chave: 'stress-test-empilhadeira-filial', url: 'https://bi.ginfo.app.br/bi/d1cead3d-e28a-487b-a1bd-8b72cdd6da55?autoAuth=true&ctid=c16300de-7070-4b58-80c8-af99af1e1f65',
+    menu: ['STRESS TEST', 'STRESS TEST EMPILHADEIRA'], indice: 2,
+    slicers: () => {
+      const h = new Date();
+      if (h.getDate() > 10) return [];
+      const ant = new Date(h.getFullYear(), h.getMonth() - 1, 1);
+      return [{ campo: 'Mês', valor: mesSlicer(ant) }];
+    } },
   // CIVF → última tabela da página (detalhada por veículo: Transportador | Filial
   // Freightech | Veículo | Projeto | Data CIVF | Status | Manutenção | Lavação |
   // Desconto Manutenção | Desconto Lavagem | Desconto Total) = aba CIFV do Farol.
