@@ -499,6 +499,7 @@ async function main() {
           if (/\/login/i.test(page.url())) { log('sessão caiu — refazendo o login'); await login(page); }
           const arq = await exportarVisual(page, aba);
           const linhas = await xlsxParaLinhas(arq);
+          log('colunas de', aba.chave + ':', JSON.stringify(Object.keys(linhas[0] || {})));
           await gravarSupabase(aba.chave, linhas);
           // o dado fica SÓ no banco: apaga o arquivo baixado (sem service key,
           // é dry-run e o xlsx fica nos artifacts p/ conferência)
