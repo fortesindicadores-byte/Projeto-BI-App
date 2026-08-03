@@ -134,6 +134,7 @@ body.light-mode input[type=date].lanc-edit::-webkit-calendar-picker-indicator{fi
 .aprv.on{background:var(--green);box-shadow:0 0 0 2px rgba(59,179,59,.28);}
 .aprv.ro{cursor:default;}
 .aprv.dis{background:var(--text3);box-shadow:none;cursor:default;opacity:.5;}
+.lanc-edit:disabled{background:rgba(255,255,255,.02);color:var(--text3);border-style:dashed;cursor:not-allowed;opacity:.6;}
 select.lanc-edit option{background:#0f1824;color:#fff;}
 /* larguras mínimas por tipo de campo (a tabela rola na horizontal) */
 .lanc-edit[data-f="data"]{min-width:132px;}
@@ -386,34 +387,44 @@ function buildProjFilter(){ buildMs('ms-proj', ()=>UNIT_PROJETOS.slice(), p=>p, 
 
 // ── DB ──
 function fromDB(d){return{id:d.id,unidade:d.unidade,vigencia:d.vigencia,pacote:d.pacote,data:d.data||'',projeto:d.projeto||'',equipamento:(d.equipamento||''),fornecedor:(d.fornecedor||''),rc:d.rc||'',oc:d.oc||'',nf:d.nf||'',conta:d.conta||'',grupo:d.grupo||'',descricao:d.descricao||'',valor:+d.valor||0,aprovado:!!d.aprovado};}
-// farol de aprovação do coordenador (verde=aprovado, vermelho=pendente). Toggle só p/ admin/coordenador e linha já salva.
+// farol de aprovação do coordenador (verde=aprovado → libera OC/NF · vermelho=pendente · cinza=falta RC).
+// A linha é salva assim que a RC é preenchida (não precisa mais de NF+Valor pra existir).
 function aprvHTML(r){
   const on=!!r.aprovado, saved=!!r.id;
   if(!saved){
-    // RC digitada já marca PENDENTE (vermelho); aprovar (verde) é só admin e após salvar
-    if(String(r.rc||'').trim()) return `<span class="aprv ro" title="RC lançada — aguardando aprovação do coordenador (salva com NF + Valor)"></span>`;
-    return `<span class="aprv dis" title="Salve a linha (NF + Valor) para poder aprovar"></span>`;
+    // RC digitada dispara o save no onchange; se ainda não salvou (foco no campo), mostra pendente
+    if(String(r.rc||'').trim()) return `<span class="aprv ro" title="Salvando…"></span>`;
+    return `<span class="aprv dis" title="Preencha a RC para habilitar a aprovação"></span>`;
   }
-  if(!IS_ADMIN) return `<span class="aprv ro${on?' on':''}" title="${on?'Aprovado pelo coordenador':'Aguardando aprovação'}"></span>`;
-  return `<span class="aprv${on?' on':''}" onclick="toggleAprv(this)" title="${on?'Aprovado — clique para reprovar':'Clique para aprovar'}"></span>`;
+  if(!IS_ADMIN) return `<span class="aprv ro${on?' on':''}" title="${on?'Aprovado — OC/NF liberados':'Aguardando aprovação do coordenador'}"></span>`;
+  return `<span class="aprv${on?' on':''}" onclick="toggleAprv(this)" title="${on?'Aprovado — clique para reprovar':'Clique para aprovar e liberar OC/NF'}"></span>`;
 }
-// ao digitar a RC numa linha ainda não salva, o farol vira PENDENTE (vermelho) na hora
+// ao digitar a RC numa linha ainda não salva, o farol vira PENDENTE (vermelho) na hora, antes do onchange salvar
 function rcDot(el){
-  const tr=el.closest('tr'); if(!tr||tr.dataset.id) return;      // linha salva: farol já é vermelho/verde
+  const tr=el.closest('tr'); if(!tr||tr.dataset.id) return;      // linha salva: farol já reflete o estado real
   const av=tr.querySelector('.aprv'); if(!av) return;
   const tem=String(el.value||'').trim();
   av.className='aprv '+(tem?'ro':'dis');
-  av.title=tem?'RC lançada — aguardando aprovação do coordenador (salva com NF + Valor)':'Salve a linha (NF + Valor) para poder aprovar';
+  av.title=tem?'Salvando…':'Preencha a RC para habilitar a aprovação';
+}
+// trava/libera OC e NF conforme a aprovação (farol verde = libera)
+function applyLockState(tr,unlocked){
+  ['oc','nf'].forEach(f=>{
+    const el=tr.querySelector('[data-f="'+f+'"]'); if(!el) return;
+    el.disabled=!unlocked;
+    el.title=unlocked?'':'Aguardando aprovação (farol verde) para preencher';
+  });
 }
 async function toggleAprv(el){
   if(!IS_ADMIN||!sb) return;
   const tr=el.closest('tr'); const id=tr&&tr.dataset.id; if(!id) return;
   const on=!el.classList.contains('on');
   el.classList.toggle('on',on);
-  el.title=on?'Aprovado — clique para reprovar':'Clique para aprovar';
+  el.title=on?'Aprovado — clique para reprovar':'Clique para aprovar e liberar OC/NF';
   const r=ROWS.find(x=>x.id===id); if(r)r.aprovado=on;
+  applyLockState(tr,on);
   const {error}=await sb.from('carta_custos').update({aprovado:on}).eq('id',id);
-  if(error){ alert('Erro ao aprovar: '+error.message); el.classList.toggle('on',!on); if(r)r.aprovado=!on; }
+  if(error){ alert('Erro ao aprovar: '+error.message); el.classList.toggle('on',!on); if(r)r.aprovado=!on; applyLockState(tr,!on); }
 }
 async function loadRows(){
   const units=curUnits(), vigs=curVigs();
@@ -464,8 +475,8 @@ function lancRowHTML(r){
     <td><input class="lanc-edit" data-f="fornecedor" value="${esc(r.fornecedor)}" placeholder="FORNECEDOR" oninput="this.value=this.value.toUpperCase()" onchange="saveLancCell(this)"></td>
     <td><input class="lanc-edit" data-f="rc" value="${esc(r.rc)}" placeholder="nº" oninput="rcDot(this)" onchange="saveLancCell(this)"></td>
     <td class="num">${aprvHTML(r)}</td>
-    <td><input class="lanc-edit" data-f="oc" value="${esc(r.oc)}" placeholder="nº" onchange="saveLancCell(this)"></td>
-    <td><input class="lanc-edit" data-f="nf" value="${esc(r.nf)}" placeholder="nº" onchange="saveLancCell(this)"></td>
+    <td><input class="lanc-edit" data-f="oc" value="${esc(r.oc)}" placeholder="nº" ${r.aprovado?'':'disabled title="Aguardando aprovação (farol verde) para preencher"'} onchange="saveLancCell(this)"></td>
+    <td><input class="lanc-edit" data-f="nf" value="${esc(r.nf)}" placeholder="nº" ${r.aprovado?'':'disabled title="Aguardando aprovação (farol verde) para preencher"'} onchange="saveLancCell(this)"></td>
     <td><select class="lanc-edit" data-f="conta" onchange="saveLancCell(this)">${selOpts(CONTAS[pac],r.conta||CONTAS[pac][0])}</select></td>
     <td><input class="lanc-edit" data-f="grupo" list="dl-grupos" value="${esc(r.grupo||'')}" placeholder="Grupo…" onchange="saveLancCell(this)"></td>
     <td><input class="lanc-edit" data-f="descricao" value="${esc(r.descricao)}" placeholder="descrição do serviço" onchange="saveLancCell(this)"></td>
@@ -484,14 +495,18 @@ async function saveLancRow(tr){
     const r=ROWS.find(x=>x.id===id); if(r)Object.assign(r,payload);
     const {error}=await sb.from('carta_custos').update(payload).eq('id',id);
     if(error){alert('Erro ao salvar: '+error.message);return;}
-    tr.classList.toggle('pend', !(payload.nf && valor>0));   // NF removido → volta a pendente
+    tr.classList.toggle('pend', !(payload.nf && valor>0));   // NF removido → volta a pendente (não conta no DRE)
     renderStats();
   }else{
-    if(!payload.nf || !(valor>0)){ tr.classList.add('pend'); return; }   // só sobe ao DRE com NF + Valor
+    if(!payload.rc){ tr.classList.add('pend'); return; }   // linha só existe (e habilita aprovação) a partir da RC
+    payload.aprovado=false;
     const {data,error}=await sb.from('carta_custos').insert(payload).select('*').single();
     if(error){alert('Erro ao lançar: '+error.message);return;}
-    tr.dataset.id=data.id; tr.classList.remove('pend'); const nr=fromDB(data); ROWS.unshift(nr);
-    const av=tr.querySelector('.aprv'); if(av) av.outerHTML=aprvHTML(nr);   // farol fica ativo após salvar
+    tr.dataset.id=data.id;
+    tr.classList.toggle('pend', !(payload.nf && valor>0));   // continua pendente no DRE até ter NF + Valor
+    const nr=fromDB(data); ROWS.unshift(nr);
+    const av=tr.querySelector('.aprv'); if(av) av.outerHTML=aprvHTML(nr);   // farol vira vermelho clicável (coordenador)
+    applyLockState(tr,false);   // OC/NF seguem travados até a aprovação
     renderStats();
   }
 }
@@ -610,7 +625,7 @@ function renderLanc(rows){
   const addBtn=$('add-lanc-btn'); if(addBtn) addBtn.style.display=single?'':'none';
   let h=`<thead><tr><th class="lft">Data</th><th class="lft">Projeto</th><th class="lft">Equipamento</th><th class="lft">Fornecedor</th><th class="lft">RC</th><th title="Aprovação do coordenador">OK</th><th class="lft">OC</th><th class="lft">NF</th><th class="lft">Conta</th><th class="lft">Grupo</th><th class="lft">Descrição</th><th>Valor</th><th></th></tr></thead><tbody>`;
   if(single){
-    $('lanc-sub').textContent=rows.length+' lançamento(s) · edite direto na linha · a linha só sobe ao ter NF + Valor · botão direito → exportar Excel';
+    $('lanc-sub').textContent=rows.length+' lançamento(s) · edite direto na linha · RC salva e libera aprovação · farol verde libera OC/NF · sobe ao DRE com NF + Valor · botão direito → exportar Excel';
     if(!rows.length){ h+=`<tr class="empty-row"><td colspan="13"><div class="empty">Nenhum custo lançado neste mês. Clique em “+ adicionar lançamento”.</div></td></tr>`; }
     h+=rows.map(lancRowHTML).join('');
   }else{
