@@ -289,12 +289,30 @@ async function aplicarSlicer(page, campo, valor) {
   });
   if (!hit) { log(`slicer "${campo}" não encontrado`); return false; }
   await hit.dd.click({ timeout: 10000 });
-  await page.waitForTimeout(1500);
-  const item = await emFrames(page, async fr => {
+  await page.waitForTimeout(2500);   // lista do dropdown pode levar um instante a mais p/ renderizar
+  const buscarItem = () => emFrames(page, async fr => {
     const i = fr.locator(`.slicerItemContainer:has-text("${valor}"), [role="option"]:has-text("${valor}"), .slicerText:text-is("${valor}"), span:text-is("${valor}")`).first();
     return (await i.count()) ? i : null;
   });
-  if (!item) { log(`item "${valor}" do slicer "${campo}" não encontrado`); await page.keyboard.press('Escape'); return false; }
+  let item = await buscarItem();
+  for (let t = 0; t < 2 && !item; t++) {   // retry — lista pode ainda estar montando
+    await page.waitForTimeout(1500);
+    item = await buscarItem();
+  }
+  if (!item) {
+    // diagnóstico: quais itens o dropdown realmente tem (fica no log do Actions)
+    const textos = [];
+    for (const fr of page.frames()) {
+      try {
+        const its = fr.locator('.slicerItemContainer, [role="option"]').filter({ visible: true });
+        const n = Math.min(await its.count(), 20);
+        for (let i = 0; i < n; i++) textos.push((await its.nth(i).innerText().catch(() => '')).trim().replace(/\s+/g, ' '));
+      } catch (e) {}
+    }
+    log(`item "${valor}" do slicer "${campo}" não encontrado — itens disponíveis:`, JSON.stringify(textos.filter(Boolean)));
+    await page.keyboard.press('Escape');
+    return false;
+  }
   await item.click();
   await page.waitForTimeout(1500);
   await page.keyboard.press('Escape');   // fecha o dropdown
@@ -412,8 +430,11 @@ async function exportarVisual(page, aba) {
   // filtros/slicers da aba (ex.: Mês anterior + Quinzena Segunda até o dia 10)
   if (typeof aba.slicers === 'function') {
     for (const s of aba.slicers()) {
-      await aplicarSlicer(page, s.campo, s.valor);
+      const ok = await aplicarSlicer(page, s.campo, s.valor);
       await shot(page, '11-' + aba.chave + '-' + s.campo.toLowerCase().replace(/[^a-z0-9]+/gi, '-'));
+      // slicer não aplicado = a tela ficou no filtro errado (ou sem filtro nenhum);
+      // aborta em vez de exportar/gravar um snapshot incompleto por cima do bom.
+      if (!ok) throw new Error(`slicer "${s.campo}"="${s.valor}" não aplicado em ${aba.chave} — abortando p/ não gravar dado incompleto`);
     }
   }
 
