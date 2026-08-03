@@ -123,7 +123,35 @@ async function preencherForm(page) {
   return true;
 }
 
+// sondagem de rotas: descobre por onde o servidor aceita conversa
+async function sondar(page) {
+  const alvos = [
+    'https://bi.conlogsa.com.br/',
+    'https://bi.conlogsa.com.br/login',
+    'https://bi.conlogsa.com.br/qlik/',
+    'https://bi.conlogsa.com.br/bi/',
+    'https://bi.conlogsa.com.br/sense/hub',
+    'https://bi.conlogsa.com.br:4244/',
+    'http://bi.conlogsa.com.br:4244/',
+    'https://bi.conlogsa.com.br:4243/qps/user',
+  ];
+  for (const u of alvos) {
+    try {
+      const r = await page.request.get(u, { timeout: 15000, maxRedirects: 0 });
+      log('sonda', u, '→', r.status(), r.headers()['location'] || '');
+    } catch (e) { log('sonda', u, '→ ERRO:', String(e.message).split('\n')[0]); }
+  }
+}
+
 async function login(page) {
+  await sondar(page);
+  // 0) raiz do site — o portal de login pode morar aqui
+  await page.goto('https://bi.conlogsa.com.br/', { waitUntil: 'domcontentloaded', timeout: 60000 }).catch(e => log('goto raiz:', e.message));
+  await page.waitForTimeout(6000);
+  await shot(page, '00-raiz');
+  await diag(page, 'raiz');
+  if (await preencherForm(page)) { await shot(page, '00b-raiz-pos-form'); await diag(page, 'raiz pós-form'); }
+
   // 1) tenta o app direto (sessão/NTLM podem bastar)
   log('abrindo o app:', ENTRY);
   await page.goto(ENTRY, { waitUntil: 'domcontentloaded', timeout: 90000 }).catch(e => log('goto app:', e.message));
