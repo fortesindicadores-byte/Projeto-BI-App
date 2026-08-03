@@ -365,7 +365,7 @@ td.obs{max-width:140px;overflow:hidden;text-overflow:ellipsis;}
       </div>
       <div class="mini-tbl-wrap">
         <table class="mini-tbl">
-          <thead id="th-modelo"><tr><th>Tipo</th><th class="num">Qtde</th><th class="num">Idade Média</th></tr></thead>
+          <thead id="th-modelo"><tr><th>Tipo</th><th class="num">Qtde</th><th class="num">Idade Média</th><th class="num">% da frota</th></tr></thead>
           <tbody id="tb-modelo"></tbody>
         </table>
       </div>
@@ -654,18 +654,18 @@ function renderMinis(rows){
       if(btn)btn.textContent='Ver por Tipo';
       set('tbl-modelo-title','Composição · Modelo');
       set('tbl-modelo-sub','Qtde e idade média por modelo');
-      $('th-modelo').innerHTML='<tr><th>Modelo</th><th>Marca</th><th class="num">Qtde</th><th class="num">Idade Média</th></tr>';
+      $('th-modelo').innerHTML='<tr><th>Modelo</th><th>Marca</th><th class="num">Qtde</th><th class="num">Idade Média</th><th class="num">% da frota</th></tr>';
       const m={};
       for(const r of rows){const k=r.modelo||'—';(m[k]=m[k]||{marca:r.marca,a:[]}).a.push(r);}
       const g=Object.entries(m).map(([k,v])=>({k,marca:v.marca,n:v.a.length,idade:avg(v.a.map(x=>x.idade))})).sort((a,b)=>b.n-a.n);
-      $('tb-modelo').innerHTML=g.map(x=>`<tr><td>${x.k}</td><td>${x.marca||'—'}</td><td class="num">${fmt(x.n)}</td><td class="num ${idadeCls(x.idade)}">${x.idade!=null?x.idade.toFixed(1):'—'}</td></tr>`).join('')||'<tr><td colspan="4" style="text-align:center;color:var(--text3);padding:20px">Sem dados</td></tr>';
+      $('tb-modelo').innerHTML=g.map(x=>`<tr><td>${x.k}</td><td>${x.marca||'—'}</td><td class="num">${fmt(x.n)}</td><td class="num ${idadeCls(x.idade)}">${x.idade!=null?x.idade.toFixed(1):'—'}</td><td class="num">${pct0(x.n/tot*100)}</td></tr>`).join('')||'<tr><td colspan="5" style="text-align:center;color:var(--text3);padding:20px">Sem dados</td></tr>';
     }else{
       if(btn)btn.textContent='Ver por Modelo';
       set('tbl-modelo-title','Composição · Tipo de Veículo');
       set('tbl-modelo-sub','Qtde e idade média por tipo');
-      $('th-modelo').innerHTML='<tr><th>Tipo</th><th class="num">Qtde</th><th class="num">Idade Média</th></tr>';
+      $('th-modelo').innerHTML='<tr><th>Tipo</th><th class="num">Qtde</th><th class="num">Idade Média</th><th class="num">% da frota</th></tr>';
       const g=groupCount(rows,r=>r.tipo).sort((a,b)=>b.n-a.n);
-      $('tb-modelo').innerHTML=g.map(x=>`<tr><td>${x.k}</td><td class="num">${fmt(x.n)}</td><td class="num ${idadeCls(x.idade)}">${x.idade!=null?x.idade.toFixed(1):'—'}</td></tr>`).join('')||'<tr><td colspan="3" style="text-align:center;color:var(--text3);padding:20px">Sem dados</td></tr>';
+      $('tb-modelo').innerHTML=g.map(x=>`<tr><td>${x.k}</td><td class="num">${fmt(x.n)}</td><td class="num ${idadeCls(x.idade)}">${x.idade!=null?x.idade.toFixed(1):'—'}</td><td class="num">${pct0(x.n/tot*100)}</td></tr>`).join('')||'<tr><td colspan="4" style="text-align:center;color:var(--text3);padding:20px">Sem dados</td></tr>';
     }
   }
   // Composição · Unidade ⇄ Projeto (toggle)
