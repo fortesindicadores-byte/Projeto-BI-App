@@ -22,7 +22,10 @@ const USER = (process.env.QLIK_USER || '').trim();
 const PASS = (process.env.QLIK_PASS || '').trim();
 // painel do DRE mostrado pelo Renan (03/08/2026): app 2a9d3451… · sheet 9b39dd9c…
 const APP_URL = 'https://bi.conlogsa.com.br/sense/app/2a9d3451-ce57-4a87-999d-df23c17c2a03/sheet/9b39dd9c-4c4b-48f7-817b-0d6b67c47e09/state/analysis';
-const ENTRY = (process.env.QLIK_URL || APP_URL).trim();
+// o deep-link sem qlikTicket dá 404 → o acesso passa por um PORTAL que emite o
+// ticket (endereço da porta 4244, do gerenciador de senhas do Renan)
+const PORTAL = (process.env.QLIK_URL || 'https://bi.conlogsa.com.br:4244').trim();
+const ENTRY = APP_URL;
 const SB_URL = 'https://lozwipoeacpvplgkrxkq.supabase.co';
 const SB_KEY = (process.env.GEM_SUPABASE_SERVICE_KEY || '').trim();
 
@@ -31,6 +34,8 @@ const SB_KEY = (process.env.GEM_SUPABASE_SERVICE_KEY || '').trim();
 // Mecânica de seleção do Qlik: clicar no filterpane → clicar no valor →
 // confirmar no ✓ VERDE. A tabela só renderiza depois dos filtros.
 const MES_Q = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
+// ESTRUTURAS FROTA (Renan, 03/08/2026) — seleção na coluna "Cód. Estrutura"
+const ESTRUTURAS_FROTA = ['170', '171', '173', '174', '176', '177', '178', '180', '181', '183', '185', '186', '398', '572'];
 // Regra de período (Renan, 03/08/2026): até o dia 10 → mês ANTERIOR; depois → mês atual.
 const refMes = () => { const h = new Date(); return h.getDate() <= 10 ? new Date(h.getFullYear(), h.getMonth() - 1, 1) : h; };
 const ABAS = [
@@ -44,9 +49,6 @@ const ABAS = [
     ]; },
     colunas: [{ coluna: 'Cód. Estrutura', valores: ESTRUTURAS_FROTA }] },
 ];
-
-// ESTRUTURAS FROTA (Renan, 03/08/2026) — seleção na coluna "Cód. Estrutura"
-const ESTRUTURAS_FROTA = ['170', '171', '173', '174', '176', '177', '178', '180', '181', '183', '185', '186', '398', '572'];
 
 // seleção MÚLTIPLA pela LUPA do cabeçalho de uma coluna da tabela:
 // abre a busca da coluna → para cada valor: digita, clica no item exato → ✓ verde
@@ -97,34 +99,89 @@ async function shot(page, nome) {
   catch (e) { log('screenshot falhou:', nome, e.message); }
 }
 
-async function login(page) {
-  log('abrindo', ENTRY);
-  await page.goto(ENTRY, { waitUntil: 'domcontentloaded', timeout: 90000 }).catch(e => log('goto:', e.message));
-  await page.waitForTimeout(8000);
-  await shot(page, '01-entrada');
-  log('URL após abrir:', page.url());
-
-  // form de login (Qlik Sense "internal forms authentication" ou tela custom)
-  const pInp = page.locator('input[type="password"]').first();
-  if (await pInp.count()) {
-    const uInp = page.locator('input[type="text"], input[type="email"], input[name*="user" i], input[id*="user" i]').first();
-    if (await uInp.count()) await uInp.fill(USER);
-    await pInp.fill(PASS);
-    await shot(page, '02-preenchido');
-    const btn = page.locator('button[type="submit"], input[type="submit"], button:has-text("Entrar"), button:has-text("Login"), button:has-text("Log in"), button:has-text("Acessar")').first();
-    if (await btn.count()) await btn.click(); else await pInp.press('Enter');
-    await page.waitForLoadState('networkidle', { timeout: 60000 }).catch(() => {});
-    await page.waitForTimeout(10000);
-  } else {
-    log('sem formulário de senha visível — pode ser NTLM (httpCredentials) ou sessão direta.');
-  }
-  await shot(page, '03-pos-login');
-  log('pós-login em:', page.url());
+async function diag(page, rotulo) {
   const titulo = await page.title().catch(() => '');
-  log('título da página:', titulo);
-  // diagnóstico: o app do Qlik carregou? (objetos qv-*/qlik na página)
   const objs = await page.locator('[tid], .qv-object, [class*="qv-"]').count().catch(() => 0);
-  log('objetos Qlik detectados:', objs);
+  const corpo = (await page.locator('body').innerText().catch(() => '')).replace(/\s+/g, ' ').slice(0, 220);
+  log(`[${rotulo}] URL: ${page.url()} | título: ${titulo} | objetos Qlik: ${objs}`);
+  if (corpo) log(`[${rotulo}] corpo: ${corpo}`);
+  return objs;
+}
+
+// tenta preencher formulário de login (se houver) na página atual
+async function preencherForm(page) {
+  const pInp = page.locator('input[type="password"]').filter({ visible: true }).first();
+  if (!(await pInp.count())) return false;
+  const uInp = page.locator('input[type="text"], input[type="email"], input[name*="user" i], input[id*="user" i]').filter({ visible: true }).first();
+  if (await uInp.count()) await uInp.fill(USER);
+  await pInp.fill(PASS);
+  await shot(page, '02-form-preenchido');
+  const btn = page.locator('button[type="submit"], input[type="submit"], button:has-text("Entrar"), button:has-text("Login"), button:has-text("Log in"), button:has-text("Acessar")').first();
+  if (await btn.count()) await btn.click(); else await pInp.press('Enter');
+  await page.waitForLoadState('networkidle', { timeout: 60000 }).catch(() => {});
+  await page.waitForTimeout(10000);
+  return true;
+}
+
+// sondagem de rotas: descobre por onde o servidor aceita conversa
+async function sondar(page) {
+  const alvos = [
+    'https://bi.conlogsa.com.br/',
+    'https://bi.conlogsa.com.br/login',
+    'https://bi.conlogsa.com.br/qlik/',
+    'https://bi.conlogsa.com.br/bi/',
+    'https://bi.conlogsa.com.br/sense/hub',
+    'https://bi.conlogsa.com.br:4244/',
+    'http://bi.conlogsa.com.br:4244/',
+    'https://bi.conlogsa.com.br:4243/qps/user',
+  ];
+  for (const u of alvos) {
+    try {
+      const r = await page.request.get(u, { timeout: 15000, maxRedirects: 0 });
+      log('sonda', u, '→', r.status(), r.headers()['location'] || '');
+    } catch (e) { log('sonda', u, '→ ERRO:', String(e.message).split('\n')[0]); }
+  }
+}
+
+async function login(page) {
+  await sondar(page);
+  // 0) raiz do site — o portal de login pode morar aqui
+  await page.goto('https://bi.conlogsa.com.br/', { waitUntil: 'domcontentloaded', timeout: 60000 }).catch(e => log('goto raiz:', e.message));
+  await page.waitForTimeout(6000);
+  await shot(page, '00-raiz');
+  await diag(page, 'raiz');
+  if (await preencherForm(page)) { await shot(page, '00b-raiz-pos-form'); await diag(page, 'raiz pós-form'); }
+
+  // 1) tenta o app direto (sessão/NTLM podem bastar)
+  log('abrindo o app:', ENTRY);
+  await page.goto(ENTRY, { waitUntil: 'domcontentloaded', timeout: 90000 }).catch(e => log('goto app:', e.message));
+  await page.waitForTimeout(8000);
+  await shot(page, '01-app-direto');
+  if (await preencherForm(page)) { await shot(page, '03-pos-form'); }
+  let objs = await diag(page, 'app direto');
+  if (objs > 0) return;
+
+  // 2) portal de login (emite o qlikTicket) — endereço da porta 4244
+  log('app não abriu direto — tentando o portal:', PORTAL);
+  await page.goto(PORTAL, { waitUntil: 'domcontentloaded', timeout: 90000 }).catch(e => log('goto portal:', e.message));
+  await page.waitForTimeout(8000);
+  await shot(page, '04-portal');
+  await diag(page, 'portal');
+  if (await preencherForm(page)) { await shot(page, '05-portal-pos-form'); await diag(page, 'portal pós-form'); }
+
+  // 3) volta ao app (o ticket/sessão deve valer agora)
+  await page.goto(ENTRY, { waitUntil: 'domcontentloaded', timeout: 90000 }).catch(e => log('goto app 2:', e.message));
+  await page.waitForTimeout(10000);
+  await shot(page, '06-app-pos-portal');
+  objs = await diag(page, 'app pós-portal');
+  if (objs > 0) return;
+
+  // 4) último recurso: hub do Sense
+  await page.goto('https://bi.conlogsa.com.br/hub', { waitUntil: 'domcontentloaded', timeout: 90000 }).catch(e => log('goto hub:', e.message));
+  await page.waitForTimeout(8000);
+  await shot(page, '07-hub');
+  await diag(page, 'hub');
+  if (await preencherForm(page)) { await shot(page, '08-hub-pos-form'); await diag(page, 'hub pós-form'); }
 }
 
 // limpa TODAS as seleções (barra do topo) — retry não pode "des-selecionar" filtro já aplicado
