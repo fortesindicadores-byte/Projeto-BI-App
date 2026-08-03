@@ -27,8 +27,38 @@ const SB_URL = 'https://lozwipoeacpvplgkrxkq.supabase.co';
 const SB_KEY = (process.env.GEM_SUPABASE_SERVICE_KEY || '').trim();
 
 // ── ABAS (preencher conforme o Renan mostra o passo a passo do export) ──
-// { chave:'custos-qlik', visual:'<título>' } — exportação via menu do visual.
-const ABAS = [];
+// { chave:'custos-qlik', filtros:()=>[...], visual:'<título>' }
+// Mecânica de seleção do Qlik: clicar no filterpane → clicar no valor →
+// confirmar no ✓ VERDE. A tabela só renderiza depois dos filtros.
+const MES_Q = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
+// Regra de período (Renan, 03/08/2026): até o dia 10 → mês ANTERIOR; depois → mês atual.
+const refMes = () => { const h = new Date(); return h.getDate() <= 10 ? new Date(h.getFullYear(), h.getMonth() - 1, 1) : h; };
+const ABAS = [
+  // export a mapear: qual visual/tabela e por qual menu — aguardando o Renan
+  // { chave: 'custos-qlik',
+  //   filtros: () => { const r = refMes(); return [
+  //     { campo: 'ANO', valor: String(r.getFullYear()) },
+  //     { campo: 'MÊS', valor: MES_Q[r.getMonth()] },
+  //     { campo: 'NÍVEL 1', valor: 'OPERAÇÕES DEDICADAS AM' },   // 1.3.1. OPERAÇÕES DEDICADAS AMBEV (texto truncado na tela — casar por "contém")
+  //   ]; } },
+];
+
+// aplica um filtro (filterpane) do Qlik Sense: abre, clica no valor, ✓ verde
+async function aplicarFiltroQlik(page, campo, valor) {
+  const fp = page.getByText(campo, { exact: true }).filter({ visible: true }).first();
+  await fp.click({ timeout: 15000 });
+  await page.waitForTimeout(1500);
+  // valor dentro do popup do listbox (fallback: texto exato em qualquer lugar visível)
+  let item = page.locator(`[role="listbox"] [role="option"], .qv-listbox li, [class*="listbox" i] [title]`).filter({ hasText: valor }).filter({ visible: true }).first();
+  if (!(await item.count())) item = page.getByText(valor, { exact: true }).filter({ visible: true }).last();
+  await item.click({ timeout: 10000 });
+  await page.waitForTimeout(800);
+  // confirmar no ✓ verde da barra de seleção
+  const ok = page.locator('[title*="Confirmar" i], [title*="Confirm" i], .sel-toolbar-confirm-button, [data-testid*="confirm" i], button.sel-toolbar-btn-confirm').filter({ visible: true }).first();
+  if (await ok.count()) await ok.click(); else await page.keyboard.press('Enter');
+  await page.waitForTimeout(4000);   // dá tempo da tabela recalcular
+  log(`filtro "${campo}" = "${valor}" aplicado`);
+}
 
 const ART = 'qlik-artifacts';
 fs.mkdirSync(ART, { recursive: true });
