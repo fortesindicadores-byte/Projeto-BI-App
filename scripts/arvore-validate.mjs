@@ -47,7 +47,7 @@ function match(f,{ano,ym,uni,proj}){
 
 async function main(){
   const [frota,disp,kml,rsl,arv]=await Promise.all([
-    gviz(VF,'Frota'), gviz(GV,'Dispersão de km'), gviz(KML,'Km/L'), gviz(GV,'R$/L'), gviz(GV,'Árvore Comb.'),
+    gviz(VF,'Frota'), gviz(GV,'Dispersão de km'), gviz(KML,'Km/L'), gviz(KML,'R$/L'), gviz(GV,'Árvore Comb.'),
   ]);
   console.log(`linhas: Frota=${frota.rows.length} Dispersão=${disp.rows.length} Km/L=${kml.rows.length} R$/L=${rsl.rows.length} ÁrvoreComb=${arv.rows.length}`);
   // ── Diagnóstico de cobertura por ano (via vigência col 0) ──
@@ -114,5 +114,41 @@ async function main(){
     console.log(`R$/Litro     NOVO rem=${fmt(ra.rem)} real=${fmt(ra.real)}   (lógica painel R$/L)`);
     console.log(`Km/L         NOVO rem=${fmt(ka.rem)} real=${fmt(ka.real)}   (lógica painel Eficiência)`);
   }
+
+  // ── Diagnóstico "R$/Litro Rem sumiu": cobertura mês a mês (últimos 8 meses com litros) ──
+  console.log('\n══════════ COBERTURA R$/L (rem) — mês a mês ══════════');
+  console.log(`R$/L: ${rsl.rows.length} linha(s) | coluna Unidade Benner=${cProjR} | coluna Vigência=${cVigR} | coluna PrecoOperadora=${cPreco} | coluna TipoCombustivel=${cFuelR}`);
+  const kmYms=[...new Set(kml.rows.map(r=>{const d=parseVig(r[K.vig]);return d?vigKey(d):null;}).filter(Boolean))].sort();
+  const last8=kmYms.slice(-8);
+  for(const ym of last8){
+    const rowsYm=kml.rows.filter(r=>{const d=parseVig(r[K.vig]);return d&&vigKey(d)===ym;});
+    const comLitros=rowsYm.filter(r=>(+(r[K.litros])||0)>0);
+    const comRem=comLitros.filter(r=>remPriceFor(r)!=null);
+    const ra=rslAgg({ym:[ym]});
+    console.log(`${ym}: linhas Km/L=${rowsYm.length} com litros=${comLitros.length} com preço rem achado=${comRem.length}/${comLitros.length}  → R$/L rem=${fmt(ra.rem)} real=${fmt(ra.real)}`);
+    if(comLitros.length && comRem.length===0){
+      const amostra=comLitros.slice(0,3).map(r=>`proj="${r[K.proj]}" fuel="${r[K.fuel]}"`);
+      console.log(`   ⚠ nenhuma linha achou preço — amostra Km/L: ${amostra.join(' | ')}`);
+      const amostraR=rsl.rows.filter(r=>{const d=parseVig(r[cVigR]);return d&&vigKey(d)===ym;}).slice(0,3).map(r=>`proj="${r[cProjR]}" fuel="${r[cFuelR]}" preco=${r[cPreco]}`);
+      console.log(`   ⚠ amostra R$/L no mesmo mês: ${amostraR.length?amostraR.join(' | '):'(NENHUMA LINHA DE R$/L NESSE MÊS)'}`);
+    } else if(comLitros.length && comRem.length<comLitros.length){
+      // cobertura parcial: quais projetos do Km/L não acharam preço vs quais "Unidade Benner" existem no R$/L nesse mês
+      const semPreco=new Set(comLitros.filter(r=>remPriceFor(r)==null).map(r=>String(r[K.proj]||'')));
+      const projsRsl=new Set(rsl.rows.filter(r=>{const d=parseVig(r[cVigR]);return d&&vigKey(d)===ym;}).map(r=>String(r[cProjR]||'')));
+      console.log(`   projetos Km/L SEM preço achado: ${[...semPreco].join(' | ')}`);
+      console.log(`   "Unidade Benner" presentes no R$/L nesse mês: ${[...projsRsl].join(' | ')}`);
+    }
+  }
+
+  // ── Foco GRL: valores CRUS (sem normalizar) de "Unidade Benner" no R$/L vs "Projeto" no Km/L ──
+  console.log('\n══════════ FOCO: como o GRL aparece em cada aba (valores crus) ══════════');
+  const rslAllBenner=[...new Set(rsl.rows.map(r=>String(r[cProjR]||'')))];
+  const kmlAllProj=[...new Set(kml.rows.map(r=>String(r[K.proj]||'')))];
+  console.log('Unidade Benner distintos (R$/L, TODOS os meses):', JSON.stringify(rslAllBenner));
+  console.log('Projeto distintos (Km/L, contém "GRL" ou "GUARU"):', JSON.stringify(kmlAllProj.filter(p=>/GRL|GUARU/i.test(p))));
+  console.log('Unidade Benner que contém "GRL" ou "GUARU":', JSON.stringify(rslAllBenner.filter(p=>/GRL|GUARU/i.test(p))));
+  // amostra crua de linhas R$/L (todas as colunas) — pra ver se a coluna certa é mesmo "unidade benner"
+  console.log('\nColunas da aba R$/L:', JSON.stringify(rsl.cols));
+  console.log('Amostra de 3 linhas cruas da R$/L:', JSON.stringify(rsl.rows.slice(0,3)));
 }
 main().catch(e=>{console.error('Falha:',e);process.exit(1);});
