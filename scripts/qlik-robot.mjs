@@ -40,8 +40,36 @@ const ABAS = [
   //     { campo: 'ANO', valor: String(r.getFullYear()) },
   //     { campo: 'MÊS', valor: MES_Q[r.getMonth()] },
   //     { campo: 'NÍVEL 1', valor: 'OPERAÇÕES DEDICADAS AM' },   // 1.3.1. OPERAÇÕES DEDICADAS AMBEV (texto truncado na tela — casar por "contém")
-  //   ]; } },
+  //   ]; },
+  //   colunas: [{ coluna: 'Cód. Estrutura', valores: ESTRUTURAS_FROTA }] },
 ];
+
+// ESTRUTURAS FROTA (Renan, 03/08/2026) — seleção na coluna "Cód. Estrutura"
+const ESTRUTURAS_FROTA = ['170', '171', '173', '174', '176', '177', '178', '180', '181', '183', '185', '186', '398', '572'];
+
+// seleção MÚLTIPLA pela LUPA do cabeçalho de uma coluna da tabela:
+// abre a busca da coluna → para cada valor: digita, clica no item exato → ✓ verde
+async function selecionarNaColuna(page, coluna, valores) {
+  const th = page.locator(`[role="columnheader"]:has-text("${coluna}"), th:has-text("${coluna}"), .qv-st-header-cell:has-text("${coluna}")`).filter({ visible: true }).first();
+  const lupa = th.locator('[class*="search" i], [data-testid*="search" i], .lui-icon--search').first();
+  if (await lupa.count()) await lupa.click({ timeout: 10000 }); else await th.click({ timeout: 10000 });
+  await page.waitForTimeout(1500);
+  const busca = page.locator('input[type="search"], [class*="listbox" i] input, [role="listbox"] input, input[placeholder*="esquis" i], input[placeholder*="earch" i]').filter({ visible: true }).first();
+  for (const v of valores) {
+    try {
+      await busca.fill(String(v));
+      await page.waitForTimeout(900);
+      const item = page.locator(`[role="listbox"] [role="option"], .qv-listbox li, [class*="listbox" i] [title]`).filter({ visible: true }).filter({ hasText: new RegExp('^\\s*' + String(v) + '\\s*$') }).first();
+      if (await item.count()) { await item.click(); log(`coluna "${coluna}": ${v} selecionado`); }
+      else log(`coluna "${coluna}": valor ${v} NÃO apareceu na busca`);
+      await page.waitForTimeout(400);
+    } catch (e) { log(`coluna "${coluna}": falha em ${v}:`, e.message); }
+  }
+  const ok = page.locator('[title*="Confirmar" i], [title*="Confirm" i], .sel-toolbar-confirm-button, [data-testid*="confirm" i], button.sel-toolbar-btn-confirm').filter({ visible: true }).first();
+  if (await ok.count()) await ok.click(); else await page.keyboard.press('Enter');
+  await page.waitForTimeout(4000);
+  log(`coluna "${coluna}": ${valores.length} valores confirmados`);
+}
 
 // aplica um filtro (filterpane) do Qlik Sense: abre, clica no valor, ✓ verde
 async function aplicarFiltroQlik(page, campo, valor) {
