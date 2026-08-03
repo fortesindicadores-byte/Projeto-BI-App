@@ -684,7 +684,9 @@ Automatiza a coleta dos dados que hoje são copiados manualmente do BI do Ginfo 
 
 Em paralelo: perguntar ao Ginfo se existe API/export oficial (trocaria o RPA por consulta estável).
 
-## Robô Qlik (DRE → Custos) — em construção (03/08/2026)
+## Robô Qlik (DRE → Custos) — EM ESPERA (03/08/2026)
+
+**Status: PARQUEADO — decisão do Renan 03/08/2026.** O robô está 100% codificado (receita dos 5 passos abaixo), mas o Qlik Sense da Conlog **não é acessível pela internet**: `bi.conlogsa.com.br` público serve só o **GLPI** (chamados) — `/sense` dá 404 e a porta 4244 não responde de fora (split DNS: o Renan acessa pela rede interna/VPN). O GitHub Actions não alcança. Opções mapeadas: (1) TI publicar o Qlik externamente · (2) self-hosted runner na rede da Conlog · (3) script agendado no PC do Renan · (4) **ler direto do BANCO DE DADOS fonte do DRE — caminho que o Renan quer explorar no futuro**. Até lá: **aba Custos segue manual**. NÃO religar sem resolver a rede.
 
 Substitui a aba **Custos** do Farol Semanal (única que ainda era manual, colada do DRE). Mesmo desenho do robô Ginfo: `scripts/qlik-robot.mjs` + `.github/workflows/qlik-robot.yml` (dispatch modo login/run) → grava em `ginfo_snapshot` (chave prevista: `custos-qlik`) → Farol/painéis leem de lá.
 
