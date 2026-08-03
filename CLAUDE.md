@@ -11,6 +11,8 @@ Cada painel é um arquivo `index.html` autocontido — sem framework, sem backen
 
 > **Git push:** Hoje `git push origin main` **funciona** normalmente (deploy automático no GitHub Pages). _(Nota histórica: o repo foi renomeado de `Projeto-BI-App`; numa época o proxy local rejeitava o push e era preciso usar `mcp__github__push_files` — não é mais o caso.)_
 
+> **SQL para o Supabase:** sempre que houver um script SQL para o Renan rodar (mesmo que já exista em `scripts/*.sql`), **colar o SQL completo direto no chat** — ele copia dali para o Supabase SQL Editor; não basta apontar o arquivo.
+
 ---
 
 ## Estrutura de pastas
@@ -660,6 +662,20 @@ Automatiza a coleta dos dados que hoje são copiados manualmente do BI do Ginfo 
 - **CHECKLIST / ADERÊNCIA 031120** (menu FROTA → **1.3 - ADERÊNCIA FROTA - 031120**; URL `bi/76e82774-d5d4-4cda-bb13-65a1a64387ef`): exportar a **única tabela** da página (traz o ano todo: Mapa | Data do mapa | Data OS | Início/Fim técnico | Problema | Nº OS | Tipo Checklist (Saída/Retorno) | Status | Filial | Motorista | Placa | Tipo Veículo | Projeto) → chave `checklist-031120`. Alimenta o farol NOVO **"Checklist"** (pedido 02/08/2026): card **"Saída com OS Crítica"** = contagem das linhas com Tipo Checklist = "Saída" no MÊS ATUAL + tabela (Data | Motorista | Placa | Tipo Veículo | Projeto | Tipo Checklist | Status | Problema). **É a 1ª base do Farol lida do SUPABASE** (`ginfo_snapshot`) em vez do Sheets — `loadChecklist()`/`renderChk()` no `farol-core.js`; até a 1ª coleta real do robô a seção mostra "Aguardando a primeira coleta".
 
 - **OS EM ABERTO** (menu FROTA → **2.4 - ORDEM SERVIÇO**; URL `bi/81e8f48c-09f2-4bc7-a84e-0718378732c9`): botão direito no card **"NÃO EXECUTADAS"** → Drill-through → **"Detalhes Ordem Serviço"** → exportar a tabela (Nº OS | Data | Status | Filial | Origem | Tipo | Criticidade | SLA Atendimento | SLA Serviço | Segmento | Fornecedor | Mecânico | Motorista | Placa) → aba `OS em Aberto` do Farol. A coluna A da planilha (**"Dias em Aberto"**) é fórmula `AGORA() − Data` (negativo → 0) — o leitor recalcula na exibição; o robô não grava.
+
+**Farol lê do SUPABASE (02/08/2026) — Sheets é só FALLBACK:** `farolLoad()` busca `ginfo_snapshot` e converte cada base com um adaptador (`GADAPT`) que renomeia as colunas do export p/ os nomes que os leitores já usavam e recalcula as colunas de fórmula da planilha (regras confirmadas pelo Renan): **Preventivas** Aderência = Status "Vencido"→0 senão 1, Projeto = join com base `ativos` pela placa · **CIFV** Aderência = Desconto Total≠0→0 senão 1 · **Stress Test (V e E)** aderência = desconto 0→1 senão 0 (`stressVPct` mudou de COM SAÍDA p/ sem-desconto) · **OS** Dias em Aberto = hoje−Data (mín 0). Se uma base faltar/vier vazia → cai p/ a aba do Sheets. Datas de xlsx = serial do Excel → `parseFlex()`.
+
+**Colunas reais dos exports (log do robô, 02/08/2026):**
+- `ativos`: Filial | Projeto | Placa | Marca | Modelo | Tipo Veículo | Estado | Ano Fabricação
+- `stress-test-frota`: Período | Empresa | Filial Freightech | Placa Freightech | Projeto | Pallets | Freightech | Última Saída | Origem | Destino | Saída | Saída na FIlial | **Viagens** (planilha: Total Viagens) | Justificativa | Status | Desconto
+- `stress-test-empilhadeira`: Prop. FT | Empresa FT | Filial FT | Filial GINFO | Filial FT x GINFO | Marca | Perfil | Placa Ginfo | Chassis | Contratada | Parada? | Status Just. | Motivo | Desconto | "Parada? " | Status Just._1 | Motivo_1 | "Desconto " | Desc. Total (1ª/2ª quinzena = colunas duplicadas; a 2ª vem com sufixo/espaço)
+- `civf`: Transportador | Filial Freightech | Veículo | Projeto | Data CIVF | Status | Manutenção | Lavação | Desconto Manutenção | Desconto Lavagem | Desconto Total
+- `preventivas`: Placa | Marca | Modelo | Último Ciclo | Próximo Ciclo | Km/Hr Intervalo | Dias Intervalo | Última | Próxima | Km/Hr Última | Km/Hr Próxima | Km/Hr Atual | **Dias Próxima** | **Km/Hr Próxima_1** (= KM/HR P/ Próxima) | Status | OS Aberta | Filial (SEM Projeto/Unidade — join com `ativos`)
+- `alinhamentos`: Filial | Placa | Próx. Evento | Status | Dias | Documento
+- `os-em-aberto`: Nº OS | Data | Status | Filial | Origem | Tipo | Criticidade | SLA Atendimento | SLA Serviço | Segmento | Fornecedor | Mecânico | Motorista | Placa | Tipo Veículo | Data Início | Data Fim | Tempo OS | Observação | NPS | Avaliador | Valor Total
+- `checklist-031120`: **PENDENTE — pegando a tabela errada** (resumo Motorista|Aderência). O relatório detalhado (Mapa|Data do mapa|…) não expõe essas colunas como columnheader na tela → **pedir PRINT da página 1.3 - ADERÊNCIA FROTA - 031120 ao Renan** p/ cravar o alvo; até lá a aba é `opcional: true` (erro não derruba o run) e o Farol Checklist mostra "aguardando".
+
+**Painel Ativos (`/ativos/`, cluster Visão Geral, 02/08/2026):** composição da frota lendo `ginfo_snapshot['ativos']` (precisa login do hub) — Qtde, Idade Média, faixas de idade, por unidade/tipo/modelo, tabelão do mais antigo p/ o mais novo. Estilo Disponibilidade.
 
 **Abas mapeadas (conforme o Renan mostra):**
 - **Custos** — FORA do escopo do robô: vem do DRE (manual) e será substituída pela **Carta de Custos** no futuro. Não mexer por enquanto. (Colunas: Δ ORÇ. | Δ FCT | Vigência | ESTRUTURA | UNIDADE | NÍVEL 3 | CONTA GERENCIAL | MÊS | ANO | ORÇADO | REMUNERADO | REALIZADO.)

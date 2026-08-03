@@ -95,10 +95,12 @@ const ABAS = [
   // (Mapa | Data do mapa | Data OS | Início/Fim técnico | Problema | Nº OS |
   // Tipo Checklist | Status | Filial | Motorista | Placa | Tipo Veículo |
   // Projeto). Alimenta o farol NOVO "Checklist" (Saída com OS Crítica do mês).
-  // (a página tem outros grids pequenos — mirar pelas colunas candidatas; os
-  // nomes NA TELA podem diferir dos campos do export — pedir print se falhar)
+  // ATENÇÃO: a coluna 'Motorista' NÃO serve de alvo — ela acha o resumo
+  // Motorista×Aderência (2 colunas) em vez do relatório detalhado. Falta um
+  // PRINT da página do Renan p/ cravar o alvo; até lá a aba é opcional
+  // (erro não derruba o run diário).
   { chave: 'checklist-031120', url: 'https://bi.ginfo.app.br/bi/76e82774-d5d4-4cda-bb13-65a1a64387ef?autoAuth=true&ctid=c16300de-7070-4b58-80c8-af99af1e1f65',
-    menu: ['FROTA', '1.3 - ADERÊNCIA FROTA - 031120'], header: ['Data do mapa', 'Problema', 'Motorista', 'Mapa'] },
+    menu: ['FROTA', '1.3 - ADERÊNCIA FROTA - 031120'], header: ['Data do mapa', 'Problema', 'Mapa'], opcional: true },
 ];
 
 const ART = 'ginfo-artifacts';
@@ -499,6 +501,7 @@ async function main() {
           if (/\/login/i.test(page.url())) { log('sessão caiu — refazendo o login'); await login(page); }
           const arq = await exportarVisual(page, aba);
           const linhas = await xlsxParaLinhas(arq);
+          log('colunas de', aba.chave + ':', JSON.stringify(Object.keys(linhas[0] || {})));
           await gravarSupabase(aba.chave, linhas);
           // o dado fica SÓ no banco: apaga o arquivo baixado (sem service key,
           // é dry-run e o xlsx fica nos artifacts p/ conferência)
@@ -507,7 +510,8 @@ async function main() {
         } catch (e) {
           log(`ERRO em ${aba.chave} (tentativa ${tent}):`, e.message);
           await shot(page, '99-erro-' + aba.chave + '-t' + tent);
-          if (tent === 2) erros++;
+          if (tent === 2 && !aba.opcional) erros++;
+          if (tent === 2 && aba.opcional) log(`(${aba.chave} é opcional — não derruba o run)`);
         }
       }
     }
