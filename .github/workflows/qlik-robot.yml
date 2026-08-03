@@ -1,0 +1,50 @@
+name: Qlik Robot (DRE -> Supabase)
+
+# Exporta a base de Custos do Qlik Sense (App DRE Conlog I Oficial) e grava em
+# ginfo_snapshot (Supabase) — substitui a aba "Custos" do Farol Semanal.
+# 1ª fase: rodar manualmente no modo "login" p/ validar o acesso (screenshots
+# ficam nos artifacts do run). Cron entra quando o export estiver validado.
+on:
+  workflow_dispatch:
+    inputs:
+      modo:
+        description: "login = só testa o acesso · run = exporta e grava"
+        required: true
+        default: "login"
+        type: choice
+        options: [login, run]
+
+concurrency:
+  group: qlik-robot
+  cancel-in-progress: false
+
+jobs:
+  robo:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Instalar Playwright + xlsx
+        run: |
+          npm init -y >/dev/null 2>&1
+          npm i --no-audit --no-fund playwright xlsx
+          npx playwright install --with-deps chromium
+      - name: Rodar robô
+        run: node scripts/qlik-robot.mjs
+        env:
+          QLIK_MODE:                ${{ github.event.inputs.modo || 'run' }}
+          QLIK_USER:                ${{ secrets.QLIK_USER }}
+          QLIK_PASS:                ${{ secrets.QLIK_PASS }}
+          QLIK_URL:                 ${{ secrets.QLIK_URL }}
+          GEM_SUPABASE_SERVICE_KEY: ${{ secrets.GEM_SUPABASE_SERVICE_KEY }}
+      - name: Publicar screenshots/downloads (debug)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: qlik-artifacts
+          path: qlik-artifacts/
+          if-no-files-found: ignore
+          retention-days: 7

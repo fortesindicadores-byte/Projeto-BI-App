@@ -684,6 +684,15 @@ Automatiza a coleta dos dados que hoje são copiados manualmente do BI do Ginfo 
 
 Em paralelo: perguntar ao Ginfo se existe API/export oficial (trocaria o RPA por consulta estável).
 
+## Robô Qlik (DRE → Custos) — em construção (03/08/2026)
+
+Substitui a aba **Custos** do Farol Semanal (única que ainda era manual, colada do DRE). Mesmo desenho do robô Ginfo: `scripts/qlik-robot.mjs` + `.github/workflows/qlik-robot.yml` (dispatch modo login/run) → grava em `ginfo_snapshot` (chave prevista: `custos-qlik`) → Farol/painéis leem de lá.
+
+- **Servidor:** Qlik Sense Enterprise próprio da Conlog — `bi.conlogsa.com.br` (IP público 187.85.144.84; a porta 4244 aparece no gerenciador de senhas; auth com `qlikTicket` na URL). Login: conta de serviço formato `dominio\usuario` (Secrets `QLIK_USER`/`QLIK_PASS`; senha passou pelo chat em 03/08 → sugerir troca depois). `httpCredentials` no Playwright cobre NTLM; form de login coberto também.
+- **Painel:** App **DRE Conlog I Oficial** → pasta **"ANALISE CONTAS FROTA - VIEW 2 - (FONTE DE DADOS RENAN)"** — URL `sense/app/2a9d3451-ce57-4a87-999d-df23c17c2a03/sheet/9b39dd9c-4c4b-48f7-817b-0d6b67c47e09`.
+- **Receita (conforme o Renan mostra, em andamento):** a tabela só aparece após aplicar os filtros. Filtros no topo: ANO | MÊS | NÍVEL 1 | NÍVEL 2 | NÍVEL 3 | EMPRESA. Mecânica de seleção do Qlik: abrir o filterpane → clicar no valor → confirmar no **✓ verde**. Passo 1: **ANO** = ano do mês de referência. Passo 2: **MÊS** (valores "jan"…"dez" minúsculos) — **até o dia 10 = mês anterior, depois = mês atual**. Passo 3: **NÍVEL 1 = "1.3.1. OPERAÇÕES DEDICADAS AMBEV"** (texto truncado na tela → casar por "contém OPERAÇÕES DEDICADAS"). Passo 4: **Cód. Estrutura** — seleção múltipla pela **LUPA do cabeçalho da coluna** na tabela (digita o número, clica no valor exato, repete, ✓ verde): **ESTRUTURAS FROTA = 170, 171, 173, 174, 176, 177, 178, 180, 181, 183, 185, 186, 398, 572** (Nível 4; barra mostra "ESTRUTURA 14 de 366"; campo real do NÍVEL 1 = `desc_ope`). Passo 5 (export): **botão direito na tabela → "Exportar dados" → submenu (Voltar/como imagem/para PDF/dados) → "Exportar dados" de novo → caixinha "Exportação concluída" → clicar no hiperlink azul** ("Clique aqui para baixar seu arquivo de dados") → xlsx. Chave no Supabase: `custos-qlik`. Retry limpa TODAS as seleções antes (clique em valor já selecionado DES-seleciona no Qlik). A tabela tem as colunas: Cód. Estrutura | Unidade | … | NÍVEL 3 | CONTA GERENCIAL | MÊS | ANO | ORÇADO | REMUNERADO | REALIZADO. **Sem REMUNERADO no mês** → o LEITOR aplica a lógica de TENDÊNCIA da Carta de Custos (nota do Renan 03/08). _(Falta: qual visual exporta e por qual menu — aguardando print.)_
+- Alvo: reproduzir as colunas da aba Custos (`Δ ORÇ. | Δ FCT | Vigência | ESTRUTURA | UNIDADE | NÍVEL 3 | CONTA GERENCIAL | MÊS | ANO | ORÇADO | REMUNERADO | REALIZADO`) — confirmar quais são fórmulas da planilha p/ recalcular na leitura.
+
 ## Roadmap
 
 **Painéis ativos:** Visão Financeira, Painel KM, Árvore de Combustível, Financeiro Pessoal (acesso direto)
