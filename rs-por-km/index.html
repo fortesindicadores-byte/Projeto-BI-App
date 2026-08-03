@@ -274,7 +274,8 @@ body.light-mode table.dre tbody tr{border-bottom:1px solid rgba(0,0,0,.06);}
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:3px;">
       <div class="tbl-title">R$/KM Detalhado</div>
       <div class="dim-toggle">
-        <button class="dim-btn active" data-dim="conta" onclick="setDim('conta')">Conta</button>
+        <button class="dim-btn active" data-dim="pacote" onclick="setDim('pacote')">Pacote</button>
+        <button class="dim-btn" data-dim="conta" onclick="setDim('conta')">Conta</button>
         <button class="dim-btn" data-dim="uni" onclick="setDim('uni')">Unidade</button>
         <button class="dim-btn" data-dim="proj" onclick="setDim('proj')">Projeto</button>
       </div>
@@ -285,7 +286,7 @@ body.light-mode table.dre tbody tr{border-bottom:1px solid rgba(0,0,0,.06);}
       <table class="dre">
         <thead>
           <tr class="cols">
-            <th class="w-conta" id="th-dim">CONTA</th>
+            <th class="w-conta" id="th-dim">PACOTE</th>
             <th class="w-num num">Rem</th>
             <th class="w-num num">Real</th>
             <th class="w-d   num">Δ</th>
@@ -340,6 +341,16 @@ const CONTAS_ALIAS = {
 };
 const CONTAS_EXCLUIR = new Set(['ICMS Crédito Presumido','IPVA e Licenciamento','Estorno ICMS','Seguros']);
 const PROJ_EXCLUIR   = new Set(['Apoio']);
+// Pacotes — mesmo agrupamento da Visão Financeira (PACOTES_MAP), aplicado às contas
+// já aliasadas (CONTAS_ALIAS) que sobrevivem ao universo de R$/KM.
+const PACOTES_MAP = {
+  'Combustíveis':'Combustíveis','Arla':'Combustíveis',
+  'Manutenção de Carrocerias':'Manutenções','Contratos de Manutenção Fabricante':'Manutenções',
+  'Materiais e Ferramentas de Oficina':'Manutenções','Personalização/Padronização':'Manutenções',
+  'Lavação de Veículos':'Manutenções','Manutenção de Veículos e Equip.':'Manutenções',
+  'Recapagens e Outros Serviços':'Pneus','Pneus Novos':'Pneus',
+};
+const getPac = c => PACOTES_MAP[c] || 'Outros';
 
 const fmtBrl  = v => { const neg=+v<0,a=Math.abs(+v); let s; if(a>=1e9) s=(a/1e9).toFixed(2)+' bi'; else if(a>=1e6) s=(a/1e6).toFixed(2)+' mi'; else if(a>=1e5) s=(a/1e3).toFixed(2)+'k'; else s=Math.round(a).toLocaleString('pt-BR'); return (neg?'-':'')+s; };
 const fmtBrlD = v => (+v>=0?'+':'')+fmtBrl(v);
@@ -350,7 +361,7 @@ const rsKmD   = v => v==null||!isFinite(v)?'—':(+v>=0?'+':'')+Number(v).toLoca
 const set     = (id,val) => { const e=document.getElementById(id); if(e) e.textContent=val; };
 const colI    = (el,bad) => { if(el) el.style.color=bad?'var(--red)':'var(--green)'; };
 
-let allRows=[], allKmRows=[], vigs=[], chRsKm=null, chImp=null, lastF=null, tableDim='conta';
+let allRows=[], allKmRows=[], vigs=[], chRsKm=null, chImp=null, lastF=null, tableDim='pacote';
 let _vigM1Done=false, _lastAnoKey='';
 
 // ── MULTI-SELECT ──
@@ -737,7 +748,23 @@ function renderTable(activeRows,activeKmRows,ytdRows,ytdKmRows,ctaFilter){
   const custoTot=sumCusto(agg(activeRows,ctaFilter)),custoYtd=sumCusto(agg(ytdRows,ctaFilter));
   let items=[];
 
-  if(tableDim==='conta'){
+  if(tableDim==='pacote'){
+    const ag=agg(activeRows,ctaFilter),agY=agg(ytdRows,ctaFilter);
+    const pm={},pmY={};
+    Object.entries(ag).forEach(([c,v])=>{if(c==='Receita Líquida')return;const p=getPac(c);if(!pm[p])pm[p]={rem:0,real:0};pm[p].rem+=v.rem;pm[p].real+=v.real;});
+    Object.entries(agY).forEach(([c,v])=>{if(c==='Receita Líquida')return;const p=getPac(c);if(!pmY[p])pmY[p]={rem:0,real:0};pmY[p].rem+=v.rem;pmY[p].real+=v.real;});
+    items=Object.keys(pm).map(p=>{
+      const d=pm[p]||{rem:0,real:0};
+      if(d.rem===0&&d.real===0)return null;
+      const dy=pmY[p]||{rem:0,real:0};
+      const rsR=kmTot.rem?d.rem/kmTot.rem:0,rsX=kmTot.real?d.real/kmTot.real:0;
+      const dRs=rsR-rsX,dP=rsR?dRs/Math.abs(rsR)*100:null,imp=dRs*kmTot.real;
+      const rsRY=kmYtd.rem?dy.rem/kmYtd.rem:0,rsXY=kmYtd.real?dy.real/kmYtd.real:0;
+      const dRsY=rsRY-rsXY,dPY=rsRY?dRsY/Math.abs(rsRY)*100:null,impY=dRsY*kmYtd.real;
+      return{k:p,rsR,rsX,dRs,dP,imp,rsRY,rsXY,dRsY,dPY,impY};
+    }).filter(Boolean);
+
+  }else if(tableDim==='conta'){
     const ag=agg(activeRows,ctaFilter),agY=agg(ytdRows,ctaFilter);
     items=CONTAS.map(c=>{
       const d=ag[c]||{rem:0,real:0},dy=agY[c]||{rem:0,real:0};
@@ -800,7 +827,7 @@ function setDim(dim){
   tableDim=dim;
   document.querySelectorAll('.dim-btn').forEach(b=>b.classList.toggle('active',b.dataset.dim===dim));
   const th=document.getElementById('th-dim');
-  if(th)th.textContent=dim==='uni'?'UNIDADE':dim==='proj'?'PROJETO':'CONTA';
+  if(th)th.textContent=dim==='uni'?'UNIDADE':dim==='proj'?'PROJETO':dim==='pacote'?'PACOTE':'CONTA';
   if(lastF){
     const ar=filterMes(allRows,lastF);
     const akr=filterKmRows(allKmRows,lastF);

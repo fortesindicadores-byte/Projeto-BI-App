@@ -114,5 +114,24 @@ async function main(){
     console.log(`R$/Litro     NOVO rem=${fmt(ra.rem)} real=${fmt(ra.real)}   (lógica painel R$/L)`);
     console.log(`Km/L         NOVO rem=${fmt(ka.rem)} real=${fmt(ka.real)}   (lógica painel Eficiência)`);
   }
+
+  // ── Diagnóstico "R$/Litro Rem sumiu": cobertura mês a mês (últimos 8 meses com litros) ──
+  console.log('\n══════════ COBERTURA R$/L (rem) — mês a mês ══════════');
+  console.log(`R$/L: ${rsl.rows.length} linha(s) | coluna Unidade Benner=${cProjR} | coluna Vigência=${cVigR} | coluna PrecoOperadora=${cPreco} | coluna TipoCombustivel=${cFuelR}`);
+  const kmYms=[...new Set(kml.rows.map(r=>{const d=parseVig(r[K.vig]);return d?vigKey(d):null;}).filter(Boolean))].sort();
+  const last8=kmYms.slice(-8);
+  for(const ym of last8){
+    const rowsYm=kml.rows.filter(r=>{const d=parseVig(r[K.vig]);return d&&vigKey(d)===ym;});
+    const comLitros=rowsYm.filter(r=>(+(r[K.litros])||0)>0);
+    const comRem=comLitros.filter(r=>remPriceFor(r)!=null);
+    const ra=rslAgg({ym:[ym]});
+    console.log(`${ym}: linhas Km/L=${rowsYm.length} com litros=${comLitros.length} com preço rem achado=${comRem.length}/${comLitros.length}  → R$/L rem=${fmt(ra.rem)} real=${fmt(ra.real)}`);
+    if(comLitros.length && comRem.length===0){
+      const amostra=comLitros.slice(0,3).map(r=>`proj="${r[K.proj]}" fuel="${r[K.fuel]}"`);
+      console.log(`   ⚠ nenhuma linha achou preço — amostra Km/L: ${amostra.join(' | ')}`);
+      const amostraR=rsl.rows.filter(r=>{const d=parseVig(r[cVigR]);return d&&vigKey(d)===ym;}).slice(0,3).map(r=>`proj="${r[cProjR]}" fuel="${r[cFuelR]}" preco=${r[cPreco]}`);
+      console.log(`   ⚠ amostra R$/L no mesmo mês: ${amostraR.length?amostraR.join(' | '):'(NENHUMA LINHA DE R$/L NESSE MÊS)'}`);
+    }
+  }
 }
 main().catch(e=>{console.error('Falha:',e);process.exit(1);});
