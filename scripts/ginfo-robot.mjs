@@ -109,7 +109,7 @@ const ABAS = [
       const h = new Date();
       const ref = h.getDate() <= 10 ? new Date(h.getFullYear(), h.getMonth() - 1, 1) : h;
       return [{ campo: 'Mês', valor: MES_FULL[ref.getMonth()] }];
-    }, opcional: true },
+    } },
 ];
 
 const ART = 'ginfo-artifacts';

@@ -673,7 +673,7 @@ Automatiza a coleta dos dados que hoje são copiados manualmente do BI do Ginfo 
 - `preventivas`: Placa | Marca | Modelo | Último Ciclo | Próximo Ciclo | Km/Hr Intervalo | Dias Intervalo | Última | Próxima | Km/Hr Última | Km/Hr Próxima | Km/Hr Atual | **Dias Próxima** | **Km/Hr Próxima_1** (= KM/HR P/ Próxima) | Status | OS Aberta | Filial (SEM Projeto/Unidade — join com `ativos`)
 - `alinhamentos`: Filial | Placa | Próx. Evento | Status | Dias | Documento
 - `os-em-aberto`: Nº OS | Data | Status | Filial | Origem | Tipo | Criticidade | SLA Atendimento | SLA Serviço | Segmento | Fornecedor | Mecânico | Motorista | Placa | Tipo Veículo | Data Início | Data Fim | Tempo OS | Observação | NPS | Avaliador | Valor Total
-- `checklist-031120`: **PENDENTE — pegando a tabela errada** (resumo Motorista|Aderência). O relatório detalhado (Mapa|Data do mapa|…) não expõe essas colunas como columnheader na tela → **pedir PRINT da página 1.3 - ADERÊNCIA FROTA - 031120 ao Renan** p/ cravar o alvo; até lá a aba é `opcional: true` (erro não derruba o run) e o Farol Checklist mostra "aguardando".
+- `checklist-031120`: Mapa | Data do mapa | Data OS | Início técnico | Fim técnico | Problema | Nº OS | Tipo Checklist | Status | Filial | Motorista | Placa | Tipo Veículo | Projeto — via drill-through do card "SAÍDAS COM OS CRÍTICA" + slicer Mês (validado 03/08/2026, 23 linhas de julho). A tabela da página PRINCIPAL não serve (coluna Motorista acha o resumo Motorista×Aderência).
 
 **Painel Ativos (`/ativos/`, cluster Visão Geral, 02/08/2026):** composição da frota lendo `ginfo_snapshot['ativos']` (precisa login do hub) — Qtde, Idade Média, faixas de idade, por unidade/tipo/modelo, tabelão do mais antigo p/ o mais novo. Estilo Disponibilidade.
 
