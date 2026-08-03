@@ -684,6 +684,15 @@ Automatiza a coleta dos dados que hoje são copiados manualmente do BI do Ginfo 
 
 Em paralelo: perguntar ao Ginfo se existe API/export oficial (trocaria o RPA por consulta estável).
 
+## Robô Qlik (DRE → Custos) — em construção (03/08/2026)
+
+Substitui a aba **Custos** do Farol Semanal (única que ainda era manual, colada do DRE). Mesmo desenho do robô Ginfo: `scripts/qlik-robot.mjs` + `.github/workflows/qlik-robot.yml` (dispatch modo login/run) → grava em `ginfo_snapshot` (chave prevista: `custos-qlik`) → Farol/painéis leem de lá.
+
+- **Servidor:** Qlik Sense Enterprise próprio da Conlog — `bi.conlogsa.com.br` (IP público 187.85.144.84; a porta 4244 aparece no gerenciador de senhas; auth com `qlikTicket` na URL). Login: conta de serviço formato `dominio\usuario` (Secrets `QLIK_USER`/`QLIK_PASS`; senha passou pelo chat em 03/08 → sugerir troca depois). `httpCredentials` no Playwright cobre NTLM; form de login coberto também.
+- **Painel:** App **DRE Conlog I Oficial** → pasta **"ANALISE CONTAS FROTA - VIEW 2 - (FONTE DE DADOS RENAN)"** — URL `sense/app/2a9d3451-ce57-4a87-999d-df23c17c2a03/sheet/9b39dd9c-4c4b-48f7-817b-0d6b67c47e09`.
+- **Receita (conforme o Renan mostra, em andamento):** a tabela só aparece após aplicar os filtros. Filtros no topo: ANO | MÊS | NÍVEL 1 | NÍVEL 2 | NÍVEL 3 | EMPRESA. Passo 1: **ANO** → clicar no filtro, selecionar o ano (ex. 2026) e confirmar no **✓ verde** (mecânica de seleção do Qlik: abrir listbox → clicar valor → confirmar). _(Próximos passos: aguardando prints do Renan — MÊS? demais filtros? qual tabela e como exporta?)_
+- Alvo: reproduzir as colunas da aba Custos (`Δ ORÇ. | Δ FCT | Vigência | ESTRUTURA | UNIDADE | NÍVEL 3 | CONTA GERENCIAL | MÊS | ANO | ORÇADO | REMUNERADO | REALIZADO`) — confirmar quais são fórmulas da planilha p/ recalcular na leitura.
+
 ## Roadmap
 
 **Painéis ativos:** Visão Financeira, Painel KM, Árvore de Combustível, Financeiro Pessoal (acesso direto)
