@@ -131,6 +131,12 @@ async function main(){
       console.log(`   ⚠ nenhuma linha achou preço — amostra Km/L: ${amostra.join(' | ')}`);
       const amostraR=rsl.rows.filter(r=>{const d=parseVig(r[cVigR]);return d&&vigKey(d)===ym;}).slice(0,3).map(r=>`proj="${r[cProjR]}" fuel="${r[cFuelR]}" preco=${r[cPreco]}`);
       console.log(`   ⚠ amostra R$/L no mesmo mês: ${amostraR.length?amostraR.join(' | '):'(NENHUMA LINHA DE R$/L NESSE MÊS)'}`);
+    } else if(comLitros.length && comRem.length<comLitros.length){
+      // cobertura parcial: quais projetos do Km/L não acharam preço vs quais "Unidade Benner" existem no R$/L nesse mês
+      const semPreco=new Set(comLitros.filter(r=>remPriceFor(r)==null).map(r=>String(r[K.proj]||'')));
+      const projsRsl=new Set(rsl.rows.filter(r=>{const d=parseVig(r[cVigR]);return d&&vigKey(d)===ym;}).map(r=>String(r[cProjR]||'')));
+      console.log(`   projetos Km/L SEM preço achado: ${[...semPreco].join(' | ')}`);
+      console.log(`   "Unidade Benner" presentes no R$/L nesse mês: ${[...projsRsl].join(' | ')}`);
     }
   }
 }
