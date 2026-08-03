@@ -131,6 +131,9 @@ async function farolLoad(){
     const {data:gs}=await sbg.from('ginfo_snapshot').select('chave,data,updated_at');
     (gs||[]).forEach(r=>{if(Array.isArray(r.data)&&r.data.length)G[r.chave]=r;});
   }catch(e){console.error('ginfo_snapshot',e);}
+  // fonte de cada seção (p/ mostrar "última exportação" nas tabelas do Farol)
+  DATA.fonte={};
+  const CHAVE_DE={stressV:'stress-test-frota',stressE:'stress-test-empilhadeira',cifv:'civf',prev:'preventivas',alinh:'alinhamentos',os:'os-em-aberto'};
   DATA.ginfoAtt=Object.values(G).reduce((mx,r)=>{const t=r.updated_at?new Date(r.updated_at).getTime():0;return t>mx?t:mx;},0)||null;
   const toT=arr=>{const cols=Object.keys(arr[0]);return {cols,rows:arr.map(o=>cols.map(k=>o[k]))};};
   // renomeia colunas do export p/ os nomes que os leitores já usam (= planilha)
@@ -165,9 +168,16 @@ async function farolLoad(){
   const abas={custos:'Custos',stressV:'Stress Test Veículos',stressE:'Stress Test Empilhadeiras',cifv:'CIFV',prev:'Preventivas',alinh:'Alinhamentos',os:'OS em aberto'};
   const out=await Promise.all(Object.entries(abas).map(async([k,aba])=>{
     if(GADAPT[k]){
-      try{const t=GADAPT[k]();if(t&&t.rows.length)return [k,t];}catch(e){console.error('ginfo adapt',k,e);}
+      try{
+        const t=GADAPT[k]();
+        if(t&&t.rows.length){
+          const g=G[CHAVE_DE[k]];
+          DATA.fonte[k]={src:'ginfo',att:g&&g.updated_at?new Date(g.updated_at):null};
+          return [k,t];
+        }
+      }catch(e){console.error('ginfo adapt',k,e);}
     }
-    try{return [k,await gvizT(aba)];}catch(e){return [k,null];}
+    try{const t=await gvizT(aba);if(GADAPT[k])DATA.fonte[k]={src:'sheets'};return [k,t];}catch(e){return [k,null];}
   }));
   const T={};out.forEach(([k,v])=>T[k]=v);
 
@@ -679,14 +689,16 @@ function renderOS(el,cod){
 // ── CHECKLIST (Saída com OS Crítica — norma FROTA-031120) ──
 // O relatório traz o ano todo; o farol mostra SÓ as Saídas do MÊS ATUAL
 // (Tipo Checklist = "Saída" → o veículo saiu com OS crítica apontada).
+// até o 3º dia ÚTIL do mês (seg–sex)? — corte do Checklist/OS crítica (Renan, 03/08/2026)
+function ateTerceiroDiaUtil(d){let u=0;for(let i=1;i<=d.getDate();i++){const w=new Date(d.getFullYear(),d.getMonth(),i).getDay();if(w>=1&&w<=5)u++;}return u<=3;}
 function renderChk(el,cod){
   if(!DATA.chk){el.innerHTML='<div class="loading">Aguardando a primeira coleta do robô Ginfo (base <b>checklist-031120</b> no Supabase).</div>';return;}
-  // mês de referência = regra do robô: até o dia 10, mês anterior; depois, mês atual
+  // mês de referência = regra do robô: até o 3º dia útil, mês anterior; depois, mês atual
   const hoje=new Date();
-  const ref=hoje.getDate()<=10?new Date(hoje.getFullYear(),hoje.getMonth()-1,1):hoje;
+  const ref=ateTerceiroDiaUtil(hoje)?new Date(hoje.getFullYear(),hoje.getMonth()-1,1):hoje;
   const m0=ref.getMonth(),a0=ref.getFullYear();
   const rs=byCod(DATA.chk,cod).filter(r=>_n(r.tipo).includes('SAIDA')&&r.dt&&r.dt.getMonth()===m0&&r.dt.getFullYear()===a0);
-  const att=DATA.chkAtt?' · atualizado '+DATA.chkAtt.toLocaleDateString('pt-BR'):'';
+  const att=DATA.chkAtt?' · última exportação do Ginfo: '+DATA.chkAtt.toLocaleDateString('pt-BR')+' '+DATA.chkAtt.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'}):'';
   let h=`<div class="mini-hero"><div class="mh-label">SAÍDA COM OS CRÍTICA — ${ref.toLocaleDateString('pt-BR',{month:'long',year:'numeric'}).toUpperCase()}</div>
     <div class="mh-val ${rs.length?'cr':'cg'}">${rs.length}</div><div class="mh-meta">saída(s) com OS crítica no mês${att}</div></div>`;
   if(!rs.length){el.innerHTML=h+'<div class="loading">Nenhuma saída com OS crítica no mês. ✓</div>';return;}
@@ -895,17 +907,24 @@ async function renderPneusCal(el,cod){
 
 // ═══════════════ MONTAGEM DAS PÁGINAS ═══════════════
 function renderFarol(el,cod){
+  // "última exportação" do robô Ginfo na legenda de cada tabela (pedido 03/08/2026)
+  const fx=k=>{
+    const f=DATA.fonte&&DATA.fonte[k];
+    if(!f)return '';
+    if(f.src==='ginfo')return f.att?` · <b>última exportação do Ginfo: ${f.att.toLocaleDateString('pt-BR')} ${f.att.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})}</b>`:' · fonte: robô Ginfo';
+    return ' · fonte: planilha Farol Semanal (fallback)';
+  };
   const S=[];
   if(!cod){S.push(['resumo','Resumo Executivo','Leitura automática do farol da semana']);S.push(['ranking','Ranking das Unidades','Aderências por indicador — melhor → pior']);}
   S.push(['custos','Custos','Realizado × Remunerado × Orçado — '+(cod?'por projeto':'por unidade')]);
-  S.push(['stressv','Stress Test — Veículos','Aderência (com saída) vs meta 100% · descontos por placa']);
+  S.push(['stressv','Stress Test — Veículos','Aderência (sem desconto) vs meta 100% · descontos por placa'+fx('stressV')]);
   const temEmp=byCod(DATA.stressE,cod).filter(r=>r.contratada).length>0;
-  if(temEmp) S.push(['stresse','Stress Test — Empilhadeiras','Aderência 1ª/2ª quinzena · descontos por equipamento']);
-  S.push(['prev','Preventivas','Aderência vs 100% · placas por status, dias e km']);
-  S.push(['cifv','CIFV','Aderência das fotos da frota vs 100% · descontos por veículo']);
-  S.push(['alinh','Alinhamento','No prazo vs vencidos · placas por próximo evento']);
-  S.push(['os','Gestão de OS','% no prazo (≤8 dias) · OSs em aberto']);
-  S.push(['chk','Checklist','Saída com OS Crítica — norma 031120, mês atual']);
+  if(temEmp) S.push(['stresse','Stress Test — Empilhadeiras','Aderência 1ª/2ª quinzena · descontos por equipamento'+fx('stressE')]);
+  S.push(['prev','Preventivas','Aderência vs 100% · placas por status, dias e km'+fx('prev')]);
+  S.push(['cifv','CIFV','Aderência das fotos da frota vs 100% · descontos por veículo'+fx('cifv')]);
+  S.push(['alinh','Alinhamento','No prazo vs vencidos · placas por próximo evento'+fx('alinh')]);
+  S.push(['os','Gestão de OS','% no prazo (≤8 dias) · OSs em aberto'+fx('os')]);
+  S.push(['chk','Checklist','Saída com OS Crítica — norma 031120 (até o 3º dia útil: mês anterior)']);
   S.push(['disp','Disponibilidade','Foto da última vigência — veículos disponíveis da frota']);
   S.push(['pneus-afer','Pneus','<i>Aferições</i>']);
   S.push(['pneus-mm','Pneus','<i>Milimetragem</i>']);
