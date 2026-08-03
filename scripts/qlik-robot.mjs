@@ -34,14 +34,15 @@ const MES_Q = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'o
 // Regra de período (Renan, 03/08/2026): até o dia 10 → mês ANTERIOR; depois → mês atual.
 const refMes = () => { const h = new Date(); return h.getDate() <= 10 ? new Date(h.getFullYear(), h.getMonth() - 1, 1) : h; };
 const ABAS = [
-  // export a mapear: qual visual/tabela e por qual menu — aguardando o Renan
-  // { chave: 'custos-qlik',
-  //   filtros: () => { const r = refMes(); return [
-  //     { campo: 'ANO', valor: String(r.getFullYear()) },
-  //     { campo: 'MÊS', valor: MES_Q[r.getMonth()] },
-  //     { campo: 'NÍVEL 1', valor: 'OPERAÇÕES DEDICADAS AM' },   // 1.3.1. OPERAÇÕES DEDICADAS AMBEV (texto truncado na tela — casar por "contém")
-  //   ]; },
-  //   colunas: [{ coluna: 'Cód. Estrutura', valores: ESTRUTURAS_FROTA }] },
+  // Receita completa do Renan (03/08/2026): filtros ANO + MÊS + NÍVEL 1,
+  // estruturas FROTA pela lupa da coluna, botão direito na tabela → Exportar dados.
+  { chave: 'custos-qlik',
+    filtros: () => { const r = refMes(); return [
+      { campo: 'ANO', valor: String(r.getFullYear()) },
+      { campo: 'MÊS', valor: MES_Q[r.getMonth()] },
+      { campo: 'NÍVEL 1', valor: 'OPERAÇÕES DEDICADAS AM' },   // 1.3.1. OPERAÇÕES DEDICADAS AMBEV (truncado na tela — casa por "contém")
+    ]; },
+    colunas: [{ coluna: 'Cód. Estrutura', valores: ESTRUTURAS_FROTA }] },
 ];
 
 // ESTRUTURAS FROTA (Renan, 03/08/2026) — seleção na coluna "Cód. Estrutura"
@@ -126,6 +127,67 @@ async function login(page) {
   log('objetos Qlik detectados:', objs);
 }
 
+// limpa TODAS as seleções (barra do topo) — retry não pode "des-selecionar" filtro já aplicado
+async function limparSelecoes(page) {
+  const b = page.locator('[title*="Limpar todas" i], [title*="Clear all" i], .sel-toolbar-clear-all, [data-testid*="clear" i]').filter({ visible: true }).first();
+  if (await b.count()) { await b.click().catch(() => {}); await page.waitForTimeout(2500); log('seleções limpas'); }
+}
+
+// filtros → estruturas → botão direito na tabela → Exportar dados → (submenu)
+// Exportar dados → baixa o xlsx
+async function exportarQlik(page, aba) {
+  await limparSelecoes(page);
+  if (typeof aba.filtros === 'function') {
+    for (const f of aba.filtros()) await aplicarFiltroQlik(page, f.campo, f.valor);
+  }
+  for (const c of (aba.colunas || [])) await selecionarNaColuna(page, c.coluna, c.valores);
+  await shot(page, '11-' + aba.chave + '-filtrado');
+
+  const tb = page.locator('[role="grid"], .qv-st, [class*="qv-st" i]').filter({ visible: true }).first();
+  await tb.click({ button: 'right', timeout: 15000 });
+  await page.waitForTimeout(1500);
+  const menuItem = () => page.locator('[role="menuitem"], .lui-list__item, [class*="menu" i] li, span, div')
+    .filter({ hasText: /^\s*Exportar dados\s*$/ }).filter({ visible: true }).first();
+  await menuItem().click({ timeout: 10000 });      // 1º nível
+  await page.waitForTimeout(1500);
+  await shot(page, '12-' + aba.chave + '-menu');
+  const dlPromise = page.waitForEvent('download', { timeout: 120000 });
+  const sub = menuItem();                          // 2º nível (submenu repete "Exportar dados")
+  if (await sub.count()) await sub.click().catch(() => {});
+  // caixinha "Exportação concluída" → clicar no hiperlink azul
+  // ("Clique aqui para baixar seu arquivo de dados.") — pode demorar a montar
+  let baixou = false;
+  dlPromise.then(() => { baixou = true; }).catch(() => {});
+  for (let t = 0; t < 30 && !baixou; t++) {
+    const link = page.locator('a[href*="tempcontent" i], a:has-text("aqui"), a:has-text("baixar"), a[download]').filter({ visible: true }).first();
+    if (await link.count()) { await link.click().catch(() => {}); break; }
+    await page.waitForTimeout(2000);
+  }
+  const download = await dlPromise;
+  const arq = path.join(ART, aba.chave + '.xlsx');
+  await download.saveAs(arq);
+  log('baixado:', arq);
+  return arq;
+}
+
+async function xlsxParaLinhas(arq) {
+  const XLSX = (await import('xlsx')).default;
+  const wb = XLSX.readFile(arq);
+  const ws = wb.Sheets[wb.SheetNames[0]];
+  return XLSX.utils.sheet_to_json(ws, { defval: null });
+}
+
+async function gravarSupabase(chave, linhas) {
+  if (!SB_KEY) { log(`[dry-run] ${chave}: ${linhas.length} linhas (sem GEM_SUPABASE_SERVICE_KEY)`); return; }
+  const res = await fetch(`${SB_URL}/rest/v1/ginfo_snapshot?on_conflict=chave`, {
+    method: 'POST',
+    headers: { apikey: SB_KEY, Authorization: 'Bearer ' + SB_KEY, 'Content-Type': 'application/json', Prefer: 'resolution=merge-duplicates' },
+    body: JSON.stringify([{ chave, data: linhas, updated_at: new Date().toISOString() }]),
+  });
+  if (!res.ok) throw new Error(`Supabase ${res.status}: ${await res.text()}`);
+  log(`gravado no Supabase: ${chave} (${linhas.length} linhas)`);
+}
+
 async function main() {
   if (!USER || !PASS) { console.error('Faltam Secrets: QLIK_USER / QLIK_PASS'); process.exit(1); }
   const browser = await chromium.launch({ headless: true });
@@ -140,8 +202,26 @@ async function main() {
   try {
     await login(page);
     if (MODE === 'login') { log('modo login: só o teste de acesso. Veja os screenshots nos artifacts.'); return; }
-    if (!ABAS.length) { log('nenhuma aba configurada ainda em ABAS — mapear com o Renan o passo a passo do export.'); return; }
-    // (export entra aqui quando o mapeamento for feito)
+    if (!ABAS.length) { log('nenhuma aba configurada ainda em ABAS.'); return; }
+    let erros = 0;
+    for (const aba of ABAS) {
+      for (let tent = 1; tent <= 2; tent++) {
+        try {
+          const arq = await exportarQlik(page, aba);
+          const linhas = await xlsxParaLinhas(arq);
+          log('colunas de', aba.chave + ':', JSON.stringify(Object.keys(linhas[0] || {})));
+          await gravarSupabase(aba.chave, linhas);
+          if (SB_KEY) { try { fs.unlinkSync(arq); log('arquivo apagado (fica só no banco):', arq); } catch (e) {} }
+          break;
+        } catch (e) {
+          log(`ERRO em ${aba.chave} (tentativa ${tent}):`, e.message);
+          await shot(page, '99-erro-' + aba.chave + '-t' + tent);
+          if (tent === 2) erros++;
+          else { await page.goto(ENTRY, { waitUntil: 'domcontentloaded', timeout: 90000 }).catch(() => {}); await page.waitForTimeout(10000); if (/login|form/i.test(page.url())) await login(page); }
+        }
+      }
+    }
+    if (erros) { console.error(`${erros} aba(s) com erro`); process.exit(1); }
   } finally {
     await browser.close();
   }
