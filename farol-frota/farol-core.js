@@ -681,10 +681,13 @@ function renderOS(el,cod){
 // (Tipo Checklist = "Saída" → o veículo saiu com OS crítica apontada).
 function renderChk(el,cod){
   if(!DATA.chk){el.innerHTML='<div class="loading">Aguardando a primeira coleta do robô Ginfo (base <b>checklist-031120</b> no Supabase).</div>';return;}
-  const hoje=new Date(),m0=hoje.getMonth(),a0=hoje.getFullYear();
+  // mês de referência = regra do robô: até o dia 10, mês anterior; depois, mês atual
+  const hoje=new Date();
+  const ref=hoje.getDate()<=10?new Date(hoje.getFullYear(),hoje.getMonth()-1,1):hoje;
+  const m0=ref.getMonth(),a0=ref.getFullYear();
   const rs=byCod(DATA.chk,cod).filter(r=>_n(r.tipo).includes('SAIDA')&&r.dt&&r.dt.getMonth()===m0&&r.dt.getFullYear()===a0);
   const att=DATA.chkAtt?' · atualizado '+DATA.chkAtt.toLocaleDateString('pt-BR'):'';
-  let h=`<div class="mini-hero"><div class="mh-label">SAÍDA COM OS CRÍTICA — ${hoje.toLocaleDateString('pt-BR',{month:'long',year:'numeric'}).toUpperCase()}</div>
+  let h=`<div class="mini-hero"><div class="mh-label">SAÍDA COM OS CRÍTICA — ${ref.toLocaleDateString('pt-BR',{month:'long',year:'numeric'}).toUpperCase()}</div>
     <div class="mh-val ${rs.length?'cr':'cg'}">${rs.length}</div><div class="mh-meta">saída(s) com OS crítica no mês${att}</div></div>`;
   if(!rs.length){el.innerHTML=h+'<div class="loading">Nenhuma saída com OS crítica no mês. ✓</div>';return;}
   const ord=rs.slice().sort((a,b)=>(b.dt?b.dt.getTime():0)-(a.dt?a.dt.getTime():0));

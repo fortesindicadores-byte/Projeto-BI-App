@@ -33,6 +33,7 @@ const SB_KEY = (process.env.GEM_SUPABASE_SERVICE_KEY || '').trim();
 // visual (opcional; sem título, o robô exporta a PRIMEIRA tabela da página).
 // Regra: o dado fica SÓ no Supabase — o arquivo baixado é apagado após gravar.
 const MES_LBL = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+const MES_FULL = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'];
 const mesSlicer = d => MES_LBL[d.getMonth()] + '-' + String(d.getFullYear()).slice(2);   // ex.: 'Jul-26'
 const ABAS = [
   // 1.1 DOCUMENTOS → drill-through "Detalhes Veículos" → tabela = base ATIVOS
@@ -95,12 +96,20 @@ const ABAS = [
   // (Mapa | Data do mapa | Data OS | Início/Fim técnico | Problema | Nº OS |
   // Tipo Checklist | Status | Filial | Motorista | Placa | Tipo Veículo |
   // Projeto). Alimenta o farol NOVO "Checklist" (Saída com OS Crítica do mês).
-  // ATENÇÃO: a coluna 'Motorista' NÃO serve de alvo — ela acha o resumo
-  // Motorista×Aderência (2 colunas) em vez do relatório detalhado. Falta um
-  // PRINT da página do Renan p/ cravar o alvo; até lá a aba é opcional
-  // (erro não derruba o run diário).
+  // 1.3 ADERÊNCIA FROTA - 031120 → botão direito no card "SAÍDAS COM OS
+  // CRÍTICA" → Drill-through → "Detalhes Saídas Com OS Crítica" → na página de
+  // detalhe, slicer Mês (nome completo, ex. "julho": até o dia 10 = mês
+  // anterior, depois = mês atual) → exportar a tabela detalhada (Mapa | Data do
+  // mapa | Data OS | Início/Fim técnico | Problema | Nº OS | Tipo Checklist |
+  // Status | Filial | Motorista | Placa | Tipo Veículo | Projeto).
   { chave: 'checklist-031120', url: 'https://bi.ginfo.app.br/bi/76e82774-d5d4-4cda-bb13-65a1a64387ef?autoAuth=true&ctid=c16300de-7070-4b58-80c8-af99af1e1f65',
-    menu: ['FROTA', '1.3 - ADERÊNCIA FROTA - 031120'], header: ['Data do mapa', 'Problema', 'Mapa'], opcional: true },
+    menu: ['FROTA', '1.3 - ADERÊNCIA FROTA - 031120'],
+    drill: { card: 'SAÍDAS COM OS CRÍTICA', item: 'Detalhes Saídas Com OS Crítica' },
+    slicers: () => {
+      const h = new Date();
+      const ref = h.getDate() <= 10 ? new Date(h.getFullYear(), h.getMonth() - 1, 1) : h;
+      return [{ campo: 'Mês', valor: MES_FULL[ref.getMonth()] }];
+    }, opcional: true },
 ];
 
 const ART = 'ginfo-artifacts';
