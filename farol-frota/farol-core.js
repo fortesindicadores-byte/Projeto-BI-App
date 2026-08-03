@@ -66,6 +66,21 @@ function refineCod(cod,proj){
 }
 function parseD(v){if(v==null)return null;const m=String(v).match(/Date\((\d+),(\d+),(\d+)/);return m?new Date(+m[1],+m[2],+m[3]):null;}
 function parseAnyD(v){const d=parseD(v);if(d)return d;const p=String(v||'').trim().split(/[\/\-]/);if(p.length>=3){const dd=+p[0]>31?new Date(+p[0],+p[1]-1,+p[2]):new Date(+p[2],+p[1]-1,+p[0]);if(!isNaN(dd))return dd;}return null;}
+// data de QUALQUER fonte: gviz "Date(...)", serial do Excel (xlsx do robô Ginfo)
+// ou string "M/D/YYYY h:mm AM" (export PBI) / "D/M/YYYY" (pt-BR)
+function parseFlex(v){
+  if(v==null||v==='')return null;
+  if(v instanceof Date)return v;
+  if(typeof v==='number')return v>20000&&v<80000?new Date(Date.UTC(1899,11,30)+Math.round(v*864e5)):null;
+  const d=parseD(v);if(d)return d;
+  const s=String(v).trim();
+  const m=s.match(/^(\d{1,4})[\/\-](\d{1,2})[\/\-](\d{1,4})/);
+  if(!m)return null;
+  const a=+m[1],b=+m[2],c=+m[3];
+  if(a>31)return new Date(a,b-1,c);
+  if(/AM|PM/i.test(s)||b>12)return new Date(c,a-1,b);
+  return new Date(c,b-1,a);
+}
 const fmtD=d=>d?d.toLocaleDateString('pt-BR'):'—';
 const num=v=>{if(v==null||v==='')return null;if(typeof v==='number')return v;const f=parseFloat(String(v).replace(/\./g,'').replace(',','.'));return isNaN(f)?null:f;};
 const brl=v=>{if(v==null||!isFinite(v))return '—';const a=Math.abs(v),s=v<0?'-':'';if(a>=1e6)return s+'R$ '+(a/1e6).toFixed(2).replace('.',',')+' mi';if(a>=1e3)return s+'R$ '+Math.round(a/1e3).toLocaleString('pt-BR')+'k';return s+'R$ '+Math.round(a).toLocaleString('pt-BR');};
@@ -107,8 +122,51 @@ async function farolGate(){
 // ═══════════════ CARGA E NORMALIZAÇÃO ═══════════════
 const DATA={};
 async function farolLoad(){
+  // ── 1) bases do robô Ginfo (Supabase ginfo_snapshot) — fonte primária ──
+  // O robô coleta todo dia 7h; a planilha Farol Semanal fica como FALLBACK
+  // (se uma base estiver vazia/ausente, a aba correspondente vem do Sheets).
+  let G={};
+  try{
+    const sbg=supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
+    const {data:gs}=await sbg.from('ginfo_snapshot').select('chave,data,updated_at');
+    (gs||[]).forEach(r=>{if(Array.isArray(r.data)&&r.data.length)G[r.chave]=r;});
+  }catch(e){console.error('ginfo_snapshot',e);}
+  DATA.ginfoAtt=Object.values(G).reduce((mx,r)=>{const t=r.updated_at?new Date(r.updated_at).getTime():0;return t>mx?t:mx;},0)||null;
+  const toT=arr=>{const cols=Object.keys(arr[0]);return {cols,rows:arr.map(o=>cols.map(k=>o[k]))};};
+  // renomeia colunas do export p/ os nomes que os leitores já usam (= planilha)
+  const ren=(arr,map)=>arr.map(o=>{const n={};for(const k in o)n[map[k]||k]=o[k];return n;});
+  const hojeMs=Date.now();
+  // Fórmulas que na planilha eram colunas calculadas (confirmadas 02/08/2026):
+  //   Preventivas: Aderência = Status "Vencido" → 0, senão 1 · Projeto via base ativos
+  //   CIFV:        Aderência = Desconto Total ≠ 0 → 0, senão 1
+  //   OS:          Dias em Aberto = hoje − Data (mínimo 0)
+  const GADAPT={
+    stressV:()=>G['stress-test-frota']&&toT(ren(G['stress-test-frota'].data,{'Viagens':'Total Viagens'})),
+    stressE:()=>G['stress-test-empilhadeira']&&toT(ren(G['stress-test-empilhadeira'].data,
+      {'Parada?':'Parada 1Q?','Parada? ':'Parada 2Q?','Desconto':'Desconto 1Q','Desconto ':'Desconto 2Q'})),
+    cifv:()=>G['civf']&&toT(G['civf'].data.map(o=>({...o,'Aderência':(num(o['Desconto Total'])||0)!==0?0:1}))),
+    prev:()=>{
+      if(!G['preventivas'])return null;
+      const at={};(G['ativos']?G['ativos'].data:[]).forEach(o=>{const p=_n(o['Placa']);if(p)at[p]={fil:o['Filial'],proj:o['Projeto']};});
+      return toT(G['preventivas'].data.map(o=>{
+        const j=at[_n(o['Placa'])]||{};
+        return {...o,'DIAS P/ Próxima':o['Dias Próxima'],'KM / HR P/ Próxima':o['Km/Hr Próxima_1'],'N° OS Aberta':o['OS Aberta'],
+          'Unidade':o['Filial']||j.fil||'','Projeto':j.proj||'',
+          'Aderência':_n(o['Status'])==='VENCIDO'?0:1};
+      }));
+    },
+    alinh:()=>G['alinhamentos']&&toT(G['alinhamentos'].data),
+    os:()=>G['os-em-aberto']&&toT(G['os-em-aberto'].data.map(o=>{
+      const d=parseFlex(o['Data']);
+      return {...o,'Dias em Aberto':d?Math.max(0,(hojeMs-d.getTime())/864e5):null};
+    })),
+  };
+  // ── 2) monta as tabelas: Ginfo primeiro, Sheets como fallback ──
   const abas={custos:'Custos',stressV:'Stress Test Veículos',stressE:'Stress Test Empilhadeiras',cifv:'CIFV',prev:'Preventivas',alinh:'Alinhamentos',os:'OS em aberto'};
   const out=await Promise.all(Object.entries(abas).map(async([k,aba])=>{
+    if(GADAPT[k]){
+      try{const t=GADAPT[k]();if(t&&t.rows.length)return [k,t];}catch(e){console.error('ginfo adapt',k,e);}
+    }
     try{return [k,await gvizT(aba)];}catch(e){return [k,null];}
   }));
   const T={};out.forEach(([k,v])=>T[k]=v);
@@ -124,7 +182,7 @@ async function farolLoad(){
   // Stress Test Veículos: Período | Empresa | Filial Freightech | Placa Freightech | Freightech | Projeto | Pallets | Última Saída | Saída | Saída na FIlial | Total Viagens | Justificativa | Status | Desconto
   if(T.stressV){const c=T.stressV.cols;
     const i={per:idxDe(c,'Período','Periodo'),fil:idxDe(c,'Filial Freightech'),pla:idxDe(c,'Placa Freightech'),proj:idxDe(c,'Projeto'),sai:idxDe(c,'Saída','Saida'),saiF:idxDe(c,'Saída na FIlial','Saida na Filial'),via:idxDe(c,'Total Viagens'),jus:idxDe(c,'Justificativa'),des:idxDe(c,'Desconto')};
-    let rs=T.stressV.rows.map(r=>({per:parseD(r[i.per]),cod:refineCod(codDe(r[i.fil]),r[i.proj]),fil:String(r[i.fil]||'').trim(),placa:String(r[i.pla]||'').trim(),proj:String(r[i.proj]||'').trim(),saida:_n(r[i.sai]),saidaF:String(r[i.saiF]||'').trim(),viagens:num(r[i.via]),jus:String(r[i.jus]||'').trim(),desc:num(r[i.des])||0})).filter(r=>r.placa);
+    let rs=T.stressV.rows.map(r=>({per:parseFlex(r[i.per]),cod:refineCod(codDe(r[i.fil]),r[i.proj]),fil:String(r[i.fil]||'').trim(),placa:String(r[i.pla]||'').trim(),proj:String(r[i.proj]||'').trim(),saida:_n(r[i.sai]),saidaF:String(r[i.saiF]||'').trim(),viagens:num(r[i.via]),jus:String(r[i.jus]||'').trim(),desc:num(r[i.des])||0})).filter(r=>r.placa);
     const mx=Math.max(...rs.map(r=>r.per?r.per.getTime():0));
     DATA.stressV=rs.filter(r=>!r.per||r.per.getTime()===mx);
   }
@@ -148,7 +206,7 @@ async function farolLoad(){
   // Alinhamentos: Filial | Placa | Próx. Evento | Status | Dias | Documento
   if(T.alinh){const c=T.alinh.cols;
     const i={fil:idxDe(c,'Filial'),pla:idxDe(c,'Placa'),ev:idxDe(c,'Próx. Evento','Prox. Evento'),st:idxDe(c,'Status'),dias:idxDe(c,'Dias'),doc:idxDe(c,'Documento')};
-    DATA.alinh=T.alinh.rows.map(r=>({cod:codDe(r[i.fil]),fil:String(r[i.fil]||'').trim(),placa:String(r[i.pla]||'').trim(),ev:parseD(r[i.ev]),st:String(r[i.st]||'').trim(),dias:num(r[i.dias]),doc:String(r[i.doc]||'').trim()})).filter(r=>r.placa);
+    DATA.alinh=T.alinh.rows.map(r=>({cod:codDe(r[i.fil]),fil:String(r[i.fil]||'').trim(),placa:String(r[i.pla]||'').trim(),ev:parseFlex(r[i.ev]),st:String(r[i.st]||'').trim(),dias:num(r[i.dias]),doc:String(r[i.doc]||'').trim()})).filter(r=>r.placa);
   }
   // OS em aberto: Dias em Aberto | N° OS | Data | Status | Filial | Origem | Tipo | Criticidade | ... | Segmento | Fornecedor | Mecânico | ... | Placa | ... | Observação
   if(T.os){const c=T.os.cols;
@@ -186,6 +244,8 @@ async function loadChecklist(){
   };
   const smp=row.data[0];
   const K={dt:kDe(smp,'Data do mapa','Data'),prob:kDe(smp,'Problema'),os:kDe(smp,'Nº OS','N° OS','No OS'),tipo:kDe(smp,'Tipo Checklist','Tipo Checkli'),st:kDe(smp,'Status'),fil:kDe(smp,'Filial'),mot:kDe(smp,'Motorista'),pla:kDe(smp,'Placa'),tv:kDe(smp,'Tipo Veículo','Tipo Veicu'),proj:kDe(smp,'Projeto','Proje')};
+  // snapshot ainda sem o relatório detalhado (o robô pegou outra tabela)? → segue "aguardando"
+  if(!K.pla||!K.dt)return;
   DATA.chk=row.data.map(r=>({dt:parseX(r[K.dt]),prob:String(r[K.prob]||'').trim(),os:String(r[K.os]||'').trim(),tipo:String(r[K.tipo]||'').trim(),st:String(r[K.st]||'').trim(),cod:refineCod(codDe(r[K.fil]),r[K.proj]),fil:String(r[K.fil]||'').trim(),mot:String(r[K.mot]||'').trim(),placa:String(r[K.pla]||'').trim(),tv:String(r[K.tv]||'').trim(),proj:String(r[K.proj]||'').trim()})).filter(r=>r.placa||r.os);
   DATA.chkAtt=row.updated_at?new Date(row.updated_at):null;
 }
@@ -484,7 +544,9 @@ function renderCustos(el,cod){
 }
 
 // ── STRESS TEST VEÍCULOS ──
-function stressVPct(rows){if(!rows.length)return null;return rows.filter(r=>r.saida==='COM SAIDA').length/rows.length*100;}
+// aderência do Stress Test = SEM DESCONTO (desconto 0 → 1, senão 0) — regra da
+// coluna Aderência da planilha, confirmada 02/08/2026
+function stressVPct(rows){if(!rows.length)return null;return rows.filter(r=>!(r.desc>0)).length/rows.length*100;}
 function renderStressV(el,cod){
   const rs=byCod(DATA.stressV,cod);
   if(!rs.length){el.innerHTML='<div class="loading">Sem dados para o recorte.</div>';return;}
