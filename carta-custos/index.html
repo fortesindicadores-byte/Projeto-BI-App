@@ -227,7 +227,9 @@ const UNIT_BASE=c=>{c=String(c||'');return c.startsWith('CBA ')?'CBA':c.startsWi
 const UNIT_TIER=c=>{c=String(c||'');return (c.startsWith('CBA ')||c.startsWith('MCC '))?c.slice(4):'';};
 const tierOfPrefix=(base,p)=>{p=String(p||'').toUpperCase();if(/EMPURRAD/.test(p))return 'T1';if(base==='CBA'&&/APOIO/.test(p))return 'T1 WH';return 'T2';};
 const unitMatchNv3=(unit,nv3)=>{const b=UNIT_BASE(unit),t=UNIT_TIER(unit);if(getUniLabel(nv3).toUpperCase().trim()!==b)return false;return !t||tierOfPrefix(b,getNv3Prefix(nv3).toUpperCase())===t;};
-const PROJETOS=['ROTA','APOIO','EMPURRADA','AUTO SERVIÇO','INSUMOS','TERCEIROS','ADMINISTRATIVO','UDC'];
+const PROJETOS=['ROTA','APOIO','EMPURRADA','AUTO SERVIÇO','INSUMOS'];
+// projetos descontinuados — nunca aparecem no seletor (pedido do Renan 03/08/2026)
+const PROJETOS_EXCLUIR=new Set(['ADMINISTRATIVO','ADMINISTRATIVO T1','ADMINISTRATIVO T2','ASVD','DEEP ARRENDAMENTOS','EMPURRADA BITREM','MOBILIZAÇÃO','PA PETRÓPOLIS','TERCEIROS','ROTA (VAN)','UDC']);
 let UNIT_PROJETOS=PROJETOS.slice();   // projetos reais da unidade (do DRE)
 // contas por pacote (do PACOTES_MAP da Visão Financeira)
 const CONTAS={
@@ -440,7 +442,7 @@ async function loadRows(){
 function projetosDaUnidade(){
   if(!FROTA) return PROJETOS;
   const m=mapTab(FROTA.header); const s=new Set(); const units=curUnits();
-  (FROTA.rows||[]).forEach(r=>{const nv3=m.nv3>=0?String(r[m.nv3]||''):'';if(units.some(u=>unitMatchNv3(u,nv3))){const p=getNv3Prefix(nv3).toUpperCase();if(p)s.add(p);}});
+  (FROTA.rows||[]).forEach(r=>{const nv3=m.nv3>=0?String(r[m.nv3]||''):'';if(units.some(u=>unitMatchNv3(u,nv3))){const p=getNv3Prefix(nv3).toUpperCase();if(p&&!PROJETOS_EXCLUIR.has(p))s.add(p);}});
   return s.size?[...s].sort():PROJETOS;
 }
 function refreshProjetos(){
