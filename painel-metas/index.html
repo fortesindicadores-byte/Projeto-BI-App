@@ -10,6 +10,7 @@
 <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.2/dist/jspdf.umd.min.js"></script>
 <script src="../assets/pdf-export.js"></script>
 <script src="../assets/excel-export.js"></script>
+<script src="../assets/gerot-base.js"></script>
 <style>
 :root{--bg:#0C1017;--card:#141B26;--border:#1E2D40;--orange:#F97316;--blue:#38BDF8;--text:#F1F5F9;--text2:#94A3B8;--text3:#475569;--green:#3BB33B;--red:#FF6666;--amber:#F4A100;}
 *{margin:0;padding:0;box-sizing:border-box;}
@@ -145,11 +146,16 @@ body.light-mode .pts{background:#1a1a1a;color:#fff;}
 // Fontes: cada indicador é calculado a partir do painel de origem (não mais lido cru da aba Painel de Metas)
 const SRC={
   metas:'https://docs.google.com/spreadsheets/d/1oW3mss0pXVI6gaDU2z5cDAKvW40LWHCQXpanqSvb12o/gviz/tq?gid=199351909',
-  ics:'https://docs.google.com/spreadsheets/d/1xGl1Xrk2sPS9zWghEuecFMNBHwmeLiZ02U-QpO8cDPY/gviz/tq?sheet='+encodeURIComponent('Consolidado ICs'),
   km:'https://docs.google.com/spreadsheets/d/1wCoRGsvOgmIvfLW4F9Sxr-5AX9Go-aFlRVjrQ_B2ilM/gviz/tq?sheet='+encodeURIComponent('Dispersão de km'),
   dpo:'https://docs.google.com/spreadsheets/d/1oW3mss0pXVI6gaDU2z5cDAKvW40LWHCQXpanqSvb12o/gviz/tq?sheet=DPO',
   fca:'https://docs.google.com/spreadsheets/d/1oW3mss0pXVI6gaDU2z5cDAKvW40LWHCQXpanqSvb12o/gviz/tq?gid=216663799'
 };
+// Custos de veículos e equipamentos = AV Orçado/Real da Visão Financeira (mesmo DRE Frota)
+const DRE_ID='1qcTy2ppLCGBKKqZCxCYWCTL9kTAuWfHBMyBfWJOyih8';
+const DRE_TAB_FROTA='Frota', DRE_TAB_RECEITA='Receita Líquida';
+// Ranking performance Frota - Unidades = Pontuação do Programa de Reconhecimento (Frota de Elite)
+const ELITE_NOMES=['CDI MACACU','CDD PELOTAS','CDD RONDONOPOLIS','CDD NOVA FRIBURGO','CDD RIO DE JANEIRO','CDD FLORIANOPOLIS','CDD CUIABA','CDD GUARULHOS','CDD CAMBORIU','PIRAI EMPURRADA','MACACU EMPURRADA','CUIABA EMPURRADA','CUIABA'];
+const ELITE_WEIGHTS={disp:20,prev:15,comb:10,pneus:10,checkT:10,checkWH:10,conf:5,stVeic:5,stEmp:5,sla:5,civf:5};
 const MESES=['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
 const META_PONTOS=80;
 let ALL=[],VIGS=[],chM=null,chI=null;
@@ -159,6 +165,7 @@ function bandLowerRatio(ratio){return ratio==null?0:ratio<=100?1:ratio<=101?.75:
 function classify(name){const n=String(name||'').toLowerCase();if(/ranking/.test(n))return'rank';if(/dispers/.test(n))return'disp';if(/dpo|vpo|sustent/.test(n))return'dpo';if(/consolida|fca/.test(n))return'fca';if(/custo/.test(n))return'custo';return'other';}
 
 function parseD(v){if(!v)return null;const m=String(v).match(/^Date\((\d+),(\d+),(\d+)/);if(m)return new Date(+m[1],+m[2],+m[3]);return null;}
+function _mesNum(m){if(m==null)return null;if(typeof m==='number'&&m>=1&&m<=12)return m;const s=String(m).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').slice(0,3);const i=MESES.indexOf(s);if(i>=0)return i+1;const n=parseInt(m);return n>=1&&n<=12?n:null;}
 function vigKeyN(d){return d?d.getFullYear()*100+d.getMonth():0;}
 function vigLbl(d){return d?MESES[d.getMonth()]+'/'+String(d.getFullYear()).slice(2):'';}
 function vigColLbl(d){return d?MESES[d.getMonth()]+'. de '+d.getFullYear():'';}
@@ -184,10 +191,61 @@ document.addEventListener('click',e=>{if(!e.target.closest('.ms-wrap'))document.
 
 // fetcher JSONP genérico → devolve a matriz de valores (rows × cols)
 function gviz(url){return new Promise((res,rej)=>{const fn='_gv'+Math.floor(Math.random()*1e9);const s=document.createElement('script');const clr=()=>{try{delete window[fn];s.remove();}catch(e){}};window[fn]=r=>{clr();try{if(r.status!=='ok')throw 0;res((r.table.rows||[]).map(x=>(x.c||[]).map(c=>c?c.v:null)));}catch(e){rej(e);}};s.onerror=()=>{clr();rej(0);};s.src=url+(url.includes('?')?'&':'?')+'tqx=out:json;responseHandler:'+fn;document.head.appendChild(s);});}
+// fetcher com header (por nome de coluna) → {header,rows}, usado p/ ler o DRE Frota igual à Visão Financeira
+async function fetchDreTab(tab){
+  const url=`https://docs.google.com/spreadsheets/d/${DRE_ID}/gviz/tq?tqx=out:json&sheet=${encodeURIComponent(tab)}`;
+  const res=await fetch(url); const raw=await res.text();
+  const json=JSON.parse(raw.replace(/^[\s\S]*?\(/,'').replace(/\);?\s*$/,''));
+  let header=(json.table.cols||[]).map(c=>c&&c.label?c.label:'');
+  let rows=json.table.rows.map(r=>r.c.map(c=>c&&c.v!=null?c.v:null));
+  if(!header.some(x=>_normEb(x).includes('realizado'))&&rows.length){header=rows[0].map(x=>x==null?'':String(x));rows=rows.slice(1);}
+  return {header,rows};
+}
+const _normEb=s=>String(s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').trim();
+function ebIdx(h,...names){const nc=h.map(_normEb);for(const n of names){const i=nc.indexOf(_normEb(n));if(i>=0)return i;}for(const n of names){const nn=_normEb(n);const i=nc.findIndex(c=>c.includes(nn));if(i>=0)return i;}return -1;}
+const _numBR=v=>{if(v==null||v==='')return null;if(typeof v==='number')return v;let s=String(v).replace(/\s|R\$/g,'');if(s.indexOf(',')>=0)s=s.replace(/\./g,'').replace(',','.');const f=parseFloat(s);return isNaN(f)?null:f;};
+function mapDre(h){return{orc:ebIdx(h,'orçado','orcado'),rem:ebIdx(h,'remunerado'),real:ebIdx(h,'realizado'),vig:ebIdx(h,'vigência','vigencia'),cta:ebIdx(h,'conta gerencial','conta'),mes:ebIdx(h,'mês','mes'),ano:ebIdx(h,'ano')};}
+function dreVigDate(r,m){const mn=m.mes>=0?_mesNum(r[m.mes]):null,an=m.ano>=0?parseInt(r[m.ano]):null;if(mn&&an)return new Date(an,mn-1,1);if(m.vig>=0){const v=r[m.vig];const d=parseD(v);if(d)return d;const s=String(v||'');const mm=s.match(/(\d{1,2})[\/\-](\d{4})/);if(mm)return new Date(+mm[2],+mm[1]-1,1);}return null;}
 
 // ── Cálculo por fonte (mapas indexados por vigKeyN) ──
-// Ranking = média da Pontuação Total (col N) do Consolidado ICs por vigência
-function compRanking(rows){const g={};rows.forEach(r=>{const d=parseD(r[0]);if(!d)return;const p=r[13]!=null?+r[13]:null;if(p==null)return;const k=vigKeyN(d);(g[k]=g[k]||[]).push(p);});const m={};Object.keys(g).forEach(k=>m[k]=g[k].reduce((a,b)=>a+b,0)/g[k].length);return m;}
+// Ranking = média da Pontuação do Programa de Reconhecimento (Frota de Elite) por vigência,
+// mesma fórmula de calcScore_() do programa-reconhecimento/, calculada em cima do GerotBase.
+function eliteScore(fields){let num=0,den=0;for(const f in ELITE_WEIGHTS){const w=ELITE_WEIGHTS[f]/100;const v=fields[f];if(v==null)continue;den+=w;let v01=v/100;if(v01>1)v01=1;num+=w*v01;}return den>0?(num/den)*100:null;}
+function compRankingElite(records){
+  const byUnitVig={};
+  (records||[]).forEach(r=>{if(!ELITE_NOMES.includes(r.unit))return;const key=r.vig+'||'+r.unit;(byUnitVig[key]=byUnitVig[key]||{f:{}}).f[r.field]=r.atg;});
+  const byVig={};
+  Object.keys(byUnitVig).forEach(key=>{
+    const sc=eliteScore(byUnitVig[key].f); if(sc==null)return;
+    const vig=key.split('||')[0]; const [y,mo]=vig.split('-').map(Number); if(!y||!mo)return;
+    const k=y*100+(mo-1); (byVig[k]=byVig[k]||[]).push(sc);
+  });
+  const out={};Object.keys(byVig).forEach(k=>{const a=byVig[k];out[k]=a.reduce((s,v)=>s+v,0)/a.length;});
+  return out;
+}
+// Custos de veículos e equipamentos = AV Orçado/Real (custos totais ÷ Receita Líquida) — igual à Visão Financeira
+function compCusto(frota,receita){
+  const mF=mapDre(frota.header||[]), mR=mapDre(receita.header||[]);
+  const cus={}, rec={};
+  (frota.rows||[]).forEach(r=>{
+    const cta=mF.cta>=0?String(r[mF.cta]||''):'';
+    if(_normEb(cta).includes('receita liquida'))return;
+    const d=dreVigDate(r,mF); if(!d)return; const k=vigKeyN(d);
+    const o=cus[k]=cus[k]||{orc:0,real:0};
+    o.orc+=_numBR(r[mF.orc])||0; o.real+=_numBR(r[mF.real])||0;
+  });
+  (receita.rows||[]).forEach(r=>{
+    const d=dreVigDate(r,mR); if(!d)return; const k=vigKeyN(d);
+    const o=rec[k]=rec[k]||{orc:0,real:0};
+    o.orc+=_numBR(r[mR.orc])||0; o.real+=_numBR(r[mR.real])||0;
+  });
+  const out={};
+  Object.keys(cus).forEach(k=>{
+    const c=cus[k], rc=rec[k]; if(!rc)return;
+    out[k]={ avOrc: rc.orc?c.orc/Math.abs(rc.orc)*100:null, avReal: rc.real?c.real/Math.abs(rc.real)*100:null };
+  });
+  return out;
+}
 // Dispersão = Δ% acumulado (YTD no ano) dos projetos ROTA + Auto Serviço · Painel KM
 function compDisp(rows){const mo={};rows.forEach(r=>{const d=parseD(r[0]);if(!d)return;const proj=String(r[14]||'').split('-')[0].trim().toUpperCase();if(!(proj==='ROTA'||proj==='AUTO SERVIÇO'||proj==='AUTO SERVICO'))return;const k=vigKeyN(d);const rem=r[31]!=null?+r[31]:0,real=r[32]!=null?+r[32]:0;const o=mo[k]=mo[k]||{rem:0,real:0};o.rem+=rem;o.real+=real;});const out={},acc={};Object.keys(mo).map(Number).sort((a,b)=>a-b).forEach(k=>{const y=Math.floor(k/100);acc[y]=acc[y]||{rem:0,real:0};acc[y].rem+=mo[k].rem;acc[y].real+=mo[k].real;out[k]=acc[y].rem?((acc[y].real-acc[y].rem)/acc[y].rem*100):null;});return out;}
 // DPO/VPO = último semestre (H) com dados; conta unidades abaixo de Nível 3 → 0=100% / 1=50% / 2+=0% (vale p/ todos os meses)
@@ -284,12 +342,14 @@ function renderTable(){
 async function carregar(){
   document.getElementById('status').textContent='Carregando…';
   try{
-    // A aba Painel de Metas dá a ESTRUTURA (indicador, peso, descrição, regra, un, meta) e o Real de Custos.
-    // Os demais indicadores têm o Real calculado a partir do painel de origem.
-    const [mRows,icRows,kmRows,dpoRows,fcaRows]=await Promise.all([
-      gviz(SRC.metas),gviz(SRC.ics),gviz(SRC.km),gviz(SRC.dpo),gviz(SRC.fca)
+    // A aba Painel de Metas dá só a ESTRUTURA (indicador, peso, descrição, regra, un) — todo o
+    // Meta/Real de cada indicador é calculado a partir do painel de origem correspondente.
+    const [mRows,kmRows,dpoRows,fcaRows,frotaTab,receitaTab,eliteRecords]=await Promise.all([
+      gviz(SRC.metas),gviz(SRC.km),gviz(SRC.dpo),gviz(SRC.fca),
+      fetchDreTab(DRE_TAB_FROTA),fetchDreTab(DRE_TAB_RECEITA),
+      window.GerotBase.load()
     ]);
-    const rankMap=compRanking(icRows), dispMap=compDisp(kmRows), dpo=compDPO(dpoRows), fcaRecs=compFCArecs(fcaRows);
+    const rankMap=compRankingElite(eliteRecords), dispMap=compDisp(kmRows), dpo=compDPO(dpoRows), fcaRecs=compFCArecs(fcaRows), custoMap=compCusto(frotaTab,receitaTab);
 
     ALL=mRows.filter(r=>r[1]&&r[0]&&parseD(r[0])).map(r=>{
       const vigD=parseD(r[0]);const k=vigKeyN(vigD);const mIdx=vigD.getMonth(),yr=vigD.getFullYear();
@@ -313,8 +373,10 @@ async function carregar(){
         o.real=fcaAderM2(fcaRecs,yr,mIdx);
         o.atg=(o.real!=null&&meta)?o.real/meta*100:null;
         o.pontos=bandHigher(o.atg)*peso;
-      }else if(tipo==='custo'){         // menor = melhor · AV Real vs AV Remunerado (negativo); >100% da meta = gastou mais = pior
-        o.atg=(o.real!=null&&meta)?o.real/meta*100:o.atg;
+      }else if(tipo==='custo'){         // menor = melhor · AV Real vs AV Orçado (custo total ÷ Receita Líquida) — igual à Visão Financeira
+        const cm=custoMap[k];
+        if(cm){ o.meta=cm.avOrc; o.real=cm.avReal; }
+        o.atg=(o.real!=null&&o.meta)?o.real/o.meta*100:null;
         o.pontos=bandLowerRatio(o.atg)*peso;
       } // 'other' mantém o que veio da planilha
       return o;
