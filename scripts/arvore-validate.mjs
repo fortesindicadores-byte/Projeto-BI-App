@@ -139,5 +139,16 @@ async function main(){
       console.log(`   "Unidade Benner" presentes no R$/L nesse mês: ${[...projsRsl].join(' | ')}`);
     }
   }
+
+  // ── Foco GRL: valores CRUS (sem normalizar) de "Unidade Benner" no R$/L vs "Projeto" no Km/L ──
+  console.log('\n══════════ FOCO: como o GRL aparece em cada aba (valores crus) ══════════');
+  const rslAllBenner=[...new Set(rsl.rows.map(r=>String(r[cProjR]||'')))];
+  const kmlAllProj=[...new Set(kml.rows.map(r=>String(r[K.proj]||'')))];
+  console.log('Unidade Benner distintos (R$/L, TODOS os meses):', JSON.stringify(rslAllBenner));
+  console.log('Projeto distintos (Km/L, contém "GRL" ou "GUARU"):', JSON.stringify(kmlAllProj.filter(p=>/GRL|GUARU/i.test(p))));
+  console.log('Unidade Benner que contém "GRL" ou "GUARU":', JSON.stringify(rslAllBenner.filter(p=>/GRL|GUARU/i.test(p))));
+  // amostra crua de linhas R$/L (todas as colunas) — pra ver se a coluna certa é mesmo "unidade benner"
+  console.log('\nColunas da aba R$/L:', JSON.stringify(rsl.cols));
+  console.log('Amostra de 3 linhas cruas da R$/L:', JSON.stringify(rsl.rows.slice(0,3)));
 }
 main().catch(e=>{console.error('Falha:',e);process.exit(1);});
