@@ -208,7 +208,11 @@ async function main() {
       for (let tent = 1; tent <= 2; tent++) {
         try {
           const arq = await exportarQlik(page, aba);
-          const linhas = await xlsxParaLinhas(arq);
+          let linhas = await xlsxParaLinhas(arq);
+          // ORÇADO/REMUNERADO/REALIZADO às vezes saem como TEXTO pt-BR
+          // ("-77.578", "1.044.419") — normaliza p/ número antes de gravar
+          const numBr = v => { if (v == null || v === '') return null; if (typeof v === 'number') return v; const f = parseFloat(String(v).trim().replace(/\./g, '').replace(',', '.').replace(/[^\d.\-]/g, '')); return isNaN(f) ? null : f; };
+          linhas = linhas.map(o => { const n = { ...o }; for (const k of Object.keys(n)) if (/OR[ÇC]AD|REMUNERAD|REALIZAD/i.test(k)) n[k] = numBr(n[k]); return n; });
           log('colunas de', aba.chave + ':', JSON.stringify(Object.keys(linhas[0] || {})));
           await gravarSupabase(aba.chave, linhas);
           if (SB_KEY) { try { fs.unlinkSync(arq); log('arquivo apagado (fica só no banco):', arq); } catch (e) {} }
