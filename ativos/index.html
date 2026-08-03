@@ -105,6 +105,30 @@ body.light-mode td{color:var(--text);}
 .mini-tbl-wrap::-webkit-scrollbar{width:4px;}
 .mini-tbl-wrap::-webkit-scrollbar-track{background:transparent;}
 .mini-tbl-wrap::-webkit-scrollbar-thumb{background:#2a3a50;border-radius:2px;}
+
+/* ── Título de card com botão de toggle (Projeto/Idade · Modelo/Tipo · Unidade/Projeto) ── */
+.chart-title-row{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;}
+.chart-toggle{background:rgba(249,115,22,.12);border:1px solid rgba(249,115,22,.3);border-radius:4px;padding:4px 10px;font-family:'Montserrat',sans-serif;font-size:11px;font-weight:700;color:var(--orange);cursor:pointer;white-space:nowrap;text-transform:uppercase;letter-spacing:.3px;flex-shrink:0;}
+.chart-toggle:hover{background:rgba(249,115,22,.25);}
+
+/* ── Mapa por estado (cartograma simplificado em grade) ── */
+.charts-col{display:flex;flex-direction:column;gap:14px;}
+.chart-card-map{display:flex;flex-direction:column;}
+.map-wrap{position:relative;padding:4px 0 0;}
+.map-grid{display:grid;grid-template-columns:repeat(8,1fr);grid-auto-rows:34px;gap:3px;}
+.map-tile{position:relative;border-radius:4px;border:2px solid transparent;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:800;color:#fff;transition:opacity .15s;}
+.map-tile:hover{opacity:.8;}
+.map-tip{position:absolute;display:none;transform:translate(-50%,-100%);margin-top:-8px;background:#141B26;border:1px solid #1E2D40;color:#F1F5F9;font-size:11px;padding:4px 8px;border-radius:4px;white-space:nowrap;pointer-events:none;z-index:20;box-shadow:0 4px 12px rgba(0,0,0,.4);}
+.map-legend{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-top:12px;font-size:11px;color:var(--text2);}
+.map-legend-qtd{display:flex;align-items:center;gap:6px;}
+.map-legend-bar{width:80px;height:8px;border-radius:4px;background:linear-gradient(90deg,rgba(249,115,22,.30),rgba(249,115,22,1));}
+.map-legend-idade{display:flex;align-items:center;gap:5px;}
+.lg-dot{width:9px;height:9px;border-radius:50%;display:inline-block;}
+.lg-dot.cg{background:var(--green);}
+.lg-dot.cy{background:var(--yellow);}
+.lg-dot.cr{background:var(--red);}
+body.light-mode .map-tile{color:#1a1a1a;}
+body.light-mode .map-tip{background:#fff;border-color:rgba(0,0,0,.12);color:#1a1a1a;}
 .mini-tbl thead th{position:sticky;top:0;background:var(--card);z-index:2;}
 body.light-mode .mini-tbl thead th{background:#F0F0F0;}
 .mini-tbl td.disp-val{font-weight:800;}
@@ -183,6 +207,11 @@ td.obs{max-width:140px;overflow:hidden;text-overflow:ellipsis;}
   .charts-grid{grid-template-columns:1fr;gap:10px;margin-bottom:10px;}
   .chart-card{padding:14px 14px;}
   .chart-wrap,.chart-wrap-tall{height:220px;}
+  .charts-col{gap:10px;}
+  .map-grid{grid-auto-rows:26px;gap:2px;}
+  .map-tile{font-size:8px;}
+  .chart-title-row{flex-wrap:wrap;}
+  .chart-toggle{font-size:10px;padding:3px 8px;}
   .mini-tbl-wrap{height:240px;}
 
   /* Colunas secundárias do tabelão ocultas por padrão */
@@ -308,52 +337,58 @@ td.obs{max-width:140px;overflow:hidden;text-overflow:ellipsis;}
     </div>
   </div>
 
-  <!-- Charts linha 1 -->
+  <!-- Mapa por estado (esquerda) + Projeto / Faixa de Idade (direita, empilhados) -->
   <div class="charts-grid">
-    <div class="chart-card">
-      <div class="chart-title">Ativos · Unidade</div>
-      <div class="chart-sub">Quantidade de ativos por unidade</div>
-      <div class="chart-wrap"><canvas id="ch-uni"></canvas></div>
+    <div class="chart-card chart-card-map">
+      <div class="chart-title">Ativos · Mapa por Estado</div>
+      <div class="chart-sub">Quantidade e idade média por estado</div>
+      <div class="map-wrap" id="map-wrap">
+        <div class="map-grid" id="map-grid"></div>
+        <div class="map-tip" id="map-tip"></div>
+      </div>
+      <div class="map-legend">
+        <div class="map-legend-qtd"><span>Qtde</span><div class="map-legend-bar"></div><span><b id="lg-min">0</b> a <b id="lg-max">0</b></span></div>
+        <div class="map-legend-idade"><span>Idade</span><i class="lg-dot cg"></i><span>≤5</span><i class="lg-dot cy"></i><span>≤10</span><i class="lg-dot cr"></i><span>&gt;10</span></div>
+      </div>
     </div>
-    <div class="chart-card">
-      <div class="chart-title">Ativos · Tipo de Veículo</div>
-      <div class="chart-sub">Quantidade por tipo</div>
-      <div class="chart-wrap"><canvas id="ch-tipo"></canvas></div>
+    <div class="charts-col">
+      <div class="chart-card">
+        <div class="chart-title-row">
+          <div><div class="chart-title">Ativos · Projeto</div><div class="chart-sub" id="ch-projeto-sub">Quantidade por projeto</div></div>
+          <button class="chart-toggle" id="tg-proj-chart" onclick="toggleProjChart()">Ver idade média</button>
+        </div>
+        <div class="chart-wrap"><canvas id="ch-projeto"></canvas></div>
+      </div>
+      <div class="chart-card">
+        <div class="chart-title">Ativos · Faixa de Idade</div>
+        <div class="chart-sub">Distribuição da frota por idade</div>
+        <div class="chart-wrap"><canvas id="ch-faixa"></canvas></div>
+      </div>
     </div>
   </div>
 
-  <!-- Charts linha 2 -->
+  <!-- Composição: Modelo/Tipo · Unidade/Projeto (toggle) -->
   <div class="charts-grid">
     <div class="chart-card">
-      <div class="chart-title">Idade Média · Tipo de Veículo</div>
-      <div class="chart-sub">Anos desde a fabricação — verde ≤5 · amarelo ≤10 · vermelho >10</div>
-      <div class="chart-wrap"><canvas id="ch-idade-tipo"></canvas></div>
-    </div>
-    <div class="chart-card">
-      <div class="chart-title">Ativos · Faixa de Idade</div>
-      <div class="chart-sub">Distribuição da frota por idade</div>
-      <div class="chart-wrap"><canvas id="ch-faixa"></canvas></div>
-    </div>
-  </div>
-
-  <!-- Composição: Modelo / Marca -->
-  <div class="charts-grid">
-    <div class="chart-card">
-      <div class="chart-title">Composição · Modelo</div>
-      <div class="chart-sub">Qtde e idade média por modelo</div>
+      <div class="chart-title-row">
+        <div><div class="chart-title" id="tbl-modelo-title">Composição · Modelo</div><div class="chart-sub" id="tbl-modelo-sub">Qtde e idade média por modelo</div></div>
+        <button class="chart-toggle" id="tg-modelo" onclick="toggleModeloTbl()">Ver por Tipo</button>
+      </div>
       <div class="mini-tbl-wrap">
         <table class="mini-tbl">
-          <thead><tr><th>Modelo</th><th>Marca</th><th class="num">Qtde</th><th class="num">Idade Média</th></tr></thead>
+          <thead id="th-modelo"><tr><th>Modelo</th><th>Marca</th><th class="num">Qtde</th><th class="num">Idade Média</th></tr></thead>
           <tbody id="tb-modelo"></tbody>
         </table>
       </div>
     </div>
     <div class="chart-card">
-      <div class="chart-title">Composição · Unidade</div>
-      <div class="chart-sub">Qtde e idade média por unidade</div>
+      <div class="chart-title-row">
+        <div><div class="chart-title" id="tbl-uni-title">Composição · Unidade</div><div class="chart-sub" id="tbl-uni-sub">Qtde e idade média por unidade</div></div>
+        <button class="chart-toggle" id="tg-uni" onclick="toggleUniTbl()">Ver por Projeto</button>
+      </div>
       <div class="mini-tbl-wrap">
         <table class="mini-tbl">
-          <thead><tr><th>Unidade</th><th class="num">Qtde</th><th class="num">Idade Média</th><th class="num">% da frota</th></tr></thead>
+          <thead><tr><th id="th-uni-1">Unidade</th><th class="num">Qtde</th><th class="num">Idade Média</th><th class="num">% da frota</th></tr></thead>
           <tbody id="tb-uni"></tbody>
         </table>
       </div>
@@ -445,7 +480,27 @@ function kDe(o,...names){
 
 // ── State ──
 let ROWS=[],ATT=null;
-let chUni=null,chTipo=null,chIdadeTipo=null,chFaixa=null;
+let chProjeto=null,chFaixa=null;
+let modeloTblMode='modelo',uniTblMode='unidade',projChartMode='qtde';
+
+// ── Mapa por estado (cartograma simplificado em grade — não é geograficamente exato) ──
+const UF_GRID={
+  RR:[1,4],AP:[1,7],
+  AM:[2,2],PA:[2,4],MA:[2,6],
+  AC:[3,1],TO:[3,4],PI:[3,6],CE:[3,7],
+  RO:[4,1],MT:[4,3],RN:[4,8],
+  BA:[5,5],PE:[5,7],PB:[5,8],
+  MS:[6,3],GO:[6,4],SE:[6,6],AL:[6,7],
+  DF:[7,4],MG:[7,5],ES:[7,6],
+  SP:[8,4],RJ:[8,5],
+  PR:[9,3],SC:[10,3],RS:[11,3],
+};
+const UF_NAMES={ACRE:'AC',ALAGOAS:'AL',AMAPA:'AP',AMAZONAS:'AM',BAHIA:'BA',CEARA:'CE','DISTRITO FEDERAL':'DF','ESPIRITO SANTO':'ES',GOIAS:'GO',MARANHAO:'MA','MATO GROSSO':'MT','MATO GROSSO DO SUL':'MS','MINAS GERAIS':'MG',PARA:'PA',PARAIBA:'PB',PARANA:'PR',PERNAMBUCO:'PE',PIAUI:'PI','RIO DE JANEIRO':'RJ','RIO GRANDE DO NORTE':'RN','RIO GRANDE DO SUL':'RS',RONDONIA:'RO',RORAIMA:'RR','SANTA CATARINA':'SC','SAO PAULO':'SP',SERGIPE:'SE',TOCANTINS:'TO'};
+function ufNorm(v){
+  const s=_nrm(v);
+  if(UF_GRID[s])return s;
+  return UF_NAMES[s]||null;
+}
 
 // ── Carga (Supabase; exige login do hub) ──
 let _sb=null;
@@ -602,16 +657,16 @@ function renderCharts(rows){
   };
   const orange=v=>v.map(()=>'#F97316CC');
   {
-    const g=groupCount(rows,r=>r.uniMap).sort((a,b)=>b.n-a.n);
-    chUni=mk(chUni,'ch-uni',g.map(x=>x.k),g.map(x=>x.n),orange(g),v=>fmt(v));
-  }
-  {
-    const g=groupCount(rows,r=>r.tipo).sort((a,b)=>b.n-a.n);
-    chTipo=mk(chTipo,'ch-tipo',g.map(x=>x.k),g.map(x=>x.n),orange(g),v=>fmt(v));
-  }
-  {
-    const g=groupCount(rows.filter(r=>r.idade!=null),r=>r.tipo).sort((a,b)=>(b.idade??0)-(a.idade??0));
-    chIdadeTipo=mk(chIdadeTipo,'ch-idade-tipo',g.map(x=>x.k),g.map(x=>x.idade!=null?+x.idade.toFixed(1):null),g.map(x=>idadeColor(x.idade)+'CC'),v=>v!=null?v.toFixed(1):'');
+    const btn=$('tg-proj-chart'),sub=$('ch-projeto-sub');
+    if(btn)btn.textContent=projChartMode==='qtde'?'Ver idade média':'Ver quantidade';
+    if(sub)sub.textContent=projChartMode==='qtde'?'Quantidade por projeto':'Idade média por projeto (anos)';
+    if(projChartMode==='qtde'){
+      const g=groupCount(rows,r=>r.projMap).sort((a,b)=>b.n-a.n);
+      chProjeto=mk(chProjeto,'ch-projeto',g.map(x=>x.k),g.map(x=>x.n),orange(g),v=>fmt(v));
+    }else{
+      const g=groupCount(rows.filter(r=>r.idade!=null),r=>r.projMap).sort((a,b)=>(b.idade??0)-(a.idade??0));
+      chProjeto=mk(chProjeto,'ch-projeto',g.map(x=>x.k),g.map(x=>x.idade!=null?+x.idade.toFixed(1):null),g.map(x=>idadeColor(x.idade)+'CC'),v=>v!=null?v.toFixed(1):'');
+    }
   }
   {
     const FAIXAS=[['0-2',0,2],['3-5',3,5],['6-10',6,10],['11-15',11,15],['16+',16,999]];
@@ -620,17 +675,76 @@ function renderCharts(rows){
     const cores=FAIXAS.map(([,a])=>idadeColor(a<=IDADE_OK?a:a<=IDADE_ATENCAO?a:99)+'CC');
     chFaixa=mk(chFaixa,'ch-faixa',FAIXAS.map(f=>f[0]+' anos'),vals,cores,v=>v?fmt(v):'');
   }
+  renderMap(rows);
 }
+function renderMap(rows){
+  const wrap=$('map-grid');if(!wrap)return;
+  const byUf={};
+  for(const r of rows){const uf=ufNorm(r.estado);if(!uf||!UF_GRID[uf])continue;(byUf[uf]=byUf[uf]||[]).push(r);}
+  const counts=Object.values(byUf).map(a=>a.length);
+  const max=counts.length?Math.max(...counts):0,min=counts.length?Math.min(...counts):0;
+  set('lg-min',fmt(min));set('lg-max',fmt(max));
+  const isLight=document.body.classList.contains('light-mode');
+  const baseGray=isLight?'#d5d9de':'#1c2635';
+  wrap.innerHTML=Object.keys(UF_GRID).map(uf=>{
+    const [r,c]=UF_GRID[uf];
+    const a=byUf[uf]||[];
+    const n=a.length;
+    const idade=avg(a.map(x=>x.idade));
+    let bg=baseGray;
+    if(n>0){
+      const t=max>min?(n-min)/(max-min):1;
+      bg=`rgba(249,115,22,${(0.30+t*0.70).toFixed(2)})`;
+    }
+    const bd=n>0&&idade!=null?idadeColor(idade):'transparent';
+    return `<div class="map-tile" style="grid-row:${r};grid-column:${c};background:${bg};border-color:${bd}" data-uf="${uf}" data-n="${n}" data-idade="${idade!=null?idade.toFixed(1):'—'}" onmouseenter="mapTip(event,this)" onmousemove="mapTip(event,this)" onmouseleave="mapTipHide()">${uf}</div>`;
+  }).join('');
+}
+function mapTip(ev,el){
+  const tip=$('map-tip');if(!tip)return;
+  const uf=el.dataset.uf,n=el.dataset.n,idade=el.dataset.idade;
+  tip.innerHTML=`<b>${uf}</b> — ${n} ativo${n==='1'?'':'s'}${idade!=='—'?` · idade média ${idade}`:''}`;
+  const wr=$('map-wrap').getBoundingClientRect(),er=el.getBoundingClientRect();
+  tip.style.left=(er.left-wr.left+er.width/2)+'px';
+  tip.style.top=(er.top-wr.top)+'px';
+  tip.style.display='block';
+}
+function mapTipHide(){const tip=$('map-tip');if(tip)tip.style.display='none';}
+function toggleProjChart(){projChartMode=projChartMode==='qtde'?'idade':'qtde';renderCharts(filtrar(ROWS));}
+function toggleModeloTbl(){modeloTblMode=modeloTblMode==='modelo'?'tipo':'modelo';renderMinis(filtrar(ROWS));}
+function toggleUniTbl(){uniTblMode=uniTblMode==='unidade'?'projeto':'unidade';renderMinis(filtrar(ROWS));}
 function renderMinis(rows){
   const tot=rows.length||1;
+  // Composição · Modelo ⇄ Tipo de Veículo (toggle)
   {
-    const m={};
-    for(const r of rows){const k=r.modelo||'—';(m[k]=m[k]||{marca:r.marca,a:[]}).a.push(r);}
-    const g=Object.entries(m).map(([k,v])=>({k,marca:v.marca,n:v.a.length,idade:avg(v.a.map(x=>x.idade))})).sort((a,b)=>b.n-a.n);
-    $('tb-modelo').innerHTML=g.map(x=>`<tr><td>${x.k}</td><td>${x.marca||'—'}</td><td class="num">${fmt(x.n)}</td><td class="num ${idadeCls(x.idade)}">${x.idade!=null?x.idade.toFixed(1):'—'}</td></tr>`).join('')||'<tr><td colspan="4" style="text-align:center;color:var(--text3);padding:20px">Sem dados</td></tr>';
+    const btn=$('tg-modelo');
+    if(modeloTblMode==='modelo'){
+      if(btn)btn.textContent='Ver por Tipo';
+      set('tbl-modelo-title','Composição · Modelo');
+      set('tbl-modelo-sub','Qtde e idade média por modelo');
+      $('th-modelo').innerHTML='<tr><th>Modelo</th><th>Marca</th><th class="num">Qtde</th><th class="num">Idade Média</th></tr>';
+      const m={};
+      for(const r of rows){const k=r.modelo||'—';(m[k]=m[k]||{marca:r.marca,a:[]}).a.push(r);}
+      const g=Object.entries(m).map(([k,v])=>({k,marca:v.marca,n:v.a.length,idade:avg(v.a.map(x=>x.idade))})).sort((a,b)=>b.n-a.n);
+      $('tb-modelo').innerHTML=g.map(x=>`<tr><td>${x.k}</td><td>${x.marca||'—'}</td><td class="num">${fmt(x.n)}</td><td class="num ${idadeCls(x.idade)}">${x.idade!=null?x.idade.toFixed(1):'—'}</td></tr>`).join('')||'<tr><td colspan="4" style="text-align:center;color:var(--text3);padding:20px">Sem dados</td></tr>';
+    }else{
+      if(btn)btn.textContent='Ver por Modelo';
+      set('tbl-modelo-title','Composição · Tipo de Veículo');
+      set('tbl-modelo-sub','Qtde e idade média por tipo');
+      $('th-modelo').innerHTML='<tr><th>Tipo</th><th class="num">Qtde</th><th class="num">Idade Média</th></tr>';
+      const g=groupCount(rows,r=>r.tipo).sort((a,b)=>b.n-a.n);
+      $('tb-modelo').innerHTML=g.map(x=>`<tr><td>${x.k}</td><td class="num">${fmt(x.n)}</td><td class="num ${idadeCls(x.idade)}">${x.idade!=null?x.idade.toFixed(1):'—'}</td></tr>`).join('')||'<tr><td colspan="3" style="text-align:center;color:var(--text3);padding:20px">Sem dados</td></tr>';
+    }
   }
+  // Composição · Unidade ⇄ Projeto (toggle)
   {
-    const g=groupCount(rows,r=>r.uniMap).sort((a,b)=>b.n-a.n);
+    const btn=$('tg-uni');
+    const porProjeto=uniTblMode==='projeto';
+    if(btn)btn.textContent=porProjeto?'Ver por Unidade':'Ver por Projeto';
+    set('tbl-uni-title',porProjeto?'Composição · Projeto':'Composição · Unidade');
+    set('tbl-uni-sub',porProjeto?'Qtde e idade média por projeto':'Qtde e idade média por unidade');
+    const th1=$('th-uni-1');if(th1)th1.textContent=porProjeto?'Projeto':'Unidade';
+    const g=groupCount(rows,porProjeto?r=>r.projMap:r=>r.uniMap).sort((a,b)=>b.n-a.n);
     $('tb-uni').innerHTML=g.map(x=>`<tr><td>${x.k}</td><td class="num">${fmt(x.n)}</td><td class="num ${idadeCls(x.idade)}">${x.idade!=null?x.idade.toFixed(1):'—'}</td><td class="num">${pct0(x.n/tot*100)}</td></tr>`).join('')||'<tr><td colspan="4" style="text-align:center;color:var(--text3);padding:20px">Sem dados</td></tr>';
   }
 }
