@@ -31,6 +31,8 @@ const SB_KEY = (process.env.GEM_SUPABASE_SERVICE_KEY || '').trim();
 // Mecânica de seleção do Qlik: clicar no filterpane → clicar no valor →
 // confirmar no ✓ VERDE. A tabela só renderiza depois dos filtros.
 const MES_Q = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
+// ESTRUTURAS FROTA (Renan, 03/08/2026) — seleção na coluna "Cód. Estrutura"
+const ESTRUTURAS_FROTA = ['170', '171', '173', '174', '176', '177', '178', '180', '181', '183', '185', '186', '398', '572'];
 // Regra de período (Renan, 03/08/2026): até o dia 10 → mês ANTERIOR; depois → mês atual.
 const refMes = () => { const h = new Date(); return h.getDate() <= 10 ? new Date(h.getFullYear(), h.getMonth() - 1, 1) : h; };
 const ABAS = [
@@ -44,9 +46,6 @@ const ABAS = [
     ]; },
     colunas: [{ coluna: 'Cód. Estrutura', valores: ESTRUTURAS_FROTA }] },
 ];
-
-// ESTRUTURAS FROTA (Renan, 03/08/2026) — seleção na coluna "Cód. Estrutura"
-const ESTRUTURAS_FROTA = ['170', '171', '173', '174', '176', '177', '178', '180', '181', '183', '185', '186', '398', '572'];
 
 // seleção MÚLTIPLA pela LUPA do cabeçalho de uma coluna da tabela:
 // abre a busca da coluna → para cada valor: digita, clica no item exato → ✓ verde
