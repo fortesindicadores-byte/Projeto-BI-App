@@ -47,7 +47,7 @@ function match(f,{ano,ym,uni,proj}){
 
 async function main(){
   const [frota,disp,kml,rsl,arv]=await Promise.all([
-    gviz(VF,'Frota'), gviz(GV,'Dispersão de km'), gviz(KML,'Km/L'), gviz(GV,'R$/L'), gviz(GV,'Árvore Comb.'),
+    gviz(VF,'Frota'), gviz(GV,'Dispersão de km'), gviz(KML,'Km/L'), gviz(KML,'R$/L'), gviz(GV,'Árvore Comb.'),
   ]);
   console.log(`linhas: Frota=${frota.rows.length} Dispersão=${disp.rows.length} Km/L=${kml.rows.length} R$/L=${rsl.rows.length} ÁrvoreComb=${arv.rows.length}`);
   // ── Diagnóstico de cobertura por ano (via vigência col 0) ──
