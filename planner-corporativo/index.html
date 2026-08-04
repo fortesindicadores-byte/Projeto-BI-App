@@ -6,6 +6,7 @@
 <title>Planner Corporativo</title>
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="../assets/gantt-view.js"></script>
 <style>
 :root{--bg:#0C1017;--card:#141B26;--border:#1E2D40;--orange:#F97316;--blue:#38BDF8;--text:#F1F5F9;--text2:#94A3B8;--text3:#475569;--green:#3BB33B;--red:#FF6666;--amber:#F4A100;}
 *{margin:0;padding:0;box-sizing:border-box;}
@@ -195,8 +196,9 @@ body.light-mode select.st[data-v="Cancelada"]{background:#333333;color:#fff;}
   <a class="btn" href="../" title="Voltar ao hub" style="text-decoration:none">← Hub</a>
   <button class="btn theme" id="themeBtn" title="Modo claro/escuro">☀</button>
   <button class="btn" id="relBtn" onclick="showRelatorio()" title="Ver ações em formato de tabela (relatório, igual ao FCA)">Relatório</button>
-  <button class="btn" id="viewBtn" onclick="toggleView()" title="Alternar entre Tabela e Kanban">Kanban</button>
-  <button class="btn" id="addBtn" onclick="addAction()" title="Adicionar ação">+ Ação</button>
+  <button class="btn" id="viewBtn" onclick="toggleView()" title="Alternar entre Tabela e Kanban">Tabela</button>
+  <button class="btn" id="ganttBtn" onclick="showGantt()" title="Ver as ações numa linha do tempo (Gantt)">Gantt</button>
+  <button class="btn" id="addBtn onclick="addAction()" title="Adicionar ação">+ Ação</button>
   <span class="saved-msg" id="savedMsg">Salvo ✓</span>
 </header>
 <main class="main">
@@ -232,7 +234,7 @@ const STATUS=['Não iniciada','Em andamento','Concluída','Cancelada'];
 const DEFAULT_STATUS='Não iniciada';
 const PRZ_OPTS=['Vencida','No prazo','Sem prazo'];
 let ROWS=[];            // fonte da verdade (do Supabase)
-let VIEW='tabela';
+let VIEW='kanban';   // abre direto no Kanban (pedido do Renan)
 let ADMIN_NAMES=[];     // responsáveis possíveis = administradores
 // nome em MAIÚSCULO, ideal "NOME SOBRENOME"; se só um termo, só ele
 const NAME_FIX={'RENAN':'RENAN FORTES'};   // corrige nomes sem sobrenome no cadastro
@@ -295,7 +297,7 @@ function prazoBadge(r){
 }
 
 // ── DB <-> memória ──
-function fromDB(d){return{id:d.id,assunto:d.assunto||'',acao:d.acao||'',resp:d.responsavel||'',prazo:d.prazo||'',status:d.status||DEFAULT_STATUS,obs:d.acompanhamento||''};}
+function fromDB(d){return{id:d.id,assunto:d.assunto||'',acao:d.acao||'',resp:d.responsavel||'',prazo:d.prazo||'',status:d.status||DEFAULT_STATUS,obs:d.acompanhamento||'',criado:d.created_at||''};}
 function toDB(r){return{assunto:r.assunto||'',acao:r.acao||'',responsavel:r.resp||'',prazo:r.prazo||null,status:r.status||DEFAULT_STATUS,acompanhamento:r.obs||''};}
 
 async function loadRows(){
@@ -339,6 +341,7 @@ function aplicar(){
   const vis=filtered();
   renderAdere(vis);
   if(VIEW==='kanban'){ $('list').innerHTML=kanbanHTML(vis); return; }
+  if(VIEW==='gantt'){ $('list').innerHTML=GanttView.html(vis.map(r=>({id:r.id,label:r.acao,tag:r.assunto,resp:r.resp,status:r.status,start:r.criado,end:r.prazo}))); return; }
   if(VIEW==='relatorio'){ $('list').innerHTML=relatorioHTML(vis); return; }
   $('list').innerHTML=tableHTML(vis);
   wireTable();
@@ -493,7 +496,8 @@ function kcard(r){
     <div class="kcard-meta">${resp} · ${prazoBadge(r)}</div>
   </div>`;
 }
-function updateViewBtns(){$('viewBtn').textContent=VIEW==='kanban'?'Tabela':'Kanban';const rb=$('relBtn');if(rb)rb.classList.toggle('active',VIEW==='relatorio');}
+function updateViewBtns(){$('viewBtn').textContent=VIEW==='kanban'?'Tabela':'Kanban';const rb=$('relBtn');if(rb)rb.classList.toggle('active',VIEW==='relatorio');const gb=$('ganttBtn');if(gb)gb.classList.toggle('active',VIEW==='gantt');}
+function showGantt(){VIEW=(VIEW==='gantt')?'kanban':'gantt';updateViewBtns();aplicar();}
 function toggleView(){VIEW=(VIEW==='kanban')?'tabela':'kanban';updateViewBtns();aplicar();}
 function showRelatorio(){VIEW=(VIEW==='relatorio')?'tabela':'relatorio';updateViewBtns();aplicar();}
 
@@ -509,7 +513,7 @@ async function moveCard(id,status){
 // drag & drop (delegado no #list, uma vez)
 (function(){
   const c=$('list'); if(!c) return;
-  c.addEventListener('click',e=>{const card=e.target.closest&&e.target.closest('.kcard');if(card&&VIEW==='kanban'){const id=card.dataset.id;if(id)openModal(id);}});
+  c.addEventListener('click',e=>{const gv=e.target.closest&&e.target.closest('.gv-row');if(gv&&gv.dataset.id){openModal(gv.dataset.id);return;}const card=e.target.closest&&e.target.closest('.kcard');if(card&&VIEW==='kanban'){const id=card.dataset.id;if(id)openModal(id);}});
   c.addEventListener('dragstart',e=>{const card=e.target.closest&&e.target.closest('.kcard');if(card){e.dataTransfer.setData('text/plain',card.dataset.id);e.dataTransfer.effectAllowed='move';card.classList.add('dragging');}});
   c.addEventListener('dragend',e=>{const card=e.target.closest&&e.target.closest('.kcard');if(card)card.classList.remove('dragging');});
   c.addEventListener('dragover',e=>{const col=e.target.closest&&e.target.closest('.kcol');if(col){e.preventDefault();e.dataTransfer.dropEffect='move';col.classList.add('kover');}});
@@ -583,7 +587,7 @@ applyTheme(localStorage.getItem('bi_theme')||'dark');
 
 // ── acesso: só admins ──
 function showRestricted(msg){
-  ['wrapAssunto','wrapResp','wrapStatus','wrapPrazo','relBtn','viewBtn','addBtn','adere','intro'].forEach(id=>{const el=$(id);if(el)el.style.display='none';});
+  ['wrapAssunto','wrapResp','wrapStatus','wrapPrazo','relBtn','viewBtn','ganttBtn','addBtn','adere','intro'].forEach(id=>{const el=$(id);if(el)el.style.display='none';});
   $('list').innerHTML=`<div class="restrito"><h2>Acesso restrito</h2><p>${esc(msg||'Este planner é exclusivo para administradores.')}</p><a class="btn" href="../" style="text-decoration:none;display:inline-flex">← Voltar ao hub</a></div>`;
 }
 async function initApp(){
