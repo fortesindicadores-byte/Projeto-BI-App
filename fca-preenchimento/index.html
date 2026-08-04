@@ -6,6 +6,7 @@
 <title>FCA · Preenchimento</title>
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="../assets/gantt-view.js"></script>
 <style>
 :root{--bg:#0C1017;--card:#141B26;--border:#1E2D40;--orange:#F97316;--blue:#38BDF8;--text:#F1F5F9;--text2:#94A3B8;--text3:#475569;--green:#3BB33B;--red:#FF6666;--amber:#F4A100;}
 *{margin:0;padding:0;box-sizing:border-box;}
@@ -193,6 +194,7 @@ body.light-mode select.st[data-v="Cancelada"]{background:#333333;color:#fff;}
   <button class="btn theme" id="themeBtn" title="Modo claro/escuro">☀</button>
   <button class="btn" id="viewBtn" onclick="toggleView()" title="Alternar entre Fatos e Kanban">Fatos</button>
   <button class="btn" id="flatBtn" onclick="showTabelaPre()" title="Ver as ações em formato de tabela (como no Planner)">Tabela</button>
+  <button class="btn" id="ganttBtn" onclick="showGantt()" title="Ver as ações numa linha do tempo (Gantt)">Gantt</button>
   <button class="btn" id="adminBtn" title="Modo admin (edita tudo) — teste; em produção será por RLS">Admin</button>
   <span class="saved-msg" id="savedMsg">Salvo ✓</span>
 </header>
@@ -789,6 +791,7 @@ function aplicar(){
     &&(!(fs.length||fpz.length) || (_DBROWS[keyOf(f)]||[]).some(acMatch)));
   if(!vis.length){list.innerHTML='<div class="empty">Nenhum fato para o filtro selecionado.</div>';return;}
   if(VIEW==='kanban'){ list.innerHTML=kanbanHTMLpre(vis); return; }
+  if(VIEW==='gantt'){ list.innerHTML=ganttHTMLpre(vis); return; }
   if(VIEW==='flat'){ list.innerHTML=relatorioHTMLpre(vis); return; }
   list.innerHTML=vis.map(f=>{
     const key=keyOf(f);
@@ -833,7 +836,15 @@ function prazoBadgeK(r){
 // setas coloridas nos textos gerados: ▲ estouro (vermelho) · ▼ saving (verde)
 const tri=h=>String(h==null?'':h).replace(/▲/g,'<span style="color:var(--red)">▲</span>').replace(/▼/g,'<span style="color:var(--green)">▼</span>');
 
-function updateViewBtnsPre(){const b=document.getElementById('viewBtn');if(b)b.textContent=VIEW==='kanban'?'Fatos':'Kanban';const f=document.getElementById('flatBtn');if(f)f.classList.toggle('active',VIEW==='flat');}
+function updateViewBtnsPre(){const b=document.getElementById('viewBtn');if(b)b.textContent=VIEW==='kanban'?'Fatos':'Kanban';const f=document.getElementById('flatBtn');if(f)f.classList.toggle('active',VIEW==='flat');const g=document.getElementById('ganttBtn');if(g)g.classList.toggle('active',VIEW==='gantt');}
+function showGantt(){VIEW=VIEW==='gantt'?'kanban':'gantt';updateViewBtnsPre();aplicar();}
+// Gantt: mesmas ações do Kanban (uma barra por ação salva no banco), criação → prazo
+function ganttHTMLpre(vis){
+  const fs=getMsValues('ms-st'), fpz=getMsValues('ms-prazo');
+  const acMatch=r=>(!fs.length||fs.includes(r.status||DEFAULT_STATUS))&&(!fpz.length||fpz.includes(prazoState(r)));
+  const items=[]; vis.forEach(f=>{const key=keyOf(f);(_DBROWS[key]||[]).forEach(r=>{if(acMatch(r)&&r.id)items.push({id:r.id,label:_firstLine(f.nome||f.fato)+(r.acao?' — '+_firstLine(r.acao):''),tag:projLabel(f.proj)+' · '+(f.vig||''),resp:r.responsavel,status:r.status,start:r.created_at,end:r.prazo});});});
+  return GanttView.html(items);
+}
 function toggleView(){VIEW=VIEW==='kanban'?'tabela':'kanban';updateViewBtnsPre();aplicar();}
 function showTabelaPre(){VIEW=VIEW==='flat'?'tabela':'flat';updateViewBtnsPre();aplicar();}
 function _firstLine(s){return String(s==null?'':s).split('\n')[0].trim();}
@@ -970,7 +981,7 @@ async function persistKModal(){
 }
 // Drag-and-drop do Kanban (montado 1x no #list, que persiste entre renders)
 (function(){const c=document.getElementById('list'); if(!c)return;
-  c.addEventListener('click',e=>{const card=e.target.closest&&e.target.closest('.kcard');if(card&&VIEW==='kanban'){const id=card.dataset.id;if(id)openKModal(id);}});
+  c.addEventListener('click',e=>{const gv=e.target.closest&&e.target.closest('.gv-row');if(gv&&gv.dataset.id){openKModal(gv.dataset.id);return;}const card=e.target.closest&&e.target.closest('.kcard');if(card&&VIEW==='kanban'){const id=card.dataset.id;if(id)openKModal(id);}});
   c.addEventListener('dragstart',e=>{const card=e.target.closest&&e.target.closest('.kcard');if(card&&card.getAttribute('draggable')==='true'){e.dataTransfer.setData('text/plain',card.dataset.id);e.dataTransfer.effectAllowed='move';card.classList.add('dragging');}});
   c.addEventListener('dragend',e=>{const card=e.target.closest&&e.target.closest('.kcard');if(card)card.classList.remove('dragging');});
   c.addEventListener('dragover',e=>{const col=e.target.closest&&e.target.closest('.kcol');if(col){e.preventDefault();e.dataTransfer.dropEffect='move';col.classList.add('kover');}});

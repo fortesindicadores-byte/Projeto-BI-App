@@ -735,8 +735,16 @@ function unitStats(cod){
   const os=(()=>{const a=byCod(DATA.os,cod);return a.length?a.filter(r=>(r.dias??0)<=OS_META).length/a.length*100:100;})();
   const cu=(()=>{const a=byCod(DATA.custos,cod);if(!a.length)return null;const o=sumA(a.map(r=>r.orc)),re=sumA(a.map(r=>r.rea));return Math.abs(o)>0?(Math.abs(re)-Math.abs(o))/Math.abs(o)*100:null;})();
   const dp=(()=>{const a=(DATA.disp||[]).filter(r=>r.cod===cod);if(!a.length)return null;const at=sumA(a.map(r=>r.ativos)),ind=sumA(a.map(r=>r.indisp));return at>0?(at-ind)/at*100:null;})();
+  // Checklist (Saída com OS Crítica) — binário: 0 saídas críticas no mês de referência = 100, alguma = 0
+  const ck=(()=>{
+    if(!DATA.chk)return null;
+    const hoje=new Date();
+    const ref=ateTerceiroDiaUtil(hoje)?new Date(hoje.getFullYear(),hoje.getMonth()-1,1):hoje;
+    const n=byCod(DATA.chk,cod).filter(r=>_n(r.tipo).includes('SAIDA')&&r.dt&&r.dt.getMonth()===ref.getMonth()&&r.dt.getFullYear()===ref.getFullYear()).length;
+    return n?0:100;
+  })();
   const _ps=pneusStats(cod);
-  return {sv,se,cf,pv,al,os,cu,dp,af:_ps.af,mm:_ps.mm,ca:_ps.ca};
+  return {sv,se,cf,pv,al,os,cu,dp,ck,af:_ps.af,mm:_ps.mm,ca:_ps.ca};
 }
 function renderRanking(el){
   const list=codsFiltrados().map(cod=>{
@@ -945,7 +953,7 @@ function renderHeroDots(el,cod){
   const stats=cod?unitStats(cod):(()=>{ // geral = média das unidades (respeita o filtro)
     const all=codsFiltrados().map(unitStats);
     const m=k=>avgA(all.map(a=>a[k]));
-    return {sv:m('sv'),se:m('se'),cf:m('cf'),pv:m('pv'),al:m('al'),os:m('os'),cu:m('cu'),dp:m('dp'),af:m('af'),mm:m('mm'),ca:m('ca')};
+    return {sv:m('sv'),se:m('se'),cf:m('cf'),pv:m('pv'),al:m('al'),os:m('os'),cu:m('cu'),dp:m('dp'),ck:m('ck'),af:m('af'),mm:m('mm'),ca:m('ca')};
   })();
   const dot=(v,cls)=>`<span class="dot ${cls==='cg'?'g':cls==='cy'?'y':cls==='cr'?'r':''}" style="${cls==='mut'?'background:#475569':''}"></span>`;
   const item=(lb,v,cls)=>`<div class="hero-delta"><span>${lb}</span><b class="${cls}">${dot(v,cls)} ${pct1(v)}</b></div>`;
@@ -957,6 +965,7 @@ function renderHeroDots(el,cod){
     item('Preventivas',stats.pv,clsPctMeta(stats.pv))+
     item('Alinhamento',stats.al,stats.al==null?'mut':stats.al>=80?'cg':'cr')+
     item('OS no prazo',stats.os,stats.os==null?'mut':stats.os>=90?'cg':stats.os>=70?'cy':'cr')+
+    item('Saída OS Crítica',stats.ck,stats.ck==null?'mut':stats.ck>=100?'cg':'cr')+
     item('Disponib.',stats.dp,dispCls(stats.dp))+
     item('Aferições',stats.af,clsPctMeta(stats.af,95,85))+
     item('Milimetragem',stats.mm,clsPctMeta(stats.mm,90,75))+
