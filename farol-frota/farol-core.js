@@ -754,16 +754,16 @@ function renderRanking(el){
   }).sort((a,b)=>(b.score??-1)-(a.score??-1));
   const cell=(v,cls)=>`<td class="num ${cls}">${pct1(v)}</td>`;
   const cCu=v=>v==null?'mut':v<=0?'cg':v<=5?'cy':'cr';
-  const rkHead='<thead><tr>'+['#','Unidade','Média','Stress Veíc.','Stress Emp.','CIFV','Preventivas','Alinhamento','OS no prazo','Disponib.','Aferições','Milimetr.','Calibr.','Custos Δ Orç %'].map((h,i)=>`<th${i>=2?' class="num"':''}>${h}</th>`).join('')+'</tr></thead>';
+  const rkHead='<thead><tr>'+['#','Unidade','Média','Stress Veíc.','Stress Emp.','CIFV','Preventivas','Alinhamento','OS no prazo','Saída OS Crít.','Disponib.','Aferições','Milimetr.','Calibr.','Custos Δ Orç %'].map((h,i)=>`<th${i>=2?' class="num"':''}>${h}</th>`).join('')+'</tr></thead>';
   el.innerHTML=wrapT('<table>'+rkHead+'<tbody>'+
     list.map((u,i)=>{
       const sc=u.score==null?'mut':u.score>=97?'#3BB33B':u.score>=90?'#EAB308':'#FF6666';
       return `<tr><td class="mut">${i+1}</td><td><b>${u.cod}</b></td>
       <td class="num">${u.score==null?'—':`<span class="pill" style="background:${sc}">${pct1(u.score)}</span>`}</td>
       ${cell(u.sv,clsPctMeta(u.sv))}${cell(u.se,clsPctMeta(u.se))}${cell(u.cf,clsPctMeta(u.cf))}${cell(u.pv,clsPctMeta(u.pv))}
-      ${cell(u.al,u.al==null?'mut':u.al>=80?'cg':'cr')}${cell(u.os,u.os==null?'mut':u.os>=90?'cg':u.os>=70?'cy':'cr')}${cell(u.dp,dispCls(u.dp))}${cell(u.af,clsPctMeta(u.af,95,85))}${cell(u.mm,clsPctMeta(u.mm,90,75))}${cell(u.ca,clsPctMeta(u.ca,90,75))}
+      ${cell(u.al,u.al==null?'mut':u.al>=80?'cg':'cr')}${cell(u.os,u.os==null?'mut':u.os>=90?'cg':u.os>=70?'cy':'cr')}${cell(u.ck,u.ck==null?'mut':u.ck>=100?'cg':'cr')}${cell(u.dp,dispCls(u.dp))}${cell(u.af,clsPctMeta(u.af,95,85))}${cell(u.mm,clsPctMeta(u.mm,90,75))}${cell(u.ca,clsPctMeta(u.ca,90,75))}
       <td class="num ${cCu(u.cu)}">${u.cu==null?'—':(u.cu>0?'+':'')+pct1(u.cu)}</td></tr>`;}).join('')+'</tbody></table>')+
-    '<div class="tbl-sub" style="margin-top:8px">Média = aderências (Stress V/E, CIFV, Preventivas, Alinhamento, OS no prazo, Disponibilidade, Aferições, Milimetragem e Calibragem). Custos é informativo (Δ Real vs Orç do mês). Aferições/Milimetragem/Calibragem vêm da API (foto Prolog); detalhe na seção Pneus abaixo.</div>';
+    '<div class="tbl-sub" style="margin-top:8px">Média = aderências (Stress V/E, CIFV, Preventivas, Alinhamento, OS no prazo, Disponibilidade, Aferições, Milimetragem e Calibragem). Saída OS Crít. é binária (Checklist do mês de referência: 100% sem saída crítica, 0% com) e Custos é informativo (Δ Real vs Orç do mês) — os dois fora da média. Aferições/Milimetragem/Calibragem vêm da API (foto Prolog); detalhe na seção Pneus abaixo.</div>';
 }
 
 // ── RESUMO EXECUTIVO (geral) ──
