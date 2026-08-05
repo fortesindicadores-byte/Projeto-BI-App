@@ -200,6 +200,24 @@ async function abrirSlicer(page, campo) {
     return null;
   });
 }
+// O popup do slicer fica ABERTO depois da seleção e intercepta o clique no
+// botão "..." do visual (Escape sozinho não fecha). Fecha clicando de novo no
+// próprio dropdown (toggle) e confirma que o popup sumiu.
+async function fecharPopupSlicer(page, dd) {
+  for (let t = 0; t < 5; t++) {
+    const aberto = await emFrames(page, async fr => {
+      const p = fr.locator('.slicer-dropdown-popup, [id^="slicer-dropdown-popup"]').filter({ visible: true }).first();
+      return (await p.count()) ? p : null;
+    });
+    if (!aberto) return true;
+    if (t === 0 && dd) { try { await dd.click({ timeout: 5000 }); } catch (e) {} }
+    else { await page.keyboard.press('Escape'); }
+    await page.waitForTimeout(1200);
+  }
+  log('atenção: popup de slicer continuou aberto');
+  return false;
+}
+
 async function itensDoSlicer(page) {
   const txt = [];
   for (const fr of page.frames()) {
@@ -235,7 +253,7 @@ async function aplicarSlicer(page, campo, valores) {
     await item.click(i === 0 ? {} : { modifiers: ['Control'] });
     await page.waitForTimeout(900);
   }
-  await page.keyboard.press('Escape');
+  await fecharPopupSlicer(page, hit.dd);
   await page.waitForTimeout(4000);
   log(`slicer "${campo}" = ${JSON.stringify(vals)} aplicado`);
   return true;
@@ -366,7 +384,8 @@ async function acharAlvo(page, cfg = {}) {
 
 // ── EXPORTAR o visual (hover → "..." → Exportar dados → confirma → xlsx) ────
 async function exportarTabela(page, alvo, nomeArq) {
-  const SEL_OPTS = '[aria-label*="Mais opções" i], [aria-label*="More options" i], [data-testid="visual-more-options-btn"], [title*="Mais opções" i], .vcMenuBtn';
+  await fecharPopupSlicer(page);   // qualquer popup aberto bloqueia o clique no "..."
+  const SEL_OPTS ='[aria-label*="Mais opções" i], [aria-label*="More options" i], [data-testid="visual-more-options-btn"], [title*="Mais opções" i], .vcMenuBtn';
   let opts = null;
   for (let t = 0; t < 10 && !opts; t++) {
     try { await alvo.v.hover(); } catch (e) {}
