@@ -489,6 +489,35 @@ async function moverTiles(page, dir, perto = null) {
 // Acha um tile (ano ou mês), rolando a faixa e esperando a página montar.
 // `perto` = caixa do tile do ANO: restringe à mesma faixa horizontal, porque a
 // página dos Pneus tem um slicer de mês por seção.
+// Rola a faixa de meses DIRETO no elemento que tem rolagem horizontal, em vez
+// de simular seta ou roda do mouse (nenhum dos dois move o slicer do Power BI).
+// Acha o tile do ano dentro do frame para descobrir a faixa e empurra o
+// scrollLeft de todo contêiner rolável naquela altura.
+let ultimoAno = null;
+async function rolarFaixaDoAno(page, ano, dir) {
+  for (const fr of page.frames()) {
+    try {
+      const ok = await fr.evaluate(({ ano, dir }) => {
+        const tiles = [...document.querySelectorAll('.slicerItemContainer, [role="option"]')];
+        const anoEl = tiles.find(e => (e.getAttribute('title') || e.textContent || '').trim() === String(ano));
+        if (!anoEl) return false;
+        const r = anoEl.getBoundingClientRect();
+        const y = r.top + r.height / 2;
+        const conts = [...document.querySelectorAll('div')].filter(e => {
+          if (e.scrollWidth <= e.clientWidth + 4) return false;
+          const b = e.getBoundingClientRect();
+          return b.height > 0 && Math.abs(b.top + b.height / 2 - y) < 150;
+        });
+        if (!conts.length) return false;
+        conts.forEach(e => { e.scrollLeft += (dir === 'next' ? 320 : -320); });
+        return true;
+      }, { ano, dir });
+      if (ok) return true;
+    } catch (e) {}
+  }
+  return false;
+}
+
 async function acharTile(page, texto, perto = null) {
   for (let t = 0; t < 8; t++) {
     const b = await emFrames(page, async fr => {
@@ -508,7 +537,10 @@ async function acharTile(page, texto, perto = null) {
     if (b) return b;
     // procura primeiro para a DIREITA: os meses são clicados do mais recente
     // para o mais antigo, e o que falta costuma estar adiante na faixa
-    if (!(await moverTiles(page, t % 2 === 0 ? 'next' : 'prev', perto))) await page.waitForTimeout(4000);
+    const dir = t % 2 === 0 ? 'next' : 'prev';
+    const rolou = (perto && ultimoAno) ? await rolarFaixaDoAno(page, ultimoAno, dir) : false;
+    if (!rolou && !(await moverTiles(page, dir, perto))) await page.waitForTimeout(4000);
+    await page.waitForTimeout(800);
   }
   return null;
 }
@@ -526,6 +558,7 @@ async function selecionarBotoesPeriodo(page, ano, meses) {
   // documento — que é de outra seção da página (Calibragem/Milimetragem) — e a
   // tabela de Aderência Aferição ficava sem filtro de mês.
   ultimoAnoBox = null;
+  ultimoAno = ano;
   const elAno = await acharTile(page, String(ano));   // com rolagem e espera
   if (elAno) {
     ultimoAnoBox = await elAno.boundingBox().catch(() => null);
