@@ -494,6 +494,46 @@ async function moverTiles(page, dir, perto = null) {
 // Acha o tile do ano dentro do frame para descobrir a faixa e empurra o
 // scrollLeft de todo contêiner rolável naquela altura.
 let ultimoAno = null;
+// A faixa de meses dos Pneus NÃO rola: tem uma seta ">" logo depois do último
+// mês ("Utilize a seta para navegar ao próximo nível"). É por isso que roda do
+// mouse, setas genéricas e scrollLeft não moviam nada — não havia o que rolar.
+// Acha o elemento pequeno e clicável imediatamente à direita do último tile da
+// faixa do ano e clica nele.
+async function setaProximoNivel(page, ano) {
+  for (const fr of page.frames()) {
+    try {
+      const ok = await fr.evaluate(({ ano }) => {
+        const tiles = [...document.querySelectorAll('.slicerItemContainer, [role="option"]')];
+        const anoEl = tiles.find(e => (e.getAttribute('title') || e.textContent || '').trim() === String(ano));
+        if (!anoEl) return false;
+        const r = anoEl.getBoundingClientRect();
+        const y = r.top + r.height / 2;
+        const naFaixa = tiles.filter(e => {
+          const b = e.getBoundingClientRect();
+          return b.height > 0 && Math.abs(b.top + b.height / 2 - y) < 80;
+        });
+        if (!naFaixa.length) return false;
+        const maxX = Math.max(...naFaixa.map(e => e.getBoundingClientRect().right));
+        const cands = [...document.querySelectorAll('div,span,img,svg,button,i,path')].filter(e => {
+          const b = e.getBoundingClientRect();
+          return b.width > 0 && b.width < 60 && b.height > 0 && b.height < 60
+            && Math.abs(b.top + b.height / 2 - y) < 80
+            && b.left >= maxX - 5 && b.left < maxX + 220;
+        });
+        if (!cands.length) return false;
+        cands.sort((a, b) => a.getBoundingClientRect().left - b.getBoundingClientRect().left);
+        const alvo = cands[0];
+        const o = { bubbles: true, cancelable: true, view: window };
+        alvo.dispatchEvent(new MouseEvent('mousedown', o));
+        alvo.dispatchEvent(new MouseEvent('mouseup', o));
+        alvo.dispatchEvent(new MouseEvent('click', o));
+        return true;
+      }, { ano });
+      if (ok) return true;
+    } catch (e) {}
+  }
+  return false;
+}
 async function rolarFaixaDoAno(page, ano, dir) {
   for (const fr of page.frames()) {
     try {
@@ -538,9 +578,13 @@ async function acharTile(page, texto, perto = null) {
     // procura primeiro para a DIREITA: os meses são clicados do mais recente
     // para o mais antigo, e o que falta costuma estar adiante na faixa
     const dir = t % 2 === 0 ? 'next' : 'prev';
-    const rolou = (perto && ultimoAno) ? await rolarFaixaDoAno(page, ultimoAno, dir) : false;
-    if (!rolou && !(await moverTiles(page, dir, perto))) await page.waitForTimeout(4000);
-    await page.waitForTimeout(800);
+    // avançar a faixa = clicar na seta ">" do slicer (não é rolagem); rolagem e
+    // setas genéricas ficam como plano B para as outras telas
+    let avancou = false;
+    if (perto && ultimoAno && dir === 'next') avancou = await setaProximoNivel(page, ultimoAno);
+    if (!avancou && perto && ultimoAno) avancou = await rolarFaixaDoAno(page, ultimoAno, dir);
+    if (!avancou && !(await moverTiles(page, dir, perto))) await page.waitForTimeout(4000);
+    await page.waitForTimeout(1500);
   }
   return null;
 }
