@@ -466,9 +466,21 @@ async function moverTiles(page, dir, perto = null) {
     cand.sort((a, b) => a.bb.x - b.bb.x);
     return dir === 'prev' ? cand[0].e : cand[cand.length - 1].e;
   });
-  if (!el) return false;
-  try { await el.click({ timeout: 5000 }); await page.waitForTimeout(1200); return true; }
-  catch (e) { return false; }
+  if (el) {
+    try { await el.click({ timeout: 5000 }); await page.waitForTimeout(1200); return true; } catch (e) {}
+  }
+  // Sem seta clicável: rola a faixa com a roda do mouse na horizontal. Nos
+  // Pneus o grupo da Aderência Aferição renderiza só janeiro→junho; julho está
+  // à direita e precisa de rolagem, não de outro seletor.
+  if (perto) {
+    try {
+      await page.mouse.move(700, perto.y + perto.height / 2);
+      await page.mouse.wheel(dir === 'next' ? 400 : -400, 0);
+      await page.waitForTimeout(1200);
+      return true;
+    } catch (e) {}
+  }
+  return false;
 }
 // clica um tile (ano ou mês). SEM filtro de visível: o tile pode estar fora da
 // faixa rolável — rola até ele em vez de descartá-lo.
@@ -493,7 +505,9 @@ async function clicarTile(page, texto, modo = {}, perto = null) {
       await page.waitForTimeout(1200);
       if (ok) return true;
     }
-    if (!(await moverTiles(page, t % 2 === 0 ? 'prev' : 'next', perto))) break;
+    // procura primeiro para a DIREITA: os meses são clicados do mais recente
+    // para o mais antigo, e o que falta costuma estar adiante na faixa
+    if (!(await moverTiles(page, t % 2 === 0 ? 'next' : 'prev', perto))) break;
   }
   return false;
 }
