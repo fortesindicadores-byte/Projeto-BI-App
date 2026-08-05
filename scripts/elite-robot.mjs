@@ -472,9 +472,11 @@ async function moverTiles(page, dir, perto = null) {
   // Sem seta clicável: rola a faixa com a roda do mouse na horizontal. Nos
   // Pneus o grupo da Aderência Aferição renderiza só janeiro→junho; julho está
   // à direita e precisa de rolagem, não de outro seletor.
-  if (perto) {
+  {
     try {
-      await page.mouse.move(700, perto.y + perto.height / 2);
+      // sem referência de faixa (busca do ano), rola na área baixa da página,
+      // onde ficam os tiles de período
+      await page.mouse.move(700, perto ? perto.y + perto.height / 2 : 780);
       await page.mouse.wheel(dir === 'next' ? 400 : -400, 0);
       await page.waitForTimeout(1200);
       return true;
@@ -484,8 +486,11 @@ async function moverTiles(page, dir, perto = null) {
 }
 // clica um tile (ano ou mês). SEM filtro de visível: o tile pode estar fora da
 // faixa rolável — rola até ele em vez de descartá-lo.
-async function clicarTile(page, texto, modo = {}, perto = null) {
-  for (let t = 0; t < 6; t++) {
+// Acha um tile (ano ou mês), rolando a faixa e esperando a página montar.
+// `perto` = caixa do tile do ANO: restringe à mesma faixa horizontal, porque a
+// página dos Pneus tem um slicer de mês por seção.
+async function acharTile(page, texto, perto = null) {
+  for (let t = 0; t < 8; t++) {
     const b = await emFrames(page, async fr => {
       const els = fr.locator(`.slicerItemContainer:has-text("${texto}"), [role="option"]:has-text("${texto}"), span:text-is("${texto}")`);
       const n = await els.count();
@@ -500,16 +505,19 @@ async function clicarTile(page, texto, modo = {}, perto = null) {
       }
       return dist < 120 ? melhor : null;
     });
-    if (b) {
-      const ok = await clicarRobusto(page, b, { ctrl: !!(modo.modifiers || []).length, timeout: 8000 });
-      await page.waitForTimeout(1200);
-      if (ok) return true;
-    }
+    if (b) return b;
     // procura primeiro para a DIREITA: os meses são clicados do mais recente
     // para o mais antigo, e o que falta costuma estar adiante na faixa
-    if (!(await moverTiles(page, t % 2 === 0 ? 'next' : 'prev', perto))) break;
+    if (!(await moverTiles(page, t % 2 === 0 ? 'next' : 'prev', perto))) await page.waitForTimeout(4000);
   }
-  return false;
+  return null;
+}
+async function clicarTile(page, texto, modo = {}, perto = null) {
+  const b = await acharTile(page, texto, perto);
+  if (!b) return false;
+  const ok = await clicarRobusto(page, b, { ctrl: !!(modo.modifiers || []).length, timeout: 8000 });
+  await page.waitForTimeout(1200);
+  return ok;
 }
 let ultimoAnoBox = null;   // faixa do slicer de período usado por último (Pneus)
 async function selecionarBotoesPeriodo(page, ano, meses) {
@@ -518,16 +526,10 @@ async function selecionarBotoesPeriodo(page, ano, meses) {
   // documento — que é de outra seção da página (Calibragem/Milimetragem) — e a
   // tabela de Aderência Aferição ficava sem filtro de mês.
   ultimoAnoBox = null;
-  for (let t = 0; t < 6 && !ultimoAnoBox; t++) {
-    const el = await emFrames(page, async fr => {
-      const e = fr.locator(`.slicerItemContainer:has-text("${ano}"), [role="option"]:has-text("${ano}"), span:text-is("${ano}")`).first();
-      return (await e.count()) ? e : null;
-    });
-    if (el) {
-      ultimoAnoBox = await el.boundingBox().catch(() => null);
-      if (ultimoAnoBox) await clicarRobusto(page, el, { timeout: 8000 });
-    }
-    if (!ultimoAnoBox) await page.waitForTimeout(5000);
+  const elAno = await acharTile(page, String(ano));   // com rolagem e espera
+  if (elAno) {
+    ultimoAnoBox = await elAno.boundingBox().catch(() => null);
+    if (ultimoAnoBox) await clicarRobusto(page, elAno, { timeout: 8000 });
   }
   if (!ultimoAnoBox) { log(`tile do ano ${ano} não encontrado`); return false; }
   const clicar = (txt, modo) => clicarTile(page, txt, modo, ultimoAnoBox);
