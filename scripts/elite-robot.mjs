@@ -98,9 +98,12 @@ const INDICADORES = [
 
   // 7. Stress Test Frota / Empilhadeira / CIVF — mesmas telas do robô do Farol,
   //    aqui coletadas POR VIGÊNCIA (aderência = desconto 0 → 1, senão 0; o leitor calcula)
+  // Quinzena: a tela abre em "Primeira" e o export saía só com metade do mês
+  // ("descricao é Primeira" no resumo de filtros). Mês fechado = as duas.
   { chave: 'stress-test-frota', menu: ['STRESS TEST', 'STRESS TEST FROTA'],
     url: 'https://bi.ginfo.app.br/bi/ce4f37f8-1c4c-499f-a80c-3a3ce80594cb?autoAuth=true&ctid=c16300de-7070-4b58-80c8-af99af1e1f65',
-    periodo: { tipo: 'dropdown' } },
+    periodo: { tipo: 'dropdown' },
+    slicersFixos: [{ campo: 'Quinzena', valor: ['Primeira', 'Segunda'] }] },
   { chave: 'stress-test-empilhadeira', menu: ['STRESS TEST', 'STRESS TEST EMPILHADEIRA'],
     url: 'https://bi.ginfo.app.br/bi/d1cead3d-e28a-487b-a1bd-8b72cdd6da55?autoAuth=true&ctid=c16300de-7070-4b58-80c8-af99af1e1f65',
     periodo: { tipo: 'dropdown' }, tabela: { header: 'Chassis' } },
@@ -172,7 +175,22 @@ async function login(page) {
 }
 
 // ── NAVEGAÇÃO PELO MENU (deep-link recarrega o app Vue e volta p/ /bi/inicio) ─
+// O menu lateral às vezes ainda não montou (ou o portal está na tela de
+// boas-vindas). Tenta de novo, voltando para /bi/inicio entre as tentativas.
 async function clicarMenu(page, secao, item) {
+  for (let t = 0; t < 3; t++) {
+    try { await clicarMenuUma(page, secao, item); return; }
+    catch (e) {
+      log(`menu ${secao} → ${item} falhou (tentativa ${t + 1}):`, String(e.message).split('\n')[0]);
+      if (t === 2) throw e;
+      try {
+        await page.goto('https://bi.ginfo.app.br/bi/inicio', { waitUntil: 'domcontentloaded', timeout: 60000 });
+        await page.waitForTimeout(8000);
+      } catch (_) {}
+    }
+  }
+}
+async function clicarMenuUma(page, secao, item) {
   if (secao === item) {
     try { await page.getByText(secao, { exact: true }).first().click({ timeout: 8000 }); await page.waitForTimeout(1200); } catch (e) {}
     // .filter({visible:true}): o portal mantém ocorrências ocultas do mesmo
@@ -193,30 +211,35 @@ async function clicarMenu(page, secao, item) {
 }
 
 // ── FILTRO 1: slicer dropdown (Ano / Mês), com multisseleção p/ o acumulado ──
-async function abrirSlicer(page, campo) {
-  return emFrames(page, async fr => {
-    const dd = fr.locator(`.slicer-dropdown-menu:below(:text("${campo}"))`).first();
-    if (await dd.count()) return { fr, dd };
-    const alt = fr.locator(`[aria-label="${campo}"]`).first();
-    if (await alt.count()) return { fr, dd: alt };
-    // fallback: o dropdown VISÍVEL mais próximo do rótulo (telas onde o
-    // ":below" não casa, como a Aderência Conformidade)
-    const lbl = fr.getByText(campo, { exact: true }).filter({ visible: true }).first();
-    if (!(await lbl.count())) return null;
-    const lb = await lbl.boundingBox().catch(() => null);
-    if (!lb) return null;
-    const dds = fr.locator('.slicer-dropdown-menu, .slicer-restatement, .slicerHeader, [class*="slicer"][role="button"]').filter({ visible: true });
-    const n = await dds.count();
-    let best = null, bd = Infinity;
-    for (let i = 0; i < n; i++) {
-      const e = dds.nth(i);
-      const b = await e.boundingBox().catch(() => null);
-      if (!b) continue;
-      const d = Math.hypot(b.x - lb.x, b.y - lb.y);
-      if (d < bd) { bd = d; best = e; }
-    }
-    return best ? { fr, dd: best } : null;
-  });
+// Devolve TODOS os candidatos a dropdown do campo, do mais provável ao menos —
+// quem chama tenta um a um até algum abrir com itens (na Conformidade o
+// "mais próximo do rótulo" abria um dropdown vazio, que era o errado).
+async function candidatosSlicer(page, campo) {
+  const out = [];
+  for (const fr of page.frames()) {
+    try {
+      const a = fr.locator(`.slicer-dropdown-menu:below(:text("${campo}"))`).first();
+      if (await a.count()) out.push({ fr, dd: a });
+      const b = fr.locator(`[aria-label="${campo}"]`).first();
+      if (await b.count()) out.push({ fr, dd: b });
+      const lbl = fr.getByText(campo, { exact: true }).filter({ visible: true }).first();
+      if (!(await lbl.count())) continue;
+      const lb = await lbl.boundingBox().catch(() => null);
+      if (!lb) continue;
+      const dds = fr.locator('.slicer-dropdown-menu, .slicer-restatement, .slicerHeader, [class*="slicer"][role="button"]').filter({ visible: true });
+      const n = await dds.count();
+      const arr = [];
+      for (let i = 0; i < n; i++) {
+        const e = dds.nth(i);
+        const bb = await e.boundingBox().catch(() => null);
+        if (!bb) continue;
+        arr.push({ e, d: Math.hypot(bb.x - lb.x, bb.y - lb.y) });
+      }
+      arr.sort((x, y) => x.d - y.d);
+      arr.slice(0, 3).forEach(x => out.push({ fr, dd: x.e }));
+    } catch (e) {}
+  }
+  return out;
 }
 // diagnóstico p/ o log quando um slicer não é achado: que rótulos existem?
 async function rotulosDeSlicer(page) {
@@ -265,17 +288,26 @@ async function aplicarSlicer(page, campo, valores) {
   const vals = Array.isArray(valores) ? valores : [valores];
   // o embed pode demorar a montar os slicers — procura por até ~45s em vez de
   // uma vez só (era o que derrubava a Aderência Conformidade)
-  let hit = null;
-  for (let t = 0; t < 9 && !hit; t++) {
-    hit = await abrirSlicer(page, campo);
-    if (!hit) await page.waitForTimeout(5000);
+  let cands = [];
+  for (let t = 0; t < 9 && !cands.length; t++) {
+    cands = await candidatosSlicer(page, campo);
+    if (!cands.length) await page.waitForTimeout(5000);
   }
-  if (!hit) {
+  if (!cands.length) {
     log(`slicer "${campo}" não encontrado — slicers visíveis:`, JSON.stringify(await rotulosDeSlicer(page)));
     return false;
   }
-  await hit.dd.click({ timeout: 10000 });
-  await page.waitForTimeout(2500);
+  // tenta cada candidato até um abrir COM ITENS (o mais próximo do rótulo nem
+  // sempre é o certo — na Conformidade abria um dropdown vazio)
+  let hit = null;
+  for (const c of cands) {
+    try { await c.dd.click({ timeout: 8000 }); } catch (e) { continue; }
+    await page.waitForTimeout(2500);
+    if ((await itensDoSlicer(page)).length) { hit = c; break; }
+    await page.keyboard.press('Escape');
+    await page.waitForTimeout(800);
+  }
+  if (!hit) { log(`dropdown "${campo}" não abriu com itens (${cands.length} candidato(s))`); return false; }
   for (let i = 0; i < vals.length; i++) {
     const v = vals[i];
     const buscar = () => emFrames(page, async fr => {
@@ -289,7 +321,12 @@ async function aplicarSlicer(page, campo, valores) {
       await page.keyboard.press('Escape');
       return false;
     }
-    await item.click(i === 0 ? {} : { modifiers: ['Control'] });
+    // a lista do dropdown rola: o item pode existir e estar fora da área
+    // visível (foi o que travou o Stress Test Empilhadeira no "Fev-26")
+    try { await item.scrollIntoViewIfNeeded({ timeout: 5000 }); } catch (e) {}
+    const modo = i === 0 ? {} : { modifiers: ['Control'] };
+    try { await item.click({ ...modo, timeout: 10000 }); }
+    catch (e) { await item.click({ ...modo, force: true, timeout: 10000 }); }
     await page.waitForTimeout(900);
   }
   await fecharPopupSlicer(page, hit.dd);
@@ -381,7 +418,13 @@ async function selecionarBotoesPeriodo(page, ano, meses) {
     }
     return false;
   };
-  if (!(await clicar(String(ano), {}))) { log(`tile do ano ${ano} não encontrado`); return false; }
+  // os tiles também demoram a montar — insiste antes de desistir do ano
+  let okAno = false;
+  for (let t = 0; t < 6 && !okAno; t++) {
+    okAno = await clicar(String(ano), {});
+    if (!okAno) await page.waitForTimeout(5000);
+  }
+  if (!okAno) { log(`tile do ano ${ano} não encontrado`); return false; }
   await page.waitForTimeout(2500);
   // do mês MAIS RECENTE para o mais antigo: o recente já está visível, e a
   // rolagem segue sempre no mesmo sentido em vez de ir e voltar.
@@ -643,6 +686,13 @@ async function coletar(page, ind, vigencia, escopo) {
       ? MES_FULL.slice(0, ref.getMonth() + 1)
       : [MES_FULL[ref.getMonth()]];
     ok = await selecionarBotoesPeriodo(page, ref.getFullYear(), meses);
+  }
+  // filtros fixos da tela (ex.: as duas quinzenas do Stress Test Frota)
+  if (ok && Array.isArray(ind.slicersFixos)) {
+    for (const s of ind.slicersFixos) {
+      ok = await aplicarSlicer(page, s.campo, s.valor);
+      if (!ok) break;
+    }
   }
   await shot(page, '10-' + tag);
   if (!ok) throw new Error(`período não aplicado em ${tag} — abortando p/ não gravar dado errado`);
