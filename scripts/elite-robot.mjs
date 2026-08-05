@@ -104,11 +104,18 @@ const INDICADORES = [
     url: 'https://bi.ginfo.app.br/bi/ce4f37f8-1c4c-499f-a80c-3a3ce80594cb?autoAuth=true&ctid=c16300de-7070-4b58-80c8-af99af1e1f65',
     periodo: { tipo: 'dropdown' },
     slicersFixos: [{ campo: 'Quinzena', valor: 'Segunda' }] },
-  // Empilhadeira NÃO tem filtro de quinzena: as duas são colunas e o
-  // "Desc. Total" já soma ambas.
+  // Empilhadeira (Renan, 05/08): usar a tela como ela vem, sem mexer em filtro
+  // nenhum além do Mês. NÃO tem filtro de quinzena (as duas são colunas e o
+  // "Desc. Total" já soma). E NÃO tocar no "Ano": o que parece um slicer ali é
+  // elemento de visual — clicar cria um filtro "Incluídos (1) 2026 + janeiro"
+  // que, cruzado com o mês pedido, zera o resultado (deu 1 linha). O valor do
+  // Mês já carrega o ano ("Jul-26"), então o Ano é dispensável.
+  // Acumulado do ano: a multisseleção não acumula nessa tela, então o ano sai
+  // da soma dos meses no leitor, em vez de forçar a UI.
   { chave: 'stress-test-empilhadeira', menu: ['STRESS TEST', 'STRESS TEST EMPILHADEIRA'],
     url: 'https://bi.ginfo.app.br/bi/d1cead3d-e28a-487b-a1bd-8b72cdd6da55?autoAuth=true&ctid=c16300de-7070-4b58-80c8-af99af1e1f65',
-    periodo: { tipo: 'dropdown' }, tabela: { header: 'Chassis' } },
+    periodo: { tipo: 'dropdown', semAno: true }, semAcumulado: true,
+    tabela: { header: 'Chassis' } },
   { chave: 'civf', menu: ['CIVF', 'CIVF'],
     url: 'https://bi.ginfo.app.br/bi/5bd5e3ac-7ebc-4c7b-963e-1c3d20ba4acd?autoAuth=true&ctid=c16300de-7070-4b58-80c8-af99af1e1f65',
     periodo: { tipo: 'dropdown' }, tabela: { ultima: true } },
@@ -759,7 +766,9 @@ async function coletar(page, ind, vigencia, escopo) {
     const meses = escopo === 'ano'
       ? Array.from({ length: ref.getMonth() + 1 }, (_, i) => mesDropdown(new Date(ref.getFullYear(), i, 1)))
       : [mesDropdown(ref)];
-    ok = await aplicarSlicer(page, 'Ano', String(ref.getFullYear()));
+    // p.semAno: o valor do Mês já traz o ano ("Jul-26") e, em algumas telas, o
+    // que parece o slicer "Ano" é um visual — clicar cria filtro de "Incluídos"
+    ok = p.semAno ? true : await aplicarSlicer(page, 'Ano', String(ref.getFullYear()));
     if (ok) ok = await aplicarSlicer(page, 'Mês', meses);
   } else if (p.tipo === 'datas') {
     ok = await preencherDatas(page, p.rotulo, dataDe(ini), dataDe(fim));
@@ -859,6 +868,10 @@ async function main() {
     for (const vig of vigencias) {
       for (const esc of escopos) {
         for (const ind of inds) {
+          if (esc === 'ano' && ind.semAcumulado) {
+            log(`— ${ind.chave}: acumulado do ano sai da soma dos meses no leitor (a tela não acumula)`);
+            continue;
+          }
           for (let tent = 1; tent <= 2; tent++) {
             try {
               if (/\/login/i.test(page.url())) { log('sessão caiu — refazendo o login'); await login(page); }
