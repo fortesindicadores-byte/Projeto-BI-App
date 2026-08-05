@@ -686,6 +686,36 @@ async function gravarSupabase(indicador, vigencia, escopo, linhas) {
   log(`gravado: ${indicador} ${vigencia} (${escopo}) — ${linhas.length} linhas`);
 }
 
+// ── DIAGNÓSTICO ─────────────────────────────────────────────────────────────
+// Este ambiente não alcança o bi.ginfo.app.br: o único jeito de "ver" a tela é
+// o robô despejar a estrutura real no log do Actions quando algo falha.
+async function diagnostico(page, tag) {
+  log(`DIAG ${tag} · url=${page.url()}`);
+  try {
+    const sb = await page.locator('#sidebar, #divSidebar, .sidebar').first()
+      .evaluate(el => el.innerText.replace(/\s+/g, ' ').slice(0, 1200)).catch(() => null);
+    if (sb) log('DIAG menu:', sb);
+  } catch (e) {}
+  for (const fr of page.frames()) {
+    try {
+      const its = await fr.locator('.slicerItemContainer, [role="option"]').evaluateAll(els =>
+        els.slice(0, 30).map(e => ({
+          t: (e.getAttribute('title') || e.textContent || '').trim().slice(0, 20),
+          sel: e.getAttribute('aria-selected'),
+          box: !!e.getClientRects().length,
+        })));
+      if (its.length) log('DIAG itens de slicer:', JSON.stringify(its));
+      const sl = await fr.locator('[class*="slicer"]').evaluateAll(els =>
+        [...new Set(els.slice(0, 40).map(e =>
+          `${e.className}|${e.getAttribute('aria-label') || ''}|${(e.textContent || '').trim().slice(0, 18)}`))]);
+      if (sl.length) log('DIAG slicers:', JSON.stringify(sl).slice(0, 2000));
+      const gr = await fr.locator('[role="grid"], [role="table"]').evaluateAll(els =>
+        els.map(e => [...e.querySelectorAll('[role="columnheader"]')].map(h => h.textContent.trim()).join(' | ').slice(0, 160)));
+      if (gr.length) log('DIAG tabelas:', JSON.stringify(gr));
+    } catch (e) {}
+  }
+}
+
 // ── COLETA de 1 indicador em 1 vigência/escopo ──────────────────────────────
 async function coletar(page, ind, vigencia, escopo) {
   const ref = refDe(vigencia);
@@ -837,6 +867,7 @@ async function main() {
             } catch (e) {
               log(`ERRO ${ind.chave} ${vig}/${esc} (tentativa ${tent}):`, e.message);
               await shot(page, `99-erro-${ind.chave}-${vig.replace('/', '-')}-${esc}-t${tent}`);
+              if (tent === 1) await diagnostico(page, `${ind.chave} ${vig}/${esc}`);
               if (tent === 2) erros++;
             }
           }
