@@ -1,0 +1,84 @@
+name: Elite Robot (Frota de Elite -> Supabase)
+
+# Coleta os indicadores do Frota de Elite no BI do Ginfo, POR VIGÊNCIA, e grava
+# em elite_snapshot (Supabase). Diferente do robô do Farol: aqui é mês a mês +
+# acumulado do ano (jan → mês de referência).
+#
+# Modos:
+#   login    → só valida o acesso (screenshots nos artifacts)
+#   mes      → rotina: mês anterior fechado + acumulado do ano até ele
+#   backfill → intervalo de/até (MM/AAAA), mês a mês
+on:
+  workflow_dispatch:
+    inputs:
+      modo:
+        description: "login = testa acesso · mes = rotina · backfill = histórico"
+        required: true
+        default: "login"
+        type: choice
+        options: [login, mes, backfill]
+      indicador:
+        description: "(opcional) indicadores separados por vírgula — ex.: disponibilidade,pneus"
+        required: false
+        type: string
+      de:
+        description: "backfill: vigência inicial MM/AAAA (default 01/2026)"
+        required: false
+        type: string
+      ate:
+        description: "backfill: vigência final MM/AAAA (default mês anterior)"
+        required: false
+        type: string
+      escopos:
+        description: "mes · ano · mes,ano"
+        required: false
+        type: string
+      forcar:
+        description: "roda mesmo depois do dia 15 (modo mes)"
+        required: false
+        default: false
+        type: boolean
+  # todo dia às 7:30 BRT (10:30 UTC). O próprio script só age do dia 01 ao 15.
+  schedule:
+    - cron: '30 10 * * *'
+
+concurrency:
+  group: elite-robot
+  cancel-in-progress: false
+
+jobs:
+  robo:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Instalar Playwright + xlsx
+        run: |
+          npm init -y >/dev/null 2>&1
+          npm i --no-audit --no-fund playwright xlsx
+          npx playwright install --with-deps chromium
+      - name: Rodar robô
+        run: node scripts/elite-robot.mjs
+        env:
+          ELITE_MODE:               ${{ github.event.inputs.modo || 'mes' }}
+          ELITE_IND:                ${{ github.event.inputs.indicador }}
+          ELITE_DE:                 ${{ github.event.inputs.de }}
+          ELITE_ATE:                ${{ github.event.inputs.ate }}
+          ELITE_ESCOPOS:            ${{ github.event.inputs.escopos }}
+          ELITE_FORCAR:             ${{ github.event.inputs.forcar == 'true' && '1' || '' }}
+          GINFO_USER:               ${{ secrets.GINFO_USER }}
+          GINFO_PASS:               ${{ secrets.GINFO_PASS }}
+          GINFO_URL:                ${{ secrets.GINFO_URL }}
+          GINFO_EMPRESA:            ${{ secrets.GINFO_EMPRESA }}
+          GEM_SUPABASE_SERVICE_KEY: ${{ secrets.GEM_SUPABASE_SERVICE_KEY }}
+      - name: Publicar screenshots/downloads (debug)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: elite-artifacts
+          path: elite-artifacts/
+          if-no-files-found: ignore
+          retention-days: 7

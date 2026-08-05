@@ -688,6 +688,39 @@ Automatiza a coleta dos dados que hoje são copiados manualmente do BI do Ginfo 
 
 Em paralelo: perguntar ao Ginfo se existe API/export oficial (trocaria o RPA por consulta estável).
 
+## Robô Frota de Elite (Ginfo → Supabase, por vigência) — em construção (05/08/2026)
+
+Automatiza a planilha **Frota de Elite** (`1DXmjzj2KRrTdQxmvXRclGxhBeDMwoIoLvORqbh3GG6M`, hoje preenchida à mão a partir do Ginfo). Mesmo desenho do robô do Farol, com **duas diferenças**: coleta **mês a mês** e também o **acumulado do ano** (jan → mês de referência, ponderado pelo BI — não é média das médias).
+
+**Peças:** `scripts/elite-robot.mjs` (Playwright) · `.github/workflows/elite-robot.yml` (dispatch `login`/`mes`/`backfill` + cron diário 7:30 BRT) · `scripts/elite-supabase.sql` → tabela **`elite_snapshot`** com PK `(indicador, vigencia, escopo)`, `escopo` ∈ `mes`|`ano`.
+
+**Regras (Renan, 05/08/2026):**
+- **Nomenclatura:** acabam "IV"/"IC" — tudo é **indicador**. Os ICs atuais são os únicos do Frota de Elite; os novos (Amplitude, MTBF/MTTR, OS Vencida, Blitz de Segurança, % Calibragem OK) entram **só no Gerot**, para gerar ação.
+- **Atingimento = a própria aderência** em todos. O robô NÃO carimba meta — a estrutura de pesos do painel já está pronta.
+- **Calendário:** roda todo dia do **dia 01 ao 15** gravando o **mês anterior fechado** + o acumulado do ano até ele; depois do 15 para e volta no dia 01. (≠ regra do dia 10 do Farol.)
+- **Backfill a partir de 01/2026** (2025 não entra). Filtro de ano só no ano que vem.
+- **MTBF e MTTR saem do mesmo relatório da Disponibilidade** (`2.4 - MTBF E MTTR`) — uma coleta, três indicadores.
+- **API Prolog** (Amplitude, % Calibragem OK) já roda — reaproveitar.
+
+**Mapa indicador → relatório (todos por Filial):**
+| Indicador | Menu Ginfo | Período | Coluna |
+|---|---|---|---|
+| disponibilidade | FROTA → 2.4 - MTBF E MTTR | dropdown Ano+Mês | Disponibilidade Veículos (+ MTTR/MTBF) |
+| preventivas | FROTA → 2.2 - PREVENTIVAS | datas "Data de Execução" (bloco VISÃO HISTÓRICA) | Aderência |
+| pneus | FROTA → 3.4 - PNEUS | tiles ano+mês no rodapé (ctrl+clique p/ o ano) | Aderência Aferição |
+| checklist-t2 | FROTA → 1.3 - ADERÊNCIA FROTA - 031120 | datas "Data" | Aderência |
+| checklist-t1 | FROTA → 1.3 - ADERÊNCIA EMPURRADA | datas "Data" | **Aderência Saída** |
+| checklist-wh | FROTA → 1.3 - ADERÊNCIA ARMAZÉM (**só EMPILHADEIRA**) | datas "Data" | **Aderência** (não a Aderência Ponto) |
+| conformidade | FROTA → 1.2 - ADERÊNCIA CONFORMIDADE | dropdown Ano+Mês | Mensal ou Bimestral (regra abaixo) |
+| stress-test-frota / -empilhadeira / civf | mesmas telas do Farol | dropdown Mês | aderência = desconto 0 → 1, senão 0 |
+| sla-manutencao | FROTA → 2.4 - ORDEM SERVIÇO | datas "Data" | SLA Atendimento |
+
+**Conformidade — regra do leitor:** PIRAI EMPURRADA, MACACU EMPURRADA, CUIABA EMPURRADA e CDD RIO DE JANEIRO usam **Aderência Bimestral** de **jan a jun**; as demais, **Mensal**. **De julho em diante, todas bimestral.**
+
+**Três mecânicas de filtro** (o robô do Farol só tinha a primeira): `dropdown` (slicer Ano/Mês, com ctrl+clique para somar meses no acumulado) · `datas` (par de campos dd/mm/aaaa — escolhe o par mais próximo do rótulo, porque Preventivas tem dois pares) · `botoes` (tiles de ano/mês no rodapé dos Pneus, com seta "‹" para revelar meses fora da faixa). Período que não aplica **aborta a coleta** — nunca grava a tela no filtro errado por cima do dado bom.
+
+**Iterar barato:** `ELITE_IND=disponibilidade` roda um indicador só; `ELITE_DE`/`ELITE_ATE` limitam o backfill; `ELITE_FORCAR=1` ignora a janela do dia 15.
+
 ## Robô Qlik (DRE → Custos) — EM ESPERA (03/08/2026)
 
 **Status: PARQUEADO — decisão do Renan 03/08/2026.** O robô está 100% codificado (receita dos 5 passos abaixo), mas o Qlik Sense da Conlog **não é acessível pela internet**: `bi.conlogsa.com.br` público serve só o **GLPI** (chamados) — `/sense` dá 404 e a porta 4244 não responde de fora (split DNS: o Renan acessa pela rede interna/VPN). O GitHub Actions não alcança. Opções mapeadas: (1) TI publicar o Qlik externamente · (2) self-hosted runner na rede da Conlog · (3) script agendado no PC do Renan · (4) **ler direto do BANCO DE DADOS fonte do DRE — caminho que o Renan quer explorar no futuro**. Até lá: **aba Custos segue manual**. NÃO religar sem resolver a rede.
