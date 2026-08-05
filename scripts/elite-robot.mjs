@@ -176,6 +176,41 @@ async function login(page) {
   if (/\/login/i.test(page.url())) log('ATENÇÃO: continuamos na tela de login — confira Empresa/usuário/senha.');
 }
 
+// ── CLIQUE ROBUSTO ──────────────────────────────────────────────────────────
+// O portal tem duplicatas OCULTAS dos textos do menu, e as listas do Power BI
+// são virtualizadas (o item existe mas está fora da área desenhada). Filtrar
+// por "visível" descarta o item que só está rolado; não filtrar pega a
+// duplicata escondida. O discriminador certo é ter CAIXA na tela: quem está só
+// rolado tem boundingBox, quem está display:none não tem.
+async function primeiroRenderizado(loc) {
+  const n = await loc.count().catch(() => 0);
+  for (let i = 0; i < n; i++) {
+    const e = loc.nth(i);
+    const b = await e.boundingBox().catch(() => null);
+    if (b && b.width > 0 && b.height > 0) return e;
+  }
+  return null;
+}
+// clica tentando, em ordem: elemento renderizado → force → evento sintético
+// (o último funciona mesmo em item virtualizado que o Playwright recusa clicar)
+async function clicarRobusto(page, loc, { ctrl = false, timeout = 10000 } = {}) {
+  const alvo = (await primeiroRenderizado(loc)) || loc.first();
+  const modo = ctrl ? { modifiers: ['Control'] } : {};
+  try { await alvo.scrollIntoViewIfNeeded({ timeout: 4000 }); } catch (e) {}
+  try { await alvo.click({ ...modo, timeout }); return true; } catch (e) {}
+  try { await alvo.click({ ...modo, force: true, timeout: 5000 }); return true; } catch (e) {}
+  try {
+    await alvo.evaluate((el, c) => {
+      el.scrollIntoView({ block: 'center', inline: 'center' });
+      const o = { bubbles: true, cancelable: true, ctrlKey: c, view: window };
+      el.dispatchEvent(new MouseEvent('mousedown', o));
+      el.dispatchEvent(new MouseEvent('mouseup', o));
+      el.dispatchEvent(new MouseEvent('click', o));
+    }, ctrl);
+    return true;
+  } catch (e) { return false; }
+}
+
 // ── NAVEGAÇÃO PELO MENU (deep-link recarrega o app Vue e volta p/ /bi/inicio) ─
 // O menu lateral às vezes ainda não montou (ou o portal está na tela de
 // boas-vindas). Tenta de novo, voltando para /bi/inicio entre as tentativas.
@@ -194,24 +229,20 @@ async function clicarMenu(page, secao, item) {
 }
 async function clicarMenuUma(page, secao, item) {
   // expande a seção (se ela mesma não estiver à vista, abre a sidebar)
-  const secLoc = page.getByText(secao, { exact: true }).first();
+  const secLoc = page.getByText(secao, { exact: true });
   if (await secLoc.count()) {
-    try { await secLoc.scrollIntoViewIfNeeded({ timeout: 4000 }); } catch (e) {}
-    try { await secLoc.click({ timeout: 8000 }); await page.waitForTimeout(1500); }
-    catch (e) { log('seção', secao, 'não clicável (talvez já aberta)'); }
+    await clicarRobusto(page, secLoc, { timeout: 8000 });
+    await page.waitForTimeout(1500);
   } else {
     try { await page.locator('button').first().click({ timeout: 4000 }); await page.waitForTimeout(1000); } catch (e) {}
   }
   // NÃO filtrar por visível: a barra lateral rola, e um item abaixo da dobra
   // era descartado antes mesmo de tentar clicar (travava o STRESS TEST
   // EMPILHADEIRA depois de passar pelo FROTA). Rola até ele.
-  const itemLoc = secao === item
-    ? page.getByText(item, { exact: true }).last()
-    : page.getByText(item, { exact: false }).first();
+  const itemLoc = page.getByText(item, { exact: secao === item });
   for (let t = 0; t < 6 && !(await itemLoc.count()); t++) await page.waitForTimeout(2500);
-  try { await itemLoc.scrollIntoViewIfNeeded({ timeout: 5000 }); } catch (e) {}
-  try { await itemLoc.click({ timeout: 12000 }); }
-  catch (e) { await itemLoc.click({ timeout: 8000, force: true }); }
+  if (!(await clicarRobusto(page, itemLoc, { timeout: 12000 })))
+    throw new Error(`item de menu "${item}" não clicável`);
   await page.waitForTimeout(15000);
 }
 
@@ -326,12 +357,14 @@ async function aplicarSlicer(page, campo, valores) {
       await page.keyboard.press('Escape');
       return false;
     }
-    // a lista do dropdown rola: o item pode existir e estar fora da área
-    // visível (foi o que travou o Stress Test Empilhadeira no "Fev-26")
-    try { await item.scrollIntoViewIfNeeded({ timeout: 5000 }); } catch (e) {}
-    const modo = i === 0 ? {} : { modifiers: ['Control'] };
-    try { await item.click({ ...modo, timeout: 10000 }); }
-    catch (e) { await item.click({ ...modo, force: true, timeout: 10000 }); }
+    // a lista do dropdown é virtualizada: o item existe mas o Playwright se
+    // recusa a clicar ("element is not visible") — o clicarRobusto cai para um
+    // evento sintético nesse caso (travava o Stress Test Empilhadeira no Fev-26)
+    if (!(await clicarRobusto(page, item, { ctrl: i > 0, timeout: 10000 }))) {
+      log(`item "${v}" do slicer "${campo}" não clicável`);
+      await page.keyboard.press('Escape');
+      return false;
+    }
     await page.waitForTimeout(900);
   }
   await fecharPopupSlicer(page, hit.dd);
@@ -420,11 +453,9 @@ async function clicarTile(page, texto, modo = {}) {
       return (await el.count()) ? el : null;
     });
     if (b) {
-      try { await b.scrollIntoViewIfNeeded({ timeout: 4000 }); } catch (e) {}
-      try { await b.click({ ...modo, timeout: 8000 }); }
-      catch (e) { await b.click({ ...modo, force: true, timeout: 6000 }); }
+      const ok = await clicarRobusto(page, b, { ctrl: !!(modo.modifiers || []).length, timeout: 8000 });
       await page.waitForTimeout(1200);
-      return true;
+      if (ok) return true;
     }
     if (!(await moverTiles(page, t % 2 === 0 ? 'prev' : 'next'))) break;
   }
