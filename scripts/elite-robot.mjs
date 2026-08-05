@@ -197,8 +197,36 @@ async function abrirSlicer(page, campo) {
     if (await dd.count()) return { fr, dd };
     const alt = fr.locator(`[aria-label="${campo}"]`).first();
     if (await alt.count()) return { fr, dd: alt };
-    return null;
+    // fallback: o dropdown VISÍVEL mais próximo do rótulo (telas onde o
+    // ":below" não casa, como a Aderência Conformidade)
+    const lbl = fr.getByText(campo, { exact: true }).filter({ visible: true }).first();
+    if (!(await lbl.count())) return null;
+    const lb = await lbl.boundingBox().catch(() => null);
+    if (!lb) return null;
+    const dds = fr.locator('.slicer-dropdown-menu, .slicer-restatement, .slicerHeader, [class*="slicer"][role="button"]').filter({ visible: true });
+    const n = await dds.count();
+    let best = null, bd = Infinity;
+    for (let i = 0; i < n; i++) {
+      const e = dds.nth(i);
+      const b = await e.boundingBox().catch(() => null);
+      if (!b) continue;
+      const d = Math.hypot(b.x - lb.x, b.y - lb.y);
+      if (d < bd) { bd = d; best = e; }
+    }
+    return best ? { fr, dd: best } : null;
   });
+}
+// diagnóstico p/ o log quando um slicer não é achado: que rótulos existem?
+async function rotulosDeSlicer(page) {
+  const out = [];
+  for (const fr of page.frames()) {
+    try {
+      const ls = fr.locator('.slicer-dropdown-menu, .slicerHeader, [class*="slicer"] [class*="title" i]').filter({ visible: true });
+      const n = Math.min(await ls.count(), 25);
+      for (let i = 0; i < n; i++) out.push((await ls.nth(i).innerText().catch(() => '')).trim().replace(/\s+/g, ' ').slice(0, 40));
+    } catch (e) {}
+  }
+  return out.filter(Boolean);
 }
 // O popup do slicer fica ABERTO depois da seleção e intercepta o clique no
 // botão "..." do visual (Escape sozinho não fecha). Fecha clicando de novo no
@@ -234,7 +262,10 @@ async function itensDoSlicer(page) {
 async function aplicarSlicer(page, campo, valores) {
   const vals = Array.isArray(valores) ? valores : [valores];
   const hit = await abrirSlicer(page, campo);
-  if (!hit) { log(`slicer "${campo}" não encontrado`); return false; }
+  if (!hit) {
+    log(`slicer "${campo}" não encontrado — slicers visíveis:`, JSON.stringify(await rotulosDeSlicer(page)));
+    return false;
+  }
   await hit.dd.click({ timeout: 10000 });
   await page.waitForTimeout(2500);
   for (let i = 0; i < vals.length; i++) {
@@ -353,9 +384,44 @@ async function selecionarBotoesPeriodo(page, ano, meses) {
       return false;
     }
   }
-  await page.waitForTimeout(5000);
+  await page.waitForTimeout(4000);
+
+  // Os tiles são TOGGLE: clicar num mês já selecionado o DESmarca (foi assim
+  // que julho sumiu do acumulado). Confere o que ficou selecionado e corrige
+  // com ctrl+clique, em vez de confiar na sequência de cliques.
+  const querido = new Set(meses.map(m => m.toLowerCase()));
+  for (let rodada = 0; rodada < 3; rodada++) {
+    const sel = await mesesSelecionados(page);
+    if (!sel) { log('atenção: não consegui ler a seleção dos tiles — seguindo sem conferir'); break; }
+    const faltando = [...querido].filter(m => !sel.has(m));
+    const sobrando = [...sel].filter(m => !querido.has(m));
+    if (!faltando.length && !sobrando.length) break;
+    log(`tiles rodada ${rodada + 1}: faltando ${JSON.stringify(faltando)} · sobrando ${JSON.stringify(sobrando)}`);
+    if (rodada === 2) { log('não consegui acertar a seleção dos meses'); return false; }
+    for (const m of [...faltando, ...sobrando]) await clicar(m, { modifiers: ['Control'] });
+    await page.waitForTimeout(3000);
+  }
+  await page.waitForTimeout(3000);
   log(`tiles: ${ano} · ${JSON.stringify(ordem)}`);
   return true;
+}
+// meses atualmente selecionados no slicer de tiles (Set em minúsculas) ou null
+// se a tela não expõe o estado de seleção.
+async function mesesSelecionados(page) {
+  const sel = new Set();
+  let achou = false;
+  for (const fr of page.frames()) {
+    try {
+      const its = fr.locator('.slicerItemContainer[aria-selected="true"], [role="option"][aria-selected="true"], .slicerItemContainer.selected').filter({ visible: true });
+      const n = await its.count();
+      if (n) achou = true;
+      for (let i = 0; i < n; i++) {
+        const t = (await its.nth(i).innerText().catch(() => '')).trim().toLowerCase();
+        if (MES_FULL.includes(t)) sel.add(t);
+      }
+    } catch (e) {}
+  }
+  return achou ? sel : null;
 }
 
 // ── ACHAR A TABELA CERTA ────────────────────────────────────────────────────
@@ -415,14 +481,30 @@ async function acharAlvo(page, cfg = {}) {
 async function exportarTabela(page, alvo, nomeArq) {
   await fecharPopupSlicer(page);   // qualquer popup aberto bloqueia o clique no "..."
   const SEL_OPTS ='[aria-label*="Mais opções" i], [aria-label*="More options" i], [data-testid="visual-more-options-btn"], [title*="Mais opções" i], .vcMenuBtn';
+  // O "..." fica FORA do grid (no cabeçalho do visual), então a busca acaba
+  // caindo no frame inteiro — e pegar o PRIMEIRO exportava o visual errado
+  // (foi o que aconteceu nas Preventivas, que trouxeram a tabela detalhada por
+  // placa). Escolhe o "..." mais próximo do canto superior direito da tabela.
+  const cx = await alvo.v.boundingBox().catch(() => null);
   let opts = null;
   for (let t = 0; t < 10 && !opts; t++) {
     try { await alvo.v.hover(); } catch (e) {}
     await page.waitForTimeout(1200);
     for (const root of [alvo.v, alvo.fr, page]) {
       try {
-        const b = root.locator(SEL_OPTS).filter({ visible: true }).first();
-        if (await b.count()) { opts = b; break; }
+        const bs = root.locator(SEL_OPTS).filter({ visible: true });
+        const n = await bs.count();
+        if (!n) continue;
+        let best = null, bd = Infinity;
+        for (let i = 0; i < n; i++) {
+          const b = bs.nth(i);
+          if (!cx) { best = b; break; }
+          const bb = await b.boundingBox().catch(() => null);
+          if (!bb) continue;
+          const d = Math.hypot(bb.x - (cx.x + cx.width), bb.y - cx.y);
+          if (d < bd) { bd = d; best = b; }
+        }
+        if (best) { opts = best; break; }
       } catch (e) {}
     }
     if (!opts) await page.waitForTimeout(1800);
@@ -460,11 +542,32 @@ async function exportarTabela(page, alvo, nomeArq) {
   return arq;
 }
 
+// O export do Power BI às vezes vem com um preâmbulo "Filtros aplicados:" antes
+// do cabeçalho (e pode ter mais de uma planilha). Acha a aba com mais dados e o
+// primeiro cabeçalho de verdade, e devolve o resumo dos filtros — que serve de
+// conferência do período que a tela estava mostrando.
 async function xlsxParaLinhas(arq) {
   const XLSX = (await import('xlsx')).default;
   const wb = XLSX.readFile(arq);
-  const ws = wb.Sheets[wb.SheetNames[0]];
-  return XLSX.utils.sheet_to_json(ws, { defval: null });
+  let melhor = { linhas: [], filtros: null };
+  for (const nome of wb.SheetNames) {
+    const mat = XLSX.utils.sheet_to_json(wb.Sheets[nome], { header: 1, defval: null, blankrows: false });
+    let filtros = null;
+    for (const r of mat) {
+      const c0 = r && r[0] != null ? String(r[0]) : '';
+      if (/filtros aplicados/i.test(c0)) filtros = c0.replace(/\s+/g, ' ').trim();
+    }
+    const iCab = mat.findIndex(r => r && r.filter(c => c != null && String(c).trim() !== '').length >= 3
+      && !/filtros aplicados/i.test(String(r[0] || '')));
+    if (iCab < 0) continue;
+    const cols = mat[iCab].map((c, i) => (c == null || String(c).trim() === '' ? `col${i}` : String(c).trim()));
+    const linhas = mat.slice(iCab + 1)
+      .filter(r => r && r.some(c => c != null && String(c).trim() !== ''))
+      .map(r => Object.fromEntries(cols.map((c, i) => [c, r[i] === undefined ? null : r[i]])));
+    if (linhas.length > melhor.linhas.length) melhor = { linhas, filtros };
+  }
+  if (melhor.filtros) log('filtros do export:', melhor.filtros);
+  return melhor.linhas;
 }
 
 async function gravarSupabase(indicador, vigencia, escopo, linhas) {
