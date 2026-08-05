@@ -259,6 +259,23 @@ async function aplicarSlicer(page, campo, valores) {
   return true;
 }
 
+// O calendário do datepicker deixa um backdrop transparente do Angular por cima
+// da página; clicar nele fecha (Escape nem sempre resolve).
+async function fecharOverlay(page) {
+  for (let t = 0; t < 4; t++) {
+    const bd = await emFrames(page, async fr => {
+      const b = fr.locator('.cdk-overlay-backdrop-showing, .cdk-overlay-backdrop').filter({ visible: true }).first();
+      return (await b.count()) ? b : null;
+    });
+    if (!bd) return true;
+    if (t === 0) await page.keyboard.press('Escape');
+    else { try { await bd.click({ timeout: 3000, force: true }); } catch (e) {} }
+    await page.waitForTimeout(1000);
+  }
+  log('atenção: overlay do datepicker continuou aberto');
+  return false;
+}
+
 // ── FILTRO 2: par de campos de data (Preventivas, Checklists, SLA) ───────────
 // A página pode ter mais de um par (ex.: Preventivas tem "Data de Execução" e
 // "Data de Vencimento"); escolhe os dois campos MAIS PRÓXIMOS do rótulo pedido.
@@ -285,47 +302,59 @@ async function preencherDatas(page, rotulo, ini, fim) {
     return { fr, ini: par[0].el, fim: par[1].el };
   });
   if (!alvo) { log(`campos de data de "${rotulo}" não encontrados`); return false; }
+  // fill() em vez de click+digitar: o datepicker abre um overlay do Angular
+  // (cdk-overlay-backdrop) que cobre a tela e intercepta o clique no 2º campo.
+  // fill() não depende de ponteiro, então passa por cima do problema.
   for (const [el, valor] of [[alvo.ini, ini], [alvo.fim, fim]]) {
-    await el.click({ timeout: 10000 });
-    await page.keyboard.press('Control+a');
-    await page.keyboard.type(valor, { delay: 40 });
-    await page.keyboard.press('Enter');
-    await page.waitForTimeout(1500);
+    await el.fill(valor, { timeout: 10000 });
+    await el.press('Enter');
+    await page.waitForTimeout(1200);
+    await fecharOverlay(page);
   }
-  await page.keyboard.press('Escape');
   await page.waitForTimeout(5000);
   log(`datas "${rotulo}": ${ini} → ${fim}`);
   return true;
 }
 
 // ── FILTRO 3: tiles de ano + meses no rodapé (Pneus) ─────────────────────────
+// A faixa de meses é rolável: as setas "‹ ›" revelam quem está fora da janela.
+// Rolar só para um lado deixa meses inalcançáveis, então alterna as direções.
+async function moverTiles(page, dir) {
+  const chevrons = await emFrames(page, async fr => {
+    const c = fr.locator('.navigationChevron, [class*="chevron" i], [aria-label*="Anterior" i], [aria-label*="Previous" i], [aria-label*="Próximo" i], [aria-label*="Next" i]').filter({ visible: true });
+    return (await c.count()) ? c : null;
+  });
+  if (!chevrons) return false;
+  const n = await chevrons.count();
+  const el = dir === 'prev' ? chevrons.first() : chevrons.nth(n - 1);
+  try { await el.click({ timeout: 5000 }); await page.waitForTimeout(1200); return true; }
+  catch (e) { return false; }
+}
 async function selecionarBotoesPeriodo(page, ano, meses) {
   const clicar = async (texto, modo) => {
-    for (let t = 0; t < 3; t++) {
+    for (let t = 0; t < 6; t++) {
       const b = await emFrames(page, async fr => {
         const el = fr.locator(`.slicerItemContainer:has-text("${texto}"), [role="option"]:has-text("${texto}"), span:text-is("${texto}")`).filter({ visible: true }).first();
         return (await el.count()) ? el : null;
       });
       if (b) { await b.click(modo); await page.waitForTimeout(1200); return true; }
-      // mês fora da faixa visível → tenta voltar com a seta "‹"
-      const seta = await emFrames(page, async fr => {
-        const s = fr.locator('[aria-label*="Anterior" i], [aria-label*="Previous" i], .scroll-left, .navigationChevron').filter({ visible: true }).first();
-        return (await s.count()) ? s : null;
-      });
-      if (seta) { await seta.click().catch(() => {}); await page.waitForTimeout(1200); } else break;
+      if (!(await moverTiles(page, t % 2 === 0 ? 'prev' : 'next'))) break;
     }
     return false;
   };
   if (!(await clicar(String(ano), {}))) { log(`tile do ano ${ano} não encontrado`); return false; }
   await page.waitForTimeout(2500);
-  for (let i = 0; i < meses.length; i++) {
-    if (!(await clicar(meses[i], i === 0 ? {} : { modifiers: ['Control'] }))) {
-      log(`tile do mês "${meses[i]}" não encontrado`);
+  // do mês MAIS RECENTE para o mais antigo: o recente já está visível, e a
+  // rolagem segue sempre no mesmo sentido em vez de ir e voltar.
+  const ordem = [...meses].reverse();
+  for (let i = 0; i < ordem.length; i++) {
+    if (!(await clicar(ordem[i], i === 0 ? {} : { modifiers: ['Control'] }))) {
+      log(`tile do mês "${ordem[i]}" não encontrado`);
       return false;
     }
   }
   await page.waitForTimeout(5000);
-  log(`tiles: ${ano} · ${JSON.stringify(meses)}`);
+  log(`tiles: ${ano} · ${JSON.stringify(ordem)}`);
   return true;
 }
 
