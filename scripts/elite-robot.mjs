@@ -98,12 +98,14 @@ const INDICADORES = [
 
   // 7. Stress Test Frota / Empilhadeira / CIVF — mesmas telas do robô do Farol,
   //    aqui coletadas POR VIGÊNCIA (aderência = desconto 0 → 1, senão 0; o leitor calcula)
-  // Quinzena: a tela abre em "Primeira" e o export saía só com metade do mês
-  // ("descricao é Primeira" no resumo de filtros). Mês fechado = as duas.
+  // Quinzena: o que vale na Frota é SEMPRE a 2ª (Renan, 05/08). A tela abre em
+  // "Primeira" — o export saía com a quinzena errada ("descricao é Primeira").
   { chave: 'stress-test-frota', menu: ['STRESS TEST', 'STRESS TEST FROTA'],
     url: 'https://bi.ginfo.app.br/bi/ce4f37f8-1c4c-499f-a80c-3a3ce80594cb?autoAuth=true&ctid=c16300de-7070-4b58-80c8-af99af1e1f65',
     periodo: { tipo: 'dropdown' },
-    slicersFixos: [{ campo: 'Quinzena', valor: ['Primeira', 'Segunda'] }] },
+    slicersFixos: [{ campo: 'Quinzena', valor: 'Segunda' }] },
+  // Empilhadeira NÃO tem filtro de quinzena: as duas são colunas e o
+  // "Desc. Total" já soma ambas.
   { chave: 'stress-test-empilhadeira', menu: ['STRESS TEST', 'STRESS TEST EMPILHADEIRA'],
     url: 'https://bi.ginfo.app.br/bi/d1cead3d-e28a-487b-a1bd-8b72cdd6da55?autoAuth=true&ctid=c16300de-7070-4b58-80c8-af99af1e1f65',
     periodo: { tipo: 'dropdown' }, tabela: { header: 'Chassis' } },
