@@ -193,22 +193,25 @@ async function clicarMenu(page, secao, item) {
   }
 }
 async function clicarMenuUma(page, secao, item) {
-  if (secao === item) {
-    try { await page.getByText(secao, { exact: true }).first().click({ timeout: 8000 }); await page.waitForTimeout(1200); } catch (e) {}
-    // .filter({visible:true}): o portal mantém ocorrências ocultas do mesmo
-    // texto (o CIVF travava tentando clicar numa delas)
-    await page.getByText(item, { exact: true }).filter({ visible: true }).last().click({ timeout: 15000 });
-    await page.waitForTimeout(15000);
-    return;
+  // expande a seção (se ela mesma não estiver à vista, abre a sidebar)
+  const secLoc = page.getByText(secao, { exact: true }).first();
+  if (await secLoc.count()) {
+    try { await secLoc.scrollIntoViewIfNeeded({ timeout: 4000 }); } catch (e) {}
+    try { await secLoc.click({ timeout: 8000 }); await page.waitForTimeout(1500); }
+    catch (e) { log('seção', secao, 'não clicável (talvez já aberta)'); }
+  } else {
+    try { await page.locator('button').first().click({ timeout: 4000 }); await page.waitForTimeout(1000); } catch (e) {}
   }
-  const itemLoc = () => page.getByText(item, { exact: false }).filter({ visible: true }).first();
-  if (!(await itemLoc().isVisible().catch(() => false))) {
-    if (!(await page.getByText(secao, { exact: true }).first().isVisible().catch(() => false))) {
-      try { await page.locator('button').first().click({ timeout: 4000 }); await page.waitForTimeout(1000); } catch (e) {}
-    }
-    try { await page.getByText(secao, { exact: true }).first().click({ timeout: 8000 }); await page.waitForTimeout(1200); } catch (e) { log('seção', secao, 'não clicável (talvez já aberta)'); }
-  }
-  await itemLoc().click({ timeout: 15000 });
+  // NÃO filtrar por visível: a barra lateral rola, e um item abaixo da dobra
+  // era descartado antes mesmo de tentar clicar (travava o STRESS TEST
+  // EMPILHADEIRA depois de passar pelo FROTA). Rola até ele.
+  const itemLoc = secao === item
+    ? page.getByText(item, { exact: true }).last()
+    : page.getByText(item, { exact: false }).first();
+  for (let t = 0; t < 6 && !(await itemLoc.count()); t++) await page.waitForTimeout(2500);
+  try { await itemLoc.scrollIntoViewIfNeeded({ timeout: 5000 }); } catch (e) {}
+  try { await itemLoc.click({ timeout: 12000 }); }
+  catch (e) { await itemLoc.click({ timeout: 8000, force: true }); }
   await page.waitForTimeout(15000);
 }
 
@@ -277,7 +280,7 @@ async function itensDoSlicer(page) {
   const txt = [];
   for (const fr of page.frames()) {
     try {
-      const its = fr.locator('.slicerItemContainer, [role="option"]').filter({ visible: true });
+      const its = fr.locator('.slicerItemContainer, [role="option"], [role="listbox"] [role="treeitem"], .slicerText').filter({ visible: true });
       const n = Math.min(await its.count(), 30);
       for (let i = 0; i < n; i++) txt.push((await its.nth(i).innerText().catch(() => '')).trim().replace(/\s+/g, ' '));
     } catch (e) {}
@@ -408,18 +411,27 @@ async function moverTiles(page, dir) {
   try { await el.click({ timeout: 5000 }); await page.waitForTimeout(1200); return true; }
   catch (e) { return false; }
 }
-async function selecionarBotoesPeriodo(page, ano, meses) {
-  const clicar = async (texto, modo) => {
-    for (let t = 0; t < 6; t++) {
-      const b = await emFrames(page, async fr => {
-        const el = fr.locator(`.slicerItemContainer:has-text("${texto}"), [role="option"]:has-text("${texto}"), span:text-is("${texto}")`).filter({ visible: true }).first();
-        return (await el.count()) ? el : null;
-      });
-      if (b) { await b.click(modo); await page.waitForTimeout(1200); return true; }
-      if (!(await moverTiles(page, t % 2 === 0 ? 'prev' : 'next'))) break;
+// clica um tile (ano ou mês). SEM filtro de visível: o tile pode estar fora da
+// faixa rolável — rola até ele em vez de descartá-lo.
+async function clicarTile(page, texto, modo = {}) {
+  for (let t = 0; t < 6; t++) {
+    const b = await emFrames(page, async fr => {
+      const el = fr.locator(`.slicerItemContainer:has-text("${texto}"), [role="option"]:has-text("${texto}"), span:text-is("${texto}")`).first();
+      return (await el.count()) ? el : null;
+    });
+    if (b) {
+      try { await b.scrollIntoViewIfNeeded({ timeout: 4000 }); } catch (e) {}
+      try { await b.click({ ...modo, timeout: 8000 }); }
+      catch (e) { await b.click({ ...modo, force: true, timeout: 6000 }); }
+      await page.waitForTimeout(1200);
+      return true;
     }
-    return false;
-  };
+    if (!(await moverTiles(page, t % 2 === 0 ? 'prev' : 'next'))) break;
+  }
+  return false;
+}
+async function selecionarBotoesPeriodo(page, ano, meses) {
+  const clicar = clicarTile.bind(null, page);
   // os tiles também demoram a montar — insiste antes de desistir do ano
   let okAno = false;
   for (let t = 0; t < 6 && !okAno; t++) {
@@ -622,8 +634,15 @@ async function xlsxParaLinhas(arq) {
     if (linhas.length > melhor.linhas.length) melhor = { linhas, filtros };
   }
   if (melhor.filtros) log('filtros do export:', melhor.filtros);
-  return melhor.linhas;
+  return melhor;
 }
+// meses citados no resumo "Filtros aplicados" — é o único jeito confiável de
+// saber o que a tela dos Pneus estava mostrando (os tiles não expõem seleção).
+const mesesNosFiltros = f => {
+  if (!f) return null;
+  const l = String(f).toLowerCase();
+  return new Set(MES_FULL.filter(m => l.includes(m)));
+};
 
 async function gravarSupabase(indicador, vigencia, escopo, linhas) {
   if (!SB_KEY) { log(`[dry-run] ${indicador} ${vigencia}/${escopo}: ${linhas.length} linhas`); return; }
@@ -674,7 +693,7 @@ async function coletar(page, ind, vigencia, escopo) {
 
   // período — falhar aqui ABORTA (nunca gravar a tela no filtro errado por cima do bom)
   const p = ind.periodo;
-  let ok = false;
+  let ok = false, mesesEsperados = null;
   if (p.tipo === 'dropdown') {
     const meses = escopo === 'ano'
       ? Array.from({ length: ref.getMonth() + 1 }, (_, i) => mesDropdown(new Date(ref.getFullYear(), i, 1)))
@@ -684,10 +703,10 @@ async function coletar(page, ind, vigencia, escopo) {
   } else if (p.tipo === 'datas') {
     ok = await preencherDatas(page, p.rotulo, dataDe(ini), dataDe(fim));
   } else if (p.tipo === 'botoes') {
-    const meses = escopo === 'ano'
+    mesesEsperados = escopo === 'ano'
       ? MES_FULL.slice(0, ref.getMonth() + 1)
       : [MES_FULL[ref.getMonth()]];
-    ok = await selecionarBotoesPeriodo(page, ref.getFullYear(), meses);
+    ok = await selecionarBotoesPeriodo(page, ref.getFullYear(), mesesEsperados);
   }
   // filtros fixos da tela (ex.: as duas quinzenas do Stress Test Frota)
   if (ok && Array.isArray(ind.slicersFixos)) {
@@ -701,9 +720,34 @@ async function coletar(page, ind, vigencia, escopo) {
 
   const alvo = await acharAlvo(page, ind.tabela || {});
   if (!alvo) { await shot(page, '98-sem-tabela-' + tag); throw new Error(`tabela não encontrada em ${tag}`); }
-  const arq = await exportarTabela(page, alvo, tag);
-  const linhas = await xlsxParaLinhas(arq);
+  let arq = await exportarTabela(page, alvo, tag);
+  let { linhas, filtros } = await xlsxParaLinhas(arq);
+
+  // Pneus: os tiles não expõem a seleção, então o resumo de filtros do export é
+  // o verificador. Não bateu? alterna o que falta/sobra e exporta de novo; se
+  // não fechar em 3 rodadas, ABORTA sem gravar.
+  if (mesesEsperados) {
+    const querido = new Set(mesesEsperados);
+    for (let r = 0; r < 3; r++) {
+      const sel = mesesNosFiltros(filtros);
+      const igual = sel && sel.size === querido.size && [...querido].every(m => sel.has(m));
+      if (igual) break;
+      log(`meses do export: ${sel ? JSON.stringify([...sel]) : '(não identificados)'} · esperado ${JSON.stringify([...querido])}`);
+      if (r === 2) throw new Error(`meses errados no export de ${tag} — abortando sem gravar`);
+      const faltando = [...querido].filter(m => !sel || !sel.has(m));
+      const sobrando = sel ? [...sel].filter(m => !querido.has(m)) : [];
+      for (const m of [...faltando, ...sobrando]) await clicarTile(page, m, { modifiers: ['Control'] });
+      await page.waitForTimeout(4000);
+      try { fs.unlinkSync(arq); } catch (e) {}
+      const alvo2 = await acharAlvo(page, ind.tabela || {});
+      if (!alvo2) throw new Error(`tabela não encontrada ao reexportar ${tag}`);
+      arq = await exportarTabela(page, alvo2, tag);
+      ({ linhas, filtros } = await xlsxParaLinhas(arq));
+    }
+  }
+
   if (!linhas.length) throw new Error(`export vazio em ${tag}`);
+  if (linhas.length < 3) log(`ATENÇÃO: só ${linhas.length} linha(s) em ${tag} — confira o filtro no screenshot`);
   log('colunas:', JSON.stringify(Object.keys(linhas[0])));
   await gravarSupabase(ind.chave, vigencia, escopo, linhas);
   if (SB_KEY) { try { fs.unlinkSync(arq); } catch (e) {} }
