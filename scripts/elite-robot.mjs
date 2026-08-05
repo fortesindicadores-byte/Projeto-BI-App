@@ -175,11 +175,13 @@ async function login(page) {
 async function clicarMenu(page, secao, item) {
   if (secao === item) {
     try { await page.getByText(secao, { exact: true }).first().click({ timeout: 8000 }); await page.waitForTimeout(1200); } catch (e) {}
-    await page.getByText(item, { exact: true }).last().click({ timeout: 15000 });
+    // .filter({visible:true}): o portal mantém ocorrências ocultas do mesmo
+    // texto (o CIVF travava tentando clicar numa delas)
+    await page.getByText(item, { exact: true }).filter({ visible: true }).last().click({ timeout: 15000 });
     await page.waitForTimeout(15000);
     return;
   }
-  const itemLoc = () => page.getByText(item, { exact: false }).first();
+  const itemLoc = () => page.getByText(item, { exact: false }).filter({ visible: true }).first();
   if (!(await itemLoc().isVisible().catch(() => false))) {
     if (!(await page.getByText(secao, { exact: true }).first().isVisible().catch(() => false))) {
       try { await page.locator('button').first().click({ timeout: 4000 }); await page.waitForTimeout(1000); } catch (e) {}
@@ -261,7 +263,13 @@ async function itensDoSlicer(page) {
 // seguintes precisam de Ctrl para somar (é o mesmo ctrl+clique que o Renan faz).
 async function aplicarSlicer(page, campo, valores) {
   const vals = Array.isArray(valores) ? valores : [valores];
-  const hit = await abrirSlicer(page, campo);
+  // o embed pode demorar a montar os slicers — procura por até ~45s em vez de
+  // uma vez só (era o que derrubava a Aderência Conformidade)
+  let hit = null;
+  for (let t = 0; t < 9 && !hit; t++) {
+    hit = await abrirSlicer(page, campo);
+    if (!hit) await page.waitForTimeout(5000);
+  }
   if (!hit) {
     log(`slicer "${campo}" não encontrado — slicers visíveis:`, JSON.stringify(await rotulosDeSlicer(page)));
     return false;
@@ -275,7 +283,7 @@ async function aplicarSlicer(page, campo, valores) {
       return (await it.count()) ? it : null;
     });
     let item = await buscar();
-    for (let t = 0; t < 2 && !item; t++) { await page.waitForTimeout(1500); item = await buscar(); }
+    for (let t = 0; t < 7 && !item; t++) { await page.waitForTimeout(2000); item = await buscar(); }
     if (!item) {
       log(`item "${v}" do slicer "${campo}" não encontrado — disponíveis:`, JSON.stringify(await itensDoSlicer(page)));
       await page.keyboard.press('Escape');
@@ -412,7 +420,9 @@ async function mesesSelecionados(page) {
   let achou = false;
   for (const fr of page.frames()) {
     try {
-      const its = fr.locator('.slicerItemContainer[aria-selected="true"], [role="option"][aria-selected="true"], .slicerItemContainer.selected').filter({ visible: true });
+      // SEM filtro de visível: o mês selecionado pode ter saído da janela de
+      // rolagem, e tratá-lo como "faltando" fazia o ctrl+clique DESmarcá-lo.
+      const its = fr.locator('.slicerItemContainer[aria-selected="true"], [role="option"][aria-selected="true"], .slicerItemContainer.selected');
       const n = await its.count();
       if (n) achou = true;
       for (let i = 0; i < n; i++) {
