@@ -92,8 +92,10 @@ const INDICADORES = [
     tabela: { header: 'Aderência Ponto' } },
 
   // 6. Conformidade — mensal x bimestral é regra do LEITOR (ver nota abaixo)
+  // Os meses desta tela são NOMES POR EXTENSO ("julho"), não "Jul-26" — o robô
+  // procurava um valor que não existe na lista (diagnóstico do run 11).
   { chave: 'conformidade', menu: ['FROTA', '1.2 - ADERÊNCIA CONFORMIDADE'],
-    periodo: { tipo: 'dropdown' },
+    periodo: { tipo: 'dropdown', mesFormato: 'nome' },
     tabela: { header: 'Aderência Bimestral' } },
 
   // 7. Stress Test Frota / Empilhadeira / CIVF — mesmas telas do robô do Farol,
@@ -314,13 +316,17 @@ async function fecharPopupSlicer(page, dd) {
   return false;
 }
 
+// Sem filtro de "visível": na Aderência Conformidade os itens TÊM caixa na tela
+// mas o Playwright não os considera visíveis, e a lista voltava vazia — era o
+// que fazia o robô achar que nenhum dropdown tinha aberto.
 async function itensDoSlicer(page) {
   const txt = [];
   for (const fr of page.frames()) {
     try {
-      const its = fr.locator('.slicerItemContainer, [role="option"], [role="listbox"] [role="treeitem"], .slicerText').filter({ visible: true });
-      const n = Math.min(await its.count(), 30);
-      for (let i = 0; i < n; i++) txt.push((await its.nth(i).innerText().catch(() => '')).trim().replace(/\s+/g, ' '));
+      const t = await fr.locator('.slicerItemContainer, [role="option"], [role="listbox"] [role="treeitem"], .slicerText')
+        .evaluateAll(els => els.filter(e => e.getClientRects().length).slice(0, 40)
+          .map(e => (e.getAttribute('title') || e.textContent || '').trim().replace(/\s+/g, ' ')));
+      txt.push(...t);
     } catch (e) {}
   }
   return txt.filter(Boolean);
@@ -440,43 +446,77 @@ async function preencherDatas(page, rotulo, ini, fim) {
 // ── FILTRO 3: tiles de ano + meses no rodapé (Pneus) ─────────────────────────
 // A faixa de meses é rolável: as setas "‹ ›" revelam quem está fora da janela.
 // Rolar só para um lado deixa meses inalcançáveis, então alterna as direções.
-async function moverTiles(page, dir) {
-  const chevrons = await emFrames(page, async fr => {
-    const c = fr.locator('.navigationChevron, [class*="chevron" i], [aria-label*="Anterior" i], [aria-label*="Previous" i], [aria-label*="Próximo" i], [aria-label*="Next" i]').filter({ visible: true });
-    return (await c.count()) ? c : null;
+// `perto` = caixa do tile do ANO. A página dos Pneus tem VÁRIOS slicers de mês
+// (um por seção), então tanto as setas quanto os meses precisam ser os da mesma
+// faixa horizontal — senão mexemos no filtro da seção errada.
+const naFaixa = (bb, perto) => !perto || Math.abs((bb.y + bb.height / 2) - (perto.y + perto.height / 2)) < 120;
+async function moverTiles(page, dir, perto = null) {
+  const el = await emFrames(page, async fr => {
+    const c = fr.locator('.navigationChevron, [class*="chevron" i], [aria-label*="Anterior" i], [aria-label*="Previous" i], [aria-label*="Próximo" i], [aria-label*="Next" i]');
+    const n = await c.count();
+    const arr = [];
+    for (let i = 0; i < n; i++) {
+      const e = c.nth(i);
+      const bb = await e.boundingBox().catch(() => null);
+      if (bb) arr.push({ e, bb });
+    }
+    if (!arr.length) return null;
+    let cand = arr.filter(a => naFaixa(a.bb, perto));
+    if (!cand.length) cand = arr;
+    cand.sort((a, b) => a.bb.x - b.bb.x);
+    return dir === 'prev' ? cand[0].e : cand[cand.length - 1].e;
   });
-  if (!chevrons) return false;
-  const n = await chevrons.count();
-  const el = dir === 'prev' ? chevrons.first() : chevrons.nth(n - 1);
+  if (!el) return false;
   try { await el.click({ timeout: 5000 }); await page.waitForTimeout(1200); return true; }
   catch (e) { return false; }
 }
 // clica um tile (ano ou mês). SEM filtro de visível: o tile pode estar fora da
 // faixa rolável — rola até ele em vez de descartá-lo.
-async function clicarTile(page, texto, modo = {}) {
+async function clicarTile(page, texto, modo = {}, perto = null) {
   for (let t = 0; t < 6; t++) {
     const b = await emFrames(page, async fr => {
-      const el = fr.locator(`.slicerItemContainer:has-text("${texto}"), [role="option"]:has-text("${texto}"), span:text-is("${texto}")`).first();
-      return (await el.count()) ? el : null;
+      const els = fr.locator(`.slicerItemContainer:has-text("${texto}"), [role="option"]:has-text("${texto}"), span:text-is("${texto}")`);
+      const n = await els.count();
+      let melhor = null, dist = Infinity;
+      for (let i = 0; i < n; i++) {
+        const e = els.nth(i);
+        const bb = await e.boundingBox().catch(() => null);
+        if (!bb) continue;
+        if (!perto) return e;
+        const d = Math.abs((bb.y + bb.height / 2) - (perto.y + perto.height / 2));
+        if (d < dist) { dist = d; melhor = e; }
+      }
+      return dist < 120 ? melhor : null;
     });
     if (b) {
       const ok = await clicarRobusto(page, b, { ctrl: !!(modo.modifiers || []).length, timeout: 8000 });
       await page.waitForTimeout(1200);
       if (ok) return true;
     }
-    if (!(await moverTiles(page, t % 2 === 0 ? 'prev' : 'next'))) break;
+    if (!(await moverTiles(page, t % 2 === 0 ? 'prev' : 'next', perto))) break;
   }
   return false;
 }
+let ultimoAnoBox = null;   // faixa do slicer de período usado por último (Pneus)
 async function selecionarBotoesPeriodo(page, ano, meses) {
-  const clicar = clicarTile.bind(null, page);
-  // os tiles também demoram a montar — insiste antes de desistir do ano
-  let okAno = false;
-  for (let t = 0; t < 6 && !okAno; t++) {
-    okAno = await clicar(String(ano), {});
-    if (!okAno) await page.waitForTimeout(5000);
+  // Acha o tile do ANO e GUARDA a posição dele: os meses da mesma seção ficam
+  // na mesma faixa horizontal. Sem isso, o robô clicava no primeiro "julho" do
+  // documento — que é de outra seção da página (Calibragem/Milimetragem) — e a
+  // tabela de Aderência Aferição ficava sem filtro de mês.
+  ultimoAnoBox = null;
+  for (let t = 0; t < 6 && !ultimoAnoBox; t++) {
+    const el = await emFrames(page, async fr => {
+      const e = fr.locator(`.slicerItemContainer:has-text("${ano}"), [role="option"]:has-text("${ano}"), span:text-is("${ano}")`).first();
+      return (await e.count()) ? e : null;
+    });
+    if (el) {
+      ultimoAnoBox = await el.boundingBox().catch(() => null);
+      if (ultimoAnoBox) await clicarRobusto(page, el, { timeout: 8000 });
+    }
+    if (!ultimoAnoBox) await page.waitForTimeout(5000);
   }
-  if (!okAno) { log(`tile do ano ${ano} não encontrado`); return false; }
+  if (!ultimoAnoBox) { log(`tile do ano ${ano} não encontrado`); return false; }
+  const clicar = (txt, modo) => clicarTile(page, txt, modo, ultimoAnoBox);
   await page.waitForTimeout(2500);
   // do mês MAIS RECENTE para o mais antigo: o recente já está visível, e a
   // rolagem segue sempre no mesmo sentido em vez de ir e voltar.
@@ -763,9 +803,11 @@ async function coletar(page, ind, vigencia, escopo) {
   const p = ind.periodo;
   let ok = false, mesesEsperados = null;
   if (p.tipo === 'dropdown') {
+    // Conformidade lista o mês por extenso; as demais telas usam "Jul-26"
+    const fmtMes = p.mesFormato === 'nome' ? (d => MES_FULL[d.getMonth()]) : mesDropdown;
     const meses = escopo === 'ano'
-      ? Array.from({ length: ref.getMonth() + 1 }, (_, i) => mesDropdown(new Date(ref.getFullYear(), i, 1)))
-      : [mesDropdown(ref)];
+      ? Array.from({ length: ref.getMonth() + 1 }, (_, i) => fmtMes(new Date(ref.getFullYear(), i, 1)))
+      : [fmtMes(ref)];
     // p.semAno: o valor do Mês já traz o ano ("Jul-26") e, em algumas telas, o
     // que parece o slicer "Ano" é um visual — clicar cria filtro de "Incluídos"
     ok = p.semAno ? true : await aplicarSlicer(page, 'Ano', String(ref.getFullYear()));
@@ -806,7 +848,7 @@ async function coletar(page, ind, vigencia, escopo) {
       if (r === 2) throw new Error(`meses errados no export de ${tag} — abortando sem gravar`);
       const faltando = [...querido].filter(m => !sel || !sel.has(m));
       const sobrando = sel ? [...sel].filter(m => !querido.has(m)) : [];
-      for (const m of [...faltando, ...sobrando]) await clicarTile(page, m, { modifiers: ['Control'] });
+      for (const m of [...faltando, ...sobrando]) await clicarTile(page, m, { modifiers: ['Control'] }, ultimoAnoBox);
       await page.waitForTimeout(4000);
       try { fs.unlinkSync(arq); } catch (e) {}
       const alvo2 = await acharAlvo(page, ind.tabela || {});
