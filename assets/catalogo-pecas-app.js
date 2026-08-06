@@ -85,14 +85,18 @@
   .cp-tbl thead th{position:sticky;top:0;background:var(--card);color:var(--text);font-size:11px;font-weight:700;
     padding:8px 8px 12px;border-bottom:1px solid rgba(255,255,255,.10);text-transform:uppercase;
     letter-spacing:.5px;text-align:left;vertical-align:bottom;z-index:2;cursor:pointer;user-select:none;
-    line-height:1.3;}
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
   .cp-tbl thead th:hover{color:var(--orange);}
   .cp-tbl thead th.filtrada{color:var(--orange);}
-  .cp-tbl thead th .fi{opacity:.5;margin-left:4px;font-size:9px;}
+  /* o padrão não tem seta em cabeçalho: só aparece no hover ou quando a
+     coluna está filtrada */
+  .cp-tbl thead th .fi{opacity:0;margin-left:4px;font-size:9px;transition:opacity .12s;}
+  .cp-tbl thead th:hover .fi{opacity:.6;}
   .cp-tbl thead th.filtrada .fi{opacity:1;}
-  .cp-tbl td{padding:13px 8px;border:none;color:var(--text);vertical-align:top;line-height:1.45;
-    white-space:normal;overflow-wrap:anywhere;}
-  .cp-tbl td.curta{white-space:nowrap;}
+  /* uma linha por registro, com reticências e tooltip — igual ao padrão. Nada
+     de quebrar em várias linhas: era isso que deixava a tabela fora do padrão. */
+  .cp-tbl td{padding:13px 8px;border:none;color:var(--text);
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
   .cp-tbl tbody tr:hover{background:rgba(255,255,255,.035);}
   body.light-mode .cp-tbl tbody tr:hover{background:rgba(0,0,0,.05);}
 
@@ -339,12 +343,12 @@
 
   // ── Largura das colunas: texto longo ganha espaço, código/número fica curto ─
   const LARG = [
-    { re: /^item$|^n[ºo°]$/i,                                   w: 58,  curta: true },
+    { re: /^item$|^n[ºo°]$/i, w: 74 },
     // ATENÇÃO: /ipi/ solto casava dentro de "Descrição oficial (TIPI)" e
     // espremia a coluna do texto mais longo da tabela.
-    { re: /^ipi\b|^ativos|^variantes|^ano\b|^qtd|^quant|^%|^itens\b/i, w: 86, curta: true },
+    { re: /^ipi\b|^ativos|^variantes|^ano\b|^qtd|^quant|^%|^itens\b/i, w: 86 },
     { re: /confian|situa[çc]/i,                                  w: 104 },
-    { re: /ncm|c[óo]digo|marca|status/i,                         w: 120, curta: true },
+    { re: /ncm|c[óo]digo|marca|status/i, w: 120 },
     { re: /grupo/i,                                              w: 120 },
     { re: /fam[íi]lia|material|unidade|filial|classe/i,          w: 155 },
     { re: /descri|observa|especifica|aplica/i,                   w: 300 },
@@ -370,7 +374,7 @@
     // largura em % do total visível: a tabela sempre ocupa 100% da largura e
     // nunca gera rolagem horizontal — o texto longo quebra em linhas.
     const tot = cols.reduce((s, i) => s + lg[i].w, 0);
-    const cls = i => (keepMobile(bloco.cols)[i] ? 'mt-keep' : 'mt-hide') + (lg[i].curta ? ' curta' : '');
+    const cls = i => keepMobile(bloco.cols)[i] ? 'mt-keep' : 'mt-hide';
     const colg = `<colgroup>${cols.map(i => `<col style="width:${(lg[i].w / tot * 100).toFixed(3)}%">`).join('')}</colgroup>`;
     const seta = i => e.ordCol === i ? (e.ordDir === 'asc' ? ' ▲' : ' ▼') : '';
     return `<div class="tbl-section" data-tbl="${esc(k)}" data-linhas="${linhas.length}">
@@ -380,7 +384,7 @@
       }</tr></thead><tbody>${
         vis.map(r => `<tr>${cols.map(i => {
           const v = r[i] === undefined ? '' : r[i];
-          return `<td class="${cls(i)}">${esc(v)}</td>`;
+          return `<td class="${cls(i)}" title="${esc(v)}">${esc(v)}</td>`;
         }).join('')}</tr>`).join('')
       }</tbody></table></div>` : '<div class="cp-vazio">Nada encontrado com os filtros aplicados.</div>'}
       ${linhas.length > vis.length ? `<button class="cp-mais">Mostrar mais ${nf(Math.min(LOTE, linhas.length - vis.length))} (faltam ${nf(linhas.length - vis.length)})</button>` : ''}
