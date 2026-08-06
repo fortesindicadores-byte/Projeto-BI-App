@@ -78,7 +78,9 @@
   .limpar{background:rgba(249,115,22,.15);border:1px solid rgba(249,115,22,.3);border-radius:5px;color:var(--orange);
     font-family:'Montserrat',sans-serif;font-size:11px;font-weight:700;padding:6px 11px;cursor:pointer;}
   .limpar:hover{background:rgba(249,115,22,.3);}
-  .tbl-scroll{overflow-y:auto;overflow-x:hidden;max-height:74vh;}
+  /* overflow-x:hidden é a única diferença proposital: a tabela fecha em 100%
+     da largura, então não existe barra horizontal para mostrar. */
+  .tbl-scroll{overflow-y:auto;overflow-x:hidden;max-height:66vh;}
   .cp-tbl{width:100%;border-collapse:collapse;font-size:12px;table-layout:fixed;}
   .cp-tbl thead th{position:sticky;top:0;background:var(--card);color:var(--text);font-size:11px;font-weight:700;
     padding:8px 8px 12px;border-bottom:1px solid rgba(255,255,255,.10);text-transform:uppercase;
@@ -127,7 +129,7 @@
   body.light-mode .main{background:#F0F0F0;--text:#1a1a1a;--text2:#444;--text3:#666;}
   /* mesmo card do visao-financeira: cinza translúcido, sem borda e sem sombra */
   body.light-mode .tbl-section,body.light-mode .panel-txt{background:rgba(128,128,128,.14)!important;
-    border:none!important;box-shadow:none!important;--text:#1a1a1a;--text2:#444;--text3:#555;}
+    border:none!important;box-shadow:none!important;--text:#1a1a1a;--text2:#444;--text3:#555;color:var(--text);}
   body.light-mode .cp-tbl thead th{background:#F0F0F0!important;color:#1a1a1a;border-bottom-color:rgba(0,0,0,.10);}
   body.light-mode .search{background:#fff;border-color:#cbd5e1;color:#1a1a1a;}
   body.light-mode .pill{background:rgba(0,0,0,.05);border-color:rgba(0,0,0,.12);}
