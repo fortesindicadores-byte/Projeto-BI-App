@@ -86,11 +86,12 @@
   .cp-tbl thead th.filtrada .fi{opacity:1;}
   .cp-tbl td{padding:10px;border:none;color:var(--text);vertical-align:top;line-height:1.5;
     white-space:normal;overflow-wrap:anywhere;border-bottom:1px solid rgba(255,255,255,.04);}
+  body.light-mode .cp-tbl td{border-bottom-color:rgba(0,0,0,.06);}
   .cp-tbl td.curta,.cp-tbl th.curta{white-space:nowrap;}
   .cp-tbl tbody tr:nth-child(even){background:rgba(255,255,255,.016);}
   .cp-tbl tbody tr:hover{background:rgba(255,255,255,.045);}
-  body.light-mode .cp-tbl tbody tr:nth-child(even){background:rgba(0,0,0,.022);}
-  body.light-mode .cp-tbl tbody tr:hover{background:rgba(249,115,22,.07);}
+  body.light-mode .cp-tbl tbody tr:nth-child(even){background:rgba(255,255,255,.35);}
+  body.light-mode .cp-tbl tbody tr:hover{background:rgba(249,115,22,.10);}
 
   .colmenu{position:fixed;z-index:400;background:#0f1824;border:1px solid #2a3a50;border-radius:6px;
     box-shadow:0 8px 24px rgba(0,0,0,.7);width:266px;max-height:400px;display:flex;flex-direction:column;}
@@ -123,9 +124,10 @@
 
   body.light-mode{--bg:#eef0f3;--sidebar:#0a0f18;}
   body.light-mode .main{background:#F0F0F0;--text:#1a1a1a;--text2:#444;--text3:#666;}
-  body.light-mode .tbl-section,body.light-mode .panel-txt{background:#FFF!important;border-color:transparent!important;
-    box-shadow:0 2px 12px rgba(0,0,0,.10)!important;--text:#1a1a1a;--text2:#444;--text3:#555;}
-  body.light-mode .cp-tbl thead th{background:#FFF!important;color:#1a1a1a;border-bottom-color:rgba(0,0,0,.10);}
+  /* mesmo card do visao-financeira: cinza translúcido, sem borda e sem sombra */
+  body.light-mode .tbl-section,body.light-mode .panel-txt{background:rgba(128,128,128,.14)!important;
+    border:none!important;box-shadow:none!important;--text:#1a1a1a;--text2:#444;--text3:#555;}
+  body.light-mode .cp-tbl thead th{background:#E4E4E4!important;color:#1a1a1a;border-bottom-color:rgba(0,0,0,.14);}
   body.light-mode .search{background:#fff;border-color:#cbd5e1;color:#1a1a1a;}
   body.light-mode .pill{background:rgba(0,0,0,.05);border-color:rgba(0,0,0,.12);}
   body.light-mode .cp-mais{background:rgba(249,115,22,.12);}
