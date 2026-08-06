@@ -962,7 +962,9 @@ function renderFarol(el,cod){
   S.push(['cifv','CIFV','Aderência das fotos da frota vs 100% · descontos por veículo'+fx('cifv')]);
   S.push(['alinh','Alinhamento','No prazo vs vencidos · placas por próximo evento'+fx('alinh')]);
   S.push(['os','Gestão de OS','% no prazo (≤8 dias) · OSs em aberto'+fx('os')]);
-  S.push(['chk','Checklist','Saída com OS Crítica — norma 031120 (até o 3º dia útil: mês anterior)']);
+  // a regra do mês de referência (até o 3º dia útil = mês anterior) fica só no
+  // código; na tela o próprio card já diz de qual mês é o número
+  S.push(['chk','Checklist','Saída com OS Crítica — norma 031120']);
   S.push(['disp','Disponibilidade','Foto da última vigência — veículos disponíveis da frota']);
   S.push(['pneus-afer','Pneus','<i>Aferições</i>']);
   S.push(['pneus-mm','Pneus','<i>Milimetragem</i>']);
