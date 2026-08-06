@@ -68,11 +68,13 @@ const INDICADORES = [
     periodo: { tipo: 'datas', rotulo: 'Data de Execução' },
     tabela: { header: 'Preventivas Realizadas' } },
 
-  // 3. Pneus (Aferições) — período por TILES no rodapé; ano todo = ctrl+clique
-  { chave: 'pneus', menu: ['FROTA', '3.4 - PNEUS'],
-    url: 'https://bi.ginfo.app.br/bi/3ab8927b-b1c5-4f10-8f36-dad6bb8a8a22?autoAuth=true&ctid=c16300de-7070-4b58-80c8-af99af1e1f65',
-    periodo: { tipo: 'botoes' },
-    tabela: { header: 'Aderência Aferição' } },
+  // 3. Pneus (Aferições) — VIA API, não pela tela do Ginfo (Renan, 05/08).
+  // A faixa de meses daquela tela avança por uma seta de "próximo nível" que
+  // não cedeu a nenhuma automação (clique, roda, scrollLeft, evento sintético).
+  // O painel de Pneus tem a mesma informação no Supabase do Prolog, com o
+  // histórico completo de inspeções — então dá para calcular QUALQUER mês sem
+  // depender de clicar, o que também resolve o backfill de uma vez.
+  { chave: 'pneus', api: 'pneus', semAcumulado: true },
 
   // 4.1 Checklist T2 — 031120 (página já vem com Tipo=Saida e Origem=031120)
   { chave: 'checklist-t2', menu: ['FROTA', '1.3 - ADERÊNCIA FROTA - 031120'],
@@ -856,12 +858,79 @@ async function diagnostico(page, tag) {
   }
 }
 
+// ── PNEUS VIA API (Supabase do painel de Pneus / Prolog) ────────────────────
+// Regra do painel (pneus/painel.html, gráfico "Aderência às Aferições"):
+//   aderência do mês = % da frota cuja ÚLTIMA aferição até o fim do mês está
+//   dentro de 30 dias.
+// Como o snapshot traz o histórico de inspeções, dá para calcular qualquer
+// vigência sem depender da tela do Ginfo.
+const PN_URL = 'https://ewbzeqsneeylwkxtcpme.supabase.co';
+const PN_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImV3YnplcXNuZWV5bHdreHRjcG1lIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE4NzY2MTcsImV4cCI6MjA5NzQ1MjYxN30.W8W6Yunt6Z8NB73qpOD8eqYlrsgMRgEG-siYsJFwDwE';
+// branch do Prolog → nome da Filial como vem do Ginfo (mesmo de-para do Gerot),
+// para o elite_snapshot ficar consistente entre os indicadores
+const BRANCH2FILIAL = {
+  24: 'CDD CAMBORIU', 1878: 'CDD CUIABA', 1906: 'CUIABA', 1907: 'CUIABA EMPURRADA',
+  20: 'CDD FLORIANOPOLIS', 30: 'CDD GUARULHOS', 2517: 'CDD NOVA FRIBURGO',
+  26: 'CDD PELOTAS', 37: 'CDD RIO DE JANEIRO', 2277: 'CDD RONDONOPOLIS',
+  1677: 'CDI MACACU', 1676: 'MACACU EMPURRADA', 38: 'PIRAI EMPURRADA',
+};
+async function coletarPneusApi(vigencia) {
+  const ref = refDe(vigencia);
+  const fim = new Date(ref.getFullYear(), ref.getMonth() + 1, 0, 23, 59, 59).getTime();
+  const pega = async bid => {
+    for (let a = 0; a < 5; a++) {
+      try {
+        const res = await fetch(`${PN_URL}/rest/v1/snapshot?branch_id=eq.${bid}&select=endpoint,data`,
+          { headers: { apikey: PN_KEY, Authorization: 'Bearer ' + PN_KEY } });
+        if (res.ok) return await res.json();
+      } catch (e) {}
+      await new Promise(r => setTimeout(r, 800));   // o free tier dá 500 intermitente nos jsonb grandes
+    }
+    return [];
+  };
+  const linhas = [];
+  for (const bid of Object.keys(BRANCH2FILIAL)) {
+    const rows = await pega(bid);
+    const veic = (rows.find(r => r.endpoint === 'vehicles') || {}).data || [];
+    const insp = (rows.find(r => r.endpoint === 'inspections') || {}).data || [];
+    if (!veic.length) continue;
+    const ultima = {};
+    for (const i of insp) {
+      const t = new Date(i.dataInspecao).getTime();
+      if (!isFinite(t) || t > fim) continue;
+      if (ultima[i.veiculoId] === undefined || t > ultima[i.veiculoId]) ultima[i.veiculoId] = t;
+    }
+    let ok = 0;
+    for (const v of veic) {
+      const u = ultima[v.id];
+      if (u !== undefined && Math.floor((fim - u) / 86400000) <= 30) ok++;
+    }
+    linhas.push({
+      Filial: BRANCH2FILIAL[bid],
+      'Aderência Aferição': +(ok / veic.length * 100).toFixed(1),
+      'Frota': veic.length,
+      'Aferidos em 30 dias': ok,
+    });
+  }
+  return linhas;
+}
+
 // ── COLETA de 1 indicador em 1 vigência/escopo ──────────────────────────────
 async function coletar(page, ind, vigencia, escopo) {
   const ref = refDe(vigencia);
   const ini = escopo === 'ano' ? new Date(ref.getFullYear(), 0, 1) : ref;
   const fim = fimDoMes(ref);
   const tag = `${ind.chave}-${vigencia.replace('/', '-')}-${escopo}`;
+
+  // indicador que vem de API não abre navegador nenhum
+  if (ind.api === 'pneus') {
+    log(`— ${ind.chave} · ${vigencia} · ${escopo} (via API do painel de Pneus)`);
+    const linhas = await coletarPneusApi(vigencia);
+    if (!linhas.length) throw new Error(`API de pneus não devolveu dados em ${tag}`);
+    log('colunas:', JSON.stringify(Object.keys(linhas[0])));
+    await gravarSupabase(ind.chave, vigencia, escopo, linhas);
+    return;
+  }
 
   const urlAba = ind.url || 'https://bi.ginfo.app.br/bi/inicio';
   log(`— ${ind.chave} · ${vigencia} · ${escopo}`);
