@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>Catálogo de Peças · BI Frota</title>
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#0C1017;--card:#141B26;--card2:#1A2335;--border:#1E2D40;
+  --orange:#F97316;--blue:#38BDF8;--text:#F1F5F9;--text2:#94A3B8;--text3:#475569;
+  --green:#3BB33B;--red:#FF6666;--yellow:#F59E0B;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'Montserrat',-apple-system,sans-serif;background:radial-gradient(ellipse at 10% 25%,rgba(249,115,22,.06) 0%,transparent 50%),radial-gradient(ellipse at 90% 75%,rgba(56,189,248,.05) 0%,transparent 50%),var(--bg);color:var(--text);min-height:100vh;font-size:15px;}
+.header{background:rgba(12,16,23,.75);border-bottom:1px solid rgba(255,255,255,.07);padding:10px 24px 12px;display:flex;flex-wrap:wrap;align-items:center;position:sticky;top:0;z-index:100;backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);box-shadow:0 2px 12px rgba(0,0,0,.3);}
+.brand{flex:1;order:1;}
+.brand h1{font-size:18px;font-weight:700;color:var(--orange);}
+.brand p{font-size:12px;color:var(--text2);margin-top:2px;}
+.header-right{flex-shrink:0;order:2;display:flex;align-items:center;gap:8px;}
+.status-badge{font-size:11px;color:var(--text);background:rgba(249,115,22,.15);border:1px solid rgba(249,115,22,.3);border-radius:4px;padding:2px 8px;white-space:nowrap;}
+.theme-btn{background:rgba(249,115,22,.15);border:1px solid rgba(249,115,22,.3);border-radius:4px;padding:5px 7px;cursor:pointer;color:var(--orange);display:flex;align-items:center;}
+.theme-btn:hover{background:rgba(249,115,22,.25);}
+.voltar{font-size:11px;color:var(--text2);text-decoration:none;border:1px solid rgba(255,255,255,.1);background:rgba(255,255,255,.05);border-radius:4px;padding:3px 9px;}
+.voltar:hover{color:var(--text);}
+.aviso{margin:40px auto;max-width:520px;text-align:center;color:var(--text2);font-size:13px;line-height:1.7;}
+@media(max-width:768px){
+  .header{padding:8px 12px 10px;}
+  .brand h1{font-size:15px;} .brand p{font-size:10px;}
+  .status-badge{font-size:9px;padding:2px 6px;}
+}
+</style>
+</head>
+<body>
+<script>try{if(!sessionStorage.getItem("gem_hub"))location.replace("../");}catch(e){}</script>
+
+<div class="header">
+  <div class="brand">
+    <h1>CATÁLOGO DE PEÇAS</h1>
+    <p>Lista de peças da frota · NCM, materiais e aplicação</p>
+  </div>
+  <div class="header-right">
+    <button class="cp-side-btn" id="cp-side-btn" title="Mostrar/ocultar o menu">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+    </button>
+    <button class="theme-btn" id="themeBtn" title="Modo claro/escuro"></button>
+    <span class="status-badge">Lista de Peças · Frota V4</span>
+    <a class="voltar" href="../">Hub</a>
+  </div>
+</div>
+
+<div id="cp-raiz"><div class="aviso">Carregando o catálogo…</div></div>
+
+<script src="../assets/catalogo-pecas-dados.js"></script>
+<script src="../assets/catalogo-pecas-app.js"></script>
+<script src="../assets/mobile.js"></script>
+<script>
+CatalogoPecas.init({ fontes: [window.CAT_DADOS] });
+
+// ── tema (padrão dos painéis) ──
+const _sun=`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>`;
+const _moon=`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>`;
+function applyTheme(t){
+  document.body.classList.toggle('light-mode', t==='light');
+  localStorage.setItem('bi_theme', t);
+  const b=document.getElementById('themeBtn');
+  if(b) b.innerHTML = t==='light' ? _moon : _sun;
+}
+(function(){
+  applyTheme(localStorage.getItem('bi_theme') || 'dark');
+  document.getElementById('themeBtn').addEventListener('click',
+    () => applyTheme(document.body.classList.contains('light-mode') ? 'dark' : 'light'));
+})();
+</script>
+</body>
+</html>
