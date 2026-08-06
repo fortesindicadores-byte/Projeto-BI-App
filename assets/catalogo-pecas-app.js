@@ -33,10 +33,10 @@
   const _n = s => txt(s).toUpperCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
 
   const CSS = `
-  .shell{display:flex;min-height:calc(100vh - 46px);}
+  .shell{display:flex;min-height:calc(100vh - var(--hh,46px));}
   .sidebar{width:230px;flex-shrink:0;background:var(--sidebar,#0a0f18);border-right:1px solid rgba(255,255,255,.06);
     padding:14px 10px;display:flex;flex-direction:column;gap:4px;transition:width .18s ease;
-    position:sticky;top:46px;height:calc(100vh - 46px);overflow-y:auto;}
+    position:sticky;top:var(--hh,46px);height:calc(100vh - var(--hh,46px));overflow-y:auto;}
   .shell.collapsed .sidebar{width:0;padding:0;overflow:hidden;border-right:none;}
   .nav-sec{font-size:9px;font-weight:800;color:#64748b;text-transform:uppercase;letter-spacing:1.2px;
     padding:10px 12px 6px;white-space:nowrap;overflow:hidden;}
@@ -128,9 +128,50 @@
   body.light-mode .cp-tbl thead th{background:#FFF!important;color:#1a1a1a;border-bottom-color:rgba(0,0,0,.10);}
   body.light-mode .search{background:#fff;border-color:#cbd5e1;color:#1a1a1a;}
   body.light-mode .pill{background:rgba(0,0,0,.05);border-color:rgba(0,0,0,.12);}
+  body.light-mode .cp-mais{background:rgba(249,115,22,.12);}
+  body.light-mode .page-title{color:#1a1a1a;} body.light-mode .page-sub{color:#444;}
+  body.light-mode .hero-value{color:#1a1a1a;} body.light-mode .hero-value.accent{color:var(--orange);}
+  body.light-mode .hero-label,body.light-mode .hero-sub{color:#555;}
+
+  /* ── Filtros no header: padrão multi-select do Gestão em Movimento ───── */
+  .header-filters{order:4;flex-basis:100%;display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:9px;}
+  .filter-group{display:flex;flex-direction:column;}
+  .ms-wrap{position:relative;}
+  .ms-btn{display:flex;align-items:center;gap:8px;background:#0a0f18;color:#F1F5F9;border:1px solid #2a3a50;
+    border-radius:4px;font-family:'Montserrat',sans-serif;font-size:11px;font-weight:700;padding:6px 12px;
+    cursor:pointer;text-transform:uppercase;letter-spacing:.5px;white-space:nowrap;min-width:110px;}
+  .ms-btn:hover{border-color:var(--orange);}
+  .ms-btn svg{margin-left:auto;}
+  .ms-cnt{background:var(--orange);color:#000;border-radius:10px;padding:1px 6px;font-size:9px;font-weight:800;display:none;}
+  .ms-panel{display:none;flex-direction:column;position:absolute;top:calc(100% + 4px);left:0;z-index:500;
+    background:#0f1824;border:1px solid #2a3a50;border-radius:4px;min-width:240px;max-height:320px;
+    box-shadow:0 8px 24px rgba(0,0,0,.7);}
+  .ms-panel.open{display:flex;}
+  .ms-search{display:flex;align-items:center;gap:6px;padding:7px 10px;border-bottom:1px solid #1e2d40;}
+  .ms-search input{flex:1;background:none;border:none;outline:none;color:#F1F5F9;
+    font-family:'Montserrat',sans-serif;font-size:11px;}
+  .ms-list{overflow-y:auto;}
+  .ms-opt{display:flex;align-items:center;gap:8px;padding:7px 12px;cursor:pointer;font-size:11px;color:#94A3B8;}
+  .ms-opt:hover{background:rgba(255,255,255,.05);color:#F1F5F9;}
+  .ms-opt.all-opt{border-bottom:1px solid #1e2d40;color:#F1F5F9;font-weight:700;}
+  .ms-opt input[type=checkbox]{accent-color:var(--orange);cursor:pointer;width:14px;height:14px;flex:0 0 auto;}
+  .ms-opt span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .f-limpa{background:rgba(249,115,22,.15);border:1px solid rgba(249,115,22,.3);border-radius:4px;color:var(--orange);
+    font-family:'Montserrat',sans-serif;font-size:10px;font-weight:700;padding:6px 11px;cursor:pointer;
+    text-transform:uppercase;letter-spacing:.5px;}
+  .f-limpa:hover{background:rgba(249,115,22,.3);}
+  .f-hint{font-size:10px;color:#64748b;white-space:nowrap;}
 
   @media(max-width:768px){
-    .sidebar{position:fixed;z-index:150;left:0;top:46px;box-shadow:6px 0 24px rgba(0,0,0,.5);}
+    .header-filters{gap:5px;margin-top:7px;}
+    .filter-group{flex:0 0 calc(33.333% - 4px);}
+    .ms-wrap{width:100%;}
+    .ms-btn{width:100%;min-width:0;font-size:8px;padding:3px 6px;gap:4px;}
+    .f-hint{display:none;}
+  }
+
+  @media(max-width:768px){
+    .sidebar{position:fixed;z-index:150;left:0;top:var(--hh,46px);box-shadow:6px 0 24px rgba(0,0,0,.5);}
     .shell.collapsed .sidebar{width:0;padding:0;overflow:hidden;}
     .main{padding:14px 12px 60px;}
     /* no mobile o assets/mobile.js esconde colunas — as larguras fixas iriam
@@ -167,7 +208,11 @@
           cols = cols.filter((_, x) => manter[x]);
           rs = body.map(r => r.filter((_, x) => manter[x]));
         }
-        blocos.push({ tipo: 'tabela', cols, rows: rs });
+        // colunas cujo valor é uma lista ("TRUCK | TOCO | VUC"): filtram por item
+        const amostra = rs.slice(0, 80);
+        const tok = new Set(cols.map((_, x) => x).filter(x =>
+          amostra.filter(r => String(r[x] || '').includes('|')).length > amostra.length * .25));
+        blocos.push({ tipo: 'tabela', cols, rows: rs, tok });
         i = j;
       } else {
         const linhas = [];
@@ -244,11 +289,30 @@
     });
   }
 
+  // valores distintos de uma coluna (explodindo as listas "A | B | C")
+  function valoresCol(bloco, col) {
+    const s = new Set();
+    if (bloco.tok && bloco.tok.has(col)) {
+      bloco.rows.forEach(r => String(r[col] == null ? '' : r[col]).split('|')
+        .forEach(v => { v = v.trim(); if (v) s.add(v); }));
+    } else {
+      bloco.rows.forEach(r => s.add(txt(r[col])));
+    }
+    return [...s].sort((a, b) => {
+      const na = numBR(a), nb = numBR(b);
+      if (na !== null && nb !== null) return na - nb;
+      return a.localeCompare(b, 'pt-BR');
+    });
+  }
+  const casaCol = (bloco, col, vals, r) => bloco.tok && bloco.tok.has(col)
+    ? String(r[col] == null ? '' : r[col]).split('|').some(v => vals.has(v.trim()))
+    : vals.has(txt(r[col]));
+
   function aplicar(bloco, e) {
     let l = bloco.rows;
     l = filtroFrota(bloco, l);
     e.filtros.forEach((vals, col) => {
-      if (vals.size) l = l.filter(r => vals.has(txt(r[col])));
+      if (vals.size) l = l.filter(r => casaCol(bloco, col, vals, r));
     });
     if (e.busca) {
       const termos = e.busca.toLowerCase().split(/\s+/).filter(Boolean);
@@ -351,22 +415,69 @@
     ).join('')}</div>`;
   }
 
-  function barraFrota() {
-    if (!USA_PLACA || !FROTA.length) return '';
-    const unis = [...new Set(FROTA.map(v => v.uni))].filter(Boolean).sort();
-    const placas = FROTA.filter(v => !unidsSel.size || unidsSel.has(v.uni)).map(v => v.placa).sort();
-    return `<div class="tbl-section" id="cp-frota">
-      <div class="tbl-title">Consultar por veículo</div>
-      <div class="tbl-sub">Escolha a placa para ver só as peças que se aplicam ao tipo e ao modelo dela.</div>
-      <div class="tbl-tools">
-        <select class="search" id="f-uni"><option value="">Todas as unidades</option>${
-          unis.map(u => `<option${unidsSel.has(u) ? ' selected' : ''}>${esc(u)}</option>`).join('')}</select>
-        <select class="search" id="f-placa"><option value="">Todas as placas (${nf(placas.length)})</option>${
-          placas.map(p => `<option${placasSel.has(p) ? ' selected' : ''}>${esc(p)}</option>`).join('')}</select>
-        ${placasSel.size || unidsSel.size ? `<span class="pill">${[...placasSel][0] || [...unidsSel][0]}</span><button class="limpar" id="f-limpar">Limpar veículo</button>` : ''}
-      </div>
-    </div>`;
+  // ── Barra de filtros no header (padrão multi-select do Gestão em Movimento) ─
+  // Ordem preferida das colunas que viram filtro na aba atual.
+  const PREF = [/^grupo/i, /^fam[íi]lia/i, /^sistema/i, /^pe[çc]a/i, /^material/i,
+    /^aplica/i, /^modelo/i, /^ncm$/i, /^confian/i, /^marca/i, /^classe/i, /^tipo/i,
+    /^status/i, /^estado/i, /^situa[çc]/i, /^c[óo]digo/i, /^fonte/i, /^cen[áa]rio/i, /^verifica/i];
+
+  function tabelaPrincipal(aba) {
+    const bl = blocosDe(aba), tbs = bl.filter(b => b.tipo === 'tabela');
+    if (!tbs.length) return null;
+    const b = tbs.reduce((a, x) => x.rows.length > a.rows.length ? x : a);
+    return { b, k: chave(aba, bl.indexOf(b)) };
   }
+
+  function colunasFiltro(bloco) {
+    const cand = bloco.cols.map((c, i) => ({ c, i }))
+      .filter(({ c, i }) => {
+        if (/^item$|^n[ºo°]$|ipi|ativos|variantes|^%|quant|^itens/i.test(c)) return false;
+        const n = valoresCol(bloco, i).length;
+        return n > 1 && n <= 600;
+      });
+    const ord = x => { const p = PREF.findIndex(re => re.test(x.c)); return p < 0 ? 99 : p; };
+    return cand.sort((a, b) => ord(a) - ord(b) || a.i - b.i).slice(0, 8);
+  }
+
+  const _caret = `<svg width="10" height="6" viewBox="0 0 10 6"><path d="M0 0l5 6 5-6z" fill="#F97316"/></svg>`;
+  const lupa = `<svg width="12" height="12" viewBox="0 0 12 12"><circle cx="5" cy="5" r="4" stroke="#94A3B8" stroke-width="1.5" fill="none"/><line x1="8.5" y1="8.5" x2="11" y2="11" stroke="#94A3B8" stroke-width="1.5"/></svg>`;
+
+  function msHtml(id, label, valores, sel) {
+    const n = sel.size;
+    return `<div class="filter-group"><div class="ms-wrap" id="${id}">
+      <button class="ms-btn" data-ms="${id}"><span class="ms-lbl">${esc(label)}</span>
+        <span class="ms-cnt" style="display:${n ? 'inline-block' : 'none'}">${n}</span>${_caret}</button>
+      <div class="ms-panel">
+        <div class="ms-search">${lupa}<input type="text" placeholder="Pesquisar…"></div>
+        <div class="ms-list">
+          <label class="ms-opt all-opt"><input type="checkbox" data-todos${n ? '' : ' checked'}><span>Todos</span></label>
+          ${valores.map(v => `<label class="ms-opt"><input type="checkbox" value="${esc(v)}"${sel.has(v) ? ' checked' : ''}><span>${esc(v) || '(vazio)'}</span></label>`).join('')}
+        </div>
+      </div></div></div>`;
+  }
+
+  function renderFiltros(aba) {
+    const cx = document.getElementById('cp-filtros');
+    if (!cx) return;
+    const tp = tabelaPrincipal(aba);
+    if (!tp) { cx.innerHTML = ''; return; }
+    const e = estado(tp.k);
+    let h = '';
+    if (USA_PLACA && FROTA.length) {
+      const unis = [...new Set(FROTA.map(v => v.uni))].filter(Boolean).sort();
+      const placas = [...new Set(FROTA.filter(v => !unidsSel.size || unidsSel.has(v.uni)).map(v => v.placa))].sort();
+      h += msHtml('ms-uni', 'Unidade', unis, unidsSel) + msHtml('ms-placa', 'Placa', placas, placasSel);
+    }
+    COLF = colunasFiltro(tp.b);
+    h += COLF.map(({ c, i }) => msHtml('ms-c' + i, c.replace(/\s*\(.*/, ''), valoresCol(tp.b, i), e.filtros.get(i) || new Set())).join('');
+    const ativos = [...e.filtros.values()].filter(s => s.size).length + (unidsSel.size ? 1 : 0) + (placasSel.size ? 1 : 0);
+    h += ativos ? `<button class="f-limpa" id="f-limpa">Limpar filtros (${ativos})</button>` : '';
+    h += `<span class="f-hint">Todo cabeçalho de coluna também filtra</span>`;
+    cx.innerHTML = h;
+    FKEY = tp.k;
+    ajustaHH();
+  }
+  let COLF = [], FKEY = null;
 
   function renderAba(aba) {
     atual = aba;
@@ -378,8 +489,9 @@
     ).join('');
     document.getElementById('cp-main').innerHTML =
       `<div class="page-title">${esc(aba)}</div>
-       <div class="page-sub">${nTb ? 'Todo cabeçalho de coluna é filtro: clique nele para ordenar ou escolher valores.' : 'Conteúdo descritivo desta aba da planilha.'}</div>
-       ${heroDe(aba, blocos)}${barraFrota()}${html}`;
+       <div class="page-sub">${nTb ? 'Filtros no topo da página · todo cabeçalho de coluna também filtra e ordena.' : 'Conteúdo descritivo desta aba da planilha.'}</div>
+       ${heroDe(aba, blocos)}${html}`;
+    renderFiltros(aba);
     window.scrollTo({ top: 0 });
   }
 
@@ -392,6 +504,7 @@
     el.replaceWith(novo.firstElementChild);
     const h = document.querySelector('.hero');
     if (h) { const n = document.createElement('div'); n.innerHTML = heroDe(aba, blocosDe(aba)); if (n.firstElementChild) h.replaceWith(n.firstElementChild); }
+    renderFiltros(aba);
   }
 
   // ── Menu de coluna (ordenar + multisseleção de valores) ──────────────────
@@ -478,6 +591,66 @@
     } catch (e) { console.error('frota', e); }
   }
 
+  // ── Eventos da barra de filtros do header ────────────────────────────────
+  // o header cresce com a barra de filtros — a sidebar acompanha
+  function ajustaHH() {
+    const hd = document.querySelector('.header');
+    if (hd) document.documentElement.style.setProperty('--hh', hd.offsetHeight + 'px');
+  }
+
+  function ligarFiltrosHeader() {
+    const cx = document.getElementById('cp-filtros');
+    if (!cx) return;
+
+    cx.addEventListener('click', ev => {
+      const bt = ev.target.closest('.ms-btn');
+      if (bt) {
+        const pn = bt.parentElement.querySelector('.ms-panel');
+        const aberto = pn.classList.contains('open');
+        cx.querySelectorAll('.ms-panel.open').forEach(p => p.classList.remove('open'));
+        if (!aberto) { pn.classList.add('open'); const i = pn.querySelector('input[type=text]'); if (i) i.focus(); }
+        return;
+      }
+      if (ev.target.closest('#f-limpa')) {
+        unidsSel.clear(); placasSel.clear();
+        if (FKEY) estado(FKEY).filtros.clear();
+        renderAba(atual);
+      }
+    });
+
+    cx.addEventListener('input', ev => {
+      const inp = ev.target.closest('.ms-search input');
+      if (!inp) return;
+      const t = _n(inp.value);
+      inp.closest('.ms-panel').querySelectorAll('.ms-opt:not(.all-opt)')
+        .forEach(o => { o.style.display = _n(o.textContent).includes(t) ? '' : 'none'; });
+    });
+
+    cx.addEventListener('change', ev => {
+      const ck = ev.target.closest('input[type=checkbox]');
+      if (!ck) return;
+      const wrap = ck.closest('.ms-wrap');
+      const marcadas = new Set([...wrap.querySelectorAll('.ms-list input[value]')]
+        .filter(c => c.checked).map(c => c.value));
+      if (ck.hasAttribute('data-todos')) {
+        wrap.querySelectorAll('.ms-list input[value]').forEach(c => { c.checked = false; });
+        marcadas.clear();
+      }
+      const id = wrap.id;
+      if (id === 'ms-uni')        { unidsSel = marcadas; placasSel.clear(); }
+      else if (id === 'ms-placa') { placasSel = marcadas; }
+      else if (FKEY) {
+        const col = +id.slice(4);
+        const e = estado(FKEY);
+        if (marcadas.size) e.filtros.set(col, marcadas); else e.filtros.delete(col);
+        e.mostrando = LOTE;
+      }
+      const aberto = [...cx.querySelectorAll('.ms-panel.open')].map(p => p.closest('.ms-wrap').id);
+      if (FKEY) repinta(FKEY); else renderAba(atual);
+      aberto.forEach(i => { const p = cx.querySelector('#' + i + ' .ms-panel'); if (p) p.classList.add('open'); });
+    });
+  }
+
   function init(cfg) {
     injetarCSS();
     DADOS = Object.assign({}, ...(cfg.fontes || []).filter(Boolean));
@@ -506,14 +679,13 @@
       const th = ev.target.closest('.cp-tbl thead th');
       if (th) { abrirMenu(th, th.closest('[data-tbl]').dataset.tbl); return; }
       const lim = ev.target.closest('.limpar');
-      if (lim && lim.id !== 'f-limpar') {
+      if (lim) {
         const k = lim.closest('[data-tbl]').dataset.tbl;
         estado(k).filtros.clear();
         estado(k).mostrando = LOTE;
         repinta(k);
         return;
       }
-      if (lim && lim.id === 'f-limpar') { placasSel.clear(); unidsSel.clear(); renderAba(atual); return; }
       const mais = ev.target.closest('.cp-mais');
       if (mais) {
         const k = mais.closest('[data-tbl]').dataset.tbl;
@@ -537,19 +709,13 @@
       }, 220);
     });
 
-    raiz.addEventListener('change', ev => {
-      if (ev.target.id === 'f-uni') {
-        unidsSel = ev.target.value ? new Set([ev.target.value]) : new Set();
-        placasSel.clear();
-        renderAba(atual);
-      } else if (ev.target.id === 'f-placa') {
-        placasSel = ev.target.value ? new Set([ev.target.value]) : new Set();
-        renderAba(atual);
-      }
-    });
+    ligarFiltrosHeader();
+    ajustaHH();
+    window.addEventListener('resize', ajustaHH);
 
     document.addEventListener('click', ev => {
       if (menuAberto && !ev.target.closest('.colmenu') && !ev.target.closest('.cp-tbl thead th')) fecharMenu();
+      if (!ev.target.closest('.ms-wrap')) document.querySelectorAll('.ms-panel.open').forEach(p => p.classList.remove('open'));
     });
     window.addEventListener('scroll', fecharMenu, { passive: true });
 
