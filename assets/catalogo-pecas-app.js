@@ -65,7 +65,9 @@
   .hero-sub{font-size:10px;color:var(--text2);margin-top:7px;font-weight:600;}
   @media(max-width:768px){.hero{gap:24px;}.hero-value{font-size:30px;}}
 
-  .tbl-section{background:rgba(20,27,38,.55);border:1px solid rgba(255,255,255,.07);border-radius:8px;
+  /* opaco de propósito: o cabeçalho é sticky e precisa do MESMO fundo do card
+     (rgba(20,27,38,.55) sobre o --bg dá exatamente #10161F) */
+  .tbl-section{--tblbg:#10161F;background:var(--tblbg);border:1px solid rgba(255,255,255,.07);border-radius:8px;
     padding:18px 20px 16px;margin-bottom:16px;backdrop-filter:blur(16px);box-shadow:0 2px 12px rgba(0,0,0,.25);}
   .tbl-title{font-size:19px;font-weight:800;color:var(--text);margin-bottom:3px;}
   .tbl-sub{font-size:13px;color:var(--text2);margin-bottom:16px;}
@@ -80,7 +82,7 @@
   .limpar:hover{background:rgba(249,115,22,.3);}
   .tbl-scroll{overflow-y:auto;overflow-x:hidden;max-height:74vh;}
   .cp-tbl{width:100%;border-collapse:collapse;font-size:12px;table-layout:fixed;}
-  .cp-tbl thead th{position:sticky;top:0;background:var(--card);color:var(--text);font-size:10.5px;font-weight:700;
+  .cp-tbl thead th{position:sticky;top:0;background:var(--tblbg);color:var(--text);font-size:10.5px;font-weight:700;
     padding:9px 10px 12px;border-bottom:1px solid rgba(255,255,255,.10);text-transform:uppercase;
     letter-spacing:.5px;text-align:left;vertical-align:bottom;z-index:2;cursor:pointer;user-select:none;
     line-height:1.3;}
@@ -92,9 +94,7 @@
     white-space:normal;overflow-wrap:anywhere;border-bottom:1px solid rgba(255,255,255,.04);}
   body.light-mode .cp-tbl td{border-bottom-color:rgba(0,0,0,.06);}
   .cp-tbl td.curta{white-space:nowrap;}
-  .cp-tbl tbody tr:nth-child(even){background:rgba(255,255,255,.016);}
   .cp-tbl tbody tr:hover{background:rgba(255,255,255,.045);}
-  body.light-mode .cp-tbl tbody tr:nth-child(even){background:rgba(255,255,255,.35);}
   body.light-mode .cp-tbl tbody tr:hover{background:rgba(249,115,22,.10);}
 
   .colmenu{position:fixed;z-index:400;background:#0f1824;border:1px solid #2a3a50;border-radius:6px;
@@ -129,9 +129,9 @@
   body.light-mode{--bg:#eef0f3;--sidebar:#0a0f18;}
   body.light-mode .main{background:#F0F0F0;--text:#1a1a1a;--text2:#444;--text3:#666;}
   /* mesmo card do visao-financeira: cinza translúcido, sem borda e sem sombra */
-  body.light-mode .tbl-section,body.light-mode .panel-txt{background:rgba(128,128,128,.14)!important;
+  body.light-mode .tbl-section,body.light-mode .panel-txt{--tblbg:#E0E0E0;background:var(--tblbg)!important;
     border:none!important;box-shadow:none!important;--text:#1a1a1a;--text2:#444;--text3:#555;}
-  body.light-mode .cp-tbl thead th{background:#E4E4E4!important;color:#1a1a1a;border-bottom-color:rgba(0,0,0,.14);}
+  body.light-mode .cp-tbl thead th{color:#1a1a1a;border-bottom-color:rgba(0,0,0,.14);}
   body.light-mode .search{background:#fff;border-color:#cbd5e1;color:#1a1a1a;}
   body.light-mode .pill{background:rgba(0,0,0,.05);border-color:rgba(0,0,0,.12);}
   body.light-mode .cp-mais{background:rgba(249,115,22,.12);}
