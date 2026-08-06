@@ -753,8 +753,26 @@
     if (hd) document.documentElement.style.setProperty('--hh', hd.offsetHeight + 'px');
   }
 
+  // O GitHub Pages entrega o HTML com max-age, então o navegador continua
+  // rodando a build antiga por minutos depois do deploy. Aqui a página busca o
+  // próprio HTML sem cache e, se lá fora já existe uma build mais nova, se
+  // recarrega apontando para ela. O sessionStorage impede laço.
+  async function checarAtualizacao() {
+    if (!VERSAO || sessionStorage.getItem('cp_reload') === VERSAO) return;
+    try {
+      const r = await fetch(location.pathname + '?cb=' + Date.now(), { cache: 'no-store' });
+      if (!r.ok) return;
+      const m = (await r.text()).match(/catalogo-pecas-app\.js\?v=(\d+)/);
+      if (m && m[1] > VERSAO) {
+        sessionStorage.setItem('cp_reload', m[1]);
+        location.replace(location.pathname + '?v=' + m[1]);
+      }
+    } catch (e) { /* offline: segue com o que tem */ }
+  }
+
   function init(cfg) {
     injetarCSS();
+    checarAtualizacao();
     DADOS = Object.assign({}, ...(cfg.fontes || []).filter(Boolean));
     ABAS_FORA.forEach(a => { delete DADOS[a]; });
     ABAS = Object.keys(DADOS);
