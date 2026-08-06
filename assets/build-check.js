@@ -15,6 +15,10 @@
   const meta = document.querySelector('meta[name="build"]');
   const atual = meta && meta.content.trim();
   if (!atual) return;
+
+  // mostra a build carregada no elemento [data-build], se a página tiver um —
+  // assim dá para saber, olhando um print, se é o arquivo novo ou o cache
+  document.querySelectorAll('[data-build]').forEach(el => { el.textContent = 'build ' + atual; });
   const chave = 'gem_reload_' + location.pathname;
   if (sessionStorage.getItem(chave) === atual) return;
 
