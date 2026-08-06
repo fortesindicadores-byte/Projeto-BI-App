@@ -719,7 +719,17 @@ Automatiza a planilha **Frota de Elite** (`1DXmjzj2KRrTdQxmvXRclGxhBeDMwoIoLvORq
 
 **Três mecânicas de filtro** (o robô do Farol só tinha a primeira): `dropdown` (slicer Ano/Mês, com ctrl+clique para somar meses no acumulado) · `datas` (par de campos dd/mm/aaaa — escolhe o par mais próximo do rótulo, porque Preventivas tem dois pares) · `botoes` (tiles de ano/mês no rodapé dos Pneus, com seta "‹" para revelar meses fora da faixa). Período que não aplica **aborta a coleta** — nunca grava a tela no filtro errado por cima do dado bom.
 
-**Iterar barato:** `ELITE_IND=disponibilidade` roda um indicador só; `ELITE_DE`/`ELITE_ATE` limitam o backfill; `ELITE_FORCAR=1` ignora a janela do dia 15.
+**Iterar barato:** `ELITE_IND=disponibilidade` roda um indicador só; `ELITE_DE`/`ELITE_ATE` limitam o backfill; `ELITE_FORCAR=1` ignora a janela do dia 15; `refazer=true` (input do workflow, `ELITE_REFAZER=1`) recoleta o que já está gravado — sem ele o robô **pula** toda chave já existente em `elite_snapshot`.
+
+**BACKFILL CONCLUÍDO (06/08/2026):** `elite_snapshot` tem 01→07/2026 completo nos dois escopos.
+- **`mes`** — 11 indicadores × 7 vigências = **77/77**.
+- **`ano`** — 9 indicadores × 7 vigências = **63/63**. Ficam de fora `pneus` (API: o leitor calcula qualquer janela) e `stress-test-empilhadeira` (a tela não acumula) — os dois com `semAcumulado:true`.
+
+**O acumulado do ano é OBRIGATÓRIO e não se deriva** (Renan, 06/08): quando o painel filtra várias vigências, o número que vale é o acumulado. Para Disponibilidade, Preventivas, Conformidade, Checklists e SLA o valor mensal já é um percentual por filial — **média de médias ≠ acumulado ponderado**, que é o que o Ginfo calcula na tela quando se multisseleciona jan→mês. Só Stress Test e CIVF (linhas 1/0 por placa) e Pneus (API) é que o leitor pode somar sozinho. Por isso o escopo `ano` é gravado **por vigência**: filtrar jan→abr exige o acumulado até abril.
+
+**Instabilidade conhecida do Ginfo:** ~8% das coletas falham por portal sem menu lateral, aba interna não encontrada ou campo de data ausente. O robô tenta 3× e aborta sem gravar. Para tapar buracos, redisparar o mesmo intervalo **sem** `refazer` — ele pula o que existe e refaz só o que falta.
+
+**Fila do Actions:** em horário de pico o job pode ficar 15 min na fila sem runner e ser cancelado (`runner_id: 0`, sem log). Não é erro do robô nem cota (o repo é público) — é só redisparar.
 
 ## Robô Qlik (DRE → Custos) — EM ESPERA (03/08/2026)
 
