@@ -754,7 +754,37 @@ function renderRanking(el){
   }).sort((a,b)=>(b.score??-1)-(a.score??-1));
   const cell=(v,cls)=>`<td class="num ${cls}">${pct1(v)}</td>`;
   const cCu=v=>v==null?'mut':v<=0?'cg':v<=5?'cy':'cr';
-  const rkHead='<thead><tr>'+['#','Unidade','Média','Stress Veíc.','Stress Emp.','CIFV','Preventivas','Alinhamento','OS no prazo','Saída OS Crít.','Disponib.','Aferições','Milimetr.','Calibr.','Custos Δ Orç %'].map((h,i)=>`<th${i>=2?' class="num"':''}>${h}</th>`).join('')+'</tr></thead>';
+  // Cortes de cor de cada coluna — a MESMA fonte alimenta o tooltip do cabeçalho
+  // e a legenda abaixo da tabela, para os dois nunca divergirem do código.
+  const RK_CORTES={
+    'Média':`≥ 97% verde · 90–96,9% amarelo · < 90% vermelho`,
+    'Stress Veíc.':'100% verde · 95–99,9% amarelo · < 95% vermelho',
+    'Stress Emp.':'100% verde · 95–99,9% amarelo · < 95% vermelho',
+    'CIFV':'100% verde · 95–99,9% amarelo · < 95% vermelho',
+    'Preventivas':'100% verde · 95–99,9% amarelo · < 95% vermelho',
+    'Alinhamento':'≥ 80% verde · < 80% vermelho (não tem faixa amarela)',
+    'OS no prazo':'≥ 90% verde · 70–89,9% amarelo · < 70% vermelho',
+    'Saída OS Crít.':'binária: 100% verde (nenhuma saída crítica) · 0% vermelho',
+    'Disponib.':`≥ ${DISP_SONHO}% verde (sonho) · ${DISP_META}–${String(DISP_SONHO-0.1).replace('.',',')}% amarelo (meta) · < ${DISP_META}% vermelho`,
+    'Aferições':'≥ 95% verde · 85–94,9% amarelo · < 85% vermelho',
+    'Milimetr.':'≥ 90% verde · 75–89,9% amarelo · < 75% vermelho',
+    'Calibr.':'≥ 90% verde · 75–89,9% amarelo · < 75% vermelho',
+    'Custos Δ Orç %':'≤ 0% verde (dentro do orçado) · até +5% amarelo · > +5% vermelho',
+  };
+  const rkHead='<thead><tr>'+['#','Unidade','Média','Stress Veíc.','Stress Emp.','CIFV','Preventivas','Alinhamento','OS no prazo','Saída OS Crít.','Disponib.','Aferições','Milimetr.','Calibr.','Custos Δ Orç %'].map((h,i)=>{
+    const t=RK_CORTES[h];
+    return `<th${i>=2?' class="num"':''}${t?` title="${escF(h)}: ${escF(t)}"`:''}>${h}</th>`;
+  }).join('')+'</tr></thead>';
+  const legenda=`<div class="rk-leg">
+    <div class="rk-leg-cores">
+      <span><i class="dot g"></i> No alvo</span>
+      <span><i class="dot y"></i> Atenção</span>
+      <span><i class="dot r"></i> Fora</span>
+      <span><i class="dot m"></i> Sem dado no período</span>
+      <span class="rk-leg-nota">passe o mouse no cabeçalho para ver o corte da coluna</span>
+    </div>
+    <div class="rk-leg-cortes">${Object.entries(RK_CORTES).map(([k,v])=>`<span><b>${escF(k)}</b> ${escF(v)}</span>`).join('')}</div>
+  </div>`;
   el.innerHTML=wrapT('<table>'+rkHead+'<tbody>'+
     list.map((u,i)=>{
       const sc=u.score==null?'mut':u.score>=97?'#3BB33B':u.score>=90?'#EAB308':'#FF6666';
@@ -762,7 +792,7 @@ function renderRanking(el){
       <td class="num">${u.score==null?'—':`<span class="pill" style="background:${sc}">${pct1(u.score)}</span>`}</td>
       ${cell(u.sv,clsPctMeta(u.sv))}${cell(u.se,clsPctMeta(u.se))}${cell(u.cf,clsPctMeta(u.cf))}${cell(u.pv,clsPctMeta(u.pv))}
       ${cell(u.al,u.al==null?'mut':u.al>=80?'cg':'cr')}${cell(u.os,u.os==null?'mut':u.os>=90?'cg':u.os>=70?'cy':'cr')}${cell(u.ck,u.ck==null?'mut':u.ck>=100?'cg':'cr')}${cell(u.dp,dispCls(u.dp))}${cell(u.af,clsPctMeta(u.af,95,85))}${cell(u.mm,clsPctMeta(u.mm,90,75))}${cell(u.ca,clsPctMeta(u.ca,90,75))}
-      <td class="num ${cCu(u.cu)}">${u.cu==null?'—':(u.cu>0?'+':'')+pct1(u.cu)}</td></tr>`;}).join('')+'</tbody></table>')+
+      <td class="num ${cCu(u.cu)}">${u.cu==null?'—':(u.cu>0?'+':'')+pct1(u.cu)}</td></tr>`;}).join('')+'</tbody></table>')+legenda+
     '<div class="tbl-sub" style="margin-top:8px">Média = aderências (Stress V/E, CIFV, Preventivas, Alinhamento, OS no prazo, Disponibilidade, Aferições, Milimetragem e Calibragem). Saída OS Crít. é binária (Checklist do mês de referência: 100% sem saída crítica, 0% com) e Custos é informativo (Δ Real vs Orç do mês) — os dois fora da média. Aferições/Milimetragem/Calibragem vêm da API (foto Prolog); detalhe na seção Pneus abaixo.</div>';
 }
 
