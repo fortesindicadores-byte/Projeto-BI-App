@@ -24,6 +24,10 @@
   // Abas que saem do painel (ficam só no Excel) e colunas que não entram.
   const ABAS_FORA = ['1. Genérico', '2. Meio-termo'];
   const COL_FORA  = /posi[çc][ãa]o\s*\(?\s*(tipi|cap[íi]tulo)/i;
+  // Colunas que ficam FORA DA TABELA mas continuam nos dados — os filtros do
+  // topo e o cruzamento por placa usam Aplicação/Modelo. Sem elas a tabela cabe
+  // na largura da tela e não precisa de rolagem horizontal.
+  const COL_OCULTA = /^ipi\b|^confian|^c[óo]digo de refer|^fonte do c[óo]digo|^modelo \(aplica|^aplica[çc][ãa]o \(tipos|^ativos atendidos|^observa/i;
   const LOTE = 300;
 
   const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -74,7 +78,7 @@
   .limpar{background:rgba(249,115,22,.15);border:1px solid rgba(249,115,22,.3);border-radius:5px;color:var(--orange);
     font-family:'Montserrat',sans-serif;font-size:11px;font-weight:700;padding:6px 11px;cursor:pointer;}
   .limpar:hover{background:rgba(249,115,22,.3);}
-  .tbl-scroll{overflow:auto;max-height:74vh;}
+  .tbl-scroll{overflow-y:auto;overflow-x:hidden;max-height:74vh;}
   .cp-tbl{width:100%;border-collapse:collapse;font-size:12px;table-layout:fixed;}
   .cp-tbl thead th{position:sticky;top:0;background:var(--card);color:var(--text);font-size:10.5px;font-weight:700;
     padding:9px 10px 12px;border-bottom:1px solid rgba(255,255,255,.10);text-transform:uppercase;
@@ -87,7 +91,7 @@
   .cp-tbl td{padding:10px;border:none;color:var(--text);vertical-align:top;line-height:1.5;
     white-space:normal;overflow-wrap:anywhere;border-bottom:1px solid rgba(255,255,255,.04);}
   body.light-mode .cp-tbl td{border-bottom-color:rgba(0,0,0,.06);}
-  .cp-tbl td.curta,.cp-tbl th.curta{white-space:nowrap;}
+  .cp-tbl td.curta{white-space:nowrap;}
   .cp-tbl tbody tr:nth-child(even){background:rgba(255,255,255,.016);}
   .cp-tbl tbody tr:hover{background:rgba(255,255,255,.045);}
   body.light-mode .cp-tbl tbody tr:nth-child(even){background:rgba(255,255,255,.35);}
@@ -178,7 +182,7 @@
     .main{padding:14px 12px 60px;}
     /* no mobile o assets/mobile.js esconde colunas — as larguras fixas iriam
        sobrar para colunas ocultas e espremer as visíveis. */
-    .cp-tbl{font-size:11px;table-layout:auto;min-width:0!important;}
+    .cp-tbl{font-size:11px;table-layout:auto;}
     .cp-tbl col{width:auto!important;}
     .cp-tbl thead th{position:static;}
     .tbl-scroll{max-height:none;}
@@ -214,7 +218,8 @@
         const amostra = rs.slice(0, 80);
         const tok = new Set(cols.map((_, x) => x).filter(x =>
           amostra.filter(r => String(r[x] || '').includes('|')).length > amostra.length * .25));
-        blocos.push({ tipo: 'tabela', cols, rows: rs, tok });
+        const vis = cols.map((c, x) => x).filter(x => !COL_OCULTA.test(cols[x]));
+        blocos.push({ tipo: 'tabela', cols, rows: rs, tok, vis });
         i = j;
       } else {
         const linhas = [];
@@ -336,7 +341,9 @@
   // ── Largura das colunas: texto longo ganha espaço, código/número fica curto ─
   const LARG = [
     { re: /^item$|^n[ºo°]$/i,                                   w: 58,  curta: true },
-    { re: /ipi|ativos|variantes|ano|qtd|quant|^%|% da/i,         w: 86,  curta: true },
+    // ATENÇÃO: /ipi/ solto casava dentro de "Descrição oficial (TIPI)" e
+    // espremia a coluna do texto mais longo da tabela.
+    { re: /^ipi\b|^ativos|^variantes|^ano\b|^qtd|^quant|^%|^itens\b/i, w: 86, curta: true },
     { re: /confian|situa[çc]/i,                                  w: 104 },
     { re: /ncm|c[óo]digo|marca|status/i,                         w: 120, curta: true },
     { re: /grupo/i,                                              w: 120 },
@@ -359,17 +366,20 @@
     const e = estado(k);
     const linhas = aplicar(bloco, e);
     const vis = linhas.slice(0, e.mostrando);
+    const cols = bloco.vis || bloco.cols.map((_, i) => i);   // índices exibidos
     const lg = larguras(bloco.cols);
+    // largura em % do total visível: a tabela sempre ocupa 100% da largura e
+    // nunca gera rolagem horizontal — o texto longo quebra em linhas.
+    const tot = cols.reduce((s, i) => s + lg[i].w, 0);
     const cls = i => (keepMobile(bloco.cols)[i] ? 'mt-keep' : 'mt-hide') + (lg[i].curta ? ' curta' : '');
-    const colg = `<colgroup>${lg.map(l => `<col style="width:${l.w}px">`).join('')}</colgroup>`;
+    const colg = `<colgroup>${cols.map(i => `<col style="width:${(lg[i].w / tot * 100).toFixed(3)}%">`).join('')}</colgroup>`;
     const seta = i => e.ordCol === i ? (e.ordDir === 'asc' ? ' ▲' : ' ▼') : '';
     return `<div class="tbl-section" data-tbl="${esc(k)}" data-linhas="${linhas.length}">
       ${titulo ? `<div class="tbl-title">${esc(titulo)}</div>` : ''}
-      ${linhas.length ? `<div class="tbl-scroll"><table class="cp-tbl" style="min-width:${
-        lg.reduce((s, l) => s + l.w, 0)}px">${colg}<thead><tr>${
-        bloco.cols.map((c, i) => `<th class="${cls(i)}${e.filtros.get(i) && e.filtros.get(i).size ? ' filtrada' : ''}" data-col="${i}">${esc(c)}${seta(i)}<span class="fi">▾</span></th>`).join('')
+      ${linhas.length ? `<div class="tbl-scroll"><table class="cp-tbl">${colg}<thead><tr>${
+        cols.map(i => `<th class="${cls(i)}${e.filtros.get(i) && e.filtros.get(i).size ? ' filtrada' : ''}" data-col="${i}">${esc(bloco.cols[i])}${seta(i)}<span class="fi">▾</span></th>`).join('')
       }</tr></thead><tbody>${
-        vis.map(r => `<tr>${bloco.cols.map((_, i) => {
+        vis.map(r => `<tr>${cols.map(i => {
           const v = r[i] === undefined ? '' : r[i];
           return `<td class="${cls(i)}">${esc(v)}</td>`;
         }).join('')}</tr>`).join('')
