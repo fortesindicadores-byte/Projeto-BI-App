@@ -151,34 +151,48 @@
   body.light-mode .hero-value{color:#1a1a1a;} body.light-mode .hero-value.accent{color:var(--orange);}
   body.light-mode .hero-label,body.light-mode .hero-sub{color:#555;}
 
-  /* ── Filtros no header: padrão multi-select do Gestão em Movimento ───── */
-  .header-filters{order:4;flex-basis:100%;display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:9px;}
-  .filter-group{display:flex;flex-direction:column;}
+  /* ── Filtros no header ── bloco copiado do visao-financeira ─────────────── */
+  .header-filters{flex-basis:100%;order:4;margin-top:10px;
+    display:flex;gap:10px;flex-wrap:wrap;align-items:flex-start;}
+  .filter-group{display:flex;flex-direction:column;gap:3px;}
+  .filter-hint{flex-basis:100%;font-size:10px;color:#475569;font-style:italic;margin-top:3px;line-height:1.2;}
   .ms-wrap{position:relative;}
-  .ms-btn{display:flex;align-items:center;gap:8px;background:#0a0f18;color:#F1F5F9;border:1px solid #2a3a50;
-    border-radius:4px;font-family:'Montserrat',sans-serif;font-size:11px;font-weight:700;padding:6px 12px;
-    cursor:pointer;text-transform:uppercase;letter-spacing:.5px;white-space:nowrap;min-width:110px;}
+  .ms-btn{display:flex;align-items:center;gap:8px;background:#0a0f18;color:#F1F5F9;
+    border:1px solid #2a3a50;border-radius:4px;font-family:'Montserrat',sans-serif;font-size:11px;
+    font-weight:700;padding:6px 12px;cursor:pointer;text-transform:uppercase;letter-spacing:.5px;
+    white-space:nowrap;min-width:110px;}
   .ms-btn:hover{border-color:var(--orange);}
-  .ms-btn svg{margin-left:auto;}
-  .ms-cnt{background:var(--orange);color:#000;border-radius:10px;padding:1px 6px;font-size:9px;font-weight:800;display:none;}
+  .ms-lbl{flex:1;text-align:left;}
+  .ms-cnt{background:var(--orange);color:#000;border-radius:10px;padding:1px 6px;font-size:9px;
+    font-weight:800;display:none;}
+  .ms-btn svg{flex-shrink:0;opacity:.8;}
   .ms-panel{display:none;flex-direction:column;position:absolute;top:calc(100% + 4px);left:0;z-index:500;
-    background:#0f1824;border:1px solid #2a3a50;border-radius:4px;min-width:240px;max-height:320px;
+    background:#0f1824;border:1px solid #2a3a50;border-radius:4px;min-width:230px;max-height:300px;
     box-shadow:0 8px 24px rgba(0,0,0,.7);}
   .ms-panel.open{display:flex;}
-  .ms-search{display:flex;align-items:center;gap:6px;padding:7px 10px;border-bottom:1px solid #1e2d40;}
-  .ms-search input{flex:1;background:none;border:none;outline:none;color:#F1F5F9;
-    font-family:'Montserrat',sans-serif;font-size:11px;}
-  .ms-list{overflow-y:auto;}
-  .ms-opt{display:flex;align-items:center;gap:8px;padding:7px 12px;cursor:pointer;font-size:11px;color:#94A3B8;}
+  .ms-search{padding:7px 10px;border-bottom:1px solid #1e2d40;display:flex;align-items:center;gap:6px;flex-shrink:0;}
+  .ms-search svg{opacity:.4;flex-shrink:0;}
+  .ms-search input{flex:1;background:transparent;border:none;color:#F1F5F9;
+    font-family:'Montserrat',sans-serif;font-size:11px;outline:none;}
+  .ms-search input::placeholder{color:#475569;}
+  .ms-list{overflow-y:auto;flex:1;}
+  .ms-opt{display:flex;align-items:center;gap:8px;padding:7px 12px;cursor:pointer;font-size:11px;
+    color:#94A3B8;text-transform:uppercase;letter-spacing:.3px;}
   .ms-opt:hover{background:rgba(255,255,255,.05);color:#F1F5F9;}
   .ms-opt.all-opt{border-bottom:1px solid #1e2d40;color:#F1F5F9;font-weight:700;}
-  .ms-opt input[type=checkbox]{accent-color:var(--orange);cursor:pointer;width:14px;height:14px;flex:0 0 auto;}
-  .ms-opt span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
-  .f-limpa{background:rgba(249,115,22,.15);border:1px solid rgba(249,115,22,.3);border-radius:4px;color:var(--orange);
-    font-family:'Montserrat',sans-serif;font-size:10px;font-weight:700;padding:6px 11px;cursor:pointer;
-    text-transform:uppercase;letter-spacing:.5px;}
+  .ms-opt input[type=checkbox]{accent-color:var(--orange);cursor:pointer;width:14px;height:14px;flex-shrink:0;}
+  .ms-opt .ms-txt{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .ms-only{margin-left:auto;font-size:8px;color:var(--orange);padding:1px 5px;border-radius:2px;
+    cursor:pointer;white-space:nowrap;flex-shrink:0;opacity:0;transition:opacity .12s;}
+  .ms-opt:hover .ms-only{opacity:1;}
+  .ms-only:hover{background:rgba(249,115,22,.2);}
+  .ms-list::-webkit-scrollbar{width:4px;}
+  .ms-list::-webkit-scrollbar-track{background:transparent;}
+  .ms-list::-webkit-scrollbar-thumb{background:#2a3a50;border-radius:2px;}
+  .f-limpa{background:rgba(249,115,22,.15);border:1px solid rgba(249,115,22,.3);border-radius:4px;
+    color:var(--orange);font-family:'Montserrat',sans-serif;font-size:10px;font-weight:700;padding:6px 11px;
+    cursor:pointer;text-transform:uppercase;letter-spacing:.5px;align-self:flex-start;}
   .f-limpa:hover{background:rgba(249,115,22,.3);}
-  .f-hint{font-size:10px;color:#64748b;white-space:nowrap;}
 
   @media(max-width:768px){
     .header-filters{gap:5px;margin-top:7px;}
@@ -432,11 +446,17 @@
     ).join('')}</div>`;
   }
 
-  // ── Barra de filtros no header (padrão multi-select do Gestão em Movimento) ─
-  // Ordem preferida das colunas que viram filtro na aba atual.
+  // ── Barra de filtros no header ────────────────────────────────────────────
+  // Mesma mecânica do visao-financeira: _sel vazio = "Todos", link "only",
+  // busca dentro do painel, badge com a contagem e — o que faltava — CASCATA:
+  // as opções de cada filtro saem das linhas que passam por TODOS OS OUTROS
+  // filtros, então o que não existe no recorte atual deixa de aparecer.
   const PREF = [/^grupo/i, /^fam[íi]lia/i, /^sistema/i, /^pe[çc]a/i, /^material/i,
     /^aplica/i, /^modelo/i, /^ncm$/i, /^confian/i, /^marca/i, /^classe/i, /^tipo/i,
-    /^status/i, /^estado/i, /^situa[çc]/i, /^c[óo]digo/i, /^fonte/i, /^cen[áa]rio/i, /^verifica/i];
+    /^status/i, /^estado/i, /^situa[çc]/i, /^cen[áa]rio/i, /^verifica/i];
+
+  const _caret = `<svg width="10" height="6" viewBox="0 0 10 6"><path d="M0 0l5 6 5-6z" fill="#F97316"/></svg>`;
+  const _lupa  = `<svg width="12" height="12" viewBox="0 0 12 12"><circle cx="5" cy="5" r="4" stroke="#94A3B8" stroke-width="1.5" fill="none"/><line x1="8.5" y1="8.5" x2="11" y2="11" stroke="#94A3B8" stroke-width="1.5"/></svg>`;
 
   function tabelaPrincipal(aba) {
     const bl = blocosDe(aba), tbs = bl.filter(b => b.tipo === 'tabela');
@@ -450,51 +470,169 @@
       .filter(({ c, i }) => {
         if (/^item$|^n[ºo°]$|ipi|ativos|variantes|^%|quant|^itens|c[óo]digo|fonte/i.test(c)) return false;
         const n = valoresCol(bloco, i).length;
-        return n > 1 && n <= 2500;   // Peça tem ~1.200 valores — o painel tem busca
+        return n > 1 && n <= 2500;
       });
     const ord = x => { const p = PREF.findIndex(re => re.test(x.c)); return p < 0 ? 99 : p; };
     return cand.sort((a, b) => ord(a) - ord(b) || a.i - b.i).slice(0, 10);
   }
 
-  const _caret = `<svg width="10" height="6" viewBox="0 0 10 6"><path d="M0 0l5 6 5-6z" fill="#F97316"/></svg>`;
-  const lupa = `<svg width="12" height="12" viewBox="0 0 12 12"><circle cx="5" cy="5" r="4" stroke="#94A3B8" stroke-width="1.5" fill="none"/><line x1="8.5" y1="8.5" x2="11" y2="11" stroke="#94A3B8" stroke-width="1.5"/></svg>`;
-
-  function msHtml(id, label, valores, sel) {
-    const n = sel.size;
+  // ── multi-select no padrão do visao-financeira ────────────────────────────
+  function msWrapHtml(id, label) {
     return `<div class="filter-group"><div class="ms-wrap" id="${id}">
-      <button class="ms-btn" data-ms="${id}"><span class="ms-lbl">${esc(label)}</span>
-        <span class="ms-cnt" style="display:${n ? 'inline-block' : 'none'}">${n}</span>${_caret}</button>
+      <button class="ms-btn"><span class="ms-lbl">${esc(label)}</span><span class="ms-cnt"></span>${_caret}</button>
       <div class="ms-panel">
-        <div class="ms-search">${lupa}<input type="text" placeholder="Pesquisar…"></div>
-        <div class="ms-list">
-          <label class="ms-opt all-opt"><input type="checkbox" data-todos${n ? '' : ' checked'}><span>Todos</span></label>
-          ${valores.map(v => `<label class="ms-opt"><input type="checkbox" value="${esc(v)}"${sel.has(v) ? ' checked' : ''}><span>${esc(v) || '(vazio)'}</span></label>`).join('')}
-        </div>
+        <div class="ms-search">${_lupa}<input type="text" placeholder="Digite para pesquisar…"></div>
+        <div class="ms-list"></div>
       </div></div></div>`;
   }
 
-  function renderFiltros(aba) {
+  function syncBadge(wrap) {
+    const cnt = wrap.querySelector('.ms-cnt'), n = wrap._sel ? wrap._sel.size : 0;
+    if (cnt) { cnt.textContent = n; cnt.style.display = n ? '' : 'none'; }
+  }
+
+  // Liga um .ms-wrap (uma única vez) e devolve o render, usado pela cascata.
+  function ligarMs(wrap, aoMudar) {
+    if (!(wrap._sel instanceof Set)) wrap._sel = new Set();
+    const sel = wrap._sel;
+    const list = wrap.querySelector('.ms-list');
+    const srch = wrap.querySelector('.ms-search input');
+    const render = q => {
+      const it = wrap._items || [];
+      const f = _n(q === undefined ? (srch.value || '') : q);
+      const shown = it.filter(v => _n(v).includes(f));
+      const allChk = sel.size === 0;
+      list.innerHTML =
+        (!f ? `<label class="ms-opt all-opt"><input type="checkbox" class="ms-all" ${allChk ? 'checked' : ''}><span class="ms-txt">Todos</span></label>` : '') +
+        shown.slice(0, 1500).map(v => `<label class="ms-opt"><input type="checkbox" data-v="${esc(v)}" ${allChk || sel.has(v) ? 'checked' : ''}><span class="ms-txt">${esc(v) || '(vazio)'}</span><span class="ms-only" data-v="${esc(v)}">only</span></label>`).join('');
+      syncBadge(wrap);
+    };
+    wrap._render = render;
+    if (!wrap._wired) {
+      wrap._wired = true;
+      wrap.querySelector('.ms-btn').addEventListener('click', () => {
+        const pn = wrap.querySelector('.ms-panel');
+        const aberto = pn.classList.contains('open');
+        document.querySelectorAll('.ms-panel.open').forEach(p => p.classList.remove('open'));
+        if (!aberto) { pn.classList.add('open'); setTimeout(() => srch.focus(), 50); }
+      });
+      list.addEventListener('change', e => {
+        const box = e.target;
+        const todos = () => wrap._items || [];
+        if (box.classList.contains('ms-all')) sel.clear();
+        else if (sel.size === 0) {
+          if (!box.checked) todos().forEach(v => { if (v !== box.dataset.v) sel.add(v); });
+        } else {
+          if (box.checked) sel.add(box.dataset.v); else sel.delete(box.dataset.v);
+          const all = todos();
+          if (all.length && all.every(v => sel.has(v))) sel.clear();
+        }
+        render(srch.value); aoMudar();
+      });
+      list.addEventListener('click', e => {
+        const only = e.target.closest('.ms-only');
+        if (!only) return;
+        e.preventDefault(); e.stopPropagation();
+        sel.clear(); sel.add(only.dataset.v);
+        render(srch.value); aoMudar();
+      });
+      srch.addEventListener('input', () => render(srch.value));
+      srch.addEventListener('click', e => e.stopPropagation());
+    }
+    render();
+  }
+
+  function setMsOptions(wrap, items) {
+    if (!wrap) return;
+    wrap._items = items;
+    if (wrap._sel && wrap._sel.size) [...wrap._sel].forEach(v => { if (!items.includes(v)) wrap._sel.delete(v); });
+    if (wrap._render) wrap._render();
+  }
+
+  // ── Estado dos filtros do topo ────────────────────────────────────────────
+  let COLF = [], FKEY = null, FBLOCO = null;
+  const msW = id => document.getElementById(id);
+  const selDe = id => { const w = msW(id); return w && w._sel ? w._sel : new Set(); };
+
+  // Uma linha passa por todos os filtros de coluna, menos o indicado.
+  function passaExceto(r, exceto) {
+    for (const { i } of COLF) {
+      if (i === exceto) continue;
+      const sel = selDe('ms-c' + i);
+      if (sel.size && !casaCol(FBLOCO, i, sel, r)) return false;
+    }
+    return true;
+  }
+
+  // Frota: opções de Unidade/Placa também em cascata uma sobre a outra.
+  function veiculosSel(exceto) {
+    const u = exceto === 'uni' ? new Set() : selDe('ms-uni');
+    const p = exceto === 'placa' ? new Set() : selDe('ms-placa');
+    return FROTA.filter(v => (!u.size || u.has(v.uni)) && (!p.size || p.has(v.placa)));
+  }
+
+  function refreshCascata() {
+    if (!FBLOCO) return;
+    if (USA_PLACA && FROTA.length) {
+      setMsOptions(msW('ms-uni'), [...new Set(veiculosSel('uni').map(v => v.uni))].filter(Boolean).sort());
+      setMsOptions(msW('ms-placa'), [...new Set(veiculosSel('placa').map(v => v.placa))].filter(Boolean).sort());
+    }
+    for (const { i } of COLF) {
+      const base = filtroFrota(FBLOCO, FBLOCO.rows).filter(r => passaExceto(r, i));
+      const vals = new Set();
+      if (FBLOCO.tok && FBLOCO.tok.has(i))
+        base.forEach(r => String(r[i] == null ? '' : r[i]).split('|').forEach(v => { v = v.trim(); if (v) vals.add(v); }));
+      else base.forEach(r => vals.add(txt(r[i])));
+      setMsOptions(msW('ms-c' + i), [...vals].sort((a, b) => {
+        const na = numBR(a), nb = numBR(b);
+        return (na !== null && nb !== null) ? na - nb : a.localeCompare(b, 'pt-BR');
+      }));
+    }
+    const n = COLF.filter(({ i }) => selDe('ms-c' + i).size).length
+            + (selDe('ms-uni').size ? 1 : 0) + (selDe('ms-placa').size ? 1 : 0);
+    const bt = document.getElementById('f-limpa');
+    if (bt) { bt.textContent = `Limpar filtros (${n})`; bt.style.display = n ? '' : 'none'; }
+  }
+
+  // Lê os filtros do topo para o estado da tabela e repinta.
+  function aplicarFiltros() {
+    if (!FKEY) return;
+    const e = estado(FKEY);
+    e.filtros.clear();
+    for (const { i } of COLF) { const sel = selDe('ms-c' + i); if (sel.size) e.filtros.set(i, new Set(sel)); }
+    unidsSel = new Set(selDe('ms-uni'));
+    placasSel = new Set(selDe('ms-placa'));
+    e.mostrando = LOTE;
+    repinta(FKEY);
+    refreshCascata();
+  }
+
+  // Monta a barra do zero (troca de aba: as colunas mudam).
+  function montarFiltros(aba) {
     const cx = document.getElementById('cp-filtros');
     if (!cx) return;
     const tp = tabelaPrincipal(aba);
-    if (!tp) { cx.innerHTML = ''; return; }
-    const e = estado(tp.k);
-    let h = '';
-    if (USA_PLACA && FROTA.length) {
-      const unis = [...new Set(FROTA.map(v => v.uni))].filter(Boolean).sort();
-      const placas = [...new Set(FROTA.filter(v => !unidsSel.size || unidsSel.has(v.uni)).map(v => v.placa))].sort();
-      h += msHtml('ms-uni', 'Unidade', unis, unidsSel) + msHtml('ms-placa', 'Placa', placas, placasSel);
-    }
+    if (!tp) { cx.innerHTML = ''; COLF = []; FKEY = FBLOCO = null; ajustaHH(); return; }
+    FKEY = tp.k; FBLOCO = tp.b;
     COLF = colunasFiltro(tp.b);
-    h += COLF.map(({ c, i }) => msHtml('ms-c' + i, c.replace(/\s*\(.*/, ''), valoresCol(tp.b, i), e.filtros.get(i) || new Set())).join('');
-    const ativos = [...e.filtros.values()].filter(s => s.size).length + (unidsSel.size ? 1 : 0) + (placasSel.size ? 1 : 0);
-    h += ativos ? `<button class="f-limpa" id="f-limpa">Limpar filtros (${ativos})</button>` : '';
-    h += `<span class="f-hint">Todo cabeçalho de coluna também filtra</span>`;
+    unidsSel = new Set(); placasSel = new Set();
+
+    let h = '';
+    if (USA_PLACA && FROTA.length) h += msWrapHtml('ms-uni', 'Unidade') + msWrapHtml('ms-placa', 'Placa');
+    h += COLF.map(({ c, i }) => msWrapHtml('ms-c' + i, c.replace(/\s*\(.*/, ''))).join('');
+    h += `<button class="f-limpa" id="f-limpa" style="display:none">Limpar filtros</button>`;
+    h += `<div class="filter-hint">Todo cabeçalho de coluna também filtra e ordena.</div>`;
     cx.innerHTML = h;
-    FKEY = tp.k;
+
+    cx.querySelectorAll('.ms-wrap').forEach(w => ligarMs(w, aplicarFiltros));
+    const bt = document.getElementById('f-limpa');
+    if (bt) bt.addEventListener('click', () => {
+      cx.querySelectorAll('.ms-wrap').forEach(w => { if (w._sel) w._sel.clear(); });
+      aplicarFiltros();
+    });
+    refreshCascata();
     ajustaHH();
   }
-  let COLF = [], FKEY = null;
 
   function renderAba(aba) {
     atual = aba;
@@ -508,7 +646,7 @@
       `<div class="page-title">${esc(aba)}</div>
        <div class="page-sub">${nTb ? 'Filtros no topo da página · todo cabeçalho de coluna também filtra e ordena.' : 'Conteúdo descritivo desta aba da planilha.'}</div>
        ${heroDe(aba, blocos)}${html}`;
-    renderFiltros(aba);
+    montarFiltros(aba);
     window.scrollTo({ top: 0 });
   }
 
@@ -521,7 +659,7 @@
     el.replaceWith(novo.firstElementChild);
     const h = document.querySelector('.hero');
     if (h) { const n = document.createElement('div'); n.innerHTML = heroDe(aba, blocosDe(aba)); if (n.firstElementChild) h.replaceWith(n.firstElementChild); }
-    renderFiltros(aba);
+    if (k === FKEY) refreshCascata();
   }
 
   // ── Menu de coluna (ordenar + multisseleção de valores) ──────────────────
@@ -533,12 +671,10 @@
     const [aba, bi] = k.split('#');
     const bloco = blocosDe(aba)[+bi];
     const e = estado(k);
-    const sel = e.filtros.get(col) || new Set();
-    const vals = [...new Set(bloco.rows.map(r => txt(r[col])))].sort((a, b) => {
-      const na = numBR(a), nb = numBR(b);
-      if (na !== null && nb !== null) return na - nb;
-      return a.localeCompare(b, 'pt-BR');
-    });
+    const wTopo = document.getElementById('ms-c' + col);   // mesmo filtro, lá em cima
+    const sel = (wTopo && wTopo._sel) || e.filtros.get(col) || new Set();
+    // as opções seguem a cascata: só o que existe no recorte atual
+    const vals = (wTopo && wTopo._items) || valoresCol(bloco, col);
     const m = document.createElement('div');
     m.className = 'colmenu';
     m.innerHTML = `<div class="cm-ord">
@@ -568,13 +704,15 @@
     m.addEventListener('change', () => {
       const marcadas = [...m.querySelectorAll('.cm-lista input[value]')].filter(c => c.checked).map(c => c.value);
       const todos = m.querySelector('[data-todos]');
-      if (document.activeElement === todos) {
-        m.querySelectorAll('.cm-lista input[value]').forEach(c => { c.checked = false; });
-        e.filtros.delete(col);
-      } else {
-        todos.checked = marcadas.length === 0;
-        if (marcadas.length) e.filtros.set(col, new Set(marcadas)); else e.filtros.delete(col);
+      const limpar = document.activeElement === todos;
+      if (limpar) m.querySelectorAll('.cm-lista input[value]').forEach(c => { c.checked = false; });
+      else todos.checked = marcadas.length === 0;
+      const novo = limpar ? [] : marcadas;
+      if (wTopo && wTopo._sel) {                       // mantém topo e cabeçalho em sincronia
+        wTopo._sel.clear(); novo.forEach(v => wTopo._sel.add(v));
+        if (wTopo._render) wTopo._render();
       }
+      if (novo.length) e.filtros.set(col, new Set(novo)); else e.filtros.delete(col);
       e.mostrando = LOTE;
       repinta(k);
       fecharMenu();
@@ -613,59 +751,6 @@
   function ajustaHH() {
     const hd = document.querySelector('.header');
     if (hd) document.documentElement.style.setProperty('--hh', hd.offsetHeight + 'px');
-  }
-
-  function ligarFiltrosHeader() {
-    const cx = document.getElementById('cp-filtros');
-    if (!cx) return;
-
-    cx.addEventListener('click', ev => {
-      const bt = ev.target.closest('.ms-btn');
-      if (bt) {
-        const pn = bt.parentElement.querySelector('.ms-panel');
-        const aberto = pn.classList.contains('open');
-        cx.querySelectorAll('.ms-panel.open').forEach(p => p.classList.remove('open'));
-        if (!aberto) { pn.classList.add('open'); const i = pn.querySelector('input[type=text]'); if (i) i.focus(); }
-        return;
-      }
-      if (ev.target.closest('#f-limpa')) {
-        unidsSel.clear(); placasSel.clear();
-        if (FKEY) estado(FKEY).filtros.clear();
-        renderAba(atual);
-      }
-    });
-
-    cx.addEventListener('input', ev => {
-      const inp = ev.target.closest('.ms-search input');
-      if (!inp) return;
-      const t = _n(inp.value);
-      inp.closest('.ms-panel').querySelectorAll('.ms-opt:not(.all-opt)')
-        .forEach(o => { o.style.display = _n(o.textContent).includes(t) ? '' : 'none'; });
-    });
-
-    cx.addEventListener('change', ev => {
-      const ck = ev.target.closest('input[type=checkbox]');
-      if (!ck) return;
-      const wrap = ck.closest('.ms-wrap');
-      const marcadas = new Set([...wrap.querySelectorAll('.ms-list input[value]')]
-        .filter(c => c.checked).map(c => c.value));
-      if (ck.hasAttribute('data-todos')) {
-        wrap.querySelectorAll('.ms-list input[value]').forEach(c => { c.checked = false; });
-        marcadas.clear();
-      }
-      const id = wrap.id;
-      if (id === 'ms-uni')        { unidsSel = marcadas; placasSel.clear(); }
-      else if (id === 'ms-placa') { placasSel = marcadas; }
-      else if (FKEY) {
-        const col = +id.slice(4);
-        const e = estado(FKEY);
-        if (marcadas.size) e.filtros.set(col, marcadas); else e.filtros.delete(col);
-        e.mostrando = LOTE;
-      }
-      const aberto = [...cx.querySelectorAll('.ms-panel.open')].map(p => p.closest('.ms-wrap').id);
-      if (FKEY) repinta(FKEY); else renderAba(atual);
-      aberto.forEach(i => { const p = cx.querySelector('#' + i + ' .ms-panel'); if (p) p.classList.add('open'); });
-    });
   }
 
   function init(cfg) {
@@ -724,7 +809,6 @@
       }
     });
 
-    ligarFiltrosHeader();
     ajustaHH();
     window.addEventListener('resize', ajustaHH);
 
@@ -738,7 +822,7 @@
     const alvo = raiz.querySelector('.nav-item[data-aba="' + primeira.replace(/"/g, '\\"') + '"]');
     if (alvo) alvo.click();
 
-    if (USA_PLACA) carregarFrota(cfg).then(() => { if (FROTA.length) renderAba(atual); });
+    if (USA_PLACA) carregarFrota(cfg).then(() => { if (FROTA.length) montarFiltros(atual); });
   }
 
   global.CatalogoPecas = { init };
