@@ -222,19 +222,57 @@ async function clicarRobusto(page, loc, { ctrl = false, timeout = 10000 } = {}) 
   } catch (e) { return false; }
 }
 
+// ── ESTADO DO PORTAL ─────────────────────────────────────────────────────────
+// O Ginfo às vezes devolve a casca logada SEM o menu ("INÍCIO · ACESSAR HELP
+// DESK · SAIR", sem FROTA/STRESS TEST). Nesse estado todo clique de menu falha
+// e o relatório nunca abre — foi o que derrubou civf e sla-manutencao em todos
+// os meses. Antes de usar o menu, confirma que ele montou; senão recarrega e,
+// em último caso, refaz o login.
+async function menuMontado(page) {
+  try {
+    const t = await page.locator('body').innerText({ timeout: 10000 });
+    return /FROTA/i.test(t) && /STRESS\s*TEST/i.test(t);
+  } catch (_) { return false; }
+}
+
+async function irPara(page, url, espera = 10000) {
+  for (let t = 1; t <= 3; t++) {
+    try {
+      await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 90000 });
+      await page.waitForTimeout(espera);
+      return true;
+    } catch (e) {
+      log(`goto falhou (tentativa ${t}):`, String(e.message).split('\n')[0]);
+      await page.waitForTimeout(5000);
+    }
+  }
+  return false;
+}
+
+async function garantirPortal(page) {
+  const INICIO = 'https://bi.ginfo.app.br/bi/inicio';
+  for (let t = 1; t <= 3; t++) {
+    if (/\/login/i.test(page.url())) { log('sessão caiu — refazendo o login'); await login(page); }
+    else if (await menuMontado(page)) return true;
+    else if (t === 1) { log('portal sem o menu lateral — recarregando'); await irPara(page, INICIO, 9000); }
+    else { log('portal sem o menu lateral — refazendo o login'); await login(page); }
+    if (await menuMontado(page)) return true;
+    await irPara(page, INICIO, 9000);
+    if (await menuMontado(page)) return true;
+  }
+  return false;
+}
+
 // ── NAVEGAÇÃO PELO MENU (deep-link recarrega o app Vue e volta p/ /bi/inicio) ─
 // O menu lateral às vezes ainda não montou (ou o portal está na tela de
-// boas-vindas). Tenta de novo, voltando para /bi/inicio entre as tentativas.
+// boas-vindas). Tenta de novo, garantindo o portal entre as tentativas.
 async function clicarMenu(page, secao, item) {
   for (let t = 0; t < 3; t++) {
     try { await clicarMenuUma(page, secao, item); return; }
     catch (e) {
       log(`menu ${secao} → ${item} falhou (tentativa ${t + 1}):`, String(e.message).split('\n')[0]);
       if (t === 2) throw e;
-      try {
-        await page.goto('https://bi.ginfo.app.br/bi/inicio', { waitUntil: 'domcontentloaded', timeout: 60000 });
-        await page.waitForTimeout(8000);
-      } catch (_) {}
+      await garantirPortal(page);
     }
   }
 }
@@ -250,8 +288,11 @@ async function clicarMenuUma(page, secao, item) {
   // NÃO filtrar por visível: a barra lateral rola, e um item abaixo da dobra
   // era descartado antes mesmo de tentar clicar (travava o STRESS TEST
   // EMPILHADEIRA depois de passar pelo FROTA). Rola até ele.
-  const itemLoc = page.getByText(item, { exact: secao === item });
+  let itemLoc = page.getByText(item, { exact: secao === item });
   for (let t = 0; t < 6 && !(await itemLoc.count()); t++) await page.waitForTimeout(2500);
+  // CIVF → CIVF: seção e item têm o MESMO texto. O primeiro match é o cabeçalho
+  // da seção — clicar nele recolhe o menu de novo (a página nunca abria).
+  if (secao === item && (await itemLoc.count()) > 1) itemLoc = itemLoc.nth(1);
   if (!(await clicarRobusto(page, itemLoc, { timeout: 12000 })))
     throw new Error(`item de menu "${item}" não clicável`);
   await page.waitForTimeout(15000);
@@ -825,7 +866,24 @@ async function gravarSupabase(indicador, vigencia, escopo, linhas) {
     body: JSON.stringify([{ indicador, vigencia, escopo, data: linhas, updated_at: new Date().toISOString() }]),
   });
   if (!res.ok) throw new Error(`Supabase ${res.status}: ${await res.text()}`);
+  JA.add(`${indicador}|${vigencia}|${escopo}`);
   log(`gravado: ${indicador} ${vigencia} (${escopo}) — ${linhas.length} linhas`);
+}
+
+// ── O QUE JÁ ESTÁ GRAVADO ───────────────────────────────────────────────────
+// Uma coleta leva ~3 min; refazer o que já foi gravado estoura o tempo do job.
+// ELITE_REFAZER=1 ignora este cache e coleta tudo de novo.
+const JA = new Set();
+async function carregarJaGravados() {
+  if (!SB_KEY || process.env.ELITE_REFAZER === '1') return;
+  try {
+    const res = await fetch(`${SB_URL}/rest/v1/elite_snapshot?select=indicador,vigencia,escopo`, {
+      headers: { apikey: SB_KEY, Authorization: 'Bearer ' + SB_KEY },
+    });
+    if (!res.ok) { log('não consegui listar o que já está gravado:', res.status); return; }
+    (await res.json()).forEach(r => JA.add(`${r.indicador}|${r.vigencia}|${r.escopo}`));
+    log(`já gravados no Supabase: ${JA.size} registro(s) — serão pulados`);
+  } catch (e) { log('não consegui listar o que já está gravado:', e.message); }
 }
 
 // ── DIAGNÓSTICO ─────────────────────────────────────────────────────────────
@@ -934,15 +992,15 @@ async function coletar(page, ind, vigencia, escopo) {
 
   const urlAba = ind.url || 'https://bi.ginfo.app.br/bi/inicio';
   log(`— ${ind.chave} · ${vigencia} · ${escopo}`);
-  await page.goto(urlAba, { waitUntil: 'domcontentloaded', timeout: 90000 });
-  await page.waitForTimeout(10000);
+  await irPara(page, urlAba);
   if (/\/login/i.test(page.url())) {
     log('sessão caiu — refazendo o login');
     await login(page);
-    await page.goto(urlAba, { waitUntil: 'domcontentloaded', timeout: 90000 });
-    await page.waitForTimeout(10000);
+    await irPara(page, urlAba);
   }
   if (ind.menu && (!ind.url || /\/bi\/inicio/.test(page.url()))) {
+    if (!(await menuMontado(page)) && !(await garantirPortal(page)))
+      throw new Error('portal abriu sem o menu lateral — sessão não recuperada');
     log('navegando pelo menu:', ind.menu.join(' → '));
     await clicarMenu(page, ind.menu[0], ind.menu[1]);
   } else {
@@ -1068,6 +1126,7 @@ async function main() {
     if (MODE === 'login') { log('modo login: só o teste de acesso. Veja os screenshots nos artifacts.'); return; }
 
     log(`plano: ${inds.length} indicador(es) × ${vigencias.length} vigência(s) × ${escopos.length} escopo(s)`);
+    await carregarJaGravados();
     let erros = 0;
     for (const vig of vigencias) {
       for (const esc of escopos) {
@@ -1076,7 +1135,8 @@ async function main() {
             log(`— ${ind.chave}: acumulado do ano sai da soma dos meses no leitor (a tela não acumula)`);
             continue;
           }
-          for (let tent = 1; tent <= 2; tent++) {
+          if (JA.has(`${ind.chave}|${vig}|${esc}`)) { log(`— ${ind.chave} ${vig} (${esc}): já gravado, pulando`); continue; }
+          for (let tent = 1; tent <= 3; tent++) {
             try {
               if (/\/login/i.test(page.url())) { log('sessão caiu — refazendo o login'); await login(page); }
               await coletar(page, ind, vig, esc);
@@ -1085,7 +1145,8 @@ async function main() {
               log(`ERRO ${ind.chave} ${vig}/${esc} (tentativa ${tent}):`, e.message);
               await shot(page, `99-erro-${ind.chave}-${vig.replace('/', '-')}-${esc}-t${tent}`);
               if (tent === 1) await diagnostico(page, `${ind.chave} ${vig}/${esc}`);
-              if (tent === 2) erros++;
+              else await garantirPortal(page);
+              if (tent === 3) erros++;
             }
           }
         }

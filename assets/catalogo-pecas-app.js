@@ -361,15 +361,8 @@
     const cls = i => (keepMobile(bloco.cols)[i] ? 'mt-keep' : 'mt-hide') + (lg[i].curta ? ' curta' : '');
     const colg = `<colgroup>${lg.map(l => `<col style="width:${l.w}px">`).join('')}</colgroup>`;
     const seta = i => e.ordCol === i ? (e.ordDir === 'asc' ? ' ▲' : ' ▼') : '';
-    const filtradas = [...e.filtros.values()].filter(s => s.size).length;
-    return `<div class="tbl-section" data-tbl="${esc(k)}">
+    return `<div class="tbl-section" data-tbl="${esc(k)}" data-linhas="${linhas.length}">
       ${titulo ? `<div class="tbl-title">${esc(titulo)}</div>` : ''}
-      <div class="tbl-sub">${nf(linhas.length)} de ${nf(bloco.rows.length)} linha(s) · clique no cabeçalho para ordenar e filtrar</div>
-      <div class="tbl-tools">
-        <input class="search" type="search" placeholder="Buscar nesta tabela…" value="${esc(e.busca)}">
-        <span class="pill">${nf(linhas.length)} linha(s)</span>
-        ${filtradas ? `<span class="pill">${filtradas} coluna(s) filtrada(s)</span><button class="limpar">Limpar filtros</button>` : ''}
-      </div>
       ${linhas.length ? `<div class="tbl-scroll"><table class="cp-tbl" style="min-width:${
         lg.reduce((s, l) => s + l.w, 0)}px">${colg}<thead><tr>${
         bloco.cols.map((c, i) => `<th class="${cls(i)}${e.filtros.get(i) && e.filtros.get(i).size ? ' filtrada' : ''}" data-col="${i}">${esc(c)}${seta(i)}<span class="fi">▾</span></th>`).join('')
@@ -431,12 +424,12 @@
   function colunasFiltro(bloco) {
     const cand = bloco.cols.map((c, i) => ({ c, i }))
       .filter(({ c, i }) => {
-        if (/^item$|^n[ºo°]$|ipi|ativos|variantes|^%|quant|^itens/i.test(c)) return false;
+        if (/^item$|^n[ºo°]$|ipi|ativos|variantes|^%|quant|^itens|c[óo]digo|fonte/i.test(c)) return false;
         const n = valoresCol(bloco, i).length;
-        return n > 1 && n <= 600;
+        return n > 1 && n <= 2500;   // Peça tem ~1.200 valores — o painel tem busca
       });
     const ord = x => { const p = PREF.findIndex(re => re.test(x.c)); return p < 0 ? 99 : p; };
-    return cand.sort((a, b) => ord(a) - ord(b) || a.i - b.i).slice(0, 8);
+    return cand.sort((a, b) => ord(a) - ord(b) || a.i - b.i).slice(0, 10);
   }
 
   const _caret = `<svg width="10" height="6" viewBox="0 0 10 6"><path d="M0 0l5 6 5-6z" fill="#F97316"/></svg>`;
@@ -692,21 +685,6 @@
         estado(k).mostrando += LOTE;
         repinta(k);
       }
-    });
-
-    let deb = null;
-    raiz.addEventListener('input', ev => {
-      const inp = ev.target.closest('.tbl-section .search');
-      if (!inp || inp.tagName === 'SELECT') return;
-      const k = inp.closest('[data-tbl]').dataset.tbl;
-      estado(k).busca = inp.value;
-      estado(k).mostrando = LOTE;
-      clearTimeout(deb);
-      deb = setTimeout(() => {
-        repinta(k);
-        const novo = document.querySelector(`[data-tbl="${k}"] .search`);
-        if (novo) { novo.focus(); novo.setSelectionRange(novo.value.length, novo.value.length); }
-      }, 220);
     });
 
     ligarFiltrosHeader();
