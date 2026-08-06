@@ -721,6 +721,8 @@ Automatiza a planilha **Frota de Elite** (`1DXmjzj2KRrTdQxmvXRclGxhBeDMwoIoLvORq
 
 **Iterar barato:** `ELITE_IND=disponibilidade` roda um indicador só; `ELITE_DE`/`ELITE_ATE` limitam o backfill; `ELITE_FORCAR=1` ignora a janela do dia 15; `refazer=true` (input do workflow, `ELITE_REFAZER=1`) recoleta o que já está gravado — sem ele o robô **pula** toda chave já existente em `elite_snapshot`.
 
+**LEITOR PLUGADO (06/08/2026):** `assets/gerot-base.js` lê o **elite_snapshot** (a planilha Frota de Elite saiu de cena; só o Combustível segue no Km/L via gviz). Contrato `records` mantido; `meta=null` e `atg = a própria aderência` (Renan: robô não carimba meta). Novo `GerotBase.acumFor(vigs)`: % por filial usa escopo `ano` quando a janela é jan→M (senão média mensal aproximada, com warn); stress/civf/pneus poolam as linhas mensais; comb Σkm/Σlitros. Consumidores: gerot (colunas de valor + YTD em acumulado), programa-reconhecimento (hero/cards/ranking/pódio em acumulado quando multi-vig; gráfico temporal segue mensal; cache v7 + hidratação em background), painel-metas (só ganhou o CDN do supabase; sua agregação própria de pontuação ficou como estava). De-para de filial dos exports = FIL2COD/refineCodG (cópia do farol-core); checklist-t1 força tier EMPURRADA (filial "CUIABA" na tela Empurrada é CBA T1, NÃO Armazém); checkWH usa a coluna `Aderência` exata (não `Aderência Ponto`).
+
 **BACKFILL CONCLUÍDO (06/08/2026):** `elite_snapshot` tem 01→07/2026 completo nos dois escopos.
 - **`mes`** — 11 indicadores × 7 vigências = **77/77**.
 - **`ano`** — 9 indicadores × 7 vigências = **63/63**. Ficam de fora `pneus` (API: o leitor calcula qualquer janela) e `stress-test-empilhadeira` (a tela não acumula) — os dois com `semAcumulado:true`.

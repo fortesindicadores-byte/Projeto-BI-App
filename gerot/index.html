@@ -3,14 +3,15 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-<meta name="build" content="202608061817">
+<meta name="build" content="202608062331">
 <title>Gerot</title>
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.2/dist/jspdf.umd.min.js"></script>
 <script src="../assets/pdf-export.js"></script>
 <script src="../assets/excel-export.js"></script>
-<script src="../assets/gerot-base.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="../assets/gerot-base.js?v=202608062331"></script>
 <style>
 :root{--bg:#0C1017;--card:#141B26;--border:#1E2D40;--orange:#F97316;--text:#F1F5F9;--text2:#94A3B8;--text3:#475569;--green:#3BB33B;--red:#FF6666;}
 *{margin:0;padding:0;box-sizing:border-box;}
@@ -172,14 +173,18 @@ function atualizar(){
   const ytdVigs=VIGS.filter(k=>vigYear(k)===vigYear(selK)&&vigMonth(k)<=vigMonth(selK));
   const perSet=new Set(perVigs), ytdSet=new Set(ytdVigs);
   const subEl=document.getElementById('tbl-sub');
-  if(subEl)subEl.textContent=perVigs.length<=1?vigDisp(selK):`${vigDisp(perVigs[0])} – ${vigDisp(selK)} · média de ${perVigs.length} vigências`;
+  if(subEl)subEl.textContent=perVigs.length<=1?vigDisp(selK):`${vigDisp(perVigs[0])} – ${vigDisp(selK)} · acumulado de ${perVigs.length} vigências`;
 
   const unitOk=r=>selUnits.length===0||selUnits.includes(r.unit);
   const kmlTxt=v=>v==null||!isFinite(v)?'-':Number(v).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
   let html='<table><thead><tr class="cols"><th class="lft">Indicador</th><th>Meta</th><th>Real</th><th>% de Ating.</th><th class="sep-l">% Ating. YTD</th></tr></thead><tbody>';
+  // Acumulado da janela (não média de meses): 1/0 e pneus ponderados pelas
+  // linhas; % por filial vem do escopo 'ano' do Ginfo (GerotBase.acumFor).
+  const acumPer=perVigs.length>1?GerotBase.acumFor(perVigs):null;
+  const acumYtd=ytdVigs.length>1?GerotBase.acumFor(ytdVigs):null;
   GerotBase.DISPLAY.forEach(ind=>{
-    const per=RECORDS.filter(r=>r.field===ind.field&&unitOk(r)&&perSet.has(r.vig));
-    const ytd=RECORDS.filter(r=>r.field===ind.field&&unitOk(r)&&ytdSet.has(r.vig));
+    const per=(acumPer||RECORDS.filter(r=>perSet.has(r.vig))).filter(r=>r.field===ind.field&&unitOk(r));
+    const ytd=(acumYtd||RECORDS.filter(r=>ytdSet.has(r.vig))).filter(r=>r.field===ind.field&&unitOk(r));
     const meta=avg(per.map(r=>r.meta)), real=avg(per.map(r=>r.real)), atg=avg(per.map(r=>r.atg));
     const atgY=avg(ytd.map(r=>r.atg));
     const isKml=ind.fmt==='kml';                      // Combustível: meta/real em km/L
@@ -227,6 +232,6 @@ carregar();
 <script src="../assets/filters-toggle.js"></script>
 <script src="../assets/mobile.js"></script>
 <script src="../assets/sortable-table.js"></script>
-<script src="../assets/build-check.js?v=202608061817"></script>
+<script src="../assets/build-check.js?v=202608062331"></script>
 </body>
 </html>

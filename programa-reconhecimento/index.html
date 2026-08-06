@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-<meta name="build" content="202608061817">
+<meta name="build" content="202608062331">
 <title>Frota de Elite · BI Frota</title>
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
@@ -11,7 +11,8 @@
 <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.2/dist/jspdf.umd.min.js"></script>
 <script src="../assets/pdf-export.js"></script>
 <script src="../assets/excel-export.js"></script>
-<script src="../assets/gerot-base.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="../assets/gerot-base.js?v=202608062331"></script>
 <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0"></script>
 <style>
 :root{
@@ -566,7 +567,7 @@ let chartIndicadores = null;
 let activeInd = 'media_geral';
 
 /* ── Fetch ── */
-const CACHE_KEY='bi_cache_reconhecimento_v6';
+const CACHE_KEY='bi_cache_reconhecimento_v7';   // v7 = fonte elite_snapshot
 const CACHE_TTL=60*60*1000; // 1 hora
 
 async function fetchData() {
@@ -586,6 +587,8 @@ function initData(){
       renderAll();
       const d=new Date(c.t);
       set('status-badge',`Atualizado ${d.toLocaleDateString('pt-BR')} ${d.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})} (cache)`);
+      // o acumulado precisa do elite_snapshot em memória — hidrata e re-renderiza
+      GerotBase.load().then(recs=>{ RAW=buildEliteRows(recs); renderAll(); }).catch(()=>{});
       return;
     }
   }catch(e){ localStorage.removeItem(CACHE_KEY); }
@@ -715,13 +718,43 @@ function getFiltered() {
   return RAW.filter(r => selVig.length===0 || selVig.includes(r.vig));
 }
 
+/* ── Acumulado da janela (Renan, 06/08): com várias vigências filtradas, o
+   número que vale é o ACUMULADO, não a média dos meses. GerotBase.acumFor usa
+   o escopo 'ano' do Ginfo para os % por filial e pondera as linhas 1/0.
+   Devolve linhas por unidade no mesmo shape do RAW; null = sem dado do
+   acumulado (ex.: render vindo do cache antes do load) → cai na média. */
+function eliteAcumRows() {
+  if (!window.GerotBase || !GerotBase.acumFor) return null;
+  const vigsSel = selVig.length ? selVig : [...new Set(RAW.map(r => r.vig))];
+  if (vigsSel.length <= 1) return null;                     // 1 vigência: fluxo normal
+  const vigs = vigsSel.map(v => { const p = v.split('/');
+    return p[0].length === 4 ? p[0] + '-' + p[1].padStart(2,'0') : null; }).filter(Boolean);
+  const recs = GerotBase.acumFor(vigs);
+  if (!recs.length) return null;
+  const m = new Map();
+  recs.forEach(r => {
+    if (!(r.unit in NOMES)) return;
+    if (!m.has(r.unit)) m.set(r.unit, { unit: r.unit, f: {} });
+    m.get(r.unit).f[r.field] = r.atg;
+  });
+  return [...m.values()].map(o => {
+    const f = o.f;
+    return { vig: 'acum', unit: o.unit,
+      disp:f.disp??null, prev:f.prev??null, comb:f.comb??null, pneus:f.pneus??null, checkT:f.checkT??null,
+      checkWH:f.checkWH??null, conf:f.conf??null, stVeic:f.stVeic??null, stEmp:f.stEmp??null,
+      civf:f.civf??null, sla:f.sla??null,
+      pont: calcScore_(f) };
+  });
+}
+
 /* ── Render All ── */
 function renderAll() {
   const data = getFiltered();
-  renderHero(data);
-  renderIndCards(data);
-  renderRanking(data);
-  renderPodio(data);
+  const acum = eliteAcumRows();          // janela multi-vig → acumulado
+  renderHero(acum || data);
+  renderIndCards(acum || data);
+  renderRanking(acum || data);
+  renderPodio(acum || data);
   renderChart();
   renderIndChart(data);
   renderResumo(data);
@@ -1234,6 +1267,6 @@ document.addEventListener('DOMContentLoaded',()=>{ initAccessLog(); initData(); 
 <script src="../assets/filters-toggle.js"></script>
 <script src="../assets/mobile.js"></script>
 <script src="../assets/sortable-table.js"></script>
-<script src="../assets/build-check.js?v=202608061817"></script>
+<script src="../assets/build-check.js?v=202608062331"></script>
 </body>
 </html>
