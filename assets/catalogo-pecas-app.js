@@ -15,6 +15,15 @@
 (function (global) {
   'use strict';
 
+  // Versão da build, lida do ?v= do próprio <script>. Vai para um badge no
+  // header — assim dá para saber, olhando o print, se o navegador está com o
+  // arquivo novo ou com o cache do GitHub Pages.
+  const VERSAO = (() => {
+    const sc = document.currentScript || [...document.scripts].find(x => /catalogo-pecas-app/.test(x.src));
+    const m = sc && sc.src.match(/[?&]v=(\d+)/);
+    return m ? m[1] : '';
+  })();
+
   const GRUPOS = [
     { nome: 'Catálogo',        abas: ['Lista de Peças'] },
     { nome: 'Cadastro no ERP', abas: ['A. Peça+NCM', 'B. Peça+Material+NCM'] },
@@ -343,7 +352,7 @@
 
   // ── Largura das colunas: texto longo ganha espaço, código/número fica curto ─
   const LARG = [
-    { re: /^item$|^n[ºo°]$/i, w: 74 },
+    { re: /^item$|^n[ºo°]$/i, w: 92 },
     // ATENÇÃO: /ipi/ solto casava dentro de "Descrição oficial (TIPI)" e
     // espremia a coluna do texto mais longo da tabela.
     { re: /^ipi\b|^ativos|^variantes|^ano\b|^qtd|^quant|^%|^itens\b/i, w: 86 },
@@ -671,6 +680,19 @@
       <nav class="sidebar" id="cp-sidebar">${menuLateral()}</nav>
       <div class="main" id="cp-main"></div>
     </div>`;
+
+    if (VERSAO) {
+      const hr = document.querySelector('.header-right');
+      if (hr && !document.getElementById('cp-versao')) {
+        const b = document.createElement('span');
+        b.id = 'cp-versao';
+        b.className = 'status-badge';
+        b.style.cssText = 'background:rgba(255,255,255,.05);border-color:rgba(255,255,255,.12);color:#94A3B8';
+        b.title = 'Versão da build carregada';
+        b.textContent = 'build ' + VERSAO;
+        hr.insertBefore(b, hr.firstChild);
+      }
+    }
 
     const btn = document.getElementById('menuBtn');
     if (btn) btn.addEventListener('click', () => document.getElementById('cp-shell').classList.toggle('collapsed'));
