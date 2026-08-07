@@ -379,8 +379,10 @@
 
   // ══════════ IVs (Indicadores de Verificação) — só no Gerot, não pontuam ══════════
   const IV_DEF = [
-    {field:'iv_mttr',     label:'MTTR Veículos',                 src:'disponibilidade', col:['MTTR Veículos'],  val:timeVal, fmt:'time',  dir:'lower',  metaMode:'median'},
-    {field:'iv_mtbf',     label:'MTBF Veículos',                 src:'disponibilidade', col:['MTBF Veículos'],  val:timeVal, fmt:'time',  dir:'higher', metaMode:'median'},
+    // MTTR/MTBF: valores do relatório "MTBF E MTTR" do Ginfo (Renan, 05/08);
+    // meta = regra do termômetro: "melhor que o 3º quartil" das unidades na vigência.
+    {field:'iv_mttr',     label:'MTTR Veículos',                 src:'disponibilidade', col:['MTTR Veículos'],  val:timeVal, fmt:'time',  dir:'lower',  metaMode:'quartil'},
+    {field:'iv_mtbf',     label:'MTBF Veículos',                 src:'disponibilidade', col:['MTBF Veículos'],  val:timeVal, fmt:'time',  dir:'higher', metaMode:'quartil'},
     {field:'iv_prevfora', label:'Preventivas · % Fora do Prazo', src:'preventivas',     calc:'foraPrazo',                    fmt:'pct',   dir:'lower',  meta:5},
     {field:'iv_prevanexo',label:'Preventivas · OS Sem Anexo %',  src:'preventivas',     col:['OS Sem Anexo %'], val:pctVal,  fmt:'pct',   dir:'lower',  meta:30},
     {field:'iv_chktempo', label:'Checklist T1/T2 · Tempo Médio', src:'checklist-t2',    col:['Tempo Médio'],    val:timeVal, fmt:'time',  dir:'higher', meta:240},
@@ -390,7 +392,7 @@
     {field:'iv_confqual', label:'Conformidade · Quali.',         src:'conformidade',    col:['Quali. Conformidade'],val:pctVal, fmt:'pct', dir:'higher', meta:98},
     {field:'iv_slaexec',  label:'SLA Man. · Total Executada %',  src:'sla-manutencao',  col:['Total Executada %'],  val:pctVal, fmt:'pct', dir:'higher', meta:98},
   ];
-  function median(a){ const v=a.filter(x=>x!=null&&isFinite(x)).sort((x,y)=>x-y); if(!v.length) return null; const n=v.length; return n%2?v[(n-1)/2]:(v[n/2-1]+v[n/2])/2; }
+  function quantile(a,q){ const v=a.filter(x=>x!=null&&isFinite(x)).sort((x,y)=>x-y); if(!v.length) return null; const pos=(v.length-1)*q; const lo=Math.floor(pos), hi=Math.ceil(pos); return v[lo]+(v[hi]-v[lo])*(pos-lo); }
   function loadIVs(){
     const recs=[];
     IV_DEF.forEach(iv=>{
@@ -411,18 +413,67 @@
           if(unit&&value!=null&&isFinite(value)) vals.push({unit,vig,value}); });
       });
       let metaByVig=null;
-      if(iv.metaMode==='median'){ metaByVig={}; const g={}; vals.forEach(v=>{(g[v.vig]=g[v.vig]||[]).push(v.value);}); Object.keys(g).forEach(vg=>metaByVig[vg]=median(g[vg])); }
+      if(iv.metaMode==='quartil'){ metaByVig={}; const g={}; vals.forEach(v=>{(g[v.vig]=g[v.vig]||[]).push(v.value);});
+        Object.keys(g).forEach(vg=>metaByVig[vg]=quantile(g[vg], iv.dir==='lower'?0.25:0.75)); }
       vals.forEach(v=>recs.push({field:iv.field,label:iv.label,unit:v.unit,vig:v.vig,real:v.value,meta:metaByVig?metaByVig[v.vig]:iv.meta,dir:iv.dir,fmt:iv.fmt,iv:true}));
     });
     return recs;
   }
+  // ── IVs do Termômetro: OS Vencida e Blitz de Segurança (PPTX do Renan) ──
+  // Planilha do termômetro, abas por tier; vigência 'MM_Q' (vale a Q2 do mês,
+  // senão a Q1, igual ao painel do termômetro). OS Vencida (col Q) = contagem,
+  // somada Frota+Armazém por unidade — meta da regra: < 10. Blitz (col M) só
+  // existe no Transportes T2 — meta da regra: 100% realizada.
+  const TERMO_ID = '10LRn3jrXEemqFiFAMbO8_bOLk98xrWTVXVUNDeQqLac';
+  const TERMO_TABS = [
+    {name:'Transportes T1', proj:'EMPURRADA'},
+    {name:'Transportes T2', proj:'', blitz:true},
+    {name:'WH T1', proj:'APOIO'},
+    {name:'WH T2', proj:''},
+  ];
+  const IV_TERMO = [
+    {field:'iv_osvenc', label:'OS Vencida (Termômetro)', fmt:'count', dir:'lower',  meta:10},
+    {field:'iv_blitz',  label:'Blitz de Segurança',      fmt:'pct',   dir:'higher', meta:100},
+  ];
+  async function loadTermometro(){
+    const recs=[];
+    const tabs=await Promise.all(TERMO_TABS.map(t=>
+      fetchTabFrom(TERMO_ID,t.name).then(rows=>({t,rows})).catch(e=>{ console.error('Gerot base — falha termômetro', t.name, e); return {t,rows:[]}; })));
+    const eff={};   // 'tab|unit|vig' → {q, os, blitz} (fica a maior quinzena)
+    tabs.forEach(({t,rows})=>{
+      rows.forEach(r=>{
+        const c=r.c||[];
+        const vraw=String(c[0]&&c[0].v!=null?c[0].v:'').trim();
+        const m=vraw.match(/^(\d{1,2})_(\d{1,2})$/); if(!m) return;
+        const vig='2026-'+m[1].padStart(2,'0'), q=+m[2];
+        const fil=String(c[1]&&c[1].v!=null?c[1].v:'');
+        if(!FIL2COD[NK(fil)]) return;
+        const unit=canonUnit(fil, t.proj);
+        const k=t.name+'|'+unit+'|'+vig;
+        if(eff[k]&&eff[k].q>=q) return;
+        eff[k]={q, os:numVal(c[16]&&c[16].v), blitz:t.blitz?pctVal(c[12]&&c[12].v):null};
+      });
+    });
+    const os={}, bl={};   // OS: soma Frota+Armazém por unit|vig · Blitz: só T2
+    Object.keys(eff).forEach(k=>{
+      const [,unit,vig]=k.split('|'); const o=eff[k];
+      if(o.os!=null){ const kk=unit+'|'+vig; os[kk]=(os[kk]||0)+o.os; }
+      if(o.blitz!=null) bl[unit+'|'+vig]=o.blitz;
+    });
+    Object.entries(os).forEach(([kk,v])=>{ const [unit,vig]=kk.split('|');
+      recs.push({field:'iv_osvenc',label:IV_TERMO[0].label,unit,vig,real:v,meta:10,dir:'lower',fmt:'count',iv:true}); });
+    Object.entries(bl).forEach(([kk,v])=>{ const [unit,vig]=kk.split('|');
+      recs.push({field:'iv_blitz',label:IV_TERMO[1].label,unit,vig,real:v,meta:100,dir:'higher',fmt:'pct',iv:true}); });
+    return recs;
+  }
+
   const IV_PNEUS = [
     {field:'iv_pneu_amp', label:'Pneus · Amplitude',  fmt:'mm',  dir:'lower',  meta:5},
-    {field:'iv_pneu_pres',label:'Pneus · % Pressão',  fmt:'pct', dir:'higher', meta:90},
+    {field:'iv_pneu_pres',label:'Pneus · % Calibragem OK', fmt:'pct', dir:'higher', meta:98},   // meta do painel Calibragem (±10% da ideal · ≥98%)
     {field:'iv_pneu_mm',  label:'Pneus · MM Média',   fmt:'mm',  dir:'higher', meta:8},
   ];
   const IV_DISPLAY = [
-    IV_DEF[0], IV_DEF[1], IV_DEF[2], IV_DEF[3],
+    IV_DEF[0], IV_DEF[1], IV_TERMO[0], IV_TERMO[1], IV_DEF[2], IV_DEF[3],
     IV_PNEUS[0], IV_PNEUS[1], IV_PNEUS[2],
     IV_DEF[4], IV_DEF[5], IV_DEF[6], IV_DEF[7], IV_DEF[8], IV_DEF[9],
   ];
@@ -456,6 +507,7 @@
   async function load(){
     const combP=loadComb();
     const pneusP=loadPneusSheet();
+    const termoP=loadTermometro();
     await fetchElite();
     await pneusP;
     const records=[];
@@ -470,6 +522,7 @@
       });
     });
     records.push(...loadIVs());
+    try{ records.push(...await termoP); }catch(e){ console.error('IVs do termômetro', e); }
     records.push(...await combP);
     const vigsAll=[...new Set(records.map(r=>r.vig))].sort();
     try{ records.push(...await loadPneusIVs(vigsAll[vigsAll.length-1])); }catch(e){ console.error('IV Pneus', e); }
