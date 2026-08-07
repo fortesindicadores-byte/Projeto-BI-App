@@ -162,16 +162,36 @@
     });
     return out;
   }
+  // ISENÇÕES do Stress Test de empilhadeira (Renan, 07/08/2026): erro de
+  // cadastro ENTRE UNIDADES gerou desconto indevido. Estes equipamentos contam
+  // sem desconto nas vigências indicadas. O casamento é pelo identificador, não
+  // pela unidade — a unidade é justamente o que estava errado.
+  const ST_EMP_ISENTOS = [
+    {id:'EMP2024', unidade:'CDD FLORIANOPOLIS', de:'2026-01', ate:'2026-05'},
+    {id:'EMP2026', unidade:'CDD PELOTAS',       de:'2026-01', ate:'2026-05'},
+  ];
+  const semEspaco = s => NK(s).replace(/[\s.\-]/g,'');
+  function stEmpIsento(row, kId, vig){
+    if(!kId||!vig) return false;
+    const id=semEspaco(row[kId]); if(!id) return false;
+    return ST_EMP_ISENTOS.some(x=>semEspaco(x.id)===id && vig>=x.de && vig<=x.ate);
+  }
+
+  const ST_EMP_OPTS = {fil:['Filial GINFO','Filial FT x GINFO','Filial FT'], desc:['Desc. Total'],
+                       idCol:['Placa Ginfo','Chassis'], isencao:stEmpIsento};
+
   // 1/0 por equipamento → agrega por unidade {unit:{ok,n}} (para pool multi-vig)
-  function contagem10(rows, opts){
+  function contagem10(rows, opts, vig){
     const g={};
     const s=rows[0]; if(!s) return g;
     const kFil=kOf(s,...opts.fil), kProj=opts.projCol?kOf(s,...opts.projCol):null, kDesc=kOf(s,...opts.desc);
+    const kId=opts.idCol?kOf(s,...opts.idCol):null;
     if(!kFil||!kDesc) return g;
     rows.forEach(r=>{
       const unit=canonUnit(r[kFil], kProj?r[kProj]:'');
       if(!unit) return;
-      const d=numVal(r[kDesc]);
+      const isento=opts.isencao&&opts.isencao(r,kId,vig);
+      const d=isento?0:numVal(r[kDesc]);
       const o=g[unit]=g[unit]||{ok:0,n:0};
       o.n++; if(d==null||d===0) o.ok++;
     });
@@ -210,7 +230,7 @@
       }
       case 'pneus':   return pneusSheetOk() ? pctDe(PNEUS[vig]||{}) : pctDe(contagemPneus(src['pneus']?.[vig]||[]));
       case 'stVeic':  return pctDe(contagem10(src['stress-test-frota']?.[vig]||[], {fil:['Filial Freightech','Filial'], projCol:['Projeto'], desc:['Desconto']}));
-      case 'stEmp':   return pctDe(contagem10(src['stress-test-empilhadeira']?.[vig]||[], {fil:['Filial GINFO','Filial FT x GINFO','Filial FT'], desc:['Desc. Total']}));
+      case 'stEmp':   return pctDe(contagem10(src['stress-test-empilhadeira']?.[vig]||[], ST_EMP_OPTS, vig));
       case 'civf':    return pctDe(contagem10(src['civf']?.[vig]||[], {fil:['Filial Freightech'], projCol:['Projeto'], desc:['Desconto Total']}));
     }
     return [];
@@ -273,8 +293,8 @@
             ? (pneusSheetOk() ? (PNEUS[vig]||{}) : contagemPneus(E.mes['pneus']?.[vig]||[]))
             : contagem10(E.mes[{stVeic:'stress-test-frota',stEmp:'stress-test-empilhadeira',civf:'civf'}[f]]?.[vig]||[],
                 f==='stVeic'?{fil:['Filial Freightech','Filial'],projCol:['Projeto'],desc:['Desconto']}:
-                f==='stEmp' ?{fil:['Filial GINFO','Filial FT x GINFO','Filial FT'],desc:['Desc. Total']}:
-                             {fil:['Filial Freightech'],projCol:['Projeto'],desc:['Desconto Total']});
+                f==='stEmp' ?ST_EMP_OPTS:
+                             {fil:['Filial Freightech'],projCol:['Projeto'],desc:['Desconto Total']}, vig);
           Object.entries(cont).forEach(([u,o])=>{ const t=g[u]=g[u]||{ok:0,n:0}; t.ok+=o.ok; t.n+=o.n; });
         });
         pctDe(g).forEach(v=>out.push(recChave(f,ind.label,v.unit,fim,v.real)));
