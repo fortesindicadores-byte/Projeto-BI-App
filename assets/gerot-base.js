@@ -385,22 +385,15 @@
     return out;
   }
 
-  // ══════════ Indicadores adicionais — SÓ no Gerot, para gerar ação ══════════
-  // Não pontuam no Frota de Elite; no Gerot são indicadores como os demais,
-  // com meta (regra do termômetro / dos painéis) e % de atingimento.
+  // ══════════ Indicadores a mais — SÓ no Gerot, para gerar ação ══════════
+  // Exatamente os 6 do plano do Renan: Amplitude · MTBF · MTTR · OS Vencida ·
+  // Blitz de Segurança · % Calibragem OK. Não pontuam no Frota de Elite; aqui
+  // são indicadores como os demais, com meta e % de atingimento.
   const ADIC_DEF = [
     // MTTR/MTBF: valores do relatório "MTBF E MTTR" do Ginfo (Renan, 05/08);
     // meta = regra do termômetro: "melhor que o 3º quartil" das unidades na vigência.
-    {field:'mttr',     label:'MTTR Veículos',                 src:'disponibilidade', col:['MTTR Veículos'],  val:timeVal, fmt:'time',  dir:'lower',  metaMode:'quartil'},
-    {field:'mtbf',     label:'MTBF Veículos',                 src:'disponibilidade', col:['MTBF Veículos'],  val:timeVal, fmt:'time',  dir:'higher', metaMode:'quartil'},
-    {field:'prevFora', label:'Preventivas · % Fora do Prazo', src:'preventivas',     calc:'foraPrazo',                    fmt:'pct',   dir:'lower',  meta:5},
-    {field:'prevAnexo',label:'Preventivas · OS Sem Anexo %',  src:'preventivas',     col:['OS Sem Anexo %'], val:pctVal,  fmt:'pct',   dir:'lower',  meta:30},
-    {field:'chkTempo', label:'Checklist T1/T2 · Tempo Médio', src:'checklist-t2',    col:['Tempo Médio'],    val:timeVal, fmt:'time',  dir:'higher', meta:240},
-    {field:'chkOsCrit',label:'Checklist T1/T2 · Saídas c/ OS Crítica', src:'checklist-t2', col:['Saídas com OS Crítica'], val:numVal, fmt:'count', dir:'lower', meta:0},
-    {field:'whTempo',  label:'Checklist WH · Realizados < Tempo mín',  src:'checklist-wh', col:['Realizados < Tempo mín'], val:pctVal, fmt:'pct',  dir:'lower',  meta:15},
-    {field:'confSeg',  label:'Conformidade · Seg.',           src:'conformidade',    col:['Seg. Conformidade'],  val:pctVal, fmt:'pct', dir:'higher', meta:98},
-    {field:'confQuali', label:'Conformidade · Quali.',         src:'conformidade',    col:['Quali. Conformidade'],val:pctVal, fmt:'pct', dir:'higher', meta:98},
-    {field:'slaExec',  label:'SLA Man. · Total Executada %',  src:'sla-manutencao',  col:['Total Executada %'],  val:pctVal, fmt:'pct', dir:'higher', meta:98},
+    {field:'mttr', label:'MTTR', src:'disponibilidade', col:['MTTR Veículos'], val:timeVal, fmt:'time', dir:'lower',  metaMode:'quartil'},
+    {field:'mtbf', label:'MTBF', src:'disponibilidade', col:['MTBF Veículos'], val:timeVal, fmt:'time', dir:'higher', metaMode:'quartil'},
   ];
   function quantile(a,q){ const v=a.filter(x=>x!=null&&isFinite(x)).sort((x,y)=>x-y); if(!v.length) return null; const pos=(v.length-1)*q; const lo=Math.floor(pos), hi=Math.ceil(pos); return v[lo]+(v[hi]-v[lo])*(pos-lo); }
   // % de atingimento dos adicionais (os indicadores-chave já têm atg = aderência).
@@ -422,16 +415,8 @@
       Object.entries(E.mes[ind.src]||{}).forEach(([vig,rows])=>{
         const s=rows[0]; if(!s) return;
         const kFil=kOf(s,'Filial'); if(!kFil) return;
-        let get;
-        if(ind.calc==='foraPrazo'){
-          const kF=kOf(s,'Realizado Fora Prazo'), kT=kOf(s,'Preventivas Realizadas');
-          get=r=>{ const f=numVal(r[kF]), t=numVal(r[kT]); return (t&&t>0)?f/t*100:null; };
-        } else {
-          const kV=kOf(s,...ind.col); if(!kV) return;
-          get=r=>ind.val(r[kV]);
-        }
-        rows.forEach(r=>{ const unit=canonUnit(r[kFil], ind.src==='checklist-wh'?'APOIO':''); const value=get(r);
-          if(ind.src==='conformidade' && unit && !confVale(unit,vig)) return;
+        const kV=kOf(s,...ind.col); if(!kV) return;
+        rows.forEach(r=>{ const unit=canonUnit(r[kFil],''); const value=ind.val(r[kV]);
           if(unit&&value!=null&&isFinite(value)) vals.push({unit,vig,value}); });
       });
       let metaByVig=null;
@@ -491,15 +476,20 @@
     return recs;
   }
 
+  // API do Prolog: Amplitude (meta do painel Milimetragem) e % Calibragem OK
+  // (meta do painel Calibragem: pressão dentro de ±10% da ideal em ≥98% da frota)
   const ADIC_PNEUS = [
-    {field:'pneuAmp', label:'Pneus · Amplitude',  fmt:'mm',  dir:'lower',  meta:5},
-    {field:'pneuCalib',label:'Pneus · % Calibragem OK', fmt:'pct', dir:'higher', meta:98},   // meta do painel Calibragem (±10% da ideal · ≥98%)
-    {field:'pneuMM',  label:'Pneus · MM Média',   fmt:'mm',  dir:'higher', meta:8},
+    {field:'pneuAmp',   label:'Amplitude',        fmt:'mm',  dir:'lower',  meta:5},
+    {field:'pneuCalib', label:'% Calibragem OK',  fmt:'pct', dir:'higher', meta:98},
   ];
+  // Os 6 do plano, na ordem em que o Renan listou
   const INDICADORES_GEROT = [
-    ADIC_DEF[0], ADIC_DEF[1], ADIC_TERMO[0], ADIC_TERMO[1], ADIC_DEF[2], ADIC_DEF[3],
-    ADIC_PNEUS[0], ADIC_PNEUS[1], ADIC_PNEUS[2],
-    ADIC_DEF[4], ADIC_DEF[5], ADIC_DEF[6], ADIC_DEF[7], ADIC_DEF[8], ADIC_DEF[9],
+    ADIC_PNEUS[0],   // Amplitude
+    ADIC_DEF[1],     // MTBF
+    ADIC_DEF[0],     // MTTR
+    ADIC_TERMO[0],   // OS Vencida
+    ADIC_TERMO[1],   // Blitz de Segurança
+    ADIC_PNEUS[1],   // % Calibragem OK
   ];
 
   // Pneus (adicionais de amplitude/calibragem/mm): snapshot do painel Pneus (Prolog)
@@ -518,10 +508,9 @@
       const tires=(byBranch[FILIAL2BRANCH[uni]]||[]).filter(t=>t && t.placa && (+t.menorMM)>0);
       if(!tires.length) continue;
       const amp=mean(tires.map(t=>+t.amplitude));
-      const mm =mean(tires.map(t=>+t.menorMM).filter(x=>x>0));
       const comP=tires.filter(t=>+t.pressaoIdeal>0);
-      const pres=comP.length?comP.filter(t=>Math.abs(+t.desvioPressao)<=10).length/comP.length*100:null;
-      ADIC_PNEUS.forEach(ind=>{ const real=ind.field==='pneuAmp'?amp:(ind.field==='pneuMM'?mm:pres); if(real==null)return;
+      const calib=comP.length?comP.filter(t=>Math.abs(+t.desvioPressao)<=10).length/comP.length*100:null;
+      ADIC_PNEUS.forEach(ind=>{ const real=ind.field==='pneuAmp'?amp:calib; if(real==null)return;
         recs.push({field:ind.field,label:ind.label,unit:uni,vig:latestVig,real,meta:ind.meta,
                    atg:atgDe(real,ind.meta,ind.dir),dir:ind.dir,fmt:ind.fmt,soGerot:true,snapshot:true}); });
     }
