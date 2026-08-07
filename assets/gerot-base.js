@@ -10,12 +10,15 @@
 //                        gerar ação; não pontuam no Frota de Elite.
 //
 // Contrato mantido para os painéis:
-//   load() → records {field, label, unit, vig, meta, real, atg}
+//   load() → records {field, label, unit, vig, meta, real, atg, atgMeta}
 //     · real em pontos percentuais (0-100) · vig = 'YYYY-MM'
-//     · chave: atg = a PRÓPRIA aderência (Renan, 05/08/2026 — o robô não
-//       carimba meta; meta fica null, só o Combustível tem)
-//     · adicionais: meta = regra do termômetro / do painel de origem e
-//       atg = meta/real ('lower') ou real/meta ('higher'), com soGerot:true
+//     · chave: `atg` = a PRÓPRIA aderência — é o que o Frota de Elite pontua
+//       (pesos do programa montados em cima disso, Renan 05/08/2026);
+//       `meta` = METAS e `atgMeta` = real ÷ meta, que é o que o Gerot mostra
+//       e de onde saem os FCAs da RPM (Renan 07/08/2026)
+//     · adicionais: meta = regra do termômetro / do painel de origem,
+//       atg = atgMeta = meta/real ('lower') ou real/meta ('higher'),
+//       com soGerot:true
 //
 // Novo:
 //   acumFor(vigsArr) → records do ACUMULADO da janela selecionada
@@ -215,6 +218,21 @@
 
   const cap100 = v => v==null?null:Math.min(100,v);
 
+  // ── METAS dos indicadores-chave (Renan, 07/08/2026) ──────────────────────
+  // É delas que saem os FCAs da RPM: no Gerot o atingimento é real ÷ meta.
+  // O Frota de Elite NÃO muda — lá `atg` continua sendo a própria aderência
+  // (os pesos do programa já estão montados em cima disso).
+  // Combustível fica de fora: a meta dele é o km/L remunerado, que varia por
+  // unidade e vigência, e já vem calculada em loadComb/combAcum.
+  const METAS = {disp:95, prev:100, pneus:100, checkT:95, checkWH:95,
+                 conf:100, stVeic:100, stEmp:100, civf:100, sla:75};
+  // registro de um indicador-chave: atg = aderência (Frota de Elite) ·
+  // atgMeta = atingimento da meta (Gerot / FCAs da RPM)
+  function recChave(field,label,unit,vig,real){
+    const meta=METAS[field]!=null?METAS[field]:null;
+    return {field,label,unit,vig,meta,real,atg:cap100(real),atgMeta:atgDe(real,meta,'higher')};
+  }
+
   // ── ACUMULADO da janela (síncrono; requer load() antes) ──────────────────
   // 1/0 e pneus: pool exato das linhas mensais. % por filial: escopo 'ano' do
   // Ginfo quando a janela é jan→M do mesmo ano; senão média mensal (aproximação).
@@ -245,7 +263,7 @@
       const f=ind.field;
       if(f==='comb'){ out.push(...combAcum(vigs)); return; }
       if(vigs.length===1){
-        valores(f,'mes',fim).forEach(v=>out.push({field:f,label:ind.label,unit:v.unit,vig:fim,meta:null,real:v.real,atg:cap100(v.real)}));
+        valores(f,'mes',fim).forEach(v=>out.push(recChave(f,ind.label,v.unit,fim,v.real)));
         return;
       }
       if(POOL_FIELDS.has(f)){
@@ -259,7 +277,7 @@
                              {fil:['Filial Freightech'],projCol:['Projeto'],desc:['Desconto Total']});
           Object.entries(cont).forEach(([u,o])=>{ const t=g[u]=g[u]||{ok:0,n:0}; t.ok+=o.ok; t.n+=o.n; });
         });
-        pctDe(g).forEach(v=>out.push({field:f,label:ind.label,unit:v.unit,vig:fim,meta:null,real:v.real,atg:cap100(v.real)}));
+        pctDe(g).forEach(v=>out.push(recChave(f,ind.label,v.unit,fim,v.real)));
         return;
       }
       // % por filial
@@ -283,7 +301,7 @@
         if(!emp.length) emp=mediaDe(u=>CONF_EMP.has(u));
         list=list.filter(v=>!CONF_EMP.has(v.unit)).concat(emp);
       }
-      list.forEach(v=>out.push({field:f,label:ind.label,unit:v.unit,vig:fim,meta:null,real:v.real,atg:cap100(v.real),approx:v.approx||undefined}));
+      list.forEach(v=>out.push(Object.assign(recChave(f,ind.label,v.unit,fim,v.real),{approx:v.approx||undefined})));
     });
     return out;
   }
@@ -367,7 +385,7 @@
         ((COMB[uni]=COMB[uni]||{})[vig]={km,lit,rems});
         const rem=rems.reduce((s,x)=>s+x,0)/rems.length, real=km/lit, atg=rem?(real/rem*100):null;
         if(atg==null) continue;
-        recs.push({field:'comb',label:'Combustível',unit:uni,vig,meta:rem,real,atg});
+        recs.push({field:'comb',label:'Combustível',unit:uni,vig,meta:rem,real,atg,atgMeta:atg});
       }
     }
     return recs;
@@ -380,7 +398,8 @@
       vigs.forEach(v=>{ const o=COMB[uni][v]; if(!o)return; km+=o.km; lit+=o.lit; rems.push(...o.rems); });
       if(!lit||!rems.length) continue;
       const rem=rems.reduce((s,x)=>s+x,0)/rems.length, real=km/lit;
-      out.push({field:'comb',label:'Combustível',unit:uni,vig:fim,meta:rem,real,atg:rem?(real/rem*100):null});
+      const atgC=rem?(real/rem*100):null;
+      out.push({field:'comb',label:'Combustível',unit:uni,vig:fim,meta:rem,real,atg:atgC,atgMeta:atgC});
     }
     return out;
   }
@@ -423,8 +442,9 @@
       if(ind.metaMode==='quartil'){ metaByVig={}; const g={}; vals.forEach(v=>{(g[v.vig]=g[v.vig]||[]).push(v.value);});
         Object.keys(g).forEach(vg=>metaByVig[vg]=quantile(g[vg], ind.dir==='lower'?0.25:0.75)); }
       vals.forEach(v=>{ const meta=metaByVig?metaByVig[v.vig]:ind.meta;
+        const atg=atgDe(v.value,meta,ind.dir);
         recs.push({field:ind.field,label:ind.label,unit:v.unit,vig:v.vig,real:v.value,meta,
-                   atg:atgDe(v.value,meta,ind.dir),dir:ind.dir,fmt:ind.fmt,soGerot:true}); });
+                   atg,atgMeta:atg,dir:ind.dir,fmt:ind.fmt,soGerot:true}); });
     });
     return recs;
   }
@@ -470,9 +490,11 @@
       if(o.blitz!=null) bl[unit+'|'+vig]=o.blitz;
     });
     Object.entries(os).forEach(([kk,v])=>{ const [unit,vig]=kk.split('|');
-      recs.push({field:'osVenc',label:ADIC_TERMO[0].label,unit,vig,real:v,meta:10,atg:atgDe(v,10,'lower'),dir:'lower',fmt:'count',soGerot:true}); });
+      const atg=atgDe(v,10,'lower');
+      recs.push({field:'osVenc',label:ADIC_TERMO[0].label,unit,vig,real:v,meta:10,atg,atgMeta:atg,dir:'lower',fmt:'count',soGerot:true}); });
     Object.entries(bl).forEach(([kk,v])=>{ const [unit,vig]=kk.split('|');
-      recs.push({field:'blitz',label:ADIC_TERMO[1].label,unit,vig,real:v,meta:100,atg:atgDe(v,100,'higher'),dir:'higher',fmt:'pct',soGerot:true}); });
+      const atg=atgDe(v,100,'higher');
+      recs.push({field:'blitz',label:ADIC_TERMO[1].label,unit,vig,real:v,meta:100,atg,atgMeta:atg,dir:'higher',fmt:'pct',soGerot:true}); });
     return recs;
   }
 
@@ -511,8 +533,9 @@
       const comP=tires.filter(t=>+t.pressaoIdeal>0);
       const calib=comP.length?comP.filter(t=>Math.abs(+t.desvioPressao)<=10).length/comP.length*100:null;
       ADIC_PNEUS.forEach(ind=>{ const real=ind.field==='pneuAmp'?amp:calib; if(real==null)return;
+        const atg=atgDe(real,ind.meta,ind.dir);
         recs.push({field:ind.field,label:ind.label,unit:uni,vig:latestVig,real,meta:ind.meta,
-                   atg:atgDe(real,ind.meta,ind.dir),dir:ind.dir,fmt:ind.fmt,soGerot:true,snapshot:true}); });
+                   atg,atgMeta:atg,dir:ind.dir,fmt:ind.fmt,soGerot:true,snapshot:true}); });
     }
     return recs;
   }
@@ -531,7 +554,7 @@
       const vigsSrc = ind.field==='pneus' && pneusSheetOk() ? Object.keys(PNEUS).sort() : vigsDe(src);
       vigsSrc.forEach(vig=>{
         valores(ind.field,'mes',vig).forEach(v=>{
-          records.push({field:ind.field,label:ind.label,unit:v.unit,vig,meta:null,real:v.real,atg:cap100(v.real)});
+          records.push(recChave(ind.field,ind.label,v.unit,vig,v.real));
         });
       });
     });
