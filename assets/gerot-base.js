@@ -3,11 +3,19 @@
 // gravado pelo robô (scripts/elite-robot.mjs). A planilha Frota de
 // Elite (GerotBase antigo via gviz) está aposentada como fonte.
 //
+// Não existe mais "IV"/"IC": é tudo INDICADOR (Renan, plano do robô).
+//   INDICADORES        → os indicadores-chave, iguais nas DUAS bases
+//                        (Frota de Elite e Gerot), lidos da MESMA fonte.
+//   INDICADORES_GEROT  → os adicionais que só aparecem no Gerot, para
+//                        gerar ação; não pontuam no Frota de Elite.
+//
 // Contrato mantido para os painéis:
 //   load() → records {field, label, unit, vig, meta, real, atg}
 //     · real em pontos percentuais (0-100) · vig = 'YYYY-MM'
-//     · atg = atingimento = a PRÓPRIA aderência (Renan, 05/08/2026 —
-//       o robô não carimba meta; meta fica null, só o Combustível tem)
+//     · chave: atg = a PRÓPRIA aderência (Renan, 05/08/2026 — o robô não
+//       carimba meta; meta fica null, só o Combustível tem)
+//     · adicionais: meta = regra do termômetro / do painel de origem e
+//       atg = meta/real ('lower') ou real/meta ('higher'), com soGerot:true
 //
 // Novo:
 //   acumFor(vigsArr) → records do ACUMULADO da janela selecionada
@@ -131,7 +139,7 @@
   const CONF_BIM = new Set(['PIRAI EMPURRADA','MACACU EMPURRADA','CUIABA EMPURRADA','CDD RIO DE JANEIRO']);
   const confBimestral = (unit, vigFim) => vigFim >= '2026-07' || CONF_BIM.has(unit);
   // Empurradas só contam Conformidade de mar/2026 em diante (Renan, 07/08/2026):
-  // jan e fev ficam sem valor (mensal e IVs); o acumulado jan→M (escopo 'ano'
+  // jan e fev ficam sem valor (mensal e nos adicionais de conformidade); o acumulado jan→M (escopo 'ano'
   // do Ginfo) segue valendo a partir das janelas que terminam em março.
   const CONF_EMP = new Set(['PIRAI EMPURRADA','MACACU EMPURRADA','CUIABA EMPURRADA']);
   const confVale = (unit, vigFim) => vigFim >= '2026-03' || !CONF_EMP.has(unit);
@@ -233,7 +241,7 @@
     if(!vigs.length) return [];
     const fim=vigs[vigs.length-1];
     const out=[];
-    DISPLAY.forEach(ind=>{
+    INDICADORES.forEach(ind=>{
       const f=ind.field;
       if(f==='comb'){ out.push(...combAcum(vigs)); return; }
       if(vigs.length===1){
@@ -377,49 +385,65 @@
     return out;
   }
 
-  // ══════════ IVs (Indicadores de Verificação) — só no Gerot, não pontuam ══════════
-  const IV_DEF = [
+  // ══════════ Indicadores adicionais — SÓ no Gerot, para gerar ação ══════════
+  // Não pontuam no Frota de Elite; no Gerot são indicadores como os demais,
+  // com meta (regra do termômetro / dos painéis) e % de atingimento.
+  const ADIC_DEF = [
     // MTTR/MTBF: valores do relatório "MTBF E MTTR" do Ginfo (Renan, 05/08);
     // meta = regra do termômetro: "melhor que o 3º quartil" das unidades na vigência.
-    {field:'iv_mttr',     label:'MTTR Veículos',                 src:'disponibilidade', col:['MTTR Veículos'],  val:timeVal, fmt:'time',  dir:'lower',  metaMode:'quartil'},
-    {field:'iv_mtbf',     label:'MTBF Veículos',                 src:'disponibilidade', col:['MTBF Veículos'],  val:timeVal, fmt:'time',  dir:'higher', metaMode:'quartil'},
-    {field:'iv_prevfora', label:'Preventivas · % Fora do Prazo', src:'preventivas',     calc:'foraPrazo',                    fmt:'pct',   dir:'lower',  meta:5},
-    {field:'iv_prevanexo',label:'Preventivas · OS Sem Anexo %',  src:'preventivas',     col:['OS Sem Anexo %'], val:pctVal,  fmt:'pct',   dir:'lower',  meta:30},
-    {field:'iv_chktempo', label:'Checklist T1/T2 · Tempo Médio', src:'checklist-t2',    col:['Tempo Médio'],    val:timeVal, fmt:'time',  dir:'higher', meta:240},
-    {field:'iv_chkoscrit',label:'Checklist T1/T2 · Saídas c/ OS Crítica', src:'checklist-t2', col:['Saídas com OS Crítica'], val:numVal, fmt:'count', dir:'lower', meta:0},
-    {field:'iv_whtempo',  label:'Checklist WH · Realizados < Tempo mín',  src:'checklist-wh', col:['Realizados < Tempo mín'], val:pctVal, fmt:'pct',  dir:'lower',  meta:15},
-    {field:'iv_confseg',  label:'Conformidade · Seg.',           src:'conformidade',    col:['Seg. Conformidade'],  val:pctVal, fmt:'pct', dir:'higher', meta:98},
-    {field:'iv_confqual', label:'Conformidade · Quali.',         src:'conformidade',    col:['Quali. Conformidade'],val:pctVal, fmt:'pct', dir:'higher', meta:98},
-    {field:'iv_slaexec',  label:'SLA Man. · Total Executada %',  src:'sla-manutencao',  col:['Total Executada %'],  val:pctVal, fmt:'pct', dir:'higher', meta:98},
+    {field:'mttr',     label:'MTTR Veículos',                 src:'disponibilidade', col:['MTTR Veículos'],  val:timeVal, fmt:'time',  dir:'lower',  metaMode:'quartil'},
+    {field:'mtbf',     label:'MTBF Veículos',                 src:'disponibilidade', col:['MTBF Veículos'],  val:timeVal, fmt:'time',  dir:'higher', metaMode:'quartil'},
+    {field:'prevFora', label:'Preventivas · % Fora do Prazo', src:'preventivas',     calc:'foraPrazo',                    fmt:'pct',   dir:'lower',  meta:5},
+    {field:'prevAnexo',label:'Preventivas · OS Sem Anexo %',  src:'preventivas',     col:['OS Sem Anexo %'], val:pctVal,  fmt:'pct',   dir:'lower',  meta:30},
+    {field:'chkTempo', label:'Checklist T1/T2 · Tempo Médio', src:'checklist-t2',    col:['Tempo Médio'],    val:timeVal, fmt:'time',  dir:'higher', meta:240},
+    {field:'chkOsCrit',label:'Checklist T1/T2 · Saídas c/ OS Crítica', src:'checklist-t2', col:['Saídas com OS Crítica'], val:numVal, fmt:'count', dir:'lower', meta:0},
+    {field:'whTempo',  label:'Checklist WH · Realizados < Tempo mín',  src:'checklist-wh', col:['Realizados < Tempo mín'], val:pctVal, fmt:'pct',  dir:'lower',  meta:15},
+    {field:'confSeg',  label:'Conformidade · Seg.',           src:'conformidade',    col:['Seg. Conformidade'],  val:pctVal, fmt:'pct', dir:'higher', meta:98},
+    {field:'confQuali', label:'Conformidade · Quali.',         src:'conformidade',    col:['Quali. Conformidade'],val:pctVal, fmt:'pct', dir:'higher', meta:98},
+    {field:'slaExec',  label:'SLA Man. · Total Executada %',  src:'sla-manutencao',  col:['Total Executada %'],  val:pctVal, fmt:'pct', dir:'higher', meta:98},
   ];
   function quantile(a,q){ const v=a.filter(x=>x!=null&&isFinite(x)).sort((x,y)=>x-y); if(!v.length) return null; const pos=(v.length-1)*q; const lo=Math.floor(pos), hi=Math.ceil(pos); return v[lo]+(v[hi]-v[lo])*(pos-lo); }
-  function loadIVs(){
+  // % de atingimento dos adicionais (os indicadores-chave já têm atg = aderência).
+  // 'lower' (MTTR, OS Vencida, Amplitude…): meta/real · 'higher': real/meta.
+  function atgDe(real, meta, dir){
+    if(real==null||meta==null||!isFinite(real)||!isFinite(meta)) return null;
+    if(dir==='lower'){
+      if(meta===0) return real<=0?100:0;
+      if(real<=0)  return 100;
+      return cap100(meta/real*100);
+    }
+    if(meta===0) return 100;
+    return cap100(real/meta*100);
+  }
+  function loadAdicionais(){
     const recs=[];
-    IV_DEF.forEach(iv=>{
+    ADIC_DEF.forEach(ind=>{
       const vals=[];
-      Object.entries(E.mes[iv.src]||{}).forEach(([vig,rows])=>{
+      Object.entries(E.mes[ind.src]||{}).forEach(([vig,rows])=>{
         const s=rows[0]; if(!s) return;
         const kFil=kOf(s,'Filial'); if(!kFil) return;
         let get;
-        if(iv.calc==='foraPrazo'){
+        if(ind.calc==='foraPrazo'){
           const kF=kOf(s,'Realizado Fora Prazo'), kT=kOf(s,'Preventivas Realizadas');
           get=r=>{ const f=numVal(r[kF]), t=numVal(r[kT]); return (t&&t>0)?f/t*100:null; };
         } else {
-          const kV=kOf(s,...iv.col); if(!kV) return;
-          get=r=>iv.val(r[kV]);
+          const kV=kOf(s,...ind.col); if(!kV) return;
+          get=r=>ind.val(r[kV]);
         }
-        rows.forEach(r=>{ const unit=canonUnit(r[kFil], iv.src==='checklist-wh'?'APOIO':''); const value=get(r);
-          if(iv.src==='conformidade' && unit && !confVale(unit,vig)) return;
+        rows.forEach(r=>{ const unit=canonUnit(r[kFil], ind.src==='checklist-wh'?'APOIO':''); const value=get(r);
+          if(ind.src==='conformidade' && unit && !confVale(unit,vig)) return;
           if(unit&&value!=null&&isFinite(value)) vals.push({unit,vig,value}); });
       });
       let metaByVig=null;
-      if(iv.metaMode==='quartil'){ metaByVig={}; const g={}; vals.forEach(v=>{(g[v.vig]=g[v.vig]||[]).push(v.value);});
-        Object.keys(g).forEach(vg=>metaByVig[vg]=quantile(g[vg], iv.dir==='lower'?0.25:0.75)); }
-      vals.forEach(v=>recs.push({field:iv.field,label:iv.label,unit:v.unit,vig:v.vig,real:v.value,meta:metaByVig?metaByVig[v.vig]:iv.meta,dir:iv.dir,fmt:iv.fmt,iv:true}));
+      if(ind.metaMode==='quartil'){ metaByVig={}; const g={}; vals.forEach(v=>{(g[v.vig]=g[v.vig]||[]).push(v.value);});
+        Object.keys(g).forEach(vg=>metaByVig[vg]=quantile(g[vg], ind.dir==='lower'?0.25:0.75)); }
+      vals.forEach(v=>{ const meta=metaByVig?metaByVig[v.vig]:ind.meta;
+        recs.push({field:ind.field,label:ind.label,unit:v.unit,vig:v.vig,real:v.value,meta,
+                   atg:atgDe(v.value,meta,ind.dir),dir:ind.dir,fmt:ind.fmt,soGerot:true}); });
     });
     return recs;
   }
-  // ── IVs do Termômetro: OS Vencida e Blitz de Segurança (PPTX do Renan) ──
+  // ── Adicionais do Termômetro: OS Vencida e Blitz de Segurança (PPTX do Renan) ──
   // Planilha do termômetro, abas por tier; vigência 'MM_Q' (vale a Q2 do mês,
   // senão a Q1, igual ao painel do termômetro). OS Vencida (col Q) = contagem,
   // somada Frota+Armazém por unidade — meta da regra: < 10. Blitz (col M) só
@@ -431,9 +455,9 @@
     {name:'WH T1', proj:'APOIO'},
     {name:'WH T2', proj:''},
   ];
-  const IV_TERMO = [
-    {field:'iv_osvenc', label:'OS Vencida (Termômetro)', fmt:'count', dir:'lower',  meta:10},
-    {field:'iv_blitz',  label:'Blitz de Segurança',      fmt:'pct',   dir:'higher', meta:100},
+  const ADIC_TERMO = [
+    {field:'osVenc', label:'OS Vencida', fmt:'count', dir:'lower',  meta:10},
+    {field:'blitz',  label:'Blitz de Segurança',      fmt:'pct',   dir:'higher', meta:100},
   ];
   async function loadTermometro(){
     const recs=[];
@@ -461,32 +485,32 @@
       if(o.blitz!=null) bl[unit+'|'+vig]=o.blitz;
     });
     Object.entries(os).forEach(([kk,v])=>{ const [unit,vig]=kk.split('|');
-      recs.push({field:'iv_osvenc',label:IV_TERMO[0].label,unit,vig,real:v,meta:10,dir:'lower',fmt:'count',iv:true}); });
+      recs.push({field:'osVenc',label:ADIC_TERMO[0].label,unit,vig,real:v,meta:10,atg:atgDe(v,10,'lower'),dir:'lower',fmt:'count',soGerot:true}); });
     Object.entries(bl).forEach(([kk,v])=>{ const [unit,vig]=kk.split('|');
-      recs.push({field:'iv_blitz',label:IV_TERMO[1].label,unit,vig,real:v,meta:100,dir:'higher',fmt:'pct',iv:true}); });
+      recs.push({field:'blitz',label:ADIC_TERMO[1].label,unit,vig,real:v,meta:100,atg:atgDe(v,100,'higher'),dir:'higher',fmt:'pct',soGerot:true}); });
     return recs;
   }
 
-  const IV_PNEUS = [
-    {field:'iv_pneu_amp', label:'Pneus · Amplitude',  fmt:'mm',  dir:'lower',  meta:5},
-    {field:'iv_pneu_pres',label:'Pneus · % Calibragem OK', fmt:'pct', dir:'higher', meta:98},   // meta do painel Calibragem (±10% da ideal · ≥98%)
-    {field:'iv_pneu_mm',  label:'Pneus · MM Média',   fmt:'mm',  dir:'higher', meta:8},
+  const ADIC_PNEUS = [
+    {field:'pneuAmp', label:'Pneus · Amplitude',  fmt:'mm',  dir:'lower',  meta:5},
+    {field:'pneuCalib',label:'Pneus · % Calibragem OK', fmt:'pct', dir:'higher', meta:98},   // meta do painel Calibragem (±10% da ideal · ≥98%)
+    {field:'pneuMM',  label:'Pneus · MM Média',   fmt:'mm',  dir:'higher', meta:8},
   ];
-  const IV_DISPLAY = [
-    IV_DEF[0], IV_DEF[1], IV_TERMO[0], IV_TERMO[1], IV_DEF[2], IV_DEF[3],
-    IV_PNEUS[0], IV_PNEUS[1], IV_PNEUS[2],
-    IV_DEF[4], IV_DEF[5], IV_DEF[6], IV_DEF[7], IV_DEF[8], IV_DEF[9],
+  const INDICADORES_GEROT = [
+    ADIC_DEF[0], ADIC_DEF[1], ADIC_TERMO[0], ADIC_TERMO[1], ADIC_DEF[2], ADIC_DEF[3],
+    ADIC_PNEUS[0], ADIC_PNEUS[1], ADIC_PNEUS[2],
+    ADIC_DEF[4], ADIC_DEF[5], ADIC_DEF[6], ADIC_DEF[7], ADIC_DEF[8], ADIC_DEF[9],
   ];
 
-  // Pneus (IVs de amplitude/pressão/mm): snapshot do painel Pneus (Prolog)
+  // Pneus (adicionais de amplitude/calibragem/mm): snapshot do painel Pneus (Prolog)
   const PN_URL = 'https://ewbzeqsneeylwkxtcpme.supabase.co';
   const PN_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImV3YnplcXNuZWV5bHdreHRjcG1lIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE4NzY2MTcsImV4cCI6MjA5NzQ1MjYxN30.W8W6Yunt6Z8NB73qpOD8eqYlrsgMRgEG-siYsJFwDwE';
   const FILIAL2BRANCH = {'CDD CAMBORIU':24,'CDD CUIABA':1878,'CUIABA':1906,'CUIABA EMPURRADA':1907,'CDD FLORIANOPOLIS':20,'CDD GUARULHOS':30,'CDD NOVA FRIBURGO':2517,'CDD PELOTAS':26,'CDD RIO DE JANEIRO':37,'CDD RONDONOPOLIS':2277,'CDI MACACU':1677,'MACACU EMPURRADA':1676,'PIRAI EMPURRADA':38};
-  async function loadPneusIVs(latestVig){
+  async function loadPneusAdic(latestVig){
     if(!latestVig) return [];
     let rows;
     try{ const res=await fetch(`${PN_URL}/rest/v1/snapshot?endpoint=eq.tires&select=branch_id,data`, {headers:{apikey:PN_KEY, Authorization:'Bearer '+PN_KEY}}); if(!res.ok) throw new Error('http '+res.status); rows=await res.json(); }
-    catch(e){ console.error('IV Pneus (Supabase) falhou', e); return []; }
+    catch(e){ console.error('Pneus (Prolog) falhou', e); return []; }
     const byBranch={}; rows.forEach(r=>{ byBranch[r.branch_id]=r.data||[]; });
     const mean=a=>{ const v=a.filter(x=>x!=null&&isFinite(x)); return v.length?v.reduce((s,x)=>s+x,0)/v.length:null; };
     const recs=[];
@@ -497,8 +521,9 @@
       const mm =mean(tires.map(t=>+t.menorMM).filter(x=>x>0));
       const comP=tires.filter(t=>+t.pressaoIdeal>0);
       const pres=comP.length?comP.filter(t=>Math.abs(+t.desvioPressao)<=10).length/comP.length*100:null;
-      IV_PNEUS.forEach(iv=>{ const real=iv.field==='iv_pneu_amp'?amp:(iv.field==='iv_pneu_mm'?mm:pres); if(real==null)return;
-        recs.push({field:iv.field,label:iv.label,unit:uni,vig:latestVig,real,meta:iv.meta,dir:iv.dir,fmt:iv.fmt,iv:true,snapshot:true}); });
+      ADIC_PNEUS.forEach(ind=>{ const real=ind.field==='pneuAmp'?amp:(ind.field==='pneuMM'?mm:pres); if(real==null)return;
+        recs.push({field:ind.field,label:ind.label,unit:uni,vig:latestVig,real,meta:ind.meta,
+                   atg:atgDe(real,ind.meta,ind.dir),dir:ind.dir,fmt:ind.fmt,soGerot:true,snapshot:true}); });
     }
     return recs;
   }
@@ -511,7 +536,7 @@
     await fetchElite();
     await pneusP;
     const records=[];
-    DISPLAY.forEach(ind=>{
+    INDICADORES.forEach(ind=>{
       if(ind.field==='comb') return;
       const src={disp:'disponibilidade',prev:'preventivas',pneus:'pneus',checkT:'checklist-t2',checkWH:'checklist-wh',conf:'conformidade',stVeic:'stress-test-frota',stEmp:'stress-test-empilhadeira',civf:'civf',sla:'sla-manutencao'}[ind.field];
       const vigsSrc = ind.field==='pneus' && pneusSheetOk() ? Object.keys(PNEUS).sort() : vigsDe(src);
@@ -521,15 +546,15 @@
         });
       });
     });
-    records.push(...loadIVs());
-    try{ records.push(...await termoP); }catch(e){ console.error('IVs do termômetro', e); }
+    records.push(...loadAdicionais());
+    try{ records.push(...await termoP); }catch(e){ console.error('adicionais do termômetro', e); }
     records.push(...await combP);
     const vigsAll=[...new Set(records.map(r=>r.vig))].sort();
-    try{ records.push(...await loadPneusIVs(vigsAll[vigsAll.length-1])); }catch(e){ console.error('IV Pneus', e); }
+    try{ records.push(...await loadPneusAdic(vigsAll[vigsAll.length-1])); }catch(e){ console.error('adicionais de pneus', e); }
     return records;
   }
 
-  const DISPLAY = [
+  const INDICADORES = [
     {field:'disp',    label:'Disponibilidade'},
     {field:'prev',    label:'Preventivas'},
     {field:'comb',    label:'Combustível',       fmt:'kml', cap:false},
@@ -543,7 +568,7 @@
     {field:'sla',     label:'SLA Man.'},
   ];
 
-  global.GerotBase = { DISPLAY, IV_DISPLAY, load, acumFor,
-    fieldLabels: DISPLAY.reduce((m,i)=>{ m[i.field]=i.label; return m; }, {}),
-    fieldOrder: DISPLAY.map(i=>i.field) };
+  global.GerotBase = { INDICADORES, INDICADORES_GEROT, load, acumFor,
+    fieldLabels: INDICADORES.reduce((m,i)=>{ m[i.field]=i.label; return m; }, {}),
+    fieldOrder: INDICADORES.map(i=>i.field) };
 })(window);
