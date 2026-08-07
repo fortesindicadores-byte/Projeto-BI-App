@@ -197,6 +197,36 @@
     });
     return g;
   }
+  // ── Conformidade · REGRA NOVA do Ginfo (08/2026) ─────────────────────────
+  // A aderência passou a ser medida pelo PRAZO DE VENCIMENTO de cada
+  // equipamento (WH 30 dias · DU 60 dias), então acabou a distinção
+  // Mensal x Bimestral: a periodicidade já está embutida no Status.
+  //   OK  = Realizado Dentro Prazo + No Prazo
+  //   NOK = Nunca Realizado + Não Realizado + Realizado Fora Prazo
+  //   Aderência = OK ÷ (soma dos cinco)
+  // Como são CONTAGENS, somar os meses da janela dá o acumulado exato — igual
+  // ao Stress Test. Por isso 'conf' entra no POOL_FIELDS.
+  const CONF_OK  = ['Realizado Dentro Prazo','No Prazo'];
+  const CONF_NOK = ['Nunca Realizado','Não Realizado','Realizado Fora Prazo'];
+  const confNovo = rows => !!(rows[0] && kOf(rows[0],'Realizado Dentro Prazo'));
+  function contagemConf(rows, vig){
+    const g={};
+    const s=rows[0]; if(!s) return g;
+    const kFil=kOf(s,'Filial'); if(!kFil) return g;
+    const kOk=CONF_OK.map(n=>kOf(s,n)), kNok=CONF_NOK.map(n=>kOf(s,n));
+    if(kOk.some(k=>!k)) return g;
+    rows.forEach(r=>{
+      const unit=canonUnit(r[kFil],''); if(!unit) return;
+      if(!confVale(unit,vig)) return;              // empurradas só de mar/2026
+      const ok  = kOk .reduce((a,k)=>a+(numVal(r[k])||0),0);
+      const nok = kNok.reduce((a,k)=>a+(k?(numVal(r[k])||0):0),0);
+      if(!(ok+nok)) return;
+      const o=g[unit]=g[unit]||{ok:0,n:0};
+      o.ok+=ok; o.n+=ok+nok;
+    });
+    return g;
+  }
+
   function contagemPneus(rows){
     const g={};
     const s=rows[0]; if(!s) return g;
@@ -219,7 +249,11 @@
       case 'disp':    return direto(src['disponibilidade']?.[vig]||[], vig, {col:['Disponibilidade Veículos']});
       case 'prev':    return direto(src['preventivas']?.[vig]||[],     vig, {col:['Aderência']});
       case 'sla':     return direto(src['sla-manutencao']?.[vig]||[],  vig, {col:['SLA Atendimento']});
-      case 'conf':    return direto(src['conformidade']?.[vig]||[],    vig, {conf:true});
+      case 'conf': {
+        const rows=src['conformidade']?.[vig]||[];
+        // regra nova (contagens por status) · senão o formato antigo (Mensal/Bimestral)
+        return confNovo(rows) ? pctDe(contagemConf(rows,vig)) : direto(rows, vig, {conf:true});
+      }
       case 'checkWH': return direto(src['checklist-wh']?.[vig]||[],    vig, {col:['Aderência'], proj:'APOIO'});
       case 'checkT': {
         // T2 (031120) + T1 (Empurrada · indicador = Aderência Saída) na mesma linha do painel
@@ -286,10 +320,16 @@
         valores(f,'mes',fim).forEach(v=>out.push(recChave(f,ind.label,v.unit,fim,v.real)));
         return;
       }
-      if(POOL_FIELDS.has(f)){
+      // Conformidade: com a regra nova são contagens → poola exato. Só entra
+      // aqui se TODOS os meses da janela já estiverem no formato novo; se algum
+      // ainda for do formato antigo, cai no caminho de % abaixo.
+      const confPoolavel = f==='conf' && vigs.every(v=>confNovo(E.mes['conformidade']?.[v]||[]));
+      if(POOL_FIELDS.has(f) || confPoolavel){
         const g={};
         vigs.forEach(vig=>{
-          const cont = f==='pneus'
+          const cont = f==='conf'
+            ? contagemConf(E.mes['conformidade']?.[vig]||[], vig)
+            : f==='pneus'
             ? (pneusSheetOk() ? (PNEUS[vig]||{}) : contagemPneus(E.mes['pneus']?.[vig]||[]))
             : contagem10(E.mes[{stVeic:'stress-test-frota',stEmp:'stress-test-empilhadeira',civf:'civf'}[f]]?.[vig]||[],
                 f==='stVeic'?{fil:['Filial Freightech','Filial'],projCol:['Projeto'],desc:['Desconto']}:
