@@ -580,7 +580,7 @@
     {field:'sla',     label:'SLA Man.'},
   ];
 
-  global.GerotBase = { INDICADORES, INDICADORES_GEROT, load, acumFor,
+  global.GerotBase = { INDICADORES, INDICADORES_GEROT, METAS, atgDe, load, acumFor,
     fieldLabels: INDICADORES.reduce((m,i)=>{ m[i.field]=i.label; return m; }, {}),
     fieldOrder: INDICADORES.map(i=>i.field) };
 })(window);
