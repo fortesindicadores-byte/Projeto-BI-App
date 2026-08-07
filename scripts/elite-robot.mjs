@@ -100,19 +100,17 @@ const INDICADORES = [
   // (WH 30 dias, DU 60 dias), então acabou a distinção Mensal x Bimestral. A base
   // vem do drill "Detalhes Aderência Mensal": uma linha por cobrança, com
   // Competência (vigência) e Status. OK = Realizado Dentro Prazo | No Prazo.
+  // A própria página já traz a tabela por Filial com as CINCO contagens de
+  // status — não precisa do drill de detalhes (que, aliás, não abre por
+  // automação: o botão direito no card não devolve menu nenhum).
+  // Somar as contagens entre meses é idêntico a somar placa a placa, então o
+  // acumulado sai exato do mensal e o escopo 'ano' fica dispensável.
   { chave: 'conformidade', menu: ['FROTA', '1.2 - ADERÊNCIA CONFORMIDADE'],
     periodo: { tipo: 'dropdown', mesFormato: 'nome' },
-    drill: { card: 'ADERÊNCIA MENSAL', item: 'Detalhes Aderência Mensal', offs: [52, 64, 40, 76, -30] },
-    tabela: { header: 'Competência' }, semAcumulado: true },
+    tabela: { header: 'Filial' }, semAcumulado: true },
 
-  // 6b. Conformidade · janela mar→M — as empurradas (CBA/PIR/MCC) só contam de
-  // mar/2026 em diante, e acumulado de % não se deriva dos meses: é a MESMA tela
-  // com Mês = março→referência, gravada como 'conformidade-mar' (escopo 'ano').
-  // O leitor usa só as linhas das três empurradas. Não existe fora de 2026.
-  { chave: 'conformidade-mar', menu: ['FROTA', '1.2 - ADERÊNCIA CONFORMIDADE'],
-    periodo: { tipo: 'dropdown', mesFormato: 'nome' },
-    tabela: { header: 'Aderência Bimestral' },
-    soAno: true, mesInicial: 2, vigMin: '03/2026', vigMax: '12/2026' },
+  // (o antigo 'conformidade-mar' saiu de cena: com contagens por status o
+  //  acumulado sai da soma dos meses, sem precisar da janela mar→M do Ginfo)
 
   // 7. Stress Test Frota / Empilhadeira / CIVF — mesmas telas do robô do Farol,
   //    aqui coletadas POR VIGÊNCIA (aderência = desconto 0 → 1, senão 0; o leitor calcula)
