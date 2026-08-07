@@ -109,7 +109,7 @@
     const sb = global.supabase.createClient(GEM_URL, GEM_KEY);
     const [mes, ano] = await Promise.all([
       sb.from('elite_snapshot').select('indicador,vigencia,data').eq('escopo','mes'),
-      sb.from('elite_snapshot').select('indicador,vigencia,data').eq('escopo','ano').in('indicador', PCT_INDS),
+      sb.from('elite_snapshot').select('indicador,vigencia,data').eq('escopo','ano').in('indicador', PCT_INDS.concat('conformidade-mar')),
     ]);
     if(mes.error) throw mes.error;
     if(ano.error) throw ano.error;
@@ -216,6 +216,15 @@
     for(let i=0;i<ms.length;i++) if(ms[i]!==i+1) return null;
     return ys[0]+'-'+String(ms[ms.length-1]).padStart(2,'0');   // 'YYYY-MM' do fim
   }
+  // janela contígua de 2026 que cobre março (início ≤ mar ≤ fim) → 'YYYY-MM' do fim.
+  // É a janela do 'conformidade-mar' (acumulado mar→M das empurradas).
+  function marPrefix(vigs){
+    if(vigs.some(v=>v.slice(0,4)!=='2026')) return null;
+    const ms=vigs.map(v=>+v.slice(5)).sort((a,b)=>a-b);
+    for(let i=1;i<ms.length;i++) if(ms[i]!==ms[i-1]+1) return null;
+    if(ms[0]>3 || ms[ms.length-1]<3) return null;
+    return '2026-'+String(ms[ms.length-1]).padStart(2,'0');
+  }
   function acumFor(vigsArr){
     if(!E) return [];
     const vigs=[...new Set(vigsArr)].sort();
@@ -245,16 +254,26 @@
       }
       // % por filial
       const pref=janPrefix(vigs);
-      if(pref){
-        const vs=valores(f,'ano',pref);
-        if(vs.length){ vs.forEach(v=>out.push({field:f,label:ind.label,unit:v.unit,vig:fim,meta:null,real:v.real,atg:cap100(v.real)})); return; }
+      const mediaDe = so => {   // aproximação: média das vigências mensais
+        const g={};
+        vigs.forEach(vig=>valores(f,'mes',vig).forEach(v=>{ if(!so||so(v.unit)) (g[v.unit]=g[v.unit]||[]).push(v.real); }));
+        return Object.entries(g).map(([u,a])=>({unit:u, real:a.reduce((s,x)=>s+x,0)/a.length, approx:true}));
+      };
+      let list=null;
+      if(pref){ const vs=valores(f,'ano',pref); if(vs.length) list=vs; }
+      if(!list){
+        list=mediaDe(null);
+        if(!pref) console.warn('GerotBase.acumFor: janela não começa em janeiro — %', f, 'é média mensal (sem acumulado exato)');
       }
-      // aproximação: média das vigências (janela não-contígua ou 'ano' ausente)
-      const g={};
-      vigs.forEach(vig=>valores(f,'mes',vig).forEach(v=>{ (g[v.unit]=g[v.unit]||[]).push(v.real); }));
-      Object.entries(g).forEach(([u,a])=>{ const real=a.reduce((s,x)=>s+x,0)/a.length;
-        out.push({field:f,label:ind.label,unit:u,vig:fim,meta:null,real,atg:cap100(real),approx:true}); });
-      if(!pref) console.warn('GerotBase.acumFor: janela não começa em janeiro — %', f, 'é média mensal (sem acumulado exato)');
+      if(f==='conf' && fim.slice(0,4)==='2026'){
+        // Empurradas: o 'ano' do Ginfo é jan→M e inclui jan/fev, quando elas não
+        // contavam — o acumulado certo é a janela mar→M ('conformidade-mar').
+        const mp=marPrefix(vigs);
+        let emp = mp ? direto(E.ano['conformidade-mar']?.[mp]||[], mp, {conf:true}).filter(v=>CONF_EMP.has(v.unit)) : [];
+        if(!emp.length) emp=mediaDe(u=>CONF_EMP.has(u));
+        list=list.filter(v=>!CONF_EMP.has(v.unit)).concat(emp);
+      }
+      list.forEach(v=>out.push({field:f,label:ind.label,unit:v.unit,vig:fim,meta:null,real:v.real,atg:cap100(v.real),approx:v.approx||undefined}));
     });
     return out;
   }
