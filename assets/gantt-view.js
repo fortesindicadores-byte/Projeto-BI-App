@@ -51,6 +51,7 @@
   .gv-row-label b{font-weight:700;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}
   .gv-row-sub{font-size:9.5px;color:var(--text3,#64748B);}
   .gv-tag{display:inline-block;background:rgba(249,115,22,.15);color:var(--orange,#F97316);border:1px solid rgba(249,115,22,.3);font-size:8.5px;font-weight:800;text-transform:uppercase;letter-spacing:.4px;padding:0 6px;border-radius:4px;margin-right:5px;vertical-align:1px;}
+  body.light-mode .gv-tag{color:#1a1a1a;}   /* laranja some no fundo claro */
   .gv-row-bars{position:relative;border-bottom:1px solid rgba(148,163,184,.10);border-left:1px solid rgba(148,163,184,.12);cursor:pointer;min-height:40px;}
   .gv-row:hover .gv-row-label,.gv-row:hover .gv-row-bars{background:rgba(255,255,255,.04);}
   body.light-mode .gv-row:hover .gv-row-label,body.light-mode .gv-row:hover .gv-row-bars{background:rgba(0,0,0,.04);}
