@@ -128,6 +128,11 @@
   // jan a jun; as demais a Mensal. De julho/2026 em diante, TODAS a Bimestral.
   const CONF_BIM = new Set(['PIRAI EMPURRADA','MACACU EMPURRADA','CUIABA EMPURRADA','CDD RIO DE JANEIRO']);
   const confBimestral = (unit, vigFim) => vigFim >= '2026-07' || CONF_BIM.has(unit);
+  // Empurradas só contam Conformidade de mar/2026 em diante (Renan, 07/08/2026):
+  // jan e fev ficam sem valor (mensal e IVs); o acumulado jan→M (escopo 'ano'
+  // do Ginfo) segue valendo a partir das janelas que terminam em março.
+  const CONF_EMP = new Set(['PIRAI EMPURRADA','MACACU EMPURRADA','CUIABA EMPURRADA']);
+  const confVale = (unit, vigFim) => vigFim >= '2026-03' || !CONF_EMP.has(unit);
 
   function direto(rows, vigFim, opts){
     // opts: {col:[nomes], proj?:string (tier default), conf?:true}
@@ -138,6 +143,7 @@
     if(!kFil||(!kVal&&!opts.conf)) return out;
     rows.forEach(r=>{
       const unit=canonUnit(r[kFil], opts.proj||'');
+      if(opts.conf && unit && !confVale(unit,vigFim)) return;
       const v=opts.conf ? pctVal(r[confBimestral(unit,vigFim)?kBim:kMen]) : pctVal(r[kVal]);
       if(unit&&v!=null) out.push({unit, real:v});
     });
@@ -347,6 +353,7 @@
           get=r=>iv.val(r[kV]);
         }
         rows.forEach(r=>{ const unit=canonUnit(r[kFil], iv.src==='checklist-wh'?'APOIO':''); const value=get(r);
+          if(iv.src==='conformidade' && unit && !confVale(unit,vig)) return;
           if(unit&&value!=null&&isFinite(value)) vals.push({unit,vig,value}); });
       });
       let metaByVig=null;

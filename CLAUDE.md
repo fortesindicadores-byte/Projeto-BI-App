@@ -715,7 +715,7 @@ Automatiza a planilha **Frota de Elite** (`1DXmjzj2KRrTdQxmvXRclGxhBeDMwoIoLvORq
 | stress-test-frota / -empilhadeira / civf | mesmas telas do Farol | dropdown Mês | aderência = desconto 0 → 1, senão 0 |
 | sla-manutencao | FROTA → 2.4 - ORDEM SERVIÇO | datas "Data" | SLA Atendimento |
 
-**Conformidade — regra do leitor:** PIRAI EMPURRADA, MACACU EMPURRADA, CUIABA EMPURRADA e CDD RIO DE JANEIRO usam **Aderência Bimestral** de **jan a jun**; as demais, **Mensal**. **De julho em diante, todas bimestral.**
+**Conformidade — regra do leitor:** PIRAI EMPURRADA, MACACU EMPURRADA, CUIABA EMPURRADA e CDD RIO DE JANEIRO usam **Aderência Bimestral** de **jan a jun**; as demais, **Mensal**. **De julho em diante, todas bimestral.** **As três empurradas só contam de mar/2026 em diante** (Renan, 07/08/2026): jan e fev ficam sem valor no mensal e nos IVs de conformidade (`confVale` no gerot-base); o acumulado jan→M (escopo `ano`) segue valendo nas janelas que terminam em março ou depois.
 
 **Três mecânicas de filtro** (o robô do Farol só tinha a primeira): `dropdown` (slicer Ano/Mês, com ctrl+clique para somar meses no acumulado) · `datas` (par de campos dd/mm/aaaa — escolhe o par mais próximo do rótulo, porque Preventivas tem dois pares) · `botoes` (tiles de ano/mês no rodapé dos Pneus, com seta "‹" para revelar meses fora da faixa). Período que não aplica **aborta a coleta** — nunca grava a tela no filtro errado por cima do dado bom.
 
