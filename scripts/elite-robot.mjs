@@ -96,9 +96,14 @@ const INDICADORES = [
   // 6. Conformidade — mensal x bimestral é regra do LEITOR (ver nota abaixo)
   // Os meses desta tela são NOMES POR EXTENSO ("julho"), não "Jul-26" — o robô
   // procurava um valor que não existe na lista (diagnóstico do run 11).
+  // NOVA REGRA (Ginfo, 08/2026): a aderência passou a ser por PRAZO DE VENCIMENTO
+  // (WH 30 dias, DU 60 dias), então acabou a distinção Mensal x Bimestral. A base
+  // vem do drill "Detalhes Aderência Mensal": uma linha por cobrança, com
+  // Competência (vigência) e Status. OK = Realizado Dentro Prazo | No Prazo.
   { chave: 'conformidade', menu: ['FROTA', '1.2 - ADERÊNCIA CONFORMIDADE'],
     periodo: { tipo: 'dropdown', mesFormato: 'nome' },
-    tabela: { header: 'Aderência Bimestral' } },
+    drill: { card: 'ADERÊNCIA MENSAL', item: 'Detalhes Aderência Mensal', offs: [52, 64, 40, 76, -30] },
+    tabela: { header: 'Competência' }, semAcumulado: true },
 
   // 6b. Conformidade · janela mar→M — as empurradas (CBA/PIR/MCC) só contam de
   // mar/2026 em diante, e acumulado de % não se deriva dos meses: é a MESMA tela
@@ -152,6 +157,68 @@ async function emFrames(page, fazer) {
     try { const r = await fazer(fr); if (r) return r; } catch (e) {}
   }
   return null;
+}
+
+// ── DRILL-THROUGH: botão direito num card → Drill-through → página de detalhe ──
+// Portado do robô do Farol (scripts/ginfo-robot.mjs). Diferença: aqui o rótulo
+// âncora pode estar ACIMA ou ABAIXO do número, então os deslocamentos vêm por
+// configuração e aceitam valores negativos (subir a partir do rótulo).
+async function drillThrough(page, cardTexto, itemMenu, offs) {
+  const pbiFrames = () => page.frames().filter(f => /powerbi|reportEmbed/i.test(f.url()));
+  const escRe = s => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  let lbl = null;
+  for (let t = 0; t < 9 && !lbl; t++) {
+    for (const fr of pbiFrames()) {
+      try {
+        const l = fr.getByText(new RegExp('^\\s*' + escRe(cardTexto) + '\\s*$')).filter({ visible: true }).first();
+        if (await l.count()) { lbl = l; break; }
+      } catch (e) {}
+    }
+    if (!lbl) await page.waitForTimeout(5000);
+  }
+  if (!lbl) throw new Error(`card "${cardTexto}" não encontrado p/ drill-through`);
+  const buscarItem = () => emFrames(page, async fr => {
+    const i = fr.locator(`[role="menuitem"]:has-text("${itemMenu}"), button:has-text("${itemMenu}"), [title*="${itemMenu}"]`).filter({ visible: true }).first();
+    return (await i.count()) ? i : null;
+  });
+  const OFFS = offs && offs.length ? offs : [28, 46, 64, 14];
+  let item = null;
+  for (let t = 0; t < OFFS.length && !item; t++) {
+    const box = await lbl.boundingBox();
+    if (!box) throw new Error(`rótulo "${cardTexto}" sem posição na tela`);
+    const y = OFFS[t] < 0 ? box.y + OFFS[t] : box.y + box.height + OFFS[t];
+    await page.mouse.click(box.x + box.width / 2, y, { button: 'right' });
+    await page.waitForTimeout(1500);
+    const drill = await emFrames(page, async fr => {
+      const d = fr.locator('[role="menuitem"]:has-text("Drill"), [role="menuitem"]:has-text("Detalhamento")').filter({ visible: true }).first();
+      return (await d.count()) ? d : null;
+    });
+    if (drill) {
+      try { await drill.hover(); } catch (e) {}
+      await page.waitForTimeout(1200);
+      item = await buscarItem();
+      if (!item) { try { await drill.click(); await page.waitForTimeout(1200); item = await buscarItem(); } catch (e) {} }
+    } else {
+      item = await buscarItem();
+    }
+    if (!item) {
+      const its = [];
+      for (const fr of page.frames()) {
+        try {
+          const ms = fr.locator('[role="menuitem"]').filter({ visible: true });
+          const n = Math.min(await ms.count(), 15);
+          for (let i = 0; i < n; i++) its.push((await ms.nth(i).innerText().catch(() => '')).trim().replace(/\s+/g, ' '));
+        } catch (e) {}
+      }
+      log(`menu do botão direito (offset ${OFFS[t]}):`, JSON.stringify(its.filter(Boolean)));
+      await page.keyboard.press('Escape');
+      await page.waitForTimeout(1200);
+    }
+  }
+  if (!item) throw new Error(`item de drill "${itemMenu}" não encontrado`);
+  await item.click();
+  await page.waitForTimeout(15000);
+  log(`drill-through: ${cardTexto} → ${itemMenu}`);
 }
 
 // ── LOGIN (mesma receita do robô do Farol: Empresa → e-mail → senha) ─────────
@@ -1058,6 +1125,12 @@ async function coletar(page, ind, vigencia, escopo) {
   await shot(page, '10-' + tag);
   if (!ok) throw new Error(`período não aplicado em ${tag} — abortando p/ não gravar dado errado`);
 
+  // drill-through DEPOIS do filtro: a página de detalhe herda o período aplicado
+  if (ind.drill) {
+    await drillThrough(page, ind.drill.card, ind.drill.item, ind.drill.offs);
+    await shot(page, '10b-' + tag);
+  }
+
   const alvo = await acharAlvo(page, ind.tabela || {});
   if (!alvo) { await shot(page, '98-sem-tabela-' + tag); throw new Error(`tabela não encontrada em ${tag}`); }
   let arq = await exportarTabela(page, alvo, tag);
@@ -1089,6 +1162,22 @@ async function coletar(page, ind, vigencia, escopo) {
   if (!linhas.length) throw new Error(`export vazio em ${tag}`);
   if (linhas.length < 3) log(`ATENÇÃO: só ${linhas.length} linha(s) em ${tag} — confira o filtro no screenshot`);
   log('colunas:', JSON.stringify(Object.keys(linhas[0])));
+  // bases detalhadas trazem a vigência na própria linha: mostra quais vieram,
+  // para saber se o export respeitou o filtro ou trouxe o período inteiro
+  {
+    const kComp = Object.keys(linhas[0]).find(k => /compet[êe]ncia/i.test(k));
+    if (kComp) {
+      const c = {};
+      linhas.forEach(r => { const v = String(r[kComp] ?? '').trim(); if (v) c[v] = (c[v] || 0) + 1; });
+      log(`competências no export (${Object.keys(c).length}):`, JSON.stringify(c));
+      const kSt = Object.keys(linhas[0]).find(k => /^status$/i.test(k));
+      if (kSt) {
+        const s = {};
+        linhas.forEach(r => { const v = String(r[kSt] ?? '').trim(); if (v) s[v] = (s[v] || 0) + 1; });
+        log('status distintos:', JSON.stringify(s));
+      }
+    }
+  }
   await gravarSupabase(ind.chave, vigencia, escopo, linhas);
   if (SB_KEY) { try { fs.unlinkSync(arq); } catch (e) {} }
 }
