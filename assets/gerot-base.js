@@ -18,7 +18,9 @@
 //       não começa em janeiro não tem acumulado exato → média mensal.
 //     · 1/0 por equipamento (stVeic, stEmp, civf): junta as linhas dos
 //       meses da janela e recalcula — isso É a ponderação exata.
-//     · pneus: Σ aferidos / Σ frota da janela (contagens vêm da API).
+//     · pneus: 1/0 por placa da aba 'Pneus' do Sheets (Frota de Elite,
+//       colada do Ginfo pelo Renan) — pool exato em qualquer janela;
+//       fallback: contagens da API no elite_snapshot.
 //     · comb: Σ km / Σ litros da janela vs média do Rem.
 //
 // Unidades: nomes do Ginfo ('CDD CUIABA', 'CUIABA EMPURRADA', …), os
@@ -195,7 +197,7 @@
         const seen=new Set(t2.map(x=>x.unit));
         return t2.concat(t1.filter(x=>!seen.has(x.unit)));
       }
-      case 'pneus':   return pctDe(contagemPneus(src['pneus']?.[vig]||[]));
+      case 'pneus':   return pneusSheetOk() ? pctDe(PNEUS[vig]||{}) : pctDe(contagemPneus(src['pneus']?.[vig]||[]));
       case 'stVeic':  return pctDe(contagem10(src['stress-test-frota']?.[vig]||[], {fil:['Filial Freightech','Filial'], projCol:['Projeto'], desc:['Desconto']}));
       case 'stEmp':   return pctDe(contagem10(src['stress-test-empilhadeira']?.[vig]||[], {fil:['Filial GINFO','Filial FT x GINFO','Filial FT'], desc:['Desc. Total']}));
       case 'civf':    return pctDe(contagem10(src['civf']?.[vig]||[], {fil:['Filial Freightech'], projCol:['Projeto'], desc:['Desconto Total']}));
@@ -242,7 +244,7 @@
         const g={};
         vigs.forEach(vig=>{
           const cont = f==='pneus'
-            ? contagemPneus(E.mes['pneus']?.[vig]||[])
+            ? (pneusSheetOk() ? (PNEUS[vig]||{}) : contagemPneus(E.mes['pneus']?.[vig]||[]))
             : contagem10(E.mes[{stVeic:'stress-test-frota',stEmp:'stress-test-empilhadeira',civf:'civf'}[f]]?.[vig]||[],
                 f==='stVeic'?{fil:['Filial Freightech','Filial'],projCol:['Projeto'],desc:['Desconto']}:
                 f==='stEmp' ?{fil:['Filial GINFO','Filial FT x GINFO','Filial FT'],desc:['Desc. Total']}:
@@ -305,6 +307,39 @@
     s.src=`https://docs.google.com/spreadsheets/d/${wbId}/gviz/tq?sheet=${encodeURIComponent(name)}&tqx=out:json;responseHandler:${fn}`;
     document.head.appendChild(s);
   }); }
+
+  // ══════════ Pneus — detalhamento por placa na aba 'Pneus' do Sheets ══════════
+  // O Renan cola o export "detalhes" do Ginfo (CALIBRAGEM) na aba Pneus do
+  // workbook Frota de Elite: Filial | Evento | Placa | Projeto | Período |
+  // Última Leitura | Status. Cada linha é uma placa na vigência; Status
+  // "Não Realizado" = 0, senão 1 — Σok/Σn dá o mês E qualquer janela
+  // acumulada exata (mesma mecânica do Stress Test), batendo com o Ginfo.
+  // Se a aba falhar/vier vazia, cai para as contagens da API (elite_snapshot).
+  const ELITE_WB = '1DXmjzj2KRrTdQxmvXRclGxhBeDMwoIoLvORqbh3GG6M';
+  const PNEUS_TAB = 'Pneus';
+  const MES_PT = {JANEIRO:1,FEVEREIRO:2,MARCO:3,ABRIL:4,MAIO:5,JUNHO:6,JULHO:7,AGOSTO:8,SETEMBRO:9,OUTUBRO:10,NOVEMBRO:11,DEZEMBRO:12};
+  function pvig(cell){                     // Período: data OU "janeiro de 2026"
+    const v=gvig(cell); if(v) return v;
+    const s=NK(cell&&(cell.f!=null?cell.f:cell.v));
+    const m=s.match(/([A-Z]+)\s+DE\s+(\d{4})/);
+    return m&&MES_PT[m[1]] ? m[2]+'-'+String(MES_PT[m[1]]).padStart(2,'0') : null;
+  }
+  let PNEUS=null;                          // {vig:{unit:{ok,n}}}
+  const pneusSheetOk = () => PNEUS && Object.keys(PNEUS).length>0;
+  async function loadPneusSheet(){
+    PNEUS={};
+    let rows; try{ rows=await fetchTabFrom(ELITE_WB,PNEUS_TAB); }catch(e){ console.error('Gerot base — falha aba Pneus (usando fallback da API)', e); return; }
+    rows.forEach(r=>{
+      const c=r.c||[];
+      const val=i=>c[i]&&c[i].v!=null?c[i].v:(c[i]&&c[i].f!=null?c[i].f:'');
+      if(!FIL2COD[NK(val(0))]) return;     // ignora cabeçalho e linhas soltas
+      const unit=canonUnit(val(0), val(3));
+      const vig=pvig(c[4]);
+      if(!unit||!vig) return;
+      const o=((PNEUS[vig]=PNEUS[vig]||{})[unit]=PNEUS[vig][unit]||{ok:0,n:0});
+      o.n++; if(NK(val(6))!=='NAO REALIZADO') o.ok++;
+    });
+  }
 
   let COMB=null;   // {unit:{vig:{km,lit,rem[]}}} — cache p/ o acumulado
   async function loadComb(){
@@ -420,12 +455,15 @@
   // ── carga completa: registros mensais (contrato antigo) ──────────────────
   async function load(){
     const combP=loadComb();
+    const pneusP=loadPneusSheet();
     await fetchElite();
+    await pneusP;
     const records=[];
     DISPLAY.forEach(ind=>{
       if(ind.field==='comb') return;
       const src={disp:'disponibilidade',prev:'preventivas',pneus:'pneus',checkT:'checklist-t2',checkWH:'checklist-wh',conf:'conformidade',stVeic:'stress-test-frota',stEmp:'stress-test-empilhadeira',civf:'civf',sla:'sla-manutencao'}[ind.field];
-      vigsDe(src).forEach(vig=>{
+      const vigsSrc = ind.field==='pneus' && pneusSheetOk() ? Object.keys(PNEUS).sort() : vigsDe(src);
+      vigsSrc.forEach(vig=>{
         valores(ind.field,'mes',vig).forEach(v=>{
           records.push({field:ind.field,label:ind.label,unit:v.unit,vig,meta:null,real:v.real,atg:cap100(v.real)});
         });
