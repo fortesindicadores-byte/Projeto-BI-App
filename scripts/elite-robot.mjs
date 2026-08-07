@@ -100,6 +100,15 @@ const INDICADORES = [
     periodo: { tipo: 'dropdown', mesFormato: 'nome' },
     tabela: { header: 'Aderência Bimestral' } },
 
+  // 6b. Conformidade · janela mar→M — as empurradas (CBA/PIR/MCC) só contam de
+  // mar/2026 em diante, e acumulado de % não se deriva dos meses: é a MESMA tela
+  // com Mês = março→referência, gravada como 'conformidade-mar' (escopo 'ano').
+  // O leitor usa só as linhas das três empurradas. Não existe fora de 2026.
+  { chave: 'conformidade-mar', menu: ['FROTA', '1.2 - ADERÊNCIA CONFORMIDADE'],
+    periodo: { tipo: 'dropdown', mesFormato: 'nome' },
+    tabela: { header: 'Aderência Bimestral' },
+    soAno: true, mesInicial: 2, vigMin: '03/2026', vigMax: '12/2026' },
+
   // 7. Stress Test Frota / Empilhadeira / CIVF — mesmas telas do robô do Farol,
   //    aqui coletadas POR VIGÊNCIA (aderência = desconto 0 → 1, senão 0; o leitor calcula)
   // Quinzena: o que vale na Frota é SEMPRE a 2ª (Renan, 05/08). A tela abre em
@@ -976,7 +985,7 @@ async function coletarPneusApi(vigencia) {
 // ── COLETA de 1 indicador em 1 vigência/escopo ──────────────────────────────
 async function coletar(page, ind, vigencia, escopo) {
   const ref = refDe(vigencia);
-  const ini = escopo === 'ano' ? new Date(ref.getFullYear(), 0, 1) : ref;
+  const ini = escopo === 'ano' ? new Date(ref.getFullYear(), ind.mesInicial || 0, 1) : ref;
   const fim = fimDoMes(ref);
   const tag = `${ind.chave}-${vigencia.replace('/', '-')}-${escopo}`;
 
@@ -1025,9 +1034,8 @@ async function coletar(page, ind, vigencia, escopo) {
   if (p.tipo === 'dropdown') {
     // Conformidade lista o mês por extenso; as demais telas usam "Jul-26"
     const fmtMes = p.mesFormato === 'nome' ? (d => MES_FULL[d.getMonth()]) : mesDropdown;
-    const meses = escopo === 'ano'
-      ? Array.from({ length: ref.getMonth() + 1 }, (_, i) => fmtMes(new Date(ref.getFullYear(), i, 1)))
-      : [fmtMes(ref)];
+    const mes0 = escopo === 'ano' ? (ind.mesInicial || 0) : ref.getMonth();
+    const meses = Array.from({ length: ref.getMonth() + 1 - mes0 }, (_, i) => fmtMes(new Date(ref.getFullYear(), mes0 + i, 1)));
     // p.semAno: o valor do Mês já traz o ano ("Jul-26") e, em algumas telas, o
     // que parece o slicer "Ano" é um visual — clicar cria filtro de "Incluídos"
     ok = p.semAno ? true : await aplicarSlicer(page, 'Ano', String(ref.getFullYear()));
@@ -1131,6 +1139,10 @@ async function main() {
     for (const vig of vigencias) {
       for (const esc of escopos) {
         for (const ind of inds) {
+          if (ind.soAno && esc !== 'ano') continue;           // só existe no acumulado
+          const ord = v => v.slice(3) + v.slice(0, 2);        // 'MM/AAAA' → 'AAAAMM'
+          if (ind.vigMin && ord(vig) < ord(ind.vigMin)) continue;
+          if (ind.vigMax && ord(vig) > ord(ind.vigMax)) continue;
           if (esc === 'ano' && ind.semAcumulado) {
             log(`— ${ind.chave}: acumulado do ano sai da soma dos meses no leitor (a tela não acumula)`);
             continue;
