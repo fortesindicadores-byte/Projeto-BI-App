@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-<meta name="build" content="202608071500">
+<meta name="build" content="202608071600">
 <title>Gerot</title>
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
@@ -11,7 +11,7 @@
 <script src="../assets/pdf-export.js"></script>
 <script src="../assets/excel-export.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="../assets/gerot-base.js?v=202608071500"></script>
+<script src="../assets/gerot-base.js?v=202608071600"></script>
 <style>
 :root{--bg:#0C1017;--card:#141B26;--border:#1E2D40;--orange:#F97316;--text:#F1F5F9;--text2:#94A3B8;--text3:#475569;--green:#3BB33B;--red:#FF6666;}
 *{margin:0;padding:0;box-sizing:border-box;}
@@ -194,7 +194,11 @@ function atualizar(){
                       : (acumYtd||RECORDS.filter(r=>ytdSet.has(r.vig))).filter(r=>r.field===ind.field&&unitOk(r));
     if(soGerot&&!per.length&&!ytd.length)return;   // sem dado no período (ex.: Pneus só na vig recente)
     const meta=avg(per.map(r=>r.meta)), real=avg(per.map(r=>r.real));
-    const atg=avg(per.map(r=>r.atg)), atgY=avg(ytd.map(r=>r.atg));
+    // % de atingimento AQUI é sempre contra a meta (é daqui que saem os FCAs
+    // da RPM). O `atg` cru — a própria aderência — é o que o Frota de Elite
+    // pontua; só entra como reserva quando o indicador não tem meta.
+    const atgOf=r=>r.atgMeta!=null?r.atgMeta:r.atg;
+    const atg=avg(per.map(atgOf)), atgY=avg(ytd.map(atgOf));
     html+=`<tr><td class="kpi">${ind.label}</td><td>${metaTxt(ind,meta)}</td><td>${valTxt(ind,real)}</td><td>${atgCell(atg)}</td><td class="sep-l">${atgCell(atgY)}</td></tr>`;
   });
   html+='</tbody></table>';
