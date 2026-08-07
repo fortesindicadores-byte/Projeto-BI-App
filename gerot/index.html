@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-<meta name="build" content="202608071600">
+<meta name="build" content="202608071700">
 <title>Gerot</title>
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
@@ -11,7 +11,7 @@
 <script src="../assets/pdf-export.js"></script>
 <script src="../assets/excel-export.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="../assets/gerot-base.js?v=202608071600"></script>
+<script src="../assets/gerot-base.js?v=202608071700"></script>
 <style>
 :root{--bg:#0C1017;--card:#141B26;--border:#1E2D40;--orange:#F97316;--text:#F1F5F9;--text2:#94A3B8;--text3:#475569;--green:#3BB33B;--red:#FF6666;}
 *{margin:0;padding:0;box-sizing:border-box;}
@@ -118,12 +118,21 @@ const vigYear  = k => +k.slice(0,4);
 
 function num(v,dec){return v==null||!isFinite(v)?'-':Number(v).toLocaleString('pt-BR',{minimumFractionDigits:dec,maximumFractionDigits:dec});}
 function pctTxt(v,dec){return v==null||!isFinite(v)?'-':num(v,dec)+'%';}
-function heat(atg){ // atingimento 0-100 → cor de fundo (verde se ≥95%, senão salmão)
+// Bateu a meta = verde · não bateu = vermelho. É binário de propósito: o que
+// fica vermelho aqui é o que vira FCA na RPM — real abaixo da meta não é "quase".
+const BATEU = 99.995;   // atgMeta é capado em 100, então só chega aqui quem atingiu
+function heat(atg){
   if(atg==null||!isFinite(atg))return null;
-  if(atg>=95)return {bg:'#7BC47F',fg:'#0C1017'};
-  return {bg:'#F0918B',fg:'#0C1017'};
+  return atg>=BATEU ? {bg:'#7BC47F',fg:'#0C1017'} : {bg:'#F0918B',fg:'#0C1017'};
 }
-function atgCell(atg){if(atg==null||!isFinite(atg))return '<span style="color:var(--text3)">-</span>';const c=heat(atg);return `<span class="atg" style="background:${c.bg};color:${c.fg}">${Math.round(atg)}%</span>`;}
+function atgCell(atg){
+  if(atg==null||!isFinite(atg))return '<span style="color:var(--text3)">-</span>';
+  const c=heat(atg);
+  // quem não bateu nunca pode aparecer como "100%" — seria um 100% vermelho
+  const txt=atg>=BATEU ? '100%'
+          : (Math.round(atg)>=100 ? num(Math.floor(atg*10)/10,1)+'%' : Math.round(atg)+'%');
+  return `<span class="atg" style="background:${c.bg};color:${c.fg}">${txt}</span>`;
+}
 function avg(arr){const v=arr.filter(x=>x!=null&&isFinite(x));return v.length?v.reduce((a,b)=>a+b,0)/v.length:null;}
 
 // ── valor de um indicador no formato dele (% · km/L · hh:mm:ss · mm · contagem) ──
@@ -193,12 +202,15 @@ function atualizar(){
     const ytd=soGerot ? RECORDS.filter(r=>r.field===ind.field&&unitOk(r)&&ytdSet.has(r.vig))
                       : (acumYtd||RECORDS.filter(r=>ytdSet.has(r.vig))).filter(r=>r.field===ind.field&&unitOk(r));
     if(soGerot&&!per.length&&!ytd.length)return;   // sem dado no período (ex.: Pneus só na vig recente)
-    const meta=avg(per.map(r=>r.meta)), real=avg(per.map(r=>r.real));
-    // % de atingimento AQUI é sempre contra a meta (é daqui que saem os FCAs
-    // da RPM). O `atg` cru — a própria aderência — é o que o Frota de Elite
-    // pontua; só entra como reserva quando o indicador não tem meta.
-    const atgOf=r=>r.atgMeta!=null?r.atgMeta:r.atg;
-    const atg=avg(per.map(atgOf)), atgY=avg(ytd.map(atgOf));
+    const meta=avg(per.map(r=>r.meta)),  real=avg(per.map(r=>r.real));
+    const metaY=avg(ytd.map(r=>r.meta)), realY=avg(ytd.map(r=>r.real));
+    // % de atingimento AQUI é sempre contra a meta (é daqui que saem os FCAs da
+    // RPM) e é calculado em cima do Real e da Meta que estão NA LINHA — senão a
+    // média dos atingimentos por unidade contradiz o que a própria linha mostra.
+    // O `atg` cru dos registros — a aderência — é o que o Frota de Elite pontua.
+    const atgOf=(rl,mt)=>mt!=null?GerotBase.atgDe(rl,mt,ind.dir):null;
+    const atg =atgOf(real,meta)  ?? avg(per.map(r=>r.atgMeta!=null?r.atgMeta:r.atg));
+    const atgY=atgOf(realY,metaY)?? avg(ytd.map(r=>r.atgMeta!=null?r.atgMeta:r.atg));
     html+=`<tr><td class="kpi">${ind.label}</td><td>${metaTxt(ind,meta)}</td><td>${valTxt(ind,real)}</td><td>${atgCell(atg)}</td><td class="sep-l">${atgCell(atgY)}</td></tr>`;
   });
   html+='</tbody></table>';
