@@ -50,7 +50,7 @@
   .gv-row-label{font-size:11.5px;color:var(--text,#F1F5F9);padding:8px 10px;border-bottom:1px solid rgba(148,163,184,.10);display:flex;flex-direction:column;justify-content:center;gap:3px;line-height:1.25;min-height:40px;cursor:pointer;}
   .gv-row-label b{font-weight:700;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}
   .gv-row-sub{font-size:9.5px;color:var(--text3,#64748B);}
-  .gv-tag{display:inline-block;background:rgba(249,115,22,.15);color:var(--orange,#F97316);border:1px solid rgba(249,115,22,.3);font-size:8.5px;font-weight:800;text-transform:uppercase;letter-spacing:.4px;padding:0 6px;border-radius:4px;margin-right:5px;vertical-align:1px;}
+  .gv-tag{display:inline-block;background:rgba(249,115,22,.15);color:var(--orange,#F97316);border:1px solid rgba(249,115,22,.3);font-size:10.5px;font-weight:800;text-transform:uppercase;letter-spacing:.4px;padding:0 6px;border-radius:4px;margin-right:5px;vertical-align:1px;}
   body.light-mode .gv-tag{color:#1a1a1a;background:#FF9900;border-color:#FF9900;}   /* laranja #FF9900 cheio no claro */
   .gv-row-bars{position:relative;border-bottom:1px solid rgba(148,163,184,.10);border-left:1px solid rgba(148,163,184,.12);cursor:pointer;min-height:40px;}
   .gv-row:hover .gv-row-label,.gv-row:hover .gv-row-bars{background:rgba(255,255,255,.04);}
