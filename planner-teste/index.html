@@ -6,6 +6,7 @@
 <meta name="build" content="202608080300">
 <title>Planner Corporativo · TESTE</title>
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="../assets/planner-teste-shim.js?v=202608080200"></script>
 <script src="../assets/gantt-view.js?v=202608080120"></script>
 <style>
@@ -143,6 +144,7 @@ body.light-mode .kcard{background:rgba(128,128,128,.14);border-color:rgba(0,0,0,
 body.light-mode .kassunto,body.light-mode .kadd,body.light-mode .add-acao{
   color:#1a1a1a;background:#F4800C;border-color:#F4800C;}
 body.light-mode .kadd:hover,body.light-mode .add-acao:hover{background:#DC730A;border-color:#DC730A;}
+@media(max-width:1200px){.kanban{grid-template-columns:repeat(2,1fr);}}
 @media(max-width:768px){.kanban{grid-template-columns:1fr;}}
 
 /* ── Modal ── */
@@ -273,6 +275,18 @@ body:not(.light-mode) .adere .hero-deltas{margin-top:8px;gap:8px 22px;}
 body:not(.light-mode) .adere .hero-delta b{font-size:14px;}
 
 /* ── colunas sem caixa: só o rótulo e os cards flutuando ── */
+body:not(.light-mode) .tb-shell,body:not(.light-mode) .tb-shell input,
+body:not(.light-mode) .tb-shell button,body:not(.light-mode) .tb-shell select{
+  font-family:'Inter','Montserrat',-apple-system,sans-serif;}
+body:not(.light-mode) .tb-app .brand h1{letter-spacing:-.4px;}
+body:not(.light-mode) .kcard-fato{font-weight:600;letter-spacing:-.1px;font-size:13px;}
+
+.kanban{grid-template-columns:repeat(4,1fr);}
+.kcol-head.bkl{background:#64748B;color:#fff;}
+.kc-prog.bkl i{background:#64748B;}
+select.st[data-v="Backlog"]{background:#64748B;color:#fff;border-color:#64748B;font-weight:700;}
+body.light-mode select.st[data-v="Backlog"]{background:#64748B;color:#fff;}
+
 body:not(.light-mode) .kanban{gap:20px;}
 body:not(.light-mode) .kcol{background:transparent;border:none;border-radius:12px;overflow:visible;}
 body:not(.light-mode) .kcol.kover{background:rgba(249,115,22,.07);}
@@ -284,9 +298,11 @@ body:not(.light-mode) .kcol-head.con{
   padding:2px 2px 14px;justify-content:flex-start;gap:10px;}
 body:not(.light-mode) .kcount{background:transparent;color:var(--text3);padding:0;font-size:11px;font-weight:800;}
 body:not(.light-mode) .kcol-body{padding:0;gap:12px;}
-.kplus{margin-left:auto;background:transparent;border:none;color:inherit;opacity:.55;cursor:pointer;
-  font-family:'Montserrat',sans-serif;font-size:15px;font-weight:700;line-height:1;padding:0 4px;}
-.kplus:hover{opacity:1;}
+.kplus{margin-left:auto;display:flex;align-items:center;justify-content:center;width:22px;height:22px;
+  background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);border-radius:6px;color:inherit;
+  cursor:pointer;font:700 15px/1 'Inter',sans-serif;padding:0 0 2px;}
+.kplus:hover{background:rgba(249,115,22,.22);border-color:rgba(249,115,22,.5);color:var(--orange);}
+body.light-mode .kplus{background:rgba(0,0,0,.12);border-color:rgba(0,0,0,.15);}
 
 /* ── cards de vidro sobre a foto ── */
 body:not(.light-mode) .kcard{
@@ -423,7 +439,7 @@ const SUPABASE_URL='https://lozwipoeacpvplgkrxkq.supabase.co';
 const SUPABASE_KEY='sb_publishable_ggKEEebc5zjgQDVsF92Upw_6uoLmKe9';
 let sb=null, SESSION=null;
 const ADMIN_EMAIL='fortesindicadores@gmail.com';
-const STATUS=['Não iniciada','Em andamento','Concluída','Cancelada'];
+const STATUS=['Backlog','Não iniciada','Em andamento','Concluída','Cancelada'];
 const DEFAULT_STATUS='Não iniciada';
 const PRZ_OPTS=['Vencida','No prazo','Sem prazo'];
 let ROWS=[];            // fonte da verdade (do Supabase)
@@ -732,13 +748,13 @@ function addRowTop(){
 }
 
 // ── Kanban ──
-const KCOLS=[{k:'Não iniciada',cls:'nao'},{k:'Em andamento',cls:'and'},{k:'Concluída',cls:'con'}];
+const KCOLS=[{k:'Backlog',cls:'bkl'},{k:'Não iniciada',cls:'nao'},{k:'Em andamento',cls:'and'},{k:'Concluída',cls:'con'}];
 function kanbanHTML(rows){
   return `<div class="kanban">${KCOLS.map(c=>{
     const cards=rows.filter(r=>(r.status||DEFAULT_STATUS)===c.k)
       .sort((a,b)=>(a.prazo||'9999-99-99').localeCompare(b.prazo||'9999-99-99'));
     return `<div class="kcol" data-status="${c.k}">
-      <div class="kcol-head ${c.cls}">${c.k}<span class="kcount">${cards.length}</span><button class="kplus" title="Nova ação nesta coluna" onclick="event.stopPropagation();openNewModal('${c.k}')">+</button></div>
+      <div class="kcol-head ${c.cls}">${c.k}<span class="kcount">${cards.length}</span><button class="kplus" title="Nova ação nesta coluna" onclick="event.stopPropagation();openNewModal('${c.k}')" aria-label="Nova ação">+</button></div>
       <div class="kcol-body">${cards.length?cards.map(kcard).join(''):'<div class="kempty">—</div>'}<button class="kadd" onclick="openNewModal('${c.k}')">+ nova ação</button></div>
     </div>`;
   }).join('')}</div>`;
@@ -755,7 +771,7 @@ function corDe(nome){
   return `hsl(${Math.abs(h)%360} 55% 66%)`;
 }
 // progresso do card = o próprio status (é o que a coluna já diz)
-const PROG={'Não iniciada':[0,''],'Em andamento':[50,''],'Concluída':[100,'con'],'Cancelada':[100,'can']};
+const PROG={'Backlog':[0,'bkl'],'Não iniciada':[0,''],'Em andamento':[50,''],'Concluída':[100,'con'],'Cancelada':[100,'can']};
 function kcard(r){
   const acao=esc(r.acao)||'<span class="dim">(sem ação)</span>';
   const resp=r.resp?esc(r.resp):'<span class="dim">sem responsável</span>';
