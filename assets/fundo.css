@@ -1,0 +1,62 @@
+/* ============================================================
+   FUNDO COMPARTILHADO DOS PAINÉIS — modo escuro
+   ------------------------------------------------------------
+   Um arquivo só para o fundo de TODOS os painéis. Cada página
+   traz uma linha:
+
+     <link rel="stylesheet" href="../assets/fundo.css">
+
+   (na raiz é href="assets/fundo.css")
+
+   Só afeta o MODO ESCURO — `body.light-mode` fica exatamente
+   como estava. Usa !important porque cada painel declara o
+   próprio `body{background:…}` no <style> inline, que de outro
+   modo venceria por vir depois.
+
+   PARA TROCAR A IMAGEM: mexa só na linha --gem-foto abaixo.
+   PARA DESLIGAR TUDO:   remova o <link> das páginas (um sed).
+   ============================================================ */
+
+:root{
+  /* ▼▼▼ IMAGEM DE FUNDO — trocar SÓ esta declaração ▼▼▼
+     Com foto:  --gem-foto: url('/gestao-em-movimento/assets/img/fundo-conlog.jpg');
+     Sem foto:  o desenho abaixo (parede escura + brilho de neon laranja)
+                serve de stand-in até a imagem entrar no repositório.      */
+  --gem-foto:
+    radial-gradient(ellipse 62% 46% at 50% 54%, rgba(249,115,22,.26) 0%, transparent 70%),
+    radial-gradient(ellipse 95% 62% at 50% 62%, rgba(56,189,248,.09) 0%, transparent 72%),
+    repeating-linear-gradient(0deg,  rgba(255,255,255,.035) 0 1px, transparent 1px 34px),
+    repeating-linear-gradient(90deg, rgba(255,255,255,.028) 0 1px, transparent 1px 72px),
+    linear-gradient(160deg, #12151b 0%, #1a1d24 45%, #0b0d12 100%);
+  /* ▲▲▲                                                    ▲▲▲ */
+
+  /* escurecedor por cima da foto — único botão de legibilidade.
+     Mais opaco = texto mais legível e imagem mais discreta. */
+  --gem-scrim: linear-gradient(180deg, rgba(7,11,17,.68) 0%, rgba(7,11,17,.88) 100%);
+}
+
+body:not(.light-mode){
+  background:
+    var(--gem-scrim),
+    var(--gem-foto),
+    var(--bg, #0C1017) !important;
+  background-size: cover !important;
+  background-position: center center !important;
+  background-repeat: no-repeat !important;
+  background-attachment: fixed !important;
+}
+
+/* o conteúdo não pode repintar o fundo por cima da foto */
+body:not(.light-mode) .main,
+body:not(.light-mode) .hub-main{ background: transparent !important; }
+
+/* de propósito: os cards NÃO são tocados aqui. Cada painel tem o seu
+   (uns translúcidos, uns não) e mexer em todos de uma vez pelo nome da
+   classe mudaria painel que nem usa o padrão. O scrim já dá conta da
+   legibilidade; se algum card ficar lavado, ajuste no painel dele. */
+
+/* em telas pequenas o background-attachment:fixed engasga em vários
+   navegadores móveis — melhor rolar junto */
+@media (max-width: 768px){
+  body:not(.light-mode){ background-attachment: scroll !important; }
+}
