@@ -96,9 +96,9 @@ table.acoes tbody tr+tr td{border-top:1px solid rgba(255,255,255,.05);}
 .acoes input:focus,.acoes textarea:focus,.acoes select:focus{border-color:var(--orange);}
 .acoes textarea{resize:none;overflow:hidden;min-height:38px;line-height:1.4;display:block;}
 .acoes select option{background:#0f1824;color:#fff;}
-select.st[data-v="Concluída"]{background:#3BB33B;color:#fff;border-color:#3BB33B;}
-select.st[data-v="Em andamento"]{background:#F4A100;color:#0C1017;border-color:#F4A100;font-weight:700;}
-select.st[data-v="Não iniciada"]{background:#FF6666;color:#0C1017;border-color:#FF6666;font-weight:700;}
+select.st[data-v="Done"]{background:#3BB33B;color:#fff;border-color:#3BB33B;}
+select.st[data-v="Doing"]{background:#F4A100;color:#0C1017;border-color:#F4A100;font-weight:700;}
+select.st[data-v="Planning"]{background:#FF6666;color:#0C1017;border-color:#FF6666;font-weight:700;}
 select.st[data-v="Cancelada"]{background:#333333;color:#fff;border-color:#333333;}
 .rm-btn{background:transparent;border:none;color:var(--text3);font-size:18px;line-height:1;cursor:pointer;padding:4px 6px;border-radius:5px;}
 .rm-btn:hover{color:var(--red);background:rgba(255,102,102,.12);}
@@ -180,9 +180,9 @@ body.light-mode .card-block{background:rgba(128,128,128,.14)!important;border:no
 body.light-mode table.acoes thead th{background:#F0F0F0;border-bottom-color:rgba(0,0,0,.12);}
 body.light-mode table.acoes tbody tr+tr td{border-top-color:rgba(0,0,0,.07);}
 body.light-mode .acoes input,body.light-mode .acoes textarea,body.light-mode .acoes select{background:#fff;border-color:#ccc;color:#1a1a1a;}
-body.light-mode select.st[data-v="Concluída"]{background:#3BB33B;color:#fff;}
-body.light-mode select.st[data-v="Em andamento"]{background:#F4A100;color:#0C1017;}
-body.light-mode select.st[data-v="Não iniciada"]{background:var(--red);color:#fff;}
+body.light-mode select.st[data-v="Done"]{background:#3BB33B;color:#fff;}
+body.light-mode select.st[data-v="Doing"]{background:#F4A100;color:#0C1017;}
+body.light-mode select.st[data-v="Planning"]{background:var(--red);color:#fff;}
 body.light-mode select.st[data-v="Cancelada"]{background:#333333;color:#fff;}
 
 /* Telas estreitas (tablet/celular): tabela vira card empilhado — evita scroll horizontal */
@@ -439,8 +439,8 @@ const SUPABASE_URL='https://lozwipoeacpvplgkrxkq.supabase.co';
 const SUPABASE_KEY='sb_publishable_ggKEEebc5zjgQDVsF92Upw_6uoLmKe9';
 let sb=null, SESSION=null;
 const ADMIN_EMAIL='fortesindicadores@gmail.com';
-const STATUS=['Backlog','Não iniciada','Em andamento','Concluída','Cancelada'];
-const DEFAULT_STATUS='Não iniciada';
+const STATUS=['Backlog','Planning','Doing','Done','Cancelada'];
+const DEFAULT_STATUS='Planning';
 const PRZ_OPTS=['Vencida','No prazo','Sem prazo'];
 let ROWS=[];            // fonte da verdade (do Supabase)
 let VIEW='kanban';   // abre direto no Kanban (pedido do Renan)
@@ -487,7 +487,7 @@ const esc=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;',
 const $=id=>document.getElementById(id);
 
 function prazoState(r){
-  if(r.status==='Concluída'||r.status==='Cancelada') return 'No prazo';
+  if(r.status==='Done'||r.status==='Cancelada') return 'No prazo';
   if(!r.prazo) return 'Sem prazo';
   const hoje=new Date(); hoje.setHours(0,0,0,0);
   const p=new Date(r.prazo+'T00:00:00');
@@ -500,7 +500,7 @@ function prazoBadge(r){
   const cls=st==='Vencida'?'venc':(st==='Sem prazo'?'sem':'ok');
   const dt=r.prazo?prazoBR(r.prazo):'sem prazo';
   let dias='';
-  const ativa=r.status!=='Concluída'&&r.status!=='Cancelada';
+  const ativa=r.status!=='Done'&&r.status!=='Cancelada';
   if(r.prazo&&ativa){ const d=diasVenc(r.prazo); dias=`<span class="kdays ${d<0?'venc':'ok'}">${d>=0?'':''}${d}D</span>`; }
   return `${dt}<span class="kbadge ${cls}">${st}</span>${dias}`;
 }
@@ -585,7 +585,7 @@ document.querySelectorAll('.tb-item[data-view]').forEach(b=>b.addEventListener('
 // ── régua de carga: prazos por dia, de 30 dias atrás a 60 à frente ──
 function renderCap(rows){
   const el=$('tbCap'); if(!el) return;
-  const ativos=rows.filter(r=>r.status!=='Concluída'&&r.status!=='Cancelada');
+  const ativos=rows.filter(r=>r.status!=='Done'&&r.status!=='Cancelada');
   const porDia={};
   ativos.forEach(r=>{ if(r.prazo) porDia[r.prazo]=(porDia[r.prazo]||0)+1; });
   const hoje=new Date(); hoje.setHours(0,0,0,0);
@@ -622,10 +622,11 @@ function aplicar(){
 function chipStatusRel(st){
   st=String(st||'').trim();
   if(!st)return '<span style="color:var(--text3)">—</span>';
-  if(/conclu/i.test(st))return `<span class="chip" style="background:rgba(59,179,59,.85);color:#06210a">${esc(st)}</span>`;
-  if(/andamento/i.test(st))return `<span class="chip" style="background:rgba(244,161,0,.9);color:#241900">${esc(st)}</span>`;
+  if(/^done$/i.test(st)||/conclu/i.test(st))return `<span class="chip" style="background:rgba(59,179,59,.85);color:#06210a">${esc(st)}</span>`;
+  if(/^doing$/i.test(st)||/andamento/i.test(st))return `<span class="chip" style="background:rgba(244,161,0,.9);color:#241900">${esc(st)}</span>`;
+  if(/^backlog$/i.test(st))return `<span class="chip" style="background:rgba(100,116,139,.6);color:#fff">${esc(st)}</span>`;
   if(/cancel/i.test(st))return `<span class="chip" style="background:rgba(120,120,120,.5);color:#fff">${esc(st)}</span>`;
-  if(/n[ãa]o inici/i.test(st))return `<span class="chip" style="background:rgba(227,52,52,.85);color:#2a0606">${esc(st)}</span>`;
+  if(/^planning$/i.test(st)||/n[ãa]o inici/i.test(st))return `<span class="chip" style="background:rgba(227,52,52,.85);color:#2a0606">${esc(st)}</span>`;
   return `<span class="chip" style="background:rgba(148,163,184,.25);color:var(--text)">${esc(st)}</span>`;
 }
 function relatorioHTML(rows){
@@ -656,10 +657,11 @@ function renderAdere(rows){
   const ativas=rows.filter(r=>(r.status||DEFAULT_STATUS)!=='Cancelada');
   const base=ativas.length;
   if(!base){ box.style.display='none'; return; }
-  const concl=ativas.filter(r=>r.status==='Concluída').length;
+  const concl=ativas.filter(r=>r.status==='Done').length;
   const venc=ativas.filter(r=>prazoState(r)==='Vencida').length;
-  const andar=ativas.filter(r=>r.status==='Em andamento').length;
-  const nao=ativas.filter(r=>(r.status||DEFAULT_STATUS)==='Não iniciada').length;
+  const andar=ativas.filter(r=>r.status==='Doing').length;
+  const nao=ativas.filter(r=>(r.status||DEFAULT_STATUS)==='Planning').length;
+  const bkl=ativas.filter(r=>r.status==='Backlog').length;
   const pConcl=Math.round(concl/base*100);
   const pPrazo=Math.round((base-venc)/base*100);
   const geral=Math.round((pConcl+pPrazo)/2);
@@ -675,9 +677,10 @@ function renderAdere(rows){
       ${d('Total de Ações',base,'')}
       ${d('No prazo',noPrazo,'var(--green)')}
       ${d('Fora do prazo',venc,venc?'var(--red)':'')}
-      ${d('Não iniciadas',nao,'var(--red)')}
-      ${d('Em andamento',andar,'var(--amber)')}
-      ${d('Concluídas',concl,'var(--green)')}
+      ${d('Backlog',bkl,'#64748B')}
+      ${d('Planning',nao,'var(--red)')}
+      ${d('Doing',andar,'var(--amber)')}
+      ${d('Done',concl,'var(--green)')}
     </div>`;
 }
 function tableHTML(rows){
@@ -748,7 +751,7 @@ function addRowTop(){
 }
 
 // ── Kanban ──
-const KCOLS=[{k:'Backlog',cls:'bkl'},{k:'Não iniciada',cls:'nao'},{k:'Em andamento',cls:'and'},{k:'Concluída',cls:'con'}];
+const KCOLS=[{k:'Backlog',cls:'bkl'},{k:'Planning',cls:'nao'},{k:'Doing',cls:'and'},{k:'Done',cls:'con'}];
 function kanbanHTML(rows){
   return `<div class="kanban">${KCOLS.map(c=>{
     const cards=rows.filter(r=>(r.status||DEFAULT_STATUS)===c.k)
@@ -771,7 +774,7 @@ function corDe(nome){
   return `hsl(${Math.abs(h)%360} 55% 66%)`;
 }
 // progresso do card = o próprio status (é o que a coluna já diz)
-const PROG={'Backlog':[0,'bkl'],'Não iniciada':[0,''],'Em andamento':[50,''],'Concluída':[100,'con'],'Cancelada':[100,'can']};
+const PROG={'Backlog':[0,'bkl'],'Planning':[0,''],'Doing':[50,''],'Done':[100,'con'],'Cancelada':[100,'can']};
 function kcard(r){
   const acao=esc(r.acao)||'<span class="dim">(sem ação)</span>';
   const resp=r.resp?esc(r.resp):'<span class="dim">sem responsável</span>';
@@ -779,7 +782,7 @@ function kcard(r){
   // faixa lateral: vermelha se vencida, verde se no prazo, cinza sem prazo
   const st=prazoState(r);
   const pz=st==='Vencida'?'venc':(st==='Sem prazo'?'sem':'ok');
-  const fim=(r.status==='Concluída'||r.status==='Cancelada')?' fin':'';
+  const fim=(r.status==='Done'||r.status==='Cancelada')?' fin':'';
   const [pc,pcls]=PROG[r.status||DEFAULT_STATUS]||PROG[DEFAULT_STATUS];
   const av=r.resp?`<span class="kc-av" style="--av:${corDe(r.resp)}" title="${esc(r.resp)}">${esc(iniciais(r.resp))}</span>`:'';
   return `<div class="kcard pz-${pz}${fim}" draggable="true" data-id="${r.id}">
