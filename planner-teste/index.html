@@ -41,7 +41,7 @@
         "uma placa sobre a outra". */
   --fundo:
     radial-gradient(85% 65% at 88% 2%, rgba(255,244,232,.11) 0%, transparent 62%),
-    linear-gradient(45deg, #0C0C0D 0%, #191919 34%, #232324 58%, #2E2E30 80%, #3A3A3D 100%);
+    linear-gradient(45deg, #090909 0%, #141415 34%, #1D1D1E 58%, #262628 80%, #313134 100%);
   --luz:      inset 0 1px 0 rgba(255,255,255,.09);
   --luz-card: inset 0 1px 0 rgba(255,255,255,.13);
   --app:      rgba(30,30,34,.24);
@@ -67,7 +67,7 @@
 body.claro{
   --fundo:
     radial-gradient(85% 65% at 88% 2%, rgba(255,255,255,.9) 0%, transparent 62%),
-    linear-gradient(45deg, #D0D1D4 0%, #DEDFE2 34%, #E9EAEC 58%, #F2F3F5 80%, #FAFBFC 100%);
+    linear-gradient(45deg, #C6C7CB 0%, #D5D6DA 34%, #E1E2E5 58%, #EBECEF 80%, #F4F5F7 100%);
   --luz:      inset 0 1px 0 rgba(255,255,255,.9);
   --luz-card: inset 0 1px 0 rgba(255,255,255,1);
   --app:      rgba(255,255,255,.34);
@@ -210,7 +210,7 @@ body.claro .menu{box-shadow:0 18px 40px rgba(15,23,42,.16);}
 .card.sem,.card.bkl{--pz:var(--cinza);}
 .card:active{cursor:grabbing;} .card.arrasta{opacity:.35;}
 .card:hover{border-color:rgba(249,115,22,.45);}
-.card.fim{opacity:.55;} .card.fim:hover{opacity:.95;}
+/* concluídas ficam normais — o verde da barra já diz que terminaram */
 .chip{display:flex;align-items:center;gap:7px;height:26px;padding:0 12px;margin-bottom:11px;
   font-size:10px;font-weight:700;letter-spacing:.4px;color:#FFF7ED;white-space:nowrap;
   overflow:hidden;text-overflow:ellipsis;
@@ -225,12 +225,12 @@ body.claro .chip i{border-color:rgba(58,29,7,.7);}
 .cfoot{display:flex;align-items:center;gap:10px;margin-top:12px;min-height:24px;padding:0 13px;}
 .bar{flex:1;min-width:44px;height:5px;border-radius:3px;background:var(--trilho);overflow:hidden;}
 .cresp{font-size:10px;font-weight:600;color:var(--txt2);white-space:nowrap;
-  overflow:hidden;text-overflow:ellipsis;max-width:60%;flex:0 0 auto;}
+  overflow:hidden;text-overflow:ellipsis;max-width:52%;flex:0 1 auto;}
 .bar i{display:block;height:100%;border-radius:3px;background:var(--pz,var(--cinza));}
 
 .avs{display:flex;align-items:center;flex:0 0 auto;}
 .av{width:24px;height:24px;border-radius:50%;display:flex;align-items:center;justify-content:center;
-  font-size:9px;font-weight:700;color:#0b1119;background:var(--av,#94A3B8);flex:0 0 24px;
+  font-size:9px;font-weight:800;letter-spacing:.2px;color:#2A1405;background:#F97316;flex:0 0 24px;
   box-shadow:0 1px 4px rgba(0,0,0,.25);}
 .add-av{width:24px;height:24px;border-radius:50%;margin-left:auto;background:transparent;
   border:1px dashed var(--trilho);color:var(--txt3);font-family:inherit;font-size:13px;line-height:1;
@@ -513,8 +513,6 @@ function iniciais(n){
   if(!p.length) return '?';
   return (p.length>1?p[0][0]+p[p.length-1][0]:p[0].slice(0,2)).toUpperCase();
 }
-function cor(n){let h=0;const s=String(n||'');for(let i=0;i<s.length;i++)h=(h*31+s.charCodeAt(i))|0;
-  return `hsl(${Math.abs(h)%360} 52% 68%)`;}
 const nomeFmt=s=>{s=String(s||'').trim().replace(/\s+/g,' ');if(!s)return '';
   const p=s.split(' ');return p.length>1?p[0]+' '+p[p.length-1]:p[0];};
 
@@ -558,7 +556,8 @@ function card(r){
   else if(pz==='venc') meta=`<span class="atraso">${dataBR(r.prazo)} · ${Math.abs(dias(r.prazo))}d de atraso</span>`;
   else meta=dataBR(r.prazo)+(r.status==='Concluída'||r.status==='Cancelada'?'':` · ${dias(r.prazo)}d`);
   const av=r.resp
-    ? `<span class="cresp">${esc(r.resp)}</span>`
+    ? `<span class="cresp">${esc(r.resp)}</span>
+       <span class="av" title="${esc(r.resp)}">${esc(iniciais(r.resp))}</span>`
     : `<button class="add-av" title="Definir responsável">+</button>`;
   // barra = quanto a ação andou (pela etapa), na cor do PRAZO:
   // vermelha se vencida, azul se no prazo, cinza sem prazo
@@ -906,7 +905,6 @@ async function iniciar(){
   if(EU && !NOMES.includes(EU)) NOMES.unshift(EU);
   $('euNome').textContent=EU||'—';
   $('euAv').textContent=iniciais(EU);
-  $('euAv').style.setProperty('--av',cor(EU));
   await carregar();
 }
 iniciar();
