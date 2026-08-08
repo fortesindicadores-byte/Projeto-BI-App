@@ -19,14 +19,14 @@
   /* fundo em degradê: base quase preta com um halo de cor sangrando da
      borda de cima (e um segundo, frio, no canto oposto). É o que dá a
      profundidade do modelo — nada de cor chapada. */
-  --fundo:
-    radial-gradient(140% 46% at 50% -8%, rgba(249,115,22,.42) 0%, rgba(249,115,22,.14) 26%, transparent 62%),
-    radial-gradient(70% 40% at 12% -4%, rgba(255,138,42,.20) 0%, transparent 60%),
-    radial-gradient(85% 55% at 102% 106%, rgba(56,189,248,.16) 0%, transparent 62%),
-    linear-gradient(180deg, #0A0F1A 0%, #05080E 100%);
-  --fio: linear-gradient(90deg, transparent 0%, rgba(249,115,22,.15) 12%, #F97316 34%,
-                         #FFA24D 50%, #F97316 66%, rgba(249,115,22,.15) 88%, transparent 100%);
-
+  --fundo: linear-gradient(160deg, #0A0C12 0%, #06080C 55%, #030407 100%);
+  /* a moldura do modelo não é simétrica: nasce no canto superior direito,
+     percorre o topo esmaecendo para a esquerda e desce pela direita até
+     morrer embaixo. Um único radial ancorado em 100% 0% faz exatamente isso. */
+  --aro: radial-gradient(125% 125% at 100% 0%,
+           rgba(255,163,77,.95) 0%, rgba(249,115,22,.80) 16%, rgba(249,115,22,.42) 34%,
+           rgba(249,115,22,.14) 54%, transparent 74%);
+  --aro-esp: 26px;
   --app:      rgba(16,23,38,.46);
   --side:     rgba(13,19,34,.62);
   --linha:    rgba(255,255,255,.07);
@@ -46,12 +46,11 @@
 }
 body.claro{
   /* mesmo desenho, na chave clara: o halo continua, o vidro fica branco */
-  --fundo:
-    radial-gradient(140% 46% at 50% -8%, rgba(249,115,22,.34) 0%, rgba(249,115,22,.10) 26%, transparent 62%),
-    radial-gradient(70% 40% at 12% -4%, rgba(255,138,42,.16) 0%, transparent 60%),
-    radial-gradient(85% 55% at 102% 106%, rgba(56,189,248,.20) 0%, transparent 62%),
-    linear-gradient(180deg, #F7F9FC 0%, #E3E8F0 100%);
-
+  --fundo: linear-gradient(160deg, #F2F5FA 0%, #E7ECF4 55%, #DDE3EC 100%);
+  --aro: radial-gradient(125% 125% at 100% 0%,
+           rgba(255,163,77,.95) 0%, rgba(249,115,22,.78) 16%, rgba(249,115,22,.40) 34%,
+           rgba(249,115,22,.12) 54%, transparent 74%);
+  --aro-esp: 22px;
   --app:      rgba(255,255,255,.40);
   --side:     rgba(255,255,255,.62);
   --linha:    rgba(15,23,42,.10);
@@ -71,9 +70,18 @@ body.claro{
 }
 
 *{margin:0;padding:0;box-sizing:border-box;}
-/* fio de luz colado no topo da tela — a assinatura do modelo */
-body::before{content:'';position:fixed;left:0;right:0;top:0;height:3px;z-index:60;
-  pointer-events:none;background:var(--fio);}
+/* ARO DE LUZ na borda da tela — medido no modelo: no topo vai de
+   #110505 (esquerda) a #CC3C3C (90%); na direita cai de #B63434 (topo)
+   a #070300 (base); esquerda e rodapé praticamente pretos. O miolo
+   volta ao preto em ~4% da altura, por isso é moldura e não halo.
+   Truque da borda em degradê: pinta a border-box e recorta o miolo. */
+body::before{content:'';position:fixed;inset:0;z-index:60;pointer-events:none;
+  border:var(--aro-esp) solid transparent;background:var(--aro) border-box;
+  -webkit-mask:linear-gradient(#000 0 0) padding-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite:xor;
+  mask:linear-gradient(#000 0 0) padding-box, linear-gradient(#000 0 0);
+  mask-composite:exclude;
+  filter:blur(9px);}
 html,body{height:100%;}
 body{
   font-family:'Inter',-apple-system,BlinkMacSystemFont,sans-serif;
@@ -166,7 +174,13 @@ body.claro .menu{box-shadow:0 18px 40px rgba(15,23,42,.16);}
 .card{position:relative;overflow:hidden;background:var(--brilho), var(--card);
   border:1px solid var(--card-brd);border-radius:8px;padding:12px 13px 11px 17px;cursor:grab;
   backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);box-shadow:var(--sombra);}
-.card::before{content:'';position:absolute;left:0;top:0;bottom:0;width:4px;background:var(--pz,var(--cinza));}
+.card::before{content:'';position:absolute;left:0;top:0;bottom:0;width:4px;background:var(--pz,var(--cinza));z-index:1;}
+/* lavagem de cor no topo do card, esmaecendo para a direita — é o
+   degradê dos "chips" do modelo, aqui na cor do prazo */
+.card::after{content:'';position:absolute;left:0;right:0;top:0;height:38px;pointer-events:none;
+  background:linear-gradient(90deg, var(--pz,var(--cinza)) 0%, transparent 52%);opacity:.20;}
+body.claro .card::after{opacity:.13;}
+.card>*{position:relative;z-index:1;}
 .card.venc{--pz:var(--vermelho);} .card.ok{--pz:var(--azul);} .card.sem{--pz:var(--cinza);}
 .card:active{cursor:grabbing;} .card.arrasta{opacity:.35;}
 .card:hover{border-color:rgba(46,155,214,.35);}
@@ -177,7 +191,8 @@ body.claro .menu{box-shadow:0 18px 40px rgba(15,23,42,.16);}
 .cmeta .atraso{color:var(--vermelho);font-weight:600;}
 .cfoot{display:flex;align-items:center;gap:10px;margin-top:12px;min-height:24px;}
 .bar{flex:1;height:4px;border-radius:3px;background:var(--trilho);overflow:hidden;}
-.bar i{display:block;height:100%;border-radius:3px;background:var(--azul);}
+.bar i{display:block;height:100%;border-radius:3px;
+  background:linear-gradient(90deg, var(--azul) 0%, rgba(41,169,224,.35) 100%);}
 .bar.done i{background:var(--azul);}
 .avs{display:flex;align-items:center;margin-left:auto;}
 .av{width:24px;height:24px;border-radius:50%;display:flex;align-items:center;justify-content:center;
