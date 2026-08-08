@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-<meta name="build" content="202608081300">
+<meta name="build" content="202608081900">
 <title>Painel de Gestão · Planner</title>
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -182,6 +182,12 @@ body.claro .menu{box-shadow:0 18px 40px rgba(15,23,42,.16);}
   text-transform:uppercase;letter-spacing:1px;}
 .menu input[type=checkbox]{accent-color:var(--azul);width:14px;height:14px;flex:0 0 14px;cursor:pointer;}
 .menu .rol{max-height:250px;overflow:auto;}
+.menu .mall{font-weight:700;border-bottom:1px solid var(--linha);margin-bottom:4px;}
+.menu .mtx{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.menu .so{font-size:9px;font-weight:700;color:#F97316;padding:1px 7px;border-radius:4px;
+  opacity:0;cursor:pointer;flex:0 0 auto;}
+.menu label:hover .so{opacity:1;}
+.menu .so:hover{background:rgba(249,115,22,.2);}
 
 /* ── colunas ── */
 .cols{flex:1;min-height:0;display:grid;grid-template-columns:repeat(4,1fr);gap:16px;
@@ -203,22 +209,21 @@ body.claro .menu{box-shadow:0 18px 40px rgba(15,23,42,.16);}
       (padrão do hub); prazo em VERDE/VERMELHO, as cores das barras
       do FCA Gerencial. Sem risco lateral. ── */
 .card{position:relative;overflow:hidden;background:var(--brilho), var(--card);
-  border:1px solid var(--card-brd);border-radius:4px;padding:0 0 12px;cursor:grab;
+  border:1px solid rgba(249,115,22,.45);border-radius:4px;padding:0 0 12px;cursor:grab;
   backdrop-filter:blur(5px);-webkit-backdrop-filter:blur(5px);
   box-shadow:0 8px 22px rgba(0,0,0,.36), var(--luz-card);}
 .card.venc{--pz:var(--vermelho);} .card.ok{--pz:var(--verde);}
 .card.sem,.card.bkl{--pz:var(--cinza);}
 .card:active{cursor:grabbing;} .card.arrasta{opacity:.35;}
-.card:hover{border-color:rgba(249,115,22,.45);}
+.card:hover{border-color:rgba(249,115,22,.8);}
 /* concluídas ficam normais — o verde da barra já diz que terminaram */
-.chip{display:flex;align-items:center;gap:7px;height:26px;padding:0 12px;margin-bottom:11px;
-  font-size:10px;font-weight:700;letter-spacing:.4px;color:#FFF7ED;white-space:nowrap;
-  overflow:hidden;text-overflow:ellipsis;
-  background:#F97316;}
-body.claro .chip{color:#3A1D07;}
-.chip i{width:11px;height:11px;flex:0 0 11px;border-radius:3px;border:1.5px solid rgba(255,247,237,.8);}
-body.claro .chip i{border-color:rgba(58,29,7,.7);}
-.chip b{margin-left:auto;font-weight:600;opacity:.6;font-size:9px;letter-spacing:.5px;}
+/* assunto no padrão do hub (botão ABRIR do Gerenciar Acessos):
+   pílula com borda laranja e texto laranja, sem faixa chapada */
+.cass{padding:11px 13px 0;margin-bottom:9px;}
+.cass span{display:inline-block;font-size:9.5px;font-weight:700;text-transform:uppercase;
+  letter-spacing:.6px;color:#F97316;background:rgba(249,115,22,.14);
+  border:1px solid rgba(249,115,22,.42);border-radius:4px;padding:2px 9px;}
+body.claro .cass span{color:#C2410C;background:rgba(249,115,22,.10);border-color:rgba(234,88,12,.5);}
 .ctit{font-size:13px;font-weight:600;line-height:1.32;padding:0 13px;}
 .cmeta{margin-top:6px;font-size:10.5px;color:var(--txt2);padding:0 13px;}
 .cmeta .atraso{color:var(--vermelho);font-weight:600;}
@@ -565,7 +570,7 @@ function card(r){
   const barra = r.status==='Backlog' ? '<div class="bar" style="visibility:hidden"></div>'
               : `<div class="bar"><i style="width:${Math.max(pct,4)}%"></i></div>`;
   return `<article class="card ${pz}${fim}" draggable="true" data-id="${esc(r.id)}">
-    <div class="chip"><i></i>${esc(r.assunto||'Sem assunto')}</div>
+    <div class="cass"><span>${esc(r.assunto||'Sem assunto')}</span></div>
     <div class="ctit">${esc(r.acao)||'(sem título)'}</div>
     ${meta?`<div class="cmeta">${meta}</div>`:''}
     <div class="cfoot">${barra}${av}</div>
@@ -592,6 +597,7 @@ function render(){
   pintaLateral();
 }
 function pintaLateral(){
+  montaMenus();
   document.querySelectorAll('.n[data-n]').forEach(el=>{
     el.textContent=LINHAS.filter(r=>daVisao(r,el.dataset.n)).length||'';
   });
@@ -740,23 +746,53 @@ function abreMenu(id){
 document.addEventListener('click',e=>{
   if(!e.target.closest('.menu-wrap')) document.querySelectorAll('.menu.open').forEach(m=>m.classList.remove('open'));
 });
-function montaMenus(){
-  const pessoas=[...new Set([...NOMES,...LINHAS.map(r=>r.resp).filter(Boolean)])].sort((a,b)=>a.localeCompare(b,'pt'));
-  $('lstPessoas').innerHTML=pessoas.length
-    ? pessoas.map(n=>`<label><input type="checkbox" data-p="${esc(n)}" ${RESP.has(n)?'checked':''}> ${esc(n)}</label>`).join('')
-    : '<div class="tit">ninguém cadastrado</div>';
-  const assuntos=[...new Set([...LINHAS.map(r=>r.assunto).filter(Boolean),...ASSUNTOS])].sort((a,b)=>a.localeCompare(b,'pt'));
-  $('lstAssuntos').innerHTML=assuntos.map(a=>
-    `<label><input type="checkbox" data-a="${esc(a)}" ${ASS.has(a)?'checked':''}> ${esc(a)}</label>`).join('');
+// listas em CASCATA: cada filtro mostra só o que sobrevive aos OUTROS
+// filtros (regra do hub/visão financeira), com "Todos" e o "só"
+function passaExceto(r,qual){
+  if(BUSCA && ![r.acao,r.assunto,r.resp,r.obs].some(x=>String(x||'').toLowerCase().includes(BUSCA))) return false;
+  if(qual!=='resp' && RESP.size && !RESP.has(r.resp)) return false;
+  if(qual!=='ass'  && ASS.size  && !ASS.has(r.assunto)) return false;
+  return daVisao(r,VISAO);
 }
-$('lstPessoas').addEventListener('change',e=>{
-  const b=e.target; if(!b.dataset.p) return;
-  b.checked?RESP.add(b.dataset.p):RESP.delete(b.dataset.p); render();
-});
-$('lstAssuntos').addEventListener('change',e=>{
-  const b=e.target; if(!b.dataset.a) return;
-  b.checked?ASS.add(b.dataset.a):ASS.delete(b.dataset.a); render();
-});
+function menuLista(itens,sel,tipo){
+  const all=sel.size===0;
+  return `<label class="mall"><input type="checkbox" data-all="${tipo}" ${all?'checked':''}> Todos</label>`+
+    (itens.length?itens.map(v=>`<label><input type="checkbox" data-${tipo}="${esc(v)}" ${all||sel.has(v)?'checked':''}>
+      <span class="mtx">${esc(v)}</span><span class="so" data-so="${esc(v)}">só</span></label>`).join('')
+    :'<div class="tit">nada com os filtros atuais</div>');
+}
+function montaMenus(){
+  const pt=(a,b)=>a.localeCompare(b,'pt');
+  const pes=[...new Set(LINHAS.filter(r=>passaExceto(r,'resp')).map(r=>r.resp).filter(Boolean))].sort(pt);
+  RESP.forEach(v=>{ if(!pes.includes(v)) pes.unshift(v); });
+  $('lstPessoas').innerHTML=menuLista(pes,RESP,'p');
+  const ass=[...new Set(LINHAS.filter(r=>passaExceto(r,'ass')).map(r=>r.assunto).filter(Boolean))].sort(pt);
+  ASS.forEach(v=>{ if(!ass.includes(v)) ass.unshift(v); });
+  $('lstAssuntos').innerHTML=menuLista(ass,ASS,'a');
+}
+// mesma mecânica do multi-select padrão: Todos limpa; desmarcar com tudo
+// marcado seleciona os demais; marcar o último de volta vira Todos; "só" isola
+function ligaMenu(el,sel,attr){
+  el.addEventListener('change',e=>{
+    const b=e.target;
+    if(b.dataset.all){ sel.clear(); render(); return; }
+    const v=b.dataset[attr]; if(v==null) return;
+    const itens=[...el.querySelectorAll(`input[data-${attr}]`)].map(i=>i.dataset[attr]);
+    if(sel.size===0){ if(!b.checked) itens.forEach(x=>{ if(x!==v) sel.add(x); }); }
+    else{
+      b.checked?sel.add(v):sel.delete(v);
+      if(itens.length && itens.every(x=>sel.has(x))) sel.clear();
+    }
+    render();
+  });
+  el.addEventListener('click',e=>{
+    const so=e.target.closest('.so'); if(!so) return;
+    e.preventDefault(); e.stopPropagation();
+    sel.clear(); sel.add(so.dataset.so); render();
+  });
+}
+ligaMenu($('lstPessoas'),RESP,'p');
+ligaMenu($('lstAssuntos'),ASS,'a');
 function limpaFiltros(){
   RESP.clear(); ASS.clear(); VISAO=''; BUSCA=''; $('busca').value='';
   document.querySelectorAll('.menu.open').forEach(m=>m.classList.remove('open'));
