@@ -207,10 +207,12 @@ body.claro .chip i{border-color:rgba(58,29,7,.7);}
 .cmeta{margin-top:6px;font-size:10.5px;color:var(--txt2);padding:0 13px;}
 .cmeta .atraso{color:var(--vermelho);font-weight:600;}
 .cfoot{display:flex;align-items:center;gap:10px;margin-top:12px;min-height:24px;padding:0 13px;}
-.bar{flex:1;height:5px;border-radius:3px;background:var(--trilho);overflow:hidden;}
+.bar{flex:1;min-width:44px;height:5px;border-radius:3px;background:var(--trilho);overflow:hidden;}
+.cresp{font-size:10px;font-weight:600;color:var(--txt2);white-space:nowrap;
+  overflow:hidden;text-overflow:ellipsis;max-width:52%;}
 .bar i{display:block;height:100%;border-radius:3px;background:var(--pz,var(--cinza));}
 
-.avs{display:flex;align-items:center;margin-left:auto;}
+.avs{display:flex;align-items:center;flex:0 0 auto;}
 .av{width:24px;height:24px;border-radius:50%;display:flex;align-items:center;justify-content:center;
   font-size:9px;font-weight:700;color:#0b1119;background:var(--av,#94A3B8);flex:0 0 24px;
   box-shadow:0 1px 4px rgba(0,0,0,.25);}
@@ -498,8 +500,6 @@ function cor(n){let h=0;const s=String(n||'');for(let i=0;i<s.length;i++)h=(h*31
   return `hsl(${Math.abs(h)%360} 52% 68%)`;}
 const nomeFmt=s=>{s=String(s||'').trim().replace(/\s+/g,' ');if(!s)return '';
   const p=s.split(' ');return p.length>1?p[0]+' '+p[p.length-1]:p[0];};
-// no lugar do número da referência: assunto + um id curto e estável
-const idCurto=r=>String(r.id).replace(/[^0-9a-z]/gi,'').slice(-6).toUpperCase();
 
 /* ── dados ── */
 const doBanco=d=>({id:d.id,assunto:d.assunto||'',acao:d.acao||'',resp:d.responsavel||'',
@@ -541,7 +541,8 @@ function card(r){
   else if(pz==='venc') meta=`<span class="atraso">${dataBR(r.prazo)} · ${Math.abs(dias(r.prazo))}d de atraso</span>`;
   else meta=dataBR(r.prazo)+(r.status==='Concluída'||r.status==='Cancelada'?'':` · ${dias(r.prazo)}d`);
   const av=r.resp
-    ? `<div class="avs"><span class="av" style="--av:${cor(r.resp)}" title="${esc(r.resp)}">${esc(iniciais(r.resp))}</span></div>`
+    ? `<span class="cresp">${esc(r.resp)}</span>
+       <div class="avs"><span class="av" style="--av:${cor(r.resp)}" title="${esc(r.resp)}">${esc(iniciais(r.resp))}</span></div>`
     : `<button class="add-av" title="Definir responsável">+</button>`;
   // barra = quanto a ação andou (pela etapa), na cor do PRAZO:
   // vermelha se vencida, azul se no prazo, cinza sem prazo
@@ -549,7 +550,7 @@ function card(r){
   const barra = r.status==='Backlog' ? '<div class="bar" style="visibility:hidden"></div>'
               : `<div class="bar"><i style="width:${Math.max(pct,4)}%"></i></div>`;
   return `<article class="card ${pz}${fim}" draggable="true" data-id="${esc(r.id)}">
-    <div class="chip"><i></i>${esc(r.assunto||'Sem assunto')}<b>${idCurto(r)}</b></div>
+    <div class="chip"><i></i>${esc(r.assunto||'Sem assunto')}</div>
     <div class="ctit">${esc(r.acao)||'(sem título)'}</div>
     ${meta?`<div class="cmeta">${meta}</div>`:''}
     <div class="cfoot">${barra}${av}</div>
