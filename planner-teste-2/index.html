@@ -4,20 +4,16 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <meta name="build" content="202608081300">
-<title>Task Board · TESTE 2</title>
+<title>Painel de Gestão · Laranja</title>
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-<script src="../assets/planner-teste-shim.js?v=202608081300"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
 /* ============================================================
-   QUADRO DE TESTE 2 — MESMAS CORES do /planner-teste/, no estilo da
-   segunda referência (o painel preto de "Faturamento & Meta").
-   Medido nela: fundo #010101 · corpo do card #1F1E1C uniforme · o
-   rótulo é uma FAIXA no topo do card ocupando a largura toda, com
-   ~23% da altura, em degradê da cor de destaque (pico #450817 no
-   vermelho, #19244C no azul) morrendo na direita. As barras do canto
-   repetem o mesmo degradê: #C71213 → #241919. Aqui a cor de destaque
-   é a do PRAZO — vermelho vencida, azul no prazo — e o texto todo
-   fica no cinza do card. Página independente: não herda nada do planner
+   VARIANTE LARANJA/PRETO do Painel de Gestão. Mesma página e mesmos
+   dados do /planner-teste/; muda só a pele: fundo preto com aro de
+   luz laranja e o card com FAIXA-RÓTULO no topo em degradê, no
+   estilo do painel "Faturamento & Meta". A urgência vira INTENSIDADE
+   de laranja: vencida em laranja forte, no prazo em âmbar apagado. Página independente: não herda nada do planner
    de produção. Mesmo layout no claro e no escuro; só as
    superfícies trocam. Sem a faixa "CAPACITY" da referência.
    ============================================================ */
@@ -35,41 +31,41 @@
      textos  título #FFFFFF · card #EEF2FA · coluna #676F83 ·
              id #4C505C · lateral #B2BCD2 · seção #505B75 ·
              card apagado #9196A2                                    */
-  --fundo: linear-gradient(180deg, #08090C 0%, #030405 60%, #010102 100%);
+  --fundo: linear-gradient(180deg, #0A0806 0%, #060504 60%, #030202 100%);
   --aro: radial-gradient(125% 125% at 100% 0%,
-           rgba(221,91,96,.90) 0%, rgba(221,91,96,.55) 16%, rgba(221,91,96,.26) 34%,
-           rgba(221,91,96,.08) 54%, transparent 74%);
+           rgba(255,163,77,.92) 0%, rgba(249,115,22,.62) 16%, rgba(249,115,22,.28) 34%,
+           rgba(249,115,22,.09) 54%, transparent 74%);
   --aro-esp: 24px;
-  --app:      rgba(4,5,8,.55);
-  --side:     rgba(9,10,14,.62);
+  --app:      rgba(6,5,4,.52);
+  --side:     rgba(20,15,10,.30);
   --linha:    rgba(255,255,255,.06);
-  --card:     rgba(41,44,58,.80);
+  --card:     rgba(40,34,28,.82);
   --brilho:   linear-gradient(180deg, rgba(255,255,255,.04) 0%, rgba(255,255,255,0) 46%);
   --card-brd: rgba(255,255,255,.07);
-  --txt:      #EEF2FA;
-  --txt2:     #B2BCD2;
-  --txt3:     #676F83;
-  --txt4:     #4C505C;
+  --txt:      #F5EFE8;
+  --txt2:     #C6B7A6;
+  --txt3:     #8A7A69;
+  --txt4:     #5E5245;
   --hover:    rgba(255,255,255,.06);
-  --azul:     #1986B1;
-  --azul-b:   #0C8BB9;
+  --azul:     #B4791F;
+  --azul-b:   #B4791F;
   --verde:    #3BB33B;
-  --vermelho: #DD5B60;
-  --verm-b:   #E05852;
-  --cinza:    #5B657C;
-  --trilho:   #262934;
+  --vermelho: #F97316;
+  --verm-b:   #F97316;
+  --cinza:    #6B5C4C;
+  --trilho:   #2B2620;
   --sombra:   0 2px 10px rgba(0,0,0,.30);
 }
 body.claro{
-  --fundo: linear-gradient(180deg, #F3F5F9 0%, #E9ECF2 60%, #DFE3EB 100%);
+  --fundo: linear-gradient(180deg, #F7F4F1 0%, #EFEAE5 60%, #E6DFD8 100%);
   --aro: radial-gradient(125% 125% at 100% 0%,
-           rgba(206,74,80,.85) 0%, rgba(206,74,80,.45) 16%, rgba(206,74,80,.18) 34%,
-           rgba(206,74,80,.05) 54%, transparent 74%);
+           rgba(234,88,12,.82) 0%, rgba(234,88,12,.45) 16%, rgba(234,88,12,.18) 34%,
+           rgba(234,88,12,.05) 54%, transparent 74%);
   --aro-esp: 20px;
-  --app:      rgba(255,255,255,.46);
-  --side:     rgba(255,255,255,.66);
+  --app:      rgba(255,255,255,.50);
+  --side:     rgba(255,255,255,.44);
   --linha:    rgba(15,23,42,.10);
-  --card:     rgba(255,255,255,.82);
+  --card:     rgba(255,255,255,.84);
   --brilho:   linear-gradient(180deg, rgba(255,255,255,.6) 0%, rgba(255,255,255,0) 46%);
   --card-brd: rgba(15,23,42,.10);
   --txt:      #161D2B;
@@ -77,18 +73,18 @@ body.claro{
   --txt3:     #737D91;
   --txt4:     #8B94A6;
   --hover:    rgba(15,23,42,.05);
-  --azul:     #12719A;
-  --azul-b:   #0C7BA5;
+  --azul:     #A06A12;
+  --azul-b:   #A06A12;
   --verde:    #0E8C0E;
-  --vermelho: #CE4A50;
-  --verm-b:   #D2453F;
+  --vermelho: #E2580C;
+  --verm-b:   #E2580C;
   --cinza:    #939CAF;
   --trilho:   rgba(15,23,42,.13);
   --sombra:   0 2px 8px rgba(15,23,42,.10);
 }
 
 *{margin:0;padding:0;box-sizing:border-box;}
-/* aro de luz na borda, ancorado no canto superior direito (medido no modelo) */
+/* aro de luz na borda, ancorado no canto superior direito */
 body::before{content:'';position:fixed;inset:0;z-index:60;pointer-events:none;
   border:var(--aro-esp) solid transparent;background:var(--aro) border-box;
   -webkit-mask:linear-gradient(#000 0 0) padding-box, linear-gradient(#000 0 0);
@@ -142,6 +138,9 @@ body{
 .s-user{margin-top:auto;display:flex;align-items:center;gap:9px;padding:12px 8px 2px;border-top:1px solid var(--linha);}
 .s-user div{flex:1;min-width:0;}
 .s-user b{display:block;font-size:12px;font-weight:600;line-height:1.2;}
+.s-sair{display:flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:7px;
+  color:var(--txt3);text-decoration:none;flex:0 0 26px;}
+.s-sair:hover{background:var(--hover);color:var(--txt);}
 .s-user i{display:block;font-size:9.5px;font-style:normal;color:var(--txt3);
   text-transform:uppercase;letter-spacing:.8px;margin-top:2px;}
 
@@ -183,8 +182,7 @@ body.claro .menu{box-shadow:0 18px 40px rgba(15,23,42,.16);}
 .cbody{display:flex;flex-direction:column;gap:10px;}
 .col.rec .cbody{display:none;}
 
-/* ── card: faixa-rótulo no topo (23% da altura, degradê morrendo à
-      direita) e todo o texto no cinza do corpo ── */
+/* ── card: faixa-rótulo no topo, corpo no cinza quente ── */
 .card{position:relative;overflow:hidden;background:var(--card);border:1px solid var(--card-brd);
   border-radius:10px;padding:0 0 12px;cursor:grab;box-shadow:var(--sombra);
   backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);}
@@ -209,18 +207,63 @@ body.claro .menu{box-shadow:0 18px 40px rgba(15,23,42,.16);}
 .cfoot{display:flex;align-items:center;gap:10px;margin-top:12px;min-height:24px;padding:0 13px;}
 .bar{flex:1;height:5px;border-radius:3px;background:var(--trilho);overflow:hidden;}
 .bar i{display:block;height:100%;border-radius:3px;
-  background:linear-gradient(90deg, var(--pz,var(--azul)) 0%,
-             color-mix(in srgb, var(--pz,var(--azul)) 18%, transparent) 100%);}
-.bar.done i{opacity:.6;}
+  background:linear-gradient(90deg, var(--pz,var(--cinza)) 0%,
+             color-mix(in srgb, var(--pz,var(--cinza)) 18%, transparent) 100%);}
 .avs{display:flex;align-items:center;margin-left:auto;}
 .av{width:24px;height:24px;border-radius:50%;display:flex;align-items:center;justify-content:center;
-  font-size:9px;font-weight:700;color:#0b1119;background:var(--av,#94A3B8);flex:0 0 24px;
+  font-size:9px;font-weight:700;color:#140F0A;background:var(--av,#94A3B8);flex:0 0 24px;
   box-shadow:0 1px 4px rgba(0,0,0,.25);}
 .add-av{width:24px;height:24px;border-radius:50%;margin-left:auto;background:transparent;
   border:1px dashed var(--trilho);color:var(--txt3);font-family:inherit;font-size:13px;line-height:1;
   cursor:pointer;display:flex;align-items:center;justify-content:center;}
-.add-av:hover{border-color:var(--azul);color:var(--azul);}
+.add-av:hover{border-color:var(--vermelho);color:var(--vermelho);}
 .cvazia{padding:12px 2px;font-size:12px;color:var(--txt3);}
+
+/* ── visões Tabela / Relatório / Resumo ── */
+.cols.solto{display:block;}
+.tab-wrap{overflow:auto;border:1px solid var(--card-brd);border-radius:10px;background:var(--card);
+  backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);}
+table.tab{width:100%;border-collapse:collapse;font-size:12px;}
+table.tab thead th{position:sticky;top:0;z-index:2;background:var(--card);text-align:left;
+  padding:11px 12px;font-size:10px;font-weight:700;color:var(--txt3);text-transform:uppercase;
+  letter-spacing:.8px;border-bottom:1px solid var(--card-brd);white-space:nowrap;}
+table.tab td{padding:11px 12px;border-bottom:1px solid var(--linha);color:var(--txt2);vertical-align:top;
+  white-space:nowrap;}
+table.tab td.forte{color:var(--txt);font-weight:600;}
+table.tab td.livre{white-space:normal;min-width:230px;line-height:1.45;}
+table.tab td.suave{color:var(--txt3);}
+table.tab td.num{text-align:right;white-space:nowrap;}
+table.tab tbody tr{cursor:pointer;}
+table.tab tbody tr:hover{background:var(--hover);}
+.tag{display:inline-block;padding:2px 9px;border-radius:20px;font-size:10px;font-weight:700;white-space:nowrap;}
+.atraso{color:var(--vermelho);font-weight:600;}
+
+.resumo{display:flex;flex-direction:column;gap:16px;}
+.hero{display:flex;align-items:center;gap:18px;}
+.hero-num{font-size:52px;font-weight:800;line-height:1;letter-spacing:-1px;}
+.hero-lbl{font-size:12px;font-weight:600;color:var(--txt2);line-height:1.5;}
+.hero-lbl span{font-size:10.5px;font-weight:500;color:var(--txt3);}
+.kpis{display:grid;grid-template-columns:repeat(6,1fr);gap:12px;}
+.kpi{background:var(--card);border:1px solid var(--card-brd);border-radius:10px;padding:13px 14px;
+  backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);}
+.kpi b{display:block;font-size:22px;font-weight:800;line-height:1.1;}
+.kpi span{display:block;margin-top:4px;font-size:10px;font-weight:600;color:var(--txt3);
+  text-transform:uppercase;letter-spacing:.6px;}
+.bloco{background:var(--card);border:1px solid var(--card-brd);border-radius:10px;padding:14px 16px 10px;
+  backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);}
+.bloco h3{font-size:10px;font-weight:700;color:var(--txt3);text-transform:uppercase;
+  letter-spacing:1.1px;margin-bottom:12px;}
+.bloco .tab-wrap{border:0;background:transparent;}
+table.mini-tab td{border-bottom:1px solid var(--linha);padding:8px 6px;}
+table.mini-tab tr:last-child td{border-bottom:0;}
+.mini{height:6px;border-radius:4px;background:var(--trilho);overflow:hidden;}
+.mini i{display:block;height:100%;border-radius:4px;}
+.etapas{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;}
+.et{text-align:center;padding:10px 6px;border-radius:9px;background:var(--hover);}
+.et b{display:block;font-size:22px;font-weight:800;}
+.et span{display:block;margin-top:3px;font-size:10px;font-weight:600;color:var(--txt3);
+  text-transform:uppercase;letter-spacing:.5px;}
+@media(max-width:1180px){.kpis{grid-template-columns:repeat(3,1fr);}}
 
 /* ── modal ── */
 .mbg{display:none;position:fixed;inset:0;z-index:80;background:rgba(3,6,11,.55);backdrop-filter:blur(2px);
@@ -271,64 +314,78 @@ input[type=date]::-webkit-calendar-picker-indicator{cursor:pointer;}
   <aside class="side">
     <div class="s-top">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M12 3 2 8l10 5 10-5-10-5Z"/><path d="M2 13l10 5 10-5"/></svg>
-      <b>Boards</b>
+      <b>Painel de Gestão</b>
       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity=".55"><path d="M8 9l4-4 4 4M8 15l4 4 4-4"/></svg>
     </div>
 
     <label class="s-search">
       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" opacity=".8"><circle cx="11" cy="11" r="7"/><path d="M16.5 16.5 21 21"/></svg>
-      <input type="text" id="busca" placeholder="Search" autocomplete="off">
+      <input type="text" id="busca" placeholder="Pesquisar" autocomplete="off">
       <span class="s-kbd">Ctrl + K</span>
     </label>
 
+    <div class="s-sec"><b>Visões</b></div>
+    <button class="s-item on" data-ver="kanban">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M4 4h5v16H4zM10 4h5v11h-5zM16 4h4v7h-4z"/></svg>
+      Quadro
+    </button>
+    <button class="s-item" data-ver="tabela">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M3 5h18v14H3zM3 10h18M9 10v9"/></svg>
+      Tabela
+    </button>
+    <button class="s-item" data-ver="relatorio">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M6 3h9l4 4v14H6z"/><path d="M9 12h7M9 16h7"/></svg>
+      Relatório
+    </button>
+    <button class="s-item" data-ver="resumo">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 19V9M10 19V5M16 19v-7M22 19H2"/></svg>
+      Resumo
+    </button>
+
+    <div class="s-sec"><b>Atalhos</b></div>
     <button class="s-item" data-vis="minhas">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="8" r="3.5"/><path d="M5 20c0-3.5 3.1-6 7-6s7 2.5 7 6"/></svg>
-      My items <span class="n" data-n="minhas"></span>
-    </button>
-    <button class="s-item" data-vis="recentes">
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="8.5"/><path d="M12 7v5l3 2"/></svg>
-      My recent <span class="n" data-n="recentes"></span>
+      Minhas ações <span class="n" data-n="minhas"></span>
     </button>
     <button class="s-item" data-vis="vencidas">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 8a6 6 0 1 0-12 0c0 6-2 7-2 7h16s-2-1-2-7"/><path d="M10.5 20a2 2 0 0 0 3 0"/></svg>
-      Notifications <span class="n" data-n="vencidas"></span>
+      Vencidas <span class="n" data-n="vencidas"></span>
     </button>
-
-    <div class="s-sec"><b>All views</b>
-      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M6 9l6 6 6-6"/></svg>
-      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
-    </div>
-    <div class="s-item pai">
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/></svg>
-      Build
-    </div>
-    <button class="s-item filho on" id="btQuadro" data-vis="">
-      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M4 4h7v16H4zM13 4h7v10h-7z"/></svg>
-      Task Board
+    <button class="s-item" data-vis="recentes">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="8.5"/><path d="M12 7v5l3 2"/></svg>
+      Criadas na semana <span class="n" data-n="recentes"></span>
     </button>
-    <button class="s-item filho" data-vis="concl3s">Completed last 3w <span class="n" data-n="concl3s"></span></button>
-    <button class="s-item filho" data-vis="semresp">Sem responsável <span class="n" data-n="semresp"></span></button>
+    <button class="s-item" data-vis="concl3s">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 12.5 10 17l9-10"/></svg>
+      Concluídas · 3 semanas <span class="n" data-n="concl3s"></span>
+    </button>
+    <button class="s-item" data-vis="semresp">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="8" r="3.5"/><path d="M5 20c0-3.5 3.1-6 7-6M16 17h5"/></svg>
+      Sem responsável <span class="n" data-n="semresp"></span>
+    </button>
     <button class="s-item" data-vis="semprazo">
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/></svg>
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3.5" y="5" width="17" height="15" rx="2"/><path d="M8 3v4M16 3v4M3.5 10h17"/></svg>
       Sem prazo <span class="n" data-n="semprazo"></span>
     </button>
 
     <div class="s-user">
       <span class="av" id="euAv">—</span>
       <div><b id="euNome">—</b><i>administrador</i></div>
-      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity=".55"><path d="M8 9l4-4 4 4M8 15l4 4 4-4"/></svg>
+      <a class="s-sair" href="../" title="Voltar ao hub">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M14 4h5v16h-5M11 8l-4 4 4 4M7 12h10"/></svg>
+      </a>
     </div>
   </aside>
 
   <!-- ══════════ quadro ══════════ -->
   <main class="board">
     <div class="top">
-      <h1>Task Board</h1>
+      <h1>Quadro</h1>
 
       <div class="menu-wrap">
         <button class="tool" id="btPessoas" onclick="abreMenu('mPessoas')">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="8" r="3.5"/><path d="M5 20c0-3.5 3.1-6 7-6s7 2.5 7 6"/></svg>
-          People
+          Pessoas
         </button>
         <div class="menu" id="mPessoas"><div class="tit">Responsável</div><div class="rol" id="lstPessoas"></div></div>
       </div>
@@ -336,7 +393,7 @@ input[type=date]::-webkit-calendar-picker-indicator{cursor:pointer;}
       <div class="menu-wrap">
         <button class="tool" id="btFiltro" onclick="abreMenu('mFiltro')">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 6h16M7 12h10M10 18h4"/></svg>
-          Filter
+          Assuntos
         </button>
         <div class="menu" id="mFiltro"><div class="tit">Assunto</div><div class="rol" id="lstAssuntos"></div></div>
       </div>
@@ -344,11 +401,10 @@ input[type=date]::-webkit-calendar-picker-indicator{cursor:pointer;}
       <div class="menu-wrap">
         <button class="tool" onclick="abreMenu('mMais')" title="Mais">···</button>
         <div class="menu" id="mMais">
-          <button onclick="novoCard('Backlog')">Nova ação</button>
+          <button onclick="novoCard('Não iniciada')">Nova ação</button>
           <button id="btTema" onclick="trocaTema()">Modo claro</button>
           <button onclick="limpaFiltros()">Limpar filtros</button>
-          <button onclick="resetar()">Resetar dados de teste</button>
-          <div class="tit">Ambiente de teste · dados só neste navegador</div>
+          <div class="tit">Dados do planner corporativo</div>
         </div>
       </div>
     </div>
@@ -386,24 +442,36 @@ const SUPABASE_KEY='sb_publishable_ggKEEebc5zjgQDVsF92Upw_6uoLmKe9';
 const $=id=>document.getElementById(id);
 const esc=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 
-// as quatro etapas da referência
-const ETAPAS=['Backlog','Planning','Doing','Done'];
-const STATUS=[...ETAPAS,'Cancelada'];
-const PADRAO='Backlog';
-const PROG={Backlog:0,Planning:15,Doing:55,Done:100};
+// ── etapas do quadro ↔ status gravados no planner oficial ──
+// O que aparece na coluna é o RÓTULO; o que vai para o banco é o
+// status que o /planner-corporativo/ já usa. 'Backlog' é a única
+// etapa nova (hoje nenhuma ação está nela).
+const ETAPAS=[
+  {k:'Backlog',       rot:'Backlog'},
+  {k:'Não iniciada',  rot:'Planejando'},
+  {k:'Em andamento',  rot:'Em execução'},
+  {k:'Concluída',     rot:'Concluído'},
+];
+const CHAVES=ETAPAS.map(e=>e.k);
+const ROTULO=Object.fromEntries(ETAPAS.map(e=>[e.k,e.rot]));
+const STATUS=[...CHAVES,'Cancelada'];
+const PADRAO='Não iniciada';
+const PROG={'Backlog':0,'Não iniciada':15,'Em andamento':55,'Concluída':100,'Cancelada':100};
+// Backlog é fila de ideias: sem prazo, fica fora de qualquer conta
+const CONTA=r=>!(r.status==='Backlog' && !r.prazo);
 const ASSUNTOS=['Governança','Custos','Projetos','Disponibilidade','Xadrez de Frota','Capacitação Técnica',
   'Contratos de Manutenção','Contratos de Locação','Km Rodado','Descarte de Resíduos','Pneus','Stress Test','CIVF',
   'Conformidade da Frota','Estoque','Demarco','DPO/VPO','Combustível','Manutenção','MTBF','MTTR',
   'Blitz de Segurança','Checklist','Viagens','Processos'];
 
 let sb=null, LINHAS=[], NOMES=[], EU='';
-let BUSCA='', VISAO='', RESP=new Set(), ASS=new Set();
+let BUSCA='', VISAO='', VER='kanban', RESP=new Set(), ASS=new Set();
 const RECOLHIDAS=new Set();
 
 /* ── utilidades ── */
 const hoje=()=>{const d=new Date();d.setHours(0,0,0,0);return d;};
 function estadoPrazo(r){
-  if(r.status==='Done'||r.status==='Cancelada') return 'ok';
+  if(r.status==='Concluída'||r.status==='Cancelada') return 'ok';
   if(!r.prazo) return 'sem';
   return new Date(r.prazo+'T00:00:00') < hoje() ? 'venc' : 'ok';
 }
@@ -441,7 +509,7 @@ function daVisao(r,v){
   if(v==='semprazo') return !r.prazo;
   if(v==='semresp')  return !r.resp;
   if(v==='recentes') return desde(r.criado)<=7;
-  if(v==='concl3s')  return r.status==='Done' && desde(r.criado)<=21;
+  if(v==='concl3s')  return r.status==='Concluída' && desde(r.criado)<=21;
   return true;
 }
 function passa(r){
@@ -454,16 +522,18 @@ function passa(r){
 /* ── render ── */
 function card(r){
   const pz=estadoPrazo(r);
-  const fim=(r.status==='Done'||r.status==='Cancelada')?' fim':'';
+  const fim=(r.status==='Concluída'||r.status==='Cancelada')?' fim':'';
   const pct=PROG[r.status]!=null?PROG[r.status]:0;
   let meta;
   if(!r.prazo) meta='sem prazo';
   else if(pz==='venc') meta=`<span class="atraso">${dataBR(r.prazo)} · ${Math.abs(dias(r.prazo))}d de atraso</span>`;
-  else meta=dataBR(r.prazo)+(r.status==='Done'||r.status==='Cancelada'?'':` · ${dias(r.prazo)}d`);
+  else meta=dataBR(r.prazo)+(r.status==='Concluída'||r.status==='Cancelada'?'':` · ${dias(r.prazo)}d`);
   const av=r.resp
     ? `<div class="avs"><span class="av" style="--av:${cor(r.resp)}" title="${esc(r.resp)}">${esc(iniciais(r.resp))}</span></div>`
     : `<button class="add-av" title="Definir responsável">+</button>`;
-  const barra = `<div class="bar${r.status==='Done'?' done':''}"><i style="width:${Math.max(pct,6)}%"></i></div>`;
+  // barra = quanto a ação andou (pela etapa), na cor do PRAZO:
+  // vermelha se vencida, azul se no prazo, cinza sem prazo
+  const barra = `<div class="bar"><i style="width:${Math.max(pct,4)}%"></i></div>`;
   return `<article class="card ${pz}${fim}" draggable="true" data-id="${esc(r.id)}">
     <div class="chip"><i></i>${esc(r.assunto||'Sem assunto')}<b>${idCurto(r)}</b></div>
     <div class="ctit">${esc(r.acao)||'(sem título)'}</div>
@@ -473,28 +543,110 @@ function card(r){
 }
 function render(){
   const vis=LINHAS.filter(passa);
+  $('cols').className = VER==='kanban' ? 'cols' : 'cols solto';
+  if(VER==='tabela'){ $('cols').innerHTML=htmlTabela(vis); pintaLateral(); return; }
+  if(VER==='relatorio'){ $('cols').innerHTML=htmlRelatorio(vis); pintaLateral(); return; }
+  if(VER==='resumo'){ $('cols').innerHTML=htmlResumo(vis); pintaLateral(); return; }
   $('cols').innerHTML=ETAPAS.map(e=>{
-    const cards=vis.filter(r=>(r.status||PADRAO)===e)
+    const cards=vis.filter(r=>(r.status||PADRAO)===e.k)
       .sort((a,b)=>(a.prazo||'9999-99-99').localeCompare(b.prazo||'9999-99-99'));
-    return `<section class="col${RECOLHIDAS.has(e)?' rec':''}" data-etapa="${e}">
+    return `<section class="col${RECOLHIDAS.has(e.k)?' rec':''}" data-etapa="${esc(e.k)}">
       <div class="chead">
-        <span class="cname">${e}</span><span class="cnum">${cards.length}</span>
-        <button class="ic" title="Nova ação" data-novo="${e}">+</button>
-        <button class="ic" title="Recolher coluna" data-rec="${e}">···</button>
+        <span class="cname">${e.rot}</span><span class="cnum">${cards.length}</span>
+        <button class="ic" title="Nova ação" data-novo="${esc(e.k)}">+</button>
+        <button class="ic" title="Recolher coluna" data-rec="${esc(e.k)}">···</button>
       </div>
       <div class="cbody">${cards.length?cards.map(card).join(''):'<div class="cvazia">—</div>'}</div>
     </section>`;
   }).join('');
+  pintaLateral();
+}
+function pintaLateral(){
   document.querySelectorAll('.n[data-n]').forEach(el=>{
-    const n=LINHAS.filter(r=>daVisao(r,el.dataset.n)).length;
-    el.textContent=n||'';
+    el.textContent=LINHAS.filter(r=>daVisao(r,el.dataset.n)).length||'';
   });
-  document.querySelectorAll('.s-item[data-vis]').forEach(b=>{
-    if(b.id==='btQuadro') b.classList.toggle('on',!VISAO);
-    else b.classList.toggle('on',!!b.dataset.vis && VISAO===b.dataset.vis);
-  });
+  document.querySelectorAll('.s-item[data-vis]').forEach(b=>
+    b.classList.toggle('on',!!b.dataset.vis && VISAO===b.dataset.vis));
+  document.querySelectorAll('.s-item[data-ver]').forEach(b=>
+    b.classList.toggle('on',VER===b.dataset.ver));
   $('btPessoas').classList.toggle('on',RESP.size>0);
   $('btFiltro').classList.toggle('on',ASS.size>0);
+}
+
+/* ══════════ VISÕES: Tabela · Relatório · Resumo ══════════ */
+const pctTxt=(a,b)=>b?Math.round(a/b*100)+'%':'—';
+function chip(st){
+  const c={'Backlog':'var(--cinza)','Não iniciada':'var(--vermelho)','Em andamento':'#F4A100',
+           'Concluída':'var(--azul)','Cancelada':'#6B7280'}[st]||'var(--cinza)';
+  return `<span class="tag" style="background:color-mix(in srgb,${c} 22%,transparent);
+    color:${c};border:1px solid color-mix(in srgb,${c} 45%,transparent)">${ROTULO[st]||esc(st)}</span>`;
+}
+function htmlTabela(rows){
+  if(!rows.length) return '<div class="cvazia">Nenhuma ação com os filtros atuais</div>';
+  const ord=[...rows].sort((a,b)=>(a.prazo||'9999-99-99').localeCompare(b.prazo||'9999-99-99'));
+  return `<div class="tab-wrap"><table class="tab">
+    <thead><tr><th>Assunto</th><th>Ação</th><th>Responsável</th><th>Prazo</th><th>Etapa</th><th>Situação</th></tr></thead>
+    <tbody>${ord.map(r=>{
+      const pz=estadoPrazo(r);
+      const sit=pz==='venc'?`<span class="atraso">Vencida · ${Math.abs(dias(r.prazo))}d</span>`
+              :(pz==='sem'?'<span style="color:var(--txt3)">Sem prazo</span>'
+              :`<span style="color:var(--azul)">No prazo</span>`);
+      return `<tr data-id="${esc(r.id)}"><td>${esc(r.assunto)||'—'}</td><td class="forte">${esc(r.acao)||'—'}</td>
+        <td>${esc(r.resp)||'—'}</td><td>${r.prazo?dataBR(r.prazo):'—'}</td><td>${chip(r.status)}</td><td>${sit}</td></tr>`;
+    }).join('')}</tbody></table></div>`;
+}
+function htmlRelatorio(rows){
+  if(!rows.length) return '<div class="cvazia">Nenhuma ação com os filtros atuais</div>';
+  const ord=[...rows].sort((a,b)=>(a.prazo||'9999-99-99').localeCompare(b.prazo||'9999-99-99'));
+  return `<div class="tab-wrap"><table class="tab rel">
+    <thead><tr><th>Assunto</th><th>Ação</th><th>Acompanhamento</th><th>Responsável</th><th>Prazo</th><th>Etapa</th></tr></thead>
+    <tbody>${ord.map(r=>`<tr data-id="${esc(r.id)}">
+      <td>${esc(r.assunto)||'—'}</td><td class="forte livre">${esc(r.acao)||'—'}</td>
+      <td class="livre suave">${esc(r.obs)||'—'}</td><td>${esc(r.resp)||'—'}</td>
+      <td>${r.prazo?dataBR(r.prazo):'—'}</td><td>${chip(r.status)}</td></tr>`).join('')}</tbody></table></div>`;
+}
+function htmlResumo(rows){
+  const val=rows.filter(CONTA);                    // Backlog sem prazo não conta
+  const ativas=val.filter(r=>r.status!=='Cancelada');
+  const concl=ativas.filter(r=>r.status==='Concluída').length;
+  const comPrazo=ativas.filter(r=>r.prazo).length;
+  const noPrazo=ativas.filter(r=>r.prazo&&estadoPrazo(r)!=='venc').length;
+  const venc=ativas.filter(r=>estadoPrazo(r)==='venc').length;
+  const semPrazo=ativas.filter(r=>!r.prazo).length;
+  const ader=comPrazo&&ativas.length
+    ? Math.round(((noPrazo/comPrazo)*0.5 + (concl/ativas.length)*0.5)*100) : 0;
+  const porEtapa=CHAVES.map(k=>({rot:ROTULO[k],n:val.filter(r=>r.status===k).length}));
+  const agrupa=(campo)=>{
+    const g={};
+    ativas.forEach(r=>{const k=r[campo]||'—';(g[k]=g[k]||{t:0,v:0,c:0}),g[k].t++;
+      if(estadoPrazo(r)==='venc')g[k].v++; if(r.status==='Concluída')g[k].c++;});
+    return Object.entries(g).sort((a,b)=>b[1].t-a[1].t);
+  };
+  const barra=(n,tot,cor)=>`<div class="mini"><i style="width:${tot?n/tot*100:0}%;background:${cor}"></i></div>`;
+  const tabela=(titulo,dados)=>`<div class="bloco"><h3>${titulo}</h3><table class="tab mini-tab"><tbody>
+      ${dados.map(([k,v])=>`<tr><td>${esc(k)}</td>
+        <td class="num">${v.t}</td>
+        <td style="width:38%">${barra(v.t-v.v,v.t,'var(--azul)')}</td>
+        <td class="num ${v.v?'atraso':''}">${v.v?v.v+' venc.':'—'}</td>
+        <td class="num">${pctTxt(v.c,v.t)}</td></tr>`).join('')}
+    </tbody></table></div>`;
+  return `<div class="resumo">
+    <div class="hero">
+      <div class="hero-num" style="color:${ader>=80?'var(--azul)':(ader>=50?'#F4A100':'var(--vermelho)')}">${ader}%</div>
+      <div class="hero-lbl">Aderência do planner<br><span>metade prazo, metade conclusão · Backlog sem prazo fora da conta</span></div>
+    </div>
+    <div class="kpis">
+      ${[['Ações válidas',ativas.length,''],['Concluídas',concl,'var(--azul)'],
+         ['Vencidas',venc,'var(--vermelho)'],['No prazo',noPrazo,'var(--azul)'],
+         ['Sem prazo',semPrazo,'var(--txt3)'],['% conclusão',pctTxt(concl,ativas.length),'']]
+        .map(([l,v,c])=>`<div class="kpi"><b style="${c?`color:${c}`:''}">${v}</b><span>${l}</span></div>`).join('')}
+    </div>
+    <div class="bloco"><h3>Por etapa</h3><div class="etapas">
+      ${porEtapa.map(e=>`<div class="et"><b>${e.n}</b><span>${e.rot}</span></div>`).join('')}
+    </div></div>
+    ${tabela('Por responsável',agrupa('resp'))}
+    ${tabela('Por assunto',agrupa('assunto'))}
+  </div>`;
 }
 
 /* ── menus do topo ── */
@@ -534,6 +686,12 @@ document.querySelectorAll('.s-item[data-vis]').forEach(b=>b.addEventListener('cl
   VISAO = (v && VISAO===v) ? '' : v;    // clicar de novo desliga
   render();
 }));
+const TIT={kanban:'Quadro',tabela:'Tabela',relatorio:'Relatório',resumo:'Resumo'};
+document.querySelectorAll('.s-item[data-ver]').forEach(b=>b.addEventListener('click',()=>{
+  VER=b.dataset.ver;
+  document.querySelector('.top h1').textContent=TIT[VER];
+  render();
+}));
 $('busca').addEventListener('input',()=>{ BUSCA=$('busca').value.trim().toLowerCase(); render(); });
 document.addEventListener('keydown',e=>{
   if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='k'){ e.preventDefault(); $('busca').focus(); }
@@ -543,6 +701,7 @@ document.addEventListener('keydown',e=>{
 /* ── cliques e arrastar dentro do quadro ── */
 const cols=$('cols');
 cols.addEventListener('click',e=>{
+  const tr=e.target.closest('tr[data-id]'); if(tr){ abreModal(tr.dataset.id); return; }
   const novo=e.target.closest('[data-novo]'); if(novo){ novoCard(novo.dataset.novo); return; }
   const rec=e.target.closest('[data-rec]');
   if(rec){ const k=rec.dataset.rec; RECOLHIDAS.has(k)?RECOLHIDAS.delete(k):RECOLHIDAS.add(k); render(); return; }
@@ -576,7 +735,8 @@ function preenche(r){
   $('mAssunto').innerHTML=opcoes([...new Set([...(r.assunto?[r.assunto]:[]),...ASSUNTOS])],r.assunto||'');
   $('mResp').innerHTML=opcoes([...new Set([...(r.resp?[r.resp]:[]),...NOMES])],r.resp||'');
   $('mPrazo').value=r.prazo||'';
-  $('mStatus').innerHTML=STATUS.map(s=>`<option${s===(r.status||PADRAO)?' selected':''}>${s}</option>`).join('');
+  $('mStatus').innerHTML=STATUS.map(k=>
+    `<option value="${esc(k)}"${k===(r.status||PADRAO)?' selected':''}>${ROTULO[k]||k}</option>`).join('');
   $('mObs').value=r.obs||'';
 }
 function abreModal(id){
@@ -614,7 +774,6 @@ async function excluir(){
   if(error){ alert('Erro ao excluir: '+error.message); return; }
   LINHAS=LINHAS.filter(x=>x.id!==ID); render(); fechaModal();
 }
-function resetar(){ if(typeof plannerTesteResetar==='function') plannerTesteResetar(); }
 
 /* ── tema: mesmo layout, só as superfícies mudam ── */
 function aplicaTema(t){
@@ -626,13 +785,33 @@ function trocaTema(){ aplicaTema(document.body.classList.contains('claro')?'dark
 aplicaTema(localStorage.getItem('bi_theme')||'dark');
 
 /* ── início ── */
+const ADMIN_EMAIL='fortesindicadores@gmail.com';
+function semAcesso(msg){
+  $('cols').className='cols solto';
+  $('cols').innerHTML=`<div class="bloco" style="max-width:520px;margin:40px auto;text-align:center">
+    <h3 style="color:var(--vermelho)">Acesso restrito</h3><p style="font-size:13px;color:var(--txt2);line-height:1.5">${esc(msg)}</p></div>`;
+}
 async function iniciar(){
   sb=supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
   const {data:{session}}=await sb.auth.getSession();
   if(!session){ location.replace('../'); return; }
+  let prof=null;
+  try{ const r=await sb.from('fca_profiles').select('is_admin').eq('user_id',session.user.id).maybeSingle(); prof=r.data; }catch(e){}
+  if(!((prof&&prof.is_admin)||session.user.email===ADMIN_EMAIL)){
+    semAcesso('Você está logado, mas não tem perfil de administrador. Fale com o corporativo para liberar seu acesso.');
+    return;
+  }
   try{
     const {data:profs}=await sb.from('fca_profiles').select('user_id,nome').eq('is_admin',true);
-    NOMES=[...new Set((profs||[]).map(p=>nomeFmt(p.nome)).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'pt'));
+    const lbl=new Map((profs||[]).map(p=>[p.user_id,(p.nome||'').trim()]));
+    const ids=[...lbl.keys()];
+    if(ids.length){
+      try{
+        const {data:apps}=await sb.from('user_approvals').select('user_id,name,email').in('user_id',ids);
+        (apps||[]).forEach(a=>{ if(!lbl.get(a.user_id)) lbl.set(a.user_id,(a.name||a.email||'').trim()); });
+      }catch(e){}
+    }
+    NOMES=[...new Set([...lbl.values()].map(nomeFmt).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'pt'));
   }catch(e){}
   EU=nomeFmt((session.user.user_metadata&&session.user.user_metadata.name)||session.user.email||'');
   if(EU && !NOMES.includes(EU)) NOMES.unshift(EU);
