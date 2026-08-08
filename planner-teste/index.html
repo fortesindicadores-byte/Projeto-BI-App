@@ -178,7 +178,8 @@ body.claro .menu{box-shadow:0 18px 40px rgba(15,23,42,.16);}
   backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);box-shadow:var(--sombra);}
 .card::before{content:'';position:absolute;left:0;top:0;bottom:0;width:4px;background:var(--pz,var(--cinza));z-index:1;}
 .card>*{position:relative;z-index:1;}
-.card.venc{--pz:var(--vermelho);} .card.ok{--pz:var(--azul);} .card.sem{--pz:var(--cinza);}
+.card.venc{--pz:var(--vermelho);} .card.ok{--pz:var(--azul);}
+.card.sem,.card.bkl{--pz:var(--cinza);}
 .card:active{cursor:grabbing;} .card.arrasta{opacity:.35;}
 .card:hover{border-color:rgba(46,155,214,.35);}
 .card.fim{opacity:.55;} .card.fim:hover{opacity:.95;}
@@ -452,6 +453,7 @@ const RECOLHIDAS=new Set();
 /* ── utilidades ── */
 const hoje=()=>{const d=new Date();d.setHours(0,0,0,0);return d;};
 function estadoPrazo(r){
+  if(r.status==='Backlog') return 'bkl';        // fila de ideias: não tem prazo
   if(r.status==='Concluída'||r.status==='Cancelada') return 'ok';
   if(!r.prazo) return 'sem';
   return new Date(r.prazo+'T00:00:00') < hoje() ? 'venc' : 'ok';
@@ -487,7 +489,7 @@ async function carregar(){
 function daVisao(r,v){
   if(v==='minhas')   return !!EU && nomeFmt(r.resp)===EU;
   if(v==='vencidas') return estadoPrazo(r)==='venc';
-  if(v==='semprazo') return !r.prazo;
+  if(v==='semprazo') return !r.prazo && r.status!=='Backlog';
   if(v==='semresp')  return !r.resp;
   if(v==='recentes') return desde(r.criado)<=7;
   if(v==='concl3s')  return r.status==='Concluída' && desde(r.criado)<=21;
@@ -506,7 +508,8 @@ function card(r){
   const fim=(r.status==='Concluída'||r.status==='Cancelada')?' fim':'';
   const pct=PROG[r.status]!=null?PROG[r.status]:0;
   let meta;
-  if(!r.prazo) meta='sem prazo';
+  if(r.status==='Backlog') meta='';             // Backlog não fala de prazo
+  else if(!r.prazo) meta='sem prazo';
   else if(pz==='venc') meta=`<span class="atraso">${dataBR(r.prazo)} · ${Math.abs(dias(r.prazo))}d de atraso</span>`;
   else meta=dataBR(r.prazo)+(r.status==='Concluída'||r.status==='Cancelada'?'':` · ${dias(r.prazo)}d`);
   const av=r.resp
@@ -514,11 +517,13 @@ function card(r){
     : `<button class="add-av" title="Definir responsável">+</button>`;
   // barra = quanto a ação andou (pela etapa), na cor do PRAZO:
   // vermelha se vencida, azul se no prazo, cinza sem prazo
-  const barra = `<div class="bar"><i style="width:${Math.max(pct,4)}%"></i></div>`;
+  // sem prazo não há o que medir: Backlog não mostra barra
+  const barra = r.status==='Backlog' ? '<div class="bar" style="visibility:hidden"></div>'
+              : `<div class="bar"><i style="width:${Math.max(pct,4)}%"></i></div>`;
   return `<article class="card ${pz}${fim}" draggable="true" data-id="${esc(r.id)}">
     <div class="cid">${esc(r.assunto||'—')} · ${idCurto(r)}</div>
     <div class="ctit">${esc(r.acao)||'(sem título)'}</div>
-    <div class="cmeta">${meta}</div>
+    ${meta?`<div class="cmeta">${meta}</div>`:''}
     <div class="cfoot">${barra}${av}</div>
   </article>`;
 }
@@ -569,11 +574,12 @@ function htmlTabela(rows){
     <thead><tr><th>Assunto</th><th>Ação</th><th>Responsável</th><th>Prazo</th><th>Etapa</th><th>Situação</th></tr></thead>
     <tbody>${ord.map(r=>{
       const pz=estadoPrazo(r);
-      const sit=pz==='venc'?`<span class="atraso">Vencida · ${Math.abs(dias(r.prazo))}d</span>`
+      const sit=pz==='bkl'?'<span style="color:var(--txt3)">—</span>'
+              :(pz==='venc'?`<span class="atraso">Vencida · ${Math.abs(dias(r.prazo))}d</span>`
               :(pz==='sem'?'<span style="color:var(--txt3)">Sem prazo</span>'
-              :`<span style="color:var(--azul)">No prazo</span>`);
+              :`<span style="color:var(--azul)">No prazo</span>`));
       return `<tr data-id="${esc(r.id)}"><td>${esc(r.assunto)||'—'}</td><td class="forte">${esc(r.acao)||'—'}</td>
-        <td>${esc(r.resp)||'—'}</td><td>${r.prazo?dataBR(r.prazo):'—'}</td><td>${chip(r.status)}</td><td>${sit}</td></tr>`;
+        <td>${esc(r.resp)||'—'}</td><td>${r.status==='Backlog'?'—':(r.prazo?dataBR(r.prazo):'—')}</td><td>${chip(r.status)}</td><td>${sit}</td></tr>`;
     }).join('')}</tbody></table></div>`;
 }
 function htmlRelatorio(rows){
@@ -584,7 +590,7 @@ function htmlRelatorio(rows){
     <tbody>${ord.map(r=>`<tr data-id="${esc(r.id)}">
       <td>${esc(r.assunto)||'—'}</td><td class="forte livre">${esc(r.acao)||'—'}</td>
       <td class="livre suave">${esc(r.obs)||'—'}</td><td>${esc(r.resp)||'—'}</td>
-      <td>${r.prazo?dataBR(r.prazo):'—'}</td><td>${chip(r.status)}</td></tr>`).join('')}</tbody></table></div>`;
+      <td>${r.status==='Backlog'?'—':(r.prazo?dataBR(r.prazo):'—')}</td><td>${chip(r.status)}</td></tr>`).join('')}</tbody></table></div>`;
 }
 function htmlResumo(rows){
   const val=rows.filter(CONTA);                    // Backlog sem prazo não conta
