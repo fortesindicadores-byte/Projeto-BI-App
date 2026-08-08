@@ -632,6 +632,10 @@ Situação atual do código: a Árvore lê a aba `Árvore Comb.` (`GV_ID=1wCoRGs
 - **"(INATIVO)" nunca aparece:** mesclado na unidade/projeto base — dados via `scripts/limpar-inativo.sql`, telas via vassoura global no `assets/mobile.js`.
 - **Mobile tipo app:** `assets/mobile.js` incluído em TODAS as páginas (zoom travado + tabela larga vira "+ Detalhar" no mobile). Páginas novas devem incluir o script.
 
+## Fundo dos painéis (`assets/fundo.css`)
+
+Um arquivo só controla o fundo do **modo escuro** de todos os painéis: `--gem-foto` (a imagem) + `--gem-scrim` (o escurecedor por cima). Cada `index.html` traz um `<link rel="stylesheet" href="…/assets/fundo.css">`; ligar/desligar em tudo é um `sed`. A URL da imagem é **relativa ao CSS** (`url('img/…')`), por isso serve igual em `/gerot/` e em `/combustivel/seara/arvore/`. Só mexe no escuro — `body.light-mode` fica intacto. Usa `!important` porque cada painel declara o próprio `body{background}` inline. Cards NÃO são tocados de propósito (cada painel tem o seu). Hoje aponta para `assets/img/fundo-conlog.svg`, um **redesenho vetorial** do letreiro de neon da CONLOG feito à mão — a foto original nunca chegou como arquivo; quando chegar, trocar por `url('img/fundo-conlog.jpg')`.
+
 ## Robô Ginfo (Power BI → Farol) — em construção (ago/2026)
 
 Automatiza a coleta dos dados que hoje são copiados manualmente do BI do Ginfo (`bi.ginfo.app.br`, Power BI homologado pela Ambev) para as abas que alimentam o Farol.

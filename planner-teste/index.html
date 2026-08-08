@@ -199,14 +199,80 @@ body.light-mode select.st[data-v="Cancelada"]{background:#333333;color:#fff;}
 }
 
 /* ══════════ LAYOUT DE TESTE — quadro estilo "Task Board" ══════════
-   Só existe no /planner-teste/. Para voltar ao normal, basta apagar
-   este bloco. FUNDO: troque a URL da linha marcada abaixo.          */
+   Só existe no /planner-teste/. Vale SÓ no modo escuro: no claro o
+   planner continua exatamente o de sempre (barra lateral e régua de
+   carga somem, colunas voltam a ser caixas). Para desfazer, apague
+   este bloco e o .tb-shell/.tb-side do <body>.
+   FUNDO: vem de assets/fundo.css (--gem-foto), igual aos painéis.  */
 
-/* FUNDO: vem do arquivo compartilhado assets/fundo.css — mesma imagem
-   de todos os painéis, um botão só (--gem-foto / --gem-scrim lá). */
-body:not(.light-mode) .main{background:transparent;}
+/* ── shell: a aplicação flutua sobre a foto ── */
+.tb-shell{display:block;}
+.tb-side,.tb-cap{display:none;}
+body:not(.light-mode) .tb-shell{display:flex;height:100vh;padding:26px;gap:0;}
+/* a foto precisa respirar: aqui o escurecedor é bem mais leve que o padrão,
+   porque o próprio shell já escurece o que fica atrás dele */
+body:not(.light-mode){--gem-scrim:linear-gradient(180deg,rgba(7,11,17,.20) 0%,rgba(7,11,17,.46) 100%);}
+body:not(.light-mode) .tb-app{
+  flex:1;min-width:0;display:flex;flex-direction:column;
+  background:rgba(11,16,24,.30);border:1px solid rgba(255,255,255,.10);border-left:none;
+  border-radius:0 18px 18px 0;overflow:hidden;
+  backdrop-filter:blur(3px);-webkit-backdrop-filter:blur(3px);
+  box-shadow:0 20px 60px rgba(0,0,0,.5);}
+body:not(.light-mode) .main{background:transparent;flex:1;min-height:0;overflow:auto;padding:20px 24px 8px;}
 
-/* colunas sem caixa: só o rótulo e os cards flutuando */
+/* ── barra lateral ── */
+body:not(.light-mode) .tb-side{
+  display:flex;flex-direction:column;gap:6px;width:234px;flex:0 0 234px;
+  background:rgba(8,12,19,.52);border:1px solid rgba(255,255,255,.10);border-right:none;
+  border-radius:18px 0 0 18px;padding:20px 14px 16px;overflow:auto;
+  backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);
+  box-shadow:0 20px 60px rgba(0,0,0,.5);}
+.tb-brand{display:flex;align-items:center;gap:10px;padding:0 6px 16px;}
+.tb-logo{width:26px;height:26px;border-radius:8px;flex:0 0 26px;background:linear-gradient(140deg,#F97316,#c2410c);
+  box-shadow:0 2px 10px rgba(249,115,22,.45);}
+.tb-brand b{display:block;font-size:14px;font-weight:800;color:var(--text);line-height:1.1;}
+.tb-brand i{display:block;font-size:9px;font-style:normal;color:var(--text3);text-transform:uppercase;letter-spacing:.8px;margin-top:2px;}
+.tb-search{display:flex;align-items:center;gap:7px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.07);
+  border-radius:8px;padding:7px 10px;margin-bottom:14px;}
+.tb-search:focus-within{border-color:rgba(249,115,22,.5);}
+.tb-search input{flex:1;min-width:0;background:transparent;border:none;outline:none;color:var(--text);
+  font-family:'Montserrat',sans-serif;font-size:11.5px;}
+.tb-search input::placeholder{color:var(--text3);}
+.tb-sec{font-size:8.5px;font-weight:800;color:var(--text3);text-transform:uppercase;letter-spacing:1.6px;padding:16px 8px 7px;}
+.tb-nav{display:flex;flex-direction:column;gap:1px;}
+.tb-item{display:flex;align-items:center;gap:9px;width:100%;background:transparent;border:none;border-radius:8px;
+  padding:8px 10px;cursor:pointer;color:var(--text2);font-family:'Montserrat',sans-serif;font-size:12px;font-weight:600;text-align:left;}
+.tb-item:hover{background:rgba(255,255,255,.06);color:var(--text);}
+.tb-item.on{background:rgba(249,115,22,.16);color:var(--orange);font-weight:800;}
+.tb-item svg{flex:0 0 14px;opacity:.75;}
+.tb-n{margin-left:auto;font-size:10px;font-weight:800;color:var(--text3);}
+.tb-item.on .tb-n{color:var(--orange);}
+.tb-user{margin-top:auto;display:flex;align-items:center;gap:9px;padding:12px 8px 0;border-top:1px solid rgba(255,255,255,.06);}
+.tb-user b{display:block;font-size:11.5px;font-weight:700;color:var(--text);line-height:1.15;}
+.tb-user i{display:block;font-size:8.5px;font-style:normal;color:var(--text3);text-transform:uppercase;letter-spacing:.8px;margin-top:2px;}
+
+/* ── cabeçalho dentro do shell ── */
+body:not(.light-mode) .tb-app .header{
+  background:transparent;border-bottom:1px solid rgba(255,255,255,.06);box-shadow:none;
+  backdrop-filter:none;-webkit-backdrop-filter:none;position:static;padding:15px 24px 13px;gap:8px;}
+body:not(.light-mode) .tb-app .brand-eyebrow,
+body:not(.light-mode) .tb-app .brand p{display:none;}
+body:not(.light-mode) .tb-app .brand h1{font-size:22px;font-weight:800;color:var(--text);}
+body:not(.light-mode) .tb-app .header .btn{background:transparent;border-color:transparent;color:var(--text2);
+  font-size:11.5px;font-weight:700;padding:6px 10px;}
+body:not(.light-mode) .tb-app .header .btn:hover{background:rgba(255,255,255,.07);color:var(--text);}
+body:not(.light-mode) .tb-app .header .btn.active{background:rgba(249,115,22,.18);color:var(--orange);}
+body:not(.light-mode) .tb-app .hfilter label{display:none;}
+body:not(.light-mode) .tb-app .ms-btn{background:rgba(255,255,255,.05);border-color:rgba(255,255,255,.08);
+  min-width:0;font-size:10.5px;padding:6px 10px;}
+
+/* hero enxuto: no quadro o número grande roubava a altura das colunas */
+body:not(.light-mode) .adere{margin-bottom:14px;}
+body:not(.light-mode) .adere .hero-value{font-size:30px;}
+body:not(.light-mode) .adere .hero-deltas{margin-top:8px;gap:8px 22px;}
+body:not(.light-mode) .adere .hero-delta b{font-size:14px;}
+
+/* ── colunas sem caixa: só o rótulo e os cards flutuando ── */
 body:not(.light-mode) .kanban{gap:20px;}
 body:not(.light-mode) .kcol{background:transparent;border:none;border-radius:12px;overflow:visible;}
 body:not(.light-mode) .kcol.kover{background:rgba(249,115,22,.07);}
@@ -215,21 +281,37 @@ body:not(.light-mode) .kcol-head.nao,
 body:not(.light-mode) .kcol-head.and,
 body:not(.light-mode) .kcol-head.con{
   background:transparent;color:var(--text2);font-size:10.5px;letter-spacing:1.6px;
-  padding:2px 4px 14px;justify-content:flex-start;gap:10px;}
+  padding:2px 2px 14px;justify-content:flex-start;gap:10px;}
 body:not(.light-mode) .kcount{background:transparent;color:var(--text3);padding:0;font-size:11px;font-weight:800;}
 body:not(.light-mode) .kcol-body{padding:0;gap:12px;}
+.kplus{margin-left:auto;background:transparent;border:none;color:inherit;opacity:.55;cursor:pointer;
+  font-family:'Montserrat',sans-serif;font-size:15px;font-weight:700;line-height:1;padding:0 4px;}
+.kplus:hover{opacity:1;}
 
-/* cards de vidro sobre a foto */
+/* ── cards de vidro sobre a foto ── */
 body:not(.light-mode) .kcard{
-  background:rgba(17,24,34,.62);border:1px solid rgba(255,255,255,.07);border-radius:10px;
-  padding:13px 14px 13px 18px;box-shadow:0 6px 20px rgba(0,0,0,.38);
+  background:rgba(17,24,34,.70);border:1px solid rgba(255,255,255,.07);border-radius:10px;
+  padding:12px 13px 11px 18px;box-shadow:0 6px 20px rgba(0,0,0,.38);
   backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);
   transition:transform .12s ease,box-shadow .12s ease;}
 body:not(.light-mode) .kcard:hover{transform:translateY(-2px);box-shadow:0 12px 28px rgba(0,0,0,.5);}
+/* no escuro o assunto vira a linha discreta do topo (como o ID da referência) */
+body:not(.light-mode) .kassunto{background:transparent;border:none;padding:0;margin-bottom:5px;
+  color:var(--text3);font-size:9px;font-weight:700;letter-spacing:1.2px;}
 body:not(.light-mode) .kadd{background:rgba(255,255,255,.04);border:1px dashed rgba(255,255,255,.18);color:var(--text2);}
 body:not(.light-mode) .kadd:hover{background:rgba(255,255,255,.09);border-color:rgba(255,255,255,.32);}
 
-/* ── a faixa lateral vale nos DOIS temas ── */
+/* rodapé do card: progresso do status + avatar do responsável */
+.kc-foot{display:flex;align-items:center;gap:10px;margin-top:10px;}
+.kc-prog{flex:1;height:4px;border-radius:3px;background:rgba(148,163,184,.20);overflow:hidden;}
+.kc-prog i{display:block;height:100%;border-radius:3px;background:var(--blue);}
+.kc-prog.con i{background:var(--green);}
+.kc-prog.can i{background:#64748B;}
+.kc-av{flex:0 0 24px;width:24px;height:24px;border-radius:50%;display:flex;align-items:center;justify-content:center;
+  font-size:9px;font-weight:800;letter-spacing:.3px;color:#0C1017;background:var(--av,#94A3B8);}
+body.light-mode .kc-prog{background:rgba(0,0,0,.12);}
+
+/* ── a faixa lateral de prazo vale nos DOIS temas ── */
 .kcard{position:relative;overflow:hidden;padding-left:18px;}
 .kcard::before{content:'';position:absolute;left:0;top:0;bottom:0;width:4px;background:var(--pz,#64748B);}
 .kcard.pz-venc{--pz:var(--red);}
@@ -241,10 +323,57 @@ body.light-mode .kcard.pz-ok  {--pz:#0E8C0E;}
 .kcard.fin{opacity:.55;}
 .kcard.fin:hover{opacity:.9;}
 
+/* ── régua de carga (a faixa "CAPACITY" da referência) ── */
+body:not(.light-mode) .tb-cap{
+  display:flex;align-items:flex-end;gap:16px;padding:12px 24px 14px;
+  border-top:1px solid rgba(255,255,255,.06);background:rgba(8,12,18,.35);}
+.tb-cap-lbl{font-size:8.5px;font-weight:800;color:var(--text3);text-transform:uppercase;letter-spacing:1.6px;
+  white-space:nowrap;padding-bottom:2px;}
+.tb-bars{flex:1;min-width:0;display:flex;align-items:flex-end;gap:2px;height:44px;position:relative;}
+.tb-bars i{flex:1;min-width:1px;border-radius:1px;background:rgba(148,163,184,.22);}
+.tb-bars i.venc{background:var(--red);}
+.tb-bars i.perto{background:var(--amber);}
+.tb-bars i.ok{background:var(--blue);}
+.tb-bars i.hoje{background:rgba(249,115,22,.55);}
+.tb-cap-rt{font-size:10px;color:var(--text2);white-space:nowrap;padding-bottom:2px;}
+.tb-cap-rt b{font-weight:800;color:var(--text);}
+.tb-cap-vazio{font-size:10px;color:var(--text3);align-self:center;}
+
+@media(max-width:900px){
+  body:not(.light-mode) .tb-shell{padding:0;}
+  body:not(.light-mode) .tb-side{display:none;}
+  body:not(.light-mode) .tb-app{border:none;border-radius:0;box-shadow:none;}
+  body:not(.light-mode) .tb-cap{display:none;}
+  body:not(.light-mode) .tb-app .header{position:sticky;top:0;background:rgba(12,16,23,.85);
+    backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);}
+}
+
 </style>
 <link rel="stylesheet" href="../assets/fundo.css">
 </head>
 <body>
+<div class="tb-shell">
+<aside class="tb-side">
+  <div class="tb-brand"><span class="tb-logo"></span><div><b>Planner</b><i>Corporativo · teste</i></div></div>
+  <div class="tb-search">
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#94A3B8" stroke-width="2.4" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><line x1="16.5" y1="16.5" x2="21" y2="21"/></svg>
+    <input type="text" id="tbSearch" placeholder="Pesquisar ação…" autocomplete="off">
+  </div>
+  <div class="tb-nav">
+    <button class="tb-item" data-quick="minhas">Minhas ações<span class="tb-n" data-n="minhas"></span></button>
+    <button class="tb-item" data-quick="vencidas">Vencidas<span class="tb-n" data-n="vencidas"></span></button>
+    <button class="tb-item" data-quick="semprazo">Sem prazo<span class="tb-n" data-n="semprazo"></span></button>
+  </div>
+  <div class="tb-sec">Todas as visões</div>
+  <div class="tb-nav">
+    <button class="tb-item" data-view="kanban">Quadro</button>
+    <button class="tb-item" data-view="tabela">Tabela</button>
+    <button class="tb-item" data-view="gantt">Gantt</button>
+    <button class="tb-item" data-view="relatorio">Relatório</button>
+  </div>
+  <div class="tb-user"><span class="kc-av" id="tbMeAv" style="--av:#F97316">—</span><div><b id="tbMe">—</b><i>administrador</i></div></div>
+</aside>
+<div class="tb-app">
 <header class="header">
   <div class="brand"><div class="brand-eyebrow">Gestão em Movimento · BI Frota</div><h1>Planner Corporativo <span style="font-size:11px;font-weight:800;background:#F4800C;color:#1a1a1a;border-radius:4px;padding:2px 8px;vertical-align:3px;">TESTE</span></h1><p>ambiente de teste · os dados ficam só no seu navegador, a base real não é tocada</p></div>
   <div class="hfilter" id="wrapAssunto"><label>Assunto</label><div class="ms-wrap" id="ms-assunto"><button class="ms-btn" onclick="toggleMs('ms-assunto')"><span class="ms-lbl">Todos</span><span class="ms-cnt"></span><svg width="10" height="6" viewBox="0 0 10 6"><path d="M0 0l5 6 5-6z" fill="#F97316"/></svg></button><div class="ms-panel"><div class="ms-search"><input type="text" placeholder="Pesquisar…"></div><div class="ms-list"></div></div></div></div>
@@ -264,6 +393,9 @@ body.light-mode .kcard.pz-ok  {--pz:#0E8C0E;}
   <div class="adere" id="adere" style="display:none"></div>
   <div id="list"><div class="loading">Carregando…</div></div>
 </main>
+<div class="tb-cap" id="tbCap"></div>
+</div><!-- /.tb-app -->
+</div><!-- /.tb-shell -->
 
 <div class="modal-bg" id="modalBg">
   <div class="modal">
@@ -392,13 +524,76 @@ const MSF=[['ms-assunto',()=>[...ASSUNTOS,...ROWS.map(r=>r.assunto).filter(a=>a&
 function buildFilters(){ MSF.forEach(([id,get])=>{const w=$(id);if(!w)return;if(!w._render)_buildMs(w,get);else w._render('');}); }
 function filtered(){
   const fa=getMsValues('ms-assunto'), fr=getMsValues('ms-resp'), fs=getMsValues('ms-status'), fp=getMsValues('ms-prazo');
-  return ROWS.filter(r=>(!fa.length||fa.includes(r.assunto))&&(!fr.length||fr.includes(r.resp))&&(!fs.length||fs.includes(r.status||DEFAULT_STATUS))&&(!fp.length||fp.includes(prazoState(r))));
+  return ROWS.filter(r=>(!fa.length||fa.includes(r.assunto))&&(!fr.length||fr.includes(r.resp))&&(!fs.length||fs.includes(r.status||DEFAULT_STATUS))&&(!fp.length||fp.includes(prazoState(r)))
+    &&quickPass(r)&&searchPass(r));
+}
+
+// ── barra lateral (busca + atalhos + visões) ──
+let SEARCH='', QUICK='', ME='';
+function quickPass(r){
+  if(QUICK==='minhas')   return !!ME && fmtName(r.resp)===ME;
+  if(QUICK==='vencidas') return prazoState(r)==='Vencida';
+  if(QUICK==='semprazo') return prazoState(r)==='Sem prazo';
+  return true;
+}
+function searchPass(r){
+  if(!SEARCH) return true;
+  return [r.acao,r.assunto,r.resp,r.obs].some(v=>String(v||'').toLowerCase().includes(SEARCH));
+}
+function renderSide(){
+  const c={minhas:0,vencidas:0,semprazo:0};
+  ROWS.forEach(r=>{
+    if(ME&&fmtName(r.resp)===ME) c.minhas++;
+    const s=prazoState(r);
+    if(s==='Vencida') c.vencidas++;
+    if(s==='Sem prazo') c.semprazo++;
+  });
+  document.querySelectorAll('.tb-n').forEach(el=>el.textContent=c[el.dataset.n]||'');
+  document.querySelectorAll('.tb-item[data-quick]').forEach(b=>b.classList.toggle('on',QUICK===b.dataset.quick));
+  document.querySelectorAll('.tb-item[data-view]').forEach(b=>b.classList.toggle('on',VIEW===b.dataset.view));
+}
+document.querySelectorAll('.tb-item[data-quick]').forEach(b=>b.addEventListener('click',()=>{
+  QUICK = QUICK===b.dataset.quick ? '' : b.dataset.quick;   // clicar de novo desliga
+  aplicar();
+}));
+document.querySelectorAll('.tb-item[data-view]').forEach(b=>b.addEventListener('click',()=>{
+  VIEW=b.dataset.view; updateViewBtns(); aplicar();
+}));
+(function(){
+  const inp=$('tbSearch'); if(!inp) return;
+  inp.addEventListener('input',()=>{ SEARCH=inp.value.trim().toLowerCase(); aplicar(); });
+})();
+
+// ── régua de carga: prazos por dia, de 30 dias atrás a 60 à frente ──
+function renderCap(rows){
+  const el=$('tbCap'); if(!el) return;
+  const ativos=rows.filter(r=>r.status!=='Concluída'&&r.status!=='Cancelada');
+  const porDia={};
+  ativos.forEach(r=>{ if(r.prazo) porDia[r.prazo]=(porDia[r.prazo]||0)+1; });
+  const hoje=new Date(); hoje.setHours(0,0,0,0);
+  const dias=[];
+  for(let i=-30;i<=60;i++){
+    const d=new Date(hoje); d.setDate(d.getDate()+i);
+    const iso=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+    dias.push({i,n:porDia[iso]||0});
+  }
+  const max=Math.max(1,...dias.map(d=>d.n));
+  const venc=ativos.filter(r=>prazoState(r)==='Vencida').length;
+  const sem =ativos.filter(r=>prazoState(r)==='Sem prazo').length;
+  const barras=dias.map(d=>{
+    if(!d.n) return `<i class="${d.i===0?'hoje':''}" style="height:${d.i===0?26:5}%"></i>`;
+    const cls = d.i<0 ? 'venc' : (d.i<=7 ? 'perto' : 'ok');
+    return `<i class="${cls}" style="height:${Math.max(18,Math.round(d.n/max*100))}%" title="${d.n} ação(ões)"></i>`;
+  }).join('');
+  el.innerHTML=`<div class="tb-cap-lbl">Carga por prazo<br><span style="letter-spacing:.6px;font-weight:600">30d atrás → 60d à frente</span></div>
+    <div class="tb-bars">${barras}</div>
+    <div class="tb-cap-rt"><b>${venc}</b> vencidas · <b>${ativos.length-venc-sem}</b> a vencer${sem?` · <b>${sem}</b> sem prazo`:''}</div>`;
 }
 
 // ── render ──
 function aplicar(){
   const vis=filtered();
-  renderAdere(vis);
+  renderAdere(vis); renderSide(); renderCap(vis);
   if(VIEW==='kanban'){ $('list').innerHTML=kanbanHTML(vis); return; }
   if(VIEW==='gantt'){ $('list').innerHTML=GanttView.html(vis.map(r=>({id:r.id,label:r.acao,tag:r.assunto,resp:r.resp,status:r.status,start:r.criado,end:r.prazo}))); return; }
   if(VIEW==='relatorio'){ $('list').innerHTML=relatorioHTML(vis); return; }
@@ -541,11 +736,24 @@ function kanbanHTML(rows){
     const cards=rows.filter(r=>(r.status||DEFAULT_STATUS)===c.k)
       .sort((a,b)=>(a.prazo||'9999-99-99').localeCompare(b.prazo||'9999-99-99'));
     return `<div class="kcol" data-status="${c.k}">
-      <div class="kcol-head ${c.cls}">${c.k}<span class="kcount">${cards.length}</span></div>
+      <div class="kcol-head ${c.cls}">${c.k}<span class="kcount">${cards.length}</span><button class="kplus" title="Nova ação nesta coluna" onclick="event.stopPropagation();openNewModal('${c.k}')">+</button></div>
       <div class="kcol-body">${cards.length?cards.map(kcard).join(''):'<div class="kempty">—</div>'}<button class="kadd" onclick="openNewModal('${c.k}')">+ nova ação</button></div>
     </div>`;
   }).join('')}</div>`;
 }
+// avatar do responsável: iniciais + cor estável derivada do nome
+function iniciais(nome){
+  const p=String(nome||'').trim().split(/\s+/).filter(Boolean);
+  if(!p.length) return '?';
+  return (p.length>1 ? p[0][0]+p[p.length-1][0] : p[0].slice(0,2)).toUpperCase();
+}
+function corDe(nome){
+  let h=0; const s=String(nome||'');
+  for(let i=0;i<s.length;i++) h=(h*31+s.charCodeAt(i))|0;
+  return `hsl(${Math.abs(h)%360} 55% 66%)`;
+}
+// progresso do card = o próprio status (é o que a coluna já diz)
+const PROG={'Não iniciada':[0,''],'Em andamento':[50,''],'Concluída':[100,'con'],'Cancelada':[100,'can']};
 function kcard(r){
   const acao=esc(r.acao)||'<span class="dim">(sem ação)</span>';
   const resp=r.resp?esc(r.resp):'<span class="dim">sem responsável</span>';
@@ -554,9 +762,12 @@ function kcard(r){
   const st=prazoState(r);
   const pz=st==='Vencida'?'venc':(st==='Sem prazo'?'sem':'ok');
   const fim=(r.status==='Concluída'||r.status==='Cancelada')?' fin':'';
+  const [pc,pcls]=PROG[r.status||DEFAULT_STATUS]||PROG[DEFAULT_STATUS];
+  const av=r.resp?`<span class="kc-av" style="--av:${corDe(r.resp)}" title="${esc(r.resp)}">${esc(iniciais(r.resp))}</span>`:'';
   return `<div class="kcard pz-${pz}${fim}" draggable="true" data-id="${r.id}">
     ${ass}<div class="kcard-fato">${acao}</div>
     <div class="kcard-meta">${resp} · ${prazoBadge(r)}</div>
+    <div class="kc-foot"><div class="kc-prog ${pcls}"><i style="width:${pc}%"></i></div>${av}</div>
   </div>`;
 }
 function updateViewBtns(){$('viewBtn').textContent=VIEW==='kanban'?'Tabela':'Kanban';const rb=$('relBtn');if(rb)rb.classList.toggle('active',VIEW==='relatorio');const gb=$('ganttBtn');if(gb)gb.classList.toggle('active',VIEW==='gantt');}
@@ -663,6 +874,10 @@ async function initApp(){
   const admin = (prof && prof.is_admin) || (session.user.email===ADMIN_EMAIL);
   if(!admin){ showRestricted('Você está logado, mas não tem perfil de administrador. Fale com o corporativo para liberar seu acesso.'); return; }
   await loadAdmins();
+  ME=fmtName((session.user.user_metadata&&session.user.user_metadata.name)||session.user.email||'');
+  const av=$('tbMeAv'), me=$('tbMe');
+  if(me) me.textContent=ME||'—';
+  if(av){ av.textContent=iniciais(ME); av.style.setProperty('--av',corDe(ME)); }
   await loadRows();
 }
 initApp();
