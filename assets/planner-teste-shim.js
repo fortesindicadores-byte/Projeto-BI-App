@@ -40,6 +40,10 @@
   };
 
   const SEED = [
+    ['Projetos',        'Estudar integração do Prolog com o Benner',                 'Renan Fortes',     '',       'Backlog',      44],
+    ['Custos',          'Levantar base de custos de pneus por unidade',              'Pedro Pieroni',    dia(46),  'Backlog',      38],
+    ['Processos',       'Mapear fluxo de devolução de peças',                        'Emili Ariza',      '',       'Backlog',      24],
+    ['Capacitação Técnica','Montar trilha de treinamento dos mecânicos',             'Felipe Monsores',  dia(74),  'Backlog',      17],
     ['Governança',      'Criar envio de faróis automáticos via e-mail',              'Renan Fortes',     dia(-1),  'Não iniciada', 30],
     ['DPO/VPO',         'Validar cronograma viagens e apoio em auditorias',          'Katiuce Cordeiro', dia(-8),  'Não iniciada', 25],
     ['Combustível',     'Verificar baixas faltantes do tanque interno de MCC',       'Emili Ariza',      dia(-1),  'Não iniciada', 20],
