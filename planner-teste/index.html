@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-<meta name="build" content="202608080200">
+<meta name="build" content="202608080300">
 <title>Planner Corporativo · TESTE</title>
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="../assets/planner-teste-shim.js?v=202608080200"></script>
@@ -197,6 +197,58 @@ body.light-mode select.st[data-v="Cancelada"]{background:#333333;color:#fff;}
   .cell-label{display:block;font-size:9.5px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px;}
   .col-x{position:absolute;top:4px;right:4px;padding:0;}
 }
+
+/* ══════════ LAYOUT DE TESTE — quadro estilo "Task Board" ══════════
+   Só existe no /planner-teste/. Para voltar ao normal, basta apagar
+   este bloco. FUNDO: troque a URL da linha marcada abaixo.          */
+
+/* ▼▼▼ IMAGEM DE FUNDO — trocar só esta linha ▼▼▼ */
+:root{ --kb-foto: linear-gradient(155deg,#0a1420 0%,#0d2130 42%,#091018 100%); }
+/* ▲▲▲ ex.: --kb-foto: url('https://...jpg');       ▲▲▲ */
+
+body:not(.light-mode){
+  background:
+    linear-gradient(180deg,rgba(7,11,17,.70) 0%,rgba(7,11,17,.88) 100%),
+    var(--kb-foto) center center / cover no-repeat fixed,
+    var(--bg);
+}
+body:not(.light-mode) .main{background:transparent;}
+
+/* colunas sem caixa: só o rótulo e os cards flutuando */
+body:not(.light-mode) .kanban{gap:20px;}
+body:not(.light-mode) .kcol{background:transparent;border:none;border-radius:12px;overflow:visible;}
+body:not(.light-mode) .kcol.kover{background:rgba(249,115,22,.07);}
+body:not(.light-mode) .kcol-head,
+body:not(.light-mode) .kcol-head.nao,
+body:not(.light-mode) .kcol-head.and,
+body:not(.light-mode) .kcol-head.con{
+  background:transparent;color:var(--text2);font-size:10.5px;letter-spacing:1.6px;
+  padding:2px 4px 14px;justify-content:flex-start;gap:10px;}
+body:not(.light-mode) .kcount{background:transparent;color:var(--text3);padding:0;font-size:11px;font-weight:800;}
+body:not(.light-mode) .kcol-body{padding:0;gap:12px;}
+
+/* cards de vidro sobre a foto */
+body:not(.light-mode) .kcard{
+  background:rgba(17,24,34,.62);border:1px solid rgba(255,255,255,.07);border-radius:10px;
+  padding:13px 14px 13px 18px;box-shadow:0 6px 20px rgba(0,0,0,.38);
+  backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);
+  transition:transform .12s ease,box-shadow .12s ease;}
+body:not(.light-mode) .kcard:hover{transform:translateY(-2px);box-shadow:0 12px 28px rgba(0,0,0,.5);}
+body:not(.light-mode) .kadd{background:rgba(255,255,255,.04);border:1px dashed rgba(255,255,255,.18);color:var(--text2);}
+body:not(.light-mode) .kadd:hover{background:rgba(255,255,255,.09);border-color:rgba(255,255,255,.32);}
+
+/* ── a faixa lateral vale nos DOIS temas ── */
+.kcard{position:relative;overflow:hidden;padding-left:18px;}
+.kcard::before{content:'';position:absolute;left:0;top:0;bottom:0;width:4px;background:var(--pz,#64748B);}
+.kcard.pz-venc{--pz:var(--red);}
+.kcard.pz-ok  {--pz:var(--green);}
+.kcard.pz-sem {--pz:#64748B;}
+body.light-mode .kcard.pz-venc{--pz:#FF0000;}
+body.light-mode .kcard.pz-ok  {--pz:#0E8C0E;}
+/* encerradas ficam recuadas, como a coluna DONE da referência */
+.kcard.fin{opacity:.55;}
+.kcard.fin:hover{opacity:.9;}
+
 </style>
 </head>
 <body>
@@ -505,7 +557,11 @@ function kcard(r){
   const acao=esc(r.acao)||'<span class="dim">(sem ação)</span>';
   const resp=r.resp?esc(r.resp):'<span class="dim">sem responsável</span>';
   const ass=r.assunto?`<span class="kassunto">${esc(r.assunto)}</span>`:'';
-  return `<div class="kcard" draggable="true" data-id="${r.id}">
+  // faixa lateral: vermelha se vencida, verde se no prazo, cinza sem prazo
+  const st=prazoState(r);
+  const pz=st==='Vencida'?'venc':(st==='Sem prazo'?'sem':'ok');
+  const fim=(r.status==='Concluída'||r.status==='Cancelada')?' fin':'';
+  return `<div class="kcard pz-${pz}${fim}" draggable="true" data-id="${r.id}">
     ${ass}<div class="kcard-fato">${acao}</div>
     <div class="kcard-meta">${resp} · ${prazoBadge(r)}</div>
   </div>`;
