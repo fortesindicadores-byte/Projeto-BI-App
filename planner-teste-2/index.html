@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-<meta name="build" content="202608081900">
+<meta name="build" content="202608082200">
 <title>Painel de Gestão · Laranja</title>
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -204,11 +204,12 @@ body.claro .menu{box-shadow:0 18px 40px rgba(15,23,42,.16);}
 /* concluídas ficam normais — a coluna já diz que terminaram */
 /* assunto no padrão do hub (botão ABRIR do Gerenciar Acessos):
    pílula com borda laranja e texto laranja, sem faixa chapada */
-.cass{padding:11px 13px 0;margin-bottom:9px;}
-.cass span{display:inline-block;font-size:9.5px;font-weight:700;text-transform:uppercase;
-  letter-spacing:.6px;color:#F97316;background:rgba(249,115,22,.14);
-  border:1px solid rgba(249,115,22,.42);border-radius:4px;padding:2px 9px;}
-body.claro .cass span{color:#C2410C;background:rgba(249,115,22,.10);border-color:rgba(234,88,12,.5);}
+/* assunto: bandeirinha laranja + rótulo laranja, igual à visão 1 */
+.cass{display:flex;align-items:center;gap:6px;padding:11px 13px 0;margin-bottom:8px;}
+.cass svg{flex:0 0 11px;}
+.cass span{font-size:11.5px;font-weight:600;color:#F97316;min-width:0;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+body.claro .cass span{color:#C2410C;}
 .ctit{font-size:13px;font-weight:600;line-height:1.32;padding:0 13px;}
 .cmeta{margin-top:6px;font-size:10.5px;color:var(--txt2);padding:0 13px;}
 .cmeta .atraso{color:var(--vermelho);font-weight:600;}
@@ -351,10 +352,6 @@ input[type=date]::-webkit-calendar-picker-indicator{cursor:pointer;}
     <button class="s-item" data-ver="tabela">
       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M3 5h18v14H3zM3 10h18M9 10v9"/></svg>
       Tabela
-    </button>
-    <button class="s-item" data-ver="relatorio">
-      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M6 3h9l4 4v14H6z"/><path d="M9 12h7M9 16h7"/></svg>
-      Relatório
     </button>
     <button class="s-item" data-ver="resumo">
       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 19V9M10 19V5M16 19v-7M22 19H2"/></svg>
@@ -556,7 +553,7 @@ function card(r){
   const barra = r.status==='Backlog' ? '<div class="bar" style="visibility:hidden"></div>'
               : `<div class="bar"><i style="width:${Math.max(pct,4)}%"></i></div>`;
   return `<article class="card ${pz}${fim}" draggable="true" data-id="${esc(r.id)}">
-    <div class="cass"><span>${esc(r.assunto||'Sem assunto')}</span></div>
+    <div class="cass"><svg width="11" height="11" viewBox="0 0 24 24" fill="rgba(249,115,22,.35)" stroke="#F97316" stroke-width="2" stroke-linejoin="round"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/></svg><span>${esc(r.assunto||'Sem assunto')}</span></div>
     <div class="ctit">${esc(r.acao)||'(sem título)'}</div>
     ${meta?`<div class="cmeta">${meta}</div>`:''}
     <div class="cfoot">${barra}${av}</div>
@@ -566,7 +563,6 @@ function render(){
   const vis=LINHAS.filter(passa);
   $('cols').className = VER==='kanban' ? 'cols' : 'cols solto';
   if(VER==='tabela'){ $('cols').innerHTML=htmlTabela(vis); pintaLateral(); return; }
-  if(VER==='relatorio'){ $('cols').innerHTML=htmlRelatorio(vis); pintaLateral(); return; }
   if(VER==='resumo'){ $('cols').innerHTML=htmlResumo(vis); pintaLateral(); return; }
   $('cols').innerHTML=ETAPAS.map(e=>{
     const cards=vis.filter(r=>(r.status||PADRAO)===e.k)
@@ -599,7 +595,7 @@ function pintaLateral(){
 const pctTxt=(a,b)=>b?Math.round(a/b*100)+'%':'—';
 function chip(st){
   const c={'Backlog':'var(--cinza)','Não iniciada':'var(--vermelho)','Em andamento':'#F4A100',
-           'Concluída':'var(--azul)','Cancelada':'#6B7280'}[st]||'var(--cinza)';
+           'Concluída':'var(--verde)','Cancelada':'#6B7280'}[st]||'var(--cinza)';
   return `<span class="tag" style="background:color-mix(in srgb,${c} 22%,transparent);
     color:${c};border:1px solid color-mix(in srgb,${c} 45%,transparent)">${ROTULO[st]||esc(st)}</span>`;
 }
@@ -617,16 +613,6 @@ function htmlTabela(rows){
       return `<tr data-id="${esc(r.id)}"><td>${esc(r.assunto)||'—'}</td><td class="forte">${esc(r.acao)||'—'}</td>
         <td>${esc(r.resp)||'—'}</td><td>${r.status==='Backlog'?'—':(r.prazo?dataBR(r.prazo):'—')}</td><td>${chip(r.status)}</td><td>${sit}</td></tr>`;
     }).join('')}</tbody></table></div>`;
-}
-function htmlRelatorio(rows){
-  if(!rows.length) return '<div class="cvazia">Nenhuma ação com os filtros atuais</div>';
-  const ord=[...rows].sort((a,b)=>(a.prazo||'9999-99-99').localeCompare(b.prazo||'9999-99-99'));
-  return `<div class="tab-wrap"><table class="tab rel">
-    <thead><tr><th>Assunto</th><th>Ação</th><th>Acompanhamento</th><th>Responsável</th><th>Prazo</th><th>Etapa</th></tr></thead>
-    <tbody>${ord.map(r=>`<tr data-id="${esc(r.id)}">
-      <td>${esc(r.assunto)||'—'}</td><td class="forte livre">${esc(r.acao)||'—'}</td>
-      <td class="livre suave">${esc(r.obs)||'—'}</td><td>${esc(r.resp)||'—'}</td>
-      <td>${r.status==='Backlog'?'—':(r.prazo?dataBR(r.prazo):'—')}</td><td>${chip(r.status)}</td></tr>`).join('')}</tbody></table></div>`;
 }
 function htmlResumo(rows){
   // ── regra do FCA Gerencial, copiada de fca-gerencial/index.html ──
@@ -791,7 +777,7 @@ document.querySelectorAll('.s-item[data-vis]').forEach(b=>b.addEventListener('cl
   VISAO = (v && VISAO===v) ? '' : v;    // clicar de novo desliga
   render();
 }));
-const TIT={kanban:'Quadro',tabela:'Tabela',relatorio:'Relatório',resumo:'Resumo'};
+const TIT={kanban:'Quadro',tabela:'Tabela',resumo:'Resumo'};
 document.querySelectorAll('.s-item[data-ver]').forEach(b=>b.addEventListener('click',()=>{
   VER=b.dataset.ver;
   document.querySelector('.top h1').textContent=TIT[VER];
