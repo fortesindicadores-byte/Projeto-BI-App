@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-<meta name="build" content="202608082330">
+<meta name="build" content="202608090030">
 <title>Painel de Gestão · Planner</title>
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -263,7 +263,12 @@ table.tab td.suave{color:var(--txt3);}
 table.tab td.num{text-align:right;white-space:nowrap;}
 table.tab tbody tr{cursor:pointer;}
 table.tab tbody tr:hover{background:var(--hover);}
-.tag{display:inline-block;padding:2px 9px;border-radius:20px;font-size:10px;font-weight:700;white-space:nowrap;}
+.tag{display:inline-block;padding:2px 9px;border-radius:20px;font-size:10px;font-weight:700;white-space:nowrap;
+  background:color-mix(in srgb,var(--c) 22%,transparent);color:var(--c);
+  border:1px solid color-mix(in srgb,var(--c) 45%,transparent);}
+/* no claro a cor fica no fundo e a letra vai para o preto */
+body.claro .tag{background:color-mix(in srgb,var(--c) 34%,transparent);color:#141922;
+  border-color:color-mix(in srgb,var(--c) 55%,transparent);}
 .atraso{color:var(--vermelho);font-weight:600;}
 
 .resumo{display:flex;flex-direction:column;gap:14px;}
@@ -515,10 +520,12 @@ const dias=iso=>Math.round((new Date(iso+'T00:00:00')-hoje())/86400000);
 // depois os que vencem antes; sem prazo sempre no fim, e aí por
 // criação (mais antigo antes) para a ordem não dançar entre renders.
 function porVencimento(a,b){
-  if(!a.prazo && !b.prazo) return String(a.criado).localeCompare(String(b.criado));
-  if(!a.prazo) return 1;
-  if(!b.prazo) return -1;
-  return a.prazo.localeCompare(b.prazo) || String(a.criado).localeCompare(String(b.criado));
+  // Backlog não tem prazo (nem quando há data gravada): vai para o fim
+  const pa=a.status==='Backlog'?'':(a.prazo||''), pb=b.status==='Backlog'?'':(b.prazo||'');
+  if(!pa && !pb) return String(a.criado).localeCompare(String(b.criado));
+  if(!pa) return 1;
+  if(!pb) return -1;
+  return pa.localeCompare(pb) || String(a.criado).localeCompare(String(b.criado));
 }
 const dataBR=iso=>iso?iso.split('-').reverse().join('/'):'';
 const desde=iso=>iso?(Date.now()-new Date(iso))/864e5:Infinity;
@@ -621,8 +628,7 @@ const pctTxt=(a,b)=>b?Math.round(a/b*100)+'%':'—';
 function chip(st){
   const c={'Backlog':'var(--cinza)','Não iniciada':'var(--vermelho)','Em andamento':'#F4A100',
            'Concluída':'var(--verde)','Cancelada':'#6B7280'}[st]||'var(--cinza)';
-  return `<span class="tag" style="background:color-mix(in srgb,${c} 22%,transparent);
-    color:${c};border:1px solid color-mix(in srgb,${c} 45%,transparent)">${ROTULO[st]||esc(st)}</span>`;
+  return `<span class="tag" style="--c:${c}">${ROTULO[st]||esc(st)}</span>`;
 }
 function htmlTabela(rows){
   if(!rows.length) return '<div class="cvazia">Nenhuma ação com os filtros atuais</div>';
