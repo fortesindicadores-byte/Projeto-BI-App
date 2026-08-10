@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-<meta name="build" content="202608090600">
+<meta name="build" content="202608090700">
 <title>Painel de Gestão · Laranja</title>
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -198,8 +198,10 @@ body.claro .menu .mdata input{background:#fff;border-color:#d7dce4;}
 
 /* ── colunas ── */
 .cols{flex:1;min-height:0;display:grid;grid-template-columns:repeat(4,1fr);gap:16px;
-  padding:0 24px 24px;overflow:auto;align-items:start;}
-.col{display:flex;flex-direction:column;min-height:56px;border-radius:10px;}
+  padding:0 24px 24px;overflow:auto;align-items:stretch;}
+.col{display:flex;flex-direction:column;min-height:100%;border-radius:10px;}
+/* o corpo estica até o fim da coluna: soltar em qualquer altura muda a etapa */
+.cbody{flex:1;}
 .col.over{background:rgba(46,155,214,.10);box-shadow:0 0 0 1px rgba(46,155,214,.35) inset;}
 .chead{display:flex;align-items:center;gap:8px;padding:2px 2px 12px;}
 .cname{font-size:10.5px;font-weight:600;color:var(--txt2);text-transform:uppercase;letter-spacing:1.3px;}
@@ -209,7 +211,7 @@ body.claro .menu .mdata input{background:#fff;border-color:#d7dce4;}
   font-family:inherit;font-size:14px;font-weight:500;line-height:1;padding:0;}
 .ic:hover{background:var(--hover);color:var(--txt);}
 .chead .ic:first-of-type{margin-left:auto;}
-.cbody{display:flex;flex-direction:column;gap:10px;}
+.cbody{display:flex;flex-direction:column;gap:10px;flex:1;}
 .col.rec .cbody{display:none;}
 
 /* ── card: faixa-rótulo no topo, corpo no cinza quente ── */
@@ -227,7 +229,10 @@ body.claro .menu .mdata input{background:#fff;border-color:#d7dce4;}
 .cass span{max-width:100%;font-size:13px;font-weight:800;letter-spacing:-.1px;color:#FFFFFF;
   overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 body.claro .cass span{color:#000000;}
-.ctit{font-size:11.5px;font-weight:400;line-height:1.4;padding:0 13px;color:var(--txt2);}
+.ctit{font-size:11.5px;font-weight:400;line-height:1.4;padding:0 13px;color:var(--txt2);
+  /* dois renques reservados: card de 1 linha fica do mesmo tamanho do de 2.
+     Passando de 2 linhas o card cresce — raro, e aí é melhor crescer que cortar */
+  min-height:calc(2 * 1.4em);}
 .cdata{font-size:10.5px;color:var(--txt3);white-space:nowrap;}
 .cdata .atraso{color:var(--vermelho);font-weight:700;}
 .cfoot{display:flex;align-items:center;justify-content:space-between;gap:10px;
@@ -399,9 +404,9 @@ input[type=date]::-webkit-calendar-picker-indicator{cursor:pointer;}
     </label>
 
     <div class="s-sec"><b>Visões</b></div>
-    <button class="s-item on" data-ver="kanban" title="Quadro">
+    <button class="s-item on" data-ver="kanban" title="Kanban">
       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M4 4h5v16H4zM10 4h5v11h-5zM16 4h4v7h-4z"/></svg>
-      Quadro
+      Kanban
     </button>
     <button class="s-item" data-ver="tabela" title="Tabela">
       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M3 5h18v14H3zM3 10h18M9 10v9"/></svg>
@@ -454,7 +459,7 @@ input[type=date]::-webkit-calendar-picker-indicator{cursor:pointer;}
   <!-- ══════════ quadro ══════════ -->
   <main class="board">
     <div class="top">
-      <h1>Quadro</h1>
+      <h1>Kanban</h1>
 
       <div class="menu-wrap">
         <button class="tool" id="btPessoas" onclick="abreMenu('mPessoas')">
@@ -951,7 +956,7 @@ document.querySelectorAll('.s-item[data-vis]').forEach(b=>b.addEventListener('cl
   VISAO = (v && VISAO===v) ? '' : v;    // clicar de novo desliga
   render();
 }));
-const TIT={kanban:'Quadro',tabela:'Tabela',gantt:'Gantt',resumo:'Resumo'};
+const TIT={kanban:'Kanban',tabela:'Tabela',gantt:'Gantt',resumo:'Resumo'};
 document.querySelectorAll('.s-item[data-ver]').forEach(b=>b.addEventListener('click',()=>{
   VER=b.dataset.ver;
   document.querySelector('.top h1').textContent=TIT[VER];
