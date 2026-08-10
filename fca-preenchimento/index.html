@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-<meta name="build" content="202608101200">
+<meta name="build" content="202608101400">
 <title>FCA</title>
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -630,8 +630,12 @@ body.light-mode .kcard{box-shadow:0 4px 14px rgba(15,23,42,.10), var(--luz-card)
 .kcard-fato{padding:0 13px;margin-top:5px;font-size:13px!important;font-weight:800!important;
   color:#FFFFFF!important;line-height:1.3;}
 body.light-mode .kcard-fato{color:#000000!important;}
-.kcard-ac{padding:0 13px;margin-top:4px!important;font-size:11.5px!important;font-weight:400!important;
+/* a causa entra ENTRE o fato e a ação — o card conta a história inteira */
+.kcard-causa{padding:0 13px;margin-top:5px;font-size:10.5px;font-weight:600;color:var(--txt3);
+  line-height:1.35;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}
+.kcard-ac{padding:0 13px;margin-top:6px!important;font-size:11.5px!important;font-weight:400!important;
   color:var(--txt2)!important;line-height:1.4;min-height:calc(2 * 1.4em);}
+.kcard-ac i{color:var(--txt4);font-style:italic;}
 /* rodapé do card: prazo à esquerda, iniciais do responsável à direita — igual ao Planner */
 .kcard-meta{display:flex;align-items:center;justify-content:space-between;gap:10px;min-height:24px;
   padding:0 13px;margin-top:12px!important;font-size:10.5px!important;color:var(--txt3)!important;}
@@ -1463,7 +1467,8 @@ function kcardHTMLpre(x){const r=x.r,f=x.f,org=String(f.origem||'').toUpperCase(
   return `<div class="kcard${lk?' klock':''}"${lk?'':' draggable="true"'} data-id="${esc(r.id||'')}">
     <div class="kcard-top"><span class="korg ${org}">${esc(f.origem||'')}</span> ${esc(UNIDADE_COD)} · ${esc(projLabel(f.proj))} · ${esc(f.vig)}${r.locked?' 🔒':''}</div>
     <div class="kcard-fato">${esc(_firstLine(f.nome||f.fato))}</div>
-    ${r.acao?`<div class="kcard-ac">${esc(r.acao)}</div>`:''}
+    ${r.causa?`<div class="kcard-causa">${esc(_firstLine(r.causa))}</div>`:''}
+    <div class="kcard-ac">${r.acao?esc(r.acao):'<i>ação não preenchida</i>'}</div>
     <div class="kcard-meta"><span>${prazoTextoK(r)}</span>${r.responsavel?`<span class="kav" title="${esc(r.responsavel)}">${esc(iniciaisK(r.responsavel))}</span>`:'<span></span>'}</div>
   </div>`;}
 function kanbanHTMLpre(vis){
@@ -1499,7 +1504,8 @@ function relatorioHTMLpre(vis){
     '</tr></thead><tbody>';
   rows.forEach(({f,a})=>{
     const sp=prazoState({status:a.status,prazo:a.prazo}), spCor=sp==='Vencida'?'var(--red)':'var(--green)';
-    h+='<tr>'+
+    // a linha abre o mesmo modal do Kanban — daí dá para editar, adicionar causa/ação e excluir
+    h+=`<tr data-id="${esc(a.id||'')}" title="Clique para editar">`+
       `<td class="center">${esc(f.origem||'—')}</td>`+
       `<td class="center">${esc(projLabel(f.proj))}</td>`+
       `<td class="center">${esc((f.vig||'').toUpperCase())}</td>`+
@@ -1525,7 +1531,7 @@ async function moveCardPre(id,status){
   const all=[]; for(const k in _DBROWS) all.push(..._DBROWS[k]); writeCache('fca_cache_'+UNIDADE_COD,all);
 }
 // ── Editar card no próprio Kanban (clique abre modal) ──
-let _kmId=null;
+let _kmId=null,_kmKey=null;
 const _KM_STS=['Não iniciada','Em andamento','Concluída','Cancelada'];
 function _findDbRow(id){for(const k in _DBROWS){const r=(_DBROWS[k]||[]).find(x=>String(x.id)===String(id));if(r)return {r,key:k};}return null;}
 function ensureKModal(){
@@ -1547,18 +1553,31 @@ function ensureKModal(){
     'body.light-mode .kmodal select option{background:#fff;color:#0f172a;}'+
     '.kmodal textarea{resize:vertical;min-height:90px;line-height:1.45;}'+
     '.kmodal-row{display:flex;gap:12px;}.kmodal-row>div{flex:1;}'+
-    '.kmodal-foot{display:flex;justify-content:flex-end;gap:8px;margin-top:18px;}'+
-    '.kcard{cursor:pointer;}.kcard.klock{cursor:default;}';
+    '.kmodal-foot{display:flex;align-items:center;gap:8px;margin-top:18px;}'+
+    '.kmodal-foot .esq{margin-right:auto;display:flex;gap:8px;}'+
+    '.km-ro{background:var(--hover);border:1px dashed var(--card-brd);border-radius:8px;padding:9px 11px;'+
+      'font-size:12.5px;color:var(--txt2);line-height:1.45;}'+
+    '.km-ro b{color:var(--txt);font-weight:700;}'+
+    '.kcard{cursor:pointer;}.kcard.klock{cursor:default;}'+
+    'table.rel tbody tr{cursor:pointer;}';
   document.head.appendChild(st);
   const d=document.createElement('div');d.id='kmodal-ov';d.className='kmodal-ov';
   d.innerHTML='<div class="kmodal">'+
     '<div class="kmodal-head"><b id="km-fato"></b><button class="kmodal-x" onclick="closeKModal()">✕</button></div>'+
     '<div class="kmodal-sub" id="km-ctx"></div>'+
+    '<label>Fato</label><div class="km-ro" id="km-desv"></div>'+
     '<label>Causa</label><textarea id="km-causa" rows="5"></textarea>'+
     '<label>Ação</label><textarea id="km-acao" rows="4"></textarea>'+
     '<div class="kmodal-row"><div><label>Responsável</label><input id="km-resp" type="text"></div><div><label>Prazo</label><input id="km-prazo" type="date"></div></div>'+
     '<div class="kmodal-row"><div><label>Status</label><select id="km-status">'+_KM_STS.map(s=>'<option>'+s+'</option>').join('')+'</select></div><div><label>Acompanhamento</label><input id="km-acomp" type="text"></div></div>'+
-    '<div class="kmodal-foot"><button class="btn ghost" onclick="closeKModal()">Fechar</button></div>'+
+    '<div class="kmodal-foot">'+
+      '<span class="esq">'+
+        '<button class="btn ghost" onclick="novaAcaoDoModal()" title="Outra ação para a mesma causa">+ ação</button>'+
+        '<button class="btn ghost" onclick="novaCausaDoModal()" title="Outra causa para o mesmo fato">+ causa</button>'+
+        '<button class="btn ghost" onclick="excluirDoModal()" style="color:var(--vermelho)">Excluir</button>'+
+      '</span>'+
+      '<button class="btn ghost" onclick="closeKModal()">Fechar</button>'+
+    '</div>'+
   '</div>';
   d.addEventListener('click',e=>{if(e.target===d)closeKModal();});
   document.body.appendChild(d);
@@ -1570,8 +1589,14 @@ function openKModal(id){
   // (sem trava: a unidade edita qualquer ação da sua unidade)
   ensureKModal();_kmId=r.id;
   const f=_FATOS.find(x=>keyOf(x)===hit.key)||{};
-  document.getElementById('km-fato').textContent=_firstLine(f.nome||f.fato||r.fato||'')||'—';
+  _kmKey=hit.key;
+  const nome=_firstLine(f.nome||f.fato||r.fato||'')||'—';
+  document.getElementById('km-fato').textContent=nome;
   document.getElementById('km-ctx').textContent=[f.origem,typeof UNIDADE_COD!=='undefined'?UNIDADE_COD:'',projLabel(f.proj),f.vig].filter(Boolean).join(' · ');
+  // o fato por extenso (nome + desvio) — quem abre pelo Kanban/Tabela precisa
+  // ver de onde a ação nasceu sem ter de voltar na tela de Fatos
+  const desv=f.desvio||(r.fato_desvio?`<span class="val am">${fmtDesvio(r.fato_desvio)}</span>`:'');
+  document.getElementById('km-desv').innerHTML=`<b>${esc(nome)}</b>${desv?' · '+tri(desv):''}`;
   document.getElementById('km-causa').value=r.causa||'';
   document.getElementById('km-acao').value=r.acao||'';
   document.getElementById('km-resp').value=r.responsavel||'';
@@ -1580,7 +1605,7 @@ function openKModal(id){
   document.getElementById('km-acomp').value=r.acompanhamento||'';
   document.getElementById('kmodal-ov').style.display='flex';
 }
-function closeKModal(){const m=document.getElementById('kmodal-ov');if(m)m.style.display='none';_kmId=null;}
+function closeKModal(){const m=document.getElementById('kmodal-ov');if(m)m.style.display='none';_kmId=null;_kmKey=null;}
 async function persistKModal(){
   const hit=_findDbRow(_kmId);if(!hit)return;const r=hit.r;
   const upd={causa:document.getElementById('km-causa').value||null,acao:document.getElementById('km-acao').value||null,
@@ -1592,9 +1617,58 @@ async function persistKModal(){
   const all=[];for(const k in _DBROWS)all.push(..._DBROWS[k]);writeCache('fca_cache_'+UNIDADE_COD,all);
   flashSavedPre();
 }
+// ── Adicionar / excluir direto do modal ──
+// Com isso o Kanban e a Tabela fazem tudo o que a tela de Fatos faz:
+// "+ ação" repete a causa (várias ações para a mesma causa) e
+// "+ causa" abre uma linha em branco no mesmo fato.
+async function _novaLinhaFCA(causa){
+  if(!_kmKey) return;
+  const key=_kmKey;
+  await persistKModal();          // o que estava digitado na linha atual não pode se perder
+  const f=_FATOS.find(x=>keyOf(x)===key);
+  const base=(_DBROWS[key]||[])[0]||{};
+  const nova={
+    unidade:UNIDADE_COD,
+    vigencia:(f&&f.vig)||base.vigencia||'',
+    origem:(f&&f.origem)||base.origem||'Custos',
+    fato:(f&&f.fato)||base.fato||'',
+    projeto:(f&&f.proj)||base.projeto||null,
+    fato_desvio:(f&&stripTags(f.desvio))||base.fato_desvio||null,
+    causa:causa||null, acao:null, responsavel:null, prazo:null,
+    status:DEFAULT_STATUS, acompanhamento:null, locked:false,
+  };
+  if(PREVIEW||!sb){ alert('Sem conexão com a base — não dá para criar agora.'); return; }
+  const {data,error}=await sb.from('fca').insert(nova).select('*').single();
+  if(error){console.error('insert modal',error);alert('Erro ao criar: '+error.message);return;}
+  (_DBROWS[key]=_DBROWS[key]||[]).push(data);
+  const all=[];for(const k in _DBROWS)all.push(..._DBROWS[k]);writeCache('fca_cache_'+UNIDADE_COD,all);
+  flashSavedPre(); aplicar();
+  openKModal(data.id);
+  const ta=document.getElementById(causa?'km-acao':'km-causa'); if(ta) ta.focus();
+}
+function novaAcaoDoModal(){
+  const c=document.getElementById('km-causa'); _novaLinhaFCA(c?c.value:'');
+}
+function novaCausaDoModal(){ _novaLinhaFCA(''); }
+async function excluirDoModal(){
+  const hit=_findDbRow(_kmId); if(!hit) return;
+  const key=hit.key, id=hit.r.id;
+  if(!confirm('Excluir esta ação?')) return;
+  if(PREVIEW||!sb){ closeKModal(); return; }
+  const {error}=await sb.from('fca').delete().eq('id',id);
+  if(error){console.error('delete modal',error);alert('Erro ao excluir');return;}
+  _DBROWS[key]=(_DBROWS[key]||[]).filter(x=>String(x.id)!==String(id));
+  const all=[];for(const k in _DBROWS)all.push(..._DBROWS[k]);writeCache('fca_cache_'+UNIDADE_COD,all);
+  closeKModal(); flashSavedPre(); aplicar();
+}
+
 // Drag-and-drop do Kanban (montado 1x no #list, que persiste entre renders)
 (function(){const c=document.getElementById('list'); if(!c)return;
-  c.addEventListener('click',e=>{const gv=e.target.closest&&e.target.closest('.grow[data-id]');if(gv&&gv.dataset.id){openKModal(gv.dataset.id);return;}const card=e.target.closest&&e.target.closest('.kcard');if(card&&VIEW==='kanban'){const id=card.dataset.id;if(id)openKModal(id);}});
+  c.addEventListener('click',e=>{
+    const gv=e.target.closest&&e.target.closest('.grow[data-id]');if(gv&&gv.dataset.id){openKModal(gv.dataset.id);return;}
+    const tr=e.target.closest&&e.target.closest('tr[data-id]');if(tr&&tr.dataset.id){openKModal(tr.dataset.id);return;}
+    const card=e.target.closest&&e.target.closest('.kcard');if(card&&VIEW==='kanban'){const id=card.dataset.id;if(id)openKModal(id);}
+  });
   c.addEventListener('dragstart',e=>{const card=e.target.closest&&e.target.closest('.kcard');if(card&&card.getAttribute('draggable')==='true'){e.dataTransfer.setData('text/plain',card.dataset.id);e.dataTransfer.effectAllowed='move';card.classList.add('dragging');}});
   c.addEventListener('dragend',e=>{const card=e.target.closest&&e.target.closest('.kcard');if(card)card.classList.remove('dragging');});
   c.addEventListener('dragover',e=>{const col=e.target.closest&&e.target.closest('.kcol');if(col){e.preventDefault();e.dataTransfer.dropEffect='move';col.classList.add('kover');}});
