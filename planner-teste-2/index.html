@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-<meta name="build" content="202608090700">
+<meta name="build" content="202608090800">
 <title>Painel de Gestão · Laranja</title>
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -249,6 +249,11 @@ body.claro .cass span{color:#000000;}
 
 /* ── visões Tabela / Relatório / Resumo ── */
 .cols.solto{display:block;}
+/* Tabela e Gantt rolam por dentro: sem isso o sticky do cabeçalho se
+   ancora no wrapper, que rola junto, e o cabeçalho some ao descer */
+.cols.rola{display:flex;flex-direction:column;overflow:hidden;}
+.cols.rola .tab-wrap,.cols.rola .grol{flex:1;min-height:0;overflow:auto;}
+.cols.rola .gantt{display:flex;flex-direction:column;min-height:0;}
 .tab-wrap{overflow:auto;border:1px solid var(--card-brd);border-radius:10px;background:var(--card);
   backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);}
 table.tab{width:100%;border-collapse:collapse;font-size:12px;}
@@ -313,17 +318,19 @@ table.res-tab tbody tr:hover{background:var(--hover);}
 /* ── Gantt ── */
 .gantt{background:var(--card);border:1px solid var(--card-brd);border-radius:8px;
   backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);overflow:hidden;}
-.grol{overflow-x:auto;}
-.grow{display:grid;grid-template-columns:300px 1fr;border-bottom:1px solid var(--linha);}
+.grol{overflow:auto;}
+.grow{display:grid;grid-template-columns:340px 1fr;border-bottom:1px solid var(--linha);}
 .grow:last-child{border-bottom:0;}
 .grow:not(.ghead){cursor:pointer;}
 .grow:not(.ghead):hover{background:var(--hover);}
 .ghead{background:var(--cabec);position:sticky;top:0;z-index:2;}
 .ghead .glbl{font-size:10px;font-weight:700;color:var(--txt2);text-transform:uppercase;letter-spacing:.8px;}
 .glbl{padding:9px 14px;min-width:0;display:flex;flex-direction:column;gap:2px;justify-content:center;}
-.glbl b{font-size:11.5px;font-weight:800;color:var(--txt);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
-.glbl span{font-size:10.5px;font-weight:400;color:var(--txt2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
-.gbar{position:relative;min-height:40px;border-left:1px solid var(--linha);}
+.glbl b{font-size:11.5px;font-weight:800;color:var(--txt);line-height:1.3;}
+/* o texto da ação quebra em até duas linhas em vez de ser cortado */
+.glbl span{font-size:10.5px;font-weight:400;color:var(--txt2);line-height:1.35;
+  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}
+.gbar{position:relative;min-height:46px;border-left:1px solid var(--linha);}
 .gmeses{display:flex;align-items:center;min-height:32px;}
 .gmeses span{font-size:9.5px;font-weight:700;color:var(--txt3);text-align:center;
   border-left:1px solid var(--linha);text-transform:uppercase;letter-spacing:.4px;}
@@ -661,7 +668,8 @@ function card(r){
   const av=r.resp
     ? `<span class="av" title="${esc(r.resp)}">${esc(iniciais(r.resp))}</span>`
     : `<button class="add-av" title="Definir responsável">+</button>`;
-  return `<article class="card ${pz}${fim}" draggable="true" data-id="${esc(r.id)}">
+  const dica=[r.assunto,r.acao,r.resp,r.prazo?('prazo '+dataBR(r.prazo)):''].filter(Boolean).join(' · ');
+  return `<article class="card ${pz}${fim}" draggable="true" data-id="${esc(r.id)}" title="${esc(dica)}">
     <div class="cass"><span>${esc(r.assunto||'Sem assunto')}</span></div>
     <div class="ctit">${esc(r.acao)||'(sem título)'}</div>
     <div class="cfoot">${meta?`<span class="cdata">${meta}</span>`:'<span></span>'}${av}</div>
@@ -669,7 +677,8 @@ function card(r){
 }
 function render(){
   const vis=LINHAS.filter(passa);
-  $('cols').className = VER==='kanban' ? 'cols' : 'cols solto';
+  $('cols').className = VER==='kanban' ? 'cols'
+    : ('cols solto'+((VER==='tabela'||VER==='gantt')?' rola':''));
   if(VER==='tabela'){ $('cols').innerHTML=htmlTabela(vis); pintaLateral(); return; }
   if(VER==='gantt'){ $('cols').innerHTML=htmlGantt(vis); pintaLateral(); return; }
   if(VER==='resumo'){ $('cols').innerHTML=htmlResumo(vis); pintaLateral(); return; }
@@ -758,12 +767,13 @@ function htmlGantt(rows){
       if(pz==='venc') barra+=`<u style="left:${b}%;width:${Math.max(hj-b,.3)}%"></u>`;
       barra+=`<em style="left:${Math.max(b,pz==='venc'?hj:b)}%">${dataBR(r.prazo).slice(0,5)}</em>`;
     }
-    return `<div class="grow" data-id="${esc(r.id)}">
+    const dica=[r.assunto,r.acao,r.resp,r.prazo?('prazo '+dataBR(r.prazo)):''].filter(Boolean).join(' · ');
+    return `<div class="grow" data-id="${esc(r.id)}" title="${esc(dica)}">
       <div class="glbl"><b>${esc(r.assunto)||'—'}</b><span>${esc(r.acao)||'(sem título)'}</span></div>
       <div class="gbar"><span class="ghoje" style="left:${hj}%"></span>${barra}</div>
     </div>`;
   }).join('');
-  return `<div class="gantt"><div class="grol"><div class="gin" style="min-width:${Math.max(760,300+meses.length*84)}px">
+  return `<div class="gantt"><div class="grol"><div class="gin" style="min-width:${Math.max(800,340+meses.length*84)}px">
     <div class="grow ghead">
       <div class="glbl">Ação</div>
       <div class="gbar gmeses">${meses.map(m=>`<span style="width:${m.w}%">${m.lbl}</span>`).join('')}
