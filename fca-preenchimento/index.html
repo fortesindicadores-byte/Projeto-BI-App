@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-<meta name="build" content="202608111100">
+<meta name="build" content="202608111200">
 <title>FCA</title>
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -571,6 +571,10 @@ table.res-tab tbody tr:hover{background:var(--hover);}
 /* Tabela e Gantt rolam por DENTRO: sem isso o sticky do cabeçalho se ancora
    num wrapper que não rola, e o cabeçalho sobe junto com as linhas */
 .board .main.rola{display:flex;flex-direction:column;overflow:hidden;}
+/* no Kanban o quadro em si não rola — quem rola é cada coluna */
+.board .main.kan{display:flex;flex-direction:column;overflow:hidden;}
+.board .main.kan #list{flex:1;min-height:0;display:flex;flex-direction:column;overflow:hidden;}
+.board .main.kan .kanban{flex:1;min-height:0;}
 .board .main.rola #list{flex:1;min-height:0;display:flex;flex-direction:column;overflow:hidden;}
 .board .main.rola .tab-wrap,.board .main.rola .grol,
 .board .main.rola .rel-wrap{flex:1;min-height:0;overflow-x:hidden;overflow-y:auto;}
@@ -636,15 +640,18 @@ body.light-mode .fato-block,body.light-mode .uhub-card{
 .kanban{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;align-items:stretch;}
 /* overflow:hidden (do CSS antigo) impede o cabeçalho de grudar: com ele a
    coluna vira contexto de recorte e o sticky se ancora nela, que não rola */
-.kcol{background:transparent!important;border:0!important;display:flex;flex-direction:column;min-height:100%;overflow:visible!important;}
-/* o título da etapa acompanha a rolagem — mesmo visual de antes, sem fundo:
-   só deixa de sumir quando a lista desce */
+.kcol{background:transparent!important;border:0!important;display:flex;flex-direction:column;
+  min-height:0;height:100%;overflow:visible!important;}
+/* o título fica FORA da área que rola: quem rola é a lista de cards de cada
+   coluna. Assim ele nunca some nem é atravessado pelos cards, e não precisa de
+   faixa de fundo nenhuma. */
 .kcol-head,.kcol-head.nao,.kcol-head.and,.kcol-head.con{
   background:transparent!important;color:var(--txt2)!important;font-size:10.5px!important;
   letter-spacing:1.3px;padding:2px 2px 12px!important;justify-content:flex-start;gap:8px;
-  position:sticky;top:0;z-index:5;}
+  flex:0 0 auto;}
 .kcount{background:transparent!important;color:var(--txt3)!important;padding:0!important;}
-.kcol-body{padding:0 0 36px!important;gap:10px!important;flex:1;}   /* 36 embaixo: o último card não fica colado */
+.kcol-body{padding:0 0 36px!important;gap:10px!important;flex:1;min-height:0;
+  overflow-y:auto;overflow-x:hidden;}   /* 36 embaixo: o último card não fica colado */
 .kcard{background:var(--brilho), var(--card)!important;border:1px solid var(--card-brd)!important;border-radius:4px!important;
   padding:0 0 12px!important;backdrop-filter:blur(5px);-webkit-backdrop-filter:blur(5px);
   box-shadow:0 8px 22px rgba(0,0,0,.36), var(--luz-card)!important;}
@@ -1345,7 +1352,8 @@ function aplicar(){
   // unidades ele é reescrito e continua aparecendo, porque lá aplicar() não roda
   const intro=document.querySelector('.intro'); if(intro) intro.style.display='none';
   const mn=document.querySelector('.board .main');
-  if(mn) mn.classList.toggle('rola', VIEW==='flat'||VIEW==='gantt');
+  if(mn){ mn.classList.toggle('rola', VIEW==='flat'||VIEW==='gantt');
+           mn.classList.toggle('kan', VIEW==='kanban'); }
   if(!_FATOS.length){list.innerHTML='<div class="empty">✓ Nenhum desvio encontrado para esta unidade na vigência mais recente — sem fatos a tratar.</div>';return;}
   const fv=getMsValues('ms-vig'), fo=getMsValues('ms-org'), fp=getMsValues('ms-proj'), fi=getMsValues('ms-ind'), fs=getMsValues('ms-st'), fpz=getMsValues('ms-prazo');
   const acMatch=r=>(!fs.length||fs.includes(r.status||DEFAULT_STATUS))&&(!fpz.length||fpz.includes(prazoState(r)));

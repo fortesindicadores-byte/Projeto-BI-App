@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-<meta name="build" content="202608111100">
+<meta name="build" content="202608111200">
 <title>Painel de Gestão · Laranja</title>
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -206,14 +206,16 @@ body.claro .menu .mdata input{background:#fff;border-color:#d7dce4;}
 /* ── colunas ── */
 .cols{flex:1;min-height:0;display:grid;grid-template-columns:repeat(4,1fr);gap:16px;
   padding:0 24px 24px;overflow:auto;align-items:stretch;}
-.col{display:flex;flex-direction:column;min-height:100%;border-radius:10px;}
+/* no Kanban o quadro em si não rola — quem rola é cada coluna */
+.cols:not(.solto){overflow:hidden;}
+.col{display:flex;flex-direction:column;min-height:0;height:100%;border-radius:10px;}
 /* o corpo estica até o fim da coluna: soltar em qualquer altura muda a etapa */
 .cbody{flex:1;}
 .col.over{background:rgba(46,155,214,.10);box-shadow:0 0 0 1px rgba(46,155,214,.35) inset;}
-/* o título da etapa acompanha a rolagem — mesmo visual de antes, sem fundo:
-   só deixa de sumir quando a lista desce */
-.chead{display:flex;align-items:center;gap:8px;padding:2px 2px 12px;
-  position:sticky;top:0;z-index:5;}
+/* o título fica FORA da área que rola: quem rola é a lista de cards de cada
+   coluna. Assim ele nunca some nem é atravessado pelos cards, e não precisa de
+   faixa de fundo nenhuma. */
+.chead{display:flex;align-items:center;gap:8px;padding:2px 2px 12px;flex:0 0 auto;}
 .cname{font-size:10.5px;font-weight:600;color:var(--txt2);text-transform:uppercase;letter-spacing:1.3px;}
 .cnum{font-size:10.5px;font-weight:600;color:var(--txt3);}
 .ic{display:flex;align-items:center;justify-content:center;width:20px;height:20px;flex:0 0 20px;
@@ -221,13 +223,16 @@ body.claro .menu .mdata input{background:#fff;border-color:#d7dce4;}
   font-family:inherit;font-size:14px;font-weight:500;line-height:1;padding:0;}
 .ic:hover{background:var(--hover);color:var(--txt);}
 .chead .ic:first-of-type{margin-left:auto;}
-.cbody{display:flex;flex-direction:column;gap:10px;flex:1;padding-bottom:36px;}
+.cbody{display:flex;flex-direction:column;gap:10px;flex:1;min-height:0;
+  overflow-y:auto;overflow-x:hidden;padding-bottom:36px;}
 /* o respiro fica no .cbody, não no .cols: os cards passam da altura da coluna,
    e padding de container que rola não conta para o conteúdo que transborda */
 .col.rec .cbody{display:none;}
 
 /* ── card: faixa-rótulo no topo, corpo no cinza quente ── */
-.card{position:relative;overflow:hidden;background:var(--card);
+/* item de flex encolhe por padrão: com a coluna rolando, os cards eram
+   espremidos até virar só o título — flex:0 0 auto trava a altura natural */
+.card{flex:0 0 auto;position:relative;overflow:hidden;background:var(--card);
   border:1px solid color-mix(in srgb, var(--pz,var(--cinza)) 45%, transparent);
   border-radius:4px;padding:0 0 12px;cursor:grab;box-shadow:var(--sombra);
   backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);}
