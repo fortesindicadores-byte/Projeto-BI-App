@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-<meta name="build" content="202608090400">
+<meta name="build" content="202608090500">
 <title>Painel de Gestão · Laranja</title>
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -439,6 +439,14 @@ input[type=date]::-webkit-calendar-picker-indicator{cursor:pointer;}
       <button class="tool ico" id="btTemaTopo" onclick="trocaTema()" title="Modo claro/escuro"></button>
 
       <div class="menu-wrap">
+        <button class="tool" id="btVig" onclick="abreMenu('mVig')">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><rect x="3.5" y="4.5" width="17" height="16" rx="2"/><path d="M3.5 9.5h17M8 3v3M16 3v3"/><path d="M7.5 13h3v3h-3z"/></svg>
+          Vigência
+        </button>
+        <div class="menu" id="mVig"><div class="tit">Vigência da ação</div><div class="rol" id="lstVig"></div></div>
+      </div>
+
+      <div class="menu-wrap">
         <button class="tool" id="btPrazo" onclick="abreMenu('mPrazo')">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><rect x="3.5" y="5" width="17" height="15" rx="2"/><path d="M8 3v4M16 3v4M3.5 10h17"/></svg>
           Prazo
@@ -519,6 +527,14 @@ const ASSUNTOS=['Governança','Custos','Projetos','Disponibilidade','Xadrez de F
 let sb=null, LINHAS=[], NOMES=[], EU='';
 let BUSCA='', VISAO='', VER='kanban', RESUMO_POR='assunto', RESP=new Set(), ASS=new Set();
 let DT_DE='', DT_ATE='';
+const VIG=new Set();
+// vigência da ação = mês em que ela foi criada, no padrão MM/AAAA
+function vigDe(r){
+  if(!r.criado) return '';
+  const d=new Date(r.criado); if(isNaN(d)) return '';
+  return String(d.getMonth()+1).padStart(2,'0')+'/'+d.getFullYear();
+}
+const vigOrd=(a,b)=>(b.slice(3)+b.slice(0,2)).localeCompare(a.slice(3)+a.slice(0,2));
 const RECOLHIDAS=new Set();
 
 /* ── utilidades ── */
@@ -584,6 +600,7 @@ function noPeriodo(r){
 }
 function passa(r){
   if(!noPeriodo(r)) return false;
+  if(VIG.size && !VIG.has(vigDe(r))) return false;
   if(BUSCA && ![r.acao,r.assunto,r.resp,r.obs].some(x=>String(x||'').toLowerCase().includes(BUSCA))) return false;
   if(RESP.size && !RESP.has(r.resp)) return false;
   if(ASS.size && !ASS.has(r.assunto)) return false;
@@ -640,6 +657,7 @@ function pintaLateral(){
   $('btPessoas').classList.toggle('on',RESP.size>0);
   $('btFiltro').classList.toggle('on',ASS.size>0);
   $('btPrazo').classList.toggle('on',!!(DT_DE||DT_ATE));
+  $('btVig').classList.toggle('on',VIG.size>0);
 }
 
 /* ══════════ VISÕES: Tabela · Relatório · Resumo ══════════ */
@@ -776,6 +794,7 @@ document.addEventListener('click',e=>{
 // filtros (regra do hub/visão financeira), com "Todos" e o "só"
 function passaExceto(r,qual){
   if(!noPeriodo(r)) return false;
+  if(qual!=='vig' && VIG.size && !VIG.has(vigDe(r))) return false;
   if(BUSCA && ![r.acao,r.assunto,r.resp,r.obs].some(x=>String(x||'').toLowerCase().includes(BUSCA))) return false;
   if(qual!=='resp' && RESP.size && !RESP.has(r.resp)) return false;
   if(qual!=='ass'  && ASS.size  && !ASS.has(r.assunto)) return false;
@@ -796,6 +815,9 @@ function montaMenus(){
   const ass=[...new Set(LINHAS.filter(r=>passaExceto(r,'ass')).map(r=>r.assunto).filter(Boolean))].sort(pt);
   ASS.forEach(v=>{ if(!ass.includes(v)) ass.unshift(v); });
   $('lstAssuntos').innerHTML=menuLista(ass,ASS,'a');
+  const vig=[...new Set(LINHAS.filter(r=>passaExceto(r,'vig')).map(vigDe).filter(Boolean))].sort(vigOrd);
+  VIG.forEach(v=>{ if(!vig.includes(v)) vig.unshift(v); });
+  $('lstVig').innerHTML=menuLista(vig,VIG,'v');
 }
 // mesma mecânica do multi-select padrão: Todos limpa; desmarcar com tudo
 // marcado seleciona os demais; marcar o último de volta vira Todos; "só" isola
@@ -820,10 +842,11 @@ function ligaMenu(el,sel,attr){
 }
 ligaMenu($('lstPessoas'),RESP,'p');
 ligaMenu($('lstAssuntos'),ASS,'a');
+ligaMenu($('lstVig'),VIG,'v');
 function mudaData(){ DT_DE=$('dtDe').value||''; DT_ATE=$('dtAte').value||''; montaMenus(); render(); }
 function limpaData(){ $('dtDe').value=''; $('dtAte').value=''; mudaData(); }
 function limpaFiltros(){
-  RESP.clear(); ASS.clear(); VISAO=''; BUSCA=''; $('busca').value='';
+  RESP.clear(); ASS.clear(); VIG.clear(); VISAO=''; BUSCA=''; $('busca').value='';
   DT_DE=''; DT_ATE=''; $('dtDe').value=''; $('dtAte').value='';
   document.querySelectorAll('.menu.open').forEach(m=>m.classList.remove('open'));
   montaMenus(); render();
