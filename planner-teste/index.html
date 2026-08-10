@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-<meta name="build" content="202608111200">
+<meta name="build" content="202608111300">
 <title>Painel de Gestão · Planner</title>
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -222,18 +222,21 @@ body.claro .menu .mdata input{background:#fff;border-color:#d7dce4;}
 .menu .so:hover{background:rgba(249,115,22,.2);}
 
 /* ── colunas ── */
+/* faixa dos títulos: fica FORA do que rola, com as mesmas colunas do grid de
+   baixo. --sb é a largura da barra de rolagem, medida no JS, para as duas
+   grades continuarem alinhadas quando a barra aparece. */
+.cheads{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;
+  padding:0 calc(24px + var(--sb,0px)) 0 24px;flex:0 0 auto;}
 .cols{flex:1;min-height:0;display:grid;grid-template-columns:repeat(4,1fr);gap:16px;
   padding:0 24px 24px;overflow:auto;align-items:stretch;}
-/* no Kanban o quadro em si não rola — quem rola é cada coluna */
-.cols:not(.solto){overflow:hidden;}
-.col{display:flex;flex-direction:column;min-height:0;height:100%;border-radius:10px;}
+.col{display:flex;flex-direction:column;min-height:100%;border-radius:10px;}
 /* o corpo estica até o fim da coluna: soltar em qualquer altura muda a etapa */
 .cbody{flex:1;}
 .col.over{background:rgba(46,155,214,.10);box-shadow:0 0 0 1px rgba(46,155,214,.35) inset;}
 /* o título fica FORA da área que rola: quem rola é a lista de cards de cada
    coluna. Assim ele nunca some nem é atravessado pelos cards, e não precisa de
    faixa de fundo nenhuma. */
-.chead{display:flex;align-items:center;gap:8px;padding:2px 2px 12px;flex:0 0 auto;}
+.chead{display:flex;align-items:center;gap:8px;padding:2px 2px 12px;}
 .cname{font-size:10.5px;font-weight:600;color:var(--txt2);text-transform:uppercase;letter-spacing:1.3px;}
 .cnum{font-size:10.5px;font-weight:600;color:var(--txt3);}
 .ic{display:flex;align-items:center;justify-content:center;width:20px;height:20px;flex:0 0 20px;
@@ -241,8 +244,7 @@ body.claro .menu .mdata input{background:#fff;border-color:#d7dce4;}
   font-family:inherit;font-size:14px;font-weight:500;line-height:1;padding:0;}
 .ic:hover{background:var(--hover);color:var(--txt);}
 .chead .ic:first-of-type{margin-left:auto;}
-.cbody{display:flex;flex-direction:column;gap:10px;flex:1;min-height:0;
-  overflow-y:auto;overflow-x:hidden;padding-bottom:36px;}
+.cbody{display:flex;flex-direction:column;gap:10px;flex:1;padding-bottom:36px;}
 /* o respiro fica no .cbody, não no .cols: os cards passam da altura da coluna,
    e padding de container que rola não conta para o conteúdo que transborda */
 .col.rec .cbody{display:none;}
@@ -554,6 +556,7 @@ input[type=date]::-webkit-calendar-picker-indicator{cursor:pointer;}
       </div>
     </div>
 
+    <div class="cheads" id="cheads"></div>
     <div class="cols" id="cols"></div>
   </main>
 </div>
@@ -725,24 +728,33 @@ function render(){
   const vis=LINHAS.filter(passa);
   $('cols').className = VER==='kanban' ? 'cols'
     : ('cols solto'+((VER==='tabela'||VER==='gantt')?' rola':''));
+  $('cheads').style.display = VER==='kanban' ? '' : 'none';
   if(VER==='tabela'){ $('cols').innerHTML=htmlTabela(vis); pintaLateral(); return; }
   if(VER==='gantt'){ $('cols').innerHTML=htmlGantt(vis); pintaLateral(); return; }
   if(VER==='resumo'){ $('cols').innerHTML=AderenciaView.html({dims:DIMS_RESUMO});
                       pintaResumo(vis); pintaLateral(); return; }
-  $('cols').innerHTML=ETAPAS.map(e=>{
-    const cards=vis.filter(r=>(r.status||PADRAO)===e.k)
-      .sort(porVencimento);
-    return `<section class="col${RECOLHIDAS.has(e.k)?' rec':''}" data-etapa="${esc(e.k)}">
-      <div class="chead">
-        <span class="cname">${e.rot}</span><span class="cnum">${cards.length}</span>
-        <button class="ic" title="Nova ação" data-novo="${esc(e.k)}">+</button>
-        <button class="ic" title="Recolher coluna" data-rec="${esc(e.k)}">···</button>
-      </div>
+  // Os títulos ficam numa faixa FORA da área que rola — o quadro continua com
+  // UMA barra de rolagem só, e o nome da etapa nunca sai da tela.
+  const porEtapa=ETAPAS.map(e=>({e,cards:vis.filter(r=>(r.status||PADRAO)===e.k).sort(porVencimento)}));
+  $('cheads').innerHTML=porEtapa.map(({e,cards})=>
+    `<div class="chead${RECOLHIDAS.has(e.k)?' rec':''}" data-etapa="${esc(e.k)}">
+      <span class="cname">${e.rot}</span><span class="cnum">${cards.length}</span>
+      <button class="ic" title="Nova ação" data-novo="${esc(e.k)}">+</button>
+      <button class="ic" title="Recolher coluna" data-rec="${esc(e.k)}">···</button>
+    </div>`).join('');
+  $('cols').innerHTML=porEtapa.map(({e,cards})=>
+    `<section class="col${RECOLHIDAS.has(e.k)?' rec':''}" data-etapa="${esc(e.k)}">
       <div class="cbody">${cards.length?cards.map(card).join(''):'<div class="cvazia">—</div>'}</div>
-    </section>`;
-  }).join('');
+    </section>`).join('');
+  alinhaCabecalhos();
   pintaLateral();
 }
+// largura da barra de rolagem do quadro → alinha a faixa de títulos com as colunas
+function alinhaCabecalhos(){
+  const c=$('cols'); if(!c) return;
+  document.documentElement.style.setProperty('--sb',(c.offsetWidth-c.clientWidth)+'px');
+}
+window.addEventListener('resize',alinhaCabecalhos);
 function pintaLateral(){
   montaMenus();
   document.querySelectorAll('.n[data-n]').forEach(el=>{
@@ -952,6 +964,13 @@ document.addEventListener('keydown',e=>{
 
 /* ── cliques e arrastar dentro do quadro ── */
 const cols=$('cols');
+const cheads=$('cheads');
+// os botões da faixa de títulos (novo, recolher) respondem igual aos de dentro
+cheads.addEventListener('click',e=>{
+  const novo=e.target.closest('[data-novo]'); if(novo){ novoCard(novo.dataset.novo); return; }
+  const rec=e.target.closest('[data-rec]');
+  if(rec){ const k=rec.dataset.rec; RECOLHIDAS.has(k)?RECOLHIDAS.delete(k):RECOLHIDAS.add(k); render(); }
+});
 cols.addEventListener('click',e=>{
   const tg=e.target.closest('[data-por]'); if(tg){ RESUMO_POR=tg.dataset.por; render(); return; }
   const gr=e.target.closest('.grow[data-id]'); if(gr){ abreModal(gr.dataset.id); return; }
