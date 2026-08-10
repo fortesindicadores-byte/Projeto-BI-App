@@ -3,10 +3,13 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-<meta name="build" content="202608101900">
+<meta name="build" content="202608102100">
 <title>FCA · Admin</title>
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<link rel="stylesheet" href="../assets/aderencia-view.css?v=202608102100">
+<script src="../assets/aderencia-view.js?v=202608102100"></script>
 <style>
 :root{--bg:#0C1017;--card:#141B26;--border:#1E2D40;--orange:#F97316;--blue:#38BDF8;--text:#F1F5F9;--text2:#94A3B8;--text3:#475569;--green:#3BB33B;--red:#FF6666;--amber:#F4A100;}
 *{margin:0;padding:0;box-sizing:border-box;}
@@ -972,14 +975,37 @@ function render(){
   if(!vis.length){body='<div class="tbl-section"><div class="empty">Nenhuma ação para os filtros selecionados.</div></div>';}
   else if(VIEW==='kanban'){body=kanbanHTML(vis);}
   else if(VIEW==='gantt'){body=ganttHTML(vis);}
-  else if(VIEW==='resumo'){body=summaryHTML(vis);}
+  else if(VIEW==='resumo'){body=AderenciaView.html({dims:DIMS_ADER});}
   else{body=relatorioHTML(vis);}
   const mn=document.querySelector('.board .main');
   if(mn) mn.classList.toggle('rola', VIEW==='tabela'||VIEW==='gantt');
   c.innerHTML=body;
+  if(VIEW==='resumo') pintaResumoAdmin(vis);
 }
 
 
+
+// ── Resumo: a MESMA visão do FCA Gerencial (assets/aderencia-view.js) ──
+// O admin corta por Unidade, Projeto ou Conta/Indicador no mesmo lugar.
+const DIMS_ADER=[{k:'unidade',rot:'Unidade'},{k:'projeto',rot:'Projeto'},{k:'conta',rot:'Conta / Indicador'}];
+let DIM_ADER='unidade';
+function linhasAderenciaAdmin(vis){
+  return vis.map(r=>{
+    const st=String(r.status||DEFAULT_STATUS);
+    return {
+      vig:r.vigencia||'', ord:vigNum(r.vigencia||''),
+      concl:/conclu/i.test(st)?'Concluída':(/andamento/i.test(st)?'Andamento':'Não Iniciada'),
+      venc:prazoState(r)==='Vencida',
+      dims:{unidade:r.unidade||'—', projeto:projLabel(r.projeto)||'—', conta:_firstLine(r.fato)||'—'},
+    };
+  });
+}
+function pintaResumoAdmin(vis){
+  AderenciaView.render(document.getElementById('content'),{
+    linhas:linhasAderenciaAdmin(vis), dims:DIMS_ADER, dim:DIM_ADER,
+    aoTrocarDim:d=>{ DIM_ADER=d; render(); },
+  });
+}
 // ── Tabela: mesmo desenho do Planner e do FCA da unidade ──
 // Só leitura; a linha abre o modal, que é onde se edita, adiciona causa/ação e exclui.
 function chipStatusRel(st){
@@ -1312,7 +1338,10 @@ async function carregar(){
 }
 
 // tema
-function applyTheme(t){document.body.classList.toggle('light-mode',t==='light');localStorage.setItem('bi_theme',t);document.getElementById('themeBtn').textContent=t==='light'?'🌙':'☀';}
+function applyTheme(t){document.body.classList.toggle('light-mode',t==='light');localStorage.setItem('bi_theme',t);document.getElementById('themeBtn').textContent=t==='light'?'🌙':'☀';
+  // as barras do Resumo são pintadas no JS: sem redesenhar, o gráfico fica
+  // com a paleta do tema anterior
+  if(typeof _ROWS!=='undefined' && _ROWS.length) render();}
 document.getElementById('themeBtn').addEventListener('click',()=>applyTheme(document.body.classList.contains('light-mode')?'dark':'light'));
 applyTheme(localStorage.getItem('bi_theme')||'dark');
 document.getElementById('logoutBtn').addEventListener('click',async()=>{try{if(sb)await sb.auth.signOut();}catch(e){}location.href='../index.html';});

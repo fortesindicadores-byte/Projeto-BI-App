@@ -3,10 +3,13 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-<meta name="build" content="202608101900">
+<meta name="build" content="202608102100">
 <title>Planner Corporativo</title>
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<link rel="stylesheet" href="../assets/aderencia-view.css?v=202608102100">
+<script src="../assets/aderencia-view.js?v=202608102100"></script>
 <style>
 /* ============================================================
    PLANNER CORPORATIVO — layout do Painel de Gestão. Layout do "Task Board"
@@ -330,11 +333,10 @@ body.claro .tag{background:color-mix(in srgb,var(--c) 34%,transparent);color:#14
   font-weight:700;text-transform:uppercase;letter-spacing:.7px;padding:6px 14px;cursor:pointer;}
 .toggle button:hover{color:var(--txt);background:var(--hover);}
 .toggle button.on{background:var(--vermelho);color:#0F0B07;}
-.graf{display:flex;align-items:flex-end;gap:6px;height:190px;margin-top:14px;}
-.gcol{flex:1;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;height:100%;}
-.gv{font-size:9.5px;font-weight:800;color:var(--txt2);height:14px;}
-.gbar{width:100%;border-radius:4px 4px 0 0;min-height:2px;}
-.gl{margin-top:6px;font-size:9px;font-weight:600;color:var(--txt3);white-space:nowrap;}
+/* (as barras do Resumo eram <div> com altura em % e usavam .gbar, o mesmo
+   nome da faixa do Gantt — a regra do Gantt vencia e deformava o gráfico.
+   Agora o Resumo é Chart.js, pelo assets/aderencia-view.js, e o nome
+   ficou só do Gantt.) */
 table.res-tab td,table.res-tab th{border-bottom:1px solid var(--linha);}
 table.res-tab tbody tr:hover{background:var(--hover);}
 .pctcell{display:inline-block;min-width:52px;text-align:center;padding:3px 10px;border-radius:6px;
@@ -727,7 +729,8 @@ function render(){
     : ('cols solto'+((VER==='tabela'||VER==='gantt')?' rola':''));
   if(VER==='tabela'){ $('cols').innerHTML=htmlTabela(vis); pintaLateral(); return; }
   if(VER==='gantt'){ $('cols').innerHTML=htmlGantt(vis); pintaLateral(); return; }
-  if(VER==='resumo'){ $('cols').innerHTML=htmlResumo(vis); pintaLateral(); return; }
+  if(VER==='resumo'){ $('cols').innerHTML=AderenciaView.html({dims:DIMS_RESUMO});
+                      pintaResumo(vis); pintaLateral(); return; }
   $('cols').innerHTML=ETAPAS.map(e=>{
     const cards=vis.filter(r=>(r.status||PADRAO)===e.k)
       .sort(porVencimento);
@@ -837,107 +840,32 @@ function htmlGantt(rows){
   </div></div>`;
 }
 
-function htmlResumo(rows){
-  // ── regra do FCA Gerencial, copiada de fca-gerencial/index.html ──
-  // prazo: Concluída conta como "No prazo"; senão, prazo < hoje = Vencida
-  // pPrazo = noPrazo/tt · pConcl = concluídas/tt
-  // total  = (concl*100 + andamento*50 + não iniciada*0) / tt
-  // faixas: <70% crítico · 70–85% atenção · ≥85% adequado
-  const base=rows.filter(r=>r.status!=='Backlog' && r.status!=='Cancelada');
-  const met=lista=>{
-    const tt=lista.length; let noP=0,venc=0,concl=0,andam=0,nini=0;
-    lista.forEach(o=>{
-      const vencida = o.status!=='Concluída' && o.prazo && new Date(o.prazo+'T00:00:00')<hoje();
-      vencida?venc++:noP++;
-      if(o.status==='Concluída')concl++; else if(o.status==='Em andamento')andam++; else nini++;
-    });
-    return {tt,noP,venc,concl,andam,nini,
-      pPrazo:tt?noP/tt*100:null, pConcl:tt?concl/tt*100:null,
-      total:tt?(concl*100+andam*50)/tt:null};
-  };
-  const faixa=v=>v==null?'var(--txt3)':(v<70?'#FF5252':(v<85?'#F4A100':'#3BB33B'));
-  const pc=v=>v==null?'—':Math.round(v)+'%';
-  const g=met(base);
-
-  const kpi=(rot,val,cor)=>`<div class="kpi"><span class="pt" style="background:${cor}"></span>
-      <span class="kl">${rot}</span><b>${val}</b></div>`;
-
-  // ── séries mensais pelo mês do PRAZO (Backlog fica de fora) ──
-  const MES=['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
-  const meses=[]; const ref=new Date(); ref.setDate(1); ref.setHours(0,0,0,0);
-  for(let i=7;i>=-4;i--){ const d=new Date(ref); d.setMonth(d.getMonth()-i); meses.push(d); }
-  const serie=getP=>meses.map(d=>{
-    const k=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
-    return {lbl:MES[d.getMonth()]+'/'+String(d.getFullYear()).slice(2),
-            v:getP(met(base.filter(r=>r.prazo&&r.prazo.slice(0,7)===k)))};
+// ── Resumo: a MESMA visão do FCA Gerencial (assets/aderencia-view.js) ──
+// Aqui só normalizamos as linhas; hero, KPIs, gráficos de barra e tabela
+// saem do componente, então Planner e os dois FCAs desenham igual.
+const DIMS_RESUMO=[{k:'assunto',rot:'Assunto'},{k:'resp',rot:'Pessoa'}];
+const _MESR=['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
+function linhasAderencia(rows){
+  // Backlog e canceladas ficam fora da conta, como antes.
+  // O mês de cada ação é o mês do PRAZO — sem prazo, não entra em mês nenhum
+  // (mas continua contando no total).
+  return rows.filter(r=>r.status!=='Backlog' && r.status!=='Cancelada').map(r=>{
+    const d=r.prazo?new Date(r.prazo+'T00:00:00'):null;
+    return {
+      vig: d?_MESR[d.getMonth()]+'/'+String(d.getFullYear()).slice(2):'',
+      ord: d?d.getFullYear()*100+d.getMonth():0,
+      concl: r.status==='Concluída'?'Concluída':(r.status==='Em andamento'?'Andamento':'Não Iniciada'),
+      venc: r.status!=='Concluída' && !!r.prazo && new Date(r.prazo+'T00:00:00')<hoje(),
+      dims:{assunto:r.assunto||'—', resp:r.resp||'—'},
+    };
   });
-  const grafico=(titulo,dados)=>`<div class="bloco"><h3>${titulo}</h3><div class="graf">
-      ${dados.map(d=>`<div class="gcol">
-        <div class="gv">${d.v==null?'':Math.round(d.v)+'%'}</div>
-        <div class="gbar" style="height:${d.v==null?0:Math.max(d.v,2)}%;
-             background:color-mix(in srgb,${faixa(d.v)} 30%,transparent);
-             border:1px solid ${faixa(d.v)}"></div>
-        <div class="gl">${d.lbl}</div></div>`).join('')}
-    </div></div>`;
-
-  // ── tabela: Assunto (padrão) ou Pessoa ──
-  const campo = RESUMO_POR==='resp' ? 'resp' : 'assunto';
-  const g2={}; base.forEach(r=>{const k=r[campo]||'—';(g2[k]=g2[k]||[]).push(r);});
-  const itens=Object.entries(g2).map(([k,l])=>({k,...met(l)}))
-    .sort((a,b)=>(b.total??-1)-(a.total??-1)||b.tt-a.tt);
-
-  return `<div class="resumo">
-    <div class="heros">
-      <div class="hero-tot">
-        <div class="hl">Aderência total</div>
-        <div class="hn" style="color:${faixa(g.total)}">${pc(g.total)}</div>
-      </div>
-      <div class="hero-sub">
-        <div><span class="hl">Prazo</span><b style="color:${faixa(g.pPrazo)}">${pc(g.pPrazo)}</b></div>
-        <div><span class="hl">Conclusão</span><b style="color:${faixa(g.pConcl)}">${pc(g.pConcl)}</b></div>
-      </div>
-    </div>
-    <div class="faixas">
-      <span><i style="background:#FF5252"></i>&lt; 70% — Crítico</span>
-      <span><i style="background:#F4A100"></i>≥ 70% e &lt; 85% — Atenção</span>
-      <span><i style="background:#3BB33B"></i>≥ 85% — Adequado</span>
-      <span class="obs">Backlog e canceladas fora da conta</span>
-    </div>
-    <div class="kpis">
-      ${kpi('Total de ações',g.tt,'var(--txt3)')}
-      ${kpi('Concluídas',g.concl,'#3BB33B')}
-      ${kpi('Em execução',g.andam,'#F4A100')}
-      ${kpi('Planejando',g.nini,'#FF5252')}
-      ${kpi('No prazo',g.noP,'#3BB33B')}
-      ${kpi('Fora do prazo',g.venc,'#FF5252')}
-    </div>
-    <div class="dois">
-      ${grafico('Aderência ao prazo · mensal',serie(m=>m.pPrazo))}
-      ${grafico('Aderência à conclusão · mensal',serie(m=>m.pConcl))}
-    </div>
-    <div class="bloco">
-      <div class="bhead"><h3>Aderência por ${campo==='resp'?'pessoa':'assunto'}</h3>
-        <div class="toggle">
-          <button class="${campo==='assunto'?'on':''}" data-por="assunto">Assunto</button>
-          <button class="${campo==='resp'?'on':''}" data-por="resp">Pessoa</button>
-        </div></div>
-      <table class="tab res-tab"><thead><tr>
-        <th>${campo==='resp'?'Pessoa':'Assunto'}</th><th class="num">TT ações</th>
-        <th class="num">Conclusão</th><th class="num">Prazo</th><th class="num">Total</th>
-      </tr></thead><tbody>
-        ${itens.map(it=>`<tr>
-          <td class="forte">${esc(it.k)}</td>
-          <td class="num">${it.tt}</td>
-          <td class="num" style="color:${faixa(it.pConcl)};font-weight:800">${pc(it.pConcl)}</td>
-          <td class="num" style="color:${faixa(it.pPrazo)};font-weight:800">${pc(it.pPrazo)}</td>
-          <td class="num"><span class="pctcell" style="background:${faixa(it.total)}">${pc(it.total)}</span></td>
-        </tr>`).join('')}
-      </tbody></table>
-    </div>
-  </div>`;
 }
-
-/* ── menus do topo ── */
+function pintaResumo(rows){
+  AderenciaView.render($('cols'),{
+    linhas:linhasAderencia(rows), dims:DIMS_RESUMO, dim:RESUMO_POR,
+    aoTrocarDim:d=>{ RESUMO_POR=d; render(); },
+  });
+}
 function abreMenu(id){
   document.querySelectorAll('.menu.open').forEach(m=>{if(m.id!==id)m.classList.remove('open');});
   $(id).classList.toggle('open');
@@ -1135,6 +1063,9 @@ function aplicaTema(t){
   const b=$('btTemaTopo');
   if(b){ b.innerHTML = t==='light' ? _LUA : _SOL;
          b.title = t==='light' ? 'Mudar para o modo escuro' : 'Mudar para o modo claro'; }
+  // as barras do Resumo são pintadas no JS: sem redesenhar, o gráfico fica
+  // com a paleta do tema anterior
+  if(typeof LINHAS!=='undefined' && LINHAS.length) render();
 }
 function trocaMini(){
   const l=document.querySelector('.side').classList.toggle('mini');
