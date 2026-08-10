@@ -3,11 +3,10 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-<meta name="build" content="202608091200">
+<meta name="build" content="202608101200">
 <title>FCA</title>
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="../assets/gantt-view.js?v=202608080120"></script>
 <style>
 :root{--bg:#0C1017;--card:#141B26;--border:#1E2D40;--orange:#F97316;--blue:#38BDF8;--text:#F1F5F9;--text2:#94A3B8;--text3:#475569;--green:#3BB33B;--red:#FF6666;--amber:#F4A100;}
 *{margin:0;padding:0;box-sizing:border-box;}
@@ -178,31 +177,548 @@ body.light-mode select.st[data-v="Cancelada"]{background:#333333;color:#fff;}
   .cell-label{display:block;font-size:9.5px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px;}
   .col-x{position:absolute;top:4px;right:4px;padding:0;}
 }
+
+/* ══════════════════════════════════════════════════════════════════
+   LAYOUT DO PAINEL DE GESTÃO no FCA.
+   O motor (fatos, RPM, hub de unidades, preenchimento com causa e
+   ação) não muda; muda a casca. Duas lições do tombo anterior:
+   a classe de tema é a MESMA do FCA (body.light-mode) e as variáveis
+   antigas (--text, --border, --bg…) viram apelidos das novas.
+   ══════════════════════════════════════════════════════════════════ */
+:root{
+  /* ══ PALETA MEDIDA na imagem de referência (amostragem por pixel) ══
+     foto de fundo  topo-esq #283D67 · topo-centro #101F46 · direita
+                    #213352 · rodapé #0C1323  → o degradê abaixo repete
+                    esse tom, já que não temos a foto;
+     sidebar        #141C30   painel #0D1520   card #222531
+     card DONE      #161B27
+     azul   #1986B1 (borda) · #0C8BB9 (barra)
+     vermelho #DD5B60 (borda) · #E05852 (barra)
+     trilho #262934
+     textos  título #FFFFFF · card #EEF2FA · coluna #676F83 ·
+             id #4C505C · lateral #B2BCD2 · seção #505B75 ·
+             card apagado #9196A2                                    */
+  /* PROFUNDIDADE — três ingredientes:
+     1. o fundo tem RAMPA (cinza neutro na diagonal, do escuro embaixo
+        à esquerda ao claro em cima à direita): é o que se enxerga
+        através do vidro;
+     2. um foco de luz no alto à direita dá DIREÇÃO à iluminação;
+     3. cada camada é um DEGRAU mais clara que a de baixo
+        (fundo → painel → lateral → card), com fio de luz na borda
+        de cima e sombra embaixo — é o degrau que o olho lê como
+        "uma placa sobre a outra". */
+  --fundo:
+    radial-gradient(80% 60% at 90% 0%, rgba(255,244,232,.045) 0%, transparent 60%),
+    linear-gradient(45deg, #0E0E0F 0%, #161617 34%, #1D1D1F 58%, #242426 80%, #2B2B2E 100%);
+  --luz:      inset 0 1px 0 rgba(255,255,255,.09);
+  --luz-card: inset 0 1px 0 rgba(255,255,255,.08);
+  --app:      rgba(18,18,18,.30);
+  --side:     rgba(30,30,30,.50);
+  --linha:    rgba(255,255,255,.06);
+  --card:     rgba(44,44,46,.78);
+  --brilho:   linear-gradient(180deg, rgba(255,255,255,.022) 0%, rgba(255,255,255,0) 46%);
+  --card-brd: rgba(255,255,255,.07);
+  --txt:      #EEF2FA;
+  --txt2:     #B2BCD2;
+  --txt3:     #676F83;
+  --txt4:     #4C505C;
+  --hover:    rgba(255,255,255,.06);
+  --azul:     #2E90E8;
+  --azul-b:   #2E90E8;
+  --verde:    #3BB33B;
+  --vermelho: #FF5252;
+  --verm-b:   #E05852;
+  --cinza:    #5B657C;
+  --trilho:   #262934;
+  --sombra:   0 2px 10px rgba(0,0,0,.30);
+  --cabec:    #2B2B30;   /* opaco de propósito: cabeçalho fixo com fundo translúcido deixa as linhas passarem por baixo */
+}
+body.light-mode{
+  --fundo:
+    radial-gradient(80% 60% at 90% 0%, rgba(255,255,255,.55) 0%, transparent 60%),
+    linear-gradient(45deg, #C6C7CB 0%, #D5D6DA 34%, #E1E2E5 58%, #EBECEF 80%, #F4F5F7 100%);
+  --luz:      inset 0 1px 0 rgba(255,255,255,.9);
+  --luz-card: inset 0 1px 0 rgba(255,255,255,1);
+  --app:      rgba(255,255,255,.34);
+  --side:     rgba(255,255,255,.50);
+  --linha:    rgba(15,23,42,.10);
+  --card:     rgba(255,255,255,.74);
+  --brilho:   linear-gradient(180deg, rgba(255,255,255,.6) 0%, rgba(255,255,255,0) 46%);
+  --card-brd: rgba(15,23,42,.10);
+  --txt:      #161D2B;
+  --txt2:     #4A5568;
+  --txt3:     #737D91;
+  --txt4:     #8B94A6;
+  --hover:    rgba(15,23,42,.05);
+  --azul:     #1B6FC4;
+  --azul-b:   #1B6FC4;
+  --verde:    #0E8C0E;
+  --vermelho: #E03131;
+  --verm-b:   #D2453F;
+  --cinza:    #939CAF;
+  --trilho:   rgba(15,23,42,.13);
+  --sombra:   0 2px 8px rgba(15,23,42,.10);
+  --text:  var(--txt);
+  --text2: var(--txt2);
+  --text3: var(--txt3);
+  --bg:     #E9EAEC;
+  --border: var(--card-brd);
+  --card2:  var(--card);
+  --orange: #C2410C;
+  --blue:   #1B6FC4;
+  --amber:  #B45309;
+  --red:    var(--vermelho);
+  --green:  var(--verde);
+  --cabec:    #DCDFE6;
+}
+
+*{margin:0;padding:0;box-sizing:border-box;}
+/* barra de rolagem no tom do painel — a padrão vem branca e salta aos olhos */
+@supports not selector(::-webkit-scrollbar){
+  *{scrollbar-width:thin;scrollbar-color:color-mix(in srgb,var(--txt3) 42%,transparent) transparent;}
+}
+::-webkit-scrollbar{width:11px;height:11px;}
+::-webkit-scrollbar-track{background:transparent;}
+::-webkit-scrollbar-thumb{background:color-mix(in srgb,var(--txt3) 42%,transparent);
+  border:3px solid transparent;background-clip:content-box;border-radius:9px;}
+::-webkit-scrollbar-thumb:hover{background:color-mix(in srgb,var(--txt3) 72%,transparent);
+  background-clip:content-box;}
+::-webkit-scrollbar-corner{background:transparent;}
+::-webkit-scrollbar-button{display:none;width:0;height:0;}
+/* ruído contra o BANDING do degradê: sem ele o gradiente cai em degraus
+   de 1 valor por canal e o olho lê como listras */
+body::after{content:'';position:fixed;inset:0;z-index:0;pointer-events:none;opacity:.5;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='3'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)' opacity='.05'/%3E%3C/svg%3E");}
+.app{z-index:1;}
+html,body{height:100%;overflow:hidden;}
+body{
+  font-family:'Montserrat',-apple-system,BlinkMacSystemFont,sans-serif;
+  font-size:13px;color:var(--txt);
+  background:var(--fundo);
+  overflow:hidden;
+}
+
+/* ── painel do app, flutuando sobre a foto ── */
+.app{
+  position:absolute;inset:34px;display:flex;
+  border-radius:22px;overflow:hidden;
+  border:1px solid rgba(255,255,255,.10);
+  box-shadow:0 28px 70px rgba(0,0,0,.55), var(--luz);
+}
+.app::before{content:'';position:absolute;inset:0;background:var(--app);
+  backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);z-index:0;}
+.side,.board{position:relative;z-index:1;}
+
+/* ── barra lateral ── */
+.side{
+  width:256px;flex:0 0 256px;display:flex;flex-direction:column;
+  background:var(--side);border-right:1px solid var(--linha);padding:16px 10px 12px;
+  backdrop-filter:blur(13px);-webkit-backdrop-filter:blur(13px);
+  box-shadow:var(--luz), 8px 0 28px rgba(0,0,0,.25);
+}
+.s-top{display:flex;align-items:center;gap:9px;padding:2px 8px 16px;}
+.s-mini{display:flex;align-items:center;justify-content:center;width:24px;height:24px;flex:0 0 24px;
+  background:transparent;border:0;border-radius:6px;color:var(--txt3);cursor:pointer;}
+.s-mini:hover{background:var(--hover);color:var(--txt);}
+/* ── menu recolhido: só os ícones ── */
+.side.mini{width:64px;flex:0 0 64px;padding:16px 8px 12px;}
+.side.mini .s-top{justify-content:center;padding-bottom:12px;}
+.side.mini .s-top b,.side.mini .s-top>svg{display:none;}
+.side.mini .s-sec,.side.mini .s-kbd,.side.mini .s-item .n,.side.mini .s-user div,
+.side.mini .s-sair,.side.mini .s-item.pai{display:none;}
+.side.mini .s-search{justify-content:center;padding:8px 0;margin-bottom:10px;background:var(--hover);}
+.side.mini .s-search input{display:none;}
+.side.mini .s-item{font-size:0;justify-content:center;padding:9px 0;gap:0;}
+.side.mini .s-item.filho{padding-left:0;}
+.side.mini .s-user{justify-content:center;padding:12px 0 2px;}
+.s-top b{flex:1;font-size:13.5px;font-weight:600;}
+.s-search{display:flex;align-items:center;gap:8px;padding:7px 8px;border-radius:7px;margin-bottom:14px;}
+.s-search:hover{background:var(--hover);}
+.s-search input{flex:1;min-width:0;background:transparent;border:0;outline:0;
+  font-family:inherit;font-size:12.5px;color:var(--txt);}
+.s-search input::placeholder{color:var(--txt2);}
+.s-kbd{font-size:10.5px;color:var(--txt3);white-space:nowrap;}
+.s-sec{display:flex;align-items:center;gap:6px;padding:16px 8px 8px;
+  font-size:10px;font-weight:600;color:var(--txt3);text-transform:uppercase;letter-spacing:1.1px;}
+.s-sec b{flex:1;font-weight:600;}
+.s-sec svg{opacity:.7;}
+.s-item{display:flex;align-items:center;gap:9px;width:100%;padding:7px 8px;border:0;border-radius:7px;
+  background:transparent;color:var(--txt2);font-family:inherit;font-size:12.5px;font-weight:500;
+  text-align:left;cursor:pointer;}
+.s-item:hover{background:var(--hover);color:var(--txt);}
+.s-item.on{background:var(--hover);color:var(--txt);font-weight:600;}
+.s-item.pai{color:var(--txt);font-weight:600;cursor:default;}
+.s-item.pai:hover{background:transparent;}
+.s-item.filho{padding-left:26px;}
+.s-item .n{margin-left:auto;font-size:11px;color:var(--txt3);font-weight:600;}
+.s-user{margin-top:auto;display:flex;align-items:center;gap:9px;padding:12px 8px 2px;border-top:1px solid var(--linha);}
+.s-user div{flex:1;min-width:0;}
+.s-user b{display:block;font-size:12px;font-weight:600;line-height:1.2;}
+.s-sair{display:flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:7px;
+  color:var(--txt3);text-decoration:none;flex:0 0 26px;}
+.s-sair:hover{background:var(--hover);color:var(--txt);}
+.s-user i{display:block;font-size:9.5px;font-style:normal;color:var(--txt3);
+  text-transform:uppercase;letter-spacing:.8px;margin-top:2px;}
+
+/* ── área do quadro ── */
+.board{flex:1;min-width:0;display:flex;flex-direction:column;}
+.top{display:flex;align-items:center;gap:6px;padding:20px 24px 14px;}
+.top h1{flex:1;font-size:21px;font-weight:600;letter-spacing:-.3px;}
+.tool{display:flex;align-items:center;gap:7px;background:transparent;border:0;border-radius:7px;
+  padding:6px 10px;color:var(--txt2);font-family:inherit;font-size:12.5px;font-weight:500;cursor:pointer;}
+.tool:hover{background:var(--hover);color:var(--txt);}
+.tool.on{background:var(--hover);color:var(--txt);}
+.tool.ico{padding:7px 9px;}
+.menu-wrap{position:relative;}
+.menu{display:none;position:absolute;top:calc(100% + 6px);right:0;z-index:40;min-width:214px;
+  background:var(--brilho), var(--card);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border:1px solid var(--card-brd);border-radius:10px;padding:6px;
+  box-shadow:0 18px 40px rgba(0,0,0,.5);}
+body.light-mode .menu{box-shadow:0 18px 40px rgba(15,23,42,.16);}
+.menu.open{display:block;}
+.menu button,.menu label{display:flex;align-items:center;gap:9px;width:100%;padding:7px 9px;border:0;border-radius:7px;
+  background:transparent;color:var(--txt);font-family:inherit;font-size:12.5px;text-align:left;cursor:pointer;}
+.menu button:hover,.menu label:hover{background:var(--hover);}
+.menu .tit{padding:8px 9px 4px;font-size:10px;font-weight:600;color:var(--txt3);
+  text-transform:uppercase;letter-spacing:1px;}
+.menu input[type=checkbox]{accent-color:var(--azul);width:14px;height:14px;flex:0 0 14px;cursor:pointer;}
+.menu .rol{max-height:250px;overflow:auto;}
+.menu .mdata{display:flex;align-items:center;gap:8px;padding:6px 9px;font-size:12px;color:var(--txt2);}
+.menu .mdata input{flex:1;min-width:0;background:var(--hover);border:1px solid var(--card-brd);
+  border-radius:6px;color:var(--txt);font-family:inherit;font-size:12px;padding:5px 8px;outline:0;}
+body.light-mode .menu .mdata input{background:#fff;border-color:#d7dce4;}
+.menu .mall{font-weight:700;border-bottom:1px solid var(--linha);margin-bottom:4px;}
+.menu .mtx{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.menu .so{font-size:9px;font-weight:700;color:#F97316;padding:1px 7px;border-radius:4px;
+  opacity:0;cursor:pointer;flex:0 0 auto;}
+.menu label:hover .so{opacity:1;}
+.menu .so:hover{background:rgba(249,115,22,.2);}
+
+/* ── colunas ── */
+.cols{flex:1;min-height:0;display:grid;grid-template-columns:repeat(4,1fr);gap:16px;
+  padding:0 24px 24px;overflow:auto;align-items:stretch;}
+.col{display:flex;flex-direction:column;min-height:100%;border-radius:10px;}
+/* o corpo estica até o fim da coluna: soltar em qualquer altura muda a etapa */
+.cbody{flex:1;}
+.col.over{background:rgba(46,155,214,.10);box-shadow:0 0 0 1px rgba(46,155,214,.35) inset;}
+.chead{display:flex;align-items:center;gap:8px;padding:2px 2px 12px;}
+.cname{font-size:10.5px;font-weight:600;color:var(--txt2);text-transform:uppercase;letter-spacing:1.3px;}
+.cnum{font-size:10.5px;font-weight:600;color:var(--txt3);}
+.ic{display:flex;align-items:center;justify-content:center;width:20px;height:20px;flex:0 0 20px;
+  background:transparent;border:0;border-radius:5px;color:var(--txt3);cursor:pointer;
+  font-family:inherit;font-size:14px;font-weight:500;line-height:1;padding:0;}
+.ic:hover{background:var(--hover);color:var(--txt);}
+.chead .ic:first-of-type{margin-left:auto;}
+.cbody{display:flex;flex-direction:column;gap:10px;flex:1;}
+.col.rec .cbody{display:none;}
+
+/* ── card: chip-rótulo no topo em degradê laranja → cor do painel
+      (padrão do hub); prazo em VERDE/VERMELHO, as cores das barras
+      do FCA Gerencial. Sem risco lateral. ── */
+.card{position:relative;overflow:hidden;background:var(--brilho), var(--card);
+  border:1px solid var(--card-brd);border-radius:4px;padding:0 0 12px;cursor:grab;
+  backdrop-filter:blur(5px);-webkit-backdrop-filter:blur(5px);
+  box-shadow:0 8px 22px rgba(0,0,0,.36), var(--luz-card);}
+.card.venc{--pz:var(--vermelho);} .card.ok{--pz:var(--verde);}
+.card.sem,.card.bkl{--pz:var(--cinza);}
+.card:active{cursor:grabbing;} .card.arrasta{opacity:.35;}
+.card:hover{border-color:rgba(249,115,22,.55);}
+/* concluídas ficam normais — o verde da barra já diz que terminaram */
+/* assunto: texto puro, sem botão e sem bandeira — é o título do card */
+.cass{display:flex;padding:11px 13px 0;margin-bottom:5px;}
+.cass span{max-width:100%;font-size:13px;font-weight:800;letter-spacing:-.1px;color:#FFFFFF;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+body.light-mode .cass span{color:#000000;}
+.ctit{font-size:11.5px;font-weight:400;line-height:1.4;padding:0 13px;color:var(--txt2);
+  /* dois renques reservados: card de 1 linha fica do mesmo tamanho do de 2.
+     Passando de 2 linhas o card cresce — raro, e aí é melhor crescer que cortar */
+  min-height:calc(2 * 1.4em);}
+.cdata{font-size:10.5px;color:var(--txt3);white-space:nowrap;}
+.cdata .atraso{color:var(--vermelho);font-weight:700;}
+.cfoot{display:flex;align-items:center;justify-content:space-between;gap:10px;
+  margin-top:12px;min-height:24px;padding:0 13px;}
+
+.avs{display:flex;align-items:center;margin-left:auto;}
+.av{width:24px;height:24px;border-radius:50%;margin-left:auto;display:flex;align-items:center;justify-content:center;
+  font-size:9px;font-weight:800;letter-spacing:.2px;color:#2A1405;background:#F97316;flex:0 0 24px;
+  box-shadow:0 1px 4px rgba(0,0,0,.25);}
+.add-av{width:24px;height:24px;border-radius:50%;margin-left:auto;background:transparent;
+  border:1px dashed var(--trilho);color:var(--txt3);font-family:inherit;font-size:13px;line-height:1;
+  cursor:pointer;display:flex;align-items:center;justify-content:center;}
+.add-av:hover{border-color:var(--verde);color:var(--verde);}
+.cvazia{padding:12px 2px;font-size:12px;color:var(--txt3);}
+
+/* ── visões Tabela / Relatório / Resumo ── */
+.cols.solto{display:block;}
+/* Tabela e Gantt rolam por dentro: sem isso o sticky do cabeçalho se
+   ancora no wrapper, que rola junto, e o cabeçalho some ao descer */
+.cols.rola{display:flex;flex-direction:column;overflow:hidden;}
+.cols.rola .tab-wrap,.cols.rola .grol{flex:1;min-height:0;overflow:auto;}
+.cols.rola .gantt{display:flex;flex-direction:column;min-height:0;}
+.tab-wrap{overflow:auto;border:1px solid var(--card-brd);border-radius:10px;background:var(--card);
+  backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);}
+table.tab{width:100%;border-collapse:collapse;font-size:12px;}
+table.tab thead th{position:sticky;top:0;z-index:2;background:var(--cabec);text-align:left;
+  padding:11px 12px;font-size:10px;font-weight:700;color:var(--txt2);text-transform:uppercase;
+  letter-spacing:.8px;border-bottom:1px solid var(--card-brd);white-space:nowrap;}
+table.tab td{padding:11px 12px;border-bottom:1px solid var(--linha);color:var(--txt2);vertical-align:top;
+  white-space:nowrap;}
+table.tab td.forte{color:var(--txt);font-weight:600;}
+table.tab td.livre{white-space:normal;min-width:230px;line-height:1.45;}
+table.tab td.suave{color:var(--txt3);}
+table.tab td.num,table.tab th.num{text-align:right;white-space:nowrap;}
+table.tab tbody tr{cursor:pointer;}
+table.tab tbody tr:hover{background:var(--hover);}
+.tag{display:inline-block;padding:2px 9px;border-radius:20px;font-size:10px;font-weight:700;white-space:nowrap;
+  background:color-mix(in srgb,var(--c) 22%,transparent);color:var(--c);
+  border:1px solid color-mix(in srgb,var(--c) 45%,transparent);}
+/* no claro a cor fica no fundo e a letra vai para o preto */
+body.light-mode .tag{background:color-mix(in srgb,var(--c) 34%,transparent);color:#141922;
+  border-color:color-mix(in srgb,var(--c) 55%,transparent);}
+.atraso{color:var(--vermelho);font-weight:600;}
+
+.resumo{display:flex;flex-direction:column;gap:14px;}
+.heros{display:flex;flex-direction:column;gap:8px;}
+.hl{font-size:10px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:1.1px;}
+.hn{font-size:46px;font-weight:800;line-height:1.02;letter-spacing:-1.5px;margin-top:2px;}
+.hero-sub{display:flex;gap:32px;}
+.hero-sub b{font-size:19px;font-weight:800;margin-left:8px;letter-spacing:-.4px;}
+.hero-sub>div{display:flex;align-items:baseline;}
+.faixas{display:flex;flex-wrap:wrap;align-items:center;gap:6px 20px;font-size:10.5px;color:var(--txt2);}
+.faixas i{display:inline-block;width:11px;height:11px;border-radius:3px;margin-right:6px;vertical-align:-1px;}
+.faixas .obs{color:var(--txt3);font-style:italic;}
+.kpis{display:grid;grid-template-columns:repeat(6,1fr);gap:12px;}
+.kpi{background:var(--card);border:1px solid var(--card-brd);border-radius:10px;padding:12px 14px 13px;
+  backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);}
+.kpi .pt{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px;vertical-align:1px;}
+.kpi .kl{font-size:9.5px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:.7px;}
+.kpi b{display:block;margin-top:6px;font-size:26px;font-weight:800;line-height:1;}
+.dois{display:grid;grid-template-columns:1fr 1fr;gap:14px;}
+.bloco{background:var(--card);border:1px solid var(--card-brd);border-radius:10px;padding:14px 16px 12px;
+  backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);}
+.bloco h3{font-size:11px;font-weight:700;color:var(--txt);text-transform:uppercase;letter-spacing:1.1px;}
+.bhead{display:flex;align-items:center;gap:12px;margin-bottom:12px;}
+.bhead h3{flex:1;margin:0;}
+.toggle{display:flex;border:1px solid var(--card-brd);border-radius:7px;overflow:hidden;}
+.toggle button{background:transparent;border:0;color:var(--txt3);font-family:inherit;font-size:10px;
+  font-weight:700;text-transform:uppercase;letter-spacing:.7px;padding:6px 14px;cursor:pointer;}
+.toggle button:hover{color:var(--txt);background:var(--hover);}
+.toggle button.on{background:var(--vermelho);color:#0F0B07;}
+.graf{display:flex;align-items:flex-end;gap:6px;height:190px;margin-top:14px;}
+.gcol{flex:1;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;height:100%;}
+.gv{font-size:9.5px;font-weight:800;color:var(--txt2);height:14px;}
+.gbar{width:100%;border-radius:4px 4px 0 0;min-height:2px;}
+.gl{margin-top:6px;font-size:9px;font-weight:600;color:var(--txt3);white-space:nowrap;}
+table.res-tab td,table.res-tab th{border-bottom:1px solid var(--linha);}
+table.res-tab tbody tr:hover{background:var(--hover);}
+.pctcell{display:inline-block;min-width:52px;text-align:center;padding:3px 10px;border-radius:6px;
+  font-weight:800;font-size:11px;color:#0F0B07;}
+@media(max-width:1180px){.kpis{grid-template-columns:repeat(3,1fr);}.dois{grid-template-columns:1fr;}}
+
+
+/* ── Gantt ── */
+.gantt{background:var(--card);border:1px solid var(--card-brd);border-radius:8px;
+  backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);overflow:hidden;}
+.grol{overflow:auto;}
+.grow{display:grid;grid-template-columns:340px 1fr;border-bottom:1px solid var(--linha);}
+.grow:last-child{border-bottom:0;}
+.grow:not(.ghead){cursor:pointer;}
+.grow:not(.ghead):hover{background:var(--hover);}
+.ghead{background:var(--cabec);position:sticky;top:0;z-index:2;}
+.ghead .glbl{font-size:10px;font-weight:700;color:var(--txt2);text-transform:uppercase;letter-spacing:.8px;}
+.glbl{padding:9px 14px;min-width:0;display:flex;flex-direction:column;gap:2px;justify-content:center;}
+.glbl b{font-size:11.5px;font-weight:800;color:var(--txt);line-height:1.3;}
+/* o texto da ação quebra em até duas linhas em vez de ser cortado */
+.glbl span{font-size:10.5px;font-weight:400;color:var(--txt2);line-height:1.35;
+  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}
+/* terceira linha do rótulo: projeto · vigência · responsável */
+.glbl .gsub{font-style:normal;font-size:9.5px;font-weight:600;color:var(--txt3);
+  letter-spacing:.3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.gbar{position:relative;min-height:46px;border-left:1px solid var(--linha);}
+.gmeses{display:flex;align-items:center;min-height:32px;}
+.gmeses span{font-size:9.5px;font-weight:700;color:var(--txt3);text-align:center;
+  border-left:1px solid var(--linha);text-transform:uppercase;letter-spacing:.4px;}
+.gmeses span:first-child{border-left:0;}
+.gbar i{position:absolute;top:50%;transform:translateY(-50%);height:12px;border-radius:6px;min-width:6px;}
+.gbar i.gsem{background:transparent;border:1.5px dashed var(--cinza);}
+.gbar u{position:absolute;top:50%;transform:translateY(-50%);height:3px;text-decoration:none;
+  background:repeating-linear-gradient(90deg,var(--vermelho) 0 5px,transparent 5px 9px);}
+.gbar em{position:absolute;top:50%;transform:translateY(-50%);padding-left:7px;
+  font-style:normal;font-size:9px;font-weight:700;color:var(--txt3);white-space:nowrap;}
+.ghoje{position:absolute;top:0;bottom:0;width:0;border-left:1px dashed var(--txt3);opacity:.7;pointer-events:none;}
+.gleg{display:flex;flex-wrap:wrap;gap:6px 18px;padding:11px 4px 0;font-size:10px;color:var(--txt2);}
+.gleg i{display:inline-block;width:15px;height:8px;border-radius:4px;margin-right:6px;vertical-align:-1px;}
+.gleg i.gtrac{background:transparent;border:1.5px dashed var(--cinza);}
+.gleg i.grastro{border-radius:0;height:3px;
+  background:repeating-linear-gradient(90deg,var(--vermelho) 0 5px,transparent 5px 9px);}
+.gleg .obs{color:var(--txt3);font-style:italic;}
+
+
+/* .main continua existindo dentro do quadro, então o CSS antigo do
+   preenchimento (fato-block, tabela de ações, hub de unidades) segue
+   valendo sem eu ter de reescrevê-lo */
+.board .main{flex:1;min-height:0;overflow:auto;padding:0 24px 24px;background:transparent;}
+/* Tabela e Gantt rolam por DENTRO: sem isso o sticky do cabeçalho se ancora
+   num wrapper que não rola, e o cabeçalho sobe junto com as linhas */
+.board .main.rola{display:flex;flex-direction:column;overflow:hidden;}
+.board .main.rola #list{flex:1;min-height:0;display:flex;flex-direction:column;overflow:hidden;}
+.board .main.rola .tab-wrap,.board .main.rola .grol,
+.board .main.rola .rel-wrap{flex:1;min-height:0;overflow:auto;}
+.board .main.rola .gantt,
+.board .main.rola .rel-section{display:flex;flex-direction:column;min-height:0;flex:1;}
+
+/* a Tabela (relatório) no visual novo — mesmas regras da tabela do Planner */
+.rel-section{background:var(--card)!important;border:1px solid var(--card-brd)!important;
+  border-radius:10px!important;padding:0!important;overflow:hidden;
+  backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);box-shadow:none!important;}
+table.rel thead th{background:var(--cabec)!important;color:var(--txt2)!important;
+  padding:11px 12px!important;letter-spacing:.8px;border-bottom:1px solid var(--card-brd)!important;}
+table.rel tbody td{padding:11px 12px!important;color:var(--txt2)!important;
+  border-bottom:1px solid var(--linha)!important;}
+table.rel tbody tr:hover{background:var(--hover)!important;}
+table.rel td.txt b{color:var(--txt);}
+body.light-mode .rel-section{background:var(--card)!important;}
+body.light-mode table.rel thead th{background:var(--cabec)!important;}
+.intro{font-size:11.5px;color:var(--txt3);line-height:1.5;margin-bottom:14px;}
+.fato-block{background:var(--card)!important;border:1px solid var(--card-brd)!important;
+  border-radius:6px!important;box-shadow:var(--sombra)!important;}
+.fato-head{border-bottom:1px solid var(--linha)!important;}
+.uhub-card{background:var(--brilho), var(--card)!important;border:1px solid var(--card-brd)!important;
+  border-radius:10px!important;box-shadow:var(--sombra)!important;
+  backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);}
+.uhub-card:hover{border-color:rgba(249,115,22,.55)!important;}
+.uhub-card.admin{border-color:rgba(249,115,22,.45)!important;background:rgba(249,115,22,.12)!important;}
+/* o claro antigo pintava esses blocos de cinza chapado — no visual novo eles
+   são o mesmo cartão translúcido das outras visões */
+body.light-mode .fato-block,body.light-mode .uhub-card{
+  background:var(--card)!important;border:1px solid var(--card-brd)!important;
+  box-shadow:var(--sombra)!important;color:var(--txt);}
+.uni-badge{font-size:10px;color:var(--txt2);background:var(--hover);border:1px solid var(--card-brd);
+  border-radius:5px;padding:3px 9px;white-space:nowrap;}
+
+/* filtros antigos (.ms-*) no desenho dos menus novos */
+.hfilter{position:relative;}
+/* só a legenda do filtro some (o botão já diz o nome) — as opções do
+   dropdown também são <label> e precisam continuar aparecendo */
+.hfilter>label{display:none;}
+.ms-btn{display:flex;align-items:center;gap:7px;background:transparent!important;border:0!important;
+  border-radius:7px;padding:6px 10px!important;color:var(--txt2)!important;font-family:inherit;
+  font-size:12.5px!important;font-weight:500!important;text-transform:none!important;
+  letter-spacing:0!important;min-width:0!important;cursor:pointer;}
+.ms-btn:hover{background:var(--hover);color:var(--txt)!important;}
+.ms-cnt{background:var(--vermelho)!important;color:#fff!important;}
+.ms-panel{background:var(--card)!important;border:1px solid var(--card-brd)!important;
+  border-radius:10px!important;padding:6px!important;box-shadow:0 18px 40px rgba(0,0,0,.5)!important;}
+.ms-opt{border-radius:7px;color:var(--txt)!important;text-transform:none!important;
+  letter-spacing:0!important;font-size:12.5px!important;}
+.ms-opt:hover{background:var(--hover);}
+.ms-opt.all-opt{border-bottom:1px solid var(--linha)!important;font-weight:700;}
+
+/* Kanban do FCA: Fato é o título, e a linha de cima leva a VIGÊNCIA */
+.kanban{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;align-items:stretch;}
+.kcol{background:transparent!important;border:0!important;display:flex;flex-direction:column;min-height:100%;}
+.kcol-head,.kcol-head.nao,.kcol-head.and,.kcol-head.con{
+  background:transparent!important;color:var(--txt2)!important;font-size:10.5px!important;
+  letter-spacing:1.3px;padding:2px 2px 12px!important;justify-content:flex-start;gap:8px;}
+.kcount{background:transparent!important;color:var(--txt3)!important;padding:0!important;}
+.kcol-body{padding:0!important;gap:10px!important;flex:1;}
+.kcard{background:var(--brilho), var(--card)!important;border:1px solid var(--card-brd)!important;border-radius:4px!important;
+  padding:0 0 12px!important;backdrop-filter:blur(5px);-webkit-backdrop-filter:blur(5px);
+  box-shadow:0 8px 22px rgba(0,0,0,.36), var(--luz-card)!important;}
+body.light-mode .kcard{box-shadow:0 4px 14px rgba(15,23,42,.10), var(--luz-card)!important;}
+.kcard:hover{border-color:rgba(249,115,22,.55)!important;}
+.kcard-top{padding:11px 13px 0!important;margin:0!important;font-size:9.5px!important;color:var(--txt3)!important;}
+.kcard-fato{padding:0 13px;margin-top:5px;font-size:13px!important;font-weight:800!important;
+  color:#FFFFFF!important;line-height:1.3;}
+body.light-mode .kcard-fato{color:#000000!important;}
+.kcard-ac{padding:0 13px;margin-top:4px!important;font-size:11.5px!important;font-weight:400!important;
+  color:var(--txt2)!important;line-height:1.4;min-height:calc(2 * 1.4em);}
+/* rodapé do card: prazo à esquerda, iniciais do responsável à direita — igual ao Planner */
+.kcard-meta{display:flex;align-items:center;justify-content:space-between;gap:10px;min-height:24px;
+  padding:0 13px;margin-top:12px!important;font-size:10.5px!important;color:var(--txt3)!important;}
+.kcard-meta .atraso{color:var(--vermelho);font-weight:700;}
+.kav{width:24px;height:24px;border-radius:50%;flex:0 0 24px;display:flex;align-items:center;justify-content:center;
+  font-size:9px;font-weight:800;letter-spacing:.2px;color:#2A1405;background:#F97316;
+  box-shadow:0 1px 4px rgba(0,0,0,.25);}
+.korg{border-radius:4px;padding:1px 6px;font-weight:800;}
+
+/* ── telas pequenas: o quadro flutuante vira página comum ── */
+@media(max-width:860px){
+  html,body{overflow:auto;}
+  .app{position:static;inset:auto;min-height:100%;border-radius:0;flex-direction:column;box-shadow:none;}
+  .side{width:auto;flex:none;flex-direction:row;flex-wrap:wrap;gap:6px;align-items:center;
+    border-right:0;border-bottom:1px solid var(--linha);padding:10px;}
+  .s-sec,.s-user,.s-top{display:none;}
+  .s-item{width:auto;font-size:11px;}
+  .top{flex-wrap:wrap;padding:14px 14px 10px;}
+  .top h1{font-size:18px;}
+  .board .main{overflow:visible;padding:0 14px 24px;}
+  .kanban{grid-template-columns:1fr;}
+}
+
 </style>
 </head>
 <body>
-<header class="header">
-  <div class="brand"><div class="brand-eyebrow">Gestão em Movimento · BI Frota</div><h1>FCA</h1><p>preenchimento por unidade</p></div>
-  <div class="hfilter"><label>Vigência</label><div class="ms-wrap" id="ms-vig"><button class="ms-btn" onclick="toggleMs('ms-vig')"><span class="ms-lbl">Todas</span><span class="ms-cnt"></span><svg width="10" height="6" viewBox="0 0 10 6"><path d="M0 0l5 6 5-6z" fill="#F97316"/></svg></button><div class="ms-panel"><div class="ms-search"><input type="text" placeholder="Pesquisar…"></div><div class="ms-list"></div></div></div></div>
-  <div class="hfilter"><label>Projeto</label><div class="ms-wrap" id="ms-proj"><button class="ms-btn" onclick="toggleMs('ms-proj')"><span class="ms-lbl">Todos</span><span class="ms-cnt"></span><svg width="10" height="6" viewBox="0 0 10 6"><path d="M0 0l5 6 5-6z" fill="#F97316"/></svg></button><div class="ms-panel"><div class="ms-search"><input type="text" placeholder="Pesquisar…"></div><div class="ms-list"></div></div></div></div>
-  <div class="hfilter"><label>Origem</label><div class="ms-wrap" id="ms-org"><button class="ms-btn" onclick="toggleMs('ms-org')"><span class="ms-lbl">Todas</span><span class="ms-cnt"></span><svg width="10" height="6" viewBox="0 0 10 6"><path d="M0 0l5 6 5-6z" fill="#F97316"/></svg></button><div class="ms-panel"><div class="ms-search"><input type="text" placeholder="Pesquisar…"></div><div class="ms-list"></div></div></div></div>
-  <div class="hfilter"><label>Fato</label><div class="ms-wrap" id="ms-ind"><button class="ms-btn" onclick="toggleMs('ms-ind')"><span class="ms-lbl">Fato</span><span class="ms-cnt"></span><svg width="10" height="6" viewBox="0 0 10 6"><path d="M0 0l5 6 5-6z" fill="#F97316"/></svg></button><div class="ms-panel"><div class="ms-search"><input type="text" placeholder="Pesquisar…"></div><div class="ms-list"></div></div></div></div>
-  <div class="hfilter"><label>Status</label><div class="ms-wrap" id="ms-st"><button class="ms-btn" onclick="toggleMs('ms-st')"><span class="ms-lbl">Status</span><span class="ms-cnt"></span><svg width="10" height="6" viewBox="0 0 10 6"><path d="M0 0l5 6 5-6z" fill="#F97316"/></svg></button><div class="ms-panel"><div class="ms-search"><input type="text" placeholder="Pesquisar…"></div><div class="ms-list"></div></div></div></div>
-  <div class="hfilter"><label>Status Prazo</label><div class="ms-wrap" id="ms-prazo"><button class="ms-btn" onclick="toggleMs('ms-prazo')"><span class="ms-lbl">Status Prazo</span><span class="ms-cnt"></span><svg width="10" height="6" viewBox="0 0 10 6"><path d="M0 0l5 6 5-6z" fill="#F97316"/></svg></button><div class="ms-panel"><div class="ms-search"><input type="text" placeholder="Pesquisar…"></div><div class="ms-list"></div></div></div></div>
-  <span class="uni-badge" id="uniBadge" style="display:none">—</span>
-  <a class="btn" id="backUnits" href="./" title="Trocar de unidade" style="display:none;text-decoration:none">← Unidades</a>
-  <a class="btn" href="../" title="Voltar ao hub" style="text-decoration:none">← Hub</a>
-  <button class="btn theme" id="themeBtn" title="Modo claro/escuro">☀</button>
-  <button class="btn" id="viewBtn" onclick="toggleView()" title="Alternar entre Fatos e Kanban">Fatos</button>
-  <button class="btn" id="flatBtn" onclick="showTabelaPre()" title="Ver as ações em formato de tabela (como no Planner)">Tabela</button>
-  <button class="btn" id="ganttBtn" onclick="showGantt()" title="Ver as ações numa linha do tempo (Gantt)">Gantt</button>
-  <button class="btn" id="adminBtn" title="Modo admin (edita tudo) — teste; em produção será por RLS">Admin</button>
-  <span class="saved-msg" id="savedMsg">Salvo ✓</span>
-</header>
-<main class="main">
-  <div class="intro">Para cada <b>fato</b> (indicador com desvio) preencha uma ou mais <b>ações</b> com <b>Causa</b>, <b>Ação</b>, <b>Responsável</b>, <b>Prazo</b> e <b>Status</b>. Os fatos vêm dos <b>ICs do Gerot</b> e dos <b>Custos da DRE</b> da unidade (Km/L e R$/L entram como causa do Custo Combustível, não como fato próprio). As ações são <b>salvas automaticamente</b> na nuvem — digitou, salvou — e podem continuar sendo editadas quando precisar.</div>
-  <div id="list"><div class="loading">Carregando fatos da unidade…</div></div>
-</main>
+<div class="app">
+  <aside class="side">
+    <div class="s-top">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M12 3 2 8l10 5 10-5-10-5Z"/><path d="M2 13l10 5 10-5"/></svg>
+      <b>FCA</b>
+      <button class="s-mini" id="btMini" title="Recolher menu">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 5h18v14H3z"/><path d="M9 5v14"/></svg>
+      </button>
+    </div>
+
+    <div class="s-sec"><b>Visões</b></div>
+    <button class="s-item on" data-v="tabela" title="Fatos">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M4 4h16v6H4zM4 14h16v6H4z"/></svg>
+      Fatos
+    </button>
+    <button class="s-item" data-v="kanban" title="Kanban">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M4 4h5v16H4zM10 4h5v11h-5zM16 4h4v7h-4z"/></svg>
+      Kanban
+    </button>
+    <button class="s-item" data-v="flat" title="Tabela">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M3 5h18v14H3zM3 10h18M9 10v9"/></svg>
+      Tabela
+    </button>
+    <button class="s-item" data-v="gantt" title="Gantt">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 6h10M4 12h14M4 18h7"/></svg>
+      Gantt
+    </button>
+
+    <div class="s-user">
+      <span class="uni-badge" id="uniBadge" style="display:none">—</span>
+      <a class="s-sair" id="backUnits" href="./" title="Trocar de unidade" style="display:none">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M9 6l-6 6 6 6M3 12h13"/></svg>
+      </a>
+      <a class="s-sair" href="../" title="Voltar ao hub">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M14 4h5v16h-5M11 8l-4 4 4 4M7 12h10"/></svg>
+      </a>
+    </div>
+  </aside>
+
+  <main class="board">
+    <div class="top">
+      <h1 id="tituloVista">Fatos</h1>
+      <div class="hfilter"><label>Vigência</label><div class="ms-wrap" id="ms-vig"><button class="ms-btn" onclick="toggleMs('ms-vig')"><span class="ms-lbl">Todas</span><span class="ms-cnt"></span><svg width="10" height="6" viewBox="0 0 10 6"><path d="M0 0l5 6 5-6z" fill="#F97316"/></svg></button><div class="ms-panel"><div class="ms-search"><input type="text" placeholder="Pesquisar…"></div><div class="ms-list"></div></div></div></div>
+      <div class="hfilter"><label>Projeto</label><div class="ms-wrap" id="ms-proj"><button class="ms-btn" onclick="toggleMs('ms-proj')"><span class="ms-lbl">Todos</span><span class="ms-cnt"></span><svg width="10" height="6" viewBox="0 0 10 6"><path d="M0 0l5 6 5-6z" fill="#F97316"/></svg></button><div class="ms-panel"><div class="ms-search"><input type="text" placeholder="Pesquisar…"></div><div class="ms-list"></div></div></div></div>
+      <div class="hfilter"><label>Origem</label><div class="ms-wrap" id="ms-org"><button class="ms-btn" onclick="toggleMs('ms-org')"><span class="ms-lbl">Todas</span><span class="ms-cnt"></span><svg width="10" height="6" viewBox="0 0 10 6"><path d="M0 0l5 6 5-6z" fill="#F97316"/></svg></button><div class="ms-panel"><div class="ms-search"><input type="text" placeholder="Pesquisar…"></div><div class="ms-list"></div></div></div></div>
+      <div class="hfilter"><label>Fato</label><div class="ms-wrap" id="ms-ind"><button class="ms-btn" onclick="toggleMs('ms-ind')"><span class="ms-lbl">Fato</span><span class="ms-cnt"></span><svg width="10" height="6" viewBox="0 0 10 6"><path d="M0 0l5 6 5-6z" fill="#F97316"/></svg></button><div class="ms-panel"><div class="ms-search"><input type="text" placeholder="Pesquisar…"></div><div class="ms-list"></div></div></div></div>
+      <div class="hfilter"><label>Status</label><div class="ms-wrap" id="ms-st"><button class="ms-btn" onclick="toggleMs('ms-st')"><span class="ms-lbl">Status</span><span class="ms-cnt"></span><svg width="10" height="6" viewBox="0 0 10 6"><path d="M0 0l5 6 5-6z" fill="#F97316"/></svg></button><div class="ms-panel"><div class="ms-search"><input type="text" placeholder="Pesquisar…"></div><div class="ms-list"></div></div></div></div>
+      <div class="hfilter"><label>Status Prazo</label><div class="ms-wrap" id="ms-prazo"><button class="ms-btn" onclick="toggleMs('ms-prazo')"><span class="ms-lbl">Status Prazo</span><span class="ms-cnt"></span><svg width="10" height="6" viewBox="0 0 10 6"><path d="M0 0l5 6 5-6z" fill="#F97316"/></svg></button><div class="ms-panel"><div class="ms-search"><input type="text" placeholder="Pesquisar…"></div><div class="ms-list"></div></div></div></div>
+      <button class="tool ico" id="themeBtn" title="Modo claro/escuro">☀</button>
+      <button class="tool" id="adminBtn" title="Modo admin">Admin</button>
+      <span class="saved-msg" id="savedMsg">Salvo ✓</span>
+      <span style="display:none">
+        <button id="viewBtn"></button><button id="flatBtn"></button><button id="ganttBtn"></button>
+      </span>
+    </div>
+    <div class="main">
+      <div class="intro">Para cada <b>fato</b> (indicador com desvio) preencha uma ou mais <b>ações</b> com <b>Causa</b>, <b>Ação</b>, <b>Responsável</b>, <b>Prazo</b> e <b>Status</b>. Os fatos vêm dos <b>ICs do Gerot</b> e dos <b>Custos da DRE</b> da unidade (Km/L e R$/L entram como causa do Custo Combustível, não como fato próprio). As ações são <b>salvas automaticamente</b> na nuvem — digitou, salvou — e podem continuar sendo editadas quando precisar.</div>
+      <div id="list"><div class="loading">Carregando fatos da unidade…</div></div>
+    </div>
+  </main>
+</div>
 <script>
 // ── Supabase (mesmo projeto do hub/auth) ──
 const SUPABASE_URL='https://lozwipoeacpvplgkrxkq.supabase.co';
@@ -785,6 +1301,8 @@ function popFiltros(){
 }
 function aplicar(){
   const list=document.getElementById('list');
+  const mn=document.querySelector('.board .main');
+  if(mn) mn.classList.toggle('rola', VIEW==='flat'||VIEW==='gantt');
   if(!_FATOS.length){list.innerHTML='<div class="empty">✓ Nenhum desvio encontrado para esta unidade na vigência mais recente — sem fatos a tratar.</div>';return;}
   const fv=getMsValues('ms-vig'), fo=getMsValues('ms-org'), fp=getMsValues('ms-proj'), fi=getMsValues('ms-ind'), fs=getMsValues('ms-st'), fpz=getMsValues('ms-prazo');
   const acMatch=r=>(!fs.length||fs.includes(r.status||DEFAULT_STATUS))&&(!fpz.length||fpz.includes(prazoState(r)));
@@ -822,7 +1340,7 @@ function aplicar(){
 }
 
 // ── Views: 'kanban' (padrão) · 'tabela' (fatos em blocos) · 'flat' (tabela/relatório) ──
-let VIEW='kanban';
+let VIEW='tabela';
 // prazo no card do Kanban (padrão do Planner): data + status + dias p/ vencer ou vencida
 function diasVenc(iso){const h=new Date();h.setHours(0,0,0,0);const p=new Date(String(iso).slice(0,10)+'T00:00:00');return Math.round((p-h)/864e5);}
 function prazoBadgeK(r){
@@ -834,17 +1352,107 @@ function prazoBadgeK(r){
   if(r.prazo&&ativa){const d=diasVenc(r.prazo);dias=`<span class="kdays ${d<0?'venc':'ok'}">${d<0?'vencida há '+(-d)+'d':(d===0?'vence hoje':d+'d p/ vencer')}</span>`;}
   return `${dt}<span class="kbadge ${cls}">${st}</span>${dias}`;
 }
+// rodapé do card no padrão do Planner: só data + dias (vermelho quando atrasada) — sem pílula
+function prazoTextoK(r){
+  const dt=r.prazo?String(r.prazo).slice(0,10).split('-').reverse().join('/'):'';
+  if(!dt) return 'sem prazo';
+  const ativa=!/conclu|cancel/i.test(String(r.status||DEFAULT_STATUS));
+  if(!ativa) return dt;
+  const d=diasVenc(r.prazo);
+  if(d<0)  return `<span class="atraso">${dt} · ${-d}d de atraso</span>`;
+  return dt+(d===0?' · vence hoje':' · '+d+'d');
+}
+function iniciaisK(n){
+  const p=String(n||'').trim().split(/\s+/).filter(Boolean);
+  if(!p.length) return '?';
+  return (p.length>1?p[0][0]+p[p.length-1][0]:p[0].slice(0,2)).toUpperCase();
+}
 // setas coloridas nos textos gerados: ▲ estouro (vermelho) · ▼ saving (verde)
 const tri=h=>String(h==null?'':h).replace(/▲/g,'<span style="color:var(--red)">▲</span>').replace(/▼/g,'<span style="color:var(--green)">▼</span>');
 
 function updateViewBtnsPre(){const b=document.getElementById('viewBtn');if(b)b.textContent=VIEW==='kanban'?'Fatos':'Kanban';const f=document.getElementById('flatBtn');if(f)f.classList.toggle('active',VIEW==='flat');const g=document.getElementById('ganttBtn');if(g)g.classList.toggle('active',VIEW==='gantt');}
+const TIT={tabela:'Fatos',kanban:'Kanban',flat:'Tabela',gantt:'Gantt'};
+function vaiPara(v){
+  VIEW=v; updateViewBtnsPre();
+  const t=document.getElementById('tituloVista'); if(t) t.textContent=TIT[v]||'';
+  document.querySelectorAll('.s-item[data-v]').forEach(b=>b.classList.toggle('on',b.dataset.v===v));
+  // o texto de instrução só faz sentido na tela de preenchimento
+  const intro=document.querySelector('.intro'); if(intro) intro.style.display=(v==='tabela'?'':'none');
+  aplicar();
+}
+document.querySelectorAll('.s-item[data-v]').forEach(b=>b.addEventListener('click',()=>vaiPara(b.dataset.v)));
+(function(){
+  const bt=document.getElementById('btMini'); if(!bt) return;
+  const marca=()=>{const l=document.querySelector('.side').classList.contains('mini');
+    bt.title=l?'Expandir menu':'Recolher menu';};
+  bt.addEventListener('click',()=>{
+    const l=document.querySelector('.side').classList.toggle('mini');
+    localStorage.setItem('fca_mini', l?'1':'0'); marca();
+  });
+  if(localStorage.getItem('fca_mini')==='1') document.querySelector('.side').classList.add('mini');
+  marca();
+})();
 function showGantt(){VIEW=VIEW==='gantt'?'kanban':'gantt';updateViewBtnsPre();aplicar();}
 // Gantt: mesmas ações do Kanban (uma barra por ação salva no banco), criação → prazo
+// ── Gantt: barra de cada ação, da criação até o prazo ──
+// verde no prazo, vermelha vencida (com rastro do prazo até hoje), tracejada sem prazo.
+// Mesmo desenho do Planner — o texto da ação quebra em vez de ser cortado.
 function ganttHTMLpre(vis){
   const fs=getMsValues('ms-st'), fpz=getMsValues('ms-prazo');
   const acMatch=r=>(!fs.length||fs.includes(r.status||DEFAULT_STATUS))&&(!fpz.length||fpz.includes(prazoState(r)));
-  const items=[]; vis.forEach(f=>{const key=keyOf(f);(_DBROWS[key]||[]).forEach(r=>{if(acMatch(r)&&r.id)items.push({id:r.id,label:_firstLine(f.nome||f.fato)+(r.acao?' — '+_firstLine(r.acao):''),tag:projLabel(f.proj)+' · '+(f.vig||''),resp:r.responsavel,status:r.status,start:r.created_at,end:r.prazo});});});
-  return GanttView.html(items);
+  const itens=[]; vis.forEach(f=>{const key=keyOf(f);(_DBROWS[key]||[]).forEach(r=>{
+    if(acMatch(r)&&r.id) itens.push({r,f});});});
+  if(!itens.length) return '<div class="cvazia">Nenhuma ação com os filtros atuais</div>';
+  itens.sort((a,b)=>String(a.r.prazo||'9999').localeCompare(String(b.r.prazo||'9999')));
+  const MES=['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
+  const dia=v=>{if(!v)return null;const d=new Date(String(v).slice(0,10)+'T00:00:00');return isNaN(d)?null:d;};
+  const h=new Date(); h.setHours(0,0,0,0);
+  let min=h,max=h;
+  itens.forEach(({r})=>{const a=dia(r.created_at)||h,b=dia(r.prazo)||h;
+    if(a<min)min=a; if(b<min)min=b; if(a>max)max=a; if(b>max)max=b;});
+  const m0=new Date(min.getFullYear(),min.getMonth(),1);
+  const m1=new Date(max.getFullYear(),max.getMonth()+1,1);
+  const tot=m1-m0, pos=d=>Math.max(0,Math.min(100,(d-m0)/tot*100));
+  const meses=[];
+  for(let d=new Date(m0); d<m1; d.setMonth(d.getMonth()+1))
+    meses.push({lbl:MES[d.getMonth()]+'/'+String(d.getFullYear()).slice(2),
+                w:(new Date(d.getFullYear(),d.getMonth()+1,1)-d)/tot*100});
+  const hj=pos(h);
+  const linhas=itens.map(({r,f})=>{
+    const ini=dia(r.created_at)||h, fim=dia(r.prazo);
+    const st=prazoState(r);
+    const cor=st==='Vencida'?'var(--vermelho)':(st==='Sem prazo'?'var(--cinza)':'var(--verde)');
+    let barra;
+    if(!fim){
+      const a=pos(ini), b=Math.max(hj,a+.6);
+      barra=`<i class="gsem" style="left:${a}%;width:${b-a}%"></i>`;
+    }else{
+      const ff=fim<ini?ini:fim, a=pos(ini), b=Math.max(pos(ff),a+.6);
+      barra=`<i style="left:${a}%;width:${b-a}%;background:${cor}"></i>`;
+      if(st==='Vencida') barra+=`<u style="left:${b}%;width:${Math.max(hj-b,.3)}%"></u>`;
+      barra+=`<em style="left:${Math.max(b,st==='Vencida'?hj:b)}%">${String(r.prazo).slice(0,10).split('-').reverse().join('/').slice(0,5)}</em>`;
+    }
+    const sub=[projLabel(f.proj),f.vig,r.responsavel].filter(Boolean).join(' · ');
+    const dica=[_firstLine(f.nome||f.fato),r.acao,r.responsavel].filter(Boolean).join(' · ');
+    return `<div class="grow" data-id="${esc(r.id)}" title="${esc(dica)}">
+      <div class="glbl"><b>${esc(_firstLine(f.nome||f.fato))||'—'}</b><span>${esc(r.acao)||'(ação não preenchida)'}</span><em class="gsub">${esc(sub)}</em></div>
+      <div class="gbar"><span class="ghoje" style="left:${hj}%"></span>${barra}</div>
+    </div>`;
+  }).join('');
+  return `<div class="gantt"><div class="grol"><div class="gin" style="min-width:${Math.max(800,340+meses.length*84)}px">
+    <div class="grow ghead">
+      <div class="glbl">Ação</div>
+      <div class="gbar gmeses">${meses.map(m=>`<span style="width:${m.w}%">${m.lbl}</span>`).join('')}
+        <span class="ghoje" style="left:${hj}%"></span></div>
+    </div>
+    ${linhas}
+  </div></div>
+  <div class="gleg">
+    <span><i style="background:var(--verde)"></i>No prazo</span>
+    <span><i style="background:var(--vermelho)"></i>Vencida</span>
+    <span><i class="gtrac"></i>Sem prazo</span>
+    <span><i class="grastro"></i>Atraso, do prazo até hoje</span>
+  </div></div>`;
 }
 function toggleView(){VIEW=VIEW==='kanban'?'tabela':'kanban';updateViewBtnsPre();aplicar();}
 function showTabelaPre(){VIEW=VIEW==='flat'?'tabela':'flat';updateViewBtnsPre();aplicar();}
@@ -856,7 +1464,7 @@ function kcardHTMLpre(x){const r=x.r,f=x.f,org=String(f.origem||'').toUpperCase(
     <div class="kcard-top"><span class="korg ${org}">${esc(f.origem||'')}</span> ${esc(UNIDADE_COD)} · ${esc(projLabel(f.proj))} · ${esc(f.vig)}${r.locked?' 🔒':''}</div>
     <div class="kcard-fato">${esc(_firstLine(f.nome||f.fato))}</div>
     ${r.acao?`<div class="kcard-ac">${esc(r.acao)}</div>`:''}
-    <div class="kcard-meta">${r.responsavel?esc(r.responsavel):'<span class="dim">sem resp.</span>'} · ${prazoBadgeK(r)}</div>
+    <div class="kcard-meta"><span>${prazoTextoK(r)}</span>${r.responsavel?`<span class="kav" title="${esc(r.responsavel)}">${esc(iniciaisK(r.responsavel))}</span>`:'<span></span>'}</div>
   </div>`;}
 function kanbanHTMLpre(vis){
   const fs=getMsValues('ms-st'), fpz=getMsValues('ms-prazo');
@@ -923,19 +1531,23 @@ function _findDbRow(id){for(const k in _DBROWS){const r=(_DBROWS[k]||[]).find(x=
 function ensureKModal(){
   if(document.getElementById('kmodal-ov'))return;
   const st=document.createElement('style');
-  st.textContent='.kmodal-ov{position:fixed;inset:0;background:rgba(0,0,0,.55);display:none;align-items:center;justify-content:center;z-index:2000;padding:16px;}'+
-    '.kmodal{background:#0f1824;border:1px solid #2a3a50;border-radius:12px;width:min(820px,96vw);max-height:92vh;overflow:auto;padding:20px 24px;box-shadow:0 20px 60px rgba(0,0,0,.6);}'+
-    'body.light-mode .kmodal{background:#fff;border-color:rgba(0,0,0,.12);}'+
+  // mesmo modal do Planner: cartão translúcido do layout novo
+  st.textContent='.kmodal-ov{position:fixed;inset:0;background:rgba(3,6,11,.55);backdrop-filter:blur(2px);display:none;align-items:center;justify-content:center;z-index:2000;padding:20px;}'+
+    '.kmodal{background:var(--brilho), var(--card);border:1px solid var(--card-brd);border-radius:14px;width:min(760px,96vw);max-height:92vh;overflow:auto;padding:22px 24px;backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);box-shadow:0 30px 70px rgba(0,0,0,.6);}'+
     '.kmodal-head{display:flex;align-items:flex-start;gap:10px;justify-content:space-between;}'+
-    '.kmodal-head b{font-size:15px;font-weight:800;color:var(--text);line-height:1.3;}'+
-    '.kmodal-x{background:none;border:none;color:var(--text2);font-size:18px;cursor:pointer;line-height:1;}'+
-    '.kmodal-sub{font-size:11px;color:var(--text2);margin:2px 0 12px;text-transform:uppercase;letter-spacing:.4px;}'+
-    '.kmodal label{display:block;font-size:10px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:.5px;margin:10px 0 3px;}'+
-    '.kmodal textarea,.kmodal input,.kmodal select{width:100%;background:#0a0f18;border:1px solid #2a3a50;border-radius:6px;color:var(--text);font-family:Montserrat,sans-serif;font-size:13px;padding:8px 10px;outline:none;}'+
-    'body.light-mode .kmodal textarea,body.light-mode .kmodal input,body.light-mode .kmodal select{background:#f0f0f0;border-color:rgba(0,0,0,.15);}'+
-    '.kmodal textarea{resize:vertical;min-height:110px;line-height:1.45;}'+
+    '.kmodal-head b{font-size:15px;font-weight:800;color:var(--txt);line-height:1.3;}'+
+    '.kmodal-x{background:none;border:none;color:var(--txt3);font-size:18px;cursor:pointer;line-height:1;}'+
+    '.kmodal-x:hover{color:var(--txt);}'+
+    '.kmodal-sub{font-size:10px;color:var(--txt3);margin:3px 0 14px;text-transform:uppercase;letter-spacing:1px;font-weight:600;}'+
+    '.kmodal label{display:block;font-size:10px;font-weight:600;color:var(--txt2);text-transform:uppercase;letter-spacing:.8px;margin:13px 0 5px;}'+
+    '.kmodal textarea,.kmodal input,.kmodal select{width:100%;background:var(--hover);border:1px solid var(--card-brd);border-radius:8px;color:var(--txt);font-family:inherit;font-size:13px;padding:9px 11px;outline:none;}'+
+    'body.light-mode .kmodal textarea,body.light-mode .kmodal input,body.light-mode .kmodal select{background:#fff;border-color:#d7dce4;}'+
+    '.kmodal textarea:focus,.kmodal input:focus,.kmodal select:focus{border-color:var(--azul);}'+
+    '.kmodal select option{background:#141d2b;color:#fff;}'+
+    'body.light-mode .kmodal select option{background:#fff;color:#0f172a;}'+
+    '.kmodal textarea{resize:vertical;min-height:90px;line-height:1.45;}'+
     '.kmodal-row{display:flex;gap:12px;}.kmodal-row>div{flex:1;}'+
-    '.kmodal-foot{display:flex;justify-content:flex-end;gap:8px;margin-top:16px;}'+
+    '.kmodal-foot{display:flex;justify-content:flex-end;gap:8px;margin-top:18px;}'+
     '.kcard{cursor:pointer;}.kcard.klock{cursor:default;}';
   document.head.appendChild(st);
   const d=document.createElement('div');d.id='kmodal-ov';d.className='kmodal-ov';
@@ -982,7 +1594,7 @@ async function persistKModal(){
 }
 // Drag-and-drop do Kanban (montado 1x no #list, que persiste entre renders)
 (function(){const c=document.getElementById('list'); if(!c)return;
-  c.addEventListener('click',e=>{const gv=e.target.closest&&e.target.closest('.gv-row');if(gv&&gv.dataset.id){openKModal(gv.dataset.id);return;}const card=e.target.closest&&e.target.closest('.kcard');if(card&&VIEW==='kanban'){const id=card.dataset.id;if(id)openKModal(id);}});
+  c.addEventListener('click',e=>{const gv=e.target.closest&&e.target.closest('.grow[data-id]');if(gv&&gv.dataset.id){openKModal(gv.dataset.id);return;}const card=e.target.closest&&e.target.closest('.kcard');if(card&&VIEW==='kanban'){const id=card.dataset.id;if(id)openKModal(id);}});
   c.addEventListener('dragstart',e=>{const card=e.target.closest&&e.target.closest('.kcard');if(card&&card.getAttribute('draggable')==='true'){e.dataTransfer.setData('text/plain',card.dataset.id);e.dataTransfer.effectAllowed='move';card.classList.add('dragging');}});
   c.addEventListener('dragend',e=>{const card=e.target.closest&&e.target.closest('.kcard');if(card)card.classList.remove('dragging');});
   c.addEventListener('dragover',e=>{const col=e.target.closest&&e.target.closest('.kcol');if(col){e.preventDefault();e.dataTransfer.dropEffect='move';col.classList.add('kover');}});
@@ -1136,6 +1748,10 @@ async function initApp(){
 // Mini-hub: um card por unidade liberada + card Admin (consolidado) só p/ admin
 function renderSubHub(allowed){
   document.querySelectorAll('.hfilter').forEach(e=>e.style.display='none');
+  // sem unidade escolhida não há o que ver: as visões do menu ficam fora do ar
+  // (clicar numa delas apagaria o próprio hub de unidades)
+  document.querySelectorAll('.s-sec, .s-item[data-v]').forEach(e=>e.style.display='none');
+  const t=document.getElementById('tituloVista'); if(t) t.textContent='Unidades';
   ['uniBadge','uniSel','adminBtn','saveBtn','savedMsg','backUnits','viewBtn','flatBtn'].forEach(id=>{const e=document.getElementById(id);if(e)e.style.display='none';});
   const intro=document.querySelector('.intro'); if(intro)intro.textContent='Selecione a unidade para preencher o FCA do mês.';
   const list=document.getElementById('list');
