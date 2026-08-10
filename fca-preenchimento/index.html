@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-<meta name="build" content="202608102100">
+<meta name="build" content="202608102200">
 <title>FCA</title>
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -685,7 +685,7 @@ body.light-mode .kcard-fato{color:#000000!important;}
   <aside class="side">
     <div class="s-top">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M12 3 2 8l10 5 10-5-10-5Z"/><path d="M2 13l10 5 10-5"/></svg>
-      <b>FCA</b>
+      <b id="marcaFCA">FCA</b>
       <button class="s-mini" id="btMini" title="Recolher menu">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 5h18v14H3z"/><path d="M9 5v14"/></svg>
       </button>
@@ -1843,7 +1843,7 @@ document.addEventListener('click',e=>{if(!e.target.closest('.ms-wrap'))document.
 function enterPreview(){
   PREVIEW=true; REAL_ADMIN=true; ADMIN=true;
   UNIDADE_COD='CGR'; applyDepara('CGR');
-  document.getElementById('uniBadge').textContent='CGR · preview';
+  document.getElementById('uniBadge').textContent='CGR · preview'; marcaUnidade('CGR · preview');
   const bp=document.querySelector('.brand p'); if(bp) bp.textContent='pré-visualização (sem nuvem)';
   applyAdminUI(); carregar();
 }
@@ -1863,7 +1863,7 @@ async function initApp(){
   const params=new URLSearchParams(location.search);
   if((params.get('gen')||'')==='all'){                       // ── geração de TODAS as unidades (só admin) ──
     if(!REAL_ADMIN){ document.getElementById('list').innerHTML='<div class="empty">Apenas administradores podem gerar os fatos.</div>'; return; }
-    document.getElementById('uniBadge').textContent='Admin · gerar';
+    document.getElementById('uniBadge').textContent='Admin · gerar'; marcaUnidade('Admin');
     gerarTodas(); return;
   }
   if((params.get('import')||'')==='total'){                  // ── importação do FCA Total (só admin) ──
@@ -1872,14 +1872,14 @@ async function initApp(){
   }
   if((params.get('sync')||'')==='rpm'){                       // ── sincroniza RPM da Base RPM (só admin) ──
     if(!REAL_ADMIN){ document.getElementById('list').innerHTML='<div class="empty">Apenas administradores.</div>'; return; }
-    document.getElementById('uniBadge').textContent='Admin · RPM';
+    document.getElementById('uniBadge').textContent='Admin · RPM'; marcaUnidade('Admin');
     sincronizarRPM(); return;
   }
   const u=(params.get('u')||'').toUpperCase();
   if(u && allowed.includes(u) && DEPARA[u]){
     // ── modo PREENCHIMENTO de uma unidade ──
     UNIDADE_COD=u; applyDepara(u);
-    document.getElementById('uniBadge').textContent=u;
+    document.getElementById('uniBadge').textContent=u; marcaUnidade(u);
     document.getElementById('backUnits').style.display='';
     applyAdminUI();
     setupUniSel();
@@ -1890,6 +1890,13 @@ async function initApp(){
   }
 }
 // Mini-hub: um card por unidade liberada + card Admin (consolidado) só p/ admin
+// marca do menu: "FCA · CGR" enquanto a unidade estiver aberta (o Admin já
+// se identifica assim). No hub de unidades volta a ser só "FCA".
+function marcaUnidade(txt){
+  const b=document.getElementById('marcaFCA');
+  if(b) b.textContent = txt ? ('FCA · '+txt) : 'FCA';
+  const t=document.querySelector('.s-top'); if(t) t.title = b?b.textContent:'';
+}
 function renderSubHub(allowed){
   document.querySelectorAll('.hfilter').forEach(e=>e.style.display='none');
   // sem unidade escolhida não há o que ver: as visões do menu ficam fora do ar
@@ -1897,6 +1904,7 @@ function renderSubHub(allowed){
   document.querySelectorAll('.s-sec, .s-item[data-v]').forEach(e=>e.style.display='none');
   // menu vazio ocupando espaço à toa: na tela de unidades ele abre recolhido.
   // Só a classe — a preferência gravada continua valendo quando a unidade abrir.
+  marcaUnidade('');
   const side=document.querySelector('.side'); if(side) side.classList.add('mini');
   const bt=document.getElementById('btMini'); if(bt) bt.title='Expandir menu';
   const t=document.getElementById('tituloVista'); if(t) t.textContent='Unidades';
@@ -1914,7 +1922,7 @@ function setupUniSel(){
   if(!REAL_ADMIN){sel.style.display='none';return;}
   sel.innerHTML=Object.keys(DEPARA).sort().map(c=>`<option value="${c}" ${c===UNIDADE_COD?'selected':''}>${c}</option>`).join('');
   sel.style.display='';
-  sel.onchange=()=>{UNIDADE_COD=sel.value;applyDepara(UNIDADE_COD);document.getElementById('uniBadge').textContent=UNIDADE_COD;document.getElementById('list').innerHTML='<div class="loading">Carregando…</div>';carregar();};
+  sel.onchange=()=>{UNIDADE_COD=sel.value;applyDepara(UNIDADE_COD);document.getElementById('uniBadge').textContent=UNIDADE_COD;marcaUnidade(UNIDADE_COD);document.getElementById('list').innerHTML='<div class="loading">Carregando…</div>';carregar();};
 }
 initApp();
 </script>
