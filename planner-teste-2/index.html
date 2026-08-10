@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-<meta name="build" content="202608090800">
+<meta name="build" content="202608101230">
 <title>Painel de Gestão · Laranja</title>
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -495,11 +495,11 @@ input[type=date]::-webkit-calendar-picker-indicator{cursor:pointer;}
       </div>
 
       <div class="menu-wrap">
-        <button class="tool" id="btPrazo" onclick="abreMenu('mPrazo')">
+        <button class="tool" id="btPrazo" onclick="abreMenu('mnPrazo')">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><rect x="3.5" y="5" width="17" height="15" rx="2"/><path d="M8 3v4M16 3v4M3.5 10h17"/></svg>
           Prazo
         </button>
-        <div class="menu" id="mPrazo">
+        <div class="menu" id="mnPrazo">
           <div class="tit">Período do prazo</div>
           <label class="mdata">De<input type="date" id="dtDe" onchange="mudaData()"></label>
           <label class="mdata">Até<input type="date" id="dtAte" onchange="mudaData()"></label>
@@ -612,11 +612,20 @@ function iniciais(n){
   if(!p.length) return '?';
   return (p.length>1?p[0][0]+p[p.length-1][0]:p[0].slice(0,2)).toUpperCase();
 }
+// Nome canônico: primeiro + último, sempre em Caixa de Título.
+// O banco tem a mesma pessoa gravada de dois jeitos ("KATIUCE CORDEIRO" veio
+// do cadastro, "Katiuce Cordeiro" das ações antigas) — sem normalizar, ela
+// aparece duas vezes no filtro e o "minhas ações" só acha metade.
+const _MINUSC=new Set(['de','da','do','das','dos','e','di','du','del','van','von']);
+const capNome=w=>{const l=w.toLocaleLowerCase('pt-BR');
+  return _MINUSC.has(l)?l:l.charAt(0).toLocaleUpperCase('pt-BR')+l.slice(1);};
 const nomeFmt=s=>{s=String(s||'').trim().replace(/\s+/g,' ');if(!s)return '';
-  const p=s.split(' ');return p.length>1?p[0]+' '+p[p.length-1]:p[0];};
+  const p=s.split(' ');
+  const curto=p.length>1?[p[0],p[p.length-1]]:[p[0]];
+  return curto.map(capNome).join(' ');};
 
 /* ── dados ── */
-const doBanco=d=>({id:d.id,assunto:d.assunto||'',acao:d.acao||'',resp:d.responsavel||'',
+const doBanco=d=>({id:d.id,assunto:d.assunto||'',acao:d.acao||'',resp:nomeFmt(d.responsavel||''),
   prazo:d.prazo||'',status:STATUS.includes(d.status)?d.status:PADRAO,
   obs:d.acompanhamento||'',criado:d.created_at||''});
 
@@ -1014,7 +1023,11 @@ const opcoes=(lista,sel)=>'<option value="">—</option>'+
   lista.map(v=>`<option${v===sel?' selected':''}>${esc(v)}</option>`).join('');
 function preenche(r){
   $('mAcao').value=r.acao||'';
-  $('mAssunto').innerHTML=opcoes([...new Set([...(r.assunto?[r.assunto]:[]),...ASSUNTOS])],r.assunto||'');
+  // a lista fixa + tudo que já existe na base: assunto criado antes de entrar
+  // na lista continuava indisponível para as outras ações
+  const assDaBase=[...new Set(LINHAS.map(x=>x.assunto).filter(Boolean))];
+  const todosAss=[...new Set([...ASSUNTOS,...assDaBase])].sort((a,b)=>a.localeCompare(b,'pt'));
+  $('mAssunto').innerHTML=opcoes([...new Set([...(r.assunto?[r.assunto]:[]),...todosAss])],r.assunto||'');
   $('mResp').innerHTML=opcoes([...new Set([...(r.resp?[r.resp]:[]),...NOMES])],r.resp||'');
   $('mPrazo').value=r.prazo||'';
   $('mStatus').innerHTML=STATUS.map(k=>
