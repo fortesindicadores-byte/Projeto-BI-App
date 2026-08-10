@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-<meta name="build" content="202608101800">
+<meta name="build" content="202608101900">
 <title>FCA</title>
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -325,7 +325,11 @@ body{
 .side.mini .s-top{justify-content:center;padding-bottom:12px;}
 .side.mini .s-top b,.side.mini .s-top>svg{display:none;}
 .side.mini .s-sec,.side.mini .s-kbd,.side.mini .s-item .n,.side.mini .s-user div,
-.side.mini .s-sair,.side.mini .s-item.pai{display:none;}
+.side.mini .s-item.pai{display:none;}
+/* recolhido, o rodapé continua com os atalhos (voltar ao hub, sair): são
+   só ícones, e sem eles não há como sair do painel com o menu fechado */
+.side.mini .s-user{flex-wrap:wrap;gap:6px;}
+.side.mini .s-sair{margin:0;}
 .side.mini .s-search{justify-content:center;padding:8px 0;margin-bottom:10px;background:var(--hover);}
 .side.mini .s-search input{display:none;}
 .side.mini .s-item{font-size:0;justify-content:center;padding:9px 0;gap:0;}
@@ -685,11 +689,7 @@ body.light-mode .kcard-fato{color:#000000!important;}
     </div>
 
     <div class="s-sec"><b>Visões</b></div>
-    <button class="s-item on" data-v="tabela" title="Fatos">
-      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M4 4h16v6H4zM4 14h16v6H4z"/></svg>
-      Fatos
-    </button>
-    <button class="s-item" data-v="kanban" title="Kanban">
+    <button class="s-item on" data-v="kanban" title="Kanban">
       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M4 4h5v16H4zM10 4h5v11h-5zM16 4h4v7h-4z"/></svg>
       Kanban
     </button>
@@ -715,7 +715,7 @@ body.light-mode .kcard-fato{color:#000000!important;}
 
   <main class="board">
     <div class="top">
-      <h1 id="tituloVista">Fatos</h1>
+      <h1 id="tituloVista">Kanban</h1>
       <div class="hfilter"><label>Vigência</label><div class="ms-wrap" id="ms-vig"><button class="ms-btn" onclick="toggleMs('ms-vig')"><span class="ms-lbl">Todas</span><span class="ms-cnt"></span><svg width="10" height="6" viewBox="0 0 10 6"><path d="M0 0l5 6 5-6z" fill="#F97316"/></svg></button><div class="ms-panel"><div class="ms-search"><input type="text" placeholder="Pesquisar…"></div><div class="ms-list"></div></div></div></div>
       <div class="hfilter"><label>Projeto</label><div class="ms-wrap" id="ms-proj"><button class="ms-btn" onclick="toggleMs('ms-proj')"><span class="ms-lbl">Todos</span><span class="ms-cnt"></span><svg width="10" height="6" viewBox="0 0 10 6"><path d="M0 0l5 6 5-6z" fill="#F97316"/></svg></button><div class="ms-panel"><div class="ms-search"><input type="text" placeholder="Pesquisar…"></div><div class="ms-list"></div></div></div></div>
       <div class="hfilter"><label>Origem</label><div class="ms-wrap" id="ms-org"><button class="ms-btn" onclick="toggleMs('ms-org')"><span class="ms-lbl">Todas</span><span class="ms-cnt"></span><svg width="10" height="6" viewBox="0 0 10 6"><path d="M0 0l5 6 5-6z" fill="#F97316"/></svg></button><div class="ms-panel"><div class="ms-search"><input type="text" placeholder="Pesquisar…"></div><div class="ms-list"></div></div></div></div>
@@ -1317,6 +1317,9 @@ function popFiltros(){
 }
 function aplicar(){
   const list=document.getElementById('list');
+  // o texto de instrução era da tela de Fatos (que saiu do menu); no hub de
+  // unidades ele é reescrito e continua aparecendo, porque lá aplicar() não roda
+  const intro=document.querySelector('.intro'); if(intro) intro.style.display='none';
   const mn=document.querySelector('.board .main');
   if(mn) mn.classList.toggle('rola', VIEW==='flat'||VIEW==='gantt');
   if(!_FATOS.length){list.innerHTML='<div class="empty">✓ Nenhum desvio encontrado para esta unidade na vigência mais recente — sem fatos a tratar.</div>';return;}
@@ -1356,7 +1359,7 @@ function aplicar(){
 }
 
 // ── Views: 'kanban' (padrão) · 'tabela' (fatos em blocos) · 'flat' (tabela/relatório) ──
-let VIEW='tabela';
+let VIEW='kanban';   // a tela de Fatos saiu do menu: o Kanban faz tudo o que ela fazia
 // prazo no card do Kanban (padrão do Planner): data + status + dias p/ vencer ou vencida
 function diasVenc(iso){const h=new Date();h.setHours(0,0,0,0);const p=new Date(String(iso).slice(0,10)+'T00:00:00');return Math.round((p-h)/864e5);}
 function prazoBadgeK(r){
@@ -1387,13 +1390,11 @@ function iniciaisK(n){
 const tri=h=>String(h==null?'':h).replace(/▲/g,'<span style="color:var(--red)">▲</span>').replace(/▼/g,'<span style="color:var(--green)">▼</span>');
 
 function updateViewBtnsPre(){const b=document.getElementById('viewBtn');if(b)b.textContent=VIEW==='kanban'?'Fatos':'Kanban';const f=document.getElementById('flatBtn');if(f)f.classList.toggle('active',VIEW==='flat');const g=document.getElementById('ganttBtn');if(g)g.classList.toggle('active',VIEW==='gantt');}
-const TIT={tabela:'Fatos',kanban:'Kanban',flat:'Tabela',gantt:'Gantt'};
+const TIT={kanban:'Kanban',flat:'Tabela',gantt:'Gantt',tabela:'Fatos'};   // 'tabela' (Fatos) não está mais no menu
 function vaiPara(v){
   VIEW=v; updateViewBtnsPre();
   const t=document.getElementById('tituloVista'); if(t) t.textContent=TIT[v]||'';
   document.querySelectorAll('.s-item[data-v]').forEach(b=>b.classList.toggle('on',b.dataset.v===v));
-  // o texto de instrução só faz sentido na tela de preenchimento
-  const intro=document.querySelector('.intro'); if(intro) intro.style.display=(v==='tabela'?'':'none');
   aplicar();
 }
 document.querySelectorAll('.s-item[data-v]').forEach(b=>b.addEventListener('click',()=>vaiPara(b.dataset.v)));
