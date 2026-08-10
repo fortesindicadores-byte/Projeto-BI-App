@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-<meta name="build" content="202608101400">
+<meta name="build" content="202608101500">
 <title>FCA</title>
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -630,12 +630,23 @@ body.light-mode .kcard{box-shadow:0 4px 14px rgba(15,23,42,.10), var(--luz-card)
 .kcard-fato{padding:0 13px;margin-top:5px;font-size:13px!important;font-weight:800!important;
   color:#FFFFFF!important;line-height:1.3;}
 body.light-mode .kcard-fato{color:#000000!important;}
-/* a causa entra ENTRE o fato e a ação — o card conta a história inteira */
+/* a causa entra ENTRE o fato e a ação, e cada linha vem escrita com o
+   nome do que é — sem rótulo dá para ler a ação como se fosse a causa */
+.kl{font-size:9.5px;font-weight:700;color:var(--txt4);text-transform:uppercase;letter-spacing:.6px;}
+.kcard-fato .kl{color:var(--txt3);}
 .kcard-causa{padding:0 13px;margin-top:5px;font-size:10.5px;font-weight:600;color:var(--txt3);
   line-height:1.35;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}
 .kcard-ac{padding:0 13px;margin-top:6px!important;font-size:11.5px!important;font-weight:400!important;
   color:var(--txt2)!important;line-height:1.4;min-height:calc(2 * 1.4em);}
-.kcard-ac i{color:var(--txt4);font-style:italic;}
+.kcard-causa i,.kcard-ac i{color:var(--txt4);font-style:italic;}
+/* atalhos de "mais uma causa / mais uma ação" no próprio card — aparecem
+   ao passar o mouse para não poluir, e ficam sempre visíveis no toque */
+.kmais{display:flex;gap:6px;margin-left:auto;margin-right:6px;opacity:0;transition:opacity .12s;}
+.kcard:hover .kmais{opacity:1;}
+@media(hover:none){.kmais{opacity:1;}}
+.kadd{background:transparent;border:1px solid var(--card-brd);border-radius:6px;color:var(--txt3);
+  font-family:inherit;font-size:9.5px;font-weight:700;padding:2px 7px;cursor:pointer;white-space:nowrap;}
+.kadd:hover{border-color:rgba(249,115,22,.6);color:var(--orange);}
 /* rodapé do card: prazo à esquerda, iniciais do responsável à direita — igual ao Planner */
 .kcard-meta{display:flex;align-items:center;justify-content:space-between;gap:10px;min-height:24px;
   padding:0 13px;margin-top:12px!important;font-size:10.5px!important;color:var(--txt3)!important;}
@@ -1466,10 +1477,17 @@ const isAutoAcao=r=>!String((r&&r.acao)||'').trim();
 function kcardHTMLpre(x){const r=x.r,f=x.f,org=String(f.origem||'').toUpperCase()==='RPM'?'rpm':'cst',lk=false;
   return `<div class="kcard${lk?' klock':''}"${lk?'':' draggable="true"'} data-id="${esc(r.id||'')}">
     <div class="kcard-top"><span class="korg ${org}">${esc(f.origem||'')}</span> ${esc(UNIDADE_COD)} · ${esc(projLabel(f.proj))} · ${esc(f.vig)}${r.locked?' 🔒':''}</div>
-    <div class="kcard-fato">${esc(_firstLine(f.nome||f.fato))}</div>
-    ${r.causa?`<div class="kcard-causa">${esc(_firstLine(r.causa))}</div>`:''}
-    <div class="kcard-ac">${r.acao?esc(r.acao):'<i>ação não preenchida</i>'}</div>
-    <div class="kcard-meta"><span>${prazoTextoK(r)}</span>${r.responsavel?`<span class="kav" title="${esc(r.responsavel)}">${esc(iniciaisK(r.responsavel))}</span>`:'<span></span>'}</div>
+    <div class="kcard-fato"><span class="kl">Fato:</span> ${esc(_firstLine(f.nome||f.fato))}</div>
+    <div class="kcard-causa"><span class="kl">Causa:</span> ${r.causa?esc(_firstLine(r.causa)):'<i>não preenchida</i>'}</div>
+    <div class="kcard-ac"><span class="kl">Ação:</span> ${r.acao?esc(r.acao):'<i>não preenchida</i>'}</div>
+    <div class="kcard-meta">
+      <span>${prazoTextoK(r)}</span>
+      <span class="kmais">
+        <button class="kadd" data-add="acao" data-id="${esc(r.id||'')}" title="Mais uma ação para ESTA causa">+ ação</button>
+        <button class="kadd" data-add="causa" data-id="${esc(r.id||'')}" title="Mais uma causa para ESTE fato">+ causa</button>
+      </span>
+      ${r.responsavel?`<span class="kav" title="${esc(r.responsavel)}">${esc(iniciaisK(r.responsavel))}</span>`:'<span></span>'}
+    </div>
   </div>`;}
 function kanbanHTMLpre(vis){
   const fs=getMsValues('ms-st'), fpz=getMsValues('ms-prazo');
@@ -1572,8 +1590,8 @@ function ensureKModal(){
     '<div class="kmodal-row"><div><label>Status</label><select id="km-status">'+_KM_STS.map(s=>'<option>'+s+'</option>').join('')+'</select></div><div><label>Acompanhamento</label><input id="km-acomp" type="text"></div></div>'+
     '<div class="kmodal-foot">'+
       '<span class="esq">'+
-        '<button class="btn ghost" onclick="novaAcaoDoModal()" title="Outra ação para a mesma causa">+ ação</button>'+
-        '<button class="btn ghost" onclick="novaCausaDoModal()" title="Outra causa para o mesmo fato">+ causa</button>'+
+        '<button class="btn ghost" onclick="novaAcaoDoModal()">+ ação (mesma causa)</button>'+
+        '<button class="btn ghost" onclick="novaCausaDoModal()">+ causa (mesmo fato)</button>'+
         '<button class="btn ghost" onclick="excluirDoModal()" style="color:var(--vermelho)">Excluir</button>'+
       '</span>'+
       '<button class="btn ghost" onclick="closeKModal()">Fechar</button>'+
@@ -1621,10 +1639,8 @@ async function persistKModal(){
 // Com isso o Kanban e a Tabela fazem tudo o que a tela de Fatos faz:
 // "+ ação" repete a causa (várias ações para a mesma causa) e
 // "+ causa" abre uma linha em branco no mesmo fato.
-async function _novaLinhaFCA(causa){
-  if(!_kmKey) return;
-  const key=_kmKey;
-  await persistKModal();          // o que estava digitado na linha atual não pode se perder
+async function _novaLinhaFCA(key,causa){
+  if(!key) return;
   const f=_FATOS.find(x=>keyOf(x)===key);
   const base=(_DBROWS[key]||[])[0]||{};
   const nova={
@@ -1646,10 +1662,21 @@ async function _novaLinhaFCA(causa){
   openKModal(data.id);
   const ta=document.getElementById(causa?'km-acao':'km-causa'); if(ta) ta.focus();
 }
-function novaAcaoDoModal(){
-  const c=document.getElementById('km-causa'); _novaLinhaFCA(c?c.value:'');
+async function novaAcaoDoModal(){
+  const key=_kmKey, c=document.getElementById('km-causa'), causa=c?c.value:'';
+  await persistKModal();          // o que estava digitado na linha atual não pode se perder
+  _novaLinhaFCA(key,causa);
 }
-function novaCausaDoModal(){ _novaLinhaFCA(''); }
+async function novaCausaDoModal(){
+  const key=_kmKey;
+  await persistKModal();
+  _novaLinhaFCA(key,'');
+}
+// mesmos dois atalhos direto no card do Kanban (sem passar pelo modal)
+function addDoCard(id,tipo){
+  const hit=_findDbRow(id); if(!hit) return;
+  _novaLinhaFCA(hit.key, tipo==='acao'?(hit.r.causa||''):'');
+}
 async function excluirDoModal(){
   const hit=_findDbRow(_kmId); if(!hit) return;
   const key=hit.key, id=hit.r.id;
@@ -1665,6 +1692,8 @@ async function excluirDoModal(){
 // Drag-and-drop do Kanban (montado 1x no #list, que persiste entre renders)
 (function(){const c=document.getElementById('list'); if(!c)return;
   c.addEventListener('click',e=>{
+    const add=e.target.closest&&e.target.closest('.kadd');
+    if(add){e.stopPropagation();addDoCard(add.dataset.id,add.dataset.add);return;}
     const gv=e.target.closest&&e.target.closest('.grow[data-id]');if(gv&&gv.dataset.id){openKModal(gv.dataset.id);return;}
     const tr=e.target.closest&&e.target.closest('tr[data-id]');if(tr&&tr.dataset.id){openKModal(tr.dataset.id);return;}
     const card=e.target.closest&&e.target.closest('.kcard');if(card&&VIEW==='kanban'){const id=card.dataset.id;if(id)openKModal(id);}
@@ -1825,6 +1854,10 @@ function renderSubHub(allowed){
   // sem unidade escolhida não há o que ver: as visões do menu ficam fora do ar
   // (clicar numa delas apagaria o próprio hub de unidades)
   document.querySelectorAll('.s-sec, .s-item[data-v]').forEach(e=>e.style.display='none');
+  // menu vazio ocupando espaço à toa: na tela de unidades ele abre recolhido.
+  // Só a classe — a preferência gravada continua valendo quando a unidade abrir.
+  const side=document.querySelector('.side'); if(side) side.classList.add('mini');
+  const bt=document.getElementById('btMini'); if(bt) bt.title='Expandir menu';
   const t=document.getElementById('tituloVista'); if(t) t.textContent='Unidades';
   ['uniBadge','uniSel','adminBtn','saveBtn','savedMsg','backUnits','viewBtn','flatBtn'].forEach(id=>{const e=document.getElementById(id);if(e)e.style.display='none';});
   const intro=document.querySelector('.intro'); if(intro)intro.textContent='Selecione a unidade para preencher o FCA do mês.';
