@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-<meta name="build" content="202608111200">
+<meta name="build" content="202608111300">
 <title>FCA · Admin</title>
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -557,10 +557,14 @@ table.res-tab tbody tr:hover{background:var(--hover);}
 /* Tabela e Gantt rolam por DENTRO: sem isso o sticky do cabeçalho se ancora
    num wrapper que não rola, e o cabeçalho sobe junto com as linhas */
 .board .main.rola{display:flex;flex-direction:column;overflow:hidden;}
-/* no Kanban o quadro em si não rola — quem rola é cada coluna */
-.board .main.kan{display:flex;flex-direction:column;overflow:hidden;}
+/* Kanban: a faixa dos títulos fica FORA da área que rola; o quadro continua
+   com UMA barra de rolagem só. --sb é a largura dessa barra, medida no JS,
+   para as duas grades continuarem alinhadas. */
+.board .main.kan{display:flex;flex-direction:column;overflow:hidden;padding-bottom:0;}
 .board .main.kan #list{flex:1;min-height:0;display:flex;flex-direction:column;overflow:hidden;}
-.board .main.kan .kanban{flex:1;min-height:0;}
+.kheads{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;flex:0 0 auto;
+  padding-right:var(--sb,0px);}
+.board .main.kan .kanban{flex:1;min-height:0;overflow-y:auto;overflow-x:hidden;padding-bottom:24px;}
 .board .main.rola #content{flex:1;min-height:0;display:flex;flex-direction:column;overflow:hidden;}
 .board .main.rola .tab-wrap,.board .main.rola .grol{flex:1;min-height:0;overflow:auto;}
 .board .main.rola .rel-wrap{flex:1;min-height:0;overflow-x:hidden;overflow-y:auto;}
@@ -653,18 +657,18 @@ table.rel tbody td{vertical-align:top;line-height:1.45;}
 .kanban{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;align-items:stretch;}
 /* overflow:hidden (do CSS antigo) impede o cabeçalho de grudar: com ele a
    coluna vira contexto de recorte e o sticky se ancora nela, que não rola */
+/* o overflow:hidden do CSS antigo cortava os cards agora que quem rola é a
+   grade inteira — a coluna não recorta nada */
 .kcol{background:transparent!important;border:0!important;display:flex;flex-direction:column;
-  min-height:0;height:100%;overflow:visible!important;}
+  min-height:100%;overflow:visible!important;}
 /* o título fica FORA da área que rola: quem rola é a lista de cards de cada
    coluna. Assim ele nunca some nem é atravessado pelos cards, e não precisa de
    faixa de fundo nenhuma. */
 .kcol-head,.kcol-head.nao,.kcol-head.and,.kcol-head.con{
   background:transparent!important;color:var(--txt2)!important;font-size:10.5px!important;
-  letter-spacing:1.3px;padding:2px 2px 12px!important;justify-content:flex-start;gap:8px;
-  flex:0 0 auto;}
+  letter-spacing:1.3px;padding:2px 2px 12px!important;justify-content:flex-start;gap:8px;}
 .kcount{background:transparent!important;color:var(--txt3)!important;padding:0!important;}
-.kcol-body{padding:0 0 36px!important;gap:10px!important;flex:1;min-height:0;
-  overflow-y:auto;overflow-x:hidden;}   /* 36 embaixo: o último card não fica colado */
+.kcol-body{padding:0 0 36px!important;gap:10px!important;flex:1;}   /* 36 embaixo: o último card não fica colado */
 .kcard{background:var(--brilho), var(--card)!important;border:1px solid var(--card-brd)!important;border-radius:4px!important;
   padding:0 0 12px!important;backdrop-filter:blur(5px);-webkit-backdrop-filter:blur(5px);
   box-shadow:0 8px 22px rgba(0,0,0,.36), var(--luz-card)!important;}
@@ -1007,6 +1011,12 @@ function rowHTML(r){
     </div></td>
   </tr>`;
 }
+// largura da barra de rolagem do quadro → alinha a faixa de títulos com as colunas
+function alinhaCabecalhos(){
+  const k=document.querySelector('.kanban'); if(!k) return;
+  document.documentElement.style.setProperty('--sb',(k.offsetWidth-k.clientWidth)+'px');
+}
+window.addEventListener('resize',alinhaCabecalhos);
 function render(){
   const c=document.getElementById('content');
   if(!_ROWS.length){c.innerHTML='<div class="tbl-section"><div class="empty">Nenhuma ação cadastrada ainda. Assim que as unidades preencherem o FCA, os registros aparecem aqui.</div></div>';return;}
@@ -1023,6 +1033,7 @@ function render(){
   const mn=document.querySelector('.board .main');
   if(mn){ mn.classList.toggle('rola', VIEW==='tabela'||VIEW==='gantt');
            mn.classList.toggle('kan', VIEW==='kanban'); }
+  setTimeout(alinhaCabecalhos,0);
   c.innerHTML=body;
   if(VIEW==='resumo'){
     // idem: a série mensal enxerga todas as vigências, e o filtro só acende as escolhidas
@@ -1206,13 +1217,18 @@ function kcardHTML(r){
 // FCA automático = ação ainda não preenchida (gerado do Gerot/DRE e não tratado) — vai primeiro no Kanban
 const isAutoAcao=r=>!String((r&&r.acao)||'').trim();
 function kanbanHTML(vis){
-  return `<div class="kanban">${KCOLS.map(c=>{
+  // Os títulos ficam numa faixa FORA da área que rola — o quadro continua com
+  // UMA barra de rolagem só, e o nome da etapa nunca sai da tela.
+  const porCol=KCOLS.map(c=>{
     const items=vis.filter(r=>(r.status||DEFAULT_STATUS)===c.k);
     items.sort((a,b)=>((isAutoAcao(a)?0:1)-(isAutoAcao(b)?0:1))||String(a.prazo||'9999').localeCompare(String(b.prazo||'9999')));
-    return `<div class="kcol" data-status="${esc(c.k)}">
-      <div class="kcol-head ${c.cls}">${c.k}<span class="kcount">${items.length}</span></div>
-      <div class="kcol-body">${items.map(kcardHTML).join('')||'<div class="kempty">—</div>'}</div>
-    </div>`;}).join('')}</div>`;
+    return {c,items};});
+  return `<div class="kheads">${porCol.map(({c,items})=>
+      `<div class="kcol-head ${c.cls}">${c.k}<span class="kcount">${items.length}</span></div>`).join('')}</div>`+
+    `<div class="kanban">${porCol.map(({c,items})=>
+      `<div class="kcol" data-status="${esc(c.k)}">
+        <div class="kcol-body">${items.map(kcardHTML).join('')||'<div class="kempty">—</div>'}</div>
+      </div>`).join('')}</div>`;
 }
 async function moveCard(id,status){
   const row=_ROWS.find(r=>r.id===id); if(!row||(row.status||DEFAULT_STATUS)===status)return;
