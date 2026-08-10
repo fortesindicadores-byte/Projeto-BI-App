@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-<meta name="build" content="202608101700">
+<meta name="build" content="202608101800">
 <title>FCA</title>
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -620,7 +620,7 @@ body.light-mode .fato-block,body.light-mode .uhub-card{
   background:transparent!important;color:var(--txt2)!important;font-size:10.5px!important;
   letter-spacing:1.3px;padding:2px 2px 12px!important;justify-content:flex-start;gap:8px;}
 .kcount{background:transparent!important;color:var(--txt3)!important;padding:0!important;}
-.kcol-body{padding:0!important;gap:10px!important;flex:1;}
+.kcol-body{padding:0 0 36px!important;gap:10px!important;flex:1;}   /* 36 embaixo: o último card não fica colado */
 .kcard{background:var(--brilho), var(--card)!important;border:1px solid var(--card-brd)!important;border-radius:4px!important;
   padding:0 0 12px!important;backdrop-filter:blur(5px);-webkit-backdrop-filter:blur(5px);
   box-shadow:0 8px 22px rgba(0,0,0,.36), var(--luz-card)!important;}
@@ -1702,9 +1702,13 @@ async function excluirDoModal(){
   });
   c.addEventListener('dragstart',e=>{const card=e.target.closest&&e.target.closest('.kcard');if(card&&card.getAttribute('draggable')==='true'){e.dataTransfer.setData('text/plain',card.dataset.id);e.dataTransfer.effectAllowed='move';card.classList.add('dragging');}});
   c.addEventListener('dragend',e=>{const card=e.target.closest&&e.target.closest('.kcard');if(card)card.classList.remove('dragging');});
-  c.addEventListener('dragover',e=>{const col=e.target.closest&&e.target.closest('.kcol');if(col){e.preventDefault();e.dataTransfer.dropEffect='move';col.classList.add('kover');}});
-  c.addEventListener('dragleave',e=>{const col=e.target.closest&&e.target.closest('.kcol');if(col)col.classList.remove('kover');});
-  c.addEventListener('drop',e=>{const col=e.target.closest&&e.target.closest('.kcol');if(!col)return;e.preventDefault();col.classList.remove('kover');const id=e.dataTransfer.getData('text/plain');if(id&&col.dataset.status)moveCardPre(id,col.dataset.status);});
+  // coluna alvo pela POSIÇÃO HORIZONTAL do ponteiro: com muitos cards uma coluna
+  // passa da altura das outras e soltar lá embaixo caía fora de qualquer .kcol
+  const colEmX=x=>[...c.querySelectorAll('.kcol')].find(k=>{const r=k.getBoundingClientRect();return x>=r.left&&x<=r.right;})||null;
+  const marcaCol=k=>{c.querySelectorAll('.kcol.kover').forEach(o=>{if(o!==k)o.classList.remove('kover');});if(k)k.classList.add('kover');};
+  c.addEventListener('dragover',e=>{const col=colEmX(e.clientX);if(col){e.preventDefault();e.dataTransfer.dropEffect='move';marcaCol(col);}});
+  c.addEventListener('dragleave',e=>{if(!c.contains(e.relatedTarget))marcaCol(null);});
+  c.addEventListener('drop',e=>{const col=colEmX(e.clientX);if(!col)return;e.preventDefault();marcaCol(null);const id=e.dataTransfer.getData('text/plain');if(id&&col.dataset.status)moveCardPre(id,col.dataset.status);});
 })();
 function autoResize(ta){ta.style.height='auto';ta.style.height=ta.scrollHeight+'px';}
 // Redimensiona todas as textareas em lote (2 reflows em vez de N)

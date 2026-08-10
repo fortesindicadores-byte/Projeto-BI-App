@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-<meta name="build" content="202608101230">
+<meta name="build" content="202608101800">
 <title>Planner Corporativo</title>
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -229,7 +229,9 @@ body.claro .menu .mdata input{background:#fff;border-color:#d7dce4;}
   font-family:inherit;font-size:14px;font-weight:500;line-height:1;padding:0;}
 .ic:hover{background:var(--hover);color:var(--txt);}
 .chead .ic:first-of-type{margin-left:auto;}
-.cbody{display:flex;flex-direction:column;gap:10px;flex:1;}
+.cbody{display:flex;flex-direction:column;gap:10px;flex:1;padding-bottom:36px;}
+/* o respiro fica no .cbody, não no .cols: os cards passam da altura da coluna,
+   e padding de container que rola não conta para o conteúdo que transborda */
 .col.rec .cbody{display:none;}
 
 /* ── card: chip-rótulo no topo em degradê laranja → cor do painel
@@ -1042,12 +1044,24 @@ cols.addEventListener('dragstart',e=>{
   c.classList.add('arrasta');
 });
 cols.addEventListener('dragend',e=>{const c=e.target.closest('.card');if(c)c.classList.remove('arrasta');});
-cols.addEventListener('dragover',e=>{const c=e.target.closest('.col');if(!c)return;
-  e.preventDefault();e.dataTransfer.dropEffect='move';c.classList.add('over');});
-cols.addEventListener('dragleave',e=>{const c=e.target.closest('.col');if(c)c.classList.remove('over');});
+// A coluna alvo sai da POSIÇÃO HORIZONTAL do ponteiro, não do elemento sob ele:
+// quando uma coluna tem muitos cards ela passa da altura das outras, e soltar lá
+// embaixo caía fora de qualquer .col — arrastar para o lado não fazia nada.
+function colunaEmX(x){
+  return [...cols.querySelectorAll('.col')].find(c=>{
+    const r=c.getBoundingClientRect(); return x>=r.left && x<=r.right;
+  })||null;
+}
+function marcaColuna(c){
+  cols.querySelectorAll('.col.over').forEach(o=>{ if(o!==c) o.classList.remove('over'); });
+  if(c) c.classList.add('over');
+}
+cols.addEventListener('dragover',e=>{const c=colunaEmX(e.clientX);if(!c)return;
+  e.preventDefault();e.dataTransfer.dropEffect='move';marcaColuna(c);});
+cols.addEventListener('dragleave',e=>{if(!cols.contains(e.relatedTarget))marcaColuna(null);});
 cols.addEventListener('drop',async e=>{
-  const c=e.target.closest('.col'); if(!c) return;
-  e.preventDefault(); c.classList.remove('over');
+  const c=colunaEmX(e.clientX); if(!c) return;
+  e.preventDefault(); marcaColuna(null);
   const id=e.dataTransfer.getData('text/plain'), etapa=c.dataset.etapa;
   const r=LINHAS.find(x=>x.id===id); if(!r||r.status===etapa) return;
   const antes=r.status; r.status=etapa; render();

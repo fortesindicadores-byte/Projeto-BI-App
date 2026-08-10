@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-<meta name="build" content="202608101700">
+<meta name="build" content="202608101800">
 <title>FCA · Admin</title>
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -568,6 +568,16 @@ table.rel tbody tr:hover{background:var(--hover)!important;}
 table.rel td.txt b{color:var(--txt);}
 body.light-mode .rel-section{background:var(--card)!important;}
 body.light-mode table.rel thead th{background:var(--cabec)!important;}
+/* mesmas colunas da Tabela do FCA da unidade */
+.rel-wrap{overflow:auto;}
+table.rel{width:100%;border-collapse:collapse;font-size:12px;min-width:1500px;}
+table.rel td.txt{white-space:normal;min-width:200px;}
+table.rel td.txtsm{white-space:normal;min-width:160px;color:var(--txt3);}
+table.rel td.center{text-align:left;white-space:nowrap;}
+table.rel thead th{text-align:left;font-size:10px;font-weight:700;text-transform:uppercase;white-space:nowrap;position:sticky;top:0;z-index:2;}
+table.rel tbody td{vertical-align:top;line-height:1.45;}
+.rel .dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px;vertical-align:middle;}
+.rel .chip{display:inline-block;padding:3px 9px;border-radius:5px;font-weight:700;font-size:11px;white-space:nowrap;}
 
 
 
@@ -604,7 +614,7 @@ body.light-mode table.rel thead th{background:var(--cabec)!important;}
   background:transparent!important;color:var(--txt2)!important;font-size:10.5px!important;
   letter-spacing:1.3px;padding:2px 2px 12px!important;justify-content:flex-start;gap:8px;}
 .kcount{background:transparent!important;color:var(--txt3)!important;padding:0!important;}
-.kcol-body{padding:0!important;gap:10px!important;flex:1;}
+.kcol-body{padding:0 0 36px!important;gap:10px!important;flex:1;}   /* 36 embaixo: o último card não fica colado */
 .kcard{background:var(--brilho), var(--card)!important;border:1px solid var(--card-brd)!important;border-radius:4px!important;
   padding:0 0 12px!important;backdrop-filter:blur(5px);-webkit-backdrop-filter:blur(5px);
   box-shadow:0 8px 22px rgba(0,0,0,.36), var(--luz-card)!important;}
@@ -729,6 +739,10 @@ table.cons{min-width:1560px!important;}
     <button class="s-item" data-v="gantt" title="Gantt">
       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 6h10M4 12h14M4 18h7"/></svg>
       Gantt
+    </button>
+    <button class="s-item" data-v="resumo" title="Resumo">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 19V9M10 19V5M16 19v-7M22 19H2"/></svg>
+      Resumo
     </button>
 
     <div class="s-sec"><b>Gerar</b></div>
@@ -945,7 +959,7 @@ function rowHTML(r){
 }
 function render(){
   const c=document.getElementById('content');
-  if(!_ROWS.length){c.innerHTML=summaryHTML([])+'<div class="tbl-section"><div class="empty">Nenhuma ação cadastrada ainda. Assim que as unidades preencherem o FCA, os registros aparecem aqui.</div></div>';return;}
+  if(!_ROWS.length){c.innerHTML='<div class="tbl-section"><div class="empty">Nenhuma ação cadastrada ainda. Assim que as unidades preencherem o FCA, os registros aparecem aqui.</div></div>';return;}
   const fu=getMsValues('ms-uni'),fv=getMsValues('ms-vig'),fo=getMsValues('ms-org'),fs=getMsValues('ms-st'),fp=getMsValues('ms-proj'),fc=getMsValues('ms-causa'),fa=getMsValues('ms-acao'),ff=getMsValues('ms-fato'),fpz=getMsValues('ms-prazo');
   const fillState=v=>String(v||'').trim()?'Preenchida':'Em branco';
   const vis=_ROWS.filter(r=>(!fu.length||fu.includes(r.unidade))&&(!fv.length||fv.includes(r.vigencia))&&(!fo.length||fo.includes(r.origem))&&(!fs.length||fs.includes(r.status||DEFAULT_STATUS))&&(!fp.length||fp.includes(projLabel(r.projeto)))&&(!fc.length||fc.includes(fillState(r.causa)))&&(!fa.length||fa.includes(fillState(r.acao)))&&(!ff.length||ff.includes(r.fato))&&(!fpz.length||fpz.includes(prazoState(r))));
@@ -954,15 +968,50 @@ function render(){
   if(!vis.length){body='<div class="tbl-section"><div class="empty">Nenhuma ação para os filtros selecionados.</div></div>';}
   else if(VIEW==='kanban'){body=kanbanHTML(vis);}
   else if(VIEW==='gantt'){body=ganttHTML(vis);}
-  else{body=`<div class="tbl-section"><div class="tbl-rola"><table class="cons">
-    <thead><tr><th>Unidade</th><th>Vigência</th><th>Origem</th><th>Fato</th><th>Projeto</th><th>Causa</th><th>Ação</th><th>Responsável</th><th>Prazo</th><th>Status</th><th>Acompanhamento</th><th>🔒</th></tr></thead>
-    <tbody>${vis.map(rowHTML).join('')}</tbody></table></div></div>`;}
+  else if(VIEW==='resumo'){body=summaryHTML(vis);}
+  else{body=relatorioHTML(vis);}
   const mn=document.querySelector('.board .main');
   if(mn) mn.classList.toggle('rola', VIEW==='tabela'||VIEW==='gantt');
-  c.innerHTML=summaryHTML(vis)+body;
-  if(VIEW!=='kanban'&&VIEW!=='gantt') autoResizeAll(c);
+  c.innerHTML=body;
 }
 
+
+// ── Tabela: mesmo desenho do Planner e do FCA da unidade ──
+// Só leitura; a linha abre o modal, que é onde se edita, adiciona causa/ação e exclui.
+function chipStatusRel(st){
+  st=String(st||'').trim();
+  if(!st)return '<span style="color:var(--txt3)">—</span>';
+  if(/conclu/i.test(st))return `<span class="chip" style="background:rgba(59,179,59,.85);color:#06210a">${esc(st)}</span>`;
+  if(/andamento/i.test(st))return `<span class="chip" style="background:rgba(244,161,0,.9);color:#241900">${esc(st)}</span>`;
+  if(/cancel/i.test(st))return `<span class="chip" style="background:rgba(120,120,120,.5);color:#fff">${esc(st)}</span>`;
+  if(/n[ãa]o inici/i.test(st))return `<span class="chip" style="background:rgba(227,52,52,.85);color:#2a0606">${esc(st)}</span>`;
+  return `<span class="chip" style="background:rgba(148,163,184,.25);color:var(--txt)">${esc(st)}</span>`;
+}
+function relatorioHTML(vis){
+  const prazoBR=p=>p?String(p).slice(0,10).split('-').reverse().join('/'):'—';
+  let h='<div class="rel-section"><div class="rel-wrap"><table class="rel"><thead><tr>'+
+    '<th>Unidade</th><th>Origem</th><th>Projeto</th><th>Vigência</th><th>Conta / Indicador</th><th>Fato</th><th>Causa</th><th>Ação</th><th>Responsável</th><th>Prazo</th><th>Status Prazo</th><th>Status</th><th>Acompanhamento</th>'+
+    '</tr></thead><tbody>';
+  vis.forEach(r=>{
+    const sp=prazoState(r), spCor=sp==='Vencida'?'var(--vermelho)':'var(--verde)';
+    h+=`<tr data-id="${esc(r.id)}" title="Clique para editar">`+
+      `<td class="center">${esc(r.unidade||'—')}</td>`+
+      `<td class="center">${esc(r.origem||'—')}</td>`+
+      `<td class="center">${esc(projLabel(r.projeto))}</td>`+
+      `<td class="center">${esc((r.vigencia||'').toUpperCase())}</td>`+
+      `<td class="txt"><b>${esc(_firstLine(r.fato))||'—'}</b></td>`+
+      `<td class="txtsm">${r.fato_desvio?tri(esc(r.fato_desvio)):'—'}</td>`+
+      `<td class="txtsm">${tri((esc(r.causa)||'—').replace(/\n/g,'<br>'))}</td>`+
+      `<td class="txt">${tri((esc(r.acao)||'—').replace(/\n/g,'<br>'))}</td>`+
+      `<td class="center">${esc(r.responsavel)||'—'}</td>`+
+      `<td class="center">${prazoBR(r.prazo)}</td>`+
+      `<td class="center"><span class="dot" style="background:${spCor}"></span>${sp}</td>`+
+      `<td class="center">${chipStatusRel(r.status||DEFAULT_STATUS)}</td>`+
+      `<td class="txtsm">${(esc(r.acompanhamento)||'—').replace(/\n/g,'<br>')}</td>`+
+    '</tr>';
+  });
+  return h+'</tbody></table></div></div>';
+}
 // ── Gantt: barra de cada ação, da criação até o prazo ──
 // verde no prazo, vermelha vencida (com rastro do prazo até hoje), tracejada sem prazo.
 // Mesmo desenho do Planner e do FCA da unidade — o texto quebra em vez de ser cortado.
@@ -1092,7 +1141,7 @@ function updViewBtns(){const b=document.getElementById('viewBtn');if(b)b.textCon
 function toggleView(){VIEW=VIEW==='kanban'?'tabela':'kanban';updViewBtns();render();}
 function showGantt(){VIEW=VIEW==='gantt'?'kanban':'gantt';updViewBtns();render();}
 // ── menu lateral: troca de visão e recolher ──
-const TIT={kanban:'Kanban',tabela:'Tabela',gantt:'Gantt'};
+const TIT={kanban:'Kanban',tabela:'Tabela',gantt:'Gantt',resumo:'Resumo'};
 function vaiPara(v){
   VIEW=v; updViewBtns();
   const t=document.getElementById('tituloVista'); if(t) t.textContent=TIT[v]||'';
@@ -1209,9 +1258,12 @@ function wireDelegation(){
   // Kanban drag-and-drop (arrastar card entre buckets muda o status)
   c.addEventListener('dragstart',e=>{const card=e.target.closest&&e.target.closest('.kcard');if(card){e.dataTransfer.setData('text/plain',card.dataset.id);e.dataTransfer.effectAllowed='move';card.classList.add('dragging');}});
   c.addEventListener('dragend',e=>{const card=e.target.closest&&e.target.closest('.kcard');if(card)card.classList.remove('dragging');});
-  c.addEventListener('dragover',e=>{const col=e.target.closest&&e.target.closest('.kcol');if(col){e.preventDefault();e.dataTransfer.dropEffect='move';col.classList.add('kover');}});
-  c.addEventListener('dragleave',e=>{const col=e.target.closest&&e.target.closest('.kcol');if(col)col.classList.remove('kover');});
-  c.addEventListener('drop',e=>{const col=e.target.closest&&e.target.closest('.kcol');if(!col)return;e.preventDefault();col.classList.remove('kover');const id=e.dataTransfer.getData('text/plain');if(id&&col.dataset.status)moveCard(id,col.dataset.status);});
+  // coluna alvo pela POSIÇÃO HORIZONTAL do ponteiro (ver FCA da unidade)
+  const colEmX=x=>[...c.querySelectorAll('.kcol')].find(k=>{const r=k.getBoundingClientRect();return x>=r.left&&x<=r.right;})||null;
+  const marcaCol=k=>{c.querySelectorAll('.kcol.kover').forEach(o=>{if(o!==k)o.classList.remove('kover');});if(k)k.classList.add('kover');};
+  c.addEventListener('dragover',e=>{const col=colEmX(e.clientX);if(col){e.preventDefault();e.dataTransfer.dropEffect='move';marcaCol(col);}});
+  c.addEventListener('dragleave',e=>{if(!c.contains(e.relatedTarget))marcaCol(null);});
+  c.addEventListener('drop',e=>{const col=colEmX(e.clientX);if(!col)return;e.preventDefault();marcaCol(null);const id=e.dataTransfer.getData('text/plain');if(id&&col.dataset.status)moveCard(id,col.dataset.status);});
   c.addEventListener('input',e=>{const ta=e.target;if(ta.tagName==='TEXTAREA')autoResize(ta);});
   c.addEventListener('focusout',e=>{const el=e.target;if(el.matches&&el.matches('textarea[data-col],input[type=text][data-col]')){const tr=el.closest('tr');if(tr)saveField(el,tr.dataset.id,el.dataset.col);}});
   c.addEventListener('change',e=>{const el=e.target;if(!el.matches)return;
@@ -1224,6 +1276,8 @@ function wireDelegation(){
     if(gv&&gv.dataset.id){openKModal(gv.dataset.id);return;}
     const kcard=e.target.closest&&e.target.closest('.kcard');
     if(kcard){openKModal(kcard.dataset.id);return;}
+    const tr=e.target.closest&&e.target.closest('tr[data-id]');
+    if(tr&&tr.dataset.id){openKModal(tr.dataset.id);return;}
     const add=e.target.closest&&e.target.closest('.mini-add');
     if(add){const tr=add.closest('tr');if(tr)addRow(tr.dataset.id,add.dataset.add==='acao');return;}
     const del=e.target.closest&&e.target.closest('.mini-del');
