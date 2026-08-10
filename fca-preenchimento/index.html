@@ -3,10 +3,13 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-<meta name="build" content="202608101900">
+<meta name="build" content="202608102100">
 <title>FCA</title>
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<link rel="stylesheet" href="../assets/aderencia-view.css?v=202608102100">
+<script src="../assets/aderencia-view.js?v=202608102100"></script>
 <style>
 :root{--bg:#0C1017;--card:#141B26;--border:#1E2D40;--orange:#F97316;--blue:#38BDF8;--text:#F1F5F9;--text2:#94A3B8;--text3:#475569;--green:#3BB33B;--red:#FF6666;--amber:#F4A100;}
 *{margin:0;padding:0;box-sizing:border-box;}
@@ -701,6 +704,10 @@ body.light-mode .kcard-fato{color:#000000!important;}
       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 6h10M4 12h14M4 18h7"/></svg>
       Gantt
     </button>
+    <button class="s-item" data-v="resumo" title="Resumo">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 19V9M10 19V5M16 19v-7M22 19H2"/></svg>
+      Resumo
+    </button>
 
     <div class="s-user">
       <span class="uni-badge" id="uniBadge" style="display:none">—</span>
@@ -1328,6 +1335,7 @@ function aplicar(){
   const vis=_FATOS.filter(f=>(!fv.length||fv.includes(f.vig))&&(!fo.length||fo.includes(f.origem))&&(!fp.length||fp.includes(projLabel(f.proj)))&&(!fi.length||fi.includes(f.fato))
     &&(!(fs.length||fpz.length) || (_DBROWS[keyOf(f)]||[]).some(acMatch)));
   if(!vis.length){list.innerHTML='<div class="empty">Nenhum fato para o filtro selecionado.</div>';return;}
+  if(VIEW==='resumo'){ list.innerHTML=AderenciaView.html({dims:DIMS_ADER}); pintaResumoFCA(vis); return; }
   if(VIEW==='kanban'){ list.innerHTML=kanbanHTMLpre(vis); return; }
   if(VIEW==='gantt'){ list.innerHTML=ganttHTMLpre(vis); return; }
   if(VIEW==='flat'){ list.innerHTML=relatorioHTMLpre(vis); return; }
@@ -1390,7 +1398,7 @@ function iniciaisK(n){
 const tri=h=>String(h==null?'':h).replace(/▲/g,'<span style="color:var(--red)">▲</span>').replace(/▼/g,'<span style="color:var(--green)">▼</span>');
 
 function updateViewBtnsPre(){const b=document.getElementById('viewBtn');if(b)b.textContent=VIEW==='kanban'?'Fatos':'Kanban';const f=document.getElementById('flatBtn');if(f)f.classList.toggle('active',VIEW==='flat');const g=document.getElementById('ganttBtn');if(g)g.classList.toggle('active',VIEW==='gantt');}
-const TIT={kanban:'Kanban',flat:'Tabela',gantt:'Gantt',tabela:'Fatos'};   // 'tabela' (Fatos) não está mais no menu
+const TIT={kanban:'Kanban',flat:'Tabela',gantt:'Gantt',resumo:'Resumo',tabela:'Fatos'};   // 'tabela' (Fatos) não está mais no menu
 function vaiPara(v){
   VIEW=v; updateViewBtnsPre();
   const t=document.getElementById('tituloVista'); if(t) t.textContent=TIT[v]||'';
@@ -1492,6 +1500,30 @@ function kcardHTMLpre(x){const r=x.r,f=x.f,org=String(f.origem||'').toUpperCase(
       ${r.responsavel?`<span class="kav" title="${esc(r.responsavel)}">${esc(iniciaisK(r.responsavel))}</span>`:'<span></span>'}
     </div>
   </div>`;}
+
+// ── Resumo: a MESMA visão do FCA Gerencial (assets/aderencia-view.js) ──
+// A unidade enxerga a aderência dela por Conta/Indicador — que é o "fato".
+const DIMS_ADER=[{k:'conta',rot:'Conta / Indicador'}];
+function linhasAderenciaFCA(vis){
+  const fs=getMsValues('ms-st'), fpz=getMsValues('ms-prazo');
+  const acMatch=r=>(!fs.length||fs.includes(r.status||DEFAULT_STATUS))&&(!fpz.length||fpz.includes(prazoState(r)));
+  const out=[];
+  vis.forEach(f=>{const key=keyOf(f);(_DBROWS[key]||[]).forEach(r=>{
+    if(!acMatch(r))return;
+    const st=String(r.status||DEFAULT_STATUS);
+    out.push({
+      vig:f.vig||r.vigencia||'', ord:vigNum(f.vig||r.vigencia||''),
+      concl:/conclu/i.test(st)?'Concluída':(/andamento/i.test(st)?'Andamento':'Não Iniciada'),
+      venc:prazoState(r)==='Vencida',
+      dims:{conta:_firstLine(f.nome||f.fato)||'—'},
+    });
+  });});
+  return out;
+}
+function pintaResumoFCA(vis){
+  AderenciaView.render(document.getElementById('list'),
+    {linhas:linhasAderenciaFCA(vis), dims:DIMS_ADER, dim:'conta'});
+}
 function kanbanHTMLpre(vis){
   const fs=getMsValues('ms-st'), fpz=getMsValues('ms-prazo');
   const acMatch=r=>(!fs.length||fs.includes(r.status||DEFAULT_STATUS))&&(!fpz.length||fpz.includes(prazoState(r)));
@@ -1792,7 +1824,9 @@ function applyAdminUI(){const b=document.getElementById('adminBtn');if(!b)return
 document.getElementById('adminBtn').addEventListener('click',()=>{if(!REAL_ADMIN)return;ADMIN=!ADMIN;applyAdminUI();aplicar();});
 
 // tema
-function applyTheme(t){document.body.classList.toggle('light-mode',t==='light');localStorage.setItem('bi_theme',t);document.getElementById('themeBtn').textContent=t==='light'?'🌙':'☀';}
+function applyTheme(t){document.body.classList.toggle('light-mode',t==='light');localStorage.setItem('bi_theme',t);document.getElementById('themeBtn').textContent=t==='light'?'🌙':'☀';
+  // idem: o Resumo redesenha para as barras trocarem de paleta
+  if(typeof _FATOS!=='undefined' && _FATOS.length) aplicar();}
 document.getElementById('themeBtn').addEventListener('click',()=>applyTheme(document.body.classList.contains('light-mode')?'dark':'light'));
 applyTheme(localStorage.getItem('bi_theme')||'dark');
 
