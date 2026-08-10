@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-<meta name="build" content="202608102200">
+<meta name="build" content="202608102300">
 <title>FCA · Admin</title>
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -559,7 +559,7 @@ table.res-tab tbody tr:hover{background:var(--hover);}
 .board .main.rola{display:flex;flex-direction:column;overflow:hidden;}
 .board .main.rola #content{flex:1;min-height:0;display:flex;flex-direction:column;overflow:hidden;}
 .board .main.rola .tab-wrap,.board .main.rola .grol{flex:1;min-height:0;overflow:auto;}
-.board .main.rola .rel-wrap{flex:1;min-height:0;overflow:auto;}
+.board .main.rola .rel-wrap{flex:1;min-height:0;overflow-x:hidden;overflow-y:auto;}
 .board .main.rola .gantt,
 .board .main.rola .rel-section{display:flex;flex-direction:column;min-height:0;flex:1;}
 
@@ -575,15 +575,29 @@ table.rel tbody tr:hover{background:var(--hover)!important;}
 table.rel td.txt b{color:var(--txt);}
 body.light-mode .rel-section{background:var(--card)!important;}
 body.light-mode table.rel thead th{background:var(--cabec)!important;}
-.rel-wrap{overflow:auto;}
+/* com table-layout:fixed nada transborda na horizontal — a barra que
+   aparecia era só a largura da barra vertical entrando na conta */
+.rel-wrap{overflow-x:hidden;overflow-y:auto;}
 /* A tabela se dimensiona sozinha, como a do FCA da unidade: sem largura
    mínima e sem largura fixa por coluna. As colunas curtas não quebram, as
    de texto quebram e absorvem o espaço que sobra — assim ela acompanha a
    janela em vez de empurrar barra de rolagem. */
-table.rel{width:100%;border-collapse:collapse;font-size:12px;}
+table.rel{width:100%;border-collapse:collapse;font-size:12px;table-layout:fixed;}
+table.rel td.txt,table.rel td.txtsm{overflow-wrap:anywhere;}
 table.rel td.txt{white-space:normal;}
 table.rel td.txtsm{white-space:normal;color:var(--txt3);}
-table.rel .chip{white-space:nowrap;}
+/* o cabeçalho quebra em duas linhas em vez de ser cortado */
+table.rel thead th{white-space:normal!important;}
+/* a pílula quebra em vez de vazar da célula (a coluna tem largura fixa) */
+table.rel .chip{white-space:normal;}
+/* o desvio embaixo da conta, menor e discreto */
+table.rel td.fato small{display:block;margin-top:3px;font-size:10.5px;font-weight:600;color:var(--txt3);}
+/* Causa e Ação com a MESMA largura, e as maiores da tabela */
+table.rel th.c-txt{width:18%;}   /* Causa e Ação: iguais e as maiores */
+table.rel th.c-fato{width:15%;}
+table.rel th.c-uni{width:6%;} table.rel th.c-vig{width:5%;}
+table.rel th.c-proj{width:8.5%;} table.rel th.c-resp{width:8%;}
+table.rel th.c-prazo{width:6%;} table.rel th.c-sp{width:6.5%;} table.rel th.c-st{width:9%;}
 /* janela estreita: tipografia mais compacta para as 13 colunas continuarem
    cabendo sem barra de rolagem */
 @media(max-width:1600px){
@@ -597,7 +611,7 @@ table.rel .chip{white-space:nowrap;}
   table.rel thead th{padding:8px 5px!important;}
   table.rel tbody td{padding:8px 5px!important;}
 }
-table.rel td.center{text-align:left;white-space:nowrap;}
+table.rel td.center{text-align:left;white-space:normal;}
 table.rel thead th{text-align:left;font-size:10px;font-weight:700;text-transform:uppercase;white-space:nowrap;position:sticky;top:0;z-index:2;}
 table.rel tbody td{vertical-align:top;line-height:1.45;}
 .rel .dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px;vertical-align:middle;}
@@ -997,7 +1011,11 @@ function render(){
   const mn=document.querySelector('.board .main');
   if(mn) mn.classList.toggle('rola', VIEW==='tabela'||VIEW==='gantt');
   c.innerHTML=body;
-  if(VIEW==='resumo') pintaResumoAdmin(vis);
+  if(VIEW==='resumo'){
+    // idem: a série mensal enxerga todas as vigências, e o filtro só acende as escolhidas
+    const visSemVig=_ROWS.filter(r=>(!fu.length||fu.includes(r.unidade))&&(!fo.length||fo.includes(r.origem))&&(!fs.length||fs.includes(r.status||DEFAULT_STATUS))&&(!fp.length||fp.includes(projLabel(r.projeto)))&&(!fc.length||fc.includes(fillState(r.causa)))&&(!fa.length||fa.includes(fillState(r.acao)))&&(!ff.length||ff.includes(r.fato))&&(!fpz.length||fpz.includes(prazoState(r))));
+    pintaResumoAdmin(vis,visSemVig,fv);
+  }
 }
 
 
@@ -1017,9 +1035,12 @@ function linhasAderenciaAdmin(vis){
     };
   });
 }
-function pintaResumoAdmin(vis){
+function pintaResumoAdmin(vis,visSemVig,vigsSel){
   AderenciaView.render(document.getElementById('content'),{
-    linhas:linhasAderenciaAdmin(vis), dims:DIMS_ADER, dim:DIM_ADER,
+    linhas:linhasAderenciaAdmin(vis),
+    linhasMes:linhasAderenciaAdmin(visSemVig||vis),
+    vigsSel:vigsSel||[],
+    dims:DIMS_ADER, dim:DIM_ADER,
     aoTrocarDim:d=>{ DIM_ADER=d; render(); },
   });
 }
@@ -1036,25 +1057,28 @@ function chipStatusRel(st){
 }
 function relatorioHTML(vis){
   const prazoBR=p=>p?String(p).slice(0,10).split('-').reverse().join('/'):'—';
+  // Origem e Acompanhamento ficam só no modal — na tabela roubavam espaço das
+  // colunas que importam. Conta/Indicador e Fato viraram uma coluna só: a conta
+  // em negrito e o desvio embaixo, menor.
   let h='<div class="rel-section"><div class="rel-wrap"><table class="rel"><thead><tr>'+
-    '<th>Unidade</th><th>Origem</th><th>Projeto</th><th>Vigência</th><th>Conta / Indicador</th><th>Fato</th><th>Causa</th><th>Ação</th><th>Responsável</th><th>Prazo</th><th>Status Prazo</th><th>Status</th><th>Acompanhamento</th>'+
+    '<th class="c-uni">Unidade</th><th class="c-proj">Projeto</th><th class="c-vig">Vigência</th>'+
+    '<th class="c-fato">Fato</th><th class="c-txt">Causa</th><th class="c-txt">Ação</th>'+
+    '<th class="c-resp">Responsável</th><th class="c-prazo">Prazo</th><th class="c-sp">Status Prazo</th><th class="c-st">Status</th>'+
     '</tr></thead><tbody>';
   vis.forEach(r=>{
     const sp=prazoState(r), spCor=sp==='Vencida'?'var(--vermelho)':'var(--verde)';
     h+=`<tr data-id="${esc(r.id)}" title="Clique para editar">`+
       `<td class="center">${esc(r.unidade||'—')}</td>`+
-      `<td class="center">${esc(r.origem||'—')}</td>`+
       `<td class="center">${esc(projLabel(r.projeto))}</td>`+
       `<td class="center">${esc((r.vigencia||'').toUpperCase())}</td>`+
-      `<td class="txt"><b>${esc(_firstLine(r.fato))||'—'}</b></td>`+
-      `<td class="txtsm">${r.fato_desvio?tri(esc(r.fato_desvio)):'—'}</td>`+
-      `<td class="txtsm">${tri((esc(r.causa)||'—').replace(/\n/g,'<br>'))}</td>`+
+      `<td class="txt fato"><b>${esc(_firstLine(r.fato))||'—'}</b>`+
+        `${r.fato_desvio?`<small>${tri(esc(r.fato_desvio))}</small>`:''}</td>`+
+      `<td class="txt">${tri((esc(r.causa)||'—').replace(/\n/g,'<br>'))}</td>`+
       `<td class="txt">${tri((esc(r.acao)||'—').replace(/\n/g,'<br>'))}</td>`+
       `<td class="center">${esc(r.responsavel)||'—'}</td>`+
       `<td class="center">${prazoBR(r.prazo)}</td>`+
       `<td class="center"><span class="dot" style="background:${spCor}"></span>${sp}</td>`+
       `<td class="center">${chipStatusRel(r.status||DEFAULT_STATUS)}</td>`+
-      `<td class="txtsm">${(esc(r.acompanhamento)||'—').replace(/\n/g,'<br>')}</td>`+
     '</tr>';
   });
   return h+'</tbody></table></div></div>';
