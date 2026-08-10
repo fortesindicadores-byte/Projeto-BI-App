@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-<meta name="build" content="202608102200">
+<meta name="build" content="202608102300">
 <title>FCA</title>
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -50,15 +50,19 @@ body{background:radial-gradient(ellipse at 10% 25%,rgba(249,115,22,.06) 0%,trans
 /* ── Tabela (relatório, como no Planner) ── */
 .rel-section{background:rgba(20,27,38,.55);border:1px solid rgba(255,255,255,.07);border-radius:10px;padding:8px 12px 12px;backdrop-filter:blur(16px);box-shadow:0 2px 12px rgba(0,0,0,.25);}
 .rel-wrap{overflow-x:auto;}
-table.rel{width:100%;border-collapse:collapse;font-size:12px;min-width:1000px;}
+table.rel{width:100%;border-collapse:collapse;font-size:12px;table-layout:fixed;}
+table.rel td.txt,table.rel td.txtsm{overflow-wrap:anywhere;}
 table.rel thead th{position:sticky;top:0;background:#141B26;color:var(--text);font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;text-align:left;padding:10px 8px;border-bottom:1px solid rgba(255,255,255,.12);white-space:nowrap;z-index:2;}
 table.rel tbody td{padding:11px 8px;border-bottom:1px solid rgba(255,255,255,.06);vertical-align:top;color:var(--text);line-height:1.45;}
 table.rel tbody tr:hover{background:rgba(255,255,255,.03);}
 table.rel td.txt{white-space:normal;min-width:200px;}
 table.rel td.txtsm{white-space:normal;min-width:160px;color:var(--text2);}
-table.rel td.center{text-align:left;white-space:nowrap;}
+table.rel td.center{text-align:left;white-space:normal;}
 .rel .dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px;vertical-align:middle;}
-.rel .chip{display:inline-block;padding:3px 9px;border-radius:5px;font-weight:700;font-size:11px;white-space:nowrap;}
+/* o cabeçalho quebra em duas linhas em vez de ser cortado */
+table.rel thead th{white-space:normal!important;}
+/* a pílula quebra em vez de vazar da célula (a coluna tem largura fixa) */
+.rel .chip{display:inline-block;padding:3px 9px;border-radius:5px;font-weight:700;font-size:11px;white-space:normal;}
 body.light-mode table.rel thead th{background:#F0F0F0;}
 body.light-mode table.rel tbody td{border-bottom-color:rgba(0,0,0,.08);}
 body.light-mode .rel-section{background:rgba(128,128,128,.14)!important;border:none!important;box-shadow:none!important;--text:#1a1a1a;--text2:#444444;--text3:#666666;}
@@ -569,7 +573,7 @@ table.res-tab tbody tr:hover{background:var(--hover);}
 .board .main.rola{display:flex;flex-direction:column;overflow:hidden;}
 .board .main.rola #list{flex:1;min-height:0;display:flex;flex-direction:column;overflow:hidden;}
 .board .main.rola .tab-wrap,.board .main.rola .grol,
-.board .main.rola .rel-wrap{flex:1;min-height:0;overflow:auto;}
+.board .main.rola .rel-wrap{flex:1;min-height:0;overflow-x:hidden;overflow-y:auto;}
 .board .main.rola .gantt,
 .board .main.rola .rel-section{display:flex;flex-direction:column;min-height:0;flex:1;}
 
@@ -583,6 +587,14 @@ table.rel tbody td{padding:11px 12px!important;color:var(--txt2)!important;
   border-bottom:1px solid var(--linha)!important;}
 table.rel tbody tr:hover{background:var(--hover)!important;}
 table.rel td.txt b{color:var(--txt);}
+/* o desvio embaixo da conta, menor e discreto */
+table.rel td.fato small{display:block;margin-top:3px;font-size:10.5px;font-weight:600;color:var(--txt3);}
+/* Causa e Ação com a MESMA largura, e as maiores da tabela */
+table.rel th.c-txt{width:19%;}   /* Causa e Ação: iguais e as maiores */
+table.rel th.c-fato{width:16%;}
+table.rel th.c-vig{width:5%;} table.rel th.c-proj{width:10%;}
+table.rel th.c-resp{width:9%;} table.rel th.c-prazo{width:6%;}
+table.rel th.c-sp{width:7%;} table.rel th.c-st{width:9%;}
 body.light-mode .rel-section{background:var(--card)!important;}
 body.light-mode table.rel thead th{background:var(--cabec)!important;}
 .intro{font-size:11.5px;color:var(--txt3);line-height:1.5;margin-bottom:14px;}
@@ -1335,7 +1347,12 @@ function aplicar(){
   const vis=_FATOS.filter(f=>(!fv.length||fv.includes(f.vig))&&(!fo.length||fo.includes(f.origem))&&(!fp.length||fp.includes(projLabel(f.proj)))&&(!fi.length||fi.includes(f.fato))
     &&(!(fs.length||fpz.length) || (_DBROWS[keyOf(f)]||[]).some(acMatch)));
   if(!vis.length){list.innerHTML='<div class="empty">Nenhum fato para o filtro selecionado.</div>';return;}
-  if(VIEW==='resumo'){ list.innerHTML=AderenciaView.html({dims:DIMS_ADER}); pintaResumoFCA(vis); return; }
+  if(VIEW==='resumo'){
+    // a série mensal ignora o filtro de VIGÊNCIA: os outros meses continuam
+    // no gráfico, apagados, como no Painel KM e na Visão Financeira
+    const visSemVig=_FATOS.filter(f=>(!fo.length||fo.includes(f.origem))&&(!fp.length||fp.includes(projLabel(f.proj)))&&(!fi.length||fi.includes(f.fato))
+      &&(!(fs.length||fpz.length) || (_DBROWS[keyOf(f)]||[]).some(acMatch)));
+    list.innerHTML=AderenciaView.html({dims:DIMS_ADER}); pintaResumoFCA(vis,visSemVig,fv); return; }
   if(VIEW==='kanban'){ list.innerHTML=kanbanHTMLpre(vis); return; }
   if(VIEW==='gantt'){ list.innerHTML=ganttHTMLpre(vis); return; }
   if(VIEW==='flat'){ list.innerHTML=relatorioHTMLpre(vis); return; }
@@ -1520,9 +1537,13 @@ function linhasAderenciaFCA(vis){
   });});
   return out;
 }
-function pintaResumoFCA(vis){
-  AderenciaView.render(document.getElementById('list'),
-    {linhas:linhasAderenciaFCA(vis), dims:DIMS_ADER, dim:'conta'});
+function pintaResumoFCA(vis,visSemVig,vigsSel){
+  AderenciaView.render(document.getElementById('list'),{
+    linhas:linhasAderenciaFCA(vis),
+    linhasMes:linhasAderenciaFCA(visSemVig||vis),
+    vigsSel:vigsSel||[],
+    dims:DIMS_ADER, dim:'conta',
+  });
 }
 function kanbanHTMLpre(vis){
   const fs=getMsValues('ms-st'), fpz=getMsValues('ms-prazo');
@@ -1552,24 +1573,28 @@ function relatorioHTMLpre(vis){
   // automáticos (sem ação) primeiro; depois por prazo
   rows.sort((x,y)=>((isAutoAcao(x.a)?0:1)-(isAutoAcao(y.a)?0:1))||String(x.a.prazo||'9999').localeCompare(String(y.a.prazo||'9999')));
   const prazoBR=p=>p?String(p).slice(0,10).split('-').reverse().join('/'):'—';
+  // Origem e Acompanhamento ficam só no modal; a conta e o desvio moram os dois
+  // na coluna Fato (conta em negrito, desvio embaixo, menor) — igual ao Admin.
   let h='<div class="rel-section"><div class="rel-wrap"><table class="rel"><thead><tr>'+
-    '<th>Origem</th><th>Projeto</th><th>Vigência</th><th>Fato</th><th>Causa</th><th>Ação</th><th>Responsável</th><th>Prazo</th><th>Status Prazo</th><th>Status</th><th>Acompanhamento</th>'+
+    '<th class="c-proj">Projeto</th><th class="c-vig">Vigência</th><th class="c-fato">Fato</th>'+
+    '<th class="c-txt">Causa</th><th class="c-txt">Ação</th>'+
+    '<th class="c-resp">Responsável</th><th class="c-prazo">Prazo</th><th class="c-sp">Status Prazo</th><th class="c-st">Status</th>'+
     '</tr></thead><tbody>';
   rows.forEach(({f,a})=>{
     const sp=prazoState({status:a.status,prazo:a.prazo}), spCor=sp==='Vencida'?'var(--red)':'var(--green)';
     // a linha abre o mesmo modal do Kanban — daí dá para editar, adicionar causa/ação e excluir
+    const desv=stripTags(f.desvio||'').trim();
     h+=`<tr data-id="${esc(a.id||'')}" title="Clique para editar">`+
-      `<td class="center">${esc(f.origem||'—')}</td>`+
       `<td class="center">${esc(projLabel(f.proj))}</td>`+
       `<td class="center">${esc((f.vig||'').toUpperCase())}</td>`+
-      `<td class="txt"><b>${esc(_firstLine(f.nome||f.fato))}</b></td>`+
-      `<td class="txtsm">${tri((esc(a.causa)||'—').replace(/\n/g,'<br>'))}</td>`+
+      `<td class="txt fato"><b>${esc(_firstLine(f.nome||f.fato))}</b>`+
+        `${desv&&desv!=='—'?`<small>${tri(esc(desv))}</small>`:''}</td>`+
+      `<td class="txt">${tri((esc(a.causa)||'—').replace(/\n/g,'<br>'))}</td>`+
       `<td class="txt">${tri((esc(a.acao)||'—').replace(/\n/g,'<br>'))}</td>`+
       `<td class="center">${esc(a.resp)||'—'}</td>`+
       `<td class="center">${prazoBR(a.prazo)}</td>`+
       `<td class="center"><span class="dot" style="background:${spCor}"></span>${sp}</td>`+
       `<td class="center">${chipStatusRel(a.status||DEFAULT_STATUS)}</td>`+
-      `<td class="txtsm">${(esc(a.obs)||'—').replace(/\n/g,'<br>')}</td>`+
     '</tr>';
   });
   return h+'</tbody></table></div></div>';

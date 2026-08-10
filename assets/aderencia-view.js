@@ -89,6 +89,7 @@
       m.data.forEach((b, i) => {
         const v = ds.data[i];
         if (v == null) return;
+        if (ds._on && !ds._on[i]) return;   // mês fora do filtro: barra apagada, sem rótulo
         ctx.fillText(Math.round(v) + '%', b.x, b.y - 4);
       });
       ctx.restore();
@@ -97,12 +98,17 @@
 
   const _charts = {};   // canvasId -> instância, para destruir antes de redesenhar
 
-  function grafico(canvasId, labels, data) {
+  // `foco` = quais meses estão selecionados no filtro de vigência. Os demais
+  // continuam aparecendo, só que apagados — mesma leitura do Painel KM e da
+  // Visão Financeira: o mês escolhido salta, o resto vira contexto.
+  function grafico(canvasId, labels, data, foco) {
     const cv = document.getElementById(canvasId);
     if (!cv || typeof Chart === 'undefined') return;
     const claro = document.body.classList.contains('light-mode') || document.body.classList.contains('claro');
-    const bg = data.map(v => v == null ? 'transparent' : bandRgba(v, .65));
-    const bc = data.map(v => v == null ? 'transparent' : band(v));
+    const temFoco = !!(foco && foco.some(f => !f) && foco.some(f => f));
+    const aceso = i => !temFoco || foco[i];
+    const bg = data.map((v, i) => v == null ? 'transparent' : bandRgba(v, temFoco ? (aceso(i) ? .85 : .18) : .65));
+    const bc = data.map((v, i) => v == null ? 'transparent' : (temFoco && !aceso(i) ? bandRgba(v, .30) : band(v)));
     const grid = { color: claro ? 'rgba(0,0,0,.08)' : 'rgba(255,255,255,.06)' };
     const tick = { color: claro ? '#444' : '#94A3B8', font: { family: 'Montserrat', size: 11 } };
     // eixo Y adaptável em múltiplos de 10 — não fica travado em 0..100
@@ -113,7 +119,8 @@
     if (_charts[canvasId]) _charts[canvasId].destroy();
     _charts[canvasId] = new Chart(cv, {
       type: 'bar',
-      data: { labels, datasets: [{ data, backgroundColor: bg, borderColor: bc, borderWidth: 1, borderRadius: 3, maxBarThickness: 46 }] },
+      data: { labels, datasets: [{ data, backgroundColor: bg, borderColor: bc, borderWidth: 1, borderRadius: 3, maxBarThickness: 46,
+        _on: data.map((_, i) => aceso(i)) }] },
       plugins: [barLabels],
       options: {
         responsive: true, maintainAspectRatio: false,
@@ -185,11 +192,16 @@
     setN('k-tt', g.tt); setN('k-concl', g.concl); setN('k-andam', g.andam);
     setN('k-nini', g.nini); setN('k-nop', g.noP); setN('k-venc', g.venc);
 
-    const ms = meses(linhas);
+    // A série mensal usa as linhas SEM o filtro de vigência (quando o painel as
+    // manda), para os outros meses continuarem no gráfico — apagados.
+    const serie = (opts && opts.linhasMes) || linhas;
+    const sel   = (opts && opts.vigsSel) || [];
+    const ms = meses(serie);
     const labels = ms.map(m => m.lbl);
-    const porMes = m => metrics(linhas.filter(o => o.ord === m.ord));
-    grafico('adv-ch-prazo', labels, ms.map(m => porMes(m).pPrazo));
-    grafico('adv-ch-concl', labels, ms.map(m => porMes(m).pConcl));
+    const foco = ms.map(m => !sel.length || sel.includes(m.lbl));
+    const porMes = m => metrics(serie.filter(o => o.ord === m.ord));
+    grafico('adv-ch-prazo', labels, ms.map(m => porMes(m).pPrazo), foco);
+    grafico('adv-ch-concl', labels, ms.map(m => porMes(m).pConcl), foco);
 
     // tabela por dimensão, da pior aderência para a melhor
     const tt = q('tbl-titulo'); if (tt) tt.textContent = 'Aderência por ' + rot;
