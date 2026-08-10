@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-<meta name="build" content="202608090500">
+<meta name="build" content="202608090600">
 <title>Painel de Gestão · Laranja</title>
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -305,6 +305,38 @@ table.res-tab tbody tr:hover{background:var(--hover);}
 @media(max-width:1180px){.kpis{grid-template-columns:repeat(3,1fr);}.dois{grid-template-columns:1fr;}}
 
 
+/* ── Gantt ── */
+.gantt{background:var(--card);border:1px solid var(--card-brd);border-radius:8px;
+  backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);overflow:hidden;}
+.grol{overflow-x:auto;}
+.grow{display:grid;grid-template-columns:300px 1fr;border-bottom:1px solid var(--linha);}
+.grow:last-child{border-bottom:0;}
+.grow:not(.ghead){cursor:pointer;}
+.grow:not(.ghead):hover{background:var(--hover);}
+.ghead{background:var(--cabec);position:sticky;top:0;z-index:2;}
+.ghead .glbl{font-size:10px;font-weight:700;color:var(--txt2);text-transform:uppercase;letter-spacing:.8px;}
+.glbl{padding:9px 14px;min-width:0;display:flex;flex-direction:column;gap:2px;justify-content:center;}
+.glbl b{font-size:11.5px;font-weight:800;color:var(--txt);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.glbl span{font-size:10.5px;font-weight:400;color:var(--txt2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.gbar{position:relative;min-height:40px;border-left:1px solid var(--linha);}
+.gmeses{display:flex;align-items:center;min-height:32px;}
+.gmeses span{font-size:9.5px;font-weight:700;color:var(--txt3);text-align:center;
+  border-left:1px solid var(--linha);text-transform:uppercase;letter-spacing:.4px;}
+.gmeses span:first-child{border-left:0;}
+.gbar i{position:absolute;top:50%;transform:translateY(-50%);height:12px;border-radius:6px;min-width:6px;}
+.gbar i.gsem{background:transparent;border:1.5px dashed var(--cinza);}
+.gbar u{position:absolute;top:50%;transform:translateY(-50%);height:3px;text-decoration:none;
+  background:repeating-linear-gradient(90deg,var(--vermelho) 0 5px,transparent 5px 9px);}
+.gbar em{position:absolute;top:50%;transform:translateY(-50%);padding-left:7px;
+  font-style:normal;font-size:9px;font-weight:700;color:var(--txt3);white-space:nowrap;}
+.ghoje{position:absolute;top:0;bottom:0;width:0;border-left:1px dashed var(--txt3);opacity:.7;pointer-events:none;}
+.gleg{display:flex;flex-wrap:wrap;gap:6px 18px;padding:11px 4px 0;font-size:10px;color:var(--txt2);}
+.gleg i{display:inline-block;width:15px;height:8px;border-radius:4px;margin-right:6px;vertical-align:-1px;}
+.gleg i.gtrac{background:transparent;border:1.5px dashed var(--cinza);}
+.gleg i.grastro{border-radius:0;height:3px;
+  background:repeating-linear-gradient(90deg,var(--vermelho) 0 5px,transparent 5px 9px);}
+.gleg .obs{color:var(--txt3);font-style:italic;}
+
 /* ── modal ── */
 .mbg{display:none;position:fixed;inset:0;z-index:80;background:rgba(3,6,11,.55);backdrop-filter:blur(2px);
   align-items:center;justify-content:center;padding:20px;}
@@ -374,6 +406,10 @@ input[type=date]::-webkit-calendar-picker-indicator{cursor:pointer;}
     <button class="s-item" data-ver="tabela" title="Tabela">
       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M3 5h18v14H3zM3 10h18M9 10v9"/></svg>
       Tabela
+    </button>
+    <button class="s-item" data-ver="gantt" title="Gantt">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 6h10M4 12h14M4 18h7"/></svg>
+      Gantt
     </button>
     <button class="s-item" data-ver="resumo" title="Resumo">
       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 19V9M10 19V5M16 19v-7M22 19H2"/></svg>
@@ -630,6 +666,7 @@ function render(){
   const vis=LINHAS.filter(passa);
   $('cols').className = VER==='kanban' ? 'cols' : 'cols solto';
   if(VER==='tabela'){ $('cols').innerHTML=htmlTabela(vis); pintaLateral(); return; }
+  if(VER==='gantt'){ $('cols').innerHTML=htmlGantt(vis); pintaLateral(); return; }
   if(VER==='resumo'){ $('cols').innerHTML=htmlResumo(vis); pintaLateral(); return; }
   $('cols').innerHTML=ETAPAS.map(e=>{
     const cards=vis.filter(r=>(r.status||PADRAO)===e.k)
@@ -682,6 +719,62 @@ function htmlTabela(rows){
         <td>${esc(r.resp)||'—'}</td><td>${r.status==='Backlog'?'—':(r.prazo?dataBR(r.prazo):'—')}</td><td>${chip(r.status)}</td><td>${sit}</td></tr>`;
     }).join('')}</tbody></table></div>`;
 }
+// ── Gantt: barra de cada ação da criação até o prazo ──
+// verde no prazo, vermelha vencida (com rastro do prazo até hoje),
+// tracejada quando não há prazo. Backlog fica fora: não tem prazo.
+function htmlGantt(rows){
+  const MES=['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
+  const dia=v=>{ if(!v) return null; const d=new Date(String(v).slice(0,10)+'T00:00:00'); return isNaN(d)?null:d; };
+  const itens=rows.filter(r=>r.status!=='Backlog').sort(porVencimento);
+  if(!itens.length) return '<div class="cvazia">Nenhuma ação com prazo nos filtros atuais</div>';
+  const h=hoje();
+  let min=h, max=h;
+  itens.forEach(r=>{ const a=dia(r.criado)||h, b=dia(r.prazo)||h;
+    if(a<min)min=a; if(b<min)min=b; if(a>max)max=a; if(b>max)max=b; });
+  const m0=new Date(min.getFullYear(),min.getMonth(),1);
+  const m1=new Date(max.getFullYear(),max.getMonth()+1,1);
+  const tot=m1-m0, pos=d=>Math.max(0,Math.min(100,(d-m0)/tot*100));
+  const meses=[];
+  for(let d=new Date(m0); d<m1; d.setMonth(d.getMonth()+1))
+    meses.push({lbl:MES[d.getMonth()]+'/'+String(d.getFullYear()).slice(2),
+                w:(new Date(d.getFullYear(),d.getMonth()+1,1)-d)/tot*100});
+  const hj=pos(h);
+  const linhas=itens.map(r=>{
+    const ini=dia(r.criado)||h, fim=dia(r.prazo);
+    const pz=estadoPrazo(r);
+    const cor=pz==='venc'?'var(--vermelho)':(pz==='sem'?'var(--cinza)':'var(--verde)');
+    let barra;
+    if(!fim){
+      const a=pos(ini), b=Math.max(hj,a+.6);
+      barra=`<i class="gsem" style="left:${a}%;width:${b-a}%"></i>`;
+    }else{
+      const f=fim<ini?ini:fim, a=pos(ini), b=Math.max(pos(f),a+.6);
+      barra=`<i style="left:${a}%;width:${b-a}%;background:${cor}"></i>`;
+      if(pz==='venc') barra+=`<u style="left:${b}%;width:${Math.max(hj-b,.3)}%"></u>`;
+      barra+=`<em style="left:${Math.max(b,pz==='venc'?hj:b)}%">${dataBR(r.prazo).slice(0,5)}</em>`;
+    }
+    return `<div class="grow" data-id="${esc(r.id)}">
+      <div class="glbl"><b>${esc(r.assunto)||'—'}</b><span>${esc(r.acao)||'(sem título)'}</span></div>
+      <div class="gbar"><span class="ghoje" style="left:${hj}%"></span>${barra}</div>
+    </div>`;
+  }).join('');
+  return `<div class="gantt"><div class="grol"><div class="gin" style="min-width:${Math.max(760,300+meses.length*84)}px">
+    <div class="grow ghead">
+      <div class="glbl">Ação</div>
+      <div class="gbar gmeses">${meses.map(m=>`<span style="width:${m.w}%">${m.lbl}</span>`).join('')}
+        <span class="ghoje" style="left:${hj}%"></span></div>
+    </div>
+    ${linhas}
+  </div></div>
+  <div class="gleg">
+    <span><i style="background:var(--verde)"></i>No prazo</span>
+    <span><i style="background:var(--vermelho)"></i>Vencida</span>
+    <span><i class="gtrac"></i>Sem prazo</span>
+    <span><i class="grastro"></i>Atraso, do prazo até hoje</span>
+    <span class="obs">Backlog fora: não tem prazo</span>
+  </div></div>`;
+}
+
 function htmlResumo(rows){
   // ── regra do FCA Gerencial, copiada de fca-gerencial/index.html ──
   // prazo: Concluída conta como "No prazo"; senão, prazo < hoje = Vencida
@@ -858,7 +951,7 @@ document.querySelectorAll('.s-item[data-vis]').forEach(b=>b.addEventListener('cl
   VISAO = (v && VISAO===v) ? '' : v;    // clicar de novo desliga
   render();
 }));
-const TIT={kanban:'Quadro',tabela:'Tabela',resumo:'Resumo'};
+const TIT={kanban:'Quadro',tabela:'Tabela',gantt:'Gantt',resumo:'Resumo'};
 document.querySelectorAll('.s-item[data-ver]').forEach(b=>b.addEventListener('click',()=>{
   VER=b.dataset.ver;
   document.querySelector('.top h1').textContent=TIT[VER];
@@ -874,6 +967,7 @@ document.addEventListener('keydown',e=>{
 const cols=$('cols');
 cols.addEventListener('click',e=>{
   const tg=e.target.closest('[data-por]'); if(tg){ RESUMO_POR=tg.dataset.por; render(); return; }
+  const gr=e.target.closest('.grow[data-id]'); if(gr){ abreModal(gr.dataset.id); return; }
   const tr=e.target.closest('tr[data-id]'); if(tr){ abreModal(tr.dataset.id); return; }
   const novo=e.target.closest('[data-novo]'); if(novo){ novoCard(novo.dataset.novo); return; }
   const rec=e.target.closest('[data-rec]');
