@@ -205,7 +205,18 @@
   //   NOK = Nunca Realizado + Não Realizado + Realizado Fora Prazo
   //   Aderência = OK ÷ (soma dos cinco)
   // Como são CONTAGENS, somar os meses da janela dá o acumulado exato — igual
-  // ao Stress Test. Por isso 'conf' entra no POOL_FIELDS.
+  // ao Stress Test. Mas só DENTRO da metade nova do ano: ver o corte abaixo.
+  // ── O CORTE DE AGOSTO/2026 ────────────────────────────────────────────────
+  // O Ginfo trocou a régua no meio do ano. Para não penalizar nem beneficiar
+  // unidade nenhuma, 2026 tem DUAS metades e cada uma é medida com a régua da
+  // sua época (Renan, 11/08/2026):
+  //     jan→jul  = o que o robô coletou ANTES da mudança (Mensal/Bimestral)
+  //     ago→dez  = a régua nova (contagens por status de prazo)
+  // No acumulado que cruza o corte, a conformidade do ano é a MÉDIA SIMPLES
+  // das duas metades — não a soma das contagens, que misturaria as réguas.
+  const CONF_CORTE = '2026-08';
+  const confRegraNova = vig => String(vig) >= CONF_CORTE;
+
   const CONF_OK  = ['Realizado Dentro Prazo','No Prazo'];
   const CONF_NOK = ['Nunca Realizado','Não Realizado','Realizado Fora Prazo'];
   const confNovo = rows => !!(rows[0] && kOf(rows[0],'Realizado Dentro Prazo'));
@@ -251,8 +262,14 @@
       case 'sla':     return direto(src['sla-manutencao']?.[vig]||[],  vig, {col:['SLA Atendimento']});
       case 'conf': {
         const rows=src['conformidade']?.[vig]||[];
-        // regra nova (contagens por status) · senão o formato antigo (Mensal/Bimestral)
-        return confNovo(rows) ? pctDe(contagemConf(rows,vig)) : direto(rows, vig, {conf:true});
+        const novo=confNovo(rows);
+        // de agosto/2026 em diante manda a régua nova (contagens por status)
+        if(confRegraNova(vig)) return novo ? pctDe(contagemConf(rows,vig)) : direto(rows, vig, {conf:true});
+        // antes do corte vale o que foi coletado na régua antiga. Se a linha já
+        // tiver sido recoletada no formato novo, usa o que existe — melhor um
+        // número na régua nova do que a unidade sem nota nenhuma.
+        const velho=direto(rows, vig, {conf:true});
+        return velho.length ? velho : (novo ? pctDe(contagemConf(rows,vig)) : []);
       }
       case 'checkWH': return direto(src['checklist-wh']?.[vig]||[],    vig, {col:['Aderência'], proj:'APOIO'});
       case 'checkT': {
@@ -307,6 +324,53 @@
     if(ms[0]>3 || ms[ms.length-1]<3) return null;
     return '2026-'+String(ms[ms.length-1]).padStart(2,'0');
   }
+  // Conformidade acumulada de UMA metade (todas as vigências na mesma régua).
+  function confMetade(vigs){
+    const fim=vigs[vigs.length-1];
+    if(vigs.length===1) return valores('conf','mes',fim);
+    // régua nova = contagens → poola exato
+    if(vigs.every(v=>confRegraNova(v) && confNovo(E.mes['conformidade']?.[v]||[]))){
+      const g={};
+      vigs.forEach(vig=>Object.entries(contagemConf(E.mes['conformidade']?.[vig]||[], vig))
+        .forEach(([u,o])=>{ const t=g[u]=g[u]||{ok:0,n:0}; t.ok+=o.ok; t.n+=o.n; }));
+      return pctDe(g);
+    }
+    // régua antiga = percentual por filial: acumulado do Ginfo quando a janela
+    // começa em janeiro; senão, média das vigências (aproximação, sinalizada)
+    const mediaDe = so => {
+      const g={};
+      vigs.forEach(vig=>valores('conf','mes',vig).forEach(v=>{ if(!so||so(v.unit)) (g[v.unit]=g[v.unit]||[]).push(v.real); }));
+      return Object.entries(g).map(([u,a])=>({unit:u, real:a.reduce((s,x)=>s+x,0)/a.length, approx:true}));
+    };
+    const pref=janPrefix(vigs);
+    let list=null;
+    if(pref){ const vs=valores('conf','ano',pref); if(vs.length) list=vs; }
+    if(!list) list=mediaDe(null);
+    if(fim.slice(0,4)==='2026'){
+      // Empurradas: o 'ano' do Ginfo é jan→M e inclui jan/fev, quando elas não
+      // contavam — o acumulado certo é a janela mar→M ('conformidade-mar').
+      const mp=marPrefix(vigs);
+      let emp = mp ? direto(E.ano['conformidade-mar']?.[mp]||[], mp, {conf:true}).filter(v=>CONF_EMP.has(v.unit)) : [];
+      if(!emp.length) emp=mediaDe(u=>CONF_EMP.has(u));
+      list=list.filter(v=>!CONF_EMP.has(v.unit)).concat(emp);
+    }
+    return list;
+  }
+  // Conformidade acumulada da janela inteira: se ela cruza o corte de agosto,
+  // cada metade vale pela sua régua e o resultado é a média simples das duas.
+  function confAcum(vigs){
+    const antes =vigs.filter(v=>!confRegraNova(v));
+    const depois=vigs.filter(v=> confRegraNova(v));
+    if(!antes.length)  return confMetade(depois);
+    if(!depois.length) return confMetade(antes);
+    const g={};
+    confMetade(antes ).forEach(v=>(g[v.unit]=g[v.unit]||[]).push(v.real));
+    confMetade(depois).forEach(v=>(g[v.unit]=g[v.unit]||[]).push(v.real));
+    return Object.entries(g).map(([u,a])=>({unit:u,
+      real:a.reduce((s,x)=>s+x,0)/a.length,
+      metades:a.length}));            // 2 = média das duas réguas; 1 = só uma metade tinha a unidade
+  }
+
   function acumFor(vigsArr){
     if(!E) return [];
     const vigs=[...new Set(vigsArr)].sort();
@@ -320,16 +384,16 @@
         valores(f,'mes',fim).forEach(v=>out.push(recChave(f,ind.label,v.unit,fim,v.real)));
         return;
       }
-      // Conformidade: com a regra nova são contagens → poola exato. Só entra
-      // aqui se TODOS os meses da janela já estiverem no formato novo; se algum
-      // ainda for do formato antigo, cai no caminho de % abaixo.
-      const confPoolavel = f==='conf' && vigs.every(v=>confNovo(E.mes['conformidade']?.[v]||[]));
-      if(POOL_FIELDS.has(f) || confPoolavel){
+      if(f==='conf'){
+        confAcum(vigs).forEach(v=>out.push(Object.assign(
+          recChave(f,ind.label,v.unit,fim,v.real),
+          {approx:v.approx||undefined, metades:v.metades})));
+        return;
+      }
+      if(POOL_FIELDS.has(f)){
         const g={};
         vigs.forEach(vig=>{
-          const cont = f==='conf'
-            ? contagemConf(E.mes['conformidade']?.[vig]||[], vig)
-            : f==='pneus'
+          const cont = f==='pneus'
             ? (pneusSheetOk() ? (PNEUS[vig]||{}) : contagemPneus(E.mes['pneus']?.[vig]||[]))
             : contagem10(E.mes[{stVeic:'stress-test-frota',stEmp:'stress-test-empilhadeira',civf:'civf'}[f]]?.[vig]||[],
                 f==='stVeic'?{fil:['Filial Freightech','Filial'],projCol:['Projeto'],desc:['Desconto']}:
@@ -352,14 +416,6 @@
       if(!list){
         list=mediaDe(null);
         if(!pref) console.warn('GerotBase.acumFor: janela não começa em janeiro — %', f, 'é média mensal (sem acumulado exato)');
-      }
-      if(f==='conf' && fim.slice(0,4)==='2026'){
-        // Empurradas: o 'ano' do Ginfo é jan→M e inclui jan/fev, quando elas não
-        // contavam — o acumulado certo é a janela mar→M ('conformidade-mar').
-        const mp=marPrefix(vigs);
-        let emp = mp ? direto(E.ano['conformidade-mar']?.[mp]||[], mp, {conf:true}).filter(v=>CONF_EMP.has(v.unit)) : [];
-        if(!emp.length) emp=mediaDe(u=>CONF_EMP.has(u));
-        list=list.filter(v=>!CONF_EMP.has(v.unit)).concat(emp);
       }
       list.forEach(v=>out.push(Object.assign(recChave(f,ind.label,v.unit,fim,v.real),{approx:v.approx||undefined})));
     });
