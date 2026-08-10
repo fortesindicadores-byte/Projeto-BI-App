@@ -3,13 +3,16 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-<meta name="build" content="202608061817">
+<meta name="build" content="202608102000">
 <title>FCA Gerencial</title>
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
-:root{--bg:#0C1017;--card:#141B26;--border:#1E2D40;--orange:#F97316;--blue:#38BDF8;--text:#F1F5F9;--text2:#94A3B8;--text3:#475569;--green:#3BB33B;--red:#FF6666;--amber:#F4A100;}
+:root{--bg:#0C1017;--card:#141B26;--border:#1E2D40;--orange:#F97316;--blue:#38BDF8;--text:#F1F5F9;--text2:#94A3B8;--text3:#475569;--green:#3BB33B;--red:#FF6666;--amber:#F4A100;
+  /* faixas de aderência — o JS lê daqui, então cor de gráfico, de chip e de
+     legenda nunca saem do mesmo lugar */
+  --band-red:#FF5252;--band-amber:#F4A100;--band-green:#3BB33B;--band-gray:#555555;}
 *{margin:0;padding:0;box-sizing:border-box;}
 body{background:radial-gradient(ellipse at 10% 25%,rgba(249,115,22,.06) 0%,transparent 50%),radial-gradient(ellipse at 90% 75%,rgba(56,189,248,.05) 0%,transparent 50%),var(--bg);color:var(--text);font-family:'Montserrat',-apple-system,sans-serif;font-size:13px;min-height:100vh;}
 /* HEADER — sempre escuro */
@@ -53,13 +56,21 @@ body{background:radial-gradient(ellipse at 10% 25%,rgba(249,115,22,.06) 0%,trans
 .hero-leg span{display:flex;align-items:center;gap:7px;font-size:12px;color:var(--text);font-weight:600;}
 .hero-leg i{width:13px;height:13px;border-radius:3px;display:inline-block;}
 /* KPI farol */
-.kpi-row{display:grid;grid-template-columns:repeat(6,1fr);gap:12px;margin-bottom:20px;}
+.kpi-row{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:12px;margin-bottom:20px;}
 .kpi{background:rgba(20,27,38,.55);border:1px solid rgba(255,255,255,.07);border-radius:8px;padding:12px 14px;backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);box-shadow:0 2px 12px rgba(0,0,0,.25);}
 .kpi-lbl{display:flex;align-items:center;gap:7px;font-size:10px;font-weight:700;color:var(--text);text-transform:uppercase;letter-spacing:.5px;}
 .kpi-lbl .fdot{width:11px;height:11px;border-radius:50%;flex-shrink:0;box-shadow:0 0 6px currentColor;}
+.fdot.cinza{background:var(--band-gray);color:var(--band-gray);}
+.fdot.verde{background:var(--band-green);color:var(--band-green);}
+.fdot.ambar{background:var(--band-amber);color:var(--band-amber);}
+.fdot.vermelho{background:var(--band-red);color:var(--band-red);}
 .kpi-val{font-size:26px;font-weight:800;margin-top:6px;}
 /* Charts */
-.charts-row{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:18px;}
+.charts-row{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;margin-bottom:18px;}
+/* sem min-width:0 o item do grid não encolhe abaixo do conteúdo, e o canvas
+   do Chart.js mantém a largura do último desenho — a segunda coluna saía da tela */
+.charts-row>*,.chart-wrap,.kpi-row>*{min-width:0;}
+.chart-wrap canvas{max-width:100%;}
 .card{background:rgba(20,27,38,.55);border:1px solid rgba(255,255,255,.07);border-radius:8px;padding:18px 20px;backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);box-shadow:0 2px 12px rgba(0,0,0,.25);}
 .chart-title{font-size:14px;font-weight:800;color:var(--text);text-transform:uppercase;letter-spacing:.5px;margin-bottom:12px;}
 .chart-wrap{position:relative;height:240px;}
@@ -80,7 +91,9 @@ table.dre tbody tr:hover{background:rgba(255,255,255,.03);}
 .loading{text-align:center;color:var(--text3);padding:40px;}
 .tbl-mob-toggle{display:none;}
 /* MODO CLARO — só conteúdo e cards (header escuro), cards brancos */
-body.light-mode .main{background:#F0F0F0;--text:#1a1a1a;--text2:#444444;--text3:#666666;color:var(--text);--red:#ff0000;--green:#0E8C0E;}body.light-mode .hero-sep{background:rgba(0,0,0,.18)!important;color:rgba(0,0,0,.2)!important;}
+/* no claro as faixas ficam FORTES: em fundo branco o tom pastel some */
+body.light-mode{--band-red:#FF0000;--band-amber:#FF9500;--band-green:#00A400;--band-gray:#8A8A8A;}
+body.light-mode .main{background:#F0F0F0;--text:#1a1a1a;--text2:#444444;--text3:#666666;color:var(--text);--red:#FF0000;--green:#00A400;--amber:#FF9500;}body.light-mode .hero-sep{background:rgba(0,0,0,.18)!important;color:rgba(0,0,0,.2)!important;}
 body.light-mode .card,body.light-mode .tbl-section,body.light-mode .kpi{background:rgba(128,128,128,.14)!important;border:none!important;box-shadow:none!important;--text:#1a1a1a;--text2:#444444;--text3:#555555;}
 body.light-mode table.dre thead th{background:#F0F0F0;border-bottom-color:rgba(0,0,0,.10);}
 body.light-mode table.dre tbody td{border-bottom-color:rgba(0,0,0,.035);}
@@ -178,19 +191,19 @@ body.light-mode table.dre tbody td{border-bottom-color:rgba(0,0,0,.035);}
       <div class="sub"><span>Aderência à Conclusão</span><b id="h-concl">—</b></div>
     </div>
     <div class="hero-leg">
-      <span><i style="background:var(--red)"></i>&lt; 70% — Crítico</span>
-      <span><i style="background:var(--amber)"></i>≥ 70% e &lt; 85% — Atenção</span>
-      <span><i style="background:var(--green)"></i>≥ 85% — Adequado</span>
+      <span><i style="background:var(--band-red)"></i>&lt; 70% — Crítico</span>
+      <span><i style="background:var(--band-amber)"></i>≥ 70% e &lt; 85% — Atenção</span>
+      <span><i style="background:var(--band-green)"></i>≥ 85% — Adequado</span>
     </div>
   </section>
 
   <section class="kpi-row">
-    <div class="kpi"><div class="kpi-lbl"><span class="fdot" style="background:#94A3B8;color:#94A3B8"></span>Total de Ações</div><div class="kpi-val" id="k-tt">—</div></div>
-    <div class="kpi"><div class="kpi-lbl"><span class="fdot" style="background:#3BB33B;color:#3BB33B"></span>Concluídas</div><div class="kpi-val" id="k-concl">—</div></div>
-    <div class="kpi"><div class="kpi-lbl"><span class="fdot" style="background:#F4A100;color:#F4A100"></span>Em Andamento</div><div class="kpi-val" id="k-andam">—</div></div>
-    <div class="kpi"><div class="kpi-lbl"><span class="fdot" style="background:#FF5252;color:#FF5252"></span>Não Iniciadas</div><div class="kpi-val" id="k-nini">—</div></div>
-    <div class="kpi"><div class="kpi-lbl"><span class="fdot" style="background:#3BB33B;color:#3BB33B"></span>No Prazo</div><div class="kpi-val" id="k-nop">—</div></div>
-    <div class="kpi"><div class="kpi-lbl"><span class="fdot" style="background:#FF5252;color:#FF5252"></span>Fora do Prazo</div><div class="kpi-val" id="k-venc">—</div></div>
+    <div class="kpi"><div class="kpi-lbl"><span class="fdot cinza"></span>Total de Ações</div><div class="kpi-val" id="k-tt">—</div></div>
+    <div class="kpi"><div class="kpi-lbl"><span class="fdot verde"></span>Concluídas</div><div class="kpi-val" id="k-concl">—</div></div>
+    <div class="kpi"><div class="kpi-lbl"><span class="fdot ambar"></span>Em Andamento</div><div class="kpi-val" id="k-andam">—</div></div>
+    <div class="kpi"><div class="kpi-lbl"><span class="fdot vermelho"></span>Não Iniciadas</div><div class="kpi-val" id="k-nini">—</div></div>
+    <div class="kpi"><div class="kpi-lbl"><span class="fdot verde"></span>No Prazo</div><div class="kpi-val" id="k-nop">—</div></div>
+    <div class="kpi"><div class="kpi-lbl"><span class="fdot vermelho"></span>Fora do Prazo</div><div class="kpi-val" id="k-venc">—</div></div>
   </section>
 
   <div class="charts-row">
@@ -242,7 +255,13 @@ function vigLbl(d){return d?MESES[d.getMonth()]+'/'+String(d.getFullYear()).slic
 function vigKeyN(d){return d?d.getFullYear()*100+d.getMonth():0;}
 function categConcl(s){s=(s||'').toLowerCase();if(/conclu/.test(s))return 'Concluída';if(/andamento/.test(s))return 'Andamento';return 'Não Iniciada';}
 function statusPrazo(o){if(o.concl==='Concluída')return 'No prazo';if(o.prazoD){const h=new Date();h.setHours(0,0,0,0);if(o.prazoD<h)return 'Vencida';}return 'No prazo';}
-function band(p){if(p==null)return '#555555';if(p<70)return '#FF5252';if(p<85)return '#F4A100';return '#3BB33B';}
+function band(p){
+  const cs=getComputedStyle(document.body), v=n=>cs.getPropertyValue(n).trim();
+  if(p==null)return v('--band-gray')||'#555555';
+  if(p<70)   return v('--band-red')  ||'#FF5252';
+  if(p<85)   return v('--band-amber')||'#F4A100';
+  return       v('--band-green')||'#3BB33B';
+}
 function bandRgba(p,a){const c=band(p);return `rgba(${parseInt(c.slice(1,3),16)},${parseInt(c.slice(3,5),16)},${parseInt(c.slice(5,7),16)},${a})`;}
 function pct(v){return v==null?'—':Math.round(v)+'%';}
 
