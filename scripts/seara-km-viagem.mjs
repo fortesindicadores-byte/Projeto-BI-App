@@ -73,6 +73,12 @@ console.log(`\nlinhas da Base CTEs: ${linhas} · viagens distintas: ${viagens} �
 if(semViagem) console.log(`  ATENÇÃO: ${semViagem} linha(s) sem CD_VIAGEM_TRANSPORTE (ficam de fora do km)`);
 if(jVaria)   console.log(`  ATENÇÃO: ${jVaria} caso(s) em que o km diverge entre CTEs da MESMA viagem`);
 
+// a coluna Z ainda existe? (a leitura da aba inteira devolveu vazio)
+const zPreenchidas = ctes.filter(r => n2(r[25]) > 0).length;
+const somaZ = await gvz(GID_CTES, 'select sum(Z), sum(J), count(A)');
+console.log(`\ncoluna Z (KM Rodado): ${zPreenchidas} linha(s) preenchidas de ${ctes.length}` +
+  `  ·  agregado do gviz: ΣZ=${n2(somaZ[0] && somaZ[0][0])} ΣJ=${n2(somaZ[0] && somaZ[0][1])} linhas=${n2(somaZ[0] && somaZ[0][2])}`);
+
 const vigs = [...new Set([...Object.keys(antes),...Object.keys(agora)].map(k=>k.split('|')[1]))]
   .sort((a,b)=>(a.slice(-4)+a.slice(0,2)).localeCompare(b.slice(-4)+b.slice(0,2)));
 console.log('\nvigência |   KM antes (Z) |  KM agora (J/viagem) |  variação');
