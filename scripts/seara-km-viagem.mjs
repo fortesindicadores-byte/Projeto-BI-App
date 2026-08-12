@@ -8,6 +8,7 @@
 const SEARA_ID = '1Rlwc0MZiupQI38gSN8VyBq_zMADgX9R_ZbfygNP-OXE';
 const GID_CTES = 1672208132, GID_REM = 0, GID_COMB = 1982300845;
 
+const A1 = i => { let s='', n=i; do { s = String.fromCharCode(65 + n%26) + s; n = Math.floor(n/26)-1; } while(n>=0); return s; };
 const MERC = 'ABCDEFGHIJ';
 function placaKey(s){
   const p = String(s==null?'':s).toUpperCase().replace(/[^A-Z0-9]/g,'');
@@ -74,10 +75,18 @@ if(semViagem) console.log(`  ATENÇÃO: ${semViagem} linha(s) sem CD_VIAGEM_TRAN
 if(jVaria)   console.log(`  ATENÇÃO: ${jVaria} caso(s) em que o km diverge entre CTEs da MESMA viagem`);
 
 // a coluna Z ainda existe? (a leitura da aba inteira devolveu vazio)
+const largura = Math.max(0, ...ctes.slice(0,50).map(r => r.length));
 const zPreenchidas = ctes.filter(r => n2(r[25]) > 0).length;
-const somaZ = await gvz(GID_CTES, 'select sum(Z), sum(J), count(A)');
-console.log(`\ncoluna Z (KM Rodado): ${zPreenchidas} linha(s) preenchidas de ${ctes.length}` +
-  `  ·  agregado do gviz: ΣZ=${n2(somaZ[0] && somaZ[0][0])} ΣJ=${n2(somaZ[0] && somaZ[0][1])} linhas=${n2(somaZ[0] && somaZ[0][2])}`);
+console.log(`\ncolunas na Base CTEs hoje: ${largura} (A..${A1(largura-1)})`);
+console.log(`coluna Z (KM Rodado): ${zPreenchidas} linha(s) preenchidas de ${ctes.length}`);
+for(const q of ['select sum(Z)', 'select sum(J)']){
+  try{
+    const r = await gvz(GID_CTES, q);
+    console.log(`  ${q}  →  ${n2(r[0] && r[0][0]).toLocaleString('pt-BR')}`);
+  }catch(e){
+    console.log(`  ${q}  →  ERRO (${e.message}) — a coluna não existe mais na aba`);
+  }
+}
 
 const vigs = [...new Set([...Object.keys(antes),...Object.keys(agora)].map(k=>k.split('|')[1]))]
   .sort((a,b)=>(a.slice(-4)+a.slice(0,2)).localeCompare(b.slice(-4)+b.slice(0,2)));
