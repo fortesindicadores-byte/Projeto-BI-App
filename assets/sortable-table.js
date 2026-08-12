@@ -106,9 +106,13 @@
     const placeholderRows = allRows.filter(r=>skip.has(r) && r!==headerRow && !/\btotal\b|\bsubtotal\b/i.test(r.className));
     const dataRows = allRows.filter(r=>!skip.has(r));
 
+    // data-sort na célula manda no lugar do texto: serve para colunas cujo
+    // rótulo não ordena sozinho — "Vencida · 12d" (ordena por dias de atraso)
+    // ou um chip de etapa (ordena pelo fluxo, não pelo alfabeto).
     const withKey = dataRows.map(r=>{
       const cell = r.children[colIdx];
-      return {r, key: parseKey(cell ? cell.textContent : '')};
+      const raw = cell ? (cell.dataset && cell.dataset.sort!=null ? cell.dataset.sort : cell.textContent) : '';
+      return {r, key: parseKey(raw)};
     });
     withKey.sort((a,b)=>compareForSort(a.key,b.key,dir));
 
