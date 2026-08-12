@@ -768,6 +768,28 @@ Substitui a aba **Custos** do Farol Semanal (única que ainda era manual, colada
 - **Receita (conforme o Renan mostra, em andamento):** a tabela só aparece após aplicar os filtros. Filtros no topo: ANO | MÊS | NÍVEL 1 | NÍVEL 2 | NÍVEL 3 | EMPRESA. Mecânica de seleção do Qlik: abrir o filterpane → clicar no valor → confirmar no **✓ verde**. Passo 1: **ANO** = ano do mês de referência. Passo 2: **MÊS** (valores "jan"…"dez" minúsculos) — **até o dia 10 = mês anterior, depois = mês atual**. Passo 3: **NÍVEL 1 = "1.3.1. OPERAÇÕES DEDICADAS AMBEV"** (texto truncado na tela → casar por "contém OPERAÇÕES DEDICADAS"). Passo 4: **Cód. Estrutura** — seleção múltipla pela **LUPA do cabeçalho da coluna** na tabela (digita o número, clica no valor exato, repete, ✓ verde): **ESTRUTURAS FROTA = 170, 171, 173, 174, 176, 177, 178, 180, 181, 183, 185, 186, 398, 572** (Nível 4; barra mostra "ESTRUTURA 14 de 366"; campo real do NÍVEL 1 = `desc_ope`). Passo 5 (export): **botão direito na tabela → "Exportar dados" → submenu (Voltar/como imagem/para PDF/dados) → "Exportar dados" de novo → caixinha "Exportação concluída" → clicar no hiperlink azul** ("Clique aqui para baixar seu arquivo de dados") → xlsx. Chave no Supabase: `custos-qlik`. Retry limpa TODAS as seleções antes (clique em valor já selecionado DES-seleciona no Qlik). A tabela tem as colunas: Cód. Estrutura | Unidade | … | NÍVEL 3 | CONTA GERENCIAL | MÊS | ANO | ORÇADO | REMUNERADO | REALIZADO. **Sem REMUNERADO no mês** → o LEITOR aplica a lógica de TENDÊNCIA da Carta de Custos (nota do Renan 03/08). _(Falta: qual visual exporta e por qual menu — aguardando print.)_
 - Alvo: reproduzir as colunas da aba Custos (`Δ ORÇ. | Δ FCT | Vigência | ESTRUTURA | UNIDADE | NÍVEL 3 | CONTA GERENCIAL | MÊS | ANO | ORÇADO | REMUNERADO | REALIZADO`) — confirmar quais são fórmulas da planilha p/ recalcular na leitura.
 
+## Seara — workbook único, 3 abas (regra vigente 12/08/2026)
+
+Workbook `1Rlwc0MZiupQI38gSN8VyBq_zMADgX9R_ZbfygNP-OXE`, abas no rodapé: **Base Remunerado** (`gid=0`) · **Base CTEs** (`gid=1672208132`) · **Combustível** (`gid=1982300845`). Alimenta `/seara-km/` e os painéis de `/combustivel/seara/`.
+
+| o quê | de onde |
+|---|---|
+| **KM realizado** | aba **Combustível** — E placa · F mês (texto) · G ano · H modelo · J tipo de veículo · **K km rodado**. É a raiz das linhas do painel. |
+| **KM remunerado** | aba **Base CTEs** — **coluna J** (`QT_QUILOMETROS_VIAGEM`), contada **UMA VEZ por `CD_VIAGEM_TRANSPORTE` (col B)**. C = placa, D = data. |
+| **R$/km remunerado** | aba **Base Remunerado** — **coluna O (`ReaisPorKm`)**, por **placa (D) + vigência (A)**. É o custo variável inteiro do km. |
+
+**A DEDUPLICAÇÃO POR VIAGEM É OBRIGATÓRIA.** A mesma viagem gera vários CTEs (normal, complementar, descarga, pernoite, CPL) e **todos repetem o km da viagem na coluna J**. Medido em 12/08/2026: 65.773 linhas para 4.078 viagens; `sum(J)` linha a linha dá **12.962.995 km** contra **552.868 km** reais — infla **23×**. O gviz não faz count-distinct: puxar `select B, C, D, J` e deduplicar no cliente.
+
+**A COLUNA Z (`KM Rodado`) NÃO EXISTE MAIS** — a aba foi reestruturada e `select sum(Z)` devolve erro do gviz. O painel lia essa coluna e passou a ler a J/viagem, que **reproduz o mesmo número** (78.946 km em 06/2026, idêntico ao que a Z dava). Nada de voltar para a Z.
+
+**R$/km — coluna O, não a N nem a T.** A **O** é a soma dos sete componentes variáveis (diesel + arla + manutenção + pneu + recapagem + lubrificante + lavagem); a **N (`TotalReaisPorKm`)** inclui o custo fixo rateado, que se paga rodando ou parado e **não** entra no impacto de um km a mais; a **T** é só o diesel. Conferido: os seis componentes não-combustível batem entre Base CTEs e Base Remunerado em todas as vigências (< 0,2%). Cobertura em 01→06/2026: **100%** das placas do painel acham o seu R$/km.
+
+**Placa — chave canônica só para cruzar as abas.** Formato antigo `LLLNNNN` vira Mercosul `LLLNLNN` trocando o 5º caractere pelo dígito→letra (0=A … 9=J); quem já é Mercosul fica igual. **Na tela aparece a placa como está na origem.** Hoje as três abas estão 100% em Mercosul — a conversão é para o dia em que uma emplacar antes da outra.
+
+**Ferramentas de conferência** (Actions, porque o sandbox não alcança o `docs.google`): `seara-km-viagem` (km por viagem × coluna Z, formato das placas, cobertura) · `seara-rskm-decomp` (decompõe o R$/km componente a componente) · `seara-rskm-inspect` (cabeçalhos das abas e comparação placa a placa).
+
+**Achado em aberto (12/08/2026):** em **06/2026** o preço do diesel troca de lugar entre as duas bases — o da Base Remunerado cai de ~2,00 para 1,665 e o da CTE sobe de ~1,70 para 2,010, cada um indo exatamente para o nível do outro. Não afeta o painel (usa a coluna O), mas tem cara de preenchimento invertido no mês. Pendente de conferência do Renan.
+
 ## Próximas automações — Frota de Elite e RPM (anotado 04/08/2026, aguardando detalhes)
 
 O Renan vai automatizar as bases **Frota de Elite** (programa-reconhecimento, hoje workbook `1DXmjzj2KRrTdQxmvXRclGxhBeDMwoIoLvORqbh3GG6M` via GerotBase) e **RPM** (Base RPM do Gerot que alimenta o fca-preenchimento). Ele estava decidindo por qual começar porque **um indicador de um aparece no outro** (sobreposição entre as duas bases). Ele vai explicar aba a aba, como fez no robô Ginfo — ir salvando o mapeamento aqui conforme ele mostrar. Nada implementado ainda.
