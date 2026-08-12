@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-<meta name="build" content="202608061817">
+<meta name="build" content="202608122000">
 <title>Visão Financeira — DRE Frota</title>
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
@@ -1237,14 +1237,20 @@ function renderHeroCards(mes, prev){
   set('c-real', fmt(cust.real));
 
   function yoyCusto(id, cur, prv){
-    const v = prv ? (Math.abs(cur)-Math.abs(prv))/Math.abs(prv)*100 : null;
+    // mesma régua: custo = -valor, então a variação é (prv - cur)/|prv|
+    const v = prv ? (prv-cur)/Math.abs(prv)*100 : null;
     setArr(document.getElementById(id), pct(v), v);
   }
   yoyCusto('c-orc-yoy',  cust.orc,  custP.orc);
   yoyCusto('c-rem-yoy',  cust.rem,  custP.rem);
   yoyCusto('c-real-yoy', cust.real, custP.real);
 
-  const dCOrcV=Math.abs(cust.real)-Math.abs(cust.orc), dCRemV=Math.abs(cust.real)-Math.abs(cust.rem);
+  // Custo na DRE vem NEGATIVO; o custo "de verdade" é -valor. Com Math.abs os
+  // dois lados viravam magnitude e um CRÉDITO (realizado positivo) era lido
+  // como gasto — abr/26 em Manutenções deu +99.159 vermelho quando a empresa
+  // recebeu 185k a menos de custo. Δ = custoReal - custoRef = ref - real, que
+  // é exatamente o que a tabela Pacote/Análise de Custos já mostra.
+  const dCOrcV=cust.orc-cust.real, dCRemV=cust.rem-cust.real;
   const dCOrcP=cust.orc?dCOrcV/Math.abs(cust.orc)*100:null, dCRemP=cust.rem?dCRemV/Math.abs(cust.rem)*100:null;
   const eDOrcV=document.getElementById('c-dorc-v'), eDOrcP=document.getElementById('c-dorc-p');
   const eDRemV=document.getElementById('c-drem-v'), eDRemP=document.getElementById('c-drem-p');
@@ -1303,7 +1309,8 @@ function renderAVCards(mes, prev){
   yoyAV('c-avo-yoy',    avOrc,  avPrevOrc);
   yoyAV('c-avr-yoy',    avRem,  avPrevRem);
   yoyAV('c-avreal-yoy', avReal, avPrevReal);
-  const dAVO=Math.abs(avReal)-Math.abs(avOrc), dAVR=Math.abs(avReal)-Math.abs(avRem);
+  // idem nos pp: a AV do custo é -av, então Δ = avRef - avReal
+  const dAVO=avOrc-avReal, dAVR=avRem-avReal;
   const impAVO=dAVO/100*Math.abs(r.real), impAVR=dAVR/100*Math.abs(r.real);
   const eDAVO=document.getElementById('c-davo-v'), eDAVR=document.getElementById('c-davr-v');
   const eIAVO=document.getElementById('c-davo-imp'), eIAVR=document.getElementById('c-davr-imp');
@@ -1355,12 +1362,16 @@ function renderCharts(f){
       const ag=agg(rows), r=rl(ag);
       const cust=Object.entries(ag).filter(([k])=>k!=='Receita Líquida')
         .reduce((a,[,v])=>({orc:a.orc+v.orc,rem:a.rem+v.rem,real:a.real+v.real}),{orc:0,rem:0,real:0});
-      dReal.push(cust.real?Math.abs(cust.real):null);
-      dOrc.push(cust.orc?Math.abs(cust.orc):null);
-      dRem.push(cust.rem?Math.abs(cust.rem):null);
-      dAvReal.push(r.real?Math.abs(cust.real)/Math.abs(r.real)*100:null);
-      dAvOrc.push(r.orc?Math.abs(cust.orc)/Math.abs(r.orc)*100:null);
-      dAvRem.push(r.rem?Math.abs(cust.rem)/Math.abs(r.rem)*100:null);
+      // -valor, não Math.abs: custo (negativo na DRE) sobe, crédito (positivo)
+      // desce. Com abs o crédito de abr/26 subia como se fosse o maior gasto
+      // do ano. A escala (padBounds) só ancora em zero quando não há negativo,
+      // então a barra para baixo aparece sozinha.
+      dReal.push(cust.real?-cust.real:null);
+      dOrc.push(cust.orc?-cust.orc:null);
+      dRem.push(cust.rem?-cust.rem:null);
+      dAvReal.push(r.real?-cust.real/Math.abs(r.real)*100:null);
+      dAvOrc.push(r.orc?-cust.orc/Math.abs(r.orc)*100:null);
+      dAvRem.push(r.rem?-cust.rem/Math.abs(r.rem)*100:null);
     } else {
       dReal.push(null);dOrc.push(null);dRem.push(null);
       dAvReal.push(null);dAvOrc.push(null);dAvRem.push(null);
