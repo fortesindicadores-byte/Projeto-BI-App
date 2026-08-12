@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-<meta name="build" content="202608121115">
+<meta name="build" content="202608122100">
 <title>Painel KM · BI Frota</title>
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
@@ -535,19 +535,88 @@ function parseRow(row) {
     rem:     parseFloat(v(31)) || 0,
     real:    parseFloat(v(32)) || 0,
     viagens: parseFloat(v(22)) || 0,
-    imp:     parseFloat(v(36)) || 0
+    imp:     0                                  // preenchido depois, com o R$/km dos pacotes
   };
+}
+
+// ═══════════════════════════════════════════════════════════
+// R$/km REMUNERADO dos pacotes Combustíveis + Manutenções + Pneus
+// (mesmo agrupamento do /rs-por-km/), por vigência|unidade|projeto.
+// O Impacto = Δ km × essa taxa. Antes o painel somava a coluna AK da própria
+// aba de km, que trazia uma taxa DIFERENTE por linha — daí PIR aparecer com Δ
+// negativo e impacto positivo: as duas linhas EMPURRADA vinham a 1,29 e 4,04
+// R$/km e a soma invertia. Com uma taxa por chave isso não acontece mais.
+// ═══════════════════════════════════════════════════════════
+const COST_ID = '1qcTy2ppLCGBKKqZCxCYWCTL9kTAuWfHBMyBfWJOyih8', COST_TAB = 'Frota';
+const CONTAS_ALIAS = {
+  'Combustíveis Veiculos e Equipamentos':'Combustíveis','Fluídos (Arla)':'Arla',
+  'Personalização/Padronização de Veículos':'Personalização/Padronização',
+  'Personalização e Padronização de Veículos':'Personalização/Padronização',
+  'Manutenção de Veículos e Equipamentos':'Manutenção de Veículos e Equip.',
+  'Consertos e Recapagens de Pneus':'Recapagens e Outros Serviços','Pneus e Camaras':'Pneus Novos'
+};
+const PACOTES_MAP = {
+  'Combustíveis':'Combustíveis','Arla':'Combustíveis',
+  'Manutenção de Carrocerias':'Manutenções','Contratos de Manutenção Fabricante':'Manutenções',
+  'Materiais e Ferramentas de Oficina':'Manutenções','Personalização/Padronização':'Manutenções',
+  'Lavação de Veículos':'Manutenções','Manutenção de Veículos e Equip.':'Manutenções',
+  'Recapagens e Outros Serviços':'Pneus','Pneus Novos':'Pneus'
+};
+const PACOTES_RSKM = new Set(['Combustíveis','Manutenções','Pneus']);
+const _semInativo = s => String(s||'').replace(/\s*\(INATIVO\)\s*/ig,'').trim();
+const chaveRs = (vig, uni, proj) => vig+'|'+_semInativo(uni).toUpperCase()+'|'+_semInativo(proj).toUpperCase();
+
+async function fetchCustoRem() {
+  const url = `https://docs.google.com/spreadsheets/d/${COST_ID}/gviz/tq?tqx=out:json&sheet=${encodeURIComponent(COST_TAB)}&t=${Date.now()}`;
+  const json = JSON.parse((await (await fetch(url)).text()).match(/google\.visualization\.Query\.setResponse\(([\s\S]*)\)/)[1]);
+  const cols = (json.table.cols||[]).map(c => String((c && (c.label||c.id)) || '').trim().toLowerCase());
+  // colunas pelo NOME: a aba já mudou de layout antes, índice fixo quebra calado
+  const idx = (...t) => cols.findIndex(c => t.some(x => c.includes(x)));
+  const K = { vig:idx('vigência','vigencia'), nv3:idx('nível 3','nivel 3','nv3'),
+              cta:idx('conta'), rem:idx('remunerado') };
+  if (Object.values(K).some(i => i < 0)) { console.warn('Aba Frota: coluna não encontrada', K, cols); return {}; }
+  const out = {};
+  (json.table.rows||[]).forEach(row => {
+    const g = i => (row.c && row.c[i] && row.c[i].v != null) ? row.c[i].v : null;
+    const vig = parseVigCell(row.c && row.c[K.vig]); if (!vig) return;
+    const nv3 = String(g(K.nv3) || ''), i = nv3.indexOf('-');
+    const proj = i >= 0 ? nv3.slice(0,i) : nv3, uni = i >= 0 ? nv3.slice(i+1) : nv3;
+    const bruta = String(g(K.cta) || '').trim();
+    const cta = CONTAS_ALIAS[bruta] || bruta;
+    if (!PACOTES_RSKM.has(PACOTES_MAP[cta])) return;
+    const k = chaveRs(vig, uni, proj);
+    // custo na DRE vem NEGATIVO: o custo de verdade é -valor
+    out[k] = (out[k] || 0) - (parseFloat(g(K.rem)) || 0);
+  });
+  return out;
 }
 
 async function fetchData() {
   const url = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:json&sheet=${encodeURIComponent(SHEET_TAB)}&t=${Date.now()}`;
-  const res  = await fetch(url);
-  const text = await res.text();
+  const [text, custoRem] = await Promise.all([
+    fetch(url).then(r => r.text()),
+    fetchCustoRem().catch(e => { console.warn('Custo (aba Frota) indisponível:', e); return {}; })
+  ]);
   const json = JSON.parse(text.match(/google\.visualization\.Query\.setResponse\(([\s\S]*)\)/)[1]);
   ALL = (json.table.rows || [])
     .map(parseRow)
     .filter(r => r.vig && (r.rem > 0 || r.real > 0));
-  try{ localStorage.setItem('bi_cache_km_v2', JSON.stringify({t:Date.now(),rows:ALL})); }catch(e){}
+
+  // IMPACTO = Δ km × R$/km remunerado da chave. O km remunerado da chave é a
+  // soma das linhas do painel, o mesmo denominador que o /rs-por-km/ usa.
+  const kmPorChave = {};
+  ALL.forEach(r => { const k = chaveRs(r.vig, r.und, r.proj); kmPorChave[k] = (kmPorChave[k]||0) + r.rem; });
+  let semTaxa = 0;
+  ALL.forEach(r => {
+    const k = chaveRs(r.vig, r.und, r.proj);
+    const custo = custoRem[k], km = kmPorChave[k];
+    const taxa = (custo > 0 && km > 0) ? custo/km : 0;
+    if (!taxa) semTaxa++;
+    r.rsKm = taxa;
+    r.imp  = (r.real - r.rem) * taxa;
+  });
+  if (semTaxa) console.warn(`Impacto: ${semTaxa} linha(s) sem R$/km (vigência sem custo fechado no DRE, ou projeto sem custo próprio) — impacto zerado nelas.`);
+  try{ localStorage.setItem(CACHE_KEY, JSON.stringify({t:Date.now(),rows:ALL})); }catch(e){}
   const savedVig = getSel('ms-vig');
   populateFilters();
   if (savedVig.length > 0) {
@@ -1178,7 +1247,7 @@ function renderCharts(F) {
     mkVertBar(projByPct, 'pct',   v => Math.round(Math.abs(v)) + '%'));
 }
 
-const CACHE_KEY='bi_cache_km_v2';
+const CACHE_KEY='bi_cache_km_v3';  // v3: Impacto passou a sair do R$/km dos pacotes
 const CACHE_TTL=60*60*1000; // 1 hora
 
 async function atualizar() {
