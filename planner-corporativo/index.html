@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-<meta name="build" content="202608121300">
+<meta name="build" content="202608121400">
 <title>Planner Corporativo</title>
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -534,6 +534,14 @@ input[type=date]::-webkit-calendar-picker-indicator{cursor:pointer;}
       </div>
 
       <div class="menu-wrap">
+        <button class="tool" id="btSit" onclick="abreMenu('mSit')">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></svg>
+          Situação
+        </button>
+        <div class="menu" id="mSit"><div class="tit">Situação do prazo</div><div class="rol" id="lstSit"></div></div>
+      </div>
+
+      <div class="menu-wrap">
         <button class="tool" id="btVig" onclick="abreMenu('mVig')">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><rect x="3.5" y="4.5" width="17" height="16" rx="2"/><path d="M3.5 9.5h17M8 3v3M16 3v3"/><path d="M7.5 13h3v3h-3z"/></svg>
           Vigência
@@ -625,6 +633,12 @@ let BUSCA='', VISAO='', VER='kanban', RESUMO_POR='assunto', RESP=new Set(), ASS=
 let DT_DE='', DT_ATE='';
 const VIG=new Set();
 const ETA=new Set();   // filtro de Etapa (o "Status" do painel antigo)
+const SIT=new Set();   // filtro de Situação do prazo — o mesmo rótulo da coluna
+// rótulo da situação: é exatamente o que a coluna "Situação" da tabela mostra,
+// para o filtro casar com o que se lê na tela.
+const SIT_ROT={venc:'Vencida', ok:'No prazo', sem:'Sem prazo', bkl:'Backlog'};
+const SIT_ORDEM=['Vencida','No prazo','Sem prazo','Backlog'];
+const sitDe=r=>SIT_ROT[estadoPrazo(r)]||'';
 // vigência da ação = mês em que ela foi criada, no padrão MM/AAAA
 function vigDe(r){
   if(!r.criado) return '';
@@ -713,6 +727,7 @@ function passa(r){
   if(!noPeriodo(r)) return false;
   if(VIG.size && !VIG.has(vigDe(r))) return false;
   if(ETA.size && !ETA.has(ROTULO[r.status]||r.status)) return false;
+  if(SIT.size && !SIT.has(sitDe(r))) return false;
   if(BUSCA && ![r.acao,r.assunto,r.resp,r.obs].some(x=>String(x||'').toLowerCase().includes(BUSCA))) return false;
   if(RESP.size && !RESP.has(r.resp)) return false;
   if(ASS.size && !ASS.has(r.assunto)) return false;
@@ -784,6 +799,7 @@ function pintaLateral(){
   $('btPrazo').classList.toggle('on',!!(DT_DE||DT_ATE));
   $('btVig').classList.toggle('on',VIG.size>0);
   $('btEtapa').classList.toggle('on',ETA.size>0);
+  $('btSit').classList.toggle('on',SIT.size>0);
 }
 
 /* ══════════ VISÕES: Tabela · Relatório · Resumo ══════════ */
@@ -804,8 +820,13 @@ function htmlTabela(rows){
               :(pz==='venc'?`<span class="atraso">Vencida · ${Math.abs(dias(r.prazo))}d</span>`
               :(pz==='sem'?'<span style="color:var(--txt3)">Sem prazo</span>'
               :`<span style="color:var(--verde)">No prazo</span>`));
+      // data-sort: Etapa ordena pelo fluxo (não pelo alfabeto) e Situação pelos
+      // dias — vencidas primeiro, da mais vencida para a menos, que é a mesma
+      // ordem padrão da lista. Sem prazo/Backlog ficam sem chave: sempre no fim.
+      const ordSit=(pz==='venc'||pz==='ok')&&r.prazo?String((pz==='venc'?-1e6:0)+dias(r.prazo)):'';
       return `<tr data-id="${esc(r.id)}"><td>${esc(r.assunto)||'—'}</td><td class="forte">${esc(r.acao)||'—'}</td>
-        <td>${esc(r.resp)||'—'}</td><td>${r.status==='Backlog'?'—':(r.prazo?dataBR(r.prazo):'—')}</td><td>${chip(r.status)}</td><td>${sit}</td></tr>`;
+        <td>${esc(r.resp)||'—'}</td><td>${r.status==='Backlog'?'—':(r.prazo?dataBR(r.prazo):'—')}</td>
+        <td data-sort="${STATUS.indexOf(r.status)}">${chip(r.status)}</td><td data-sort="${ordSit}">${sit}</td></tr>`;
     }).join('')}</tbody></table></div>`;
 }
 // ── Gantt: barra de cada ação da criação até o prazo ──
@@ -904,6 +925,7 @@ function passaExceto(r,qual){
   if(!noPeriodo(r)) return false;
   if(qual!=='vig' && VIG.size && !VIG.has(vigDe(r))) return false;
   if(qual!=='eta' && ETA.size && !ETA.has(ROTULO[r.status]||r.status)) return false;
+  if(qual!=='sit' && SIT.size && !SIT.has(sitDe(r))) return false;
   if(BUSCA && ![r.acao,r.assunto,r.resp,r.obs].some(x=>String(x||'').toLowerCase().includes(BUSCA))) return false;
   if(qual!=='resp' && RESP.size && !RESP.has(r.resp)) return false;
   if(qual!=='ass'  && ASS.size  && !ASS.has(r.assunto)) return false;
@@ -931,6 +953,10 @@ function montaMenus(){
     .sort((a,b)=>STATUS.findIndex(k=>(ROTULO[k]||k)===a)-STATUS.findIndex(k=>(ROTULO[k]||k)===b));
   ETA.forEach(v=>{ if(!eta.includes(v)) eta.unshift(v); });
   $('lstEtapa').innerHTML=menuLista(eta,ETA,'e');
+  const sit=[...new Set(LINHAS.filter(r=>passaExceto(r,'sit')).map(sitDe).filter(Boolean))]
+    .sort((a,b)=>SIT_ORDEM.indexOf(a)-SIT_ORDEM.indexOf(b));
+  SIT.forEach(v=>{ if(!sit.includes(v)) sit.unshift(v); });
+  $('lstSit').innerHTML=menuLista(sit,SIT,'s');
 }
 // mesma mecânica do multi-select padrão: Todos limpa; desmarcar com tudo
 // marcado seleciona os demais; marcar o último de volta vira Todos; "só" isola
@@ -957,10 +983,11 @@ ligaMenu($('lstPessoas'),RESP,'p');
 ligaMenu($('lstAssuntos'),ASS,'a');
 ligaMenu($('lstVig'),VIG,'v');
 ligaMenu($('lstEtapa'),ETA,'e');
+ligaMenu($('lstSit'),SIT,'s');
 function mudaData(){ DT_DE=$('dtDe').value||''; DT_ATE=$('dtAte').value||''; montaMenus(); render(); }
 function limpaData(){ $('dtDe').value=''; $('dtAte').value=''; mudaData(); }
 function limpaFiltros(){
-  RESP.clear(); ASS.clear(); VIG.clear(); ETA.clear(); VISAO=''; BUSCA=''; $('busca').value='';
+  RESP.clear(); ASS.clear(); VIG.clear(); ETA.clear(); SIT.clear(); VISAO=''; BUSCA=''; $('busca').value='';
   DT_DE=''; DT_ATE=''; $('dtDe').value=''; $('dtAte').value='';
   document.querySelectorAll('.menu.open').forEach(m=>m.classList.remove('open'));
   montaMenus(); render();
@@ -1148,6 +1175,7 @@ async function iniciar(){
 }
 iniciar();
 </script>
+<script src="../assets/sortable-table.js"></script>
 <script src="../assets/mobile.js"></script>
 <script src="../assets/build-check.js?v=202608061817"></script>
 </body>
