@@ -381,7 +381,7 @@ body.light-mode tbody tr{border-bottom:1px solid rgba(0,0,0,.06);}
     </div>
     <div class="chart-card">
       <div class="chart-title">Impacto Financeiro</div>
-      <div class="chart-sub">Impacto financeiro acumulado (BRL) · por vigência</div>
+      <div class="chart-sub">Impacto financeiro acumulado (BRL) · por vigência · R$/km remunerado de cada placa</div>
       <div class="chart-wrap"><canvas id="chart-impacto"></canvas></div>
     </div>
   </div>
@@ -439,10 +439,12 @@ body.light-mode tbody tr{border-bottom:1px solid rgba(0,0,0,.06);}
 Chart.register(ChartDataLabels);
 
 // Fonte Seara (workbook único, 3 abas). Combustível = realizado por placa/mês (raiz);
-// Base CTEs = KM remunerado (Z) + R$ combustível (S), agregado por placa/mês.
+// Base CTEs = KM remunerado (col Z), agregado por placa/mês;
+// Base Remunerado = R$/km de cada placa (col O, ReaisPorKm) — a régua do Impacto.
 const SEARA_ID = '1Rlwc0MZiupQI38gSN8VyBq_zMADgX9R_ZbfygNP-OXE';
 const GID_COMB = 1982300845;   // Combustível
 const GID_CTES = 1672208132;   // Base CTEs
+const GID_REM  = 0;            // Base Remunerado
 
 let ALL = [];
 let chEvo = null, chImp = null, chKmFrota = null, chKmViagem = null, chProjKm = null, chProjPct = null;
@@ -520,14 +522,39 @@ function gvizRows(gid, tq) {
 }
 const _MESES3 = ['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
 const _placaKey = s => String(s == null ? '' : s).toUpperCase().replace(/\s+/g, '').trim();
+// vigência MM/AAAA a partir da coluna de data da Base Remunerado (o gviz manda
+// data como "Date(2026,5,1)" — mês 0-11 — mas às vezes vem já formatada)
+function _vigDeData(v){
+  const s = String(v == null ? '' : v);
+  let m = s.match(/Date\((\d+),(\d+)/);
+  if (m) return String(+m[2] + 1).padStart(2,'0') + '/' + m[1];
+  m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+  if (m) return m[2].padStart(2,'0') + '/' + m[3];
+  const d = new Date(s);
+  return isNaN(d) ? '' : String(d.getMonth() + 1).padStart(2,'0') + '/' + d.getFullYear();
+}
 
 async function fetchData() {
   // Combustível (realizado): E=4 placa, F=5 mês(texto), G=6 ano, H=7 modelo, J=9 tipo veíc., K=10 km rodado
   // Base CTEs (remunerado): C=placa, D=data → KM Rem = sum(Z), R$ Comb = sum(S)
-  const [comb, agg] = await Promise.all([
+  // Base Remunerado: A=0 vigência, D=3 placa, O=14 ReaisPorKm
+  const [comb, agg, brem] = await Promise.all([
     gvizRows(GID_COMB),
-    gvizRows(GID_CTES, 'select C, year(D), month(D), sum(Z), sum(S) group by C, year(D), month(D)')
+    gvizRows(GID_CTES, 'select C, year(D), month(D), sum(Z), sum(S) group by C, year(D), month(D)'),
+    gvizRows(GID_REM)
   ]);
+
+  // R$/km de CADA PLACA, da Base Remunerado (col O — ReaisPorKm). É o custo
+  // variável inteiro do km: diesel + arla + manutenção + pneu + recapagem +
+  // lubrificante + lavagem. Antes o painel usava só o combustível embutido na
+  // CTE (ΣS÷ΣZ), que além de deixar os outros seis de fora carregava o preço
+  // praticado do diesel em vez do remunerado.
+  const rsKmMap = {};
+  brem.forEach(r => {
+    const placa = _placaKey(r[3]), vig = _vigDeData(r[0]), o = +r[14] || 0;
+    if (!placa || !vig || o <= 0) return;
+    rsKmMap[placa + '|' + vig] = o;
+  });
 
   // remunerado por placa|vig
   const remMap = {};
@@ -536,6 +563,7 @@ async function fetchData() {
     if (!placa || !yr) return;
     remMap[placa + '|' + String(mo).padStart(2,'0') + '/' + yr] = { rem: +r[3] || 0, rComb: +r[4] || 0 };
   });
+  let _semRsKm = 0;
 
   // realizado por placa/mês (Combustível) — só linhas com km rodado > 0 — cruza com o remunerado
   ALL = [];
@@ -546,7 +574,10 @@ async function fetchData() {
     if (!placa || mi < 0 || !yr || real <= 0) return;
     const vig = String(mi + 1).padStart(2,'0') + '/' + yr;
     const M = remMap[placa + '|' + vig] || { rem: 0, rComb: 0 };
-    const rsKm = M.rem > 0 ? M.rComb / M.rem : 0;   // R$/km combustível = ΣR$ ÷ Σkm rem
+    // R$/km da placa na vigência. Sem a placa na Base Remunerado, cai no
+    // combustível da CTE para o impacto não zerar — e conta quantas foram.
+    let rsKm = rsKmMap[placa + '|' + vig] || 0;
+    if (!rsKm) { rsKm = M.rem > 0 ? M.rComb / M.rem : 0; if (M.rem > 0) _semRsKm++; }
     ALL.push({
       vig, ano: String(yr),
       placa: String(r[4]).trim(),
@@ -558,6 +589,7 @@ async function fetchData() {
       kmFrota: 0, viagens: 0
     });
   });
+  if (_semRsKm) console.warn(`Impacto: ${_semRsKm} placa(s)/vigência(s) sem R$/km na Base Remunerado — usado o combustível da CTE.`);
   try{ localStorage.setItem(CACHE_KEY, JSON.stringify({t:Date.now(),rows:ALL})); }catch(e){}
   const savedVig = getSel('ms-vig');
   populateFilters();
@@ -1115,7 +1147,7 @@ function renderCharts(F) {
     mkVertBar(projByPct, 'pct',   v => Math.round(Math.abs(v)) + '%'));
 }
 
-const CACHE_KEY='bi_cache_kmseara_v1';
+const CACHE_KEY='bi_cache_kmseara_v2';  // v2: Impacto passou a usar o R$/km da Base Remunerado
 const CACHE_TTL=60*60*1000; // 1 hora
 
 async function atualizar() {
