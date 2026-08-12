@@ -439,7 +439,7 @@ body.light-mode tbody tr{border-bottom:1px solid rgba(0,0,0,.06);}
 Chart.register(ChartDataLabels);
 
 // Fonte Seara (workbook único, 3 abas). Combustível = realizado por placa/mês (raiz);
-// Base CTEs = KM remunerado (col Z), agregado por placa/mês;
+// Base CTEs = KM remunerado (col J), contado uma vez por viagem (col B);
 // Base Remunerado = R$/km de cada placa (col O, ReaisPorKm) — a régua do Impacto.
 const SEARA_ID = '1Rlwc0MZiupQI38gSN8VyBq_zMADgX9R_ZbfygNP-OXE';
 const GID_COMB = 1982300845;   // Combustível
@@ -521,7 +521,15 @@ function gvizRows(gid, tq) {
   });
 }
 const _MESES3 = ['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
-const _placaKey = s => String(s == null ? '' : s).toUpperCase().replace(/\s+/g, '').trim();
+// Chave de placa para CASAR AS ABAS — não é o que aparece na tela. Placa no
+// formato antigo (LLLNNNN) vira Mercosul (LLLNLNN) trocando o 5º caractere pelo
+// dígito→letra (0=A … 9=J); placa que já é Mercosul fica como está. Assim, se
+// uma aba emplacar antes da outra, o cruzamento continua achando o veículo.
+const _MERCOSUL = 'ABCDEFGHIJ';
+function _placaKey(s){
+  const p = String(s == null ? '' : s).toUpperCase().replace(/[^A-Z0-9]/g, '');
+  return /^[A-Z]{3}[0-9]{4}$/.test(p) ? p.slice(0,4) + _MERCOSUL[+p[4]] + p.slice(5) : p;
+}
 // vigência MM/AAAA a partir da coluna de data da Base Remunerado (o gviz manda
 // data como "Date(2026,5,1)" — mês 0-11 — mas às vezes vem já formatada)
 function _vigDeData(v){
@@ -536,11 +544,11 @@ function _vigDeData(v){
 
 async function fetchData() {
   // Combustível (realizado): E=4 placa, F=5 mês(texto), G=6 ano, H=7 modelo, J=9 tipo veíc., K=10 km rodado
-  // Base CTEs (remunerado): C=placa, D=data → KM Rem = sum(Z), R$ Comb = sum(S)
+  // Base CTEs (remunerado): B=viagem, C=placa, D=data, J=km da viagem
   // Base Remunerado: A=0 vigência, D=3 placa, O=14 ReaisPorKm
-  const [comb, agg, brem] = await Promise.all([
+  const [comb, ctes, brem] = await Promise.all([
     gvizRows(GID_COMB),
-    gvizRows(GID_CTES, 'select C, year(D), month(D), sum(Z), sum(S) group by C, year(D), month(D)'),
+    gvizRows(GID_CTES, 'select B, C, D, J'),
     gvizRows(GID_REM)
   ]);
 
@@ -549,19 +557,43 @@ async function fetchData() {
   // lubrificante + lavagem. Antes o painel usava só o combustível embutido na
   // CTE (ΣS÷ΣZ), que além de deixar os outros seis de fora carregava o preço
   // praticado do diesel em vez do remunerado.
-  const rsKmMap = {};
+  const rsKmMap = {}, rsKmHist = {};
   brem.forEach(r => {
     const placa = _placaKey(r[3]), vig = _vigDeData(r[0]), o = +r[14] || 0;
     if (!placa || !vig || o <= 0) return;
     rsKmMap[placa + '|' + vig] = o;
+    (rsKmHist[placa] || (rsKmHist[placa] = [])).push({ ord: vig.slice(-4) + vig.slice(0,2), o });
   });
+  Object.values(rsKmHist).forEach(a => a.sort((x,y) => x.ord.localeCompare(y.ord)));
+  // Placa sem linha na vigência: usa a tabela mais recente da PRÓPRIA placa até
+  // aquele mês (ou a primeira que existir). Preferível a zerar o impacto — e o
+  // console avisa quantas vezes o desvio foi usado.
+  function rsKmDe(placa, vig){
+    const exata = rsKmMap[placa + '|' + vig];
+    if (exata) return exata;
+    const h = rsKmHist[placa];
+    if (!h || !h.length) return 0;
+    const alvo = vig.slice(-4) + vig.slice(0,2);
+    let melhor = null;
+    for (const x of h) { if (x.ord <= alvo) melhor = x; }
+    return (melhor || h[0]).o;
+  }
 
-  // remunerado por placa|vig
-  const remMap = {};
-  agg.forEach(r => {
-    const placa = _placaKey(r[0]), yr = +r[1], mo = (+r[2]) + 1;   // gviz month() é 0-11
-    if (!placa || !yr) return;
-    remMap[placa + '|' + String(mo).padStart(2,'0') + '/' + yr] = { rem: +r[3] || 0, rComb: +r[4] || 0 };
+  // KM REMUNERADO por placa|vig — coluna J (QT_QUILOMETROS_VIAGEM), contada UMA
+  // VEZ POR VIAGEM. A mesma viagem gera vários CTEs (normal, complementar,
+  // descarga, pernoite…) e todos repetem o km da viagem: somar linha a linha
+  // multiplicava o km. A chave é o CD_VIAGEM_TRANSPORTE (col B).
+  const remMap = {}, vistas = new Set();
+  ctes.forEach(r => {
+    const viagem = r[0];
+    if (viagem == null || viagem === '') return;
+    const vk = String(viagem);
+    if (vistas.has(vk)) return;
+    vistas.add(vk);
+    const placa = _placaKey(r[1]), vig = _vigDeData(r[2]), km = +r[3] || 0;
+    if (!placa || !vig) return;
+    const k = placa + '|' + vig;
+    remMap[k] = (remMap[k] || 0) + km;
   });
   let _semRsKm = 0;
 
@@ -573,23 +605,21 @@ async function fetchData() {
     const yr = +r[6], real = +r[10] || 0;
     if (!placa || mi < 0 || !yr || real <= 0) return;
     const vig = String(mi + 1).padStart(2,'0') + '/' + yr;
-    const M = remMap[placa + '|' + vig] || { rem: 0, rComb: 0 };
-    // R$/km da placa na vigência. Sem a placa na Base Remunerado, cai no
-    // combustível da CTE para o impacto não zerar — e conta quantas foram.
-    let rsKm = rsKmMap[placa + '|' + vig] || 0;
-    if (!rsKm) { rsKm = M.rem > 0 ? M.rComb / M.rem : 0; if (M.rem > 0) _semRsKm++; }
+    const rem = remMap[placa + '|' + vig] || 0;
+    const rsKm = rsKmDe(placa, vig);
+    if (!rsKmMap[placa + '|' + vig] && rem > 0) _semRsKm++;
     ALL.push({
       vig, ano: String(yr),
-      placa: String(r[4]).trim(),
+      placa: String(r[4]).trim(),                   // a placa como está na origem
       proj:  String(r[7] || '').trim() || '—',      // MODELO        → filtro "Modelo"
       und:   String(r[9] || '').trim() || '—',      // TIPO VEÍCULO  → filtro "Tipo Veíc."
-      rem:   M.rem,
+      rem,
       real:  real,
-      imp:   (real - M.rem) * rsKm,
+      imp:   (real - rem) * rsKm,
       kmFrota: 0, viagens: 0
     });
   });
-  if (_semRsKm) console.warn(`Impacto: ${_semRsKm} placa(s)/vigência(s) sem R$/km na Base Remunerado — usado o combustível da CTE.`);
+  if (_semRsKm) console.warn(`Impacto: ${_semRsKm} placa(s)/vigência(s) sem linha na Base Remunerado — usada a tabela anterior da própria placa.`);
   try{ localStorage.setItem(CACHE_KEY, JSON.stringify({t:Date.now(),rows:ALL})); }catch(e){}
   const savedVig = getSel('ms-vig');
   populateFilters();
