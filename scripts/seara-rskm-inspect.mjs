@@ -82,4 +82,42 @@ for(const o of cand){
 // totais do mês pelos dois caminhos
 const totRs = Object.values(agg).reduce((s,o)=>s+o.rs,0);
 const totKm = Object.values(agg).reduce((s,o)=>s+o.km,0);
-console.log(`\ntotal ${vig} pela Base CTEs: R$ ${totRs.toFixed(2)} ÷ ${totKm.toFixed(0)} km = R$/km ${totKm?(totRs/totKm).toFixed(4):'—'}`);
+console.log(`\ntotal ${vig} pela Base CTEs: ΣS ${totRs.toFixed(2)} ÷ ΣZ ${totKm.toFixed(0)} = ${totKm?(totRs/totKm).toFixed(4):'—'}`);
+
+// ── S é taxa ou valor? linhas cruas + as três contas possíveis ──
+console.log('\n\n=== S "R$/KM Combustível" é taxa ou valor? ===');
+const porPlaca = {};
+ctes.rows.forEach(r => {
+  const p = placaKey(r[2]); if(!p || vigDe(r[3]) !== vig) return;
+  (porPlaca[p] || (porPlaca[p] = [])).push(r);
+});
+const remO = {}, remT = {};
+brem.rows.forEach(r => {
+  if(vigDe(r[0]) !== vig) return;
+  const p = placaKey(r[3]); if(!p) return;
+  remO[p] = +r[14] || 0; remT[p] = +r[19] || 0;
+});
+Object.keys(porPlaca).slice(0,3).forEach(p => {
+  const rs = porPlaca[p];
+  const uniqS = [...new Set(rs.map(r => +r[18] || 0))];
+  const sumS = rs.reduce((a,r)=>a+(+r[18]||0),0);
+  const sumZ = rs.reduce((a,r)=>a+(+r[25]||0),0);
+  const sumSZ = rs.reduce((a,r)=>a+(+r[18]||0)*(+r[25]||0),0);
+  console.log(`\n${p} — ${rs.length} CTEs`);
+  console.log(`  valores distintos de S: ${uniqS.slice(0,6).map(v=>v.toFixed(4)).join(' ')}${uniqS.length>6?' …('+uniqS.length+')':''}`);
+  console.log(`  ΣS=${sumS.toFixed(2)}  ΣZ=${sumZ.toFixed(1)} km  Σ(S×Z)=${sumSZ.toFixed(2)}`);
+  console.log(`  · ΣS÷ΣZ (o que o painel faz) = ${sumZ?(sumS/sumZ).toFixed(4):'—'}`);
+  console.log(`  · Σ(S×Z)÷ΣZ (taxa ponderada) = ${sumZ?(sumSZ/sumZ).toFixed(4):'—'}`);
+  console.log(`  · Base Remunerado: ReaisPorKm(O)=${(remO[p]||0).toFixed(4)}  ReaisPorKmDiesel(T)=${(remT[p]||0).toFixed(4)}`);
+  console.log('  primeiras linhas  [H frete/km · I frete · J km viagem · S R$/km comb · Z km rodado]:');
+  rs.slice(0,4).forEach(r => console.log(`    H=${r[7]} I=${r[8]} J=${r[9]} S=${r[18]} Z=${r[25]}`));
+});
+
+// A soma dos sete R$/KM da CTE bate com o ReaisPorKm (O) da Base Remunerado?
+console.log('\n=== ΣR$/KM dos 7 componentes da CTE × ReaisPorKm (O) ===');
+Object.keys(porPlaca).slice(0,6).forEach(p => {
+  const r = porPlaca[p][0];
+  const comp = [18,19,20,21,22,23,24].reduce((a,i)=>a+(+r[i]||0),0);
+  console.log(`  ${p}: CTE Σcomponentes=${comp.toFixed(4)} × Rem O=${(remO[p]||0).toFixed(4)}` +
+    (Math.abs(comp-(remO[p]||0))<0.005 ? '  ✔ bate' : '  ✘'));
+});
