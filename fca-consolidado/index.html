@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-<meta name="build" content="202608111300">
+<meta name="build" content="202608121300">
 <title>FCA · Admin</title>
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -1081,6 +1081,14 @@ function chipStatusRel(st){
 }
 function relatorioHTML(vis){
   const prazoBR=p=>p?String(p).slice(0,10).split('-').reverse().join('/'):'—';
+  // A situação manda primeiro: as vencidas encabeçam a tabela, da mais vencida
+  // para a menos (prazo mais antigo = mais dias de atraso); depois as no prazo,
+  // pela data de vencimento, e sem prazo no fim ('9999'). A ordem de fora
+  // (unidade → vigência → projeto → fato) sobra como desempate, para a lista
+  // não dançar entre renders. Kanban e Gantt reordenam por conta própria.
+  vis=vis.slice().sort((a,b)=>
+    ((prazoState(a)==='Vencida'?0:1)-(prazoState(b)==='Vencida'?0:1))
+    ||String(a.prazo||'9999').localeCompare(String(b.prazo||'9999')));
   // Origem e Acompanhamento ficam só no modal — na tabela roubavam espaço das
   // colunas que importam. Conta/Indicador e Fato viraram uma coluna só: a conta
   // em negrito e o desvio embaixo, menor.

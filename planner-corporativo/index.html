@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-<meta name="build" content="202608121200">
+<meta name="build" content="202608121300">
 <title>Planner Corporativo</title>
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -643,10 +643,15 @@ function estadoPrazo(r){
   return new Date(r.prazo+'T00:00:00') < hoje() ? 'venc' : 'ok';
 }
 const dias=iso=>Math.round((new Date(iso+'T00:00:00')-hoje())/86400000);
-// ORDEM PADRÃO DE TODA LISTA: por vencimento — o mais vencido primeiro,
-// depois os que vencem antes; sem prazo sempre no fim, e aí por
-// criação (mais antigo antes) para a ordem não dançar entre renders.
+// ORDEM PADRÃO DE TODA LISTA: a SITUAÇÃO manda primeiro — as vencidas
+// encabeçam a lista, da mais vencida para a menos; em seguida as no prazo,
+// pela data de vencimento; sem prazo sempre no fim, e aí por criação (mais
+// antigo antes) para a ordem não dançar entre renders.
+// No Kanban isso não muda nada: cada coluna tem um status só, então dentro
+// dela ninguém é "vencida" enquanto o vizinho é "no prazo".
 function porVencimento(a,b){
+  const va=estadoPrazo(a)==='venc', vb=estadoPrazo(b)==='venc';
+  if(va!==vb) return va?-1:1;
   // Backlog não tem prazo (nem quando há data gravada): vai para o fim
   const pa=a.status==='Backlog'?'':(a.prazo||''), pb=b.status==='Backlog'?'':(b.prazo||'');
   if(!pa && !pb) return String(a.criado).localeCompare(String(b.criado));
