@@ -64,7 +64,9 @@ custo.rows.forEach(row => {
   const cta = ALIAS[String(g(C.cta)||'').trim()] || String(g(C.cta)||'').trim();
   if(!TRES.has(PACOTE[cta])) return;
   const k = vig+'|'+uni.toUpperCase()+'|'+proj.toUpperCase();
-  custoRem[k] = (custoRem[k]||0) + n2(g(C.rem));
+  // custo na DRE vem NEGATIVO — o custo de verdade é -valor, senão o R$/km sai
+  // negativo e inverte o sinal de todo impacto
+  custoRem[k] = (custoRem[k]||0) - n2(g(C.rem));
 });
 
 // km do painel (mesma aba/colunas que o /painel-km/ lê)
