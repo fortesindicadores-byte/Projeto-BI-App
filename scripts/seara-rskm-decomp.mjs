@@ -77,3 +77,30 @@ for(const vig of vigs){
 console.log('\nLeitura: "CTE comb" é o que o painel usa hoje (ΣS÷ΣZ). Se "CTE resto"');
 console.log('bater com "Rem resto", os seis componentes não-combustível das duas');
 console.log('bases são os mesmos e a única divergência real é o preço do diesel.');
+
+// ── COBERTURA: quantas placas do painel acham R$/km na Base Remunerado? ──
+// As linhas do painel nascem da aba Combustível (realizado). Toda placa que não
+// achar a sua na Base Remunerado cai no combustível da CTE — vale saber quantas.
+const GID_COMB = 1982300845;
+const MESES3 = ['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
+const comb = await gvz(GID_COMB);
+const temRem = new Set();
+brem.forEach(r => { const p=placaKey(r[3]), v=vigDe(r[0]); if(p&&v) temRem.add(p+'|'+v); });
+
+console.log('\n=== cobertura do R$/km (col O) nas placas do painel ===');
+const porVig = {};
+comb.forEach(r => {
+  const p = placaKey(r[4]);
+  const mi = MESES3.indexOf(String(r[5]||'').toLowerCase().slice(0,3));
+  const y = +r[6], real = n2(r[10]);
+  if(!p || mi<0 || !y || real<=0) return;
+  const vig = String(mi+1).padStart(2,'0')+'/'+y;
+  const o = porVig[vig] || (porVig[vig] = {tot:new Set(), ok:new Set(), kmSem:0});
+  o.tot.add(p);
+  if(temRem.has(p+'|'+vig)) o.ok.add(p); else o.kmSem += real;
+});
+Object.keys(porVig).sort((a,b)=>(a.slice(-4)+a.slice(0,2)).localeCompare(b.slice(-4)+b.slice(0,2))).forEach(v => {
+  const o = porVig[v], falta = o.tot.size - o.ok.size;
+  console.log(`  ${v}: ${o.ok.size}/${o.tot.size} placas com R$/km próprio` +
+    (falta ? `  ·  ${falta} sem (fallback), ${Math.round(o.kmSem).toLocaleString('pt-BR')} km realizados` : '  ·  cobertura total'));
+});
