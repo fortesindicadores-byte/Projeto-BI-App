@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-<meta name="build" content="202608111300">
+<meta name="build" content="202608121300">
 <title>FCA</title>
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -1601,8 +1601,15 @@ function relatorioHTMLpre(vis){
   const acMatch=r=>(!fs.length||fs.includes(r.status||DEFAULT_STATUS))&&(!fpz.length||fpz.includes(prazoState(r)));
   const rows=[]; vis.forEach(f=>{const key=keyOf(f);loadAcoes(key,f.causaAuto).forEach(a=>{if(acMatch(a))rows.push({f,a});});});
   if(!rows.length)return '<div class="empty">Nenhuma ação com os filtros selecionados.</div>';
-  // automáticos (sem ação) primeiro; depois por prazo
-  rows.sort((x,y)=>((isAutoAcao(x.a)?0:1)-(isAutoAcao(y.a)?0:1))||String(x.a.prazo||'9999').localeCompare(String(y.a.prazo||'9999')));
+  // A situação manda primeiro: as vencidas encabeçam a tabela, da mais
+  // vencida para a menos (prazo mais antigo = mais dias de atraso). Depois
+  // as no prazo, pela data de vencimento. Sem prazo cai no fim ('9999'), e
+  // os automáticos (sem ação) só desempatam quando o prazo é o mesmo — no
+  // Kanban eles continuam vindo primeiro, ali a regra não mudou.
+  rows.sort((x,y)=>
+    ((prazoState(x.a)==='Vencida'?0:1)-(prazoState(y.a)==='Vencida'?0:1))
+    ||String(x.a.prazo||'9999').localeCompare(String(y.a.prazo||'9999'))
+    ||((isAutoAcao(x.a)?0:1)-(isAutoAcao(y.a)?0:1)));
   const prazoBR=p=>p?String(p).slice(0,10).split('-').reverse().join('/'):'—';
   // Origem e Acompanhamento ficam só no modal; a conta e o desvio moram os dois
   // na coluna Fato (conta em negrito, desvio embaixo, menor) — igual ao Admin.
