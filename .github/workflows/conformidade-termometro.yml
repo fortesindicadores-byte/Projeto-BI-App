@@ -1,0 +1,31 @@
+name: Conformidade Termometro
+
+on:
+  workflow_dispatch:
+    inputs:
+      vig:
+        description: 'Vigência MM/AAAA (padrão 07/2026)'
+        required: false
+        default: '07/2026'
+      gravar:
+        description: 'Gravar no Supabase (desmarcado = só mostra)'
+        type: boolean
+        required: false
+        default: false
+
+jobs:
+  coletar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: claude/epic-edison-ae21sz
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Conformidade do Termometro
+        env:
+          VIG: ${{ inputs.vig }}
+          GEM_SUPABASE_SERVICE_KEY: ${{ inputs.gravar && secrets.GEM_SUPABASE_SERVICE_KEY || '' }}
+        run: node scripts/conformidade-termometro.mjs
