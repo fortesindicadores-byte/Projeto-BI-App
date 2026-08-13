@@ -718,7 +718,7 @@ function onFilterChange(){
 // ═══════════════════════════════════════════════
 // FETCH — workbook Seara + Frota (custo ANG), via gviz/tq (fetch)
 //  · Custo Combustível → aba Frota (Visão Financeira), pacote Combustíveis, unidade ANG
-//  · KM Rodado         → workbook Seara: rem = Base CTEs (col Z, KM Rodado); real = aba Combustível
+//  · KM Rodado         → workbook Seara: rem = Base CTEs (col J, uma vez por viagem); real = aba Combustível
 //  · R$/Litro          → real = ΣTotalR$/ΣLitros (Combustível); rem = Σ(PrecoDiesel×Litros)/ΣLitros (Base Remunerado)
 //  · Km/L              → real = ΣKmReal/ΣLitros; rem = Σ(KmPorLitro×viagens)/Σviagens (Base Remunerado ponderado p/ viagens CTEs)
 //  · R$/km             → calculado: Custo ÷ KM
@@ -732,7 +732,16 @@ const GID_REM  = 0, GID_CTES = 1672208132, GID_COMB = 1982300845;
 // ICMS nem ICMS Crédito Presumido — assim bate com a linha "Combustíveis" da DRE.
 const COMB = new Set(['COMBUSTIVEIS VEICULOS E EQUIPAMENTOS','COMBUSTIVEIS']);
 const _nk = s => String(s||'').toUpperCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/\s+/g,' ').trim();
-const _placaKey = s => String(s==null?'':s).toUpperCase().replace(/[^A-Z0-9]/g,'').trim();
+// Chave canônica de placa — só para CRUZAR as abas (na tela aparece a placa da
+// origem). Formato antigo LLLNNNN vira Mercosul LLLNLNN trocando o 5º caractere
+// pelo dígito→letra (0=A … 9=J); quem já é Mercosul fica igual. Hoje as abas
+// estão todas em Mercosul: a conversão é para o dia em que uma emplacar antes
+// da outra.
+const _MERCOSUL='ABCDEFGHIJ';
+function _placaKey(s){
+  const p=String(s==null?'':s).toUpperCase().replace(/[^A-Z0-9]/g,'');
+  return /^[A-Z]{3}[0-9]{4}$/.test(p) ? p.slice(0,4)+_MERCOSUL[+p[4]]+p.slice(5) : p;
+}
 const _MESES3 = ['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
 const _vigYM = (y,m) => `${String(m).padStart(2,'0')}/${y}`;   // 'MM/YYYY'
 
@@ -790,22 +799,29 @@ function custoAgg(f){
 
 // Carrega Frota + workbook Seara e monta as opções de filtro (ano/vigência)
 async function fetchAll(){
-  const [fr, comb, aggKm, rawVg, brem] = await Promise.all([
+  const [fr, comb, rawVg, brem] = await Promise.all([
     gvz(VF_ID,{tab:'Frota'}),
     gvz(SEARA_ID,{gid:GID_COMB}),
-    gvz(SEARA_ID,{gid:GID_CTES, tq:'select C, year(D), month(D), sum(Z) group by C, year(D), month(D)'}),
-    gvz(SEARA_ID,{gid:GID_CTES, tq:'select B, C, D'}),
+    gvz(SEARA_ID,{gid:GID_CTES, tq:'select B, C, D, J'}),
     gvz(SEARA_ID,{gid:GID_REM}),
   ]);
   FR_ROWS = fr.rows;
 
-  // KM remunerado (Base CTEs col Z) por placa|vig
-  const remKm={};
-  aggKm.rows.forEach(r=>{ const p=_placaKey(r[0]), y=+r[1], m=(+r[2])+1; if(!p||!y) return; remKm[p+'|'+_vigYM(y,m)]=+r[3]||0; });
-
-  // Viagens distintas (Base CTEs col B = CD_VIAGEM_TRANSPORTE) por placa|vig — gviz não faz count-distinct, dedupa no cliente
-  const seenVg=new Set(), viag={};
-  rawVg.rows.forEach(r=>{ const b=r[0], p=_placaKey(r[1]), d=kParseVig(r[2]); if(b==null||!p||!d) return; if(seenVg.has(b)) return; seenVg.add(b); const k=p+'|'+_vigYM(d.getFullYear(),d.getMonth()+1); viag[k]=(viag[k]||0)+1; });
+  // KM remunerado e viagens saem da MESMA passada na Base CTEs.
+  // A coluna Z (KM Rodado) não existe mais — a aba foi reestruturada e o
+  // `select sum(Z)` derrubava a carga inteira. O km vem da coluna J
+  // (QT_QUILOMETROS_VIAGEM), contada UMA VEZ por CD_VIAGEM_TRANSPORTE (col B):
+  // a mesma viagem gera vários CTEs (complementar, descarga, pernoite, CPL) e
+  // todos repetem o km na J — somar linha a linha infla ~23×.
+  const seenVg=new Set(), viag={}, remKm={};
+  rawVg.rows.forEach(r=>{
+    const b=r[0], p=_placaKey(r[1]), d=kParseVig(r[2]), km=+r[3]||0;
+    if(b==null||!p||!d) return;
+    if(seenVg.has(b)) return; seenVg.add(b);
+    const k=p+'|'+_vigYM(d.getFullYear(),d.getMonth()+1);
+    viag[k]=(viag[k]||0)+1;
+    remKm[k]=(remKm[k]||0)+km;
+  });
 
   // Benchmark remunerado (Base Remunerado): KmPorLitro col15(P), PrecoDiesel col17(R) por placa|vig
   const bench={};

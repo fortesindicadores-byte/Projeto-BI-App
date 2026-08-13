@@ -472,7 +472,16 @@ document.addEventListener('click',e=>{if(!e.target.closest('.ms-wrap'))document.
 
 // ── FETCH (gviz/tq via fetch, com retry-on-empty p/ throttle) ──
 const _sleep=ms=>new Promise(r=>setTimeout(r,ms));
-const _placaKey=s=>String(s==null?'':s).toUpperCase().replace(/[^A-Z0-9]/g,'').trim();
+// Chave canônica de placa — só para CRUZAR as abas (na tela aparece a placa da
+// origem). Formato antigo LLLNNNN vira Mercosul LLLNLNN trocando o 5º caractere
+// pelo dígito→letra (0=A … 9=J); quem já é Mercosul fica igual. Hoje as abas
+// estão todas em Mercosul: a conversão é para o dia em que uma emplacar antes
+// da outra.
+const _MERCOSUL='ABCDEFGHIJ';
+function _placaKey(s){
+  const p=String(s==null?'':s).toUpperCase().replace(/[^A-Z0-9]/g,'');
+  return /^[A-Z]{3}[0-9]{4}$/.test(p) ? p.slice(0,4)+_MERCOSUL[+p[4]]+p.slice(5) : p;
+}
 function _gvzOnce(id,{gid,tq}={}){
   const p=[];
   if(gid!=null)p.push('gid='+gid);
@@ -498,9 +507,12 @@ async function gvz(id,opts={},tries=3){
 }
 // Monta allRows (linhas sintéticas por placa|vig) a partir do workbook Seara.
 async function fetchData(){
-  const [comb,aggKm,rawVg,brem]=await Promise.all([
+  // A coluna Z (KM Rodado) da aba Base CTEs NÃO EXISTE MAIS — a aba foi
+  // reestruturada. O `select sum(Z)` que ficou aqui derrubava o Promise.all
+  // inteiro ("Erro ao carregar dados"), e o resultado dele nem era usado: o km
+  // desta tela vem da aba Combustível. Query removida.
+  const [comb,rawVg,brem]=await Promise.all([
     gvz(SEARA_ID,{gid:GID_COMB}),
-    gvz(SEARA_ID,{gid:GID_CTES,tq:'select C, year(D), month(D), sum(Z) group by C, year(D), month(D)'}),
     gvz(SEARA_ID,{gid:GID_CTES,tq:'select B, C, D'}),
     gvz(SEARA_ID,{gid:GID_REM}),
   ]);
