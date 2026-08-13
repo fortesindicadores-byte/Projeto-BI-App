@@ -260,7 +260,7 @@ body.light-mode table.dre thead tr.cols th{background:#F0F0F0;}
     </div>
     <div class="chart-card">
       <div class="chart-title">Impacto por Modelo</div>
-      <div class="chart-sub" id="ch-imp-sub">Δ Km/L convertido em R$ — período selecionado</div>
+      <div class="chart-sub" id="ch-imp-sub">Δ km × R$/km remunerado (ReaisPorKm) — período selecionado</div>
       <div class="chart-wrap"><canvas id="ch-proj"></canvas></div>
     </div>
   </div>
@@ -318,15 +318,19 @@ body.light-mode table.dre thead tr.cols th{background:#F0F0F0;}
 </main>
 
 <script>
-// ── Fontes: workbook Seara (Anhanguera) ──
-// Km/L Real  = ΣKm/ΣLitros (aba Combustível)
-// Km/L Rem   = KmPorLitro (Base Remunerado, col P) ponderado por nº de viagens (Base CTEs)
+// ── Fontes: workbook Seara (Anhanguera) — regra do Renan (13/08/2026) ──
+// TODO o remunerado sai de duas colunas: km da Base CTEs (col J, UMA VEZ por
+// CD_VIAGEM_TRANSPORTE) e R$/km da Base Remunerado (col O, ReaisPorKm, por
+// placa+vigência). KmPorLitro/PrecoDiesel não existem mais — a aba foi enxugada.
+//   Km/L Real = ΣKmReal ÷ ΣLitros            (aba Combustível)
+//   Km/L Rem  = ΣKmRem  ÷ ΣLitros            (mesmos litros: o Δ vira km direto)
+//   Impacto   = (KmReal − KmRem) × R$/km(O)  (por placa — ADITIVO: Σ partes = total)
 // R$/L Real  = ΣTotalR$/ΣLitros (aba Combustível)
 const SEARA_ID = '1Rlwc0MZiupQI38gSN8VyBq_zMADgX9R_ZbfygNP-OXE';
 const GID_REM  = 0, GID_CTES = 1672208132, GID_COMB = 1982300845;
 
 // Linhas sintéticas (arrays) posicionadas nestes índices — reaproveita toda a máquina do painel.
-const CL = {vig:0, rem:1, remM:2, real:3, rsLReal:4, ativo:5, proj:6, uni:7, placa:8, modelo:9, tipoVei:10, kmRod:11, litros:12, viagens:13};
+const CL = {vig:0, rem:1, remM:2, real:3, rsLReal:4, ativo:5, proj:6, uni:7, placa:8, modelo:9, tipoVei:10, kmRod:11, litros:12, viagens:13, kmRem:14, rsKm:15};
 function detectCols(){ /* colunas fixas nas linhas sintéticas */ }
 
 const getProj = r => r[CL.proj] ? String(r[CL.proj]).trim() : '';
@@ -513,28 +517,40 @@ async function fetchData(){
   // desta tela vem da aba Combustível. Query removida.
   const [comb,rawVg,brem]=await Promise.all([
     gvz(SEARA_ID,{gid:GID_COMB}),
-    gvz(SEARA_ID,{gid:GID_CTES,tq:'select B, C, D'}),
+    gvz(SEARA_ID,{gid:GID_CTES,tq:'select B, C, D, J'}),
     gvz(SEARA_ID,{gid:GID_REM}),
   ]);
   const vyk=(y,m)=>y+'-'+String(m).padStart(2,'0');
-  // Km rem (não usado aqui, mas mantido p/ paridade) — viagens distintas por placa|vig
-  const seen=new Set(), viag={};
-  rawVg.rows.forEach(r=>{ const b=r[0], p=_placaKey(r[1]), d=parseVig(r[2]); if(b==null||!p||!d)return; if(seen.has(b))return; seen.add(b); const k=p+'|'+vyk(d.getFullYear(),d.getMonth()+1); viag[k]=(viag[k]||0)+1; });
-  // Benchmark remunerado: KmPorLitro(P=15) por placa|vig
+  // KM REMUNERADO por placa|vig: coluna J, UMA VEZ por viagem (col B) — a mesma
+  // viagem gera vários CTEs repetindo o km; somar linha a linha infla ~23×.
+  const seen=new Set(), viag={}, remKm={};
+  rawVg.rows.forEach(r=>{ const b=r[0], p=_placaKey(r[1]), d=parseVig(r[2]), kmv=+r[3]||0;
+    if(b==null||!p||!d)return; if(seen.has(b))return; seen.add(b);
+    const k=p+'|'+vyk(d.getFullYear(),d.getMonth()+1);
+    viag[k]=(viag[k]||0)+1; remKm[k]=(remKm[k]||0)+kmv; });
+  // R$/km REMUNERADO por placa|vig: coluna ReaisPorKm da Base Remunerado, achada
+  // pelo NOME do cabeçalho (a aba já foi reordenada uma vez; índice fixo quebra).
+  const bcols=brem.cols.map(c=>String(c||'').toLowerCase().replace(/\s/g,''));
+  const bIdx=(alvo,naoPode)=>bcols.findIndex(c=>c.includes(alvo)&&(!naoPode||!c.includes(naoPode)));
+  const iVig=Math.max(bIdx('vigencia'),bIdx('vigência'),0),
+        iPlaca=(x=>x>=0?x:3)(bIdx('placa')),
+        iRsKm=(x=>x>=0?x:14)(bIdx('reaisporkm','total'));
   const bench={};
-  brem.rows.forEach(r=>{ const p=_placaKey(r[3]), d=parseVig(r[0]); if(!p||!d)return; bench[p+'|'+vyk(d.getFullYear(),d.getMonth()+1)]={kmL:+r[15]||0,preco:+r[17]||0}; });
+  brem.rows.forEach(r=>{ const p=_placaKey(r[iPlaca]), d=parseVig(r[iVig]); if(!p||!d)return;
+    bench[p+'|'+vyk(d.getFullYear(),d.getMonth()+1)]=+r[iRsKm]||0; });
   // raiz = aba Combustível (real por placa|mês)
   const MES3=['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
   const rows=[];
   comb.rows.forEach(r=>{
     const placa=_placaKey(r[4]); const mi=MES3.indexOf(String(r[5]||'').toLowerCase().slice(0,3)); const y=+r[6];
     const km=+r[10]||0, lit=+r[11]||0; if(!placa||mi<0||!y||km<=0)return;
-    const k=placa+'|'+vyk(y,mi+1); const b=bench[k]||{kmL:0,preco:0};
+    const k=placa+'|'+vyk(y,mi+1);
+    const kmR=remKm[k]||0;
     const tot=+r[13]||0;
     const row=[];
     row[CL.vig]=new Date(y,mi,1);
-    row[CL.rem]=b.kmL;                        // Km/L Rem (benchmark)
-    row[CL.remM]=b.kmL;
+    row[CL.rem]=lit>0&&kmR>0?kmR/lit:0;       // Km/L Rem = km remunerado ÷ litros abastecidos
+    row[CL.remM]=row[CL.rem];
     row[CL.real]=lit>0?km/lit:0;              // Km/L Real da placa
     row[CL.rsLReal]=lit>0?tot/lit:0;          // R$/L Real da placa
     row[CL.ativo]='';
@@ -546,6 +562,8 @@ async function fetchData(){
     row[CL.kmRod]=km;
     row[CL.litros]=lit;
     row[CL.viagens]=viag[k]||0;
+    row[CL.kmRem]=kmR;
+    row[CL.rsKm]=bench[k]||0;                 // ReaisPorKm (col O) da placa na vigência
     rows.push(row);
   });
   return rows;
@@ -599,30 +617,28 @@ function getYtdVigs(f){
   return out;
 }
 
-// ── AGREGAÇÃO ──
+// ── AGREGAÇÃO — regra do Renan (13/08/2026) ──
 function aggRows(rows){
   // Seara:
-  //  Km/L Real = ΣKm / ΣLitros                          (ponderado por litros)
-  //  Km/L Rem  = Σ(KmPorLitro × viagens) / Σviagens     (ponderado por nº de viagens da placa)
-  //  R$/L      = ΣTotalR$ / ΣLitros                      (base p/ valorizar litros economizados)
-  let sumKm=0,sumLitros=0,sumRemV=0,sumV=0,sumRsLxLit=0;
+  //  Km/L Real = ΣKmReal ÷ ΣLitros    (aba Combustível)
+  //  Km/L Rem  = ΣKmRem  ÷ ΣLitros    (Base CTEs col J, dedup por viagem — MESMO
+  //              denominador do Real, então o Δ de Km/L é exatamente o Δ de km)
+  //  Impacto   = Σ (KmReal − KmRem) × ReaisPorKm(O) da placa
+  //              ADITIVO por construção: a soma das unidades É o total.
+  let sumKm=0,sumLitros=0,sumKmRem=0,sumRsLxLit=0,sumImp=0,nImp=0;
   rows.forEach(r=>{
-    const km=+(r[CL.kmRod]||0),lit=+(r[CL.litros]||0),rem=+(r[CL.rem]||0),rsL=+(r[CL.rsLReal]||0),vg=+(r[CL.viagens]||0);
-    sumKm+=km;sumLitros+=lit;
-    if(rem>0&&vg>0){sumRemV+=rem*vg;sumV+=vg;}
+    const km=+(r[CL.kmRod]||0),lit=+(r[CL.litros]||0),kmR=+(r[CL.kmRem]||0),rsL=+(r[CL.rsLReal]||0),o=+(r[CL.rsKm]||0);
+    sumKm+=km;sumLitros+=lit;sumKmRem+=kmR;
     if(rsL>0&&lit>0){sumRsLxLit+=rsL*lit;}
+    if(km>0&&kmR>0&&o>0){sumImp+=(km-kmR)*o;nImp++;}
   });
-  const remAvg=sumV>0?sumRemV/sumV:null;
+  const remAvg=sumLitros>0&&sumKmRem>0?sumKmRem/sumLitros:null;
   const realWt=sumLitros>0?sumKm/sumLitros:null;
   const rsLAvg=sumLitros>0?sumRsLxLit/sumLitros:null;
-  return{remAvg,realWt,sumKm,sumLitros,rsLAvg};
+  return{remAvg,realWt,sumKm,sumLitros,rsLAvg,sumImp,nImp};
 }
 function calcImpacto(agg){
-  const{remAvg,realWt,sumKm,rsLAvg}=agg;
-  if(!remAvg||!realWt||!rsLAvg)return null;
-  // liters saved = km/rem - km/real (positive = saved, negative = extra consumed)
-  const litrosSaved=sumKm/remAvg-sumKm/realWt;
-  return litrosSaved*rsLAvg;
+  return (agg&&agg.nImp>0&&isFinite(agg.sumImp))?agg.sumImp:null;
 }
 function aggByKey(rows,keyFn){
   const m={};
@@ -804,10 +820,10 @@ function renderVeiTable(active,ytd){
   const ytdByPlaca=Object.fromEntries(aggByKey(ytd||[],placaKey).map(({k,agg})=>[k,agg]));
   veiCache=active.map(r=>{
     const rem=+(r[CL.rem]||0),remM=+(r[CL.remM]||0),real=+(r[CL.real]||0);
-    const km=+(r[CL.kmRod]||0),rsL=+(r[CL.rsLReal]||0);
+    const km=+(r[CL.kmRod]||0),kmR=+(r[CL.kmRem]||0),o=+(r[CL.rsKm]||0);
     const delta=real-rem,deltaP=rem?delta/Math.abs(rem)*100:null;
-    const litrosSaved=km>0&&rem>0&&real>0?km/rem-km/real:null;
-    const imp=litrosSaved!=null?litrosSaved*rsL:null;
+    // impacto da placa = Δ km × ReaisPorKm(O) — mesma conta do agregado (aditiva)
+    const imp=(km>0&&kmR>0&&o>0)?(km-kmR)*o:null;
     const placa=r[CL.placa]?String(r[CL.placa]).trim():'—';
     const yagg=ytdByPlaca[placa];
     let deltaY=null,deltaPY=null,impY=null;
