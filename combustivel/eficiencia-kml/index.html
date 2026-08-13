@@ -930,8 +930,8 @@ function buildImpactoExport(active){
     base.push([_vigTxt(r[CL.vig]), r[CL.proj]||'', r[CL.placa]||'', r[CL.modelo]||'', r[CL.tipoVei]||'',
       _round(km,0), _round(lit,0), rem?_round(rem,2):'', remM?_round(remM,2):'', real?_round(real,2):'', rsLimp?_round(rsLimp,4):'', rsL?_round(rsL,4):'', _round(impMed,2), _round(impMod,2)]);
   });
-  // o número do painel: o ▲ da linha virado em litros e depois em R$
-  const A=aggRows(active||[]); const impPainel=calcImpacto(A);
+  // o número do painel: soma das unidades (cada uma com o ▲ dela em litros × R$/L)
+  const A=aggRows(active||[]); const impPainel=impactoSomaUni(active||[]);
   const memoria=[
     ['MEMÓRIA DE CÁLCULO — IMPACTO (Eficiência Km/L)'],[],
     ['O impacto vem do ▲ da linha — o mesmo REM e o mesmo REAL que a tela mostra:'],
@@ -948,7 +948,9 @@ function buildImpactoExport(active){
     ['  litros do remunerado (KM ÷ REM):', A.remAvg?_round(A.sumKm/A.remAvg,0):''],
     ['  litros do realizado (Σ abastecido):', _round(A.sumLitros,0)],
     ['  R$/L Remunerado (ponderado pelo km):', A.rsLRem?_round(A.rsLRem,4):''],
-    ['  IMPACTO (R$):', impPainel!=null?_round(impPainel,2):''],[],
+    ['  IMPACTO do painel (R$):', impPainel!=null?_round(impPainel,2):''],
+    ['  (soma das UNIDADES — cada uma com o seu REM; por isso pode diferir da'],
+    ['   conta feita direto no agregado acima)'],[],
     ['Preço:','R$/L Remunerado (base R$/L, por projeto/vigência), ponderado pelo km rodado. Fallback por linha = R$/L Realizado quando não há preço remunerado. O preço remunerado isola o efeito EFICIÊNCIA do efeito PREÇO.'],[],
     ['Linhas na base:',(active||[]).length],
     ['Linhas com preço remunerado:',nRem],
@@ -977,6 +979,15 @@ function aggByKey(rows,keyFn){
   });
   return Object.entries(m).map(([k,v])=>({k,agg:aggRows(v.rows)}));
 }
+// IMPACTO ACUMULADO = SOMA DAS UNIDADES (Renan, 13/08/2026).
+// Cada unidade tem o impacto do SEU ▲ (a régua dela); o total do painel é a
+// soma dessas parcelas — não o ▲ de um agregado gigante, cujo REM médio muda
+// quando os projetos se misturam e descolava o total da soma das partes.
+function impactoSomaUni(rows){
+  let s=0,n=0;
+  aggByKey(rows,r=>getUni(r)||'—').forEach(({agg})=>{ const i=calcImpacto(agg); if(i!=null){s+=i;n++;} });
+  return n>0?s:null;
+}
 
 // ── HERO ──
 function renderHero(active,ytd){
@@ -984,7 +995,7 @@ function renderHero(active,ytd){
   const{remAvg:rem,realWt:real,rsLAvg}=a;
   const delta=(rem!=null&&real!=null)?real-rem:null;
   const deltaP=(delta!=null&&rem)?delta/Math.abs(rem)*100:null;
-  const imp=calcImpacto(a);
+  const imp=impactoSomaUni(active);
 
   set('h-real',real!=null?kml(real):'—');
   set('h-rem',rem!=null?kml(rem):'—');
@@ -996,7 +1007,7 @@ function renderHero(active,ytd){
   const{remAvg:remY,realWt:realY}=ay;
   const deltaY=(remY!=null&&realY!=null)?realY-remY:null;
   const deltaYP=(deltaY!=null&&remY)?deltaY/Math.abs(remY)*100:null;
-  const impY=calcImpacto(ay);
+  const impY=impactoSomaUni(ytd);
   const eYv=document.getElementById('h-ytd-v'),eYp=document.getElementById('h-ytd-p'),eYimp=document.getElementById('h-ytd-imp');
   if(eYv){eYv.textContent=deltaY!=null?kmlD(deltaY):'—';colI(eYv,deltaY<0);}
   if(eYp){eYp.textContent=pct(deltaYP);colI(eYp,deltaYP<0);}
@@ -1116,12 +1127,14 @@ function renderTable(active,ytd){
     html+=`<tr><td class="conta">${k}</td><td class="num">${kml(rem)}</td><td class="num">${kml(real)}</td><td class="num ${bad?'cr':'cg'}">${kmlD(delta)}</td><td class="num ${bad?'cr-t':'cg-t'}">${pctInt(deltaP)}</td><td class="num imp-cell" style="color:${imp<0?'var(--red)':'var(--green)'}">${imp!=null?fmtBrlD(imp):'—'}</td><td class="num sep-l ${badY?'cr':'cg'}">${deltaY!=null?kmlD(deltaY):'—'}</td><td class="num ${badY?'cr-t':'cg-t'}">${deltaPY!=null?pctInt(deltaPY):'—'}</td><td class="num imp-cell" style="color:${impY<0?'var(--red)':'var(--green)'}">${impY!=null?fmtBrlD(impY):'—'}</td></tr>`;
   });
 
-  // Totais
+  // Totais — REM/REAL/▲ continuam do agregado; o IMPACTO é a SOMA das linhas
+  // exibidas (cada unidade/projeto com a régua dela), igual ao hero.
+  const somaImp=arr=>{let s=0,n=0;arr.forEach(v=>{if(v!=null){s+=v;n++;}});return n>0?s:null;};
   const totA=aggRows(active),totY=aggRows(ytd);
   const{remAvg:tRem,realWt:tReal}=totA;
-  const tD=(tRem!=null&&tReal!=null)?tReal-tRem:null,tDP=(tD!=null&&tRem)?tD/Math.abs(tRem)*100:null,tImp=calcImpacto(totA);
+  const tD=(tRem!=null&&tReal!=null)?tReal-tRem:null,tDP=(tD!=null&&tRem)?tD/Math.abs(tRem)*100:null,tImp=somaImp(items.map(x=>x.imp));
   const{remAvg:tRemY,realWt:tRealY}=totY;
-  const tDY=(tRemY!=null&&tRealY!=null)?tRealY-tRemY:null,tDPY=(tDY!=null&&tRemY)?tDY/Math.abs(tRemY)*100:null,tImpY=calcImpacto(totY);
+  const tDY=(tRemY!=null&&tRealY!=null)?tRealY-tRemY:null,tDPY=(tDY!=null&&tRemY)?tDY/Math.abs(tRemY)*100:null,tImpY=somaImp(items.map(x=>x.impY));
   const bT=tD!=null&&tD<0,bTY=tDY!=null&&tDY<0;
   html+=`<tr class="total"><td class="conta">Total</td><td class="num">${kml(tRem)}</td><td class="num">${kml(tReal)}</td><td class="num ${bT?'cr':'cg'}">${tD!=null?kmlD(tD):'—'}</td><td class="num ${bT?'cr-t':'cg-t'}">${pctInt(tDP)}</td><td class="num imp-cell" style="color:${tImp<0?'var(--red)':'var(--green)'}">${tImp!=null?fmtBrlD(tImp):'—'}</td><td class="num sep-l ${bTY?'cr':'cg'}">${tDY!=null?kmlD(tDY):'—'}</td><td class="num ${bTY?'cr-t':'cg-t'}">${pctInt(tDPY)}</td><td class="num imp-cell" style="color:${tImpY<0?'var(--red)':'var(--green)'}">${tImpY!=null?fmtBrlD(tImpY):'—'}</td></tr>`;
   document.getElementById('body-kml').innerHTML=html;
