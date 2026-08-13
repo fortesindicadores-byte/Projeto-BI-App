@@ -831,6 +831,10 @@ function detKmlSrc(cols){ const fi=_fiFactory(cols); return {vig:0, proj:fi('pro
 const _nk = s => String(s||'').toUpperCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/\s+/g,' ').trim();
 const _nf = s => { let x=String(s||''); const i=x.indexOf(':'); if(i>=0) x=x.slice(i+1); return _nk(x); };
 const _ym  = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;   // p/ lookup R$/L
+// A árvore começa em 2026 (Renan, 13/08/2026): antes disso não há dado de
+// consumo de combustível que sustente a decomposição. Para abrir outro ano,
+// basta mudar este número.
+const ANO_MIN = 2026;
 const vigBR = d => `${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()}`;   // formato dos filtros
 // 'MM/YYYY' em ordem de CALENDÁRIO. O .sort() cru ordena como texto e joga
 // 07/2023, 07/2024, 07/2025, 07/2026, 08/2021… — mês antes do ano.
@@ -925,6 +929,7 @@ async function fetchAll(){
   S_DP.forEach(r=>{ if((+r[DP.kmReal]||0)===0&&(+r[DP.kmRem]||0)===0)return; const d=kParseVig(r[DP.vig]); if(d)add(vigBR(d),String(r[DP.proj]||'')); });
   S_KM.forEach(r=>{ if((+r[KM.kmRod]||0)===0&&(+r[KM.litros]||0)===0)return; const d=kParseVig(r[KM.vig]); if(d)add(vigBR(d),String(r[KM.proj]||'')); });
   if(VIG_CONS.size) allRows=allRows.filter(r=>VIG_CONS.has(r.vigencia));
+  allRows=allRows.filter(r=>+String(r.vigencia).slice(-4)>=ANO_MIN);
 
   const vigs=[...new Set(allRows.map(r=>r.vigencia))].sort(cmpVigBR);
   const anos=[...new Set(allRows.map(r=>r.vigencia.slice(-4)))].sort().reverse();
