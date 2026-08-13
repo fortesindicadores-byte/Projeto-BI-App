@@ -112,7 +112,7 @@ function analisa(rows,CL,LK){
   const litRemNovo=remAvg>0?kmAll/remAvg:0;
   const passo1=(litRemCov-litRealCov)*pAvg;                      // só troca o preço
   const kmCov=kmAll-kmOut;
-  const passo2=(remAvg>0?kmCov/remAvg:0 - litRealCov)*pAvg;      // troca a régua do rem
+  const passo2=((remAvg>0?kmCov/remAvg:0) - litRealCov)*pAvg;    // troca a régua do rem
   const novo=(litRemNovo-litAll)*pAvg;                           // entra a cobertura
   return { kmAll, litAll, remAvg, realWt, pAvg, oldRs, passo1, passo2, novo,
     litRemCov, litRealCov, litRemNovo, nCov, nOut, kmOut, litOut, nPrecoRem, nFallback,
