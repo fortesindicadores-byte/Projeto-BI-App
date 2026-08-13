@@ -790,6 +790,21 @@ Workbook `1Rlwc0MZiupQI38gSN8VyBq_zMADgX9R_ZbfygNP-OXE`, abas no rodapé: **Base
 
 **Achado em aberto (12/08/2026):** em **06/2026** o preço do diesel troca de lugar entre as duas bases — o da Base Remunerado cai de ~2,00 para 1,665 e o da CTE sobe de ~1,70 para 2,010, cada um indo exatamente para o nível do outro. Não afeta o painel (usa a coluna O), mas tem cara de preenchimento invertido no mês. Pendente de conferência do Renan.
 
+## Automação do Combustível — contextualização em andamento (13/08/2026)
+
+O Renan quer automatizar o combustível **em partes**, ele contextualizando aba a aba (mesmo método do robô Ginfo). **Nada implementado — aguardar ele mandar fazer.**
+
+**Parte 1 · Km/L (alimenta `/combustivel/eficiencia-kml/`).** A aba `Km/L` fica no workbook **`1ZZdvG_RK5cTBLdPl3TWCbNeqw-Y4fTYwWsQV4w-e__A`** (é o `KML_ID` que a Árvore de Combustível e o painel de Eficiência já leem; nome do arquivo: **Consumo**). Abas no rodapé: `Km/L · R$/L · De-Para · Base CO² · Base Remunerado Modelo`.
+
+A aba `Km/L` já vem **consolidada** — uma linha por recorte, com três blocos de colunas:
+- **R$/km** — Remunerado · Realizado · Δ
+- **Km/L** — Remunerado Médio · Remunerado Modelo · Realizado · Δ
+- **R$/L** — Remunerado · Realizado · Δ
+
+Recorte das linhas: **Operação · Empresa · Projeto · Unidade**, mais uma coluna **`Ativo`** com **três** valores — `VERDADEIRO`, `FALSO` e **`Fora FT`** (não é booleano; não tratar como tal).
+
+**O ponto do Renan:** *"tenho essa aba que vem de uma planilha complexa"* — ou seja, o que o painel lê hoje é o **produto final** de uma cadeia de cálculo que mora fora daqui. Automatizar o Km/L significa reproduzir essa cadeia (ou achar a fonte a montante), não só copiar a aba consolidada. Esperar o Renan abrir a planilha de origem antes de propor desenho.
+
 ## Próximas automações — Frota de Elite e RPM (anotado 04/08/2026, aguardando detalhes)
 
 O Renan vai automatizar as bases **Frota de Elite** (programa-reconhecimento, hoje workbook `1DXmjzj2KRrTdQxmvXRclGxhBeDMwoIoLvORqbh3GG6M` via GerotBase) e **RPM** (Base RPM do Gerot que alimenta o fca-preenchimento). Ele estava decidindo por qual começar porque **um indicador de um aparece no outro** (sobreposição entre as duas bases). Ele vai explicar aba a aba, como fez no robô Ginfo — ir salvando o mapeamento aqui conforme ele mostrar. Nada implementado ainda.
