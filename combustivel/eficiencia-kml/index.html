@@ -871,17 +871,16 @@ function aggRows(rows){
   //   projeto pelo seu KM RODADO do projeto (não pela placa).
   // remMode='modelo': coluna Km/L Rem Modelo (col remM) ponderada pelo KM
   //   RODADO DA PLACA (ex.: placa A rem 2·100km e B rem 3·900km → 2,90).
-  let sumKm=0,sumLitros=0,sumRsL=0,sumRemMKm=0,sumKmRem=0,sumImp=0;
+  let sumKm=0,sumLitros=0,sumRsL=0,sumRemMKm=0,sumKmRem=0,sumPKm=0,sumKmP=0;
   const proj={};
   rows.forEach(r=>{
     const km=+(r[CL.kmRod]||0),lit=+(r[CL.litros]||0),rem=+(r[CL.rem]||0),remM=+(r[CL.remM]||0),rsL=+(r[CL.rsLReal]||0),real=+(r[CL.real]||0);
     sumKm+=km;sumLitros+=lit;sumRsL+=rsL;
     if(remM>0&&km>0){sumRemMKm+=remM*km;sumKmRem+=km;}   // modelo: km da placa
-    // impacto ADITIVO por linha (subtotais somam o total): (km/rem − km/real)·R$/L REMUNERADO
-    // Preço remunerado isola o efeito EFICIÊNCIA do efeito PREÇO (fallback: R$/L realizado).
-    const rb=remMode==='modelo'?remM:rem;
+    // preço que converte litro em R$ — o REMUNERADO, ponderado pelo km rodado.
+    // Remunerado (e não realizado) para isolar o efeito EFICIÊNCIA do efeito PREÇO.
     const pRem=remPriceFor(r), rsLimp=(pRem!=null&&pRem>0)?pRem:rsL;
-    if(km>0&&rb>0&&real>0)sumImp+=(km/rb-km/real)*rsLimp;
+    if(km>0&&rsLimp>0){sumPKm+=rsLimp*km;sumKmP+=km;}
     const p=getProj(r)||'—';
     if(!proj[p])proj[p]={sumRem:0,cnt:0,km:0};
     if(rem>0){proj[p].sumRem+=rem;proj[p].cnt++;}         // média burra no projeto
@@ -895,11 +894,25 @@ function aggRows(rows){
   const remAvg=remMode==='modelo'?remModelo:remMedio;
   const realWt=sumLitros>0?sumKm/sumLitros:null;
   const rsLAvg=rows.length>0?sumRsL/rows.length:null;
-  return{remAvg,realWt,sumKm,sumLitros,rsLAvg,sumImp};
+  const rsLRem=sumKmP>0?sumPKm/sumKmP:null;
+  return{remAvg,realWt,sumKm,sumLitros,rsLAvg,rsLRem};
 }
-// impacto = soma dos impactos por linha (aditivo: ROTA + VAN = Total)
+// IMPACTO = o próprio ▲ da linha, virado em litros e depois em R$.
+//
+//   litros do remunerado = KM ÷ Km/L REM      (o REM mostrado na linha)
+//   litros do realizado  = KM ÷ Km/L REAL     (= os litros de fato abastecidos)
+//   impacto              = (litros rem − litros real) × R$/L remunerado
+//
+// Por vir dos MESMOS dois números que a tela mostra, o sinal do impacto sempre
+// acompanha o sinal do ▲: real melhor que o remunerado = economia (verde),
+// pior = perda (vermelho). Antes o impacto era a soma placa a placa e podia
+// sair com o sinal contrário ao ▲ da linha, porque o REM do agregado é média
+// simples por projeto e não a média ponderada que a soma das placas embute.
 function calcImpacto(agg){
-  return (agg&&isFinite(agg.sumImp))?agg.sumImp:null;
+  if(!agg) return null;
+  const {remAvg,realWt,sumKm,rsLRem}=agg;
+  if(!(remAvg>0)||!(realWt>0)||!(sumKm>0)||!(rsLRem>0)) return null;
+  return (sumKm/remAvg - sumKm/realWt) * rsLRem;
 }
 
 // ── EXPORT: base completa (linhas filtradas) + coluna IMPACTO + aba Memória de cálculo ──
@@ -917,21 +930,37 @@ function buildImpactoExport(active){
     base.push([_vigTxt(r[CL.vig]), r[CL.proj]||'', r[CL.placa]||'', r[CL.modelo]||'', r[CL.tipoVei]||'',
       _round(km,0), _round(lit,0), rem?_round(rem,2):'', remM?_round(remM,2):'', real?_round(real,2):'', rsLimp?_round(rsLimp,4):'', rsL?_round(rsL,4):'', _round(impMed,2), _round(impMod,2)]);
   });
+  // o número do painel: o ▲ da linha virado em litros e depois em R$
+  const A=aggRows(active||[]); const impPainel=calcImpacto(A);
   const memoria=[
     ['MEMÓRIA DE CÁLCULO — IMPACTO (Eficiência Km/L)'],[],
-    ['Fórmula (por linha, aditiva — subtotais somam o total):'],
-    ['IMPACTO = ( KM ÷ Km/L Remunerado − KM ÷ Km/L Realizado ) × R$/L Remunerado'],[],
-    ['Duas visões de benchmark (Km/L Remunerado):'],
-    ['  · vs Média Geral  → coluna Km/L Rem Médio (média das placas do projeto)'],
-    ['  · vs Média Modelo → coluna Km/L Rem Modelo (média do modelo)'],[],
-    ['Interpretação:','os litros que a eficiência real gastou a mais/menos vs. o remunerado, valorizados no preço REMUNERADO (isola o efeito eficiência do efeito preço).'],
-    ['Preço:','R$/L Remunerado (base R$/L, por projeto/vigência). Fallback = R$/L Realizado quando não há preço remunerado.'],[],
+    ['O impacto vem do ▲ da linha — o mesmo REM e o mesmo REAL que a tela mostra:'],
+    ['  litros do remunerado = KM ÷ Km/L REM'],
+    ['  litros do realizado  = KM ÷ Km/L REAL'],
+    ['  IMPACTO = ( litros do remunerado − litros do realizado ) × R$/L Remunerado'],[],
+    ['Por isso o sinal do impacto sempre acompanha o sinal do ▲:'],
+    ['  real melhor que o remunerado = economia (verde) · pior = perda (vermelho).'],[],
+    ['Conta da visão ativa (', (remMode==='modelo'?'Km/L Rem Modelo':'Km/L Rem Médio'), '):'],
+    ['  KM rodado:', _round(A.sumKm,0)],
+    ['  Km/L REM:', A.remAvg?_round(A.remAvg,4):''],
+    ['  Km/L REAL (Σkm ÷ Σlitros):', A.realWt?_round(A.realWt,4):''],
+    ['  ▲ (real − rem):', (A.realWt!=null&&A.remAvg!=null)?_round(A.realWt-A.remAvg,4):''],
+    ['  litros do remunerado (KM ÷ REM):', A.remAvg?_round(A.sumKm/A.remAvg,0):''],
+    ['  litros do realizado (Σ abastecido):', _round(A.sumLitros,0)],
+    ['  R$/L Remunerado (ponderado pelo km):', A.rsLRem?_round(A.rsLRem,4):''],
+    ['  IMPACTO (R$):', impPainel!=null?_round(impPainel,2):''],[],
+    ['Preço:','R$/L Remunerado (base R$/L, por projeto/vigência), ponderado pelo km rodado. Fallback por linha = R$/L Realizado quando não há preço remunerado. O preço remunerado isola o efeito EFICIÊNCIA do efeito PREÇO.'],[],
     ['Linhas na base:',(active||[]).length],
     ['Linhas com preço remunerado:',nRem],
     ['Linhas com fallback (preço realizado):',nFb],[],
-    ['IMPACTO TOTAL vs Média Geral (R$):',_round(sumMed,2)],
-    ['IMPACTO TOTAL vs Média Modelo (R$):',_round(sumMod,2)],
-    ['(o total da visão ativa no painel bate com o card Impacto)'],
+    ['As duas colunas de IMPACTO da aba anterior são o mesmo cálculo PLACA A PLACA,'],
+    ['com o benchmark de cada uma — servem para achar o veículo, não para somar:'],
+    ['  · vs Média Geral  → coluna Km/L Rem Médio'],
+    ['  · vs Média Modelo → coluna Km/L Rem Modelo'],
+    ['Soma placa a placa vs Média Geral (R$):',_round(sumMed,2)],
+    ['Soma placa a placa vs Média Modelo (R$):',_round(sumMod,2)],
+    ['A soma das placas NÃO precisa bater com o impacto do painel: o REM do agregado'],
+    ['é média simples por projeto, e não a média que a soma das placas embute.'],
   ];
   return { nome:'Impacto Km-L', base, memoria };
 }
@@ -1121,10 +1150,13 @@ function renderVeiTable(active,ytd){
     const rem=+(r[CL.rem]||0),remM=+(r[CL.remM]||0),real=+(r[CL.real]||0);
     const km=+(r[CL.kmRod]||0),rsL=+(r[CL.rsLReal]||0);
     const delta=real-rem,deltaP=rem?delta/Math.abs(rem)*100:null;
-    // impacto por veículo no mesmo benchmark do resumo (médio/modelo) → soma bate com o total
+    // mesmo cálculo do resumo, agora na placa: o ▲ dela em litros × R$/L remunerado.
+    // Serve para ACHAR o veículo — a soma das placas não precisa dar o total da
+    // unidade, porque lá o REM é média simples por projeto (ver memória de cálculo).
     const rb=remMode==='modelo'?remM:rem;
+    const pRem=remPriceFor(r), rsLimp=(pRem!=null&&pRem>0)?pRem:rsL;
     const litrosSaved=km>0&&rb>0&&real>0?km/rb-km/real:null;
-    const imp=litrosSaved!=null?litrosSaved*rsL:null;
+    const imp=litrosSaved!=null?litrosSaved*rsLimp:null;
     const placa=r[CL.placa]?String(r[CL.placa]).trim():'—';
     const yagg=ytdByPlaca[placa];
     let deltaY=null,deltaPY=null,impY=null;
