@@ -65,6 +65,7 @@ body.light-mode .mfoot{border-top-color:rgba(0,0,0,.10);}
 body.light-mode .mcancel{border-color:rgba(0,0,0,.16);}
 .mdel{background:transparent;border-color:rgba(255,102,102,.35);color:var(--red);}
 .mdel:hover{background:rgba(255,102,102,.12);}
+.mctx{grid-template-columns:repeat(2,minmax(0,1fr));padding-bottom:12px;margin-bottom:2px;border-bottom:1px solid var(--border);}
 @media(max-width:640px){ .mgrid,.mgrid-4{grid-template-columns:1fr 1fr;} .mbg{padding:16px 10px;} }
 
 .brand{flex:1;min-width:0;order:1;margin-right:16px;}.brand h1{font-size:18px;font-weight:800;color:var(--orange);line-height:1.1;}.brand p{font-size:10px;color:var(--text2);margin-top:2px;font-style:italic;}
@@ -290,6 +291,12 @@ body.light-mode .lf input,body.light-mode .lf select{background:#fff;border-colo
       <button class="mx" onclick="fecharLanc()" title="Fechar" aria-label="Fechar">×</button>
     </div>
     <div class="mbody">
+      <!-- só aparece na visão agregada: com várias unidades/vigências no filtro,
+           a caixa precisa dizer a QUAL delas o lançamento pertence -->
+      <div class="mgrid mctx" id="m-ctx" style="display:none">
+        <label class="mf"><span>Unidade</span><select id="f-unidade" onchange="ctxUnidadeMudou()"></select></label>
+        <label class="mf"><span>Vigência</span><select id="f-vigencia"></select></label>
+      </div>
       <div class="mgrid">
         <label class="mf"><span>Data</span><input type="date" id="f-data"></label>
         <label class="mf"><span>Projeto</span><select id="f-projeto"></select></label>
@@ -568,6 +575,14 @@ function projetosDaUnidade(){
   (FROTA.rows||[]).forEach(r=>{const nv3=m.nv3>=0?String(r[m.nv3]||''):'';if(units.some(u=>unitMatchNv3(u,nv3))){const p=getNv3Prefix(nv3).toUpperCase();if(p&&!PROJETOS_EXCLUIR.has(p))s.add(p);}});
   return s.size?[...s].sort():PROJETOS;
 }
+// projetos de UMA unidade — a caixa usa quando a visão é agregada e o usuário
+// escolhe a unidade ali dentro (o filtro, nesse caso, traz a união de todas)
+function projetosDe(unit){
+  if(!FROTA) return PROJETOS;
+  const m=mapTab(FROTA.header); const s=new Set();
+  (FROTA.rows||[]).forEach(r=>{const nv3=m.nv3>=0?String(r[m.nv3]||''):'';if(unitMatchNv3(unit,nv3)){const p=getNv3Prefix(nv3).toUpperCase();if(p&&!PROJETOS_EXCLUIR.has(p))s.add(p);}});
+  return s.size?[...s].sort():PROJETOS;
+}
 function refreshProjetos(){
   UNIT_PROJETOS=projetosDaUnidade();
   [...selProj].forEach(p=>{ if(!UNIT_PROJETOS.includes(p)) selProj.delete(p); });   // remove projetos que sumiram
@@ -726,25 +741,6 @@ function renderAcomp(){
   $('tbl-conta').innerHTML=h;
 }
 function brDate(iso){if(!iso)return '—';const [y,m,d]=iso.split('-');return `${d}/${m}/${y.slice(2)}`;}
-// linha só-leitura (visão agregada de várias unidades/meses)
-function lancRowRO(r){
-  const uni=curUnits().length>1?`<span class="ro-uni">${esc(r.unidade||'')}</span>`:'';
-  return `<tr data-id="${esc(r.id||'')}"${counts(r)?'':' class="pend"'}>
-    <td>${brDate(r.data)}</td>
-    <td>${uni}${esc(r.projeto||'')}</td>
-    <td>${esc(r.equipamento||'')}</td>
-    <td>${esc(r.fornecedor||'')}</td>
-    <td>${esc(r.conta||'')}</td>
-    <td>${esc(r.grupo||'')}</td>
-    <td>${esc(r.descricao||'')}</td>
-    <td class="num">${r.valor?fmt(r.valor):D}</td>
-    <td>${esc(r.rc||'')}</td>
-    <td class="num">${aprvHTML(r)}</td>
-    <td>${esc(r.oc||'')}</td>
-    <td>${esc(r.nf||'')}</td>
-    <td></td>
-  </tr>`;
-}
 // ══════════════════════════════════════════════════════════════
 // VISÃO TABELA: a linha não edita — ela ABRE o lançamento numa caixa
 // numa caixa, como no Planner. A caixa também lança custo novo.
@@ -762,9 +758,12 @@ function setVistaLanc(v){
 // linha só de leitura, clicável — mesmas colunas da visão de edição
 function lancRowBox(r){
   const pend=!counts(r);
+  // na visão agregada a linha precisa dizer de qual unidade/mês ela é
+  const ctx=[curUnits().length>1?r.unidade:'', curVigs().length>1?vigLabel(r.vigencia):''].filter(Boolean).join(' · ');
+  const tag=ctx?`<span class="ro-uni">${esc(ctx)}</span>`:'';
   return `<tr class="clicavel${pend?' pend':''}" data-id="${r.id||''}" onclick="abrirLanc('${r.id||''}')" title="Clique para abrir">
     <td>${esc(dataBR(r.data))}</td>
-    <td>${esc(r.projeto||'—')}</td>
+    <td>${tag}${esc(r.projeto||'—')}</td>
     <td>${esc(r.equipamento||'—')}</td>
     <td>${esc(r.fornecedor||'—')}</td>
     <td>${esc(r.conta||'—')}</td>
@@ -787,7 +786,19 @@ function abrirLanc(id){
   const hoje=new Date(), iso=hoje.getFullYear()+'-'+String(hoje.getMonth()+1).padStart(2,'0')+'-'+String(hoje.getDate()).padStart(2,'0');
   const d = r || {data:iso, projeto:(UNIT_PROJETOS[0]||''), conta:(CONTAS['Manutenção']||[])[0]||''};
   $('mTit').textContent = r ? 'Editar lançamento' : 'Novo lançamento';
-  $('f-projeto').innerHTML = selOpts(UNIT_PROJETOS, d.projeto||UNIT_PROJETOS[0]||'');
+  // visão agregada: a unidade e a vigência do lançamento se escolhem aqui
+  // (no filtro elas são várias, e o payload não pode chutar a primeira)
+  const ctx=$('m-ctx'), agreg=!singleCtx();
+  ctx.style.display = agreg ? '' : 'none';
+  if(agreg){
+    const uni = (r && r.unidade) || curUnits()[0];
+    $('f-unidade').innerHTML  = selOpts(ALLOWED, ALLOWED.includes(uni)?uni:(curUnits()[0]||ALLOWED[0]));
+    const vig  = (r && r.vigencia) || curVigs()[0];
+    const vigs = VIG_OPTS.includes(vig) ? VIG_OPTS : [vig, ...VIG_OPTS];   // vigência antiga não some da caixa
+    $('f-vigencia').innerHTML = vigs.map(v=>`<option value="${esc(v)}"${v===vig?' selected':''}>${esc(vigLabel(v))}</option>`).join('');
+  }
+  const projs = agreg ? projetosDe($('f-unidade').value) : UNIT_PROJETOS;
+  $('f-projeto').innerHTML = selOpts(projs, d.projeto||projs[0]||'');
   $('f-conta').innerHTML   = selOpts(CONTAS['Manutenção'], d.conta||CONTAS['Manutenção'][0]);
   $('f-data').value        = d.data ? String(d.data).slice(0,10) : '';
   $('f-equipamento').value = d.equipamento||'';
@@ -810,6 +821,12 @@ function abrirLanc(id){
   $('mbg').classList.add('open');
   setTimeout(()=>{ const f=$('f-equipamento'); if(f && !f.disabled) f.focus(); }, 30);
 }
+// trocar a unidade na caixa troca a lista de projetos (cada unidade tem os seus)
+function ctxUnidadeMudou(){
+  const sel=$('f-projeto'), atual=sel.value;
+  const projs=projetosDe($('f-unidade').value);
+  sel.innerHTML = selOpts(projs, projs.includes(atual)?atual:(projs[0]||''));
+}
 function fecharLanc(){ $('mbg').classList.remove('open'); LANC_ABERTO=null; }
 document.addEventListener('keydown', e=>{ if(e.key==='Escape' && $('mbg').classList.contains('open')) fecharLanc(); });
 
@@ -817,7 +834,12 @@ async function salvarLancModal(){
   if(!sb) return;
   const v=k=>{ const e=$(k); return e?e.value:''; };
   const valor=parseValor(v('f-valor'));
-  const payload={unidade:curUnits()[0],vigencia:curVigs()[0],pacote:'Manutenção',
+  // na visão agregada quem manda são os campos da caixa; no contexto único,
+  // o próprio filtro. Editar um lançamento nunca pode movê-lo de unidade por
+  // acidente — por isso a caixa mostra a unidade dele, não a primeira do filtro.
+  const agreg=$('m-ctx').style.display!=='none';
+  const payload={unidade: agreg?v('f-unidade'):curUnits()[0],
+    vigencia: agreg?v('f-vigencia'):curVigs()[0], pacote:'Manutenção',
     data:v('f-data')||null, projeto:v('f-projeto'),
     equipamento:v('f-equipamento').trim().toUpperCase(), fornecedor:v('f-fornecedor').trim().toUpperCase(),
     rc:v('f-rc').trim(), oc:v('f-oc').trim(), nf:v('f-nf').trim(),
@@ -846,33 +868,30 @@ async function excluirLancModal(){
 
 function renderLanc(rows){
   const single=singleCtx();
-  const caixa = single && VISTA_LANC==='caixa';
+  // Editar na LINHA exige contexto único: os campos da linha não dizem unidade
+  // nem vigência. A CAIXA diz — por isso a visão agregada agora também edita,
+  // e é ela que fica quando há várias unidades/meses no filtro.
+  const caixa = !single || VISTA_LANC==='caixa';
   const vt=$('vtoggle'); if(vt){ vt.style.display=single?'':'none';
     vt.querySelectorAll('button').forEach(b=>b.classList.toggle('on', b.dataset.v===VISTA_LANC)); }
   const addBtn=$('add-lanc-btn');
-  if(addBtn){ addBtn.style.display=single?'':'none';
+  if(addBtn){ addBtn.style.display='';
     addBtn.textContent = caixa ? '+ lançar custo' : '+ adicionar lançamento';
     addBtn.onclick = caixa ? ()=>abrirLanc('') : addLancRow; }
   $('tbl-lanc').classList.toggle('box', caixa);
+  const th=`<thead><tr><th class="lft">Data</th><th class="lft">Projeto</th><th class="lft">Equipamento</th><th class="lft">Fornecedor</th><th class="lft">Conta</th><th class="lft">Grupo</th><th class="lft">Descrição</th><th>Valor</th><th class="lft">RC</th><th title="Aprovação do coordenador">OK</th><th class="lft">OC</th><th class="lft">NF</th><th></th></tr></thead><tbody>`;
+  let h=th;
   if(caixa){
-    $('lanc-sub').textContent=rows.length+' lançamento(s) · clique na linha para abrir o custo · botão direito → exportar Excel';
-    let h=`<thead><tr><th class="lft">Data</th><th class="lft">Projeto</th><th class="lft">Equipamento</th><th class="lft">Fornecedor</th><th class="lft">Conta</th><th class="lft">Grupo</th><th class="lft">Descrição</th><th>Valor</th><th class="lft">RC</th><th title="Aprovação do coordenador">OK</th><th class="lft">OC</th><th class="lft">NF</th><th></th></tr></thead><tbody>`;
-    if(!rows.length) h+=`<tr class="empty-row"><td colspan="13"><div class="empty">Nenhum custo lançado neste mês. Clique em “+ lançar custo”.</div></td></tr>`;
+    $('lanc-sub').textContent = rows.length+' lançamento(s) · '
+      + (single ? 'clique na linha para abrir o custo'
+                : 'visão agregada (várias unidades/meses) · clique na linha para abrir; a caixa mostra a unidade e a vigência de cada lançamento')
+      + ' · botão direito → exportar Excel';
+    if(!rows.length) h+=`<tr class="empty-row"><td colspan="13"><div class="empty">${single?'Nenhum custo lançado neste mês.':'Nenhum custo lançado no filtro atual.'} Clique em “+ lançar custo”.</div></td></tr>`;
     h+=rows.map(lancRowBox).join('');
-    const tot=rows.filter(counts).reduce((s,r)=>s+r.valor,0);
-    h+=`</tbody><tfoot><tr class="total"><td class="conta">Total</td>${'<td></td>'.repeat(10)}<td class="num" id="lanc-total">${fmt(tot)}</td><td></td></tr></tfoot>`;
-    $('tbl-lanc').innerHTML=h;
-    return;
-  }
-  let h=`<thead><tr><th class="lft">Data</th><th class="lft">Projeto</th><th class="lft">Equipamento</th><th class="lft">Fornecedor</th><th class="lft">Conta</th><th class="lft">Grupo</th><th class="lft">Descrição</th><th>Valor</th><th class="lft">RC</th><th title="Aprovação do coordenador">OK</th><th class="lft">OC</th><th class="lft">NF</th><th></th></tr></thead><tbody>`;
-  if(single){
+  }else{
     $('lanc-sub').textContent=rows.length+' lançamento(s) · edite direto na linha · RC salva e libera aprovação · farol verde libera OC/NF · sobe ao DRE com NF + Valor · botão direito → exportar Excel';
     if(!rows.length){ h+=`<tr class="empty-row"><td colspan="13"><div class="empty">Nenhum custo lançado neste mês. Clique em “+ adicionar lançamento”.</div></td></tr>`; }
     h+=rows.map(lancRowHTML).join('');
-  }else{
-    $('lanc-sub').textContent=rows.length+' lançamento(s) · visão agregada (várias unidades/meses) · selecione 1 unidade e 1 vigência para editar · botão direito → exportar Excel';
-    if(!rows.length){ h+=`<tr class="empty-row"><td colspan="13"><div class="empty">Nenhum custo lançado no filtro atual.</div></td></tr>`; }
-    h+=rows.map(lancRowRO).join('');
   }
   const tot=rows.filter(counts).reduce((s,r)=>s+r.valor,0);
   h+=`</tbody><tfoot><tr class="total"><td class="conta">Total</td>${'<td></td>'.repeat(10)}<td class="num" id="lanc-total">${fmt(tot)}</td><td></td></tr></tfoot>`;
