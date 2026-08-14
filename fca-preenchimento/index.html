@@ -970,8 +970,8 @@ function pushGerot(rows,fatos,deParaMap){
 // Mapeamento conta → pacote (mesmo PACOTES_MAP da Visão Financeira / FCAs Total)
 const PACOTES_MAP={
   'Combustíveis Veiculos e Equipamentos':'Combustíveis','Combustíveis':'Combustíveis',
-  'Estorno de ICMS não Aproveitado':'Combustíveis','Fluídos (Arla)':'Combustíveis',
-  'Arla':'Combustíveis','ICMS Crédito Presumido':'Combustíveis',
+  'Estorno de ICMS não Aproveitado':'ICMS','Fluídos (Arla)':'Combustíveis',
+  'Arla':'Combustíveis','ICMS Crédito Presumido':'ICMS',
   'Manutenção de Veículos e Equipamentos':'Manutenções','Manutenção de Veículos e Equip.':'Manutenções',
   'Materiais e Ferramentas de Oficina':'Manutenções','Lavação de Veículos':'Manutenções',
   'Manutenção de Carrocerias':'Manutenções','Personalização/Padronização de Veículos':'Manutenções',
@@ -982,22 +982,20 @@ const PACOTES_MAP={
   'Seguro de Veículos e Equipamentos':'Seguros e licenças','Seguros':'Seguros e licenças',
 };
 const getPacote=c=>PACOTES_MAP[String(c||'').trim()]||'Outros';
-function pushDRE(dre,fatos,kmlCausas,dispCausas,frotaMaps){
-  kmlCausas=kmlCausas||{};dispCausas=dispCausas||{};frotaMaps=frotaMaps||{mes:{},porMes:{}};
+function pushDRE(dre,fatos){
   const _nc=s=>String(s||'').normalize('NFD').replace(/[̀-ͯ]/g,'').toUpperCase().replace(/\s+/g,' ').trim();
-  const EXCL=new Set(['RECEITA LIQUIDA','ICMS CREDITO PRESUMIDO','IPVA E LICENCIAMENTO DE VEICULOS','ESTORNO ICMS NAO APROVEITADO']);
+  // 'ESTORNO ICMS NAO APROVEITADO' (sem o "DE") NUNCA casava com a conta real
+  // 'Estorno de ICMS não Aproveitado' — por isso ela vinha na causa do pacote
+  // Combustíveis. As duas grafias ficam no set.
+  const EXCL=new Set(['RECEITA LIQUIDA','ICMS CREDITO PRESUMIDO','IPVA E LICENCIAMENTO DE VEICULOS',
+                      'ESTORNO ICMS NAO APROVEITADO','ESTORNO DE ICMS NAO APROVEITADO']);
   const drRows=(dre||[]).filter(r=>parseD(r[0])&&uniMatch(r[3])&&tierMatch(r[4])&&!EXCL.has(_nc(r[5])));
   if(!drRows.length)return;
   // Frota tem meses ORÇADOS futuros (rem/real=0); mês de análise = última vigência COM realizado ≠ 0.
   let maxK=0;drRows.forEach(r=>{const real=r[10]!=null?+r[10]:0;if(real!==0){const k=vigKeyN(parseD(r[0]));if(k>maxK)maxK=k;}});
   const vig=vigLbl(new Date(Math.floor(maxK/100),maxK%100,1));
-  const yrMax=Math.floor(maxK/100);
   const acc={};
   drRows.filter(r=>vigKeyN(parseD(r[0]))===maxK).forEach(r=>{const conta=String(r[5]||'—').trim();const niv=String(r[4]||'').replace(/\s*\(INATIVO\)\s*/i,'').trim();const rem=r[9]!=null?+r[9]:0,real=r[10]!=null?+r[10]:0;const key=niv+'||'+conta;if(!acc[key])acc[key]={conta,niv,rem:0,real:0};acc[key].rem+=rem;acc[key].real+=real;});
-  // Manutenção/Pneus/Recapagem/Lavação: custo de CADA mês do ano (YTD) por projeto+PACOTE, p/ a média do custo/placa ativa
-  const isMP=c=>/MANUTEN|PNEU|RECAP|LAVA/.test(_nc(c));
-  const custoPorMes={}; // key proj||pacote -> { vigKey: custo }
-  drRows.forEach(r=>{const k=vigKeyN(parseD(r[0]));if(Math.floor(k/100)!==yrMax||k>maxK)return;const conta=String(r[5]||'').trim();if(!isMP(conta))return;const key=projKey(r[4])+'||'+_nc(getPacote(conta));(custoPorMes[key]=custoPorMes[key]||{});custoPorMes[key][k]=(custoPorMes[key][k]||0)+Math.abs(r[10]!=null?+r[10]:0);});
   // ── FATO = PACOTE (líquido) · CAUSA desdobra as contas ──
   // Custos na DRE são negativos: gasto ACIMA do remunerado => (rem - real) > 0.
   // O fato sobe quando o PACOTE líquido estoura vs remunerado — uma conta pode ter
@@ -1018,20 +1016,12 @@ function pushDRE(dre,fatos,kmlCausas,dispCausas,frotaMaps){
       // desdobramento por conta: ▲ estouros (maior→menor), depois ▼ savings (maior→menor)
       const det=g.contas.map(o=>{const ov=o.rem-o.real,b=Math.abs(o.rem);return {conta:o.conta,ov,p:b>0?Math.round(Math.abs(ov)/b*100):null};}).filter(o=>Math.round(o.ov)!==0);
       det.sort((a,b)=>{const pa=a.ov>0,pb=b.ov>0;if(pa&&pb)return b.ov-a.ov;if(pa)return -1;if(pb)return 1;return a.ov-b.ov;});
-      if(det.length){causas.push('Contas do pacote (maior desvio → maior saving):');
+      // A CAUSA É SÓ AS CONTAS — em TODOS os pacotes (Renan, 14/08/2026).
+      // Saíram os drivers de Combustíveis (Dispersão de km, Km/L, bottom 3
+      // placas) e o custo/placa ativa de Manutenções/Pneus: viravam uma
+      // miscelânea no card. Quem quer o driver abre o painel do indicador.
+      if(det.length){causas.push('Contas:');
         det.forEach(o=>{const s=o.ov>0?'▲':'▼';causas.push(`- ${o.conta}: ${s} ${impFmt(o.ov)}${o.p!=null?' | '+s+' '+o.p+'%':''}${o.ov<0?' (saving)':''}`);});}
-      // Combustíveis: mantém os drivers (Dispersão de km + Km/L com 3 piores placas + R$/L) ANTES das contas
-      if(/COMBUST/.test(_nc(g.pac))){const parts=[];const dd=dispCausas[projKey(g.niv)];if(dd)parts.push(dd);const c=kmlCausas[projKey(g.niv)];if(c)parts.push(c);if(parts.length)causas.unshift(parts.join('\n'));}
-      // Manutenções/Pneus: custo/placa ativa do PACOTE (mês vs média do ano)
-      else if(/MANUTEN|PNEUS/.test(_nc(g.pac))){
-        const pk=projKey(g.niv);const fMes=frotaMaps.mes[pk]||0;
-        const cpMes=fMes>0?Math.abs(g.real)/fMes:null;
-        const cm=custoPorMes[pk+'||'+_nc(g.pac)]||{},fm=frotaMaps.porMes[pk]||{};
-        const ratios=[];Object.keys(cm).forEach(k=>{const f=fm[k];if(f>0)ratios.push(cm[k]/f);});
-        const cpAno=ratios.length?ratios.reduce((a,b)=>a+b,0)/ratios.length:null;
-        if(cpMes!=null){const gap=cpAno?Math.round((cpMes/cpAno-1)*100):null;
-          causas.push(`Custo/placa ativa: ${brl(cpMes)} (mês)`+(cpAno!=null?` vs ${brl(cpAno)} (média ano)${gap!=null?' | ▲ '+gap+'%':''}`:''));}
-      }
       if(causas.length)fato.causaAuto=causas.join('\n');
       fatos.push(fato);});
 }
@@ -1132,11 +1122,10 @@ async function fetchDB(){
 const _gvizSafe=url=>gviz(url).catch(()=>null);
 async function gerarFatos(shared){
   const fatos=[];
-  let kmlCausas={},dispCausas={},frotaMaps={mes:{},porMes:{}};
-  // RPM agora é sincronizada à parte (Base RPM, via "Sincronizar RPM"); aqui só Custos (DRE) + drivers de causa.
-  const disp=shared?shared.disp:await _gvizSafe(SRC_DISP); if(disp){try{dispCausas=dispCausasPorProj(disp);frotaMaps=frotaAtivaPorProj(disp);}catch(e){}}
-  const kml=shared?shared.kml:await _gvizSafe(SRC_KML);    if(kml){try{kmlCausas=kmlCausasPorProj(kml);}catch(e){}}
-  const dre=shared?shared.dre:await _gvizSafe(srcDre()); if(dre){try{pushDRE(dre,fatos,kmlCausas,dispCausas,frotaMaps);}catch(e){}}
+  // RPM é sincronizada à parte (Base RPM, via "Desvios da RPM"); aqui só Custos (DRE).
+  // A causa passou a ser SÓ as contas do pacote (Renan, 14/08/2026), então a
+  // geração não baixa mais Dispersão de km nem Km/L — eram os drivers antigos.
+  const dre=shared?shared.dre:await _gvizSafe(srcDre()); if(dre){try{pushDRE(dre,fatos);}catch(e){}}
   return fatos;
 }
 // Grava/atualiza na base os fatos da unidade atual. Retorna nº de novos.
@@ -1213,7 +1202,7 @@ async function gerarTodas(){
   const intro=document.querySelector('.intro'); if(intro)intro.style.display='none';
   list.innerHTML='<div class="loading">Baixando planilhas…</div>';
   // RPM recriado por (unidade, vigência) dentro do seedUnidade — meses anteriores e Custos preservados
-  const shared={ger:await _gvizSafe(SRC_GEROT), disp:await _gvizSafe(SRC_DISP), kml:await _gvizSafe(SRC_KML), dep:await _gvizSafe(SRC_DEPARA), dre:await _gvizSafe(srcDre())};
+  const shared={ger:await _gvizSafe(SRC_GEROT), dep:await _gvizSafe(SRC_DEPARA), dre:await _gvizSafe(srcDre())};   // sem Disp/Km-L: a causa é só as contas
   const units=Object.keys(DEPARA).sort();
   const log=[]; let tot=0;
   for(const u of units){
