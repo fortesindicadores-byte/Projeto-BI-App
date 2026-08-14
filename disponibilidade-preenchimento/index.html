@@ -143,9 +143,6 @@ body{font-family:'Montserrat',-apple-system,BlinkMacSystemFont,sans-serif;font-s
 .tool.ico{padding:7px 9px;}
 .tool.novo{border:1px solid color-mix(in srgb,var(--laranja) 40%,transparent);color:var(--laranja);font-weight:700;}
 .tool.novo:hover{background:color-mix(in srgb,var(--laranja) 14%,transparent);}
-.tool.ck{border:1px solid rgba(59,179,59,.4);color:var(--verde);font-weight:700;}
-.tool.ck:hover{background:rgba(59,179,59,.14);}
-.tool.ck.feito{border-color:transparent;background:rgba(59,179,59,.14);cursor:default;}
 .menu-wrap{position:relative;}
 .menu{display:none;position:absolute;top:calc(100% + 6px);right:0;z-index:40;min-width:214px;
   background:var(--brilho), var(--card);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);
@@ -289,7 +286,6 @@ input[type=date]::-webkit-calendar-picker-indicator{cursor:pointer;}
       <h1 id="tit">Indisponíveis</h1>
 
       <button class="tool novo" onclick="novoEvento()">+ Nova indisponibilidade</button>
-      <button class="tool ck" id="btCheckin" onclick="confirmarDia()">✓ Confirmar frota do dia</button>
 
       <button class="tool" id="btLista" onclick="setVer('lista')">Indisponíveis</button>
       <button class="tool" id="btFrota" onclick="setVer('frota')">Frota completa</button>
@@ -421,7 +417,7 @@ function unitCod(nome,projeto){
 }
 
 let sb=null, PROFILE=null, ADMIN=false, MY_UNITS=[], UNIT=null, USER=null, EU='';
-let ATIVOS=[], EVENTS=[], CHECKINS=[], ABERTAS_POR={};
+let ATIVOS=[], EVENTS=[], ABERTAS_POR={};
 let BUSCA='', VISAO='', VER='lista', ID=null;
 const FPROJ=new Set(), FGRUPO=new Set(), FTIPO=new Set();
 
@@ -449,12 +445,6 @@ async function loadEvents(){
   if(error)throw error;
   EVENTS=data||[];
 }
-async function loadCheckins(){
-  const {data,error}=await sb.from('disp_checkins').select('*').eq('data',hojeBRT())
-    .order('created_at',{ascending:false});
-  if(error)throw error;
-  CHECKINS=data||[];
-}
 async function contaAbertas(){
   try{
     const {data}=await sb.from('indisponibilidade').select('unidade').is('data_retorno',null);
@@ -465,7 +455,6 @@ async function contaAbertas(){
 }
 const frota=()=>ATIVOS.filter(a=>a.cod===UNIT);
 const abertos=()=>EVENTS.filter(e=>!e.data_retorno);
-const ckHoje=()=>CHECKINS.find(c=>c.unidade===UNIT);
 
 /* ── filtros ── */
 function daVisao(e,v){
@@ -556,7 +545,13 @@ function pintaLateral(){
   const nInd=fr.filter(a=>abertaSet.has(a.placa)).length;
   const foraBase=ab.filter(e=>!fr.some(a=>a.placa===normP(e.placa))).length;
   const disp=fr.length?((fr.length-nInd)/fr.length*100):null;
-  const ck=ckHoje();
+  // última movimentação da unidade = auditoria automática (preencheu, confirmou)
+  const ult=EVENTS.reduce((m,e)=>{const t=e.updated_at||e.created_at;return t>m?t:m;},'');
+  const ultTxt=ult?(()=>{const d=new Date(ult);
+    const hj=d.toLocaleDateString('en-CA',{timeZone:'America/Sao_Paulo'})===hojeBRT();
+    const dia=hj?'hoje':d.toLocaleDateString('pt-BR',{timeZone:'America/Sao_Paulo'});
+    const hora=d.toLocaleTimeString('pt-BR',{timeZone:'America/Sao_Paulo',hour:'2-digit',minute:'2-digit'});
+    return dia+' '+hora;})():'—';
   $('resTit').textContent='Resumo · '+(UNIT||'');
   $('sRes').innerHTML=`
     <div class="s-hero"><span class="hl">Disponibilidade</span>
@@ -565,9 +560,7 @@ function pintaLateral(){
     <div class="rrow"><span>Disponíveis</span><b class="grn">${fr.length-nInd}</b></div>
     <div class="rrow"><span>Indisponíveis</span><b class="${nInd?'red':'grn'}">${nInd}</b></div>
     ${foraBase?`<div class="rrow"><span>Fora da base ativos</span><b>${foraBase}</b></div>`:''}
-    <div class="s-ck ${ck?'ok':'pend'}">${ck
-      ?`✓ Frota confirmada ${new Date(ck.created_at).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})} · ${esc(ck.nome||'')}`
-      :'Frota do dia ainda não confirmada'}</div>`;
+    <div class="s-ck ${ult?'ok':'pend'}">Última atualização: ${ultTxt}</div>`;
   const ab2=abertos();
   const N={previsao:ab2.filter(e=>daVisao(e,'previsao')).length,
            cronicos:ab2.filter(e=>daVisao(e,'cronicos')).length,
@@ -583,9 +576,6 @@ function pintaLateral(){
   $('btProj').classList.toggle('on',FPROJ.size>0);
   $('btGrupo').classList.toggle('on',FGRUPO.size>0);
   $('btTipo').classList.toggle('on',FTIPO.size>0);
-  const bt=$('btCheckin');
-  if(ck){bt.classList.add('feito');bt.textContent=`✓ Frota confirmada · ${new Date(ck.created_at).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})}`;}
-  else{bt.classList.remove('feito');bt.textContent='✓ Confirmar frota do dia';}
   $('euUni').textContent=UNIT||'—';
 }
 function montaUnidades(){
@@ -652,7 +642,7 @@ function limpaFiltros(){
 }
 async function recarregar(){
   document.querySelectorAll('.menu.open').forEach(m=>m.classList.remove('open'));
-  await Promise.all([loadAtivos(),loadEvents(),loadCheckins()]);
+  await Promise.all([loadAtivos(),loadEvents()]);
   contaAbertas(); render();
 }
 
@@ -789,21 +779,10 @@ async function excluir(){
   EVENTS=EVENTS.filter(x=>x.id!==ID);
   contaAbertas(); render(); fechaModal();
 }
-async function confirmarDia(){
-  if(ckHoje())return;
-  const {error}=await sb.from('disp_checkins').insert({
-    unidade:UNIT, data:hojeBRT(),
-    nome:EU||(USER.email||'').split('@')[0],
-    n_indisponiveis:abertos().length
-  });
-  if(error){alert('Erro ao confirmar: '+error.message);return;}
-  await loadCheckins(); render();
-}
-
 /* ── unidade ── */
 async function setUnit(u){
   UNIT=u; localStorage.setItem('disp_unit',u);
-  try{ await loadEvents(); await loadCheckins(); render(); }
+  try{ await loadEvents(); render(); }
   catch(e){ $('cols').innerHTML=`<div class="cvazia">Erro ao carregar: ${esc(e.message||e)}</div>`; }
 }
 
