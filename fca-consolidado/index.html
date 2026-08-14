@@ -924,7 +924,16 @@ function prazoState(r){
   return d<hoje ? 'Vencida' : 'No prazo';
 }
 // Projetos disponíveis dependem da(s) Unidade(s) selecionada(s) — filtro em cascata. Usa projeto "limpo".
-function projItems(){const fu=getMsValues('ms-uni');return [...new Set(_ROWS.filter(r=>!fu.length||fu.includes(r.unidade)).map(r=>projLabel(r.projeto)))].sort();}
+// PROJETOS = os mesmos da Visão Financeira (Renan, 14/08/2026): tudo vem de lá.
+// A lista do FCA vinha do que estava gravado no banco e trazia uma cacetada de
+// variação (ADMINISTRATIVO, EMPURRADA BITREM…) que não existe no filtro da VF.
+const PROJ_CANON=['APOIO','AUTO SERVIÇO','DISTRIBUIÇÃO URBANA','EMPURRADA','INSUMOS','ROTA','TERCEIROS'];
+const _pn=s=>String(s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toUpperCase().replace(/\s+/g,' ').trim();
+const _PROJ_SET=new Set(PROJ_CANON.map(_pn));
+const projCanon=v=>_PROJ_SET.has(_pn(v));
+// mantém a ORDEM da Visão Financeira
+const projFiltra=arr=>PROJ_CANON.filter(c=>arr.some(v=>_pn(v)===_pn(c)));
+function projItems(){const fu=getMsValues('ms-uni');return projFiltra([...new Set(_ROWS.filter(r=>!fu.length||fu.includes(r.unidade)).map(r=>projLabel(r.projeto)))]);}
 function popFiltros(){
   UNI_OPTS=[...new Set(_ROWS.map(r=>r.unidade).filter(Boolean))].sort();
   VIG_OPTS=[...new Set(_ROWS.map(r=>r.vigencia).filter(Boolean))].sort((a,b)=>vigNum(b)-vigNum(a));
