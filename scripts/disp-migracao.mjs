@@ -106,6 +106,13 @@ async function sbDelete(tbl, filtro) {
   });
   if (!res.ok) throw new Error(`DELETE ${tbl}: ${res.status} ${await res.text()}`);
 }
+async function sbGet(tbl, filtro) {
+  const res = await fetch(`${SB_URL}/rest/v1/${tbl}?${filtro}`, {
+    headers: { apikey: SB_KEY, Authorization: 'Bearer ' + SB_KEY }
+  });
+  if (!res.ok) throw new Error(`GET ${tbl}: ${res.status} ${await res.text()}`);
+  return res.json();
+}
 async function sbInsert(tbl, rows) {
   const B = 1000;
   for (let i = 0; i < rows.length; i += B) {
@@ -158,6 +165,7 @@ async function main() {
     const projeto = cellText(pick(c, hI.idx, ['Projeto'])) || null;
     INDISP.push({
       data, unidade: unitCod(nome, projeto), unidade_nome: normU(nome), projeto,
+      data_parada_real: toDate(pick(c, hI.idx, ['Data Parada'])),   // não vai p/ o snapshot; só p/ o seed
       placa: placa.toUpperCase().replace(/\s+/g, ''),
       modelo: cellText(pick(c, hI.idx, ['Modelo de Veiculo', 'Modelo de Veículo', 'Modelo'])) || null,
       grupo: cellText(pick(c, hI.idx, ['Grupo'])) || null,
@@ -174,14 +182,55 @@ async function main() {
   log(`Indisponibilidade: ${INDISP.length} linhas (${range(INDISP)})`);
   if (UNMAPPED.size) log('⚠ unidades sem código no de-para (foram com o nome):', [...UNMAPPED].join(', '));
 
-  // ── grava ──
+  // ── grava as fotos (histórico) ──
   log('Apagando importação anterior (fonte=sheet)…');
   await sbDelete('disp_snapshot', 'fonte=eq.sheet');
   await sbDelete('indisp_snapshot', 'fonte=eq.sheet');
   log('Inserindo…');
   await sbInsert('disp_snapshot', DISP);
-  await sbInsert('indisp_snapshot', INDISP);
-  log(`✅ Concluído: ${DISP.length + INDISP.length} linhas migradas.`);
+  await sbInsert('indisp_snapshot', INDISP.map(({ data_parada_real, ...r }) => r));
+
+  // ── semeia os EVENTOS ABERTOS: o último dia da aba vira a carga inicial
+  //    da tabela viva (quem está parado hoje não precisa ser relançado).
+  //    Não apaga nada: pula placa que já tenha evento aberto (app ou seed). ──
+  const maxData = INDISP.reduce((m, r) => r.data > m ? r.data : m, '');
+  const ultimo = INDISP.filter(r => r.data === maxData);
+  const vistos = new Set();
+  const infereStatus = t => {
+    const s = normU(t);
+    if (/OR[CÇ]AMENTO/.test(s)) return 'Em orçamento';
+    if (/AGUARDANDO PE[CÇ]A|PECAS|AGUARD/.test(s)) return 'Aguardando peça';
+    if (/PRONTO/.test(s)) return 'Pronto para retirada';
+    return 'Em execução';
+  };
+  const abertosDB = await sbGet('indisponibilidade', 'select=unidade,placa&data_retorno=is.null&limit=10000');
+  const jaAberto = new Set(abertosDB.map(r => `${r.unidade}||${String(r.placa).toUpperCase()}`));
+  const eventos = [];
+  for (const r of ultimo) {
+    if (/FRETEIRO/i.test(r.projeto || '')) continue;   // FRETEIRO fora (Renan, 14/08/2026)
+    const key = `${r.unidade}||${r.placa}`;
+    if (vistos.has(key)) continue;
+    vistos.add(key);
+    if (jaAberto.has(key)) continue;
+    eventos.push({
+      unidade: r.unidade, unidade_nome: r.unidade_nome, projeto: r.projeto,
+      placa: r.placa, modelo: r.modelo, grupo: r.grupo,
+      descricao_problema: r.descricao_problema, local_manutencao: r.local_manutencao,
+      rc_oc: r.rc_oc,
+      // Data Parada real da planilha; sem ela, estima pela foto − dias parado
+      data_parada: r.data_parada_real ||
+        (r.dias_parado != null
+          ? new Date(new Date(r.data + 'T12:00') - r.dias_parado * 864e5).toISOString().slice(0, 10)
+          : r.data),
+      previsao_retorno: r.previsao_retorno, data_retorno: null,
+      status: infereStatus(r.status === null || /PRAZO/.test(normU(r.status)) ? r.descricao_problema : r.status),
+      observacao: [r.observacao, `[migrado da planilha · foto de ${r.data}]`].filter(Boolean).join(' ')
+    });
+  }
+  log(`Eventos abertos (foto de ${maxData}): ${ultimo.length} linhas → ${eventos.length} novas (${jaAberto.size} já existiam abertas).`);
+  await sbInsert('indisponibilidade', eventos);
+
+  log(`✅ Concluído: ${DISP.length + INDISP.length} linhas de histórico + ${eventos.length} eventos abertos.`);
 }
 
 main().catch(e => { console.error('ERRO:', e.message || e); process.exit(1); });

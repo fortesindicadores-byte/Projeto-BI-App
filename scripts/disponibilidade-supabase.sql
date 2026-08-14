@@ -189,6 +189,7 @@ begin
              upper(replace(coalesce(e->>'Placa',''),' ','')) as placa
         from ginfo_snapshot g, jsonb_array_elements(g.data) e
        where g.chave = 'ativos'
+         and upper(coalesce(e->>'Projeto','')) not like '%FRETEIRO%'  -- FRETEIRO fora (Renan, 14/08/2026)
          -- e upper(coalesce(e->>'Estado','')) like 'ATIV%'  -- ligar se quiser só ativos
     ) a
     left join (
