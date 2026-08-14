@@ -657,13 +657,13 @@ table.rel tbody td{vertical-align:top;line-height:1.45;}
   letter-spacing:0!important;min-width:0!important;cursor:pointer;}
 .ms-btn:hover{background:var(--hover);color:var(--txt)!important;}
 .ms-cnt{background:var(--vermelho)!important;color:#fff!important;}
-/* painel do filtro: fundo SÓLIDO — o --card é translúcido e a tabela atrás
-   aparecia através das opções. Aqui é menu, não card: opacidade total. */
-.ms-panel{background:#151C28!important;border:1px solid var(--card-brd)!important;
+/* painel do filtro: translúcido como antes, mas com vidro mais forte — o
+   --card puro deixava a tabela aparecer por trás das opções. */
+.ms-panel{background:rgba(21,28,40,.86)!important;border:1px solid var(--card-brd)!important;
   border-radius:10px!important;padding:6px!important;
-  backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);
-  box-shadow:0 18px 44px rgba(0,0,0,.55)!important;}
-body.light-mode .ms-panel{background:#FFFFFF!important;box-shadow:0 18px 40px rgba(15,23,42,.18)!important;}
+  backdrop-filter:blur(22px) saturate(140%);-webkit-backdrop-filter:blur(22px) saturate(140%);
+  box-shadow:0 18px 44px rgba(0,0,0,.5)!important;}
+body.light-mode .ms-panel{background:rgba(255,255,255,.9)!important;box-shadow:0 18px 40px rgba(15,23,42,.16)!important;}
 .ms-opt{border-radius:7px;color:var(--txt)!important;text-transform:none!important;
   letter-spacing:0!important;font-size:12.5px!important;}
 .ms-opt:hover{background:var(--hover);}
@@ -907,7 +907,20 @@ function _buildMs(w,getItems,after){
   srch.addEventListener('input',()=>w._render(srch.value));srch.addEventListener('click',e=>e.stopPropagation());
   w._render();
 }
-function toggleMs(id){document.querySelectorAll('.ms-panel.open').forEach(p=>{if(p.closest('.ms-wrap').id!==id)p.classList.remove('open');});const p=document.querySelector('#'+id+' .ms-panel');if(p)p.classList.toggle('open');}
+function toggleMs(id){
+  document.querySelectorAll('.ms-panel.open').forEach(p=>{if(p.closest('.ms-wrap').id!==id)p.classList.remove('open');});
+  const p=document.querySelector('#'+id+' .ms-panel'); if(!p) return;
+  p.classList.toggle('open');
+  // o painel dos ÚLTIMOS filtros (Causa, Ação) estourava a borda da janela e
+  // sumia: se não couber ancorado à esquerda, ancora à direita do botão.
+  if(p.classList.contains('open')){
+    p.style.left=''; p.style.right='';
+    const r=p.getBoundingClientRect();
+    if(r.right>window.innerWidth-8){ p.style.left='auto'; p.style.right='0'; }
+    const r2=p.getBoundingClientRect();
+    if(r2.left<8){ p.style.left='0'; p.style.right='auto'; }
+  }
+}
 function getMsValues(id){const w=document.getElementById(id);return w&&w._sel?[...w._sel]:[];}
 
 let UNI_OPTS=[],VIG_OPTS=[],ORG_OPTS=[],ST_OPTS=[],FATO_OPTS=[],CONTA_OPTS=[],_vigInit=false;
