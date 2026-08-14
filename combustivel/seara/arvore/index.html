@@ -463,17 +463,16 @@ function calcular(f){
   const c = custoAgg(f);
   const custoRem=c.rem, custoReal=c.real;
 
-  let kmReal=0, kmRem=0, litros=0, totalRS=0;
+  let kmReal=0, kmRem=0, litros=0, totalRS=0, sumPxL=0, sumLitP=0, sumKmlxV=0, sumV=0;
   for(const r of F){
     kmReal+=r.kmReal; kmRem+=r.kmRem; litros+=r.litros; totalRS+=r.totalRS;
+    if(r.preco>0 && r.litros>0){ sumPxL+=r.preco*r.litros; sumLitP+=r.litros; }   // R$/L rem: ponderado por litros
+    if(r.kmL>0   && r.viagens>0){ sumKmlxV+=r.kmL*r.viagens; sumV+=r.viagens; }    // Km/L rem: ponderado por viagens
   }
-  // Remunerado da Seara = km (Base CTEs col J, dedup por viagem) + custo REM
-  // (KmPorLitro/PrecoDiesel saíram da Base Remunerado na enxugada — regra 13/08/2026).
-  // A árvore fecha em si mesma: R$/L ÷ Km/L = R$/km nos dois lados.
   const rsLReal = litros>0  ? totalRS/litros : 0;
-  const rsLRem  = litros>0&&custoRem ? Math.abs(custoRem)/litros : 0;   // custo rem ÷ litros
+  const rsLRem  = sumLitP>0 ? sumPxL/sumLitP : 0;
   const kmLReal = litros>0  ? kmReal/litros  : 0;
-  const kmLRem  = litros>0&&kmRem>0 ? kmRem/litros : 0;                 // km rem ÷ litros
+  const kmLRem  = sumV>0    ? sumKmlxV/sumV  : 0;
 
   // R$/km = Custo ÷ KM (mantém o sinal do custo, negativo)
   const rsKmRem  = kmRem  ? custoRem  / kmRem  : 0;
@@ -800,22 +799,23 @@ function custoAgg(f){
 
 // Carrega Frota + workbook Seara e monta as opções de filtro (ano/vigência)
 async function fetchAll(){
-  const [fr, comb, rawVg] = await Promise.all([
+  const [fr, comb, rawVg, brem] = await Promise.all([
     gvz(VF_ID,{tab:'Frota'}),
     gvz(SEARA_ID,{gid:GID_COMB}),
-    gvz(SEARA_ID,{gid:GID_CTES, tq:'select B, C, D, J'}),
+    gvz(SEARA_ID,{gid:GID_CTES, tq:'select B, C, D, E, J'}),
+    gvz(SEARA_ID,{gid:GID_REM}),
   ]);
   FR_ROWS = fr.rows;
 
-  // KM remunerado e viagens saem da MESMA passada na Base CTEs.
-  // A coluna Z (KM Rodado) não existe mais — a aba foi reestruturada e o
-  // `select sum(Z)` derrubava a carga inteira. O km vem da coluna J
-  // (QT_QUILOMETROS_VIAGEM), contada UMA VEZ por CD_VIAGEM_TRANSPORTE (col B):
-  // a mesma viagem gera vários CTEs (complementar, descarga, pernoite, CPL) e
-  // todos repetem o km na J — somar linha a linha infla ~23×.
+  // KM remunerado e viagens saem da MESMA passada na Base CTEs: coluna J
+  // (QT_QUILOMETROS_VIAGEM), contada UMA VEZ por CD_VIAGEM_TRANSPORTE (col B) —
+  // a mesma viagem gera vários CTEs repetindo o km; somar linha a linha infla ~23×.
+  // Data da CTE: col D no layout enxuto, col E no largo — detecta pelo que parseia.
+  let _nD=0,_nE=0; rawVg.rows.slice(0,80).forEach(r=>{ if(kParseVig(r[2]))_nD++; if(kParseVig(r[3]))_nE++; });
+  const iDt=_nE>_nD?3:2;
   const seenVg=new Set(), viag={}, remKm={};
   rawVg.rows.forEach(r=>{
-    const b=r[0], p=_placaKey(r[1]), d=kParseVig(r[2]), km=+r[3]||0;
+    const b=r[0], p=_placaKey(r[1]), d=kParseVig(r[iDt]), km=+r[4]||0;
     if(b==null||!p||!d) return;
     if(seenVg.has(b)) return; seenVg.add(b);
     const k=p+'|'+_vigYM(d.getFullYear(),d.getMonth()+1);
@@ -823,18 +823,30 @@ async function fetchAll(){
     remKm[k]=(remKm[k]||0)+km;
   });
 
-  // (KmPorLitro/PrecoDiesel saíram da Base Remunerado — o remunerado da árvore
-  //  agora fecha com km da CTE (J) + custo REM do DRE; ver calcular().)
+  // Benchmark remunerado (Base Remunerado) por placa|vig — colunas pelo NOME
+  // (fallback: índices do layout largo, KmPorLitro=15/P e PrecoDiesel=17/R)
+  const _bl=brem.cols.map(c=>String(c||'').toLowerCase().replace(/\s/g,''));
+  const _bi=(alvo,def)=>{const i=_bl.findIndex(c=>c.includes(alvo));return i>=0?i:def;};
+  const iVigB=_bi('vigencia',0), iPlacaB=_bi('placa',3), iKmLB=_bi('kmporlitro',15), iPrecoB=_bi('precodiesel',17);
+  const bench={};
+  brem.rows.forEach(r=>{ const p=_placaKey(r[iPlacaB]), d=kParseVig(r[iVigB]); if(!p||!d) return; bench[p+'|'+_vigYM(d.getFullYear(),d.getMonth()+1)]={kmL:+r[iKmLB]||0, preco:+r[iPrecoB]||0}; });
+  // MÊS SEM BASE AINDA = MÊS ANTERIOR (Renan, 14/08/2026): Combustível já tem
+  // julho; Base Remunerado/CTEs vão até junho. Benchmark e peso de viagens caem
+  // no mês anterior da MESMA placa até o mês ser colado (aí o direto vence).
+  // km remunerado NÃO cai (é quantidade do mês, não taxa) — fica 0 até chegar.
+  const _mesAnt=k=>{const [p,ym]=k.split('|');const [m,y]=ym.split('/').map(Number);const d=new Date(y,m-2,1);return p+'|'+_vigYM(d.getFullYear(),d.getMonth()+1);};
+  const benchFor=k=>{const b=bench[k];if(b&&(b.kmL>0||b.preco>0))return b;return bench[_mesAnt(k)]||{kmL:0,preco:0};};
+  const viagFor=k=>viag[k]||viag[_mesAnt(k)]||0;
 
-  // ALL = raiz aba Combustível (real), cruzada com km rem/viagens
+  // ALL = raiz aba Combustível (real), cruzada com rem/bench/viagens
   ALL=[];
   comb.rows.forEach(r=>{
     const placa=_placaKey(r[4]); const mi=_MESES3.indexOf(String(r[5]||'').toLowerCase().slice(0,3)); const y=+r[6];
     const real=+r[10]||0; if(!placa||mi<0||!y||real<=0) return;
-    const vig=_vigYM(y, mi+1); const k=placa+'|'+vig;
+    const vig=_vigYM(y, mi+1); const k=placa+'|'+vig; const b=benchFor(k);
     ALL.push({ vig, ano:String(y), placa:String(r[4]).trim(), modelo:String(r[7]||'').trim()||'—',
       kmReal:real, litros:+r[11]||0, totalRS:+r[13]||0,
-      kmRem:remKm[k]||0, viagens:viag[k]||0 });
+      kmRem:remKm[k]||0, kmL:b.kmL, preco:b.preco, viagens:viagFor(k) });
   });
 
   // allRows = meses com dado real (default cai no último mês com dados)
