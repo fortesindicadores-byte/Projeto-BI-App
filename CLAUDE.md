@@ -713,7 +713,11 @@ Decisão do Renan (14/08/2026): tirar a Disponibilidade/Indisponibilidade do App
 
 **Ativos:** vêm do robô Ginfo (`ginfo_snapshot`, chave 'ativos', diário 7h BRT) — NÃO criar coletor novo.
 
-**Pendências:** rodar a migração do histórico e conferir contagens · painel `/disponibilidade/` ainda lê o Sheets via gviz → trocar para Supabase depois da conferência · painel de aderência dos check-ins (quem confirmou/quem não) · desligar o trigger do Apps Script SÓ depois de comparar os números por 1–2 semanas.
+**MIGRAÇÃO CONCLUÍDA E VALIDADA (14/08/2026):** workflow **Disp Migracao** (`scripts/disp-migracao.mjs`, dispatch no Actions, gviz→Supabase com a service key) rodou: `disp_snapshot` 16.939 linhas fonte=sheet (19/02→12/08/2026 — a base real é ~17k, não "316k") · `indisp_snapshot` 11.675 (17/02→13/08) · último dia da aba virou os EVENTOS ABERTOS (ANG=13 conferido linha a linha com a planilha). Reimportável: apaga só fonte='sheet' e pula placas com evento aberto.
+
+**Decisões do Renan na construção (14/08/2026):** SEM Kanban (não é plano de ação) — app no shell do Planner com lateral (resumo + unidades + atalhos, menu recolhível) e miolo em LISTA · SEM check-in manual ("preencheu, confirmou" — auditoria = updated_by/updated_at dos eventos; `disp_checkins` existe mas está sem uso) · retorno SEMPRE por campo de data (mini-modal, entre a parada e hoje) · datalist de placa só com a placa · **FRETEIRO fora** de tudo · **ANG/Anhanguera não existe no Ginfo**: tabela `ativos_manual` (RLS por unidade) com 51 veículos do xlsx (Filial SEARA·ROTA, `scripts/ativos-manual.sql`), botão "+ Veículo" no template Ginfo SÓ na ANG, foto diária soma Ginfo+manuais (manual prioriza por placa) · visão **Resumo** = o painel de disponibilidade dentro do app (view `disp_resumo` dia×unidade; hero, % por dia, % por unidade, tabela hoje vs média 30d) — o Renan ainda vai detalhar o formato final espelhando o `/disponibilidade/` antigo.
+
+**Pendências:** painel `/disponibilidade/` ainda lê o Sheets via gviz → aposentar quando o Resumo do app for validado · painel de aderência (quem atualiza/quem não, via updated_at dos eventos) · desligar o trigger do Apps Script SÓ depois de comparar os números por 1–2 semanas · detalhar a visão Resumo com o Renan.
 
 ## Robô Frota de Elite (Ginfo → Supabase, por vigência) — em construção (05/08/2026)
 
