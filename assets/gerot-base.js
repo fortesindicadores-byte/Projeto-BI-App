@@ -620,15 +620,75 @@
     {field:'pneuAmp',   label:'Amplitude',        fmt:'mm',  dir:'lower',  meta:5},
     {field:'pneuCalib', label:'% Calibragem OK',  fmt:'pct', dir:'higher', meta:98},
   ];
-  // Os 6 do plano, na ordem em que o Renan listou
+  // Saída com OS Crítica: mesma base do farol Checklist (ginfo_snapshot
+  // 'checklist-031120', drill do card "SAÍDAS COM OS CRÍTICA"). Regra binária
+  // do farol: 0 saídas no mês = 100 · ≥1 = 0. Meta é ZERO saídas.
+  const ADIC_CHK = {field:'osCritica', label:'Saída com OS Crítica', fmt:'count', dir:'lower', meta:0};
+
+  // Os adicionais do plano, na ordem do Renan (+ Saída com OS Crítica, 14/08/2026)
   const INDICADORES_GEROT = [
     ADIC_PNEUS[0],   // Amplitude
     ADIC_DEF[1],     // MTBF
     ADIC_DEF[0],     // MTTR
     ADIC_TERMO[0],   // OS Vencida
+    ADIC_CHK,        // Saída com OS Crítica
     ADIC_TERMO[1],   // Blitz de Segurança
     ADIC_PNEUS[1],   // % Calibragem OK
   ];
+
+  // ginfo_snapshot 'checklist-031120' → nº de SAÍDAS com OS crítica por
+  // unidade|vigência. O snapshot guarda só o mês de referência do robô — os
+  // meses cobertos são os que aparecem nas linhas; nesses meses, unidade sem
+  // linha nenhuma = 0 saídas = 100.
+  async function loadOsCritica(){
+    if(!global.supabase) return [];
+    let row;
+    try{
+      const sb = global.supabase.createClient(GEM_URL, GEM_KEY);
+      const r = await sb.from('ginfo_snapshot').select('data').eq('chave','checklist-031120').maybeSingle();
+      row = r.data;
+    }catch(e){ console.error('Saída OS Crítica (checklist) falhou', e); return []; }
+    if(!row || !Array.isArray(row.data) || !row.data.length) return [];
+    const kDe=(o,...names)=>{const ks=Object.keys(o),N=ks.map(NK);
+      for(const nm of names){const i=N.indexOf(NK(nm));if(i>=0)return ks[i];}
+      for(const nm of names){const t=NK(nm);const i=N.findIndex(k=>k.includes(t));if(i>=0)return ks[i];}
+      return null;};
+    // datas do xlsx: serial do Excel ou string do export PBI (M/D/YYYY…)
+    const parseX=v=>{
+      if(v==null||v==='')return null;
+      if(typeof v==='number')return v>20000&&v<80000?new Date(Date.UTC(1899,11,30)+Math.round(v*864e5)):null;
+      const s=String(v).trim();
+      const m=s.match(/^(\d{1,4})[\/\-](\d{1,2})[\/\-](\d{1,4})/);
+      if(!m)return null;
+      const a=+m[1],b=+m[2],c=+m[3];
+      if(a>31)return new Date(a,b-1,c);
+      if(/AM|PM/i.test(s)||b>12)return new Date(c,a-1,b);
+      return new Date(c,b-1,a);
+    };
+    const smp=row.data[0];
+    const K={dt:kDe(smp,'Data do mapa','Data'),tipo:kDe(smp,'Tipo Checklist','Tipo Checkli'),
+             fil:kDe(smp,'Filial'),proj:kDe(smp,'Projeto','Proje')};
+    if(!K.dt||!K.tipo||!K.fil) return [];
+    const cont={}, vigsCob=new Set();
+    row.data.forEach(r=>{
+      const d=parseX(r[K.dt]); if(!d) return;
+      const vig=d.getUTCFullYear()+'-'+String(d.getUTCMonth()+1).padStart(2,'0');
+      vigsCob.add(vig);
+      if(NK(r[K.tipo])!=='SAIDA') return;
+      const unit=canonUnit(r[K.fil], r[K.proj]); if(!unit) return;
+      cont[unit+'|'+vig]=(cont[unit+'|'+vig]||0)+1;
+    });
+    const recs=[];
+    vigsCob.forEach(vig=>{
+      Object.values(COD2UNIT).forEach(unit=>{
+        const real=cont[unit+'|'+vig]||0;
+        const atg=real===0?100:0;   // binário, regra do farol
+        recs.push({field:ADIC_CHK.field,label:ADIC_CHK.label,unit,vig,real,meta:0,
+                   atg,atgMeta:atg,dir:'lower',fmt:'count',soGerot:true});
+      });
+    });
+    return recs;
+  }
 
   // Pneus (adicionais de amplitude/calibragem/mm): snapshot do painel Pneus (Prolog)
   const PN_URL = 'https://ewbzeqsneeylwkxtcpme.supabase.co';
@@ -661,6 +721,7 @@
     const combP=loadComb();
     const pneusP=loadPneusSheet();
     const termoP=loadTermometro();
+    const chkP=loadOsCritica();
     await fetchElite();
     await pneusP;
     const records=[];
@@ -676,6 +737,7 @@
     });
     records.push(...loadAdicionais());
     try{ records.push(...await termoP); }catch(e){ console.error('adicionais do termômetro', e); }
+    try{ records.push(...await chkP); }catch(e){ console.error('Saída com OS Crítica', e); }
     records.push(...await combP);
     const vigsAll=[...new Set(records.map(r=>r.vig))].sort();
     try{ records.push(...await loadPneusAdic(vigsAll[vigsAll.length-1])); }catch(e){ console.error('adicionais de pneus', e); }
