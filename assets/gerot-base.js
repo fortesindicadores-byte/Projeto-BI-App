@@ -79,9 +79,20 @@
     }
     return cod;
   }
+  // ── FUSÃO DE UNIDADES (Frota de Elite, Renan 14/08/2026) ─────────────────
+  // CDI MACACU + MACACU EMPURRADA viram uma unidade só: MACACU. É opt-in
+  // (load({fundir:true})) porque o Gerot e os FCAs da RPM continuam tratando
+  // os dois tiers separados — lá o RPM_UNIT_MAP depende dos nomes originais.
+  // A fusão acontece AQUI, na origem: assim as telas de contagem (conformidade,
+  // pneus, stress, CIVF, combustível) já poolam sozinhas — a soma das contagens
+  // É o número exato. As telas que só dão % ganham PESO (ver PESOS abaixo) e
+  // viram média ponderada pelo denominador de cada uma. Nada de média de médias.
+  const FUSAO = {'CDI MACACU':'MACACU','MACACU EMPURRADA':'MACACU'};
+  let FUNDIR = false;
+  const fundido = u => (FUNDIR && u && FUSAO[u]) ? FUSAO[u] : u;
   function canonUnit(filial, proj){
     const cod = refineCodG(FIL2COD[NK(filial)]||null, proj);
-    return cod ? COD2UNIT[cod] : NK(filial);
+    return fundido(cod ? COD2UNIT[cod] : NK(filial));
   }
 
   // ── parsers de valor do export (xlsx → JSON: número, "96,9%", "0,969"…) ──
@@ -148,19 +159,45 @@
   const confVale = (unit, vigFim) => vigFim >= '2026-03' || !CONF_EMP.has(unit);
 
   function direto(rows, vigFim, opts){
-    // opts: {col:[nomes], proj?:string (tier default), conf?:true}
+    // opts: {col:[nomes], proj?:string (tier default), conf?:true,
+    //        peso?:[nomes da coluna denominadora], pesoHoras?:true}
     const out=[];
     const s=rows[0]; if(!s) return out;
     const kFil=kOf(s,'Filial'), kMen=opts.conf?kOf(s,'Aderência Mensal'):null, kBim=opts.conf?kOf(s,'Aderência Bimestral'):null;
     const kVal=opts.conf?null:kOf(s,...opts.col);
+    const kPeso=opts.peso?kOf(s,...opts.peso):null;
     if(!kFil||(!kVal&&!opts.conf)) return out;
     rows.forEach(r=>{
       const unit=canonUnit(r[kFil], opts.proj||'');
       if(opts.conf && unit && !confVale(unit,vigFim)) return;
       const v=opts.conf ? pctVal(r[confBimestral(unit,vigFim)?kBim:kMen]) : pctVal(r[kVal]);
-      if(unit&&v!=null) out.push({unit, real:v});
+      if(unit&&v!=null) out.push({unit, real:v, peso:pesoDa(r,kPeso,v,opts)});
     });
-    return out;
+    return fundeLinhas(out);
+  }
+  // peso = denominador da tela. Na Disponibilidade a tela não dá as horas totais,
+  // mas elas saem do próprio par: horas = Tempo Indisponível ÷ (1 − disp).
+  function pesoDa(r,kPeso,v,opts){
+    if(!kPeso) return null;
+    if(opts.pesoHoras){ const t=timeVal(r[kPeso]); return (t!=null&&v<100)?t/(1-v/100):null; }
+    const n=numVal(r[kPeso]); return (n!=null&&n>0)?n:null;
+  }
+  // duas filiais na mesma unidade (fusão) → média PONDERADA pelo denominador.
+  // Se faltar peso em alguma, cai na média simples e avisa no console.
+  function fundeLinhas(out){
+    if(!FUNDIR) return out;
+    const g={};
+    out.forEach(o=>{ const t=g[o.unit]=g[o.unit]||{vals:[],pesos:[]}; t.vals.push(o.real); t.pesos.push(o.peso); });
+    return Object.entries(g).map(([unit,t])=>{
+      if(t.vals.length===1) return {unit, real:t.vals[0], peso:t.pesos[0]};
+      const todosComPeso=t.pesos.every(p=>p!=null&&isFinite(p)&&p>0);
+      if(todosComPeso){
+        const sw=t.pesos.reduce((a,b)=>a+b,0);
+        return {unit, real:t.vals.reduce((a,v,i)=>a+v*t.pesos[i],0)/sw, peso:sw};
+      }
+      console.warn('GerotBase: fusão sem denominador em', unit, '— média simples');
+      return {unit, real:t.vals.reduce((a,b)=>a+b,0)/t.vals.length, approx:true};
+    });
   }
   // ISENÇÕES do Stress Test de empilhadeira (Renan, 07/08/2026): erro de
   // cadastro ENTRE UNIDADES gerou desconto indevido. Estes equipamentos contam
@@ -257,9 +294,10 @@
   function valores(field, esc, vig){
     const src=E[esc];
     switch(field){
-      case 'disp':    return direto(src['disponibilidade']?.[vig]||[], vig, {col:['Disponibilidade Veículos']});
-      case 'prev':    return direto(src['preventivas']?.[vig]||[],     vig, {col:['Aderência']});
-      case 'sla':     return direto(src['sla-manutencao']?.[vig]||[],  vig, {col:['SLA Atendimento']});
+      // peso = denominador de cada tela (só usado quando há fusão de unidades)
+      case 'disp':    return direto(src['disponibilidade']?.[vig]||[], vig, {col:['Disponibilidade Veículos'], peso:['Tempo Indisponível'], pesoHoras:true});
+      case 'prev':    return direto(src['preventivas']?.[vig]||[],     vig, {col:['Aderência'], peso:['Preventivas Realizadas']});
+      case 'sla':     return direto(src['sla-manutencao']?.[vig]||[],  vig, {col:['SLA Atendimento'], peso:['Executadas']});
       case 'conf': {
         const rows=src['conformidade']?.[vig]||[];
         const novo=confNovo(rows);
@@ -271,11 +309,15 @@
         const velho=direto(rows, vig, {conf:true});
         return velho.length ? velho : (novo ? pctDe(contagemConf(rows,vig)) : []);
       }
-      case 'checkWH': return direto(src['checklist-wh']?.[vig]||[],    vig, {col:['Aderência'], proj:'APOIO'});
+      case 'checkWH': return direto(src['checklist-wh']?.[vig]||[],    vig, {col:['Aderência'], proj:'APOIO', peso:['Realizados']});
       case 'checkT': {
         // T2 (031120) + T1 (Empurrada · indicador = Aderência Saída) na mesma linha do painel
-        const t2=direto(src['checklist-t2']?.[vig]||[], vig, {col:['Aderência']});
-        const t1=direto(src['checklist-t1']?.[vig]||[], vig, {col:['Aderência Saída'], proj:'EMPURRADA'});
+        const t2=direto(src['checklist-t2']?.[vig]||[], vig, {col:['Aderência'], peso:['Viagens']});
+        const t1=direto(src['checklist-t1']?.[vig]||[], vig, {col:['Aderência Saída'], proj:'EMPURRADA', peso:['Viagens']});
+        // com FUSÃO a mesma unidade pode ter as DUAS telas (T1 na empurrada,
+        // T2 no CDI): aí valem as duas, ponderadas por viagens. Sem fusão,
+        // T2 manda (comportamento de sempre).
+        if(FUNDIR) return fundeLinhas(t2.concat(t1));
         const seen=new Set(t2.map(x=>x.unit));
         return t2.concat(t1.filter(x=>!seen.has(x.unit)));
       }
@@ -491,14 +533,24 @@
       return {vig, proj:String(c[14]&&c[14].v!=null?c[14].v:''), km:nRaw(c[22]), lit:nRaw(c[23]), rem:nRaw(c[4])}; }).filter(Boolean);
     const vigsK=[...new Set(parsed.map(p=>p.vig))];
     COMB={};
-    const recs=[];
+    // com FUSÃO as duas filiais caem na MESMA chave e os km/litros SOMAM —
+    // Σkm ÷ Σlitros é o Km/L exato da unidade unida (não média de médias).
     for(const uni of UNI_LIST_COMB){
       if(UNI_SEM_KM.has(uni)) continue;
+      const key=fundido(uni);
       for(const vig of vigsK){
         let km=0,lit=0,rems=[];
         parsed.forEach(p=>{ if(p.vig!==vig||!projMatchUni(uni,p.proj))return; km+=p.km; lit+=p.lit; if(p.rem>0)rems.push(p.rem); });
         if(!lit||!rems.length) continue;
-        ((COMB[uni]=COMB[uni]||{})[vig]={km,lit,rems});
+        const alvo=((COMB[key]=COMB[key]||{})[vig]=COMB[key][vig]||{km:0,lit:0,rems:[]});
+        alvo.km+=km; alvo.lit+=lit; alvo.rems.push(...rems);
+      }
+    }
+    const recs=[];
+    for(const uni in COMB){
+      for(const vig in COMB[uni]){
+        const {km,lit,rems}=COMB[uni][vig];
+        if(!lit||!rems.length) continue;
         const rem=rems.reduce((s,x)=>s+x,0)/rems.length, real=km/lit, atg=rem?(real/rem*100):null;
         if(atg==null) continue;
         recs.push({field:'comb',label:'Combustível',unit:uni,vig,meta:rem,real,atg,atgMeta:atg});
@@ -686,7 +738,8 @@
   }
 
   // ── carga completa: registros mensais (contrato antigo) ──────────────────
-  async function load(){
+  async function load(opts){
+    FUNDIR = !!(opts&&opts.fundir);
     const combP=loadComb();
     const pneusP=loadPneusSheet();
     const termoP=loadTermometro();
@@ -726,7 +779,8 @@
     {field:'sla',     label:'SLA Man.'},
   ];
 
-  global.GerotBase = { INDICADORES, INDICADORES_GEROT, METAS, atgDe, load, acumFor,
+  global.GerotBase = { INDICADORES, INDICADORES_GEROT, METAS, atgDe, load, acumFor, FUSAO,
+    unidadeFundida: u => fundido(u),
     fieldLabels: INDICADORES.reduce((m,i)=>{ m[i.field]=i.label; return m; }, {}),
     fieldOrder: INDICADORES.map(i=>i.field) };
 })(window);

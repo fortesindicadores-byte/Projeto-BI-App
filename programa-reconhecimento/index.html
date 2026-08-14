@@ -492,7 +492,8 @@ Chart.register(ChartDataLabels);
 
 /* ── Avatares por unidade ── */
 const AVATARES = {
-  'CDI MACACU':        'avatares/marina.png',
+  // CDI MACACU + MACACU EMPURRADA unificados em MACACU (Renan, 14/08/2026)
+  'MACACU':            'avatares/erick.png',
   'CDD PELOTAS':       'avatares/ritcher.png',
   'CDD RONDONOPOLIS':  'avatares/kleiton.png',
   'CDD NOVA FRIBURGO': 'avatares/lucas.png',
@@ -502,13 +503,12 @@ const AVATARES = {
   'CDD GUARULHOS':     'avatares/pinotti.png',
   'CDD CAMBORIU':      'avatares/bruno.png',
   'PIRAI EMPURRADA':   'avatares/jean.png',
-  'MACACU EMPURRADA':  'avatares/erick.png',
   'CUIABA EMPURRADA':  'avatares/aldo.png',
   'CUIABA':            'avatares/silverio.png',
 };
 
 const NOMES = {
-  'CDI MACACU':        'Marina',
+  'MACACU':            'Erick e Marina',
   'CDD PELOTAS':       'Ritcher',
   'CDD RONDONOPOLIS':  'Kleiton',
   'CDD NOVA FRIBURGO': 'Lucas',
@@ -518,7 +518,6 @@ const NOMES = {
   'CDD GUARULHOS':     'Pinotti',
   'CDD CAMBORIU':      'Bruno',
   'PIRAI EMPURRADA':   'Jean',
-  'MACACU EMPURRADA':  'Erick',
   'CUIABA EMPURRADA':  'Aldo',
   'CUIABA':            'Silvério',
 };
@@ -567,11 +566,11 @@ let chartIndicadores = null;
 let activeInd = 'media_geral';
 
 /* ── Fetch ── */
-const CACHE_KEY='bi_cache_reconhecimento_v12';  // v12 = conformidade na regra nova do Ginfo
+const CACHE_KEY='bi_cache_reconhecimento_v13';  // v13 = MACACU unificado (CDI + EMPURRADA)
 const CACHE_TTL=60*60*1000; // 1 hora
 
 async function fetchData() {
-  const records = await GerotBase.load();
+  const records = await GerotBase.load({fundir:true});   // CDI MACACU + MACACU EMPURRADA = MACACU
   RAW = buildEliteRows(records);
   try{ localStorage.setItem(CACHE_KEY,JSON.stringify({t:Date.now(),rows:RAW})); }catch(e){}
   populateFilters();
@@ -588,7 +587,7 @@ function initData(){
       const d=new Date(c.t);
       set('status-badge',`Atualizado ${d.toLocaleDateString('pt-BR')} ${d.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})} (cache)`);
       // o acumulado precisa do elite_snapshot em memória — hidrata e re-renderiza
-      GerotBase.load().then(recs=>{ RAW=buildEliteRows(recs); renderAll(); }).catch(()=>{});
+      GerotBase.load({fundir:true}).then(recs=>{ RAW=buildEliteRows(recs); renderAll(); }).catch(()=>{});
       return;
     }
   }catch(e){ localStorage.removeItem(CACHE_KEY); }
