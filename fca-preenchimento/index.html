@@ -1159,6 +1159,15 @@ function isDriverCombust(fato){
 function projLabel(s){const t=String(s==null?'':s).replace(/\s*\(INATIVO\)\s*/gi,' ').replace(/\s+/g,' ').trim();if(!t)return '—';const i=t.indexOf('-');return i>=0?(t.substring(0,i).trim()||'—'):t;}
 // Formata o desvio (o Fato) como "▲ R$ nominal · ▲ %". Para desvios de custo (têm R$);
 // RPM/atingimento (sem R$) fica como veio. Extrai os números do texto salvo.
+// Desvio com VÁRIAS LINHAS: a 1ª é o valor do pacote (fmtDesvio sabe formatar),
+// as demais são as contas — vão como estão. Sem isso a unidade não vê as contas
+// que o admin vê (fmtDesvio só extraía R$ e % e jogava o resto fora).
+function fmtDesvioML(txt){
+  const ls=String(txt||'').split('\n').map(l=>l.trim()).filter(Boolean);
+  if(!ls.length) return '—';
+  const cab=fmtDesvio(ls[0]);
+  return cab+(ls.length>1?'<br>'+ls.slice(1).map(l=>esc(l)).join('<br>'):'');
+}
 function fmtDesvio(txt){
   const s=String(txt||'').trim();
   if(!s) return '—';
@@ -1182,7 +1191,7 @@ function fatosDaBase(){
     const nome=m?m[1].trim():raw, emb=m?m[2].trim():'';
     const desvSrc=r.fato_desvio||emb;
     fatos.push({vig:r.vigencia||'',origem:r.origem||'Custos',proj:r.projeto||'',fato:raw,nome,sev:'aten',
-      desvio:desvSrc?`<span class="val am">${fmtDesvio(desvSrc)}</span>`:'<span class="dn">—</span>'});});
+      desvio:desvSrc?`<span class="val am">${fmtDesvioML(desvSrc)}</span>`:'<span class="dn">—</span>'});});
   fatos.sort((a,b)=>vigNum(b.vig)-vigNum(a.vig)||String(a.origem).localeCompare(String(b.origem))||String(a.fato).localeCompare(String(b.fato)));
   return fatos;
 }
@@ -1805,8 +1814,13 @@ function openKModal(id){
   document.getElementById('km-ctx').textContent=[f.origem,typeof UNIDADE_COD!=='undefined'?UNIDADE_COD:'',projLabel(f.proj),f.vig].filter(Boolean).join(' · ');
   // o fato por extenso (nome + desvio) — quem abre pelo Kanban/Tabela precisa
   // ver de onde a ação nasceu sem ter de voltar na tela de Fatos
-  const desv=f.desvio||(r.fato_desvio?`<span class="val am">${fmtDesvio(r.fato_desvio)}</span>`:'');
-  document.getElementById('km-desv').innerHTML=`<b>${esc(nome)}</b>${desv?' · '+tri(desv):''}`;
+  // O desvio tem VÁRIAS LINHAS: 1ª é o valor do pacote, as demais são as contas.
+  // fmtDesvio só sabe formatar a 1ª (extrai R$ e %) — o resto vai como está,
+  // senão a unidade não vê as contas que o admin vê.
+  const desvTxt=stripTags(f.desvio||'')||String(r.fato_desvio||'');
+  const dHtml=desvTxt?fmtDesvioML(desvTxt):'';
+  document.getElementById('km-desv').innerHTML=`<b>${esc(nome)}</b>`
+    +(dHtml&&dHtml!=='—'?' · '+tri(`<span class="val am">${dHtml}</span>`):'');
   document.getElementById('km-causa').value=r.causa||'';
   document.getElementById('km-acao').value=r.acao||'';
   document.getElementById('km-resp').value=r.responsavel||'';
