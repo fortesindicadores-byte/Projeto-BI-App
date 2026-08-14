@@ -6,6 +6,7 @@
 <title>Disponibilidade · Frota do Dia</title>
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <style>
 /* ============================================================
    DISPONIBILIDADE — mesmo shell do Planner Corporativo
@@ -92,6 +93,20 @@ body{font-family:'Montserrat',-apple-system,BlinkMacSystemFont,sans-serif;font-s
   box-shadow:var(--luz), 8px 0 28px rgba(0,0,0,.25);overflow:auto;}
 .s-top{display:flex;align-items:center;gap:9px;padding:2px 8px 14px;}
 .s-top b{flex:1;font-size:13.5px;font-weight:600;}
+.s-mini{display:flex;align-items:center;justify-content:center;width:24px;height:24px;flex:0 0 24px;
+  background:transparent;border:0;border-radius:6px;color:var(--txt3);cursor:pointer;}
+.s-mini:hover{background:var(--hover);color:var(--txt);}
+/* ── menu recolhido: só os ícones (mesma ideia do Planner) ── */
+.side.mini{width:64px;flex:0 0 64px;padding:16px 8px 12px;}
+.side.mini .s-top{justify-content:center;padding-bottom:12px;}
+.side.mini .s-top b,.side.mini .s-top>svg{display:none;}
+.side.mini .s-sec,.side.mini .s-kbd,.side.mini .s-res,.side.mini #lstUnidades,
+.side.mini .s-item .n,.side.mini .s-user div{display:none;}
+.side.mini .s-search{justify-content:center;padding:8px 0;margin-bottom:10px;background:var(--hover);}
+.side.mini .s-search input{display:none;}
+.side.mini .s-item{font-size:0;justify-content:center;padding:9px 0;gap:0;}
+.side.mini .s-user{flex-wrap:wrap;gap:6px;justify-content:center;padding:12px 0 2px;}
+.side.mini .s-sair{margin:0;}
 .s-search{display:flex;align-items:center;gap:8px;padding:7px 8px;border-radius:7px;margin-bottom:8px;}
 .s-search:hover{background:var(--hover);}
 .s-search input{flex:1;min-width:0;background:transparent;border:0;outline:0;font-family:inherit;font-size:12.5px;color:var(--txt);}
@@ -239,6 +254,9 @@ input[type=date]::-webkit-calendar-picker-indicator{cursor:pointer;}
     <div class="s-top">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><rect x="1" y="5" width="14" height="11" rx="1"/><path d="M15 9h4l3 3v4h-7z"/><circle cx="5.5" cy="18.5" r="2"/><circle cx="18" cy="18.5" r="2"/></svg>
       <b>Disponibilidade</b>
+      <button class="s-mini" id="btMini" onclick="trocaMini()" title="Recolher menu">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 5h18v14H3z"/><path d="M9 5v14"/></svg>
+      </button>
     </div>
 
     <label class="s-search">
@@ -287,9 +305,12 @@ input[type=date]::-webkit-calendar-picker-indicator{cursor:pointer;}
 
       <button class="tool novo" onclick="novoEvento()">+ Nova indisponibilidade</button>
 
+      <button class="tool" id="btVeic" onclick="novoVeiculo()" style="display:none">+ Veículo</button>
+
       <button class="tool" id="btLista" onclick="setVer('lista')">Indisponíveis</button>
       <button class="tool" id="btFrota" onclick="setVer('frota')">Frota completa</button>
       <button class="tool" id="btHist" onclick="setVer('historico')">Histórico</button>
+      <button class="tool" id="btRes" onclick="setVer('resumo')">Resumo</button>
 
       <div class="menu-wrap">
         <button class="tool" id="btProj" onclick="abreMenu('mProj')">
@@ -357,6 +378,37 @@ input[type=date]::-webkit-calendar-picker-indicator{cursor:pointer;}
         <button class="b ret" id="mRet" onclick="retornouHoje()">✓ Retornou hoje</button>
         <button class="b gho" onclick="fechaModal()">Fechar</button>
         <button class="b pri" onclick="salvar()">Salvar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════ modal: veículo manual (só ANG — template Ginfo) ══════════ -->
+<div class="mbg" id="vbg">
+  <div class="modal" style="max-width:560px">
+    <h3 id="vTit">Novo veículo · ANG</h3>
+    <div class="msub">Mesmo template da tabela de ativos do Ginfo — a Anhanguera não existe lá, então o cadastro é manual.</div>
+    <div class="f2">
+      <div class="f"><label>Placa *</label><input id="vPlaca" placeholder="ABC1D23" autocomplete="off"></div>
+      <div class="f"><label>Filial</label><input id="vFilial" value="SEARA"></div>
+    </div>
+    <div class="f2" style="margin-top:13px">
+      <div class="f"><label>Projeto</label><input id="vProjeto" value="ROTA"></div>
+      <div class="f"><label>Tipo Veículo *</label><input id="vTipo" list="tiposList" placeholder="VUC / TOCO / TRUCK…"><datalist id="tiposList"></datalist></div>
+    </div>
+    <div class="f2" style="margin-top:13px">
+      <div class="f"><label>Marca</label><input id="vMarca" value="Volkswagen"></div>
+      <div class="f"><label>Modelo</label><input id="vModelo" placeholder="VW 9.170 DRC 4X2"></div>
+    </div>
+    <div class="f2" style="margin-top:13px">
+      <div class="f"><label>Estado</label><input id="vEstado" value="SÃO PAULO"></div>
+      <div class="f"><label>Ano Fabricação</label><input id="vAno" type="number" min="1990" max="2100" placeholder="2024"></div>
+    </div>
+    <div class="macoes">
+      <button class="b del" id="vDel" onclick="excluirVeiculo()">Excluir</button>
+      <div style="display:flex;gap:10px">
+        <button class="b gho" onclick="fechaVeic()">Fechar</button>
+        <button class="b pri" onclick="salvarVeiculo()">Salvar</button>
       </div>
     </div>
   </div>
@@ -430,14 +482,22 @@ function iniciais(n){const p=String(n||'').trim().split(/\s+/).filter(Boolean);
 
 /* ── dados ── */
 async function loadAtivos(){
-  const {data,error}=await sb.from('ginfo_snapshot').select('data').eq('chave','ativos').maybeSingle();
-  if(error)throw error;
-  if(!data||!Array.isArray(data.data))throw new Error('Base de ativos (robô Ginfo) não encontrada.');
-  ATIVOS=data.data.map(r=>{
+  const [g,m]=await Promise.all([
+    sb.from('ginfo_snapshot').select('data').eq('chave','ativos').maybeSingle(),
+    sb.from('ativos_manual').select('*')
+  ]);
+  if(g.error)throw g.error;
+  if(!g.data||!Array.isArray(g.data.data))throw new Error('Base de ativos (robô Ginfo) não encontrada.');
+  const manuais=(m.data||[]).map(r=>({placa:normP(r.placa),filial:r.filial||'',projeto:r.projeto||'',
+    tipo:r.tipo_veiculo||'',modelo:r.modelo||'',cod:r.unidade,manual:true}));
+  const placasManuais=new Set(manuais.map(r=>r.placa));
+  const ginfo=g.data.data.map(r=>{
     const filial=String(r['Filial']||'').trim(), projeto=String(r['Projeto']||'').trim();
     return {placa:normP(r['Placa']),filial,projeto,tipo:String(r['Tipo Veículo']||'').trim(),
             modelo:String(r['Modelo']||'').trim(),cod:unitCod(filial,projeto)};
-  }).filter(r=>r.placa&&!/FRETEIRO/i.test(r.projeto));   // FRETEIRO fora (Renan, 14/08/2026)
+  }).filter(r=>r.placa&&!/FRETEIRO/i.test(r.projeto)     // FRETEIRO fora (Renan, 14/08/2026)
+             &&!placasManuais.has(r.placa));             // manual tem prioridade
+  ATIVOS=[...ginfo,...manuais];
 }
 async function loadEvents(){
   const {data,error}=await sb.from('indisponibilidade').select('*').eq('unidade',UNIT)
@@ -482,6 +542,7 @@ function chip(st){
 function render(){
   if(VER==='lista') $('cols').innerHTML=htmlLista();
   else if(VER==='frota') $('cols').innerHTML=htmlFrota();
+  else if(VER==='resumo'){ renderResumo(); pintaLateral(); return; }
   else $('cols').innerHTML=htmlHistorico();
   pintaLateral();
 }
@@ -521,7 +582,8 @@ function htmlFrota(){
         <td class="forte">${esc(a.placa)}</td><td>${esc(a.projeto||'—')}</td><td>${esc(a.tipo||'—')}</td><td>${esc(a.modelo||'—')}</td>
         <td>${ev?`<span class="tag" style="--c:var(--vermelho)">Indisponível · ${diasParado(ev)}d</span>`
                :`<span class="tag" style="--c:var(--verde)">Disponível</span>`}</td>
-        <td>${ev?'':`<button class="btn-mini abrir" data-parou="${esc(a.placa)}">Parou? Abrir</button>`}</td></tr>`;
+        <td style="white-space:nowrap">${ev?'':`<button class="btn-mini abrir" data-parou="${esc(a.placa)}">Parou? Abrir</button>`}
+          ${a.manual&&UNIT==='ANG'?` <button class="btn-mini" data-editv="${esc(a.placa)}" title="Editar veículo (manual)" style="background:var(--hover);color:var(--txt2);border:1px solid var(--card-brd)">✎</button>`:''}</td></tr>`;
     }).join('')}</tbody></table></div>`;
 }
 function htmlHistorico(){
@@ -535,6 +597,102 @@ function htmlHistorico(){
       <td class="livre">${esc(e.descricao_problema||'—')}</td>
       <td>${dataBR(e.data_parada)}</td><td style="color:var(--verde);font-weight:700">${dataBR(e.data_retorno)}</td>
       <td class="num">${diasParado(e)}</td></tr>`).join('')}</tbody></table></div>`;
+}
+
+/* ── visão RESUMO: o painel de disponibilidade (substitui /disponibilidade/) ── */
+let RES=null, CH1=null, CH2=null;
+async function loadResumo(){
+  if(RES)return RES;
+  const out=[]; const PG=1000;
+  for(let i=0;;i+=PG){
+    const {data,error}=await sb.from('disp_resumo').select('*').order('data',{ascending:true}).range(i,i+PG-1);
+    if(error)throw error;
+    out.push(...(data||[]));
+    if(!data||data.length<PG)break;
+  }
+  RES=out; return RES;
+}
+async function renderResumo(){
+  $('cols').innerHTML='<div class="cvazia" style="padding:30px">Carregando resumo…</div>';
+  let rows;
+  try{ rows=await loadResumo(); }
+  catch(e){ $('cols').innerHTML=`<div class="cvazia">Erro: ${esc(e.message||e)} — rode scripts/ativos-manual.sql (view disp_resumo).</div>`; return; }
+  if(VER!=='resumo')return;
+  if(!rows.length){ $('cols').innerHTML='<div class="cvazia">Sem fotos ainda — rode a migração do histórico e aguarde as fotos diárias.</div>'; return; }
+  // por dia (todas as unidades)
+  const porDia=new Map();
+  rows.forEach(r=>{
+    if(!porDia.has(r.data))porDia.set(r.data,{a:0,i:0});
+    const g=porDia.get(r.data); g.a+=r.ativos; g.i+=r.indisponiveis;
+  });
+  const dias=[...porDia.keys()].sort();
+  const ult=dias[dias.length-1];
+  const win=dias.slice(-60);                    // últimos 60 dias no gráfico
+  const pct=d=>{const g=porDia.get(d);return g.a?((g.a-g.i)/g.a*100):null;};
+  const gU=porDia.get(ult);
+  const dispHoje=gU.a?((gU.a-gU.i)/gU.a*100):null;
+  // médias do período visível
+  const med=arr=>arr.length?arr.reduce((s,v)=>s+v,0)/arr.length:null;
+  const medDisp=med(win.map(pct).filter(v=>v!=null));
+  const medAtv=med(win.map(d=>porDia.get(d).a));
+  const medInd=med(win.map(d=>porDia.get(d).i));
+  // por unidade no último dia + média 30d
+  const unis=[...new Set(rows.map(r=>r.unidade).filter(Boolean))].sort();
+  const d30=dias.slice(-30);
+  const porUni=unis.map(u=>{
+    const hoje=rows.find(r=>r.data===ult&&r.unidade===u);
+    const hist=rows.filter(r=>d30.includes(r.data)&&r.unidade===u&&r.ativos);
+    const m=hist.length?med(hist.map(r=>(r.ativos-r.indisponiveis)/r.ativos*100)):null;
+    return {u,a:hoje?hoje.ativos:0,i:hoje?hoje.indisponiveis:0,
+            p:hoje&&hoje.ativos?((hoje.ativos-hoje.indisponiveis)/hoje.ativos*100):null,m};
+  }).filter(x=>x.a||x.i);
+  const corP=v=>v==null?'var(--txt3)':v>=95?'var(--verde)':v>=90?'var(--ambar)':'var(--vermelho)';
+  $('cols').innerHTML=`
+  <div style="overflow:auto;min-height:0;flex:1">
+    <div style="display:flex;gap:26px;align-items:flex-end;flex-wrap:wrap;margin-bottom:14px">
+      <div><div style="font-size:10px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:1px">Disponibilidade · ${dataBR(ult)}</div>
+        <div style="font-size:44px;font-weight:800;letter-spacing:-1.5px;line-height:1.05;color:${corP(dispHoje)}">${dispHoje==null?'—':dispHoje.toFixed(1).replace('.',',')+'%'}</div></div>
+      <div style="display:flex;gap:22px;padding-bottom:6px;flex-wrap:wrap">
+        <div><div style="font-size:9.5px;color:var(--txt3);text-transform:uppercase;letter-spacing:.7px">Média 60d</div><b style="font-size:17px">${medDisp==null?'—':medDisp.toFixed(1).replace('.',',')+'%'}</b></div>
+        <div><div style="font-size:9.5px;color:var(--txt3);text-transform:uppercase;letter-spacing:.7px">Média Ativos</div><b style="font-size:17px">${medAtv==null?'—':Math.round(medAtv)}</b></div>
+        <div><div style="font-size:9.5px;color:var(--txt3);text-transform:uppercase;letter-spacing:.7px">Média Indisponíveis</div><b style="font-size:17px">${medInd==null?'—':Math.round(medInd)}</b></div>
+      </div>
+    </div>
+    <div class="tab-wrap" style="padding:14px 16px;margin-bottom:14px">
+      <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;margin-bottom:10px">Disponibilidade % · por dia</div>
+      <div style="height:200px"><canvas id="chDia"></canvas></div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+      <div class="tab-wrap" style="padding:14px 16px">
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;margin-bottom:10px">Disponibilidade % · por unidade (${dataBR(ult)})</div>
+        <div style="height:230px"><canvas id="chUni"></canvas></div>
+      </div>
+      <div class="tab-wrap" style="overflow:auto;max-height:290px">
+        <table class="tab"><thead><tr><th>Unidade</th><th class="num">Ativos</th><th class="num">Indisp.</th><th class="num">Disp. hoje</th><th class="num">Média 30d</th></tr></thead>
+        <tbody>${porUni.map(x=>`<tr>
+          <td class="forte">${esc(x.u)}</td><td class="num">${x.a}</td>
+          <td class="num" style="color:${x.i?'var(--vermelho)':'inherit'}">${x.i}</td>
+          <td class="num"><b style="color:${corP(x.p)}">${x.p==null?'—':x.p.toFixed(1).replace('.',',')+'%'}</b></td>
+          <td class="num">${x.m==null?'—':x.m.toFixed(1).replace('.',',')+'%'}</td></tr>`).join('')}</tbody></table>
+      </div>
+    </div>
+  </div>`;
+  // gráficos (tema-aware)
+  const claro=document.body.classList.contains('claro');
+  const grid={color:claro?'rgba(0,0,0,.08)':'rgba(255,255,255,.06)'};
+  const tick={color:claro?'#444':'#B2BCD2',font:{family:'Montserrat',size:10}};
+  if(CH1)CH1.destroy(); if(CH2)CH2.destroy();
+  CH1=new Chart($('chDia'),{type:'line',data:{labels:win.map(dataBR),
+    datasets:[{data:win.map(pct),borderColor:'#F97316',borderWidth:2.5,pointRadius:0,tension:.3,fill:false}]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},
+      tooltip:{callbacks:{label:c=>c.parsed.y==null?'—':c.parsed.y.toFixed(1).replace('.',',')+'%'}}},
+      scales:{x:{grid,ticks:{...tick,maxTicksLimit:10}},y:{grid,ticks:{...tick,callback:v=>v+'%'}}}}});
+  CH2=new Chart($('chUni'),{type:'bar',data:{labels:porUni.map(x=>x.u),
+    datasets:[{data:porUni.map(x=>x.p),backgroundColor:porUni.map(x=>x.p==null?'#5B657C':x.p>=95?'#3BB33B':x.p>=90?'#F4A100':'#FF5252')}]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},
+      tooltip:{callbacks:{label:c=>c.parsed.y==null?'—':c.parsed.y.toFixed(1).replace('.',',')+'%'}}},
+      scales:{x:{grid:{display:false},ticks:{...tick,font:{family:'Montserrat',size:9}}},
+              y:{grid,ticks:{...tick,callback:v=>v+'%'},suggestedMin:80,max:100}}}});
 }
 
 /* ── lateral: resumo + unidades + contadores ── */
@@ -569,10 +727,11 @@ function pintaLateral(){
   document.querySelectorAll('.n[data-n]').forEach(el=>{el.textContent=N[el.dataset.n]||'';});
   document.querySelectorAll('.s-item[data-vis]').forEach(b=>b.classList.toggle('on',VISAO===b.dataset.vis));
   document.querySelectorAll('#lstUnidades .s-item').forEach(b=>b.classList.toggle('on',b.dataset.uni===UNIT));
-  ['lista','frota','historico'].forEach(v=>{
-    const bt=$({'lista':'btLista','frota':'btFrota','historico':'btHist'}[v]);
+  ['lista','frota','historico','resumo'].forEach(v=>{
+    const bt=$({'lista':'btLista','frota':'btFrota','historico':'btHist','resumo':'btRes'}[v]);
     if(bt)bt.classList.toggle('on',VER===v);
   });
+  $('btVeic').style.display=(UNIT==='ANG')?'':'none';   // cadastro de veículo: só ANG
   $('btProj').classList.toggle('on',FPROJ.size>0);
   $('btGrupo').classList.toggle('on',FGRUPO.size>0);
   $('btTipo').classList.toggle('on',FTIPO.size>0);
@@ -642,12 +801,13 @@ function limpaFiltros(){
 }
 async function recarregar(){
   document.querySelectorAll('.menu.open').forEach(m=>m.classList.remove('open'));
+  RES=null;
   await Promise.all([loadAtivos(),loadEvents()]);
   contaAbertas(); render();
 }
 
 /* ── navegação ── */
-const TIT={lista:'Indisponíveis',frota:'Frota completa',historico:'Histórico'};
+const TIT={lista:'Indisponíveis',frota:'Frota completa',historico:'Histórico',resumo:'Resumo · Disponibilidade'};
 function setVer(v){VER=v;$('tit').textContent=TIT[v];render();}
 document.querySelectorAll('.s-item[data-vis]').forEach(b=>b.addEventListener('click',()=>{
   VISAO=(VISAO===b.dataset.vis)?'':b.dataset.vis;
@@ -658,17 +818,84 @@ document.querySelectorAll('.s-item[data-vis]').forEach(b=>b.addEventListener('cl
 $('busca').addEventListener('input',()=>{BUSCA=$('busca').value.trim().toLowerCase();render();});
 document.addEventListener('keydown',e=>{
   if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='k'){e.preventDefault();$('busca').focus();}
-  if(e.key==='Escape'){fechaModal();fechaRet();document.querySelectorAll('.menu.open').forEach(m=>m.classList.remove('open'));}
+  if(e.key==='Escape'){fechaModal();fechaRet();fechaVeic();document.querySelectorAll('.menu.open').forEach(m=>m.classList.remove('open'));}
 });
 
 /* ── cliques na área de conteúdo ── */
 $('cols').addEventListener('click',e=>{
   const ret=e.target.closest('[data-ret]');
   if(ret){abreRet(ret.dataset.ret);return;}
+  const edv=e.target.closest('[data-editv]');
+  if(edv){abreVeic(edv.dataset.editv);return;}
   const parou=e.target.closest('[data-parou]');
   if(parou){novoEvento(parou.dataset.parou);return;}
   const tr=e.target.closest('tr[data-id]'); if(tr)abreModal(tr.dataset.id);
 });
+
+/* ── veículo manual (só ANG — template Ginfo) ── */
+let VEIC_PLACA=null;
+function novoVeiculo(){
+  VEIC_PLACA=null;
+  $('vTit').textContent='Novo veículo · '+UNIT;
+  $('vDel').style.display='none';
+  $('vPlaca').value=''; $('vPlaca').disabled=false;
+  $('vFilial').value='SEARA'; $('vProjeto').value='ROTA';
+  $('vTipo').value=''; $('vMarca').value='Volkswagen'; $('vModelo').value='';
+  $('vEstado').value='SÃO PAULO'; $('vAno').value='';
+  $('tiposList').innerHTML=[...new Set(ATIVOS.map(a=>a.tipo).filter(Boolean))].sort()
+    .map(t=>`<option value="${esc(t)}"></option>`).join('');
+  $('vbg').classList.add('open'); setTimeout(()=>$('vPlaca').focus(),40);
+}
+function abreVeic(placa){
+  const a=ATIVOS.find(x=>x.placa===normP(placa)&&x.manual); if(!a)return;
+  novoVeiculo();
+  VEIC_PLACA=a.placa;
+  $('vTit').textContent='Editar veículo · '+a.placa;
+  $('vDel').style.display='';
+  $('vPlaca').value=a.placa; $('vPlaca').disabled=true;
+  $('vFilial').value=a.filial||''; $('vProjeto').value=a.projeto||'';
+  $('vTipo').value=a.tipo||''; $('vModelo').value=a.modelo||'';
+}
+function fechaVeic(){$('vbg').classList.remove('open');VEIC_PLACA=null;}
+$('vbg').addEventListener('click',e=>{if(e.target===$('vbg'))fechaVeic();});
+async function salvarVeiculo(){
+  const placa=normP($('vPlaca').value);
+  if(!placa){alert('Informe a placa.');return;}
+  if(!$('vTipo').value.trim()){alert('Informe o tipo de veículo.');return;}
+  const dados={
+    placa, unidade:UNIT,
+    filial:$('vFilial').value.trim()||null,
+    projeto:$('vProjeto').value.trim()||null,
+    marca:$('vMarca').value.trim()||null,
+    modelo:$('vModelo').value.trim()||null,
+    tipo_veiculo:$('vTipo').value.trim()||null,
+    estado:$('vEstado').value.trim()||null,
+    ano_fabricacao:$('vAno').value?+$('vAno').value:null
+  };
+  const q=VEIC_PLACA
+    ? sb.from('ativos_manual').update(dados).eq('placa',VEIC_PLACA)
+    : sb.from('ativos_manual').insert(dados);
+  const {error}=await q;
+  if(error){alert('Erro ao salvar: '+error.message);return;}
+  fechaVeic(); await loadAtivos(); render();
+}
+async function excluirVeiculo(){
+  if(!VEIC_PLACA||!confirm('Excluir este veículo do cadastro da '+UNIT+'?'))return;
+  const {error}=await sb.from('ativos_manual').delete().eq('placa',VEIC_PLACA);
+  if(error){alert('Erro ao excluir: '+error.message);return;}
+  fechaVeic(); await loadAtivos(); render();
+}
+
+/* ── menu lateral recolhido (mesma ideia do Planner) ── */
+function trocaMini(){
+  const l=document.querySelector('.side').classList.toggle('mini');
+  localStorage.setItem('disp_mini', l?'1':'0');
+  const b=$('btMini'); if(b)b.title=l?'Expandir menu':'Recolher menu';
+}
+if(localStorage.getItem('disp_mini')==='1'){
+  document.querySelector('.side').classList.add('mini');
+  $('btMini').title='Expandir menu';
+}
 
 /* ── mini-modal de retorno: data em CAMPO DE DATA (sem texto livre) ── */
 let RET_ID=null;
@@ -793,6 +1020,7 @@ function aplicaTema(t){
   document.body.classList.toggle('claro',t==='light');
   localStorage.setItem('bi_theme',t);
   const b=$('btTemaTopo'); if(b)b.innerHTML=t==='light'?_LUA:_SOL;
+  if(VER==='resumo'&&RES)render();   // redesenha os gráficos na paleta do tema
 }
 function trocaTema(){aplicaTema(document.body.classList.contains('claro')?'dark':'light');}
 aplicaTema(localStorage.getItem('bi_theme')||'dark');
