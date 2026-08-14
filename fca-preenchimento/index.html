@@ -1366,6 +1366,15 @@ function rowHTML(a,canRemove){
 
 let _FATOS=[];
 function render(fatos){ _FATOS=fatos||[]; popFiltros(); aplicar(); }
+// PROJETOS = os mesmos da Visão Financeira (Renan, 14/08/2026): tudo vem de lá.
+// A lista do FCA vinha do que estava gravado no banco e trazia uma cacetada de
+// variação (ADMINISTRATIVO, EMPURRADA BITREM…) que não existe no filtro da VF.
+const PROJ_CANON=['APOIO','AUTO SERVIÇO','DISTRIBUIÇÃO URBANA','EMPURRADA','INSUMOS','ROTA','TERCEIROS'];
+const _pn=s=>String(s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toUpperCase().replace(/\s+/g,' ').trim();
+const _PROJ_SET=new Set(PROJ_CANON.map(_pn));
+const projCanon=v=>_PROJ_SET.has(_pn(v));
+// mantém a ORDEM da Visão Financeira
+const projFiltra=arr=>PROJ_CANON.filter(c=>arr.some(v=>_pn(v)===_pn(c)));
 let PROJ_OPTS=[],IND_OPTS=[],VIG_OPTS=[],ORG_OPTS=[],CONTA_OPTS=[],_vigInit=false;
 // nome limpo do fato: 1ª linha, sem o "Desvio de R$ …" dos fatos antigos e
 // sem o prefixo "Pacote " (formato anterior) — o filtro lista indicador/conta,
@@ -1399,7 +1408,7 @@ function getMsValues(id){const w=document.getElementById(id);return w&&w._sel?[.
 function popFiltros(){
   VIG_OPTS=[...new Set(_FATOS.map(f=>f.vig).filter(Boolean))].sort((a,b)=>vigNum(b)-vigNum(a));
   ORG_OPTS=[...new Set(_FATOS.map(f=>f.origem).filter(Boolean))].sort();
-  PROJ_OPTS=[...new Set(_FATOS.map(f=>projLabel(f.proj)))].sort();
+  PROJ_OPTS=projFiltra([...new Set(_FATOS.map(f=>projLabel(f.proj)))]);
   IND_OPTS=[...new Set(_FATOS.map(f=>f.fato))].sort();
   CONTA_OPTS=[...new Set(_FATOS.flatMap(contasDeF).filter(Boolean))].sort();
   // 1ª carga: já abre na vigência mais recente (as outras ficam no filtro)
