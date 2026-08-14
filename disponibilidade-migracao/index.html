@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>Disponibilidade · Migração</title>
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+:root{--bg:#0C1017;--card:#141B26;--border:#1E2D40;--orange:#F97316;--blue:#38BDF8;--text:#F1F5F9;--text2:#94A3B8;--text3:#475569;--green:#3BB33B;--red:#FF6666;--amber:#F4A100;}
+*{margin:0;padding:0;box-sizing:border-box;}
+body{background:radial-gradient(ellipse at 10% 25%,rgba(249,115,22,.06) 0%,transparent 50%),radial-gradient(ellipse at 90% 75%,rgba(56,189,248,.05) 0%,transparent 50%),var(--bg);color:var(--text);font-family:'Montserrat',-apple-system,sans-serif;font-size:13px;min-height:100vh;}
+.header{background:rgba(12,16,23,.75);border-bottom:1px solid rgba(255,255,255,.07);padding:10px 24px 12px;display:flex;flex-wrap:wrap;align-items:center;gap:10px;position:sticky;top:0;z-index:100;backdrop-filter:blur(20px);box-shadow:0 2px 12px rgba(0,0,0,.3);}
+.brand{flex:1;min-width:200px;}.brand h1{font-size:18px;font-weight:800;color:var(--orange);line-height:1.1;}.brand p{font-size:10px;color:var(--text2);margin-top:2px;font-style:italic;}
+.brand-eyebrow{font-size:10px;color:var(--text2);text-transform:uppercase;letter-spacing:1.2px;font-weight:700;margin-bottom:2px;}
+.btn{background:rgba(249,115,22,.15);border:1px solid rgba(249,115,22,.35);border-radius:6px;padding:7px 14px;cursor:pointer;color:var(--orange);font-family:'Montserrat',sans-serif;font-weight:800;font-size:12px;display:inline-flex;align-items:center;gap:6px;text-decoration:none;}
+.btn:hover{background:rgba(249,115,22,.3);}
+.btn:disabled{opacity:.5;cursor:not-allowed;}
+.btn.ghost{background:rgba(255,255,255,.05);border-color:rgba(255,255,255,.12);color:var(--text2);}
+.btn.ghost:hover{background:rgba(255,255,255,.1);color:var(--text);}
+.main{padding:20px 24px 60px;max-width:1100px;}
+.card{background:rgba(20,27,38,.55);border:1px solid rgba(255,255,255,.07);border-radius:12px;padding:18px 20px;margin-bottom:16px;backdrop-filter:blur(16px);box-shadow:0 2px 12px rgba(0,0,0,.25);}
+.card h2{font-size:14px;font-weight:800;margin-bottom:4px;}
+.card .sub{font-size:11px;color:var(--text2);margin-bottom:14px;line-height:1.5;}
+.row{display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end;}
+.fld{display:flex;flex-direction:column;gap:4px;}
+.fld label{font-size:10px;color:var(--text2);text-transform:uppercase;letter-spacing:.5px;}
+input[type=text]{background:#0a0f18;border:1px solid #2a3a50;border-radius:6px;color:var(--text);font-family:'Montserrat',sans-serif;font-size:12px;padding:8px 10px;outline:none;}
+input[type=text]:focus{border-color:var(--orange);}
+table{width:100%;border-collapse:collapse;font-size:11.5px;margin-top:6px;}
+th{font-size:10px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:.5px;text-align:left;padding:7px 8px;border-bottom:1px solid rgba(255,255,255,.10);white-space:nowrap;}
+td{padding:6px 8px;border-top:1px solid rgba(255,255,255,.05);vertical-align:top;color:var(--text);white-space:nowrap;}
+.tbl-wrap{overflow-x:auto;}
+.note{font-size:11px;color:var(--amber);margin-top:8px;}
+.log{font-size:12px;white-space:pre-wrap;background:#0a0f18;border:1px solid #1e2d40;border-radius:8px;padding:12px;margin-top:10px;max-height:260px;overflow:auto;}
+.loading{text-align:center;color:var(--text3);padding:50px;font-size:14px;}
+.gate{max-width:520px;margin:80px auto;text-align:center;background:rgba(20,27,38,.55);border:1px solid rgba(255,255,255,.08);border-radius:14px;padding:38px 34px;}
+.gate .ic{font-size:38px;margin-bottom:14px;}.gate h2{font-size:18px;font-weight:800;margin-bottom:10px;}.gate p{font-size:13px;color:var(--text2);line-height:1.6;margin-bottom:18px;}
+.gate code{background:rgba(249,115,22,.14);color:var(--orange);padding:2px 7px;border-radius:5px;}
+.stat{display:inline-block;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);border-radius:6px;padding:6px 12px;margin:4px 8px 4px 0;font-size:11px;}
+.stat b{color:var(--orange);font-size:14px;display:block;}
+body.light-mode{background:#F0F0F0;}
+body.light-mode .main{--text:#1a1a1a;--text2:#444;--text3:#666;color:var(--text);}
+body.light-mode .card,body.light-mode .gate{background:rgba(128,128,128,.14)!important;border:none!important;box-shadow:none!important;--text:#1a1a1a;--text2:#444;--text3:#666;}
+body.light-mode input{background:#fff;border-color:#ccc;color:#1a1a1a;}
+body.light-mode .log{background:#fff;border-color:#ccc;}
+</style>
+</head>
+<body>
+<header class="header">
+  <div class="brand"><div class="brand-eyebrow">Gestão em Movimento · BI Frota</div><h1>Disponibilidade · Migração</h1><p>importa o histórico do Consolidado Geral (Sheets) para a base</p></div>
+  <a class="btn ghost" href="../index.html" title="Voltar ao hub">← Hub</a>
+  <button class="btn" id="themeBtn" title="Modo claro/escuro" style="padding:7px 9px;">☀</button>
+</header>
+<main class="main">
+  <div id="content"><div class="loading">Verificando acesso…</div></div>
+</main>
+<script>
+const SUPABASE_URL='https://lozwipoeacpvplgkrxkq.supabase.co';
+const SUPABASE_KEY='sb_publishable_ggKEEebc5zjgQDVsF92Upw_6uoLmKe9';
+const DEFAULT_SHEET='1oW3mss0pXVI6gaDU2z5cDAKvW40LWHCQXpanqSvb12o';
+let sb=null;
+let DISP=[], INDISP=[];      // linhas construídas p/ inserir
+
+function esc(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+function gate(ic,t,h){document.getElementById('content').innerHTML=`<div class="gate"><div class="ic">${ic}</div><h2>${t}</h2>${h}</div>`;}
+function normU(s){return String(s||'').normalize('NFD').replace(/[̀-ͯ]/g,'').toUpperCase().replace(/\s+/g,' ').trim();}
+
+// ── De-para nome → código (mesmo do scripts/disponibilidade-supabase.sql) ──
+const NAME2COD={
+  'CDD CAMBORIU':'BLC','BALNEARIO CAMBORIU':'BLC','CAMBORIU':'BLC',
+  'CDD CUIABA':'CBA T2','CUIABA':'CBA T1 WH','CUIABA EMPURRADA':'CBA T1',
+  'CDD RIO DE JANEIRO':'CGR','CAMPO GRANDE':'CGR','RIO DE JANEIRO':'CGR',
+  'CDD FLORIANOPOLIS':'FLP','FLORIANOPOLIS':'FLP',
+  'CDD GUARULHOS':'GRL','GUARULHOS':'GRL',
+  'ANHANGUERA':'ANG',
+  'CDI MACACU':'MCC T2','MACACU EMPURRADA':'MCC T1','CACHOEIRAS DE MACACU':'MCC T2','MACACU':'MCC T2',
+  'CDD NOVA FRIBURGO':'NFR','NOVA FRIBURGO':'NFR',
+  'PIRAI EMPURRADA':'PIR','PIRAI':'PIR',
+  'CDD PELOTAS':'PLT','PELOTAS':'PLT',
+  'CDD RONDONOPOLIS':'RON','RONDONOPOLIS':'RON'
+};
+const UNMAPPED=new Set();
+function unitCod(nome,projeto){
+  const n=normU(nome); if(!n)return null;
+  let cod=NAME2COD[n];
+  if(!cod){UNMAPPED.add(n);return n;}     // desconhecido: mantém o nome
+  const p=normU(projeto);
+  if(cod.startsWith('CBA')){
+    if(/EMPURRAD/.test(p))cod='CBA T1';
+    else if(/APOIO|EMPILHADEIRA|ARMAZEM|\bWH\b/.test(p))cod='CBA T1 WH';
+    else if(/ROTA|CDD|AUTO SERVICO|VAN/.test(p))cod='CBA T2';
+  }else if(cod.startsWith('MCC')){
+    if(/EMPURRAD/.test(p))cod='MCC T1';
+    else if(/ROTA|CDI|CDD|AUTO SERVICO|VAN/.test(p))cod='MCC T2';
+  }
+  return cod;
+}
+
+// ── células gviz ──
+function cellText(c){if(!c)return '';if(c.f!=null&&c.f!=='')return String(c.f).trim();if(c.v!=null)return String(c.v).trim();return '';}
+function toDate(c){
+  if(!c)return null;
+  if(c.v instanceof Date)return `${c.v.getFullYear()}-${String(c.v.getMonth()+1).padStart(2,'0')}-${String(c.v.getDate()).padStart(2,'0')}`;
+  const v=c.v!=null?String(c.v):'';
+  let m=v.match(/^Date\((\d+),(\d+),(\d+)/); if(m)return `${m[1]}-${String(+m[2]+1).padStart(2,'0')}-${String(+m[3]).padStart(2,'0')}`;
+  const t=cellText(c);
+  m=t.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})/); if(m){const y=m[3].length===2?'20'+m[3]:m[3];return `${y}-${String(+m[2]).padStart(2,'0')}-${String(+m[1]).padStart(2,'0')}`;}
+  if(/^\d{4}-\d{2}-\d{2}/.test(t))return t.slice(0,10);
+  return null;
+}
+function toInt(c){
+  if(!c)return null;
+  if(typeof c.v==='number'&&isFinite(c.v))return Math.round(c.v);
+  const t=cellText(c).replace(/\./g,'').replace(',','.');
+  const n=parseFloat(t); return isFinite(n)?Math.round(n):null;
+}
+
+function gviz(url){return new Promise((res,rej)=>{const fn='_gvm'+Math.floor(Math.random()*1e9);const s=document.createElement('script');const clr=()=>{try{delete window[fn];s.remove();}catch(e){}};window[fn]=r=>{clr();try{if(r.status!=='ok')throw new Error((r.errors&&r.errors[0]&&(r.errors[0].detailed_message||r.errors[0].message))||'Erro gviz');res(r.table);}catch(e){rej(e);}};s.onerror=()=>{clr();rej(new Error('Falha ao ler a planilha. Você está logado no Google e tem acesso a ela?'));};s.src=url+(url.includes('?')?'&':'?')+'tqx=out:json;responseHandler:'+fn;document.head.appendChild(s);});}
+
+// acha a linha de cabeçalho e devolve {idx: {NOME:posição}, start: primeira linha de dados}
+function headerIdx(rows,mustHave){
+  for(let r=0;r<Math.min(rows.length,4);r++){
+    const cells=rows[r]||[];
+    const idx={};
+    cells.forEach((c,i)=>{const t=normU(cellText(c));if(t&&!(t in idx))idx[t]=i;});
+    if(mustHave.every(h=>h in idx))return {idx,start:r+1};
+  }
+  return null;
+}
+// gviz às vezes põe o cabeçalho em cols[].label em vez da 1ª linha
+function headerFromCols(cols,mustHave){
+  const idx={};
+  (cols||[]).forEach((c,i)=>{const t=normU(c&&c.label||'');if(t&&!(t in idx))idx[t]=i;});
+  return mustHave.every(h=>h in idx)?{idx,start:0}:null;
+}
+function pick(cells,idx,names){for(const n of names){const k=normU(n);if(k in idx)return cells[idx[k]];}return null;}
+
+function showWizard(){
+  document.getElementById('content').innerHTML=`
+  <div class="card">
+    <h2>1 · Origem — Consolidado Geral</h2>
+    <div class="sub">Lê as abas <b>Disponibilidade</b> (agregado diário) e <b>Indisponibilidade</b> (detalhe diário) direto do Sheets.
+    Você precisa estar logado no Google com acesso à planilha.</div>
+    <div class="row">
+      <div class="fld"><label>ID da planilha</label><input type="text" id="sheetId" value="${DEFAULT_SHEET}" style="width:430px"></div>
+      <button class="btn" id="loadBtn">Carregar dados</button>
+    </div>
+    <div id="loadMsg" class="note" style="display:none"></div>
+    <div id="stats"></div>
+  </div>
+  <div id="prevCard"></div>`;
+  document.getElementById('loadBtn').addEventListener('click',carregar);
+}
+
+async function carregar(){
+  const id=document.getElementById('sheetId').value.trim();
+  const msg=document.getElementById('loadMsg');msg.style.display='';msg.style.color='var(--text2)';msg.textContent='Carregando Disponibilidade… (pode demorar, são centenas de milhares de linhas)';
+  UNMAPPED.clear();
+  try{
+    // ── aba Disponibilidade: Data | Unidade | Projeto | Tipo de Veiculo | Ativos | Indisponíveis ──
+    const tD=await gviz(`https://docs.google.com/spreadsheets/d/${id}/gviz/tq?sheet=${encodeURIComponent('Disponibilidade')}`);
+    const rowsD=(tD.rows||[]).map(r=>r.c||[]);
+    const hD=headerFromCols(tD.cols,['DATA','UNIDADE'])||headerIdx(rowsD,['DATA','UNIDADE']);
+    if(!hD)throw new Error('Não achei o cabeçalho (Data/Unidade) na aba Disponibilidade.');
+    DISP=[];
+    for(let r=hD.start;r<rowsD.length;r++){
+      const c=rowsD[r];
+      const data=toDate(pick(c,hD.idx,['Data']));
+      const nome=cellText(pick(c,hD.idx,['Unidade']));
+      if(!data||!nome)continue;
+      const projeto=cellText(pick(c,hD.idx,['Projeto']))||null;
+      DISP.push({
+        data, unidade:unitCod(nome,projeto), unidade_nome:normU(nome), projeto,
+        tipo_veiculo:cellText(pick(c,hD.idx,['Tipo de Veiculo','Tipo de Veículo','Tipo Veiculo']))||null,
+        ativos:toInt(pick(c,hD.idx,['Ativos']))??0,
+        indisponiveis:toInt(pick(c,hD.idx,['Indisponíveis','Indisponiveis']))??0,
+        fonte:'sheet'
+      });
+    }
+    msg.textContent=`Disponibilidade: ${DISP.length} linhas. Carregando Indisponibilidade…`;
+
+    // ── aba Indisponibilidade: bloco consolidado começa na coluna D ──
+    const tI=await gviz(`https://docs.google.com/spreadsheets/d/${id}/gviz/tq?sheet=${encodeURIComponent('Indisponibilidade')}`);
+    const rowsI=(tI.rows||[]).map(r=>r.c||[]);
+    const needI=['DATA','UNIDADE','PLACA'];
+    const hI=headerFromCols(tI.cols,needI)||headerIdx(rowsI,needI);
+    if(!hI)throw new Error('Não achei o cabeçalho (Data/Unidade/Placa) na aba Indisponibilidade.');
+    INDISP=[];
+    for(let r=hI.start;r<rowsI.length;r++){
+      const c=rowsI[r];
+      const data=toDate(pick(c,hI.idx,['Data']));
+      const nome=cellText(pick(c,hI.idx,['Unidade']));
+      const placa=cellText(pick(c,hI.idx,['Placa']));
+      if(!data||!nome||!placa)continue;
+      const projeto=cellText(pick(c,hI.idx,['Projeto']))||null;
+      INDISP.push({
+        data, unidade:unitCod(nome,projeto), unidade_nome:normU(nome), projeto,
+        placa:placa.toUpperCase().replace(/\s+/g,''),
+        modelo:cellText(pick(c,hI.idx,['Modelo de Veiculo','Modelo de Veículo','Modelo']))||null,
+        grupo:cellText(pick(c,hI.idx,['Grupo']))||null,
+        descricao_problema:cellText(pick(c,hI.idx,['Descrição do Problema','Descricao do Problema']))||null,
+        local_manutencao:cellText(pick(c,hI.idx,['Local Manutenção','Local Manutencao']))||null,
+        rc_oc:cellText(pick(c,hI.idx,['RC/OC']))||null,
+        dias_parado:toInt(pick(c,hI.idx,['Dias Parado'])),
+        status:cellText(pick(c,hI.idx,['Status']))||null,
+        previsao_retorno:toDate(pick(c,hI.idx,['Previsão Retorno','Previsao Retorno'])),
+        observacao:cellText(pick(c,hI.idx,['Observação','Observacao']))||null,
+        fonte:'sheet'
+      });
+    }
+    msg.style.color='var(--green)';
+    msg.textContent=`✓ Carregado.`;
+    const dMin=a=>a.length?a.reduce((m,r)=>r.data<m?r.data:m,a[0].data):'—';
+    const dMax=a=>a.length?a.reduce((m,r)=>r.data>m?r.data:m,a[0].data):'—';
+    document.getElementById('stats').innerHTML=
+      `<div style="margin-top:12px">`+
+      `<span class="stat"><b>${DISP.length.toLocaleString('pt-BR')}</b>Disponibilidade (${dMin(DISP)} → ${dMax(DISP)})</span>`+
+      `<span class="stat"><b>${INDISP.length.toLocaleString('pt-BR')}</b>Indisponibilidade (${dMin(INDISP)} → ${dMax(INDISP)})</span>`+
+      (UNMAPPED.size?`<div class="note">⚠ Unidades sem código no de-para (vão com o nome mesmo): ${[...UNMAPPED].join(', ')}</div>`:'')+
+      `</div>`;
+    preview();
+  }catch(e){msg.style.color='var(--red)';msg.textContent='✗ '+e.message;console.error(e);}
+}
+
+function preview(){
+  const cols=['data','unidade','unidade_nome','projeto','tipo_veiculo','ativos','indisponiveis'];
+  const body=DISP.slice(-5).map(r=>`<tr>${cols.map(c=>`<td>${esc(r[c])}</td>`).join('')}</tr>`).join('');
+  const colsI=['data','unidade','projeto','placa','grupo','dias_parado','status'];
+  const bodyI=INDISP.slice(-5).map(r=>`<tr>${colsI.map(c=>`<td>${esc(r[c])}</td>`).join('')}</tr>`).join('');
+  document.getElementById('prevCard').innerHTML=`<div class="card">
+    <h2>2 · Conferência &amp; importação</h2>
+    <div class="sub">Últimas 5 linhas de cada aba (as mais recentes). Destinos: <b>disp_snapshot</b> e <b>indisp_snapshot</b>, com <code>fonte='sheet'</code>.
+    Importar de novo <b>substitui</b> a importação anterior (apaga só fonte='sheet' — o que o app/cron gravar nunca é tocado).</div>
+    <div class="tbl-wrap"><table><thead><tr>${cols.map(c=>`<th>${c}</th>`).join('')}</tr></thead><tbody>${body}</tbody></table></div>
+    <div class="tbl-wrap" style="margin-top:10px"><table><thead><tr>${colsI.map(c=>`<th>${c}</th>`).join('')}</tr></thead><tbody>${bodyI}</tbody></table></div>
+    <div style="margin-top:14px"><button class="btn" id="impBtn">Importar ${(DISP.length+INDISP.length).toLocaleString('pt-BR')} linhas</button></div>
+    <div id="impLog" class="log" style="display:none"></div>
+  </div>`;
+  document.getElementById('impBtn').addEventListener('click',importar);
+}
+
+async function importar(){
+  const btn=document.getElementById('impBtn');btn.disabled=true;
+  const log=document.getElementById('impLog');log.style.display='';log.textContent='';
+  const add=t=>{log.textContent+=t+'\n';log.scrollTop=log.scrollHeight;};
+  const B=500;
+  try{
+    add('Apagando importação anterior (fonte=sheet)…');
+    let r=await sb.from('disp_snapshot').delete().eq('fonte','sheet');if(r.error)throw r.error;
+    r=await sb.from('indisp_snapshot').delete().eq('fonte','sheet');if(r.error)throw r.error;
+    add('✓ limpo.');
+
+    add(`\nDisponibilidade → disp_snapshot (${DISP.length.toLocaleString('pt-BR')} linhas)…`);
+    for(let i=0;i<DISP.length;i+=B){
+      const {error}=await sb.from('disp_snapshot').insert(DISP.slice(i,i+B));
+      if(error)throw error;
+      if((i/B)%20===0||i+B>=DISP.length)add(`  ✓ ${Math.min(i+B,DISP.length).toLocaleString('pt-BR')}/${DISP.length.toLocaleString('pt-BR')}`);
+    }
+    add(`\nIndisponibilidade → indisp_snapshot (${INDISP.length.toLocaleString('pt-BR')} linhas)…`);
+    for(let i=0;i<INDISP.length;i+=B){
+      const {error}=await sb.from('indisp_snapshot').insert(INDISP.slice(i,i+B));
+      if(error)throw error;
+      if((i/B)%20===0||i+B>=INDISP.length)add(`  ✓ ${Math.min(i+B,INDISP.length).toLocaleString('pt-BR')}/${INDISP.length.toLocaleString('pt-BR')}`);
+    }
+    add(`\n✅ Concluído: ${(DISP.length+INDISP.length).toLocaleString('pt-BR')} linhas migradas.`);
+  }catch(e){add('\n✗ Erro: '+(e.message||e));console.error(e);}
+  btn.disabled=false;
+}
+
+function applyTheme(t){document.body.classList.toggle('light-mode',t==='light');localStorage.setItem('bi_theme',t);document.getElementById('themeBtn').textContent=t==='light'?'🌙':'☀';}
+document.getElementById('themeBtn').addEventListener('click',()=>applyTheme(document.body.classList.contains('light-mode')?'dark':'light'));
+applyTheme(localStorage.getItem('bi_theme')||'dark');
+
+async function initApp(){
+  try{ sb=supabase.createClient(SUPABASE_URL,SUPABASE_KEY); }catch(e){ gate('⚠️','Erro','<p>Falha ao iniciar o Supabase.</p>'); return; }
+  const {data:{session}}=await sb.auth.getSession();
+  if(!session){ gate('🔒','Login necessário','<p>Entre pelo hub para continuar.</p><a class="btn" href="../index.html">Ir para o hub</a>'); return; }
+  const {data:prof,error}=await sb.from('fca_profiles').select('is_admin').eq('user_id',session.user.id).maybeSingle();
+  if(error){ gate('⚠️','Erro',`<p>${esc(error.message)}</p>`); return; }
+  if(!prof||!prof.is_admin){ gate('⛔','Somente admin','<p>Esta ferramenta é restrita a administradores.</p><a class="btn ghost" href="../index.html">← Hub</a>'); return; }
+  const probe=await sb.from('disp_snapshot').select('id',{count:'exact',head:true});
+  if(probe.error&&/does not exist|find the table|schema cache/i.test(probe.error.message||'')){
+    gate('🛠️','Banco não configurado','<p>Rode <code>scripts/disponibilidade-supabase.sql</code> no Supabase SQL Editor primeiro.</p>');return;
+  }
+  showWizard();
+}
+initApp();
+</script>
+<script src="../assets/mobile.js"></script>
+</body>
+</html>
