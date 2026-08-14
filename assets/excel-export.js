@@ -228,7 +228,7 @@
     });
   }
   // bloco "exportável como imagem" mais próximo do clique
-  const IMG_BLOCK='.tbl-section,.chart-card,.kpi-card,.card,.peso-box,.podio-section,.hero,section';
+  const IMG_BLOCK='.tbl-section,.chart-card,.kpi-card,.card,.kcard,.kcol,.gantt,.rel-section,.fato-block,.peso-box,.podio-section,.hero,section';
   function blocoImagem(target){ return target.closest(IMG_BLOCK); }
 
   // ---- menu de contexto ----
@@ -308,7 +308,8 @@
       const impEl=findImpactoEl(e.target);
       if(impEl) items.push({icon:IC_FILE,label:'Exportar base + Impacto (Excel)',action:()=>baixarImpacto(impEl.$exportImpacto,'Impacto')});
       const cards=cardsDe(e.target);
-      if(cards) items.push({icon:IC_FILE,label:'Exportar Excel (cards)',action:()=>baixarCards(cards, 'Cards')});
+      const cardsOk=cards&&cards.some(c=>c.querySelector(LBL_SEL)&&c.querySelector(VAL_SEL));
+      if(cardsOk) items.push({icon:IC_FILE,label:'Exportar Excel (cards)',action:()=>baixarCards(cards, 'Cards')});
       items.push({icon:IC_IMG,label:'Exportar imagem (PNG)',action:()=>capturaImagem(bloco, nome)});
       items.push({icon:IC_IMG,label:'PNG fundo transparente',action:()=>capturaImagem(bloco, nome, undefined, true)});
       showMenu(e.clientX,e.clientY,items);
