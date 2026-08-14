@@ -366,6 +366,22 @@ input[type=date]::-webkit-calendar-picker-indicator{cursor:pointer;}
   </div>
 </div>
 
+<!-- ══════════ mini-modal: confirmar retorno ══════════ -->
+<div class="mbg" id="rbg">
+  <div class="modal" style="max-width:360px">
+    <h3>Confirmar retorno</h3>
+    <div class="msub" id="rSub"></div>
+    <div class="f"><label>Retornou em *</label><input type="date" id="rData"></div>
+    <div class="macoes">
+      <span></span>
+      <div style="display:flex;gap:10px">
+        <button class="b gho" onclick="fechaRet()">Cancelar</button>
+        <button class="b ret" onclick="confirmaRet()">✓ Confirmar retorno</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <script>
 'use strict';
 const SUPABASE_URL='https://lozwipoeacpvplgkrxkq.supabase.co';
@@ -652,25 +668,40 @@ document.querySelectorAll('.s-item[data-vis]').forEach(b=>b.addEventListener('cl
 $('busca').addEventListener('input',()=>{BUSCA=$('busca').value.trim().toLowerCase();render();});
 document.addEventListener('keydown',e=>{
   if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='k'){e.preventDefault();$('busca').focus();}
-  if(e.key==='Escape'){fechaModal();document.querySelectorAll('.menu.open').forEach(m=>m.classList.remove('open'));}
+  if(e.key==='Escape'){fechaModal();fechaRet();document.querySelectorAll('.menu.open').forEach(m=>m.classList.remove('open'));}
 });
 
 /* ── cliques na área de conteúdo ── */
-$('cols').addEventListener('click',async e=>{
+$('cols').addEventListener('click',e=>{
   const ret=e.target.closest('[data-ret]');
-  if(ret){
-    const ev=EVENTS.find(x=>x.id===ret.dataset.ret); if(!ev)return;
-    if(!confirm(`${ev.placa} retornou hoje (${dataBR(hojeBRT())})?`))return;
-    const antes=ev.data_retorno; ev.data_retorno=hojeBRT(); render();
-    const {error}=await sb.from('indisponibilidade').update({data_retorno:ev.data_retorno}).eq('id',ev.id);
-    if(error){ev.data_retorno=antes;render();alert('Erro: '+error.message);}
-    else contaAbertas();
-    return;
-  }
+  if(ret){abreRet(ret.dataset.ret);return;}
   const parou=e.target.closest('[data-parou]');
   if(parou){novoEvento(parou.dataset.parou);return;}
   const tr=e.target.closest('tr[data-id]'); if(tr)abreModal(tr.dataset.id);
 });
+
+/* ── mini-modal de retorno: data em CAMPO DE DATA (sem texto livre) ── */
+let RET_ID=null;
+function abreRet(id){
+  const ev=EVENTS.find(x=>x.id===id); if(!ev)return;
+  RET_ID=id;
+  $('rSub').textContent=[ev.placa,ev.tipo_veiculo,ev.projeto,'parou '+dataBR(ev.data_parada)].filter(Boolean).join(' · ');
+  const r=$('rData'); r.value=hojeBRT(); r.min=ev.data_parada||''; r.max=hojeBRT();
+  $('rbg').classList.add('open');
+}
+function fechaRet(){$('rbg').classList.remove('open');RET_ID=null;}
+$('rbg').addEventListener('click',e=>{if(e.target===$('rbg'))fechaRet();});
+async function confirmaRet(){
+  const ev=EVENTS.find(x=>x.id===RET_ID); if(!ev){fechaRet();return;}
+  const d=$('rData').value;
+  if(!d){alert('Informe a data do retorno.');return;}
+  if(ev.data_parada&&d<ev.data_parada){alert('O retorno não pode ser antes da parada ('+dataBR(ev.data_parada)+').');return;}
+  if(d>hojeBRT()){alert('O retorno não pode ser no futuro.');return;}
+  const antes=ev.data_retorno; ev.data_retorno=d; fechaRet(); render();
+  const {error}=await sb.from('indisponibilidade').update({data_retorno:d}).eq('id',ev.id);
+  if(error){ev.data_retorno=antes;render();alert('Erro: '+error.message);}
+  else contaAbertas();
+}
 
 /* ── modal ── */
 function fillPlacas(){
@@ -717,6 +748,8 @@ async function salvar(){
   const parada=$('mParada').value;
   if(!placa){alert('Informe a placa.');return;}
   if(!parada){alert('Informe a data da parada.');return;}
+  const retISO=$('mRetorno').value;
+  if(retISO&&retISO<parada){alert('O retorno não pode ser antes da parada.');return;}
   const a=ATIVOS.find(x=>x.placa===placa);
   const dados={
     unidade:UNIT, unidade_nome:a?normU(a.filial):null,
