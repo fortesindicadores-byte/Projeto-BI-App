@@ -1010,10 +1010,11 @@ function pushDRE(dre,fatos){
   Object.values(porPac).map(g=>{const over=g.rem-g.real,base=Math.abs(g.rem);return {...g,over,dpct:base>0?over/base*100:0};})
     .filter(g=>g.over>0&&g.rem!==0).sort((a,b)=>b.over-a.over)
     .forEach(g=>{const sev=g.dpct>=5?'crit':'aten';
-      // Fato financeiro: "Pacote X — Desvio: ▲ R$ X · ▲ -Y%"
+      // Fato financeiro: o NOME DO PACOTE puro (Combustíveis, Manutenções…),
+      // sem o prefixo "Pacote" (Renan, 14/08/2026)
       const brlFull='R$ '+Math.round(Math.abs(g.over)).toLocaleString('pt-BR');
       const desvio=`<span class="dn">Desvio: </span><span class="val ${sev==='aten'?'am':''}">▲ ${brlFull} · ▲ -${Math.round(g.dpct)}%</span>`;
-      const fato={vig,fato:'Pacote '+g.pac,proj:g.niv,desvio,sev,origem:'Custos'};
+      const fato={vig,fato:g.pac,proj:g.niv,desvio,sev,origem:'Custos'};
       const causas=[];
       // desdobramento por conta: ▲ estouros (maior→menor), depois ▼ savings (maior→menor)
       const det=g.contas.map(o=>{const ov=o.rem-o.real,b=Math.abs(o.rem);return {conta:o.conta,ov,p:b>0?Math.round(Math.abs(ov)/b*100):null};}).filter(o=>Math.round(o.ov)!==0);
@@ -1366,12 +1367,20 @@ function rowHTML(a,canRemove){
 let _FATOS=[];
 function render(fatos){ _FATOS=fatos||[]; popFiltros(); aplicar(); }
 let PROJ_OPTS=[],IND_OPTS=[],VIG_OPTS=[],ORG_OPTS=[],CONTA_OPTS=[],_vigInit=false;
+// nome limpo do fato: 1ª linha, sem o "Desvio de R$ …" dos fatos antigos e
+// sem o prefixo "Pacote " (formato anterior) — o filtro lista indicador/conta,
+// nunca o valor do desvio.
+const nomeLimpo=t=>{
+  let x=String(t||'').split('\n')[0].trim();
+  x=x.replace(/\s+desvio\b[\s\S]*$/i,'').replace(/^pacote\s+/i,'').trim();
+  return x;
+};
 // Indicador/Conta: nos Custos o fato é o PACOTE e as contas ficam nas linhas
-// "- Conta: ▲ …" do desvio; na RPM o próprio fato é o indicador.
+// "- Conta: ▲ …" do desvio; na RPM (e nos fatos antigos) vale o nome do fato.
 const contasDeF=f=>{
   const out=[];
-  stripTags(f.desvio||'').split('\n').forEach(l=>{const m=l.match(/^\s*-\s*([^:]+):/);if(m)out.push(m[1].trim());});
-  if(!out.length&&f.fato) out.push(String(f.fato).trim());
+  stripTags(f.desvio||'').split('\n').forEach(l=>{const m=l.match(/^\s*-\s*([^:]+):/);if(m){const n=nomeLimpo(m[1]);if(n)out.push(n);}});
+  if(!out.length&&f.fato){const n=nomeLimpo(f.fato);if(n)out.push(n);}
   return out;
 };
 function syncBadge(w){const c=w.querySelector('.ms-cnt'),n=w._sel?w._sel.size:0;if(c){c.textContent=n;c.style.display=n?'':'none';}}

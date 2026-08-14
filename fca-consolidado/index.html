@@ -897,12 +897,20 @@ function toggleMs(id){document.querySelectorAll('.ms-panel.open').forEach(p=>{if
 function getMsValues(id){const w=document.getElementById(id);return w&&w._sel?[...w._sel]:[];}
 
 let UNI_OPTS=[],VIG_OPTS=[],ORG_OPTS=[],ST_OPTS=[],FATO_OPTS=[],CONTA_OPTS=[],_vigInit=false;
+// nome limpo do fato: 1ª linha, sem o "Desvio de R$ …" dos fatos antigos e
+// sem o prefixo "Pacote " (formato anterior) — o filtro lista indicador/conta,
+// nunca o valor do desvio.
+const nomeLimpo=t=>{
+  let x=String(t||'').split('\n')[0].trim();
+  x=x.replace(/\s+desvio\b[\s\S]*$/i,'').replace(/^pacote\s+/i,'').trim();
+  return x;
+};
 // Indicador/Conta: nos Custos o fato é o PACOTE e as contas ficam nas linhas
-// "- Conta: ▲ …" do desvio; na RPM o próprio fato é o indicador.
+// "- Conta: ▲ …" do desvio; na RPM (e nos fatos antigos) vale o nome do fato.
 const contasDe=r=>{
   const out=[];
-  String(r.fato_desvio||'').split('\n').forEach(l=>{const m=l.match(/^\s*-\s*([^:]+):/);if(m)out.push(m[1].trim());});
-  if(!out.length&&r.fato) out.push(String(r.fato).trim());
+  String(r.fato_desvio||'').split('\n').forEach(l=>{const m=l.match(/^\s*-\s*([^:]+):/);if(m){const n=nomeLimpo(m[1]);if(n)out.push(n);}});
+  if(!out.length&&r.fato){const n=nomeLimpo(r.fato);if(n)out.push(n);}
   return out;
 };
 const PRZ_OPTS=['Vencida','No prazo','Sem prazo'];
