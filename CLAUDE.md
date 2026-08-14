@@ -694,9 +694,26 @@ Automatiza a coleta dos dados que hoje são copiados manualmente do BI do Ginfo 
 **Abas mapeadas (conforme o Renan mostra):**
 - **Custos** — FORA do escopo do robô: vem do DRE (manual) e será substituída pela **Carta de Custos** no futuro. Não mexer por enquanto. (Colunas: Δ ORÇ. | Δ FCT | Vigência | ESTRUTURA | UNIDADE | NÍVEL 3 | CONTA GERENCIAL | MÊS | ANO | ORÇADO | REMUNERADO | REALIZADO.)
 - **Ativos** — automática (IMPORTRANGE do **Consolidado Geral**, mesmo workbook da Disponibilidade/`DISP_SHEET_ID`; colunas: Placa Mercosul | Filial | Projeto | Placa | Marca | Modelo | Tipo Veículo | Estado | Ano Fabricação). Papel: **base de-para por placa** — a aba Preventivas usa PROCV nela p/ preencher Projeto/Unidade, que o relatório do Ginfo NÃO traz → quando o robô exportar Preventivas, precisa reproduzir esse join (placa → Filial/Projeto via Ativos). Desejo futuro: **painel "Ativos/Frota"** no cluster Visão Geral (idade da frota, ativos por unidade/tipo/modelo).
-- **Indisponibilidade** e **Disponibilidade** — FORA do escopo do robô Ginfo: já são automáticas. As unidades preenchem a indisponibilidade diária em planilhas próprias; um **Apps Script** consolida no Sheets **"Consolidado Geral"** e gera diariamente a aba de disponibilidade (compara indisponibilidades × ativos). Desejo registrado: **futuramente espelhar essas duas no Supabase** (job simples Sheets→Supabase, sem login — a planilha é link-readable; painéis Disponibilidade/Farol passariam a ler de lá).
+- **Indisponibilidade** e **Disponibilidade** — em MIGRAÇÃO para o Supabase (ver seção "Disponibilidade no Supabase" abaixo). O fluxo antigo (planilhas por unidade + Apps Script no "Consolidado Geral") segue rodando em paralelo até os números serem conferidos.
 
 Em paralelo: perguntar ao Ginfo se existe API/export oficial (trocaria o RPA por consulta estável).
+
+## Disponibilidade no Supabase — substitui o Apps Script (14/08/2026)
+
+Decisão do Renan (14/08/2026): tirar a Disponibilidade/Indisponibilidade do Apps Script do "Consolidado Geral" e rodar tudo no banco, com as unidades preenchendo num app do portal (estilo FCA) e auditoria de quem atualiza. **Sem fluxo de validação de admin.** Diagnóstico que motivou: o Apps Script encadeava 4 funções num trigger; `atualizarDisponibilidade` reescrevia a aba inteira (~316k linhas) todo dia e estourava o tempo, deixando a Disponibilidade 1 dia atrás da Indisponibilidade (e com janela destrutiva entre clearContent e setValues).
+
+**Modelo (scripts/disponibilidade-supabase.sql, rodado em 14/08/2026):**
+- `indisponibilidade` — EVENTOS vivos, 1 linha por parada; a unidade abre quando o veículo para e fecha com `data_retorno` quando volta. Sem evento aberto = disponível. RLS: leitura p/ logados; escrita via `fca_has_unit()`/admin (mesmos acessos do FCA).
+- `disp_checkins` — botão "Confirmar frota do dia" (auditoria de quem atualizou; INSERT only, nem admin apaga).
+- `indisp_snapshot` / `disp_snapshot` — fotos diárias (histórico migrado do Sheets com `fonte='sheet'`; o dia a dia entra com `fonte='app'`). APPEND-ONLY: dias anteriores nunca são tocados.
+- `unidade_depara` + `disp_unit_cod(nome, projeto)` — nome de filial → código do portal, com refino de tier CBA/MCC pelo projeto (inclui ANHANGUERA→ANG).
+- `disp_snapshot_diario()` — pg_cron diário às 09h BRT (`0 12 * * *` UTC, job 'disp-snapshot-diario'): fotografa eventos abertos e agrega Ativos (ginfo_snapshot['ativos'], casando indisponível↔ativo pela placa) × indisponíveis. Idempotente no dia. Testada manualmente em 14/08 — OK.
+
+**Páginas:** `/disponibilidade-preenchimento/` (app da unidade: frota do Ginfo, abrir/editar/fechar evento, busca, histórico, check-in; card "Indisponibilidade" no cluster Processos do hub) · `/disponibilidade-migracao/` (admin; importa o histórico das abas Disponibilidade e Indisponibilidade do Consolidado Geral; reimportável — apaga só `fonte='sheet'`).
+
+**Ativos:** vêm do robô Ginfo (`ginfo_snapshot`, chave 'ativos', diário 7h BRT) — NÃO criar coletor novo.
+
+**Pendências:** rodar a migração do histórico e conferir contagens · painel `/disponibilidade/` ainda lê o Sheets via gviz → trocar para Supabase depois da conferência · painel de aderência dos check-ins (quem confirmou/quem não) · desligar o trigger do Apps Script SÓ depois de comparar os números por 1–2 semanas.
 
 ## Robô Frota de Elite (Ginfo → Supabase, por vigência) — em construção (05/08/2026)
 
