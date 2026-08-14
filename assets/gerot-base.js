@@ -636,58 +636,22 @@
     ADIC_PNEUS[1],   // % Calibragem OK
   ];
 
-  // ginfo_snapshot 'checklist-031120' → nº de SAÍDAS com OS crítica por
-  // unidade|vigência. Devolve o MAPA de contagens; quem vira registro é o
-  // load(), que emite o indicador para TODAS as vigências (Renan, 14/08/2026:
-  // aparece sempre — a meta é zero, então sem registro de saída crítica no
-  // export = 0 saídas = 100%).
-  async function loadOsCritica(){
-    if(!global.supabase) return {};
-    let row;
-    try{
-      const sb = global.supabase.createClient(GEM_URL, GEM_KEY);
-      const r = await sb.from('ginfo_snapshot').select('data').eq('chave','checklist-031120').maybeSingle();
-      row = r.data;
-    }catch(e){ console.error('Saída OS Crítica (checklist) falhou', e); return {}; }
-    if(!row || !Array.isArray(row.data) || !row.data.length) return {};
-    const kDe=(o,...names)=>{const ks=Object.keys(o),N=ks.map(NK);
-      for(const nm of names){const i=N.indexOf(NK(nm));if(i>=0)return ks[i];}
-      for(const nm of names){const t=NK(nm);const i=N.findIndex(k=>k.includes(t));if(i>=0)return ks[i];}
-      return null;};
-    // datas do xlsx: serial do Excel ou string do export PBI (M/D/YYYY…)
-    const parseX=v=>{
-      if(v==null||v==='')return null;
-      if(typeof v==='number')return v>20000&&v<80000?new Date(Date.UTC(1899,11,30)+Math.round(v*864e5)):null;
-      const s=String(v).trim();
-      const m=s.match(/^(\d{1,4})[\/\-](\d{1,2})[\/\-](\d{1,4})/);
-      if(!m)return null;
-      const a=+m[1],b=+m[2],c=+m[3];
-      if(a>31)return new Date(a,b-1,c);
-      if(/AM|PM/i.test(s)||b>12)return new Date(c,a-1,b);
-      return new Date(c,b-1,a);
-    };
-    const smp=row.data[0];
-    const K={dt:kDe(smp,'Data do mapa','Data'),tipo:kDe(smp,'Tipo Checklist','Tipo Checkli'),
-             fil:kDe(smp,'Filial'),proj:kDe(smp,'Projeto','Proje')};
-    if(!K.dt||!K.tipo||!K.fil) return {};
-    const cont={};
-    row.data.forEach(r=>{
-      const d=parseX(r[K.dt]); if(!d) return;
-      const vig=d.getUTCFullYear()+'-'+String(d.getUTCMonth()+1).padStart(2,'0');
-      if(NK(r[K.tipo])!=='SAIDA') return;
-      const unit=canonUnit(r[K.fil], r[K.proj]); if(!unit) return;
-      cont[unit+'|'+vig]=(cont[unit+'|'+vig]||0)+1;
-    });
-    return cont;
-  }
-  // O indicador aparece em TODAS as vigências e unidades: real = contagem do
-  // snapshot (0 quando não há registro de saída crítica) · atg binário 0→100 / ≥1→0.
-  function osCriticaRecords(cont, vigsAll){
+  // Saída com OS Crítica: a coluna "Saídas com OS Crítica" do export MENSAL do
+  // checklist-t2 (tela ADERÊNCIA FROTA - 031120, a mesma da imagem do Renan) —
+  // validado 14/08/2026 contra o Ginfo: soma dos meses jan→jul = 125, batendo
+  // com o acumulado da tela (CUIABA 63 · GRL 25 · BLC 17 · PLT 12…). Histórico
+  // mensal completo, sem depender do snapshot do farol (que guarda um mês só).
+  // A tela cobre os CDDs/CDI; empurradas (T1) e WH não têm a coluna → sem valor.
+  function loadOsCritica(){
     const recs=[];
-    (vigsAll||[]).forEach(vig=>{
-      Object.values(COD2UNIT).forEach(unit=>{
-        const real=cont[unit+'|'+vig]||0;
-        const atg=real===0?100:0;   // binário, regra do farol
+    Object.entries(E.mes['checklist-t2']||{}).forEach(([vig,rows])=>{
+      const s=rows[0]; if(!s) return;
+      const kFil=kOf(s,'Filial'); if(!kFil) return;
+      const kV=Object.keys(s).find(k=>/sa[ií]das?\s*com\s*os\s*cr[ií]tica/i.test(k)); if(!kV) return;
+      rows.forEach(r=>{
+        const unit=canonUnit(r[kFil],''); if(!unit) return;
+        const real=numVal(r[kV]); if(real==null) return;
+        const atg=real===0?100:0;   // binário, regra do farol: meta é ZERO saídas
         recs.push({field:ADIC_CHK.field,label:ADIC_CHK.label,unit,vig,real,meta:0,
                    atg,atgMeta:atg,dir:'lower',fmt:'count',soGerot:true});
       });
@@ -726,7 +690,6 @@
     const combP=loadComb();
     const pneusP=loadPneusSheet();
     const termoP=loadTermometro();
-    const chkP=loadOsCritica();
     await fetchElite();
     await pneusP;
     const records=[];
@@ -741,10 +704,10 @@
       });
     });
     records.push(...loadAdicionais());
+    try{ records.push(...loadOsCritica()); }catch(e){ console.error('Saída com OS Crítica', e); }
     try{ records.push(...await termoP); }catch(e){ console.error('adicionais do termômetro', e); }
     records.push(...await combP);
     const vigsAll=[...new Set(records.map(r=>r.vig))].sort();
-    try{ records.push(...osCriticaRecords(await chkP, vigsAll)); }catch(e){ console.error('Saída com OS Crítica', e); }
     try{ records.push(...await loadPneusAdic(vigsAll[vigsAll.length-1])); }catch(e){ console.error('adicionais de pneus', e); }
     return records;
   }
