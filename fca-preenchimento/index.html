@@ -1356,6 +1356,27 @@ function alinhaCabecalhos(){
   document.documentElement.style.setProperty('--sb',(k.offsetWidth-k.clientWidth)+'px');
 }
 window.addEventListener('resize',alinhaCabecalhos);
+// A roda do mouse em QUALQUER ponto do quadro rola o kanban — inclusive sobre a
+// faixa de títulos e as bordas, onde o evento não nasce dentro da área rolável.
+// E o quadro aceita teclado (PgDn/setas/espaço): ganha foco ao entrar no Kanban.
+document.addEventListener('wheel',function(e){
+  const mn=document.querySelector('.board .main'); if(!mn||!mn.classList.contains('kan'))return;
+  if(e.target.closest('.kanban')||e.target.closest('.kmodal')||e.target.closest('.menu')||e.target.closest('.ms-panel')||e.target.closest('.side'))return;
+  const k=mn.querySelector('.kanban'); if(!k)return;
+  k.scrollTop+=e.deltaY;
+},{passive:true});
+document.addEventListener('click',function(e){
+  if(e.target.closest('input,textarea,select,button,a,[contenteditable]'))return;
+  const k=e.target.closest('.main.kan .kanban'); if(!k)return;
+  k.setAttribute('tabindex','-1'); k.style.outline='none'; k.focus({preventScroll:true});
+});
+function focaQuadro(){
+  const k=document.querySelector('.main.kan .kanban'); if(!k)return;
+  k.setAttribute('tabindex','-1'); k.style.outline='none';
+  const ae=document.activeElement;
+  if(!ae||ae===document.body) k.focus({preventScroll:true});
+}
+
 function aplicar(){
   const list=document.getElementById('list');
   // o texto de instrução era da tela de Fatos (que saiu do menu); no hub de
@@ -1364,7 +1385,7 @@ function aplicar(){
   const mn=document.querySelector('.board .main');
   if(mn){ mn.classList.toggle('rola', VIEW==='flat'||VIEW==='gantt');
            mn.classList.toggle('kan', VIEW==='kanban'); }
-  setTimeout(alinhaCabecalhos,0);
+  setTimeout(function(){alinhaCabecalhos();focaQuadro();},0);
   if(!_FATOS.length){list.innerHTML='<div class="empty">✓ Nenhum desvio encontrado para esta unidade na vigência mais recente — sem fatos a tratar.</div>';return;}
   const fv=getMsValues('ms-vig'), fo=getMsValues('ms-org'), fp=getMsValues('ms-proj'), fi=getMsValues('ms-ind'), fs=getMsValues('ms-st'), fpz=getMsValues('ms-prazo');
   const acMatch=r=>(!fs.length||fs.includes(r.status||DEFAULT_STATUS))&&(!fpz.length||fpz.includes(prazoState(r)));

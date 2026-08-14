@@ -637,18 +637,19 @@
   ];
 
   // ginfo_snapshot 'checklist-031120' → nº de SAÍDAS com OS crítica por
-  // unidade|vigência. O snapshot guarda só o mês de referência do robô — os
-  // meses cobertos são os que aparecem nas linhas; nesses meses, unidade sem
-  // linha nenhuma = 0 saídas = 100.
+  // unidade|vigência. Devolve o MAPA de contagens; quem vira registro é o
+  // load(), que emite o indicador para TODAS as vigências (Renan, 14/08/2026:
+  // aparece sempre — a meta é zero, então sem registro de saída crítica no
+  // export = 0 saídas = 100%).
   async function loadOsCritica(){
-    if(!global.supabase) return [];
+    if(!global.supabase) return {};
     let row;
     try{
       const sb = global.supabase.createClient(GEM_URL, GEM_KEY);
       const r = await sb.from('ginfo_snapshot').select('data').eq('chave','checklist-031120').maybeSingle();
       row = r.data;
-    }catch(e){ console.error('Saída OS Crítica (checklist) falhou', e); return []; }
-    if(!row || !Array.isArray(row.data) || !row.data.length) return [];
+    }catch(e){ console.error('Saída OS Crítica (checklist) falhou', e); return {}; }
+    if(!row || !Array.isArray(row.data) || !row.data.length) return {};
     const kDe=(o,...names)=>{const ks=Object.keys(o),N=ks.map(NK);
       for(const nm of names){const i=N.indexOf(NK(nm));if(i>=0)return ks[i];}
       for(const nm of names){const t=NK(nm);const i=N.findIndex(k=>k.includes(t));if(i>=0)return ks[i];}
@@ -668,18 +669,22 @@
     const smp=row.data[0];
     const K={dt:kDe(smp,'Data do mapa','Data'),tipo:kDe(smp,'Tipo Checklist','Tipo Checkli'),
              fil:kDe(smp,'Filial'),proj:kDe(smp,'Projeto','Proje')};
-    if(!K.dt||!K.tipo||!K.fil) return [];
-    const cont={}, vigsCob=new Set();
+    if(!K.dt||!K.tipo||!K.fil) return {};
+    const cont={};
     row.data.forEach(r=>{
       const d=parseX(r[K.dt]); if(!d) return;
       const vig=d.getUTCFullYear()+'-'+String(d.getUTCMonth()+1).padStart(2,'0');
-      vigsCob.add(vig);
       if(NK(r[K.tipo])!=='SAIDA') return;
       const unit=canonUnit(r[K.fil], r[K.proj]); if(!unit) return;
       cont[unit+'|'+vig]=(cont[unit+'|'+vig]||0)+1;
     });
+    return cont;
+  }
+  // O indicador aparece em TODAS as vigências e unidades: real = contagem do
+  // snapshot (0 quando não há registro de saída crítica) · atg binário 0→100 / ≥1→0.
+  function osCriticaRecords(cont, vigsAll){
     const recs=[];
-    vigsCob.forEach(vig=>{
+    (vigsAll||[]).forEach(vig=>{
       Object.values(COD2UNIT).forEach(unit=>{
         const real=cont[unit+'|'+vig]||0;
         const atg=real===0?100:0;   // binário, regra do farol
@@ -737,9 +742,9 @@
     });
     records.push(...loadAdicionais());
     try{ records.push(...await termoP); }catch(e){ console.error('adicionais do termômetro', e); }
-    try{ records.push(...await chkP); }catch(e){ console.error('Saída com OS Crítica', e); }
     records.push(...await combP);
     const vigsAll=[...new Set(records.map(r=>r.vig))].sort();
+    try{ records.push(...osCriticaRecords(await chkP, vigsAll)); }catch(e){ console.error('Saída com OS Crítica', e); }
     try{ records.push(...await loadPneusAdic(vigsAll[vigsAll.length-1])); }catch(e){ console.error('adicionais de pneus', e); }
     return records;
   }
