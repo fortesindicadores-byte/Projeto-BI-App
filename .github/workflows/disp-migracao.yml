@@ -1,0 +1,25 @@
+name: Disp Migracao
+
+# Migra o histórico das abas Disponibilidade/Indisponibilidade do
+# "Consolidado Geral" (Sheets) para disp_snapshot/indisp_snapshot no Supabase.
+# Reimportável: apaga só fonte='sheet' antes de inserir.
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: disp-migracao
+  cancel-in-progress: false
+
+jobs:
+  migrar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Migrar histórico Sheets → Supabase
+        run: node scripts/disp-migracao.mjs
+        env:
+          GEM_SUPABASE_SERVICE_KEY: ${{ secrets.GEM_SUPABASE_SERVICE_KEY }}
