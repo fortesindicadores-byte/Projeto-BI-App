@@ -834,6 +834,7 @@ table.cons{min-width:1560px!important;}
       <div class="hfilter"><label>Fato</label><div class="ms-wrap" id="ms-fato"><button class="ms-btn" onclick="toggleMs('ms-fato')"><span class="ms-lbl">Fato</span><span class="ms-cnt"></span><svg width="10" height="6" viewBox="0 0 10 6"><path d="M0 0l5 6 5-6z" fill="#F97316"/></svg></button><div class="ms-panel"><div class="ms-search"><input type="text" placeholder="Pesquisar…"></div><div class="ms-list"></div></div></div></div>
       <div class="hfilter"><label>Status</label><div class="ms-wrap" id="ms-st"><button class="ms-btn" onclick="toggleMs('ms-st')"><span class="ms-lbl">Status</span><span class="ms-cnt"></span><svg width="10" height="6" viewBox="0 0 10 6"><path d="M0 0l5 6 5-6z" fill="#F97316"/></svg></button><div class="ms-panel"><div class="ms-search"><input type="text" placeholder="Pesquisar…"></div><div class="ms-list"></div></div></div></div>
       <div class="hfilter"><label>Status Prazo</label><div class="ms-wrap" id="ms-prazo"><button class="ms-btn" onclick="toggleMs('ms-prazo')"><span class="ms-lbl">Status Prazo</span><span class="ms-cnt"></span><svg width="10" height="6" viewBox="0 0 10 6"><path d="M0 0l5 6 5-6z" fill="#F97316"/></svg></button><div class="ms-panel"><div class="ms-search"><input type="text" placeholder="Pesquisar…"></div><div class="ms-list"></div></div></div></div>
+      <div class="hfilter"><label>Indicador/Conta</label><div class="ms-wrap" id="ms-conta"><button class="ms-btn" onclick="toggleMs('ms-conta')"><span class="ms-lbl">Indicador/Conta</span><span class="ms-cnt"></span><svg width="10" height="6" viewBox="0 0 10 6"><path d="M0 0l5 6 5-6z" fill="#F97316"/></svg></button><div class="ms-panel"><div class="ms-search"><input type="text" placeholder="Pesquisar…"></div><div class="ms-list"></div></div></div></div>
       <div class="hfilter"><label>Causa</label><div class="ms-wrap" id="ms-causa"><button class="ms-btn" onclick="toggleMs('ms-causa')"><span class="ms-lbl">Causa</span><span class="ms-cnt"></span><svg width="10" height="6" viewBox="0 0 10 6"><path d="M0 0l5 6 5-6z" fill="#F97316"/></svg></button><div class="ms-panel"><div class="ms-search"><input type="text" placeholder="Pesquisar…"></div><div class="ms-list"></div></div></div></div>
       <div class="hfilter"><label>Ação</label><div class="ms-wrap" id="ms-acao"><button class="ms-btn" onclick="toggleMs('ms-acao')"><span class="ms-lbl">Ação</span><span class="ms-cnt"></span><svg width="10" height="6" viewBox="0 0 10 6"><path d="M0 0l5 6 5-6z" fill="#F97316"/></svg></button><div class="ms-panel"><div class="ms-search"><input type="text" placeholder="Pesquisar…"></div><div class="ms-list"></div></div></div></div>
       <button class="tool ico" id="themeBtn" title="Modo claro/escuro">☀</button>
@@ -895,7 +896,15 @@ function _buildMs(w,getItems,after){
 function toggleMs(id){document.querySelectorAll('.ms-panel.open').forEach(p=>{if(p.closest('.ms-wrap').id!==id)p.classList.remove('open');});const p=document.querySelector('#'+id+' .ms-panel');if(p)p.classList.toggle('open');}
 function getMsValues(id){const w=document.getElementById(id);return w&&w._sel?[...w._sel]:[];}
 
-let UNI_OPTS=[],VIG_OPTS=[],ORG_OPTS=[],ST_OPTS=[],FATO_OPTS=[],_vigInit=false;
+let UNI_OPTS=[],VIG_OPTS=[],ORG_OPTS=[],ST_OPTS=[],FATO_OPTS=[],CONTA_OPTS=[],_vigInit=false;
+// Indicador/Conta: nos Custos o fato é o PACOTE e as contas ficam nas linhas
+// "- Conta: ▲ …" do desvio; na RPM o próprio fato é o indicador.
+const contasDe=r=>{
+  const out=[];
+  String(r.fato_desvio||'').split('\n').forEach(l=>{const m=l.match(/^\s*-\s*([^:]+):/);if(m)out.push(m[1].trim());});
+  if(!out.length&&r.fato) out.push(String(r.fato).trim());
+  return out;
+};
 const PRZ_OPTS=['Vencida','No prazo','Sem prazo'];
 // Status do prazo pela data de vencimento: concluída/cancelada não vence; sem prazo à parte.
 function prazoState(r){
@@ -914,10 +923,11 @@ function popFiltros(){
   ORG_OPTS=[...new Set(_ROWS.map(r=>r.origem).filter(Boolean))].sort();
   ST_OPTS=[...new Set(_ROWS.map(r=>r.status||DEFAULT_STATUS))].sort();
   FATO_OPTS=[...new Set(_ROWS.map(r=>r.fato).filter(Boolean))].sort();
+  CONTA_OPTS=[...new Set(_ROWS.flatMap(contasDe).filter(Boolean))].sort();
   // 1ª carga: abre já na vigência mais recente (menos linhas = mais rápido); admin pode trocar
   const wv=document.getElementById('ms-vig');
   if(wv && wv._sel && !_vigInit && VIG_OPTS.length){ wv._sel.clear(); wv._sel.add(VIG_OPTS[0]); _vigInit=true; }  // muta o Set (não substitui) p/ o dropdown refletir
-  ['ms-uni','ms-vig','ms-org','ms-st','ms-proj','ms-fato','ms-prazo'].forEach(id=>{const w=document.getElementById(id);if(w&&w._render)w._render('');});
+  ['ms-uni','ms-vig','ms-org','ms-st','ms-proj','ms-fato','ms-conta','ms-prazo'].forEach(id=>{const w=document.getElementById(id);if(w&&w._render)w._render('');});
 }
 
 function autoResize(ta){ta.style.height='auto';ta.style.height=ta.scrollHeight+'px';}
@@ -1043,9 +1053,9 @@ function focaQuadro(){
 function render(){
   const c=document.getElementById('content');
   if(!_ROWS.length){c.innerHTML='<div class="tbl-section"><div class="empty">Nenhuma ação cadastrada ainda. Assim que as unidades preencherem o FCA, os registros aparecem aqui.</div></div>';return;}
-  const fu=getMsValues('ms-uni'),fv=getMsValues('ms-vig'),fo=getMsValues('ms-org'),fs=getMsValues('ms-st'),fp=getMsValues('ms-proj'),fc=getMsValues('ms-causa'),fa=getMsValues('ms-acao'),ff=getMsValues('ms-fato'),fpz=getMsValues('ms-prazo');
+  const fu=getMsValues('ms-uni'),fv=getMsValues('ms-vig'),fo=getMsValues('ms-org'),fs=getMsValues('ms-st'),fp=getMsValues('ms-proj'),fc=getMsValues('ms-causa'),fa=getMsValues('ms-acao'),ff=getMsValues('ms-fato'),fct=getMsValues('ms-conta'),fpz=getMsValues('ms-prazo');
   const fillState=v=>String(v||'').trim()?'Preenchida':'Em branco';
-  const vis=_ROWS.filter(r=>(!fu.length||fu.includes(r.unidade))&&(!fv.length||fv.includes(r.vigencia))&&(!fo.length||fo.includes(r.origem))&&(!fs.length||fs.includes(r.status||DEFAULT_STATUS))&&(!fp.length||fp.includes(projLabel(r.projeto)))&&(!fc.length||fc.includes(fillState(r.causa)))&&(!fa.length||fa.includes(fillState(r.acao)))&&(!ff.length||ff.includes(r.fato))&&(!fpz.length||fpz.includes(prazoState(r))));
+  const vis=_ROWS.filter(r=>(!fu.length||fu.includes(r.unidade))&&(!fv.length||fv.includes(r.vigencia))&&(!fo.length||fo.includes(r.origem))&&(!fs.length||fs.includes(r.status||DEFAULT_STATUS))&&(!fp.length||fp.includes(projLabel(r.projeto)))&&(!fc.length||fc.includes(fillState(r.causa)))&&(!fa.length||fa.includes(fillState(r.acao)))&&(!ff.length||ff.includes(r.fato))&&(!fct.length||contasDe(r).some(c=>fct.includes(c)))&&(!fpz.length||fpz.includes(prazoState(r))));
   vis.sort((a,b)=>String(a.unidade||'').localeCompare(String(b.unidade||''))||(vigNum(b.vigencia)-vigNum(a.vigencia))||String(a.projeto||'').localeCompare(String(b.projeto||''))||String(a.fato||'').localeCompare(String(b.fato||'')));  // unidade A→Z, vigência recente, projeto, fato
   let body;
   if(!vis.length){body='<div class="tbl-section"><div class="empty">Nenhuma ação para os filtros selecionados.</div></div>';}
@@ -1060,7 +1070,7 @@ function render(){
   c.innerHTML=body;
   if(VIEW==='resumo'){
     // idem: a série mensal enxerga todas as vigências, e o filtro só acende as escolhidas
-    const visSemVig=_ROWS.filter(r=>(!fu.length||fu.includes(r.unidade))&&(!fo.length||fo.includes(r.origem))&&(!fs.length||fs.includes(r.status||DEFAULT_STATUS))&&(!fp.length||fp.includes(projLabel(r.projeto)))&&(!fc.length||fc.includes(fillState(r.causa)))&&(!fa.length||fa.includes(fillState(r.acao)))&&(!ff.length||ff.includes(r.fato))&&(!fpz.length||fpz.includes(prazoState(r))));
+    const visSemVig=_ROWS.filter(r=>(!fu.length||fu.includes(r.unidade))&&(!fo.length||fo.includes(r.origem))&&(!fs.length||fs.includes(r.status||DEFAULT_STATUS))&&(!fp.length||fp.includes(projLabel(r.projeto)))&&(!fc.length||fc.includes(fillState(r.causa)))&&(!fa.length||fa.includes(fillState(r.acao)))&&(!ff.length||ff.includes(r.fato))&&(!fct.length||contasDe(r).some(c=>fct.includes(c)))&&(!fpz.length||fpz.includes(prazoState(r))));
     pintaResumoAdmin(vis,visSemVig,fv);
   }
 }
@@ -1466,6 +1476,7 @@ _buildMs(document.getElementById('ms-vig'),()=>VIG_OPTS);
 _buildMs(document.getElementById('ms-org'),()=>ORG_OPTS);
 _buildMs(document.getElementById('ms-st'),()=>ST_OPTS);
 _buildMs(document.getElementById('ms-fato'),()=>FATO_OPTS);
+_buildMs(document.getElementById('ms-conta'),()=>CONTA_OPTS);
 _buildMs(document.getElementById('ms-prazo'),()=>PRZ_OPTS);
 _buildMs(document.getElementById('ms-proj'),projItems);
 const FILL_OPTS=['Preenchida','Em branco'];

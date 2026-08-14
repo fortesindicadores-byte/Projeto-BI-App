@@ -756,6 +756,7 @@ body.light-mode .kcard-fato{color:#000000!important;}
       <div class="hfilter"><label>Projeto</label><div class="ms-wrap" id="ms-proj"><button class="ms-btn" onclick="toggleMs('ms-proj')"><span class="ms-lbl">Projeto</span><span class="ms-cnt"></span><svg width="10" height="6" viewBox="0 0 10 6"><path d="M0 0l5 6 5-6z" fill="#F97316"/></svg></button><div class="ms-panel"><div class="ms-search"><input type="text" placeholder="Pesquisar…"></div><div class="ms-list"></div></div></div></div>
       <div class="hfilter"><label>Origem</label><div class="ms-wrap" id="ms-org"><button class="ms-btn" onclick="toggleMs('ms-org')"><span class="ms-lbl">Origem</span><span class="ms-cnt"></span><svg width="10" height="6" viewBox="0 0 10 6"><path d="M0 0l5 6 5-6z" fill="#F97316"/></svg></button><div class="ms-panel"><div class="ms-search"><input type="text" placeholder="Pesquisar…"></div><div class="ms-list"></div></div></div></div>
       <div class="hfilter"><label>Fato</label><div class="ms-wrap" id="ms-ind"><button class="ms-btn" onclick="toggleMs('ms-ind')"><span class="ms-lbl">Fato</span><span class="ms-cnt"></span><svg width="10" height="6" viewBox="0 0 10 6"><path d="M0 0l5 6 5-6z" fill="#F97316"/></svg></button><div class="ms-panel"><div class="ms-search"><input type="text" placeholder="Pesquisar…"></div><div class="ms-list"></div></div></div></div>
+      <div class="hfilter"><label>Indicador/Conta</label><div class="ms-wrap" id="ms-conta"><button class="ms-btn" onclick="toggleMs('ms-conta')"><span class="ms-lbl">Indicador/Conta</span><span class="ms-cnt"></span><svg width="10" height="6" viewBox="0 0 10 6"><path d="M0 0l5 6 5-6z" fill="#F97316"/></svg></button><div class="ms-panel"><div class="ms-search"><input type="text" placeholder="Pesquisar…"></div><div class="ms-list"></div></div></div></div>
       <div class="hfilter"><label>Status</label><div class="ms-wrap" id="ms-st"><button class="ms-btn" onclick="toggleMs('ms-st')"><span class="ms-lbl">Status</span><span class="ms-cnt"></span><svg width="10" height="6" viewBox="0 0 10 6"><path d="M0 0l5 6 5-6z" fill="#F97316"/></svg></button><div class="ms-panel"><div class="ms-search"><input type="text" placeholder="Pesquisar…"></div><div class="ms-list"></div></div></div></div>
       <div class="hfilter"><label>Status Prazo</label><div class="ms-wrap" id="ms-prazo"><button class="ms-btn" onclick="toggleMs('ms-prazo')"><span class="ms-lbl">Status Prazo</span><span class="ms-cnt"></span><svg width="10" height="6" viewBox="0 0 10 6"><path d="M0 0l5 6 5-6z" fill="#F97316"/></svg></button><div class="ms-panel"><div class="ms-search"><input type="text" placeholder="Pesquisar…"></div><div class="ms-list"></div></div></div></div>
       <button class="tool ico" id="themeBtn" title="Modo claro/escuro">☀</button>
@@ -1296,6 +1297,9 @@ async function desviosDoGerot(){
   const vigTxt=vigLbl(new Date(+alvo.slice(0,4), +alvo.slice(5,7)-1, 1));
   const out=[];
   doMes.forEach(r=>{
+    if(r.field==='comb') return;                                     // Combustível NÃO vira FCA de RPM
+                                                                     // (Renan, 14/08/2026): já é tratado
+                                                                     // no pacote Combustíveis dos Custos
     const dp=uniMap[_normU(r.unit)]; if(!dp) return;                 // só unidades do mapa da RPM
     const atg=r.atgMeta!=null?r.atgMeta:r.atg;                       // atingimento CONTRA A META
     if(atg==null||!isFinite(atg)||atg>=100) return;                  // só o que não atingiu
@@ -1361,7 +1365,15 @@ function rowHTML(a,canRemove){
 
 let _FATOS=[];
 function render(fatos){ _FATOS=fatos||[]; popFiltros(); aplicar(); }
-let PROJ_OPTS=[],IND_OPTS=[],VIG_OPTS=[],ORG_OPTS=[],_vigInit=false;
+let PROJ_OPTS=[],IND_OPTS=[],VIG_OPTS=[],ORG_OPTS=[],CONTA_OPTS=[],_vigInit=false;
+// Indicador/Conta: nos Custos o fato é o PACOTE e as contas ficam nas linhas
+// "- Conta: ▲ …" do desvio; na RPM o próprio fato é o indicador.
+const contasDeF=f=>{
+  const out=[];
+  stripTags(f.desvio||'').split('\n').forEach(l=>{const m=l.match(/^\s*-\s*([^:]+):/);if(m)out.push(m[1].trim());});
+  if(!out.length&&f.fato) out.push(String(f.fato).trim());
+  return out;
+};
 function syncBadge(w){const c=w.querySelector('.ms-cnt'),n=w._sel?w._sel.size:0;if(c){c.textContent=n;c.style.display=n?'':'none';}}
 function _buildMs(w,getItems){
   if(!w)return; if(!(w._sel instanceof Set))w._sel=new Set();
@@ -1380,10 +1392,11 @@ function popFiltros(){
   ORG_OPTS=[...new Set(_FATOS.map(f=>f.origem).filter(Boolean))].sort();
   PROJ_OPTS=[...new Set(_FATOS.map(f=>projLabel(f.proj)))].sort();
   IND_OPTS=[...new Set(_FATOS.map(f=>f.fato))].sort();
+  CONTA_OPTS=[...new Set(_FATOS.flatMap(contasDeF).filter(Boolean))].sort();
   // 1ª carga: já abre na vigência mais recente (as outras ficam no filtro)
   const wv=document.getElementById('ms-vig');
   if(wv && wv._sel && !_vigInit && VIG_OPTS.length){ wv._sel.clear(); wv._sel.add(VIG_OPTS[0]); _vigInit=true; }  // muta o Set (não substitui) p/ o dropdown refletir
-  ['ms-vig','ms-org','ms-proj','ms-ind','ms-st','ms-prazo'].forEach(id=>{const w=document.getElementById(id);if(w&&w._render)w._render('');});
+  ['ms-vig','ms-org','ms-proj','ms-ind','ms-conta','ms-st','ms-prazo'].forEach(id=>{const w=document.getElementById(id);if(w&&w._render)w._render('');});
 }
 // largura da barra de rolagem do quadro → alinha a faixa de títulos com as colunas
 function alinhaCabecalhos(){
@@ -1422,15 +1435,15 @@ function aplicar(){
            mn.classList.toggle('kan', VIEW==='kanban'); }
   setTimeout(function(){alinhaCabecalhos();focaQuadro();},0);
   if(!_FATOS.length){list.innerHTML='<div class="empty">✓ Nenhum desvio encontrado para esta unidade na vigência mais recente — sem fatos a tratar.</div>';return;}
-  const fv=getMsValues('ms-vig'), fo=getMsValues('ms-org'), fp=getMsValues('ms-proj'), fi=getMsValues('ms-ind'), fs=getMsValues('ms-st'), fpz=getMsValues('ms-prazo');
+  const fv=getMsValues('ms-vig'), fo=getMsValues('ms-org'), fp=getMsValues('ms-proj'), fi=getMsValues('ms-ind'), fct=getMsValues('ms-conta'), fs=getMsValues('ms-st'), fpz=getMsValues('ms-prazo');
   const acMatch=r=>(!fs.length||fs.includes(r.status||DEFAULT_STATUS))&&(!fpz.length||fpz.includes(prazoState(r)));
-  const vis=_FATOS.filter(f=>(!fv.length||fv.includes(f.vig))&&(!fo.length||fo.includes(f.origem))&&(!fp.length||fp.includes(projLabel(f.proj)))&&(!fi.length||fi.includes(f.fato))
+  const vis=_FATOS.filter(f=>(!fv.length||fv.includes(f.vig))&&(!fo.length||fo.includes(f.origem))&&(!fp.length||fp.includes(projLabel(f.proj)))&&(!fi.length||fi.includes(f.fato))&&(!fct.length||contasDeF(f).some(c=>fct.includes(c)))
     &&(!(fs.length||fpz.length) || (_DBROWS[keyOf(f)]||[]).some(acMatch)));
   if(!vis.length){list.innerHTML='<div class="empty">Nenhum fato para o filtro selecionado.</div>';return;}
   if(VIEW==='resumo'){
     // a série mensal ignora o filtro de VIGÊNCIA: os outros meses continuam
     // no gráfico, apagados, como no Painel KM e na Visão Financeira
-    const visSemVig=_FATOS.filter(f=>(!fo.length||fo.includes(f.origem))&&(!fp.length||fp.includes(projLabel(f.proj)))&&(!fi.length||fi.includes(f.fato))
+    const visSemVig=_FATOS.filter(f=>(!fo.length||fo.includes(f.origem))&&(!fp.length||fp.includes(projLabel(f.proj)))&&(!fi.length||fi.includes(f.fato))&&(!fct.length||contasDeF(f).some(c=>fct.includes(c)))
       &&(!(fs.length||fpz.length) || (_DBROWS[keyOf(f)]||[]).some(acMatch)));
     list.innerHTML=AderenciaView.html({dims:DIMS_ADER}); pintaResumoFCA(vis,visSemVig,fv); return; }
   if(VIEW==='kanban'){ list.innerHTML=kanbanHTMLpre(vis); return; }
@@ -1960,6 +1973,7 @@ _buildMs(document.getElementById('ms-vig'),()=>VIG_OPTS);
 _buildMs(document.getElementById('ms-org'),()=>ORG_OPTS);
 _buildMs(document.getElementById('ms-proj'),()=>PROJ_OPTS);
 _buildMs(document.getElementById('ms-ind'),()=>IND_OPTS);
+_buildMs(document.getElementById('ms-conta'),()=>CONTA_OPTS);
 _buildMs(document.getElementById('ms-st'),()=>STATUS);
 _buildMs(document.getElementById('ms-prazo'),()=>PRZ_OPTS);
 document.addEventListener('click',e=>{if(!e.target.closest('.ms-wrap'))document.querySelectorAll('.ms-panel.open').forEach(p=>p.classList.remove('open'));});
