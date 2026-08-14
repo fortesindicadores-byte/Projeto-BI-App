@@ -52,3 +52,15 @@ Object.keys(porVig).sort().forEach(v => {
   if (o.desvio) console.log('   desvios:', [...o.kpis].slice(0, 10).join(' · '));
   if (o.kpisFora.size) console.log('   KPIs BARRADOS pelo prefixo IC/IV:', [...o.kpisFora].slice(0, 12).join(' · '));
 });
+
+// Amostra crua das últimas vigências: o que exatamente está em Meta/Real/Ating?
+console.log('\n\n===== AMOSTRA CRUA (5 linhas por vigência recente) =====');
+const iMeta = idx(['Meta']), iReal = idx(['Real', 'Realizado']);
+['2026-06', '2026-07', '2026-08'].forEach(alvo => {
+  const amostra = rows.filter(r => vigOf(r[ci.vig]) === alvo).slice(0, 5);
+  console.log(`\n--- ${alvo} (${rows.filter(r => vigOf(r[ci.vig]) === alvo).length} linhas) ---`);
+  amostra.forEach(r => console.log(`  ${String(r[ci.uni]).padEnd(20)} | ${String(r[ci.kpi]).slice(0, 34).padEnd(34)} | meta=${JSON.stringify(r[iMeta])} real=${JSON.stringify(r[iReal])} ating=${JSON.stringify(r[ci.atg])}`));
+  const vals = rows.filter(r => vigOf(r[ci.vig]) === alvo).map(r => r[ci.atg]);
+  const nulos = vals.filter(v => v == null || v === '').length;
+  console.log(`  ating VAZIO em ${nulos}/${vals.length} linhas`);
+});
