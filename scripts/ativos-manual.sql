@@ -158,7 +158,7 @@ begin
        where data_retorno is null
     ) i on i.placa = a.placa
    where a.placa <> ''
-   group by 1, 2, 3, 4;
+   group by a.cod, a.filial, a.projeto, a.tipo;
 end $$;
 revoke execute on function public.disp_snapshot_diario() from public, anon, authenticated;
 
