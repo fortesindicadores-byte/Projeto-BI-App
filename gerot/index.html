@@ -202,8 +202,13 @@ function atualizar(){
     const ytd=soGerot ? RECORDS.filter(r=>r.field===ind.field&&unitOk(r)&&ytdSet.has(r.vig))
                       : (acumYtd||RECORDS.filter(r=>ytdSet.has(r.vig))).filter(r=>r.field===ind.field&&unitOk(r));
     if(soGerot&&!per.length&&!ytd.length)return;   // sem dado no período (ex.: Pneus só na vig recente)
-    const meta=avg(per.map(r=>r.meta)),  real=avg(per.map(r=>r.real));
-    const metaY=avg(ytd.map(r=>r.meta)), realY=avg(ytd.map(r=>r.real));
+    // Saída com OS Crítica é CONTAGEM: janela e YTD SOMAM os meses/unidades
+    // (soma dos meses = acumulado exato da tela do Ginfo: jan→jul 125), em vez
+    // da média — média de contagem não significa nada.
+    const somaC=arr=>{const v=arr.filter(x=>x!=null&&isFinite(x));return v.length?v.reduce((s,x)=>s+x,0):null;};
+    const isSoma=ind.field==='osCritica';
+    const meta=avg(per.map(r=>r.meta)),  real=isSoma?somaC(per.map(r=>r.real)):avg(per.map(r=>r.real));
+    const metaY=avg(ytd.map(r=>r.meta)), realY=isSoma?somaC(ytd.map(r=>r.real)):avg(ytd.map(r=>r.real));
     // % de atingimento AQUI é sempre contra a meta (é daqui que saem os FCAs da
     // RPM) e é calculado em cima do Real e da Meta que estão NA LINHA — senão a
     // média dos atingimentos por unidade contradiz o que a própria linha mostra.
