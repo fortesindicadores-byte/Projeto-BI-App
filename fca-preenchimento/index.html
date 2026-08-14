@@ -10,6 +10,7 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <link rel="stylesheet" href="../assets/aderencia-view.css?v=202608102100">
 <script src="../assets/aderencia-view.js?v=202608102100"></script>
+<script src="../assets/gerot-base.js?v=202608140100"></script>
 <style>
 :root{--bg:#0C1017;--card:#141B26;--border:#1E2D40;--orange:#F97316;--blue:#38BDF8;--text:#F1F5F9;--text2:#94A3B8;--text3:#475569;--green:#3BB33B;--red:#FF6666;--amber:#F4A100;}
 *{margin:0;padding:0;box-sizing:border-box;}
@@ -1016,12 +1017,14 @@ function pushDRE(dre,fatos){
       // desdobramento por conta: ▲ estouros (maior→menor), depois ▼ savings (maior→menor)
       const det=g.contas.map(o=>{const ov=o.rem-o.real,b=Math.abs(o.rem);return {conta:o.conta,ov,p:b>0?Math.round(Math.abs(ov)/b*100):null};}).filter(o=>Math.round(o.ov)!==0);
       det.sort((a,b)=>{const pa=a.ov>0,pb=b.ov>0;if(pa&&pb)return b.ov-a.ov;if(pa)return -1;if(pb)return 1;return a.ov-b.ov;});
-      // A CAUSA É SÓ AS CONTAS — em TODOS os pacotes (Renan, 14/08/2026).
-      // Saíram os drivers de Combustíveis (Dispersão de km, Km/L, bottom 3
-      // placas) e o custo/placa ativa de Manutenções/Pneus: viravam uma
-      // miscelânea no card. Quem quer o driver abre o painel do indicador.
-      if(det.length){causas.push('Contas:');
-        det.forEach(o=>{const s=o.ov>0?'▲':'▼';causas.push(`- ${o.conta}: ${s} ${impFmt(o.ov)}${o.p!=null?' | '+s+' '+o.p+'%':''}${o.ov<0?' (saving)':''}`);});}
+      // AS CONTAS FICAM NO FATO, não na causa (Renan, 14/08/2026): o fato é o
+      // pacote e o desdobramento dele; a CAUSA nasce vazia, para a unidade
+      // escrever o porquê. Saíram também os drivers de Combustíveis
+      // (Dispersão de km, Km/L, bottom 3 placas) e o custo/placa ativa de
+      // Manutenções/Pneus — quem quer o driver abre o painel do indicador.
+      if(det.length){const ls=['Contas:'];
+        det.forEach(o=>{const s=o.ov>0?'▲':'▼';ls.push(`- ${o.conta}: ${s} ${impFmt(o.ov)}${o.p!=null?' | '+s+' '+o.p+'%':''}${o.ov<0?' (saving)':''}`);});
+        fato.desvio+='<br>'+ls.join('<br>');}
       if(causas.length)fato.causaAuto=causas.join('\n');
       fatos.push(fato);});
 }
@@ -1253,13 +1256,11 @@ async function sincronizarRPM(){
   document.querySelectorAll('.hfilter').forEach(e=>e.style.display='none');
   ['uniBadge','uniSel','adminBtn','saveBtn','savedMsg','backUnits','viewBtn','flatBtn'].forEach(id=>{const e=document.getElementById(id);if(e)e.style.display='none';});
   const intro=document.querySelector('.intro'); if(intro)intro.style.display='none';
-  list.innerHTML='<div class="loading">Lendo a Base RPM…</div>';
+  list.innerHTML='<div class="loading">Lendo os indicadores do Gerot…</div>';
   let payload;
-  try{
-    const t=await gvizT(SRC_BASE_RPM);
-    payload=parseBaseRPM(t);                                                    // mapa de unidade/projeto é fixo (RPM_UNIT_MAP)
-  }catch(e){ list.innerHTML='<div class="empty">Erro ao ler/processar a RPM:<br>'+esc(e.message||e)+'</div>'; return; }
-  if(!payload.length){ list.innerHTML='<div class="empty">Nenhum desvio de RPM encontrado (IC/IV com atingimento &lt; 100%).</div>'; return; }
+  try{ payload=await desviosDoGerot(); }
+  catch(e){ list.innerHTML='<div class="empty">Erro ao ler os indicadores do Gerot:<br>'+esc(e.message||e)+'</div>'; return; }
+  if(!payload.length){ list.innerHTML='<div class="empty">Nenhum indicador do Gerot abaixo da meta na vigência mais recente.</div>'; return; }
   list.innerHTML='<div class="loading">Gravando os desvios novos de RPM…</div>';
   let novos=0;
   try{
@@ -1271,7 +1272,51 @@ async function sincronizarRPM(){
     for(let i=0;i<ins.length;i+=200){const {error}=await sb.from('fca').insert(ins.slice(i,i+200));if(error)throw error;}
   }catch(e){ list.innerHTML='<div class="empty">Erro ao gravar na base: '+esc(e.message||e)+'</div>'; return; }
   try{Object.keys(localStorage).filter(k=>k.indexOf('fca_cache_')===0).forEach(k=>localStorage.removeItem(k));}catch(e){}
-  list.innerHTML='<div class="genres"><h2 class="genres-h">RPM gerada — '+novos+' desvio(s) novo(s) no banco</h2><a class="btn" style="display:inline-block;margin-top:14px;text-decoration:none" href="../fca-consolidado/">← Voltar ao Admin</a></div>';
+  list.innerHTML='<div class="genres"><h2 class="genres-h">RPM gerada — '+novos+' desvio(s) novo(s) no banco</h2>'
+    +'<div class="genres-sub">'+payload.length+' indicador(es) abaixo da meta na vigência '+esc(payload[0].vigencia)+'.</div>'
+    +'<a class="btn" style="display:inline-block;margin-top:14px;text-decoration:none" href="../fca-consolidado/">← Voltar ao Admin</a></div>';
+}
+
+// ── DESVIOS DA RPM = OS INDICADORES DO GEROT ABAIXO DA META ──────────────────
+// Regra do Renan: QUALQUER indicador que não está atingindo a meta vira FCA.
+// A fonte é a MESMA do painel Gerot (assets/gerot-base.js → elite_snapshot do
+// robô), não mais a aba "Base RPM" do Sheets (que ficou sem apuração de julho
+// em diante e por isso não gerava nada). Gera a ÚLTIMA vigência com dados;
+// aditivo, então rodar todo mês vai acumulando.
+// Aceita ?vig=YYYY-MM para gerar uma vigência específica.
+async function desviosDoGerot(){
+  if(!window.GerotBase) throw new Error('gerot-base.js não carregou');
+  const recs=await GerotBase.load();
+  if(!recs.length) throw new Error('sem indicadores no elite_snapshot');
+  const alvo=(new URLSearchParams(location.search).get('vig')||'').trim()
+          || [...new Set(recs.map(r=>r.vig))].sort().pop();
+  const doMes=recs.filter(r=>r.vig===alvo);
+  // unidade do Ginfo ('CDD RIO DE JANEIRO') → {abrev:'CGR', projeto:'ROTA'}
+  const uniMap=_RPM_MAP_N;
+  const vigTxt=vigLbl(new Date(+alvo.slice(0,4), +alvo.slice(5,7)-1, 1));
+  const out=[];
+  doMes.forEach(r=>{
+    const dp=uniMap[_normU(r.unit)]; if(!dp) return;                 // só unidades do mapa da RPM
+    const atg=r.atgMeta!=null?r.atgMeta:r.atg;                       // atingimento CONTRA A META
+    if(atg==null||!isFinite(atg)||atg>=100) return;                  // só o que não atingiu
+    if(r.meta==null||!isFinite(r.meta)) return;                      // sem meta não há o que cobrar
+    out.push({unidade:dp.abrev, vigencia:vigTxt, origem:'RPM', fato:r.label, projeto:dp.projeto,
+      fato_desvio:`Meta: ${fmtInd(r,r.meta)} | Real: ${fmtInd(r,r.real)} | Ating: ${Math.round(atg)}%`,
+      causa:null, acao:null, prazo:null, status:DEFAULT_STATUS, locked:false});
+  });
+  // maior desvio primeiro
+  out.sort((a,b)=>(+String(a.fato_desvio).match(/Ating: (-?\d+)/)[1])-(+String(b.fato_desvio).match(/Ating: (-?\d+)/)[1]));
+  return out;
+}
+// valor de um indicador no formato dele (%, contagem, hh:mm:ss, mm, km/L)
+function fmtInd(r,v){
+  if(v==null||!isFinite(v))return '—';
+  const f=r.fmt;
+  if(f==='count') return String(Math.round(v));
+  if(f==='mm')    return (Math.round(v*10)/10).toLocaleString('pt-BR')+' mm';
+  if(f==='kml')   return (Math.round(v*100)/100).toLocaleString('pt-BR')+' km/L';
+  if(f==='time'){const sc=Math.round(v),h=Math.floor(sc/3600),m=Math.floor(sc%3600/60);return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`;}
+  return (Math.round(v*10)/10).toLocaleString('pt-BR')+'%';
 }
 
 const STATUS=['Não iniciada','Em andamento','Concluída','Cancelada'];
@@ -1289,7 +1334,8 @@ function prazoState(r){
 
 // ── Ações vêm do Supabase (mapeadas por chave de fato) ──
 const keyOf=f=>fkey(f.vig,f.origem,f.proj,f.fato);
-const stripTags=h=>String(h||'').replace(/<[^>]*>/g,'').replace(/\s+/g,' ').trim();
+// preserva as quebras: o desvio agora tem várias linhas (pacote + contas)
+const stripTags=h=>String(h||'').replace(/<br\s*\/?>/gi,'\n').replace(/<[^>]*>/g,'').replace(/[ \t]+/g,' ').replace(/ *\n */g,'\n').trim();
 function loadAcoes(key,causaAuto){
   if(PREVIEW){ try{const v=JSON.parse(localStorage.getItem('fca_prev_'+key));if(Array.isArray(v)&&v.length)return v;}catch(e){} return [{id:'',causa:causaAuto||'',acao:'',resp:'',prazo:'',status:DEFAULT_STATUS,obs:'',locked:false}]; }
   const rows=_DBROWS[key];
@@ -1539,7 +1585,7 @@ function kcardHTMLpre(x){const r=x.r,f=x.f,org=String(f.origem||'').toUpperCase(
   return `<div class="kcard${lk?' klock':''}"${lk?'':' draggable="true"'} data-id="${esc(r.id||'')}">
     <div class="kcard-top"><span class="korg ${org}">${esc(f.origem||'')}</span> ${esc(UNIDADE_COD)} · ${esc(projLabel(f.proj))} · ${esc(f.vig)}${r.locked?' 🔒':''}</div>
     <div class="kcard-fato">${esc(_firstLine(f.nome||f.fato))}</div>
-    <div class="kcard-desvio"><span class="kl">Fato:</span> ${(()=>{const d=stripTags(f.desvio||'').trim();return d&&d!=='—'?tri(esc(d)):'<i>sem desvio</i>';})()}</div>
+    <div class="kcard-desvio"><span class="kl">Fato:</span> ${(()=>{const d=stripTags(f.desvio||'').trim();return d&&d!=='—'?tri(esc(d).replace(/\n/g,'<br>')):'<i>sem desvio</i>';})()}</div>
     <div class="kcard-causa"><span class="kl">Causa:</span> ${r.causa?esc(_firstLine(r.causa)):'<i>não preenchida</i>'}</div>
     <div class="kcard-ac">${r.acao?esc(r.acao):'<i>ação não preenchida</i>'}</div>
     <div class="kcard-meta">
@@ -1636,7 +1682,7 @@ function relatorioHTMLpre(vis){
       `<td class="center">${esc(projLabel(f.proj))}</td>`+
       `<td class="center">${esc((f.vig||'').toUpperCase())}</td>`+
       `<td class="txt fato"><b>${esc(_firstLine(f.nome||f.fato))}</b>`+
-        `${desv&&desv!=='—'?`<small>${tri(esc(desv))}</small>`:''}</td>`+
+        `${desv&&desv!=='—'?`<small>${tri(esc(desv).replace(/\n/g,'<br>'))}</small>`:''}</td>`+
       `<td class="txt">${tri((esc(a.causa)||'—').replace(/\n/g,'<br>'))}</td>`+
       `<td class="txt">${tri((esc(a.acao)||'—').replace(/\n/g,'<br>'))}</td>`+
       `<td class="center">${esc(a.resp)||'—'}</td>`+
