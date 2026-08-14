@@ -603,11 +603,17 @@ table.rel .chip{white-space:normal;}
 /* o desvio embaixo da conta, menor e discreto */
 table.rel td.fato small{display:block;margin-top:3px;font-size:10.5px;font-weight:600;color:var(--txt3);}
 /* Causa e Ação com a MESMA largura, e as maiores da tabela */
-table.rel th.c-txt{width:18%;}   /* Causa e Ação: iguais e as maiores */
-table.rel th.c-fato{width:15%;}
-table.rel th.c-uni{width:6%;} table.rel th.c-vig{width:5%;}
-table.rel th.c-proj{width:8.5%;} table.rel th.c-resp{width:8%;}
-table.rel th.c-prazo{width:6%;} table.rel th.c-sp{width:6.5%;} table.rel th.c-st{width:9%;}
+table.rel th.c-txt{width:16%;}   /* Causa e Ação: iguais */
+/* Fato é a coluna mais larga: as CONTAS ficam dentro dele e não podem quebrar
+   em cada palavra. O espaço vem do Status Prazo, que virou só o farol. */
+table.rel th.c-fato{width:23%;}
+table.rel th.c-uni{width:5.5%;} table.rel th.c-vig{width:5.5%;}
+table.rel th.c-proj{width:8%;} table.rel th.c-resp{width:7.5%;}
+table.rel th.c-prazo{width:6%;} table.rel th.c-sp{width:5%;} table.rel th.c-st{width:9%;}
+/* títulos de duas palavras (Status Prazo) quebram em vez de serem cortados */
+table.rel thead th{white-space:normal;}
+/* as linhas do fato (Contas: …) quebram só quando não couber MESMO */
+table.rel td.fato small{display:block;line-height:1.45;overflow-wrap:normal;word-break:keep-all;hyphens:none;}
 /* janela estreita: tipografia mais compacta para as 13 colunas continuarem
    cabendo sem barra de rolagem */
 @media(max-width:1600px){
@@ -1145,7 +1151,7 @@ function relatorioHTML(vis){
   let h='<div class="rel-section"><div class="rel-wrap"><table class="rel"><thead><tr>'+
     '<th class="c-uni">Unidade</th><th class="c-proj">Projeto</th><th class="c-vig">Vigência</th>'+
     '<th class="c-fato">Fato</th><th class="c-txt">Causa</th><th class="c-txt">Ação</th>'+
-    '<th class="c-resp">Responsável</th><th class="c-prazo">Prazo</th><th class="c-sp">Status Prazo</th><th class="c-st">Status</th>'+
+    '<th class="c-resp">Responsável</th><th class="c-prazo">Prazo</th><th class="c-st">Status</th><th class="c-sp">Status Prazo</th>'+
     '</tr></thead><tbody>';
   vis.forEach(r=>{
     const sp=prazoState(r), spCor=sp==='Vencida'?'var(--vermelho)':'var(--verde)';
@@ -1159,11 +1165,12 @@ function relatorioHTML(vis){
       `<td class="txt">${tri((esc(r.acao)||'—').replace(/\n/g,'<br>'))}</td>`+
       `<td class="center">${esc(r.responsavel)||'—'}</td>`+
       `<td class="center">${prazoBR(r.prazo)}</td>`+
-      // data-sort: clicar em Status Prazo ordena pelos dias — vencidas primeiro,
-      // da mais vencida para a menos. Sem prazo fica sem chave: sempre no fim.
-      `<td class="center" data-sort="${r.prazo&&sp!=='Sem prazo'?(sp==='Vencida'?-1e6:0)+diasVenc(r.prazo):''}">`+
-        `<span class="dot" style="background:${spCor}"></span>${sp}</td>`+
       `<td class="center">${chipStatusRel(r.status||DEFAULT_STATUS)}</td>`+
+      // Status Prazo = SÓ O FAROL (o título da coluna já diz o que é). O texto
+      // fica no title, para quem passar o mouse. data-sort mantém a ordenação
+      // por dias: vencidas primeiro, da mais vencida para a menos.
+      `<td class="center" title="${esc(sp)}" data-sort="${r.prazo&&sp!=='Sem prazo'?(sp==='Vencida'?-1e6:0)+diasVenc(r.prazo):''}">`+
+        `<span class="dot" style="background:${spCor}"></span></td>`+
     '</tr>';
   });
   return h+'</tbody></table></div></div>';
