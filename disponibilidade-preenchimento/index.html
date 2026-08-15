@@ -845,11 +845,12 @@ async function renderResumo(){
     const g=porMes.get(m); g.a+=r.ativos||0; g.i+=r.indisponiveis||0;});
   porMes.forEach((g,m)=>{vals[m]=dispPct(g.a,g.i);});
   const projs=agrupa('projeto');
-  /* ── calendário do MÊS ATUAL: um quadradinho por dia, pintado com a
-        disponibilidade daquele dia. Ignora os filtros de vigência e data de
-        propósito — é sempre o mês corrente (Renan, 15/08/2026)            ── */
-  const hj=new Date(), calY=hj.getFullYear(), calM=hj.getMonth();
-  const pref=calY+'-'+String(calM+1).padStart(2,'0');
+  /* ── calendário: um quadradinho por dia, pintado com a disponibilidade
+        daquele dia. Segue a vigência quando há UMA marcada; com várias (ou
+        nenhuma) mostra o mês corrente (Renan, 15/08/2026)                 ── */
+  const hj=new Date();
+  const pref=FVIG.size===1 ? [...FVIG][0] : hj.getFullYear()+'-'+String(hj.getMonth()+1).padStart(2,'0');
+  const calY=+pref.slice(0,4), calM=+pref.slice(5,7)-1;
   const porDia=new Map();
   all.forEach(r=>{
     if(!Suni.has(r.unidade)||projFora(r.projeto)) return;
@@ -862,11 +863,12 @@ async function renderResumo(){
   });
   const primDia=new Date(calY,calM,1).getDay(), nDiasMes=new Date(calY,calM+1,0).getDate();
   const semanas=Math.ceil((primDia+nDiasMes)/7);
-  const mesNome=hj.toLocaleDateString('pt-BR',{month:'long',year:'numeric'});
+  const mesNome=new Date(calY,calM,1).toLocaleDateString('pt-BR',{month:'long',year:'numeric'});
+  const ehMesDeHoje=calY===hj.getFullYear()&&calM===hj.getMonth();
   const cels=[...Array(primDia)].map(()=>'<div></div>')
     .concat([...Array(nDiasMes)].map((_,k)=>{
       const d=k+1, g=porDia.get(d), p=g?dispPct(g.a,g.i):null;
-      const hoje=d===hj.getDate();
+      const hoje=ehMesDeHoje&&d===hj.getDate();
       return `<div class="cal-c${p==null?' vaz':''}${p!=null&&p>=META_DISP?' esc':''}${hoje?' hoje':''}"${p==null?'':` style="background:${clsDisp(p)}"`}>
         <span class="cal-d">${d}</span>${p==null?'':`<span class="cal-p">${p.toFixed(0)}%</span>`}</div>`;
     })).join('');
@@ -1142,7 +1144,7 @@ function montaUnidades(){
   const el=$('lstUni'); if(!el) return;
   const all=FUNI.size===0;
   el.innerHTML=`<label class="mall"><input type="checkbox" data-all="u" ${all?'checked':''}> Todas</label>`+
-    MY_UNITS.map(u=>`<label><input type="checkbox" data-u="${esc(u)}" ${all||FUNI.has(u)?'checked':''}>
+    [...MY_UNITS].sort((a,b)=>a.localeCompare(b,'pt')).map(u=>`<label><input type="checkbox" data-u="${esc(u)}" ${all||FUNI.has(u)?'checked':''}>
       <span class="mtx">${esc(u)}</span>
       <span class="so" data-so="${esc(u)}">só</span></label>`).join('');
 }
@@ -1165,22 +1167,19 @@ function menuLista(rotulos,sel,tipo,valores){
 }
 function montaMenus(){
   const pt=(a,b)=>a.localeCompare(b,'pt');
+  // texto vai de A a Z, data e vigência do menor para o maior; o que já está
+  // marcado mas sumiu do recorte entra na lista SEM furar a ordem
+  const ordena=(lista,sel,cmp)=>{sel.forEach(v=>{if(!lista.includes(v))lista.push(v);}); return lista.sort(cmp);};
   const base=VER==='historico'?EVENTS.filter(e=>!!e.data_retorno):abertos();
-  const proj=[...new Set(base.filter(e=>passa(e,'proj')&&!projFora(e.projeto)).map(e=>projLbl(e.projeto)))].sort(pt);
-  FPROJ.forEach(v=>{if(!proj.includes(v))proj.unshift(v);});
+  const proj=ordena([...new Set(base.filter(e=>passa(e,'proj')&&!projFora(e.projeto)).map(e=>projLbl(e.projeto)))],FPROJ,pt);
   $('lstProj').innerHTML=menuLista(proj,FPROJ,'p');
-  const gru=[...new Set(base.filter(e=>passa(e,'grupo')).map(e=>e.grupo||'—'))].sort(pt);
-  FGRUPO.forEach(v=>{if(!gru.includes(v))gru.unshift(v);});
+  const gru=ordena([...new Set(base.filter(e=>passa(e,'grupo')).map(e=>e.grupo||'—'))],FGRUPO,pt);
   $('lstGrupo').innerHTML=menuLista(gru,FGRUPO,'g');
-  const tip=[...new Set(base.filter(e=>passa(e,'tipo')).map(e=>e.tipo_veiculo||'—'))].sort(pt);
-  FTIPO.forEach(v=>{if(!tip.includes(v))tip.unshift(v);});
+  const tip=ordena([...new Set(base.filter(e=>passa(e,'tipo')).map(e=>e.tipo_veiculo||'—'))],FTIPO,pt);
   $('lstTipo').innerHTML=menuLista(tip,FTIPO,'t');
-  // Vigência (mês da parada) e Data (dia exato) — do mais recente para o mais antigo
-  const vg=[...new Set(base.filter(e=>passa(e,'vig')).map(vigDe).filter(Boolean))].sort().reverse();
-  FVIG.forEach(v=>{if(!vg.includes(v))vg.unshift(v);});
+  const vg=ordena([...new Set(base.filter(e=>passa(e,'vig')).map(vigDe).filter(Boolean))],FVIG);
   $('lstVig').innerHTML=menuLista(vg.map(vigBR),FVIG,'v',vg);
-  const dt=[...new Set(base.filter(e=>passa(e,'data')).map(e=>String(e.data_parada||'')).filter(Boolean))].sort().reverse();
-  FDATA.forEach(v=>{if(!dt.includes(v))dt.unshift(v);});
+  const dt=ordena([...new Set(base.filter(e=>passa(e,'data')).map(e=>String(e.data_parada||'')).filter(Boolean))],FDATA);
   $('lstData').innerHTML=menuLista(dt.map(dataBR),FDATA,'d',dt);
   montaUnidades();
 }
