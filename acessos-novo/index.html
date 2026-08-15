@@ -256,7 +256,24 @@ table.dre td.cg-t,.cg-t{color:var(--verde)!important;font-weight:700;}
 
 
 /* ── Acessos: só o que é próprio deste painel ── */
-.kpis.k4{grid-template-columns:repeat(4,1fr);}
+.kpis.k3{grid-template-columns:repeat(3,1fr);flex:0 0 auto;}
+/* gráfico e calendário embaixo, em altura menor (Renan) */
+.res-cols{flex:1 1 auto;min-height:200px;display:flex;gap:12px;}
+.res-graf{flex:1 1 auto;min-width:0;}
+.res-cal{flex:0 0 auto;width:auto;aspect-ratio:1;align-self:stretch;overflow:hidden;
+  padding:12px 14px;display:flex;flex-direction:column;}
+.cal-grid{flex:1;min-height:0;display:grid;grid-template-columns:repeat(7,1fr);gap:4px;margin-top:6px;}
+.cal-h{font-size:9px;font-weight:700;color:var(--txt3);text-align:center;letter-spacing:.5px;}
+.cal-c{border-radius:6px;display:flex;flex-direction:column;align-items:center;justify-content:center;
+  gap:5px;line-height:1;overflow:hidden;}
+.cal-d{font-size:9px;font-weight:600;color:rgba(255,255,255,.72);}
+.cal-n{font-size:12.5px;font-weight:800;color:#fff;}
+.cal-c.esc .cal-n{color:#2A1405;} .cal-c.esc .cal-d{color:rgba(0,0,0,.55);}
+.cal-c.vaz{background:repeating-linear-gradient(45deg,transparent,transparent 3px,var(--hover) 3px,var(--hover) 6px);}
+body.claro .cal-c.vaz{background:repeating-linear-gradient(45deg,
+  rgba(15,23,42,.06),rgba(15,23,42,.06) 3px,rgba(15,23,42,.13) 3px,rgba(15,23,42,.13) 6px);}
+.cal-c.vaz .cal-d{color:var(--txt3);}
+.cal-c.hoje{outline:2px solid var(--txt);outline-offset:-2px;}
 .gr2{flex:1 1 auto;min-height:220px;max-height:none;display:grid;grid-template-columns:1fr 1fr;gap:12px;}
 .tsec{flex:1;min-height:0;display:flex;flex-direction:column;padding:14px 16px 12px;}
 .pill{display:inline-block;min-width:30px;text-align:center;padding:2px 8px;border-radius:6px;
@@ -272,7 +289,18 @@ table.dre tr.falta td{background:color-mix(in srgb,var(--vermelho) 7%,transparen
 .gate p{font-size:13px;color:var(--txt2);line-height:1.6;}
 .gate code{background:color-mix(in srgb,var(--laranja) 16%,transparent);color:var(--laranja);padding:2px 7px;border-radius:5px;}
 .vazio{padding:34px;text-align:center;color:var(--txt3);font-size:12px;}
-@media(max-width:860px){ .gr2{display:block;height:auto;} .gr2>*{height:300px;margin-bottom:12px;} .kpis.k4{grid-template-columns:repeat(2,1fr);} }
+/* cabeçalho SEMPRE alinhado com o conteúdo da coluna:
+   texto à esquerda, número à direita (o padrão da casca alinha tudo à direita,
+   que serve para a DRE, toda numérica, mas não para tabelas com texto) */
+table.dre thead th{text-align:left;}
+table.dre thead th.num{text-align:right;}
+/* barra de rolagem horizontal é proibida: a tabela se ajusta à largura */
+.twrap{overflow-x:hidden;}
+.twrap table.dre{width:100%;table-layout:auto;}
+table.dre td,table.dre th{white-space:normal;overflow-wrap:anywhere;}
+table.dre td.num,table.dre th.num{white-space:nowrap;}
+@media(max-width:860px){ .res-cols{display:block;max-height:none;} .res-graf{height:260px;margin-bottom:12px;}
+  .res-cal{aspect-ratio:auto;height:300px;width:100%;} .kpis.k3{grid-template-columns:1fr;} }
 
 @media(max-width:860px){
   body{overflow:auto;}
@@ -371,22 +399,32 @@ table.dre tr.falta td{background:color-mix(in srgb,var(--vermelho) 7%,transparen
 
     <div class="cols" id="cols">
       <section class="vw on" id="vw-resumo">
-        <div class="kpis k4">
-          <div class="kpi"><div class="kl">Total de acessos</div><div class="kv" id="k-tot">—</div><div class="km" id="k-tot-m">—</div></div>
+        <div class="fin-hero">
+          <div>
+            <div class="hlbl">Total de acessos</div>
+            <div class="hval" id="k-tot">—</div>
+            <div class="hdel">
+              <div>No filtro<b id="k-tot-m">—</b></div>
+              <div>Painéis<b id="k-pan">—</b></div>
+              <div>Média/dia<b id="k-med">—</b></div>
+            </div>
+          </div>
+        </div>
+        <div class="kpis k3">
           <div class="kpi"><div class="kl">Usuários ativos</div><div class="kv" id="k-usr">—</div><div class="km" id="k-usr-m">—</div></div>
           <div class="kpi"><div class="kl">Acessos hoje</div><div class="kv" id="k-hoje">—</div><div class="km" id="k-hoje-m">—</div></div>
           <div class="kpi"><div class="kl">Últimos 7 dias</div><div class="kv" id="k-7d">—</div><div class="km" id="k-7d-m">—</div></div>
         </div>
-        <div class="gr2">
-          <div class="card gcard">
+        <div class="res-cols">
+          <div class="card gcard res-graf">
             <div class="gtit">Acessos por mês</div>
             <div class="gsub">Últimos 12 meses · respeita os filtros</div>
             <div class="gcv"><canvas id="ch-mes"></canvas></div>
           </div>
-          <div class="card gcard">
+          <div class="card res-cal">
             <div class="gtit">Acessos por dia</div>
-            <div class="gsub">Últimos 30 dias · respeita os filtros</div>
-            <div class="gcv"><canvas id="ch-dia"></canvas></div>
+            <div class="gsub" id="cal-sub">—</div>
+            <div class="cal-grid" id="cal-grid"></div>
           </div>
         </div>
       </section>
@@ -418,7 +456,7 @@ table.dre tr.falta td{background:color-mix(in srgb,var(--vermelho) 7%,transparen
 <script>
 const SUPABASE_URL='https://lozwipoeacpvplgkrxkq.supabase.co';
 const SUPABASE_KEY='sb_publishable_ggKEEebc5zjgQDVsF92Upw_6uoLmKe9';
-let sb=null, ROWS=[], chDia=null, chMes=null, PROFILES=[], LAST_ACCESS={};
+let sb=null, ROWS=[], chMes=null, PROFILES=[], LAST_ACCESS={};
 // Unidades que o FCA cobre (mesma lista do fca-preenchimento) — CBA e MCC separadas por tier. Farol por cadastro.
 const DEPARA={'CGR':'CAMPO GRANDE','BLC':'BALNEARIO CAMBORIU','CBA T1':'CUIABA · EMPURRADA (T1)','CBA T1 WH':'CUIABA · APOIO (T1 WH)','CBA T2':'CUIABA · CDD (T2)','FLP':'FLORIANOPOLIS','GRL':'GUARULHOS','NFR':'NOVA FRIBURGO','PLT':'PELOTAS','RON':'RONDONOPOLIS','MCC T1':'MACACU · EMPURRADA (T1)','MCC T2':'MACACU · CDI (T2)','PIR':'PIRAI','ANG':'ANHANGUERA'};
 // resolve fca_profiles.unidade (lista com vírgula; código, nome ou token legado CBA/MCC) para código(s)
@@ -487,50 +525,67 @@ function render(){
   const n7=rows.filter(r=>r.dt>=new Date(d7.getFullYear(),d7.getMonth(),d7.getDate())).length;
   set('k-7d',n7.toLocaleString('pt-BR'));
   const totGeral=ROWS.length, dias=new Set(rows.map(r=>r.dia)).size;
-  set('k-tot-m', rows.length===totGeral ? 'todos os registros' : totGeral.toLocaleString('pt-BR')+' sem filtro');
+  set('k-tot-m', rows.length===totGeral ? 'todos os registros' : 'de '+totGeral.toLocaleString('pt-BR'));
+  set('k-pan', new Set(rows.map(r=>r.painel)).size);
+  set('k-med', dias?(rows.length/dias).toFixed(1).replace('.',','):'—');
   set('k-usr-m', dias?('em '+dias+' dia'+(dias>1?'s':'')):'—');
   set('k-hoje-m', hoje.toLocaleDateString('pt-BR'));
   set('k-7d-m', (n7/7).toFixed(1).replace('.',',')+' por dia');
 
-  // ── gráficos no padrão do painel: sem grade, rótulo no topo, barra colada ──
+  // ── gráfico de barras por mês, no padrão do painel ──
   const isLight=document.body.classList.contains('claro');
   const tick={color:isLight?'#4A5568':'#B2BCD2',font:{family:'Montserrat',size:10}};
   const tooltip={backgroundColor:isLight?'#FFFFFF':'#1B1B1E',titleColor:'#F97316',
     bodyColor:isLight?'#161D2B':'#EEF2FA',borderColor:isLight?'#d7dce4':'#33343A',borderWidth:1,
     titleFont:{family:'Montserrat'},bodyFont:{family:'Montserrat'}};
-  // rótulo de dados no topo de cada ponto/barra (mesma receita do visao-financeira)
   const rotulos={id:'rot',afterDatasetsDraw(ch){
     const ds=ch.data.datasets[0], meta=ch.getDatasetMeta(0); if(!meta||!meta.data) return;
-    const cx=ch.ctx; cx.save();
-    cx.font='800 10px Montserrat'; cx.fillStyle=isLight?'#161D2B':'#EEF2FA';
-    cx.textAlign='center'; cx.textBaseline='bottom';
+    const cx=ch.ctx; cx.save(); cx.font='800 10px Montserrat';
+    cx.fillStyle=isLight?'#161D2B':'#EEF2FA'; cx.textAlign='center'; cx.textBaseline='bottom';
     ds.data.forEach((v,k)=>{ if(!v) return; const pt=meta.data[k]; if(!pt) return;
-      cx.fillText(String(v), pt.x, pt.y-6); });
-    cx.restore();
-  }};
-  const eixos={x:{ticks:{...tick,autoSkip:true,maxRotation:0},grid:{display:false},border:{display:false}},
-               y:{beginAtZero:true,ticks:{...tick,precision:0,maxTicksLimit:5},grid:{display:false},border:{display:false}}};
-  const opcoes={responsive:true,maintainAspectRatio:false,animation:false,layout:{padding:{top:18}},
-    plugins:{legend:{display:false},tooltip},scales:eixos};
-
-  // últimos 30 dias
-  const labels=[],data=[];
-  for(let i=29;i>=0;i--){const d=new Date(hoje);d.setDate(d.getDate()-i);const k=diaKey(d);labels.push(d.getDate()+'/'+String(d.getMonth()+1).padStart(2,'0'));data.push(rows.filter(r=>r.dia===k).length);}
-  if(chDia)chDia.destroy();
-  chDia=new Chart(document.getElementById('ch-dia'),{type:'line',
-    data:{labels,datasets:[{data,borderColor:'#F97316',borderWidth:2.5,tension:.35,fill:true,
-      backgroundColor:'rgba(249,115,22,.14)',pointRadius:2.5,pointHoverRadius:6,
-      pointBackgroundColor:'#F97316',pointBorderColor:'#F97316'}]},
-    plugins:[rotulos],options:opcoes});
-
-  // últimos 12 meses (eixo fixo — sempre 12, mesmo com 0)
+      cx.fillText(v.toLocaleString('pt-BR'), pt.x, pt.y-6); });
+    cx.restore(); }};
   const mLabels=[],mData=[];
-  for(let i=11;i>=0;i--){const d=new Date(hoje.getFullYear(),hoje.getMonth()-i,1);const k=mesKey(d);mLabels.push(MESES_PT[d.getMonth()]+'/'+String(d.getFullYear()).slice(2));mData.push(rows.filter(r=>r.dia.slice(0,7)===k).length);}
+  for(let i=11;i>=0;i--){const d=new Date(hoje.getFullYear(),hoje.getMonth()-i,1);const k=mesKey(d);
+    mLabels.push(MESES_PT[d.getMonth()]+'/'+String(d.getFullYear()).slice(2));
+    mData.push(rows.filter(r=>r.dia.slice(0,7)===k).length);}
   if(chMes)chMes.destroy();
   chMes=new Chart(document.getElementById('ch-mes'),{type:'bar',
     data:{labels:mLabels,datasets:[{data:mData,backgroundColor:'#F97316',borderWidth:0,
       borderRadius:0,barPercentage:.92,categoryPercentage:.94}]},
-    plugins:[rotulos],options:opcoes});
+    plugins:[rotulos],
+    options:{responsive:true,maintainAspectRatio:false,animation:false,layout:{padding:{top:18}},
+      plugins:{legend:{display:false},tooltip},
+      scales:{x:{ticks:{...tick,autoSkip:true,maxRotation:0},grid:{display:false},border:{display:false}},
+              y:{beginAtZero:true,ticks:{...tick,precision:0,maxTicksLimit:4},grid:{display:false},border:{display:false}}}}});
+
+  // ── acessos por dia: calendário de calor do mês (mesmo componente do
+  //    Indisponibilidade). Mostra o mês filtrado; sem filtro, o mês atual. ──
+  const fmSel=getMsValues('ms-mes');
+  const mesCal=(fmSel.length===1?fmSel[0]:mesKey(hoje)).split('-');
+  const calY=+mesCal[0], calM=+mesCal[1]-1;
+  const porDia=new Map();
+  rows.forEach(r=>{ if(r.dia.slice(0,7)!==calY+'-'+String(calM+1).padStart(2,'0')) return;
+    const d=+r.dia.slice(8,10); porDia.set(d,(porDia.get(d)||0)+1); });
+  const maxDia=Math.max(1,...porDia.values());
+  const prim=new Date(calY,calM,1).getDay(), nDias=new Date(calY,calM+1,0).getDate();
+  const semanas=Math.ceil((prim+nDias)/7);
+  const ehMesHoje=calY===hoje.getFullYear()&&calM===hoje.getMonth();
+  // escala de calor em laranja: quanto mais acessos, mais forte
+  const calor=n=>{ const t=n/maxDia;
+    const a=t>=.85?1:t>=.6?.78:t>=.35?.55:t>=.15?.34:.2;
+    return 'color-mix(in srgb, var(--laranja) '+Math.round(a*100)+'%, transparent)'; };
+  const cels=[...Array(prim)].map(()=>'<div></div>')
+    .concat([...Array(nDias)].map((_,k)=>{
+      const d=k+1, n=porDia.get(d)||0, forte=n/maxDia>=.6, hj=ehMesHoje&&d===hoje.getDate();
+      return `<div class="cal-c${n?'':' vaz'}${forte?' esc':''}${hj?' hoje':''}"${n?` style="background:${calor(n)}" title="${d}: ${n} acesso(s)"`:` title="${d}: sem acesso"`}>
+        <span class="cal-d">${d}</span>${n?`<span class="cal-n">${n}</span>`:''}</div>`;
+    })).join('');
+  const gc=document.getElementById('cal-grid');
+  if(gc){ gc.style.gridTemplateRows='12px repeat('+semanas+',1fr)';
+    gc.innerHTML=['DOM','SEG','TER','QUA','QUI','SEX','SAB'].map(d=>`<div class="cal-h">${d}</div>`).join('')+cels; }
+  set('cal-sub', new Date(calY,calM,1).toLocaleDateString('pt-BR',{month:'long',year:'numeric'})
+    + ' · pico de ' + maxDia.toLocaleString('pt-BR') + ' num dia');
 
   // por usuário
   const byU={};
@@ -539,9 +594,9 @@ function render(){
     if(!u.last||r.dt>u.last)u.last=r.dt;u.pan[r.painel]=(u.pan[r.painel]||0)+1;});
   const us=Object.values(byU).sort((a,b)=>b.tot-a.tot);
   set('sub-usr',us.length+' usuário(s)');
-  document.getElementById('t-usr').innerHTML=us.length?'<table class="dre"><thead><tr><th>#</th><th>Usuário</th><th class="num">Acessos</th><th class="num">Últimos 7d</th><th>Último acesso</th><th>Painel mais usado</th></tr></thead><tbody>'+
+  document.getElementById('t-usr').innerHTML=us.length?'<table class="dre"><thead><tr><th class="num">#</th><th>Usuário</th><th>Painel mais usado</th><th>Último acesso</th><th class="num">Últimos 7d</th><th class="num">Acessos</th></tr></thead><tbody>'+
     us.map((u,i)=>{const top=Object.entries(u.pan).sort((a,b)=>b[1]-a[1])[0];
-      return `<tr><td class="mut">${i+1}</td><td><b>${esc(u.email)}</b></td><td class="num"><span class="pill">${u.tot}</span></td><td class="num">${u.d7}</td><td class="mut">${fmtDT(u.last)}</td><td>${nomePainel(top[0])} <span class="mut">(${top[1]})</span></td></tr>`;}).join('')+'</tbody></table>':'<div class="vazio">Sem registros para o filtro.</div>';
+      return `<tr><td class="num mut">${i+1}</td><td class="conta"><b>${esc(u.email)}</b></td><td>${nomePainel(top[0])} <span class="mut">(${top[1]})</span></td><td class="mut">${fmtDT(u.last)}</td><td class="num">${u.d7}</td><td class="num"><span class="pill">${u.tot}</span></td></tr>`;}).join('')+'</tbody></table>':'<div class="vazio">Sem registros para o filtro.</div>';
 
   // por painel
   const byP={};
@@ -549,8 +604,8 @@ function render(){
     p.tot++;p.users.add(r.email);if(!p.last||r.dt>p.last)p.last=r.dt;});
   const ps=Object.values(byP).sort((a,b)=>b.tot-a.tot);
   set('sub-pan',ps.length+' painel(éis)');
-  document.getElementById('t-pan').innerHTML=ps.length?'<table class="dre"><thead><tr><th>Painel</th><th class="num">Acessos</th><th class="num">Usuários</th><th>Último acesso</th></tr></thead><tbody>'+
-    ps.map(p=>`<tr><td><b>${esc(nomePainel(p.painel))}</b></td><td class="num"><span class="pill">${p.tot}</span></td><td class="num">${p.users.size}</td><td class="mut">${fmtDT(p.last)}</td></tr>`).join('')+'</tbody></table>':'<div class="vazio">Sem registros para o filtro.</div>';
+  document.getElementById('t-pan').innerHTML=ps.length?'<table class="dre"><thead><tr><th>Painel</th><th class="num">Usuários</th><th>Último acesso</th><th class="num">Acessos</th></tr></thead><tbody>'+
+    ps.map(p=>`<tr><td class="conta"><b>${esc(nomePainel(p.painel))}</b></td><td class="num">${p.users.size}</td><td class="mut">${fmtDT(p.last)}</td><td class="num"><span class="pill">${p.tot}</span></td></tr>`).join('')+'</tbody></table>':'<div class="vazio">Sem registros para o filtro.</div>';
 }
 
 // ── Por unidade: farol de cadastro (independe dos filtros) ──
@@ -568,14 +623,16 @@ function renderUnidades(){
   rows.sort((a,b)=>(a.ok-b.ok)|| a.cidade.localeCompare(b.cidade)); // vermelhos primeiro
   const faltam=rows.filter(r=>!r.ok).length;
   set('sub-uni', `${rows.length} unidades · ${faltam} sem ninguém cadastrado (farol vermelho). Cadastros pendentes de aprovação ainda não têm unidade e não contam aqui.`);
-  document.getElementById('t-uni').innerHTML='<table class="dre"><thead><tr><th>Unidade</th><th>Farol</th><th class="num">Cadastrados</th><th>Quem</th><th>Último acesso</th></tr></thead><tbody>'+
-    rows.map(r=>`<tr class="${r.ok?'':'falta'}">
-      <td><b>${esc(r.cidade)}</b> <span class="mut">(${r.cod})</span></td>
+  // Sem a coluna "Quem": a lista de nomes estourava a largura e criava barra
+  // horizontal. Os nomes ficam na dica da linha (passar o mouse).
+  document.getElementById('t-uni').innerHTML='<table class="dre"><thead><tr><th>Unidade</th><th>Farol</th><th class="num">Cadastrados</th><th>Último acesso</th></tr></thead><tbody>'+
+    rows.map(r=>{ const quem=r.users.length?r.users.map(p=>p.nome||'(sem nome)').join(', '):'ninguém cadastrado';
+    return `<tr class="${r.ok?'':'falta'}" title="${esc(quem)}">
+      <td class="conta"><b>${esc(r.cidade)}</b> <span class="mut">(${r.cod})</span></td>
       <td><span class="farol ${r.ok?'on':'off'}" title="${r.ok?'Tem cadastro':'Ninguém cadastrado'}"></span></td>
       <td class="num">${r.n||'—'}</td>
-      <td>${r.users.length?esc(r.users.map(p=>p.nome||'(sem nome)').join(', ')):'<span class="mut">— ninguém —</span>'}</td>
       <td class="mut">${r.last?fmtDT(r.last):'—'}</td>
-    </tr>`).join('')+'</tbody></table>';
+    </tr>`;}).join('')+'</tbody></table>';
 }
 
 async function initApp(){
