@@ -593,7 +593,7 @@ function unitCod(nome,projeto){
 }
 
 let sb=null, PROFILE=null, ADMIN=false, MY_UNITS=[], UNIT=null, USER=null, EU='';
-let ATIVOS=[], EVENTS=[], ABERTAS_POR={};
+let ATIVOS=[], ATIVO_POR={}, EVENTS=[], ABERTAS_POR={};
 let BUSCA='', VISAO='', VER='lista', ID=null;
 // filtros do topo: unidade (multi), vigência (YYYY-MM) e data (dia exato)
 const FUNI=new Set(), FVIG=new Set(), FDATA=new Set();
@@ -624,7 +624,17 @@ async function loadAtivos(){
   }).filter(r=>r.placa&&!/FRETEIRO/i.test(r.projeto)     // FRETEIRO fora (Renan, 14/08/2026)
              &&!placasManuais.has(r.placa));             // manual tem prioridade
   ATIVOS=[...ginfo,...manuais];
+  ATIVO_POR={}; ATIVOS.forEach(a=>{ATIVO_POR[a.placa]=a;});
 }
+/* Projeto, tipo e modelo do evento vêm da BASE DE ATIVOS pela PLACA (Renan,
+   15/08/2026). O que a unidade digitou no evento é só rede de segurança — foi
+   dali que saíram coisas como "MCC" na coluna Projeto, que é nome de unidade,
+   e o Tipo vazio na tela toda. Assim o filtro de Projeto passa a bater com o
+   do Resumo, que já lê o projeto do ativo. */
+const ativoDe=x=>ATIVO_POR[normP(x&&x.placa)]||null;
+const projDe=e=>{const a=ativoDe(e); return (a&&a.projeto)||(e&&e.projeto)||'';};
+const tipoDe=e=>{const a=ativoDe(e); return (a&&a.tipo)||(e&&e.tipo_veiculo)||'';};
+const modeloDe=e=>{const a=ativoDe(e); return (a&&a.modelo)||(e&&e.modelo)||'';};
 async function loadEvents(){
   // carrega TODAS as unidades liberadas — o recorte por unidade virou FILTRO
   // de tela (Renan, 14/08/2026), então o dado precisa estar todo em memória.
@@ -684,16 +694,16 @@ function daVisao(e,v){
   return true;
 }
 function passa(e,exceto){
-  if(projFora(e.projeto)) return false;                      // FREITEIRO/ADM fora
+  if(projFora(projDe(e))) return false;                      // FREITEIRO/ADM fora
   if(exceto!=='uni'  && FUNI.size  && !FUNI.has(e.unidade)) return false;
   if(exceto!=='vig'  && FVIG.size  && !FVIG.has(vigDe(e))) return false;
   // com a view de dias no ar, DATA deixou de ser a data de parada — ela escolhe
   // a FOTO do dia (ver render/renderListaDia); sem a view, segue o comportamento antigo
   if(!DIAS.length && exceto!=='data' && FDATA.size && !FDATA.has(String(e.data_parada||''))) return false;
-  if(exceto!=='proj' && FPROJ.size && !FPROJ.has(projLbl(e.projeto))) return false;
+  if(exceto!=='proj' && FPROJ.size && !FPROJ.has(projLbl(projDe(e)))) return false;
   if(exceto!=='grupo' && FGRUPO.size && !FGRUPO.has(e.grupo||'—')) return false;
-  if(exceto!=='tipo' && FTIPO.size && !FTIPO.has(e.tipo_veiculo||'—')) return false;
-  if(BUSCA && ![e.placa,e.descricao_problema,e.projeto,e.rc_oc,e.status,e.observacao]
+  if(exceto!=='tipo' && FTIPO.size && !FTIPO.has(tipoDe(e)||'—')) return false;
+  if(BUSCA && ![e.placa,e.descricao_problema,projDe(e),e.rc_oc,e.status,e.observacao]
     .some(x=>String(x||'').toLowerCase().includes(BUSCA))) return false;
   return daVisao(e,VISAO);
 }
@@ -742,10 +752,10 @@ async function renderListaDia(d){
     if(VISAO==='semrcoc')  return !r.rc_oc;
     return true;
   };
-  const rows=linhas.filter(r=>S.has(r.unidade)&&!projFora(r.projeto)
-      &&(!FPROJ.size||FPROJ.has(projLbl(r.projeto)))
+  const rows=linhas.filter(r=>S.has(r.unidade)&&!projFora(projDe(r))
+      &&(!FPROJ.size||FPROJ.has(projLbl(projDe(r))))
       &&(!FGRUPO.size||FGRUPO.has(r.grupo||'—'))
-      &&(!BUSCA||[r.placa,r.descricao_problema,r.projeto,r.rc_oc,r.status,r.observacao]
+      &&(!BUSCA||[r.placa,r.descricao_problema,projDe(r),r.rc_oc,r.status,r.observacao]
           .some(x=>String(x||'').toLowerCase().includes(BUSCA)))
       &&daVis(r))
     .sort((a,b)=>(b.dias_parado||0)-(a.dias_parado||0));
@@ -762,8 +772,8 @@ async function renderListaDia(d){
       const dp=r.dias_parado||0;
       const late=r.previsao_retorno&&r.previsao_retorno<d;
       return `<tr>
-        <td class="forte">${esc(r.placa)}</td><td class="c-proj wrap">${esc(projLbl(r.projeto))}</td>
-        <td class="c-tipo wrap">${esc(r.modelo||'—')}</td>
+        <td class="forte">${esc(r.placa)}</td><td class="c-proj wrap">${esc(projLbl(projDe(r)))}</td>
+        <td class="c-tipo wrap">${esc(modeloDe(r)||'—')}</td>
         <td class="c-grupo wrap">${esc(r.grupo||'—')}</td><td class="livre">${esc(r.descricao_problema||'—')}</td>
         <td>${esc(r.local_manutencao||'—')}</td><td>${esc(r.rc_oc||'—')}</td>
         <td>${parada(r)}</td>
@@ -783,8 +793,8 @@ function htmlLista(){
       const dp=diasParado(e);
       const atras=e.previsao_retorno&&e.previsao_retorno<hojeBRT();
       return `<tr data-id="${esc(e.id)}">
-        <td class="forte">${esc(e.placa)}</td><td class="c-proj wrap">${esc(projLbl(e.projeto))}</td>
-        <td class="c-tipo wrap">${esc(e.tipo_veiculo||'—')}</td>
+        <td class="forte">${esc(e.placa)}</td><td class="c-proj wrap">${esc(projLbl(projDe(e)))}</td>
+        <td class="c-tipo wrap">${esc(tipoDe(e)||'—')}</td>
         <td class="c-grupo wrap">${esc(e.grupo||'—')}</td><td class="livre">${esc(e.descricao_problema||'—')}</td>
         <td>${esc(e.local_manutencao||'—')}</td><td>${esc(e.rc_oc||'—')}</td>
         <td>${dataBR(e.data_parada)}</td>
@@ -831,7 +841,7 @@ function htmlHistorico(){
   return `<div class="tab-wrap"><table class="tab">
     <thead><tr><th>Placa</th><th>Projeto</th><th>Grupo</th><th>Problema</th><th>Parada</th><th>Retorno</th><th class="num">Dias parado</th></tr></thead>
     <tbody>${fech.map(e=>`<tr data-id="${esc(e.id)}">
-      <td class="forte">${esc(e.placa)}</td><td>${esc(e.projeto||'—')}</td><td>${esc(e.grupo||'—')}</td>
+      <td class="forte">${esc(e.placa)}</td><td>${esc(projLbl(projDe(e)))}</td><td>${esc(e.grupo||'—')}</td>
       <td class="livre">${esc(e.descricao_problema||'—')}</td>
       <td>${dataBR(e.data_parada)}</td><td style="color:var(--verde);font-weight:700">${dataBR(e.data_retorno)}</td>
       <td class="num">${diasParado(e)}</td></tr>`).join('')}</tbody></table></div>`;
@@ -1251,11 +1261,11 @@ function montaMenus(){
   // marcado mas sumiu do recorte entra na lista SEM furar a ordem
   const ordena=(lista,sel,cmp)=>{sel.forEach(v=>{if(!lista.includes(v))lista.push(v);}); return lista.sort(cmp);};
   const base=VER==='historico'?EVENTS.filter(e=>!!e.data_retorno):abertos();
-  const proj=ordena([...new Set(base.filter(e=>passa(e,'proj')&&!projFora(e.projeto)).map(e=>projLbl(e.projeto)))],FPROJ,pt);
+  const proj=ordena([...new Set(base.filter(e=>passa(e,'proj')&&!projFora(projDe(e))).map(e=>projLbl(projDe(e))))],FPROJ,pt);
   $('lstProj').innerHTML=menuLista(proj,FPROJ,'p');
   const gru=ordena([...new Set(base.filter(e=>passa(e,'grupo')).map(e=>e.grupo||'—'))],FGRUPO,pt);
   $('lstGrupo').innerHTML=menuLista(gru,FGRUPO,'g');
-  const tip=ordena([...new Set(base.filter(e=>passa(e,'tipo')).map(e=>e.tipo_veiculo||'—'))],FTIPO,pt);
+  const tip=ordena([...new Set(base.filter(e=>passa(e,'tipo')).map(e=>tipoDe(e)||'—'))],FTIPO,pt);
   $('lstTipo').innerHTML=menuLista(tip,FTIPO,'t');
   // Vigência e Data vêm do MAIOR para o menor — o dia de hoje primeiro (Renan)
   const vg=ordena([...new Set(base.filter(e=>passa(e,'vig')).map(vigDe).filter(Boolean))],FVIG)
