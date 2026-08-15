@@ -638,7 +638,7 @@ Terceira referência escolhida pelo Renan (dashboard "Metric Flow"): **`docs/lay
 
 # ⭐ LAYOUT PADRÃO DO PORTAL (Renan, 15/08/2026) — usar em TUDO daqui pra frente
 
-Decisão do Renan em 15/08/2026, vendo a `visao-financeira-app`: **"essa visão ficou sensacional, quero que seja o nosso novo padrão. Vamos aplicar em todos os painéis que já existem."** Referências vivas: **`visao-financeira-app/index.html`** (painel completo: menu lateral, filtros, cards, gráficos, tabelas, forecast editável) e **`hub-novo/index.html`** (a mesma casca **sem** menu lateral, com os clusters em colunas numa tela só). O `disponibilidade-preenchimento` foi onde a linguagem nasceu.
+Decisão do Renan em 15/08/2026, vendo a `visao-financeira-app`: **"essa visão ficou sensacional, quero que seja o nosso novo padrão. Vamos aplicar em todos os painéis que já existem."** Referências vivas: **`visao-financeira/index.html`** (painel completo: menu lateral, filtros, cards, gráficos, tabelas, forecast editável) e **`index.html` da raiz** (a mesma casca **sem** menu lateral, com os clusters em lista/colunas). Os dois entraram no ar em 15/08/2026, substituindo o hub e o painel antigos. O `disponibilidade-preenchimento` foi onde a linguagem nasceu.
 
 ## A casca (app shell)
 
@@ -696,14 +696,14 @@ Barra fina com título + subtítulo à esquerda (`JUL/26 · atualizado …`) e, 
 - **Cores de resultado**: `table.dre td.cr,.cr{color:var(--vermelho)!important;font-weight:700}` (idem `cg`, `cr-t`, `cg-t`) — **o `!important` é obrigatório**, senão `table.dre td{color:…}` vence pela especificidade.
 - **Célula editável** (forecast): `td.edit` com fundo laranja 7%, borda tracejada, foco com anel; `td.edit.changed` em laranja. Ao focar troca para o número cru; ao sair, `parseNum` aceita `-2,87 mi`, `566k` e pt-BR.
 
-## Hub sem menu lateral (`hub-novo/`)
+## Hub sem menu lateral (`index.html` da raiz)
 
 Mesma casca, **sem `.side`**: topo com marca + busca de painel + tema + usuário, e o miolo em `.board`. **Dois arranjos para o mesmo conteúdo**, alternados pelo botão `#btModo` no topo (chave `gem_hub_modo`):
 
 - **LISTA (padrão)** — clusters empilhados. O cluster **não é um card**: é só a barra de título (rótulo em caixa alta + filete + contagem) com o **"+" que vira "−"**. Ao abrir, mostra os **cards inteiros**, do tamanho normal e com o resumo em até 3 linhas. A primeira visita abre todos (`gem_hub_abertos` ausente ⇒ todos) e, quando não couber, **quem rola é o `.board`, nunca a página** — por isso `.board.lista .clu{flex:0 0 auto}`, senão o flex column comprime os clusters e corta os cards em vez de rolar.
 - **COLUNAS** — um cluster por coluna (`grid-template-columns:repeat(N,minmax(0,1fr))`, N = clusters visíveis). Tudo aberto numa tela só, sem rolagem — validado de 1280×720 a 1920×1080, com a densidade caindo por altura de tela (descrição em 3 linhas acima de 940px, 2 abaixo; paddings menores abaixo de 800px).
 
-A busca do topo filtra os cards e esconde cluster vazio; no modo lista ela **abre sozinha** o cluster que tem resultado e devolve o estado do usuário ao limpar. Cluster **Administração** e o card **Planner Corporativo** só aparecem para admin. Os cards saem de um array `CLUSTERS` no JS (não são HTML solto), e os links levam `../` porque a página mora numa subpasta.
+A busca do topo filtra os cards e esconde cluster vazio; no modo lista ela **abre sozinha** o cluster que tem resultado e devolve o estado do usuário ao limpar. Cluster **Administração** e o card **Planner Corporativo** só aparecem para admin. Os cards saem de um array `CLUSTERS` no JS, não são HTML solto.
 
 ## Regras que não se negociam
 
@@ -712,7 +712,9 @@ A busca do topo filtra os cards e esconde cluster vazio; no modo lista ela **abr
 3. Todo painel inclui `assets/mobile.js`, `assets/sortable-table.js` e `assets/excel-export.js` (o exportador já entende `.tab-wrap`, `.tsec` e `.rtit`).
 4. Nomes de visão em português curto e sem jargão de arquivo: *Resumo · Análise Nominal · AH e AV · YTG + TGT · Bridge/Cenário 1/Cenário 2 · Forecast · Cenário 1/Cenário 2*.
 
-**Roteiro de aplicação (a fazer):** `visao-financeira-app` vira a `visao-financeira` oficial e, na sequência, os demais painéis migram para esta casca. O hub-novo substitui o `index.html` da raiz quando o Renan aprovar.
+**Fundo é UNIFORME, não degradê** (Renan, 15/08/2026): o degradê diagonal clareava para o canto superior direito e os cards de lá sumiam. Os dois temas param no tom do MEIO do degradê antigo — `#E1E2E5` no claro, `#202022` no escuro —, que é o que reproduz o miolo do painel (`#eeeef0` / `#1c1c1e` medidos no pixel). Ao mexer nisso, **medir o pixel do miolo nas duas telas**, não confiar no olho.
+
+**Roteiro de aplicação:** hub e Visão Financeira migrados em 15/08/2026. Faltam os demais painéis.
 
 ---
 
