@@ -148,10 +148,27 @@ body{font-family:'Montserrat',-apple-system,BlinkMacSystemFont,sans-serif;font-s
 /* o número fica na cor do texto (preto no claro, branco no escuro) e quem dá o
    recado é o farol ao lado — mesma cor da legenda (Renan, 15/08/2026) */
 .dfarol{width:13px;height:13px;border-radius:50%;flex:0 0 auto;}
-.cols .res-graf{flex:1 1 0;min-height:150px;overflow:hidden;padding:12px 16px 10px;display:flex;flex-direction:column;}
+.cols .tab-wrap.res-graf{flex:1 1 0;min-height:150px;overflow:hidden;padding:12px 16px 10px;display:flex;flex-direction:column;}
 .res-cv{flex:1;min-height:0;position:relative;}
+/* os dois gráficos à esquerda e, ao lado, o calendário do mês num quadrado
+   (a largura sai da altura pelo aspect-ratio) — Renan, 15/08/2026 */
+.res-cols{flex:1;min-height:0;display:flex;gap:12px;}
+.res-esq{flex:1 1 auto;min-width:0;min-height:0;display:flex;flex-direction:column;gap:12px;}
+.cols .tab-wrap.res-cal{flex:0 0 auto;width:clamp(250px,30%,430px);aspect-ratio:1;align-self:center;
+  overflow:hidden;padding:12px 14px 12px;display:flex;flex-direction:column;}
+.cal-grid{flex:1;min-height:0;display:grid;grid-template-columns:repeat(7,1fr);gap:4px;margin-top:2px;}
+.cal-h{font-size:9px;font-weight:700;color:var(--txt3);text-align:center;letter-spacing:.5px;}
+.cal-c{border-radius:6px;display:flex;flex-direction:column;align-items:center;justify-content:center;
+  gap:1px;line-height:1;overflow:hidden;}
+.cal-d{font-size:8px;font-weight:600;color:rgba(255,255,255,.7);}
+.cal-p{font-size:11px;font-weight:800;color:#fff;}
+.cal-c.vaz{background:repeating-linear-gradient(45deg,transparent,transparent 3px,var(--hover) 3px,var(--hover) 6px);}
+.cal-c.vaz .cal-d{color:var(--txt3);}
+.cal-c.hoje{outline:2px solid var(--txt);outline-offset:-2px;}
 @media(max-width:900px){
-  .cols .res-graf{flex:0 0 auto;height:240px;}
+  .cols .tab-wrap.res-graf{flex:0 0 auto;height:240px;}
+  .res-cols{flex-direction:column;}
+  .cols .tab-wrap.res-cal{aspect-ratio:auto;height:280px;width:100%;}
   .res-wrap{overflow:auto;}
 }
 .grn{color:var(--verde);font-size:18px;font-weight:800;}
@@ -809,6 +826,31 @@ async function renderResumo(){
     const g=porMes.get(m); g.a+=r.ativos||0; g.i+=r.indisponiveis||0;});
   porMes.forEach((g,m)=>{vals[m]=dispPct(g.a,g.i);});
   const projs=agrupa('projeto');
+  /* ── calendário do MÊS ATUAL: um quadradinho por dia, pintado com a
+        disponibilidade daquele dia. Ignora os filtros de vigência e data de
+        propósito — é sempre o mês corrente (Renan, 15/08/2026)            ── */
+  const hj=new Date(), calY=hj.getFullYear(), calM=hj.getMonth();
+  const pref=calY+'-'+String(calM+1).padStart(2,'0');
+  const porDia=new Map();
+  all.forEach(r=>{
+    if(!Suni.has(r.unidade)||projFora(r.projeto)) return;
+    if(FPROJ.size && !FPROJ.has(projLbl(r.projeto))) return;
+    if(FTIPO.size && !FTIPO.has(r.tipo_veiculo||'—')) return;
+    if(String(r.data||'').slice(0,7)!==pref) return;
+    const d=+String(r.data).slice(8,10);
+    if(!porDia.has(d)) porDia.set(d,{a:0,i:0});
+    const g=porDia.get(d); g.a+=r.ativos||0; g.i+=r.indisponiveis||0;
+  });
+  const primDia=new Date(calY,calM,1).getDay(), nDiasMes=new Date(calY,calM+1,0).getDate();
+  const semanas=Math.ceil((primDia+nDiasMes)/7);
+  const mesNome=hj.toLocaleDateString('pt-BR',{month:'long',year:'numeric'});
+  const cels=[...Array(primDia)].map(()=>'<div></div>')
+    .concat([...Array(nDiasMes)].map((_,k)=>{
+      const d=k+1, g=porDia.get(d), p=g?dispPct(g.a,g.i):null;
+      const hoje=d===hj.getDate();
+      return `<div class="cal-c${p==null?' vaz':''}${hoje?' hoje':''}"${p==null?'':` style="background:${clsDisp(p)}"`}>
+        <span class="cal-d">${d}</span>${p==null?'':`<span class="cal-p">${p.toFixed(0)}%</span>`}</div>`;
+    })).join('');
   $('cols').innerHTML=`
   <div class="res-wrap">
     <!-- HERO — só o número, com meta e sonho ABAIXO dele -->
@@ -819,15 +861,27 @@ async function renderResumo(){
         ${metaSonho()}
       </div>
     </div>
-    <div class="tab-wrap res-graf">
-      <div class="rtit">Disponibilidade % · Mensal</div>
-      <div class="rsub">Evolução por vigência — Meta ${META_DISP}% · Sonho ${SONHO_DISP}%</div>
-      <div class="res-cv"><canvas id="chVig"></canvas></div>
-    </div>
-    <div class="tab-wrap res-graf">
-      <div class="rtit">Disponibilidade % · Projeto</div>
-      <div class="rsub">Período selecionado</div>
-      <div class="res-cv"><canvas id="chProj"></canvas></div>
+    <div class="res-cols">
+      <div class="res-esq">
+        <div class="tab-wrap res-graf">
+          <div class="rtit">Disponibilidade % · Mensal</div>
+          <div class="rsub">Evolução por vigência — Meta ${META_DISP}% · Sonho ${SONHO_DISP}%</div>
+          <div class="res-cv"><canvas id="chVig"></canvas></div>
+        </div>
+        <div class="tab-wrap res-graf">
+          <div class="rtit">Disponibilidade % · Projeto</div>
+          <div class="rsub">Período selecionado</div>
+          <div class="res-cv"><canvas id="chProj"></canvas></div>
+        </div>
+      </div>
+      <div class="tab-wrap res-cal">
+        <div class="rtit">Disponibilidade % · Dia</div>
+        <div class="rsub">${esc(mesNome)}</div>
+        <div class="cal-grid" style="grid-template-rows:12px repeat(${semanas},1fr)">
+          ${['D','S','T','Q','Q','S','S'].map(d=>`<div class="cal-h">${d}</div>`).join('')}
+          ${cels}
+        </div>
+      </div>
     </div>
   </div>`;
   // ── gráficos: MESMAS opções do painel antigo (eixo Y adaptativo, datalabels,
