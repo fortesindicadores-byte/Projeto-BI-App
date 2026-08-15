@@ -130,6 +130,32 @@ body.claro .app{border-color:rgba(15,23,42,.10);box-shadow:0 28px 70px rgba(15,2
 .clu-h b{flex:0 0 auto;font-size:10px;font-weight:600;color:var(--txt4);}
 .clu-cards{display:flex;flex-direction:column;gap:9px;min-height:0;}
 
+/* ── modo LISTA: clusters empilhados, cada um abre no "+" ── */
+.board.lista{display:flex;flex-direction:column;gap:8px;overflow:auto;align-items:stretch;}
+.board.lista .clu{flex:0 0 auto;gap:0;border-radius:14px;overflow:hidden;
+  background:var(--brilho), var(--card);border:1px solid var(--card-brd);box-shadow:var(--luz-card);
+  backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);}
+.board.lista .clu-h{width:100%;display:flex;align-items:center;gap:11px;padding:11px 15px;cursor:pointer;
+  background:transparent;border:0;font-family:inherit;text-align:left;}
+.board.lista .clu-h:hover{background:var(--hover);}
+.board.lista .clu-h span{font-size:11.5px;font-weight:600;color:var(--txt2);letter-spacing:1.1px;text-transform:uppercase;}
+.board.lista .clu.aberto .clu-h span{color:var(--txt);}
+.board.lista .clu-h b{font-size:10.5px;font-weight:600;color:var(--txt4);}
+/* o "+" que vira "−" ao abrir */
+.mais{position:relative;width:20px;height:20px;flex:0 0 20px;border-radius:6px;display:flex;
+  background:color-mix(in srgb,var(--laranja) 14%,transparent);
+  border:1px solid color-mix(in srgb,var(--laranja) 26%,transparent);}
+.mais i{position:absolute;top:50%;left:50%;width:9px;height:1.6px;border-radius:2px;background:var(--laranja);
+  transform:translate(-50%,-50%);transition:transform .2s;}
+.mais i:last-child{transform:translate(-50%,-50%) rotate(90deg);}
+.clu.aberto .mais i:last-child{transform:translate(-50%,-50%) rotate(0deg);}
+.board.lista .clu-cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(212px,1fr));gap:8px;
+  padding:0 12px 12px;}
+.board.lista .clu:not(.aberto) .clu-cards{display:none;}
+.board.lista .hcard{padding:10px 12px 11px;}
+.board.lista .hcard .dsc{-webkit-line-clamp:2;line-height:1.42;}
+@media(max-width:900px){ .board.lista .clu-cards{grid-template-columns:1fr;} }
+
 .hcard{display:flex;flex-direction:column;gap:6px;padding:12px 13px 13px;border-radius:12px;cursor:pointer;
   background:var(--brilho), var(--card);border:1px solid var(--card-brd);box-shadow:var(--luz-card);
   backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);
@@ -382,6 +408,7 @@ body.claro .farol-panel{box-shadow:0 18px 40px rgba(15,23,42,.16);}
         <svg viewBox="0 0 24 24" fill="none" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M16.5 16.5 21 21"/></svg>
         <input type="text" id="busca-painel" placeholder="Buscar painel…" oninput="filtraBoard(this.value)" autocomplete="off">
       </div>
+      <button class="ico-btn" id="btModo" onclick="trocaModo()" title="Ver em colunas"></button>
       <button class="ico-btn" id="btTema" onclick="trocaTema()" title="Claro / escuro"></button>
       <div class="quem"><span class="av" id="hub-avatar">—</span><b id="hub-username">—</b>
         <button class="sair" onclick="doLogout()" title="Sair">
@@ -449,19 +476,53 @@ function cardHtml(k){
   return k.h ? `<a class="hcard card-link" href="../${k.h}" data-b="${busca}" title="${k.d.replace(/"/g,'')}">${dentro}</a>`
              : `<div class="hcard" onclick="${k.onc}" data-b="${busca}" title="${k.d.replace(/"/g,'')}">${dentro}</div>`;
 }
+/* Dois arranjos para o mesmo conteúdo — o botão do topo alterna:
+   COLUNAS = um cluster por coluna, tudo aberto numa tela só.
+   LISTA   = clusters empilhados, cada um abre no "+".                        */
+let MODO   = localStorage.getItem('gem_hub_modo') || 'lista';
+let ABERTO = (localStorage.getItem('gem_hub_abertos') || '').split('|').filter(Boolean);
+let _isAdmin = false;
+
 function renderBoard(isAdmin){
+  if (typeof isAdmin === 'boolean') _isAdmin = isAdmin;
   const vis = CLUSTERS
-    .filter(c => !c.adm || isAdmin)
-    .map(c => ({...c, cards: c.cards.filter(k => !k.adm || isAdmin)}))
+    .filter(c => !c.adm || _isAdmin)
+    .map(c => ({...c, cards: c.cards.filter(k => !k.adm || _isAdmin)}))
     .filter(c => c.cards.length);
   const b = document.getElementById('board');
-  b.style.gridTemplateColumns = 'repeat(' + vis.length + ',minmax(0,1fr))';
-  b.innerHTML = vis.map(c => `<section class="clu">
-      <div class="clu-h"><span>${c.nome}</span><i></i><b>${c.cards.length}</b></div>
-      <div class="clu-cards">${c.cards.map(cardHtml).join('')}</div>
-    </section>`).join('');
+  b.classList.toggle('lista', MODO === 'lista');
+  b.style.gridTemplateColumns = MODO === 'lista' ? '' : 'repeat(' + vis.length + ',minmax(0,1fr))';
+
+  b.innerHTML = vis.map(c => MODO === 'lista'
+    ? `<section class="clu${ABERTO.includes(c.nome) ? ' aberto' : ''}" data-clu="${c.nome}">
+         <button class="clu-h" onclick="abreClu('${c.nome.replace(/'/g,"\\'")}')">
+           <span class="mais"><i></i><i></i></span><span>${c.nome}</span><i class="ln"></i><b>${c.cards.length}</b>
+         </button>
+         <div class="clu-cards">${c.cards.map(cardHtml).join('')}</div>
+       </section>`
+    : `<section class="clu" data-clu="${c.nome}">
+         <div class="clu-h"><span>${c.nome}</span><i class="ln"></i><b>${c.cards.length}</b></div>
+         <div class="clu-cards">${c.cards.map(cardHtml).join('')}</div>
+       </section>`).join('');
+
+  const bt = document.getElementById('btModo');
+  if (bt){
+    bt.innerHTML = MODO === 'lista' ? _COLS : _LISTA;
+    bt.title = MODO === 'lista' ? 'Ver em colunas' : 'Ver em lista';
+  }
   const busca = document.getElementById('busca-painel');
   if (busca && busca.value) filtraBoard(busca.value);
+}
+function abreClu(nome){
+  ABERTO = ABERTO.includes(nome) ? ABERTO.filter(n => n !== nome) : ABERTO.concat(nome);
+  localStorage.setItem('gem_hub_abertos', ABERTO.join('|'));
+  const s = document.querySelector(`#board .clu[data-clu="${nome}"]`);
+  if (s) s.classList.toggle('aberto', ABERTO.includes(nome));
+}
+function trocaModo(){
+  MODO = MODO === 'lista' ? 'colunas' : 'lista';
+  localStorage.setItem('gem_hub_modo', MODO);
+  renderBoard();
 }
 function filtraBoard(q){
   const t = String(q||'').toLowerCase().trim();
@@ -474,6 +535,8 @@ function filtraBoard(q){
       if (ok) n++;
     });
     clu.style.display = n ? '' : 'none';
+    // buscando, o cluster que tem resultado abre sozinho; sem busca, volta ao que o usuário deixou
+    if (MODO === 'lista') clu.classList.toggle('aberto', t ? n > 0 : ABERTO.includes(clu.dataset.clu));
     achou += n;
   });
   const b = document.getElementById('board');
@@ -484,6 +547,8 @@ function filtraBoard(q){
     vazio.style.display = '';
   } else if (vazio) vazio.style.display = 'none';
 }
+const _COLS ='<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><rect x="3" y="4" width="5" height="16" rx="1.5"/><rect x="9.5" y="4" width="5" height="16" rx="1.5"/><rect x="16" y="4" width="5" height="16" rx="1.5"/></svg>';
+const _LISTA='<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><rect x="3" y="4" width="18" height="4.5" rx="1.5"/><rect x="3" y="10.5" width="18" height="4.5" rx="1.5"/><rect x="3" y="17" width="18" height="4.5" rx="1.5"/></svg>';
 
 /* ── tema claro / escuro (mesma chave dos painéis) ── */
 const _SOL='<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4.5"/><path d="M12 1.5v2M12 20.5v2M4.2 4.2l1.4 1.4M18.4 18.4l1.4 1.4M1.5 12h2M20.5 12h2M4.2 19.8l1.4-1.4M18.4 5.6l1.4-1.4"/></svg>';
