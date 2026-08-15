@@ -162,6 +162,8 @@ body{font-family:'Montserrat',-apple-system,BlinkMacSystemFont,sans-serif;font-s
   gap:1px;line-height:1;overflow:hidden;}
 .cal-d{font-size:8px;font-weight:600;color:rgba(255,255,255,.7);}
 .cal-p{font-size:11px;font-weight:800;color:#fff;}
+.cal-c.esc .cal-p{color:#0F1115;}
+.cal-c.esc .cal-d{color:rgba(0,0,0,.55);}
 .cal-c.vaz{background:repeating-linear-gradient(45deg,transparent,transparent 3px,var(--hover) 3px,var(--hover) 6px);}
 .cal-c.vaz .cal-d{color:var(--txt3);}
 .cal-c.hoje{outline:2px solid var(--txt);outline-offset:-2px;}
@@ -848,7 +850,7 @@ async function renderResumo(){
     .concat([...Array(nDiasMes)].map((_,k)=>{
       const d=k+1, g=porDia.get(d), p=g?dispPct(g.a,g.i):null;
       const hoje=d===hj.getDate();
-      return `<div class="cal-c${p==null?' vaz':''}${hoje?' hoje':''}"${p==null?'':` style="background:${clsDisp(p)}"`}>
+      return `<div class="cal-c${p==null?' vaz':''}${p!=null&&p>=META_DISP?' esc':''}${hoje?' hoje':''}"${p==null?'':` style="background:${clsDisp(p)}"`}>
         <span class="cal-d">${d}</span>${p==null?'':`<span class="cal-p">${p.toFixed(0)}%</span>`}</div>`;
     })).join('');
   $('cols').innerHTML=`
@@ -901,7 +903,9 @@ async function renderResumo(){
         tooltip:{backgroundColor:'#141B26',titleColor:'#F97316',bodyColor:'#F1F5F9',borderColor:'#1E2D40',borderWidth:1,
           titleFont:{family:'Montserrat'},bodyFont:{family:'Montserrat'},
           callbacks:{label:c=>(c.parsed.y!=null?c.parsed.y.toFixed(0):'—')+'%'}},
-        datalabels:{color:'#fff',
+        // no amarelo e no verde o rótulo é preto; só no vermelho fica branco
+        datalabels:{color:c=>{const d=c&&c.dataset&&c.dataset.data, v=d?d[c.dataIndex]:null;
+            return v!=null&&v>=META_DISP?'#0F1115':'#fff';},
           font:{family:'Montserrat',size:11,weight:'700'},anchor:'end',align:'start',offset:2,
           formatter:v=>v!=null?v.toFixed(0)+'%':''}},
       // sem grade e sem linha de eixo — estilo do layout moderno (Renan, 15/08/2026)
