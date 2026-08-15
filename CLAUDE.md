@@ -657,21 +657,34 @@ A página **não rola** — o app ocupa a tela e cada área resolve o próprio e
 ## Tokens (substituem a paleta antiga nos painéis novos)
 
 ```css
-:root{
-  --fundo:#0B0B0D; --app:#101014; --side:#16161B; --card:#1A1A20; --card-brd:#26262E;
-  --linha:#202027; --cabec:#2B2B30; --hover:rgba(255,255,255,.045);
-  --brilho:linear-gradient(180deg,rgba(255,255,255,.028),rgba(255,255,255,0));
-  --txt:#EEF2FA; --txt2:#B2BCD2; --txt3:#7B849B; --txt4:#565E70;
-  --laranja:#F97316; --azul:#2E90E8; --verde:#22A85A; --vermelho:#E5484D;
+:root{                                   /* escuro */
+  --fundo:  radial-gradient(80% 60% at 90% 0%, rgba(255,244,232,.045), transparent 60%),
+            linear-gradient(45deg,#202022 0%,#202022 100%);   /* UNIFORME, ver nota abaixo */
+  --luz:      inset 0 1px 0 rgba(255,255,255,.09);
+  --luz-card: inset 0 1px 0 rgba(255,255,255,.08);
+  --app:      rgba(18,18,18,.30);   --side:  rgba(30,30,30,.50);
+  --card:     rgba(44,44,46,.78);   --linha: rgba(255,255,255,.06);
+  --card-brd: rgba(255,255,255,.07);
+  --brilho:   linear-gradient(180deg,rgba(255,255,255,.022) 0%,rgba(255,255,255,0) 46%);
+  --txt:#EEF2FA; --txt2:#B2BCD2; --txt3:#676F83; --txt4:#4C505C;
+  --hover:rgba(255,255,255,.06); --cabec:#2B2B30;
+  --azul:#2E90E8; --verde:#3BB33B; --vermelho:#FF5252; --laranja:#F97316; --ambar:#F4A100;
 }
-body.claro{
-  --fundo:#E8EAEE; --app:#FFFFFF; --side:#F4F5F8; --card:#FFFFFF; --card-brd:#DFE2E9;
-  --linha:#E9EBF0; --cabec:#DCDFE6; --hover:rgba(15,23,42,.045);
-  --brilho:linear-gradient(180deg,rgba(15,23,42,.02),rgba(15,23,42,0));
-  --txt:#161D2B; --txt2:#3C4658; --txt3:#4A5568; --txt4:#79839A;
-  --laranja:#E2620A; --azul:#1B6FC4; --verde:#12894A; --vermelho:#C4242A;
+body.claro{                              /* claro */
+  --fundo:  radial-gradient(80% 60% at 90% 0%, rgba(255,255,255,.35), transparent 60%),
+            linear-gradient(45deg,#E1E2E5 0%,#E1E2E5 100%);
+  --luz:      inset 0 1px 0 rgba(255,255,255,.9);
+  --luz-card: inset 0 1px 0 rgba(255,255,255,1);
+  --app:      rgba(255,255,255,.34);  --side:  rgba(255,255,255,.50);
+  --card:     rgba(255,255,255,.74);  --linha: rgba(15,23,42,.10);
+  --card-brd: rgba(15,23,42,.10);
+  --brilho:   linear-gradient(180deg,rgba(255,255,255,.6) 0%,rgba(255,255,255,0) 46%);
+  --txt:#161D2B; --txt2:#4A5568; --txt3:#737D91; --txt4:#8B94A6;
+  --hover:rgba(15,23,42,.05); --cabec:#DCDFE6;
+  --azul:#1B6FC4; --verde:#00B300; --vermelho:#FF0000; --ambar:#E9A400;
 }
 ```
+**São cores TRANSLÚCIDAS de propósito** — é o empilhamento `--fundo` → `.app` (com `backdrop-filter:blur(20px)`) → `--side`/`--card` (com blur próprio e `--luz-card`) que dá o vidro. Trocar por hex chapado mata o efeito (já aconteceu). A moldura leva `.app{position:absolute;inset:34px;border-radius:22px;box-shadow:0 28px 70px rgba(0,0,0,.55), var(--luz)}` — **a sombra forte vale nos dois temas**, não suavizar no claro — e o `body::after` com a textura de grão fica por cima do fundo.
 **Tema claro é classe `body.claro`** (não `light-mode`), chave `bi_theme`, botão sol/lua no topo. Cards usam `background:var(--side)` — o mesmo tom do menu lateral (regra do Renan). Tudo que é "um degrau acima" (painéis, chips, inputs) usa `--side`; nada de `rgba` chapado.
 
 ## Menu lateral (painéis)
