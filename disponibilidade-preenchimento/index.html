@@ -210,6 +210,13 @@ body.claro .cal-c.vaz .cal-d{color:var(--txt3);}
 .s-sair{display:flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:7px;
   color:var(--txt3);text-decoration:none;flex:0 0 26px;}
 .s-sair:hover{background:var(--hover);color:var(--txt);}
+/* com a lateral recolhida, passar o mouse no ícone mostra o nome. Vai em
+   position:fixed porque a .side tem overflow:auto e cortaria a dica */
+.dica{position:fixed;z-index:9000;transform:translateY(-50%);pointer-events:none;opacity:0;
+  background:var(--card);color:var(--txt);border:1px solid var(--card-brd);border-radius:7px;
+  padding:5px 9px;font-size:11.5px;font-weight:600;white-space:nowrap;
+  box-shadow:0 8px 22px rgba(0,0,0,.45);transition:opacity .12s;}
+.dica.on{opacity:1;}
 
 /* ── quadro ── */
 .board{flex:1;min-width:0;display:flex;flex-direction:column;}
@@ -339,7 +346,7 @@ input[type=date]::-webkit-calendar-picker-indicator{cursor:pointer;}
       </button>
     </div>
 
-    <label class="s-search">
+    <label class="s-search" data-tip="Pesquisar">
       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" opacity=".8"><circle cx="11" cy="11" r="7"/><path d="M16.5 16.5 21 21"/></svg>
       <input type="text" id="busca" placeholder="Pesquisar placa, problema…" autocomplete="off">
       <span class="s-kbd">Ctrl + K</span>
@@ -1434,7 +1441,30 @@ async function excluirVeiculo(){
 }
 
 /* ── menu lateral recolhido (mesma ideia do Planner) ── */
+/* ── dicas da lateral recolhida ─────────────────────────────────────────── */
+const DICA=document.createElement('div'); DICA.className='dica'; document.body.appendChild(DICA);
+const escondeDica=()=>DICA.classList.remove('on');
+function rotuloItem(b){
+  if(b.dataset.tip) return b.dataset.tip;
+  const c=b.cloneNode(true); c.querySelectorAll('.n,svg,input,.s-kbd').forEach(e=>e.remove());
+  return c.textContent.replace(/\s+/g,' ').trim() || b.getAttribute('title') || '';
+}
+document.querySelectorAll('.side .s-item, .side .s-search, .side .s-sair').forEach(b=>{
+  b.addEventListener('mouseenter',()=>{
+    if(!document.querySelector('.side').classList.contains('mini')) return;
+    const t=rotuloItem(b); if(!t) return;
+    DICA.textContent=t;
+    const r=b.getBoundingClientRect();
+    DICA.style.top=Math.round(r.top+r.height/2)+'px';
+    DICA.style.left=Math.round(r.right+10)+'px';
+    DICA.classList.add('on');
+  });
+  b.addEventListener('mouseleave',escondeDica);
+  b.addEventListener('click',escondeDica);
+});
+window.addEventListener('scroll',escondeDica,true);
 function trocaMini(){
+  escondeDica();
   const l=document.querySelector('.side').classList.toggle('mini');
   localStorage.setItem('disp_mini', l?'1':'0');
   const b=$('btMini'); if(b)b.title=l?'Expandir menu':'Recolher menu';
