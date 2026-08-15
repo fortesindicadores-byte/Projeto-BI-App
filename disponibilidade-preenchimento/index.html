@@ -7,6 +7,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0"></script>
 <style>
 /* ============================================================
    DISPONIBILIDADE — mesmo shell do Planner Corporativo
@@ -122,6 +123,13 @@ body{font-family:'Montserrat',-apple-system,BlinkMacSystemFont,sans-serif;font-s
 .s-item .n{margin-left:auto;font-size:11px;color:var(--txt3);font-weight:600;}
 .s-item .n.alerta{color:var(--vermelho);}
 /* resumo da disponibilidade na lateral */
+.tab tbody tr[data-id],.tab tbody tr[data-parou]{cursor:pointer;}
+.hsep{width:1px;height:26px;background:var(--linha);margin:0 4px;}
+/* no Resumo as tabelas mostram TUDO — sem barra interna (Renan, 14/08/2026) */
+.tab-wrap.inteira{overflow:visible;}
+.dimbt{white-space:nowrap;}
+.lapis{color:var(--txt3);font-size:11px;margin-left:5px;cursor:pointer;}
+.lapis:hover{color:var(--txt);}
 .rlbl{font-size:9.5px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:.9px;}
 .rval{font-size:18px;font-weight:800;}
 .rsep{width:1px;background:var(--linha);align-self:stretch;margin:2px 2px;}
@@ -611,7 +619,7 @@ function htmlLista(){
   const rows=abertos().filter(e=>passa(e)).sort((a,b)=>diasParado(b)-diasParado(a));
   if(!rows.length) return '<div class="cvazia">Nenhum veículo indisponível com os filtros atuais 🎉</div>';
   return `<div class="tab-wrap"><table class="tab">
-    <thead><tr><th>Placa</th><th>Projeto</th><th>Tipo</th><th>Grupo</th><th>Problema</th><th>Local</th><th>RC/OC</th><th>Parada</th><th class="num">Dias</th><th>Previsão</th><th>Status</th><th></th></tr></thead>
+    <thead><tr><th>Placa</th><th>Projeto</th><th>Tipo</th><th>Grupo</th><th>Problema</th><th>Local</th><th>RC/OC</th><th>Parada</th><th class="num">Dias</th><th>Previsão</th><th>Status</th></tr></thead>
     <tbody>${rows.map(e=>{
       const dp=diasParado(e);
       const atras=e.previsao_retorno&&e.previsao_retorno<hojeBRT();
@@ -622,8 +630,7 @@ function htmlLista(){
         <td>${dataBR(e.data_parada)}</td>
         <td class="num" data-sort="${dp}"><b style="color:${dp>=30?'var(--vermelho)':'inherit'}">${dp}</b></td>
         <td>${e.previsao_retorno?(atras?`<span class="atraso">${dataBR(e.previsao_retorno)}</span>`:dataBR(e.previsao_retorno)):'—'}</td>
-        <td>${chip(e.status)}</td>
-        <td><button class="btn-mini ret" data-ret="${esc(e.id)}">✓ Retornou</button></td></tr>`;
+        <td>${chip(e.status)}</td></tr>`;
     }).join('')}</tbody></table></div>`;
 }
 function htmlFrota(){
@@ -636,15 +643,16 @@ function htmlFrota(){
     .sort((a,b)=>(abertaSet.has(b.placa)?1:0)-(abertaSet.has(a.placa)?1:0)||a.placa.localeCompare(b.placa));
   if(!lista.length) return '<div class="cvazia">Nenhum veículo da unidade na base de ativos.</div>';
   return `<div class="tab-wrap"><table class="tab">
-    <thead><tr><th>Placa</th><th>Projeto</th><th>Tipo</th><th>Modelo</th><th>Situação</th><th></th></tr></thead>
+    <thead><tr><th>Placa</th><th>Projeto</th><th>Tipo</th><th>Modelo</th><th>Situação</th></tr></thead>
     <tbody>${lista.map(a=>{
       const ev=abertaSet.get(a.placa);
-      return `<tr ${ev?`data-id="${esc(ev.id)}"`:''}>
-        <td class="forte">${esc(a.placa)}</td><td>${esc(a.projeto||'—')}</td><td>${esc(a.tipo||'—')}</td><td>${esc(a.modelo||'—')}</td>
+      // sem coluna de ação: clicar na LINHA abre o evento (se parado) ou já
+      // começa uma nova indisponibilidade para a placa (Renan, 14/08/2026)
+      return `<tr ${ev?`data-id="${esc(ev.id)}"`:`data-parou="${esc(a.placa)}"`} title="${ev?'Abrir a indisponibilidade':'Lançar indisponibilidade'}">
+        <td class="forte">${esc(a.placa)}${a.manual&&UNIT==='ANG'?` <span class="lapis" data-editv="${esc(a.placa)}" title="Editar veículo (manual)">✎</span>`:''}</td>
+        <td>${esc(a.projeto||'—')}</td><td>${esc(a.tipo||'—')}</td><td>${esc(a.modelo||'—')}</td>
         <td>${ev?`<span class="tag" style="--c:var(--vermelho)">Indisponível · ${diasParado(ev)}d</span>`
-               :`<span class="tag" style="--c:var(--verde)">Disponível</span>`}</td>
-        <td style="white-space:nowrap">${ev?'':`<button class="btn-mini abrir" data-parou="${esc(a.placa)}">Parou? Abrir</button>`}
-          ${a.manual&&UNIT==='ANG'?` <button class="btn-mini" data-editv="${esc(a.placa)}" title="Editar veículo (manual)" style="background:var(--hover);color:var(--txt2);border:1px solid var(--card-brd)">✎</button>`:''}</td></tr>`;
+               :`<span class="tag" style="--c:var(--verde)">Disponível</span>`}</td></tr>`;
     }).join('')}</tbody></table></div>`;
 }
 function htmlHistorico(){
@@ -664,14 +672,20 @@ function htmlHistorico(){
       tabelas), agora sobre o disp_snapshot do Supabase. Renan, 14/08/2026:
       "a visão resumo deve ser igual ao painel Disponibilidade que já existe".
       Meta 93% · Sonho 97% — as mesmas réguas do painel antigo.            ── */
-let RES=null, CH1=null, CH2=null;
+if(window.ChartDataLabels&&window.Chart) Chart.register(ChartDataLabels);
+let RES=null, CH1=null, CH2=null, SEM_MODELO=false;
 const META_DISP=93, SONHO_DISP=97;
 async function loadResumo(){
   if(RES)return RES;
   const out=[]; const PG=1000;
   for(let i=0;;i+=PG){
-    const {data,error}=await sb.from('disp_snapshot').select('data,unidade,projeto,tipo_veiculo,ativos,indisponiveis')
+    let {data,error}=await sb.from('disp_snapshot').select('data,unidade,projeto,tipo_veiculo,modelo,ativos,indisponiveis')
       .order('data',{ascending:true}).range(i,i+PG-1);
+    if(error&&/modelo/i.test(error.message||'')){       // banco ainda sem scripts/disp-modelo.sql
+      SEM_MODELO=true;
+      ({data,error}=await sb.from('disp_snapshot').select('data,unidade,projeto,tipo_veiculo,ativos,indisponiveis')
+        .order('data',{ascending:true}).range(i,i+PG-1));
+    }
     if(error)throw error;
     out.push(...(data||[]));
     if(!data||data.length<PG)break;
@@ -689,7 +703,6 @@ async function renderResumo(){
   catch(e){ $('cols').innerHTML=`<div class="cvazia">Erro: ${esc(e.message||e)}</div>`; return; }
   if(VER!=='resumo')return;
   if(!all.length){ $('cols').innerHTML='<div class="cvazia">Sem fotos ainda — rode a migração do histórico e aguarde as fotos diárias.</div>'; return; }
-  // filtros da tela valem aqui também (unidade, vigência, data, projeto, tipo)
   const Suni=new Set(unisSel());
   const passaS=(r,exceto)=>{
     if(!Suni.has(r.unidade)) return false;
@@ -701,19 +714,19 @@ async function renderResumo(){
   };
   const rows=all.filter(r=>passaS(r));
   if(!rows.length){ $('cols').innerHTML='<div class="cvazia">Nada com os filtros atuais.</div>'; return; }
-  const soma=(arr)=>arr.reduce((g,r)=>{g.a+=r.ativos||0;g.i+=r.indisponiveis||0;g.d.add(r.data);return g;},{a:0,i:0,d:new Set()});
+  const soma=arr=>arr.reduce((g,r)=>{g.a+=r.ativos||0;g.i+=r.indisponiveis||0;g.d.add(r.data);return g;},{a:0,i:0,d:new Set()});
   const tot=soma(rows), nDias=tot.d.size||1;
   const pctTot=dispPct(tot.a,tot.i);
-  // Δ vs vigência anterior (sem o filtro de vigência, como no painel antigo)
+  // Δ vigência anterior e Δ YTD (mesma conta do painel antigo)
   const semVig=all.filter(r=>passaS(r,'vig'));
   const vigs=[...new Set(semVig.map(r=>String(r.data||'').slice(0,7)))].sort();
   let dpp=null,dpct=null;
   if(vigs.length>=2){
-    const pL=dispPct(...(x=>[x.a,x.i])(soma(semVig.filter(r=>String(r.data).slice(0,7)===vigs[vigs.length-1]))));
-    const pP=dispPct(...(x=>[x.a,x.i])(soma(semVig.filter(r=>String(r.data).slice(0,7)===vigs[vigs.length-2]))));
+    const g1=soma(semVig.filter(r=>String(r.data).slice(0,7)===vigs[vigs.length-1]));
+    const g2=soma(semVig.filter(r=>String(r.data).slice(0,7)===vigs[vigs.length-2]));
+    const pL=dispPct(g1.a,g1.i), pP=dispPct(g2.a,g2.i);
     if(pL!=null&&pP!=null){ dpp=pL-pP; dpct=(pL-pP)/Math.abs(pP)*100; }
   }
-  // Δ YTD (ano atual vs anterior)
   const cy=new Date().getFullYear();
   const aY=soma(semVig.filter(r=>+String(r.data).slice(0,4)===cy));
   const aPY=soma(semVig.filter(r=>+String(r.data).slice(0,4)===cy-1));
@@ -722,116 +735,121 @@ async function renderResumo(){
     const pY=dispPct(aY.a,aY.i), pPY=dispPct(aPY.a,aPY.i);
     if(pY!=null&&pPY!=null){ ypp=pY-pPY; ypct=(pY-pPY)/Math.abs(pPY)*100; }
   }
-  // séries
-  const porVig=new Map();
-  rows.forEach(r=>{const v=String(r.data).slice(0,7);
-    if(!porVig.has(v))porVig.set(v,{a:0,i:0}); const g=porVig.get(v); g.a+=r.ativos||0; g.i+=r.indisponiveis||0;});
-  const vigsL=[...porVig.keys()].sort();
-  const porChave=(campo)=>{
+  // agrupadores das tabelas (com TOGGLE: unidade↔projeto · tipo↔modelo)
+  const agrupa=campo=>{
     const m=new Map();
     rows.forEach(r=>{const k=r[campo]||'—'; if(!m.has(k))m.set(k,{a:0,i:0});
       const g=m.get(k); g.a+=r.ativos||0; g.i+=r.indisponiveis||0;});
-    return [...m.entries()].map(([k,g])=>({k,a:g.a,i:g.i,p:dispPct(g.a,g.i),
-      mA:g.a/nDias,mI:g.i/nDias})).sort((x,y)=>(y.p??-1)-(x.p??-1));
+    return [...m.entries()].map(([k,g])=>({k,a:g.a/nDias,i:g.i/nDias,p:dispPct(g.a,g.i)}))
+      .sort((x,y)=>(x.p??101)-(y.p??101));   // pior primeiro, como no painel antigo
   };
-  const porProj=porChave('projeto'), porUni=porChave('unidade'), porTipo=porChave('tipo_veiculo');
-  // cenário atual = eventos ABERTOS (dado vivo), com os filtros da tela
-  const cen=abertos().filter(e=>passa(e)).sort((a,b)=>diasParado(b)-diasParado(a));
-  const dl=(v,cls)=>`<b class="${cls}">${v}</b>`;
+  const dimA=DIM_UNI==='uni'?'unidade':'projeto', dimB=DIM_TIPO==='tipo'?'tipo_veiculo':'modelo';
+  const tabA=agrupa(dimA), tabB=agrupa(dimB);
+  // série mensal do ANO (jan→dez), ignorando o filtro de vigência
+  const MES3=['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
+  const vals=Array(12).fill(null);
+  const porMes=new Map();
+  semVig.filter(r=>+String(r.data).slice(0,4)===cy).forEach(r=>{
+    const m=+String(r.data).slice(5,7)-1;
+    if(!porMes.has(m))porMes.set(m,{a:0,i:0});
+    const g=porMes.get(m); g.a+=r.ativos||0; g.i+=r.indisponiveis||0;});
+  porMes.forEach((g,m)=>{vals[m]=dispPct(g.a,g.i);});
+  const projs=agrupa('projeto');
   $('cols').innerHTML=`
   <div style="overflow:auto;min-height:0;flex:1;padding-bottom:10px">
-    <!-- HERO -->
-    <div style="display:flex;gap:30px;align-items:flex-end;flex-wrap:wrap;margin-bottom:16px">
-      <div>
-        <div class="rlbl">Disponibilidade Total</div>
-        <div style="font-size:46px;font-weight:800;letter-spacing:-1.6px;line-height:1.04;color:${clsDisp(pctTot)}">${p1(pctTot)}</div>
+    <!-- HERO — empilhado, como no painel antigo -->
+    <div style="margin-bottom:18px">
+      <div class="rlbl">Disponibilidade Total</div>
+      <div style="font-size:50px;font-weight:800;line-height:1;margin:2px 0 10px;color:${clsDisp(pctTot)}">${p1(pctTot)}</div>
+      <div style="display:flex;gap:28px;margin-bottom:10px">
+        <div><div class="rlbl">Média Ativos</div><b class="rval">${fmtMil(tot.a/nDias)}</b></div>
+        <div><div class="rlbl">Média Indisponíveis</div><b class="rval">${fmtMil(tot.i/nDias)}</b></div>
       </div>
-      <div style="display:flex;gap:24px;padding-bottom:8px;flex-wrap:wrap">
-        <div><div class="rlbl">Média Ativos</div><b class="rval">${Math.round(tot.a/nDias)}</b></div>
-        <div><div class="rlbl">Média Indisponíveis</div><b class="rval">${Math.round(tot.i/nDias)}</b></div>
-        <div class="rsep"></div>
-        <div><div class="rlbl">Δ pp</div>${dl(ppFmt(dpp),dpp==null?'':dpp>=0?'grn':'red')}</div>
-        <div><div class="rlbl">Δ %</div>${dl(dpct==null?'—':(dpct>=0?'+':'')+dpct.toFixed(1).replace('.',',')+'%',dpct==null?'':dpct>=0?'grn':'red')}</div>
-        <div class="rsep"></div>
-        <div><div class="rlbl">Δ YTD pp</div>${dl(ppFmt(ypp),ypp==null?'':ypp>=0?'grn':'red')}</div>
-        <div><div class="rlbl">Δ YTD %</div>${dl(ypct==null?'—':(ypct>=0?'+':'')+ypct.toFixed(1).replace('.',',')+'%',ypct==null?'':ypct>=0?'grn':'red')}</div>
+      <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+        <div><div class="rlbl">Δ pp</div>${dl(ppFmt(dpp),dpp)}</div>
+        <div><div class="rlbl">Δ %</div>${dl(pctFmt(dpct),dpct)}</div>
+        <div class="hsep"></div>
+        <div><div class="rlbl">Δ YTD pp</div>${dl(ppFmt(ypp),ypp)}</div>
+        <div><div class="rlbl">Δ YTD %</div>${dl(pctFmt(ypct),ypct)}</div>
       </div>
     </div>
-    <!-- GRÁFICOS -->
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px">
       <div class="tab-wrap" style="padding:14px 16px">
         <div class="rtit">Disponibilidade % · Mensal</div>
         <div class="rsub">Evolução por vigência — Meta ${META_DISP}% · Sonho ${SONHO_DISP}%</div>
-        <div style="height:210px"><canvas id="chVig"></canvas></div>
+        <div style="height:250px"><canvas id="chVig"></canvas></div>
       </div>
       <div class="tab-wrap" style="padding:14px 16px">
         <div class="rtit">Disponibilidade % · Projeto</div>
         <div class="rsub">Período selecionado</div>
-        <div style="height:210px"><canvas id="chProj"></canvas></div>
+        <div style="height:250px"><canvas id="chProj"></canvas></div>
       </div>
     </div>
-    <!-- TABELAS Unidade / Tipo -->
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px">
-      ${miniTab('Disponibilidade % · Unidade','Unidade',porUni)}
-      ${miniTab('Disponibilidade % · Tipo de Veículo','Tipo',porTipo)}
-    </div>
-    <!-- CENÁRIO ATUAL -->
-    <div class="tab-wrap">
-      <div style="padding:14px 16px 0">
-        <div class="rtit">Indisponibilidade · Cenário Atual</div>
-        <div class="rsub">${cen.length} veículo(s) parado(s) agora</div>
-      </div>
-      <table class="tab"><thead><tr>
-        <th>Unid</th><th>Proj.</th><th>Placa</th><th>Tipo</th><th>Grupo</th><th>Descrição</th>
-        <th>Observações</th><th>Dt. Parada</th><th>Prev. Retorno</th><th class="num">Dias Prazo</th>
-        <th>Status</th><th class="num">Dias Ind.</th></tr></thead>
-      <tbody>${cen.length?cen.map(e=>{
-        const dp=diasParado(e);
-        const prazo=e.previsao_retorno?Math.round((new Date(e.previsao_retorno)-new Date(hojeBRT()))/864e5):null;
-        return `<tr>
-          <td>${esc(e.unidade||'—')}</td><td>${esc(e.projeto||'—')}</td><td class="forte">${esc(e.placa)}</td>
-          <td>${esc(e.tipo_veiculo||'—')}</td><td>${esc(e.grupo||'—')}</td>
-          <td class="livre">${esc(e.descricao_problema||'—')}</td>
-          <td class="livre">${esc(e.observacao||'—')}</td>
-          <td>${dataBR(e.data_parada)}</td><td>${e.previsao_retorno?dataBR(e.previsao_retorno):'—'}</td>
-          <td class="num" style="color:${prazo!=null&&prazo<0?'var(--vermelho)':'inherit'}">${prazo==null?'—':prazo}</td>
-          <td>${chip(e.status)}</td>
-          <td class="num"><b>${dp}</b></td></tr>`;}).join('')
-        :'<tr><td colspan="12" style="text-align:center;color:var(--txt3);padding:18px">Nenhum veículo parado 🎉</td></tr>'}</tbody></table>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+      ${miniTab('Disponibilidade % · '+(DIM_UNI==='uni'?'Unidade':'Projeto'),DIM_UNI==='uni'?'Unidade':'Projeto',tabA,'uni',DIM_UNI==='uni'?'Ver por projeto':'Ver por unidade')}
+      ${miniTab('Disponibilidade % · '+(DIM_TIPO==='tipo'?'Tipo de Veículo':'Modelo'),DIM_TIPO==='tipo'?'Tipo':'Modelo',tabB,'tipo',DIM_TIPO==='tipo'?'Ver por modelo':'Ver por tipo')}
     </div>
   </div>`;
-  // ── gráficos (tema-aware, mesmas cores do painel antigo) ──
+  // ── gráficos: MESMAS opções do painel antigo (eixo Y adaptativo, datalabels,
+  //    linhas de meta/sonho tracejadas com pontos, mês do filtro em destaque) ──
   const claro=document.body.classList.contains('claro');
-  const grid={color:claro?'rgba(0,0,0,.07)':'rgba(255,255,255,.06)'};
-  const tick={color:claro?'#444':'#B2BCD2',font:{family:'Montserrat',size:10}};
-  const lineC=claro?'#8A93A6':'#94A3B8';
+  const gridC=claro?'rgba(0,0,0,.07)':'rgba(255,255,255,.06)';
+  const tickC=claro?'#444':'#94A3B8';
+  const lineC=claro?'#1a1a1a':'#F1F5F9';
+  const corDisp=v=>v==null?'#475569':v>=SONHO_DISP?'#3BB33B':v>=META_DISP?'#F59E0B':'#FF6666';
+  const opts=vs=>{
+    const nums=(vs||[]).filter(v=>v!=null);
+    const lo=nums.length?Math.max(0,Math.floor(Math.min(...nums)/5)*5-5):85;
+    return {responsive:true,maintainAspectRatio:false,layout:{padding:{top:10}},
+      plugins:{legend:{display:false},
+        tooltip:{backgroundColor:'#141B26',titleColor:'#F97316',bodyColor:'#F1F5F9',borderColor:'#1E2D40',borderWidth:1,
+          titleFont:{family:'Montserrat'},bodyFont:{family:'Montserrat'},
+          callbacks:{label:c=>c.dataset.type==='line'?c.dataset.label:((c.parsed.y!=null?c.parsed.y.toFixed(0):'—')+'%')}},
+        datalabels:{display:c=>c.dataset.type!=='line',color:'#fff',
+          font:{family:'Montserrat',size:13,weight:'700'},anchor:'end',align:'start',offset:2,
+          formatter:v=>v!=null?v.toFixed(0)+'%':''}},
+      scales:{x:{ticks:{color:tickC,font:{family:'Montserrat',size:11},maxRotation:35},grid:{color:gridC}},
+              y:{min:lo,max:100,ticks:{color:tickC,font:{family:'Montserrat',size:11},callback:v=>v+'%'},grid:{color:gridC}}}};
+  };
+  const metaLines=(n,vs)=>{
+    const pts=i=>vs&&vs[i]==null?0:3;
+    return [META_DISP,SONHO_DISP].map((y,k)=>({type:'line',label:(k?'Sonho ':'Meta ')+y+'%',
+      data:Array(n).fill(y),borderColor:lineC,borderWidth:2,tension:0,fill:false,borderDash:[5,3],
+      pointRadius:Array.from({length:n},(_,i)=>pts(i)),pointBackgroundColor:lineC,pointBorderWidth:0,
+      pointHoverRadius:6,datalabels:{display:false},order:0}));
+  };
   if(CH1)CH1.destroy(); if(CH2)CH2.destroy();
-  const serie=vigsL.map(v=>{const g=porVig.get(v);return dispPct(g.a,g.i);});
-  CH1=new Chart($('chVig'),{data:{labels:vigsL.map(vigBR),datasets:[
-      {type:'bar',label:'Disp. %',data:serie,backgroundColor:serie.map(v=>v==null?'#5B657C':v>=SONHO_DISP?'#3BB33B':v<META_DISP?'#FF5252':'#F4A100'),borderRadius:3,order:1},
-      {type:'line',label:'Meta '+META_DISP+'%',data:vigsL.map(()=>META_DISP),borderColor:lineC,borderWidth:2,borderDash:[5,3],pointRadius:0,fill:false,order:0},
-      {type:'line',label:'Sonho '+SONHO_DISP+'%',data:vigsL.map(()=>SONHO_DISP),borderColor:lineC,borderWidth:2,borderDash:[2,3],pointRadius:0,fill:false,order:0}]},
-    options:{responsive:true,maintainAspectRatio:false,
-      plugins:{legend:{labels:{color:claro?'#161D2B':'#EEF2FA',font:{family:'Montserrat',size:10},boxWidth:12}},
-        tooltip:{callbacks:{label:c=>c.dataset.label+': '+(c.parsed.y==null?'—':c.parsed.y.toFixed(1).replace('.',',')+'%')}}},
-      scales:{x:{grid:{display:false},ticks:tick},y:{grid,ticks:{...tick,callback:v=>v+'%'},suggestedMin:80,max:100}}}});
-  CH2=new Chart($('chProj'),{type:'bar',data:{labels:porProj.map(x=>x.k),
-    datasets:[{data:porProj.map(x=>x.p),backgroundColor:porProj.map(x=>x.p==null?'#5B657C':x.p>=SONHO_DISP?'#3BB33B':x.p<META_DISP?'#FF5252':'#F4A100'),borderRadius:3}]},
-    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},
-      tooltip:{callbacks:{label:c=>c.parsed.y==null?'—':c.parsed.y.toFixed(1).replace('.',',')+'%'}}},
-      scales:{x:{grid:{display:false},ticks:{...tick,font:{family:'Montserrat',size:9}}},
-              y:{grid,ticks:{...tick,callback:v=>v+'%'},suggestedMin:80,max:100}}}});
+  // mês em destaque = o que está no filtro de vigência (todos, se vazio)
+  const hi=i=>!FVIG.size||FVIG.has(cy+'-'+String(i+1).padStart(2,'0'));
+  CH1=new Chart($('chVig'),{type:'bar',data:{labels:MES3,datasets:[
+      {type:'bar',label:'Disp. %',data:vals,
+       backgroundColor:vals.map((v,i)=>v==null?'transparent':corDisp(v)+(hi(i)?'CC':'33')),
+       borderColor:vals.map((v,i)=>v==null?'transparent':corDisp(v)+(hi(i)?'':'55')),
+       borderWidth:1,borderRadius:3,order:1,
+       datalabels:{display:c=>vals[c.dataIndex]!=null&&hi(c.dataIndex)}},
+      ...metaLines(12,vals)]},options:opts(vals)});
+  const pv=projs.map(x=>x.p);
+  CH2=new Chart($('chProj'),{type:'bar',data:{labels:projs.map(x=>x.k),datasets:[
+      {type:'bar',label:'Disp. %',data:pv,backgroundColor:pv.map(v=>corDisp(v)+(v!=null?'CC':'44')),
+       borderColor:pv.map(v=>corDisp(v)),borderWidth:1,borderRadius:3,order:1}]},options:opts(pv)});
 }
-// tabelinha Unidade/Tipo — mesmas colunas do painel antigo
-function miniTab(titulo,col1,itens){
-  return `<div class="tab-wrap" style="overflow:auto;max-height:300px">
-    <div style="padding:14px 16px 0"><div class="rtit">${esc(titulo)}</div><div class="rsub">Período selecionado</div></div>
+const fmtMil=v=>v==null?'—':Math.round(v).toLocaleString('pt-BR');
+const pctFmt=v=>v==null?'—':(v>=0?'+':'')+v.toFixed(1).replace('.',',')+'%';
+const dl=(txt,v)=>`<b class="${v==null?'':v>=0?'grn':'red'}">${txt}</b>`;
+// tabelas Unidade/Tipo — inteiras (sem rolagem própria) e com TOGGLE de dimensão
+let DIM_UNI='uni', DIM_TIPO='tipo';
+function miniTab(titulo,col1,itens,dim,rotulo){
+  return `<div class="tab-wrap inteira">
+    <div style="padding:14px 16px 0;display:flex;align-items:flex-start;gap:10px">
+      <div style="flex:1"><div class="rtit">${esc(titulo)}</div><div class="rsub">Período selecionado</div></div>
+      <button class="btn-mini dimbt" data-dim="${dim}">${esc(rotulo)}</button>
+    </div>
     <table class="tab"><thead><tr><th>${esc(col1)}</th><th class="num">Ativos</th><th class="num">Indisp.</th><th class="num">Disp. %</th></tr></thead>
     <tbody>${itens.map(x=>`<tr>
       <td class="forte">${esc(x.k)}</td>
-      <td class="num">${Math.round(x.mA)}</td>
-      <td class="num" style="color:${x.mI>=1?'var(--vermelho)':'inherit'}">${Math.round(x.mI)}</td>
-      <td class="num"><b style="color:${clsDisp(x.p)}">${p1(x.p)}</b></td></tr>`).join('')}</tbody></table></div>`;
+      <td class="num">${fmtMil(x.a)}</td>
+      <td class="num" style="color:${x.i>=1?'var(--vermelho)':'inherit'}">${fmtMil(x.i)}</td>
+      <td class="num"><b style="color:${clsDisp(x.p)}">${x.p==null?'—':x.p.toFixed(0)+'%'}</b></td></tr>`).join('')}</tbody></table></div>`;
 }
 
 /* ── visão ADERÊNCIA: quem está preenchendo (Renan, 14/08/2026) ───────────
@@ -1065,8 +1083,11 @@ document.addEventListener('keydown',e=>{
 
 /* ── cliques na área de conteúdo ── */
 $('cols').addEventListener('click',e=>{
-  const ret=e.target.closest('[data-ret]');
-  if(ret){abreRet(ret.dataset.ret);return;}
+  const dim=e.target.closest('[data-dim]');
+  if(dim){ if(dim.dataset.dim==='uni') DIM_UNI=DIM_UNI==='uni'?'proj':'uni';
+           else { if(SEM_MODELO&&DIM_TIPO==='tipo'){ alert('A foto diária ainda não guarda o modelo.\nRode scripts/disp-modelo.sql no Supabase.'); return; }
+                  DIM_TIPO=DIM_TIPO==='tipo'?'modelo':'tipo'; }
+           renderResumo(); return; }
   const edv=e.target.closest('[data-editv]');
   if(edv){abreVeic(edv.dataset.editv);return;}
   const parou=e.target.closest('[data-parou]');
