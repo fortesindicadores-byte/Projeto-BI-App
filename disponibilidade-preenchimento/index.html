@@ -59,7 +59,7 @@ body.claro{
   --azul:     #1B6FC4;
   --verde:    #00B300;   /* no claro o verde e o vermelho são os FORTES (Renan) */
   --vermelho: #FF0000;
-  --ambar:    #B87400;
+  --ambar:    #E9A400;
   --cinza:    #939CAF;
   --cabec:    #DCDFE6;
 }
@@ -833,12 +833,12 @@ async function renderResumo(){
   // ── gráficos: MESMAS opções do painel antigo (eixo Y adaptativo, datalabels,
   //    linhas de meta/sonho tracejadas com pontos, mês do filtro em destaque) ──
   const claro=document.body.classList.contains('claro');
-  const gridC=claro?'rgba(0,0,0,.07)':'rgba(255,255,255,.06)';
   const tickC=claro?'#444':'#94A3B8';
   const lineC=claro?'#1a1a1a':'#F1F5F9';
-  // as barras usam a MESMA régua do número e da tabela — e no claro o verde e o
-  // vermelho são os fortes (Renan, 15/08/2026)
-  const VD=claro?'#00B300':'#3BB33B', VM=claro?'#FF0000':'#FF6666', AM=claro?'#B87400':'#F59E0B';
+  // as barras leem as PRÓPRIAS variáveis do tema, então nunca divergem do número
+  // nem da tabela — trocar a cor no :root troca o gráfico junto
+  const cor=n=>getComputedStyle(document.body).getPropertyValue(n).trim();
+  const VD=cor('--verde'), VM=cor('--vermelho'), AM=cor('--ambar');
   const corDisp=v=>v==null?'#475569':v>=SONHO_DISP?VD:v>=META_DISP?AM:VM;
   const opts=vs=>{
     const nums=(vs||[]).filter(v=>v!=null);
@@ -851,30 +851,35 @@ async function renderResumo(){
         datalabels:{display:c=>c.dataset.type!=='line',color:'#fff',
           font:{family:'Montserrat',size:11,weight:'700'},anchor:'end',align:'start',offset:2,
           formatter:v=>v!=null?v.toFixed(0)+'%':''}},
-      scales:{x:{ticks:{color:tickC,font:{family:'Montserrat',size:10},maxRotation:35},grid:{color:gridC}},
-              y:{min:lo,max:100,ticks:{color:tickC,font:{family:'Montserrat',size:10},maxTicksLimit:6,callback:v=>v+'%'},grid:{color:gridC}}}};
+      // sem grade e sem linha de eixo — estilo do layout moderno (Renan, 15/08/2026)
+      scales:{x:{ticks:{color:tickC,font:{family:'Montserrat',size:10},maxRotation:35},
+                 grid:{display:false},border:{display:false}},
+              y:{min:lo,max:100,ticks:{color:tickC,font:{family:'Montserrat',size:10},maxTicksLimit:6,callback:v=>v+'%'},
+                 grid:{display:false},border:{display:false}}}};
   };
   const metaLines=(n,vs)=>{
-    const pts=i=>vs&&vs[i]==null?0:3;
+    const pts=i=>vs&&vs[i]==null?0:6;   // marcadores maiores
     return [META_DISP,SONHO_DISP].map((y,k)=>({type:'line',label:(k?'Sonho ':'Meta ')+y+'%',
       data:Array(n).fill(y),borderColor:lineC,borderWidth:2,tension:0,fill:false,borderDash:[5,3],
       pointRadius:Array.from({length:n},(_,i)=>pts(i)),pointBackgroundColor:lineC,pointBorderWidth:0,
-      pointHoverRadius:6,datalabels:{display:false},order:0}));
+      pointHoverRadius:9,datalabels:{display:false},order:0}));
   };
+  // barras largas e quase encostadas, com topo bem arredondado
+  const BARRA={borderRadius:8,borderSkipped:false,barPercentage:.97,categoryPercentage:.94};
   if(CH1)CH1.destroy(); if(CH2)CH2.destroy();
   // mês em destaque = o que está no filtro de vigência (todos, se vazio)
   const hi=i=>!FVIG.size||FVIG.has(cy+'-'+String(i+1).padStart(2,'0'));
   CH1=new Chart($('chVig'),{type:'bar',data:{labels:MES3,datasets:[
-      {type:'bar',label:'Disp. %',data:vals,
+      {type:'bar',label:'Disp. %',data:vals,...BARRA,
        backgroundColor:vals.map((v,i)=>v==null?'transparent':corDisp(v)+(hi(i)?'CC':'33')),
        borderColor:vals.map((v,i)=>v==null?'transparent':corDisp(v)+(hi(i)?'':'55')),
-       borderWidth:1,borderRadius:3,order:1,
+       borderWidth:1,order:1,
        datalabels:{display:c=>vals[c.dataIndex]!=null&&hi(c.dataIndex)}},
       ...metaLines(12,vals)]},options:opts(vals)});
   const pv=projs.map(x=>x.p);
   CH2=new Chart($('chProj'),{type:'bar',data:{labels:projs.map(x=>x.k),datasets:[
-      {type:'bar',label:'Disp. %',data:pv,backgroundColor:pv.map(v=>corDisp(v)+(v!=null?'CC':'44')),
-       borderColor:pv.map(v=>corDisp(v)),borderWidth:1,borderRadius:3,order:1}]},options:opts(pv)});
+      {type:'bar',label:'Disp. %',data:pv,...BARRA,backgroundColor:pv.map(v=>corDisp(v)+(v!=null?'CC':'44')),
+       borderColor:pv.map(v=>corDisp(v)),borderWidth:1,order:1}]},options:opts(pv)});
 }
 const fmtMil=v=>v==null?'—':Math.round(v).toLocaleString('pt-BR');
 // tabelas Unidade/Tipo — inteiras (sem rolagem própria) e com TOGGLE de dimensão
