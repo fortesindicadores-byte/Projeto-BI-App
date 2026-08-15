@@ -125,6 +125,9 @@ body{font-family:'Montserrat',-apple-system,BlinkMacSystemFont,sans-serif;font-s
 /* resumo da disponibilidade na lateral */
 .tab tbody tr[data-id],.tab tbody tr[data-parou]{cursor:pointer;}
 .hsep{width:1px;height:26px;background:var(--linha);margin:0 4px;}
+/* previsão: bolinha verde (no prazo) / vermelha (estourou) — Renan, 14/08/2026 */
+.farol{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px;vertical-align:middle;}
+.farol.ok{background:var(--verde);} .farol.late{background:var(--vermelho);}
 /* no Resumo as tabelas mostram TUDO — sem barra interna (Renan, 14/08/2026) */
 .tab-wrap.inteira{overflow:visible;}
 .dimbt{white-space:nowrap;}
@@ -174,6 +177,7 @@ body{font-family:'Montserrat',-apple-system,BlinkMacSystemFont,sans-serif;font-s
 .tool.novo{border:1px solid color-mix(in srgb,var(--laranja) 40%,transparent);color:var(--laranja);font-weight:700;}
 .tool.novo:hover{background:color-mix(in srgb,var(--laranja) 14%,transparent);}
 .menu-wrap{position:relative;}
+.menu .rol label .mtx{overflow:visible;}
 .menu{display:none;position:absolute;top:calc(100% + 6px);right:0;z-index:40;min-width:214px;
   background:var(--brilho), var(--card);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);
   border:1px solid var(--card-brd);border-radius:10px;padding:6px;box-shadow:0 18px 40px rgba(0,0,0,.5);}
@@ -184,9 +188,12 @@ body.claro .menu{box-shadow:0 18px 40px rgba(15,23,42,.16);}
 .menu button:hover,.menu label:hover{background:var(--hover);}
 .menu .tit{padding:8px 9px 4px;font-size:10px;font-weight:600;color:var(--txt3);text-transform:uppercase;letter-spacing:1px;}
 .menu input[type=checkbox]{accent-color:var(--azul);width:14px;height:14px;flex:0 0 14px;cursor:pointer;}
-.menu .rol{max-height:250px;overflow:auto;}
+/* a última opção visível não pode ficar cortada: a altura é múltipla da linha
+   (7+7 de padding + 17 de linha = 31px) — Renan, 14/08/2026 */
+.menu .rol{max-height:248px;overflow:auto;}
+.menu .rol label{min-height:31px;}
 .menu .mall{font-weight:700;border-bottom:1px solid var(--linha);margin-bottom:4px;}
-.menu .mtx{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.menu .mtx{flex:1;min-width:0;white-space:nowrap;}   /* sem cortar o nome da unidade */
 .menu .so{font-size:9px;font-weight:700;color:#F97316;padding:1px 7px;border-radius:4px;opacity:0;cursor:pointer;flex:0 0 auto;}
 .menu label:hover .so{opacity:1;}
 .menu .so:hover{background:rgba(249,115,22,.2);}
@@ -602,6 +609,12 @@ function passa(e,exceto){
 }
 
 /* ── render ── */
+// célula de Previsão: farol redondo + data (verde no prazo, vermelho estourado)
+function prevCel(e){
+  if(!e||!e.previsao_retorno) return '—';
+  const late=e.previsao_retorno<hojeBRT();
+  return `<span class="farol ${late?'late':'ok'}" title="${late?'Previsão estourada':'No prazo'}"></span>${dataBR(e.previsao_retorno)}`;
+}
 function chip(st){
   const c={'Em orçamento':'#F4A100','Aguardando aprovação':'#F4A100','Aguardando peça':'#A78BFA',
            'Em execução':'#2E90E8','Pronto para retirada':'var(--verde)'}[st]||'var(--cinza)';
@@ -629,7 +642,7 @@ function htmlLista(){
         <td>${esc(e.local_manutencao||'—')}</td><td>${esc(e.rc_oc||'—')}</td>
         <td>${dataBR(e.data_parada)}</td>
         <td class="num" data-sort="${dp}"><b style="color:${dp>=30?'var(--vermelho)':'inherit'}">${dp}</b></td>
-        <td>${e.previsao_retorno?(atras?`<span class="atraso">${dataBR(e.previsao_retorno)}</span>`:dataBR(e.previsao_retorno)):'—'}</td>
+        <td>${prevCel(e)}</td>
         <td>${chip(e.status)}</td></tr>`;
     }).join('')}</tbody></table></div>`;
 }
@@ -640,10 +653,12 @@ function htmlFrota(){
   const lista=(q?fr.filter(a=>[a.placa,a.projeto,a.tipo,a.modelo].some(x=>String(x).toUpperCase().includes(q))):fr)
     .filter(a=>!FPROJ.size||FPROJ.has(a.projeto||'—'))
     .filter(a=>!FTIPO.size||FTIPO.has(a.tipo||'—'))
-    .sort((a,b)=>(abertaSet.has(b.placa)?1:0)-(abertaSet.has(a.placa)?1:0)||a.placa.localeCompare(b.placa));
+    // parados primeiro, do que está parado há MAIS tempo para o menos
+    .sort((a,b)=>{const ea=abertaSet.get(a.placa),eb=abertaSet.get(b.placa);
+      return (eb?diasParado(eb):-1)-(ea?diasParado(ea):-1)||a.placa.localeCompare(b.placa);});
   if(!lista.length) return '<div class="cvazia">Nenhum veículo da unidade na base de ativos.</div>';
   return `<div class="tab-wrap"><table class="tab">
-    <thead><tr><th>Placa</th><th>Projeto</th><th>Tipo</th><th>Modelo</th><th>Situação</th></tr></thead>
+    <thead><tr><th>Placa</th><th>Projeto</th><th>Tipo</th><th>Modelo</th><th>Grupo</th><th>Problema</th><th>Previsão</th><th>Situação</th></tr></thead>
     <tbody>${lista.map(a=>{
       const ev=abertaSet.get(a.placa);
       // sem coluna de ação: clicar na LINHA abre o evento (se parado) ou já
@@ -651,7 +666,10 @@ function htmlFrota(){
       return `<tr ${ev?`data-id="${esc(ev.id)}"`:`data-parou="${esc(a.placa)}"`} title="${ev?'Abrir a indisponibilidade':'Lançar indisponibilidade'}">
         <td class="forte">${esc(a.placa)}${a.manual&&UNIT==='ANG'?` <span class="lapis" data-editv="${esc(a.placa)}" title="Editar veículo (manual)">✎</span>`:''}</td>
         <td>${esc(a.projeto||'—')}</td><td>${esc(a.tipo||'—')}</td><td>${esc(a.modelo||'—')}</td>
-        <td>${ev?`<span class="tag" style="--c:var(--vermelho)">Indisponível · ${diasParado(ev)}d</span>`
+        <td>${ev?esc(ev.grupo||'—'):'—'}</td>
+        <td class="livre">${ev?esc(ev.descricao_problema||'—'):'—'}</td>
+        <td>${ev?prevCel(ev):'—'}</td>
+        <td data-sort="${ev?diasParado(ev):-1}">${ev?`<span class="tag" style="--c:var(--vermelho)">Indisponível · ${diasParado(ev)}d</span>`
                :`<span class="tag" style="--c:var(--verde)">Disponível</span>`}</td></tr>`;
     }).join('')}</tbody></table></div>`;
 }
@@ -986,7 +1004,7 @@ function montaUnidades(){
   const all=FUNI.size===0;
   el.innerHTML=`<label class="mall"><input type="checkbox" data-all="u" ${all?'checked':''}> Todas</label>`+
     MY_UNITS.map(u=>`<label><input type="checkbox" data-u="${esc(u)}" ${all||FUNI.has(u)?'checked':''}>
-      <span class="mtx">${esc(u)}</span>${ABERTAS_POR[u]?`<span class="n alerta">${ABERTAS_POR[u]}</span>`:''}
+      <span class="mtx">${esc(u)}</span>
       <span class="so" data-so="${esc(u)}">só</span></label>`).join('');
 }
 
