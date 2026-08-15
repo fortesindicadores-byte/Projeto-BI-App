@@ -633,6 +633,24 @@ async function loadEvents(){
   if(error)throw error;
   EVENTS=data||[];
 }
+/* ── o filtro DATA é o dia do HISTÓRICO (a foto daquele dia), não a data de
+      parada do evento (Renan, 15/08/2026). A lista de dias vem da view
+      disp_dias — uma linha por dia, em vez das ~30 mil das duas fotos.       */
+let DIAS=[], SNAPD={};
+const diaSel=()=>FDATA.size===1?[...FDATA][0]:null;
+async function loadDias(){
+  try{
+    const {data,error}=await sb.from('disp_dias').select('data').order('data',{ascending:false}).limit(3000);
+    if(error)throw error;
+    DIAS=[...new Set((data||[]).map(r=>String(r.data).slice(0,10)))].filter(d=>d.slice(0,7)>=MED_INICIO);
+  }catch(e){ DIAS=[]; }   // view ainda não criada: o filtro cai no jeito antigo
+}
+async function snapDoDia(d){
+  if(SNAPD[d])return SNAPD[d];
+  const {data,error}=await sb.from('indisp_snapshot').select('*').eq('data',d).in('unidade',MY_UNITS).limit(5000);
+  if(error)throw error;
+  return (SNAPD[d]=data||[]);
+}
 async function contaAbertas(){
   try{
     const {data}=await sb.from('indisponibilidade').select('unidade').is('data_retorno',null);
@@ -669,7 +687,9 @@ function passa(e,exceto){
   if(projFora(e.projeto)) return false;                      // FREITEIRO/ADM fora
   if(exceto!=='uni'  && FUNI.size  && !FUNI.has(e.unidade)) return false;
   if(exceto!=='vig'  && FVIG.size  && !FVIG.has(vigDe(e))) return false;
-  if(exceto!=='data' && FDATA.size && !FDATA.has(String(e.data_parada||''))) return false;
+  // com a view de dias no ar, DATA deixou de ser a data de parada — ela escolhe
+  // a FOTO do dia (ver render/renderListaDia); sem a view, segue o comportamento antigo
+  if(!DIAS.length && exceto!=='data' && FDATA.size && !FDATA.has(String(e.data_parada||''))) return false;
   if(exceto!=='proj' && FPROJ.size && !FPROJ.has(projLbl(e.projeto))) return false;
   if(exceto!=='grupo' && FGRUPO.size && !FGRUPO.has(e.grupo||'—')) return false;
   if(exceto!=='tipo' && FTIPO.size && !FTIPO.has(e.tipo_veiculo||'—')) return false;
@@ -691,13 +711,66 @@ function chip(st){
   return `<span class="tag" style="--c:${c}">${esc(st||'—')}</span>`;
 }
 function render(){
-  if(VER==='lista') $('cols').innerHTML=htmlLista();
+  if(VER==='lista'){
+    // dia anterior escolhido no filtro → mostra a FOTO daquele dia (só leitura);
+    // o último dia (ou nenhum) → os eventos vivos, que são editáveis
+    const d=diaSel();
+    if(d && DIAS.length && d!==DIAS[0]){ renderListaDia(d); pintaLateral(); return; }
+    $('cols').innerHTML=htmlLista();
+  }
   else if(VER==='frota') $('cols').innerHTML=htmlFrota();
   else if(VER==='resumo'){ renderResumo(); pintaLateral(); return; }
   else if(VER==='estrat'){ renderEstrat(); pintaLateral(); return; }
   else if(VER==='aderencia'){ renderAderencia(); pintaLateral(); return; }
   else $('cols').innerHTML=htmlHistorico();
   pintaLateral();
+}
+/* ── a FOTO de um dia anterior: quem estava indisponível naquele dia.
+      Vem do indisp_snapshot, então é só leitura — não dá para lançar retorno
+      num dia que já passou (Renan, 15/08/2026).                            ── */
+async function renderListaDia(d){
+  $('cols').innerHTML='<div class="cvazia" style="padding:30px">Carregando…</div>';
+  let linhas;
+  try{ linhas=await snapDoDia(d); }
+  catch(e){ $('cols').innerHTML=`<div class="cvazia">Erro: ${esc(e.message||e)}</div>`; return; }
+  if(VER!=='lista'||diaSel()!==d)return;                 // trocou de tela no meio
+  const S=new Set(unisSel());
+  const daVis=r=>{
+    if(VISAO==='previsao') return !!r.previsao_retorno && r.previsao_retorno<d;
+    if(VISAO==='cronicos') return (r.dias_parado||0)>=30;
+    if(VISAO==='semprev')  return !r.previsao_retorno;
+    if(VISAO==='semrcoc')  return !r.rc_oc;
+    return true;
+  };
+  const rows=linhas.filter(r=>S.has(r.unidade)&&!projFora(r.projeto)
+      &&(!FPROJ.size||FPROJ.has(projLbl(r.projeto)))
+      &&(!FGRUPO.size||FGRUPO.has(r.grupo||'—'))
+      &&(!BUSCA||[r.placa,r.descricao_problema,r.projeto,r.rc_oc,r.status,r.observacao]
+          .some(x=>String(x||'').toLowerCase().includes(BUSCA)))
+      &&daVis(r))
+    .sort((a,b)=>(b.dias_parado||0)-(a.dias_parado||0));
+  const aviso=`<div class="rsub" style="margin:0 0 8px">Foto de ${dataBR(d)} — ${rows.length} indisponível(is).
+    É histórico, não dá para editar; volte para ${dataBR(DIAS[0])} para lançar retorno.</div>`;
+  if(!rows.length){ $('cols').innerHTML=aviso+'<div class="cvazia">Nenhum veículo indisponível nesse dia com os filtros atuais.</div>'; return; }
+  const parada=r=>{const t=new Date(d+'T12:00'); t.setDate(t.getDate()-(r.dias_parado||0));
+    return t.toLocaleDateString('pt-BR');};
+  $('cols').innerHTML=aviso+`<div class="tab-wrap"><table class="tab">
+    <thead><tr><th>Placa</th><th class="c-proj wrap">Projeto</th><th class="c-tipo wrap">Modelo</th>
+      <th class="c-grupo wrap">Grupo</th><th>Problema</th><th>Local</th><th>RC/OC</th><th>Parada</th>
+      <th>Previsão</th><th class="c-sit">Situação</th><th class="num c-dias">Dias</th></tr></thead>
+    <tbody>${rows.map(r=>{
+      const dp=r.dias_parado||0;
+      const late=r.previsao_retorno&&r.previsao_retorno<d;
+      return `<tr>
+        <td class="forte">${esc(r.placa)}</td><td class="c-proj wrap">${esc(projLbl(r.projeto))}</td>
+        <td class="c-tipo wrap">${esc(r.modelo||'—')}</td>
+        <td class="c-grupo wrap">${esc(r.grupo||'—')}</td><td class="livre">${esc(r.descricao_problema||'—')}</td>
+        <td>${esc(r.local_manutencao||'—')}</td><td>${esc(r.rc_oc||'—')}</td>
+        <td>${parada(r)}</td>
+        <td>${r.previsao_retorno?`<span class="farol ${late?'late':'ok'}"></span>${dataBR(r.previsao_retorno)}`:'—'}</td>
+        <td class="c-sit">${chip(r.status)}</td>
+        <td class="num c-dias" data-sort="${dp}"><b style="color:${dp>=30?'var(--vermelho)':'inherit'}">${dp}</b></td></tr>`;
+    }).join('')}</tbody></table></div>`;
 }
 function htmlLista(){
   const rows=abertos().filter(e=>passa(e)).sort((a,b)=>diasParado(b)-diasParado(a));
@@ -823,7 +896,11 @@ async function renderResumo(){
   const soma=arr=>arr.reduce((g,r)=>{g.a+=r.ativos||0;g.i+=r.indisponiveis||0;g.d.add(r.data);return g;},{a:0,i:0,d:new Set()});
   const tot=soma(rows);
   const pctTot=dispPct(tot.a,tot.i);
-  const semVig=all.filter(r=>passaS(r,'vig'));
+  // a evolução do ano ignora vigência E data — senão, com o filtro de Data já
+  // vindo no último dia, o gráfico do ano viraria uma barra só
+  const semVig=all.filter(r=>Suni.has(r.unidade)&&!projFora(r.projeto)
+    &&(!FPROJ.size||FPROJ.has(projLbl(r.projeto)))
+    &&(!FTIPO.size||FTIPO.has(r.tipo_veiculo||'—')));
   const cy=new Date().getFullYear();
   // agrupadores das tabelas (com TOGGLE: unidade↔projeto · tipo↔modelo)
   const agrupa=campo=>{
@@ -1180,11 +1257,14 @@ function montaMenus(){
   $('lstGrupo').innerHTML=menuLista(gru,FGRUPO,'g');
   const tip=ordena([...new Set(base.filter(e=>passa(e,'tipo')).map(e=>e.tipo_veiculo||'—'))],FTIPO,pt);
   $('lstTipo').innerHTML=menuLista(tip,FTIPO,'t');
+  // Vigência e Data vêm do MAIOR para o menor — o dia de hoje primeiro (Renan)
   const vg=ordena([...new Set(base.filter(e=>passa(e,'vig')).map(vigDe).filter(Boolean))],FVIG)
-    .filter(v=>v>=MED_INICIO);
+    .filter(v=>v>=MED_INICIO).reverse();
   $('lstVig').innerHTML=menuLista(vg.map(vigBR),FVIG,'v',vg);
-  const dt=ordena([...new Set(base.filter(e=>passa(e,'data')).map(e=>String(e.data_parada||'')).filter(Boolean))],FDATA)
-    .filter(v=>v.slice(0,7)>=MED_INICIO);
+  // Data = dia do histórico (view disp_dias); sem a view, cai na data de parada
+  const dt=(DIAS.length?ordena(DIAS.slice(),FDATA)
+      :ordena([...new Set(base.filter(e=>passa(e,'data')).map(e=>String(e.data_parada||'')).filter(Boolean))],FDATA))
+    .filter(v=>v.slice(0,7)>=MED_INICIO).reverse();
   $('lstData').innerHTML=menuLista(dt.map(dataBR),FDATA,'d',dt);
   montaUnidades();
 }
@@ -1474,6 +1554,9 @@ async function iniciar(){
   // uma unidade só: já entra filtrada nela (não faz sentido escolher)
   if(MY_UNITS.length===1) FUNI.add(MY_UNITS[0]);
   try{ await loadEvents(); }catch(e){ semAcesso('Erro ao carregar os eventos: '+(e.message||e)); return; }
+  // a tela abre no ÚLTIMO dia com dados, já marcado no filtro de Data (Renan)
+  await loadDias();
+  if(DIAS.length && !FDATA.size) FDATA.add(DIAS[0]);
   contaAbertas(); render();
 }
 iniciar();
