@@ -214,7 +214,9 @@ body.claro .cal-c.vaz .cal-d{color:var(--txt3);}
 /* ── quadro ── */
 .board{flex:1;min-width:0;display:flex;flex-direction:column;}
 .top{display:flex;align-items:center;gap:6px;padding:20px 24px 14px;flex-wrap:wrap;}
-.top h1{flex:1;font-size:21px;font-weight:600;letter-spacing:-.3px;}
+.tit-wrap{flex:1;min-width:0;}
+.top h1{font-size:21px;font-weight:600;letter-spacing:-.3px;}
+.tit-sub{font-size:11px;color:var(--txt3);font-weight:600;margin-top:2px;letter-spacing:.2px;}
 .tool{display:flex;align-items:center;gap:7px;background:transparent;border:0;border-radius:7px;
   padding:6px 10px;color:var(--txt2);font-family:inherit;font-size:12.5px;font-weight:500;cursor:pointer;}
 .tool:hover{background:var(--hover);color:var(--txt);}
@@ -319,7 +321,8 @@ input[type=date]::-webkit-calendar-picker-indicator{cursor:pointer;}
   .s-res{margin:8px 0 0;}
   .cols{overflow:visible;padding:0 14px 24px;}
   .top{padding:14px 14px 10px;}
-  .top h1{font-size:17px;flex-basis:100%;}
+  .tit-wrap{flex-basis:100%;}
+  .top h1{font-size:17px;}
 }
 </style>
 </head>
@@ -408,7 +411,7 @@ input[type=date]::-webkit-calendar-picker-indicator{cursor:pointer;}
   <!-- ══════════ conteúdo ══════════ -->
   <main class="board">
     <div class="top">
-      <h1 id="tit">Indisponíveis</h1>
+      <div class="tit-wrap"><h1 id="tit">Indisponíveis</h1><div class="tit-sub" id="titSub"></div></div>
 
       <!-- UNIDADE: filtro (admin vê todas; a unidade escolhe entre as dela) -->
       <div class="menu-wrap">
@@ -647,6 +650,15 @@ async function loadEvents(){
       disp_dias — uma linha por dia, em vez das ~30 mil das duas fotos.       */
 let DIAS=[], SNAPD={};
 const diaSel=()=>FDATA.size===1?[...FDATA][0]:null;
+/* O dia da visão Indisponíveis é SEMPRE um só — misturar dias na mesma lista
+   confunde (Renan, 15/08/2026). Vale o dia marcado; com vários, o mais recente
+   deles; com só a vigência, o último dia dela; sem nada, o último com dados. */
+const diaFoco=()=>{
+  if(!DIAS.length) return null;                  // DIAS já vem do mais novo p/ o mais antigo
+  if(FDATA.size){ const c=DIAS.filter(d=>FDATA.has(d)); if(c.length) return c[0]; }
+  if(FVIG.size){  const c=DIAS.filter(d=>FVIG.has(d.slice(0,7))); if(c.length) return c[0]; }
+  return DIAS[0];
+};
 async function loadDias(){
   try{
     const {data,error}=await sb.from('disp_dias').select('data').order('data',{ascending:false}).limit(3000);
@@ -695,10 +707,11 @@ function daVisao(e,v){
 function passa(e,exceto){
   if(projFora(projDe(e))) return false;                      // FREITEIRO/ADM fora
   if(exceto!=='uni'  && FUNI.size  && !FUNI.has(e.unidade)) return false;
-  if(exceto!=='vig'  && FVIG.size  && !FVIG.has(vigDe(e))) return false;
-  // com a view de dias no ar, DATA deixou de ser a data de parada — ela escolhe
-  // a FOTO do dia (ver render/renderListaDia); sem a view, segue o comportamento antigo
-  if(!DIAS.length && exceto!=='data' && FDATA.size && !FDATA.has(String(e.data_parada||''))) return false;
+  // vigência e data deixaram de ser a data de PARADA: elas escolhem o DIA da
+  // foto (ver diaFoco). Só o Histórico ainda recorta o evento por elas.
+  const porTempo=(VER==='historico'||!DIAS.length);
+  if(porTempo && exceto!=='vig'  && FVIG.size  && !FVIG.has(vigDe(e))) return false;
+  if(porTempo && exceto!=='data' && FDATA.size && !FDATA.has(String(e.data_parada||''))) return false;
   if(exceto!=='proj' && FPROJ.size && !FPROJ.has(projLbl(projDe(e)))) return false;
   if(exceto!=='grupo' && FGRUPO.size && !FGRUPO.has(e.grupo||'—')) return false;
   if(exceto!=='tipo' && FTIPO.size && !FTIPO.has(tipoDe(e)||'—')) return false;
@@ -723,8 +736,8 @@ function render(){
   if(VER==='lista'){
     // dia anterior escolhido no filtro → mostra a FOTO daquele dia (só leitura);
     // o último dia (ou nenhum) → os eventos vivos, que são editáveis
-    const d=diaSel();
-    if(d && DIAS.length && d!==DIAS[0]){ renderListaDia(d); pintaLateral(); return; }
+    const d=diaFoco();
+    if(d && d!==DIAS[0]){ renderListaDia(d); pintaLateral(); tituloDia(); return; }
     $('cols').innerHTML=htmlLista();
   }
   else if(VER==='frota') $('cols').innerHTML=htmlFrota();
@@ -732,7 +745,13 @@ function render(){
   else if(VER==='estrat'){ renderEstrat(); pintaLateral(); return; }
   else if(VER==='aderencia'){ renderAderencia(); pintaLateral(); return; }
   else $('cols').innerHTML=htmlHistorico();
-  pintaLateral();
+  pintaLateral(); tituloDia();
+}
+// o dia que está na tela, logo abaixo do título
+function tituloDia(){
+  const el=$('titSub'); if(!el) return;
+  const d=VER==='lista'?diaFoco():null;
+  el.textContent=d?(d===DIAS[0]?'Hoje · situação atual':'Foto de '+dataBR(d)):'';
 }
 /* ── a FOTO de um dia anterior: quem estava indisponível naquele dia.
       Vem do indisp_snapshot, então é só leitura — não dá para lançar retorno
@@ -893,7 +912,7 @@ async function renderResumo(){
   const Suni=new Set(unisSel());
   const passaS=(r,exceto)=>{
     if(!Suni.has(r.unidade)) return false;
-    if(exceto!=='vig'  && FVIG.size  && !FVIG.has(String(r.data||'').slice(0,7))) return false;
+    if(!FDATA.size && exceto!=='vig' && FVIG.size && !FVIG.has(String(r.data||'').slice(0,7))) return false;
     if(exceto!=='data' && FDATA.size && !FDATA.has(String(r.data||''))) return false;
     if(projFora(r.projeto)) return false;                       // FREITEIRO/ADM fora
     if(exceto!=='proj' && FPROJ.size && !FPROJ.has(projLbl(r.projeto))) return false;
@@ -905,9 +924,11 @@ async function renderResumo(){
   const soma=arr=>arr.reduce((g,r)=>{g.a+=r.ativos||0;g.i+=r.indisponiveis||0;g.d.add(r.data);return g;},{a:0,i:0,d:new Set()});
   const tot=soma(rows);
   const pctTot=dispPct(tot.a,tot.i);
-  // a evolução do ano ignora só a VIGÊNCIA: filtrando um dia, fica a barra do
-  // mês daquele dia, com o valor do dia (Renan, 15/08/2026)
-  const semVig=all.filter(r=>passaS(r,'vig'));
+  // a evolução do ano ignora vigência E data: as barras dos outros meses ficam
+  // APAGADAS, não somem — igual já era quando se filtrava a vigência (Renan)
+  const semVig=all.filter(r=>Suni.has(r.unidade)&&!projFora(r.projeto)
+    &&(!FPROJ.size||FPROJ.has(projLbl(r.projeto)))
+    &&(!FTIPO.size||FTIPO.has(r.tipo_veiculo||'—')));
   const cy=new Date().getFullYear();
   // agrupadores das tabelas (com TOGGLE: unidade↔projeto · tipo↔modelo)
   const agrupa=campo=>{
@@ -1030,8 +1051,9 @@ async function renderResumo(){
   // barras largas e quase encostadas, e SEM cantos arredondados
   const BARRA={borderRadius:0,barPercentage:.97,categoryPercentage:.94};
   if(CH1)CH1.destroy(); if(CH2)CH2.destroy();
-  // mês em destaque = o que está no filtro de vigência (todos, se vazio)
-  const hi=i=>!FVIG.size||FVIG.has(cy+'-'+String(i+1).padStart(2,'0'));
+  // mês em destaque = o da vigência marcada e o do dia marcado (todos, se vazio)
+  const mesesFoco=new Set(FDATA.size?[...FDATA].map(d=>d.slice(0,7)):[...FVIG]);
+  const hi=i=>!mesesFoco.size||mesesFoco.has(cy+'-'+String(i+1).padStart(2,'0'));
   CH1=new Chart($('chVig'),{type:'bar',data:{labels:MES3,datasets:[
       {type:'bar',label:'Disp. %',data:vals,...BARRA,
        backgroundColor:vals.map((v,i)=>v==null?'transparent':corDisp(v)+(hi(i)?'CC':'33')),
@@ -1060,7 +1082,7 @@ async function renderEstrat(){
   const rows=all.filter(r=>{
     if(!Suni.has(r.unidade)) return false;
     if(projFora(r.projeto)) return false;
-    if(FVIG.size  && !FVIG.has(String(r.data||'').slice(0,7))) return false;
+    if(!FDATA.size && FVIG.size && !FVIG.has(String(r.data||'').slice(0,7))) return false;
     if(FDATA.size && !FDATA.has(String(r.data||''))) return false;
     if(FPROJ.size && !FPROJ.has(projLbl(r.projeto))) return false;
     if(FTIPO.size && !FTIPO.has(r.tipo_veiculo||'—')) return false;
@@ -1275,8 +1297,11 @@ function montaMenus(){
   const tip=ordena([...new Set([...daFrota(a=>a.tipo||''),
       ...base.filter(e=>passa(e,'tipo')).map(e=>tipoDe(e)||'—')])],FTIPO,pt);
   $('lstTipo').innerHTML=menuLista(tip,FTIPO,'t');
-  // Vigência e Data vêm do MAIOR para o menor — o dia de hoje primeiro (Renan)
-  const vg=ordena([...new Set(base.filter(e=>passa(e,'vig')).map(vigDe).filter(Boolean))],FVIG)
+  // Vigência e Data vêm do MAIOR para o menor e saem da MESMA fonte: os dias do
+  // histórico. Tirando da parada do evento entravam meses futuros (set/26,
+  // nov/26) que não existem em foto nenhuma — Renan, 15/08/2026
+  const vg=(DIAS.length?ordena([...new Set(DIAS.map(d=>d.slice(0,7)))],FVIG)
+      :ordena([...new Set(base.filter(e=>passa(e,'vig')).map(vigDe).filter(Boolean))],FVIG))
     .filter(v=>v>=MED_INICIO).reverse();
   $('lstVig').innerHTML=menuLista(vg.map(vigBR),FVIG,'v',vg);
   // Data = dia do histórico (view disp_dias); sem a view, cai na data de parada
@@ -1572,9 +1597,10 @@ async function iniciar(){
   // uma unidade só: já entra filtrada nela (não faz sentido escolher)
   if(MY_UNITS.length===1) FUNI.add(MY_UNITS[0]);
   try{ await loadEvents(); }catch(e){ semAcesso('Erro ao carregar os eventos: '+(e.message||e)); return; }
-  // a tela abre no ÚLTIMO dia com dados, já marcado no filtro de Data (Renan)
+  // a tela abre com o MÊS ATUAL marcado na Vigência; o dia quem escolhe é o
+  // usuário, e sem escolha a lista mostra o último dia com dados (Renan)
   await loadDias();
-  if(DIAS.length && !FDATA.size) FDATA.add(DIAS[0]);
+  if(DIAS.length && !FVIG.size) FVIG.add(DIAS[0].slice(0,7));
   contaAbertas(); render();
 }
 iniciar();
