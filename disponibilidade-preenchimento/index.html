@@ -771,6 +771,9 @@ function htmlHistorico(){
 if(window.ChartDataLabels&&window.Chart) Chart.register(ChartDataLabels);
 let RES=null, CH1=null, CH2=null, SEM_MODELO=false;
 const META_DISP=93, SONHO_DISP=97;
+// a medição começou em fev/26 (a migração do histórico vai de 19/02/2026 em
+// diante) — out/25 a jan/26 saem dos filtros de Vigência e Data (Renan)
+const MED_INICIO='2026-02';
 async function loadResumo(){
   if(RES)return RES;
   const out=[]; const PG=1000;
@@ -1177,9 +1180,11 @@ function montaMenus(){
   $('lstGrupo').innerHTML=menuLista(gru,FGRUPO,'g');
   const tip=ordena([...new Set(base.filter(e=>passa(e,'tipo')).map(e=>e.tipo_veiculo||'—'))],FTIPO,pt);
   $('lstTipo').innerHTML=menuLista(tip,FTIPO,'t');
-  const vg=ordena([...new Set(base.filter(e=>passa(e,'vig')).map(vigDe).filter(Boolean))],FVIG);
+  const vg=ordena([...new Set(base.filter(e=>passa(e,'vig')).map(vigDe).filter(Boolean))],FVIG)
+    .filter(v=>v>=MED_INICIO);
   $('lstVig').innerHTML=menuLista(vg.map(vigBR),FVIG,'v',vg);
-  const dt=ordena([...new Set(base.filter(e=>passa(e,'data')).map(e=>String(e.data_parada||'')).filter(Boolean))],FDATA);
+  const dt=ordena([...new Set(base.filter(e=>passa(e,'data')).map(e=>String(e.data_parada||'')).filter(Boolean))],FDATA)
+    .filter(v=>v.slice(0,7)>=MED_INICIO);
   $('lstData').innerHTML=menuLista(dt.map(dataBR),FDATA,'d',dt);
   montaUnidades();
 }
