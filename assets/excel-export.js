@@ -31,11 +31,11 @@
   function painelTitulo(){ return (document.querySelector('.brand h1')||{}).textContent || document.title || 'BI'; }
   function tituloTabela(sec){
     if(!sec) return 'Tabela';
-    const t=sec.querySelector('.tbl-title,.sec-title,h2,h3'); return (t&&t.textContent.trim())||'Tabela';
+    const t=sec.querySelector('.tbl-title,.sec-title,.rtit,h2,h3'); return (t&&t.textContent.trim())||'Tabela';
   }
   function tituloGrafico(canvas){
-    const card=canvas.closest('.chart-card,.tbl-section,section,div');
-    const t=card&&card.querySelector('.chart-title,.tbl-title,.sec-title,h2,h3'); return (t&&t.textContent.trim())||'Grafico';
+    const card=canvas.closest('.chart-card,.tbl-section,.tab-wrap,section,div');
+    const t=card&&card.querySelector('.chart-title,.tbl-title,.sec-title,.rtit,h2,h3'); return (t&&t.textContent.trim())||'Grafico';
   }
   // Converte texto formatado em NÚMERO (p/ análise no Excel). Trata pt-BR (vírgula
   // decimal, ponto milhar), toFixed (ponto decimal), %, pp, R$, sufixos mi/bi/k, º.
@@ -228,7 +228,7 @@
     });
   }
   // bloco "exportável como imagem" mais próximo do clique
-  const IMG_BLOCK='.tbl-section,.chart-card,.kpi-card,.card,.kcard,.kcol,.gantt,.rel-section,.fato-block,.peso-box,.podio-section,.hero,section';
+  const IMG_BLOCK='.tbl-section,.chart-card,.tab-wrap,.kpi-card,.card,.kcard,.kcol,.gantt,.rel-section,.fato-block,.peso-box,.podio-section,.hero,section';
   function blocoImagem(target){ return target.closest(IMG_BLOCK); }
 
   // ---- menu de contexto ----
@@ -270,7 +270,7 @@
   document.addEventListener('contextmenu',e=>{
     if(e.target.closest('#xl-menu')) return;
     // 1) tabela → Excel + Imagem (da seção inteira)
-    const sec=e.target.closest('.tbl-section');
+    const sec=e.target.closest('.tbl-section,.tab-wrap');
     const table=(sec&&sec.querySelector('table'))||e.target.closest('table');
     if(table){
       e.preventDefault();
@@ -289,7 +289,7 @@
       if(ch){
         e.preventDefault();
         const nome=tituloGrafico(canvas);
-        const card=canvas.closest('.chart-card')||canvas.closest('.tbl-section,section')||canvas.parentElement;
+        const card=canvas.closest('.chart-card,.tab-wrap')||canvas.closest('.tbl-section,section')||canvas.parentElement;
         showMenu(e.clientX,e.clientY,[
           {icon:IC_FILE,label:'Exportar Excel',action:()=>baixarGrafico(ch, nome)},
           {icon:IC_IMG, label:'Exportar imagem (PNG)',action:()=>capturaImagem(card, nome, ch)},
