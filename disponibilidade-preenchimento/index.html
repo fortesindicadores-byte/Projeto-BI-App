@@ -143,7 +143,15 @@ body{font-family:'Montserrat',-apple-system,BlinkMacSystemFont,sans-serif;font-s
    (Renan, 15/08/2026) — as alturas saem do espaço que sobra, via flex */
 .res-wrap{flex:1;min-height:0;display:flex;flex-direction:column;gap:12px;padding-bottom:6px;}
 .res-hero{display:flex;align-items:flex-end;gap:34px;flex-wrap:wrap;flex:0 0 auto;}
-.res-big{font-size:clamp(30px,4.2vh,46px);font-weight:800;line-height:1;margin:2px 0 5px;}
+.res-big{font-size:clamp(30px,4.2vh,46px);font-weight:800;line-height:1;margin:2px 0 5px;
+  display:flex;align-items:center;gap:10px;color:var(--txt);}
+/* o número fica na cor do texto (preto no claro, branco no escuro) e quem dá o
+   recado é o farol ao lado — mesma cor da legenda (Renan, 15/08/2026) */
+.dfarol{width:13px;height:13px;border-radius:50%;flex:0 0 auto;}
+.leg{display:flex;gap:14px;flex-wrap:wrap;align-items:center;}
+.leg span{display:flex;align-items:center;gap:5px;font-size:9.5px;font-weight:700;
+  color:var(--txt3);text-transform:uppercase;letter-spacing:.7px;white-space:nowrap;}
+.leg i{width:9px;height:9px;border-radius:50%;}
 .res-med{display:flex;gap:26px;padding-bottom:3px;}
 .cols .res-graf{flex:1 1 0;min-height:150px;overflow:hidden;padding:12px 16px 10px;display:flex;flex-direction:column;}
 .res-cv{flex:1;min-height:0;position:relative;}
@@ -757,6 +765,11 @@ async function loadResumo(){
 const dispPct=(a,i)=>a?((a-i)/a*100):null;
 const clsDisp=v=>v==null?'var(--txt3)':v>=SONHO_DISP?'var(--verde)':v<META_DISP?'var(--vermelho)':'var(--ambar)';
 const p1=v=>v==null?'—':v.toFixed(1).replace('.',',')+'%';
+// legenda das cores — a mesma régua do clsDisp e das barras dos gráficos
+const legDisp=()=>`<div class="leg">
+  <span><i style="background:var(--verde)"></i>Sonho ≥ ${SONHO_DISP}%</span>
+  <span><i style="background:var(--ambar)"></i>Meta ${META_DISP}% a ${SONHO_DISP}%</span>
+  <span><i style="background:var(--vermelho)"></i>Abaixo da meta</span></div>`;
 async function renderResumo(){
   $('cols').innerHTML='<div class="cvazia" style="padding:30px">Carregando resumo…</div>';
   let all;
@@ -810,13 +823,14 @@ async function renderResumo(){
     <div class="res-hero">
       <div>
         <div class="rlbl">Disponibilidade Total</div>
-        <div class="res-big" style="color:${clsDisp(pctTot)}">${p1(pctTot)}</div>
+        <div class="res-big">${p1(pctTot)}<span class="dfarol" style="background:${clsDisp(pctTot)}"></span></div>
         <div class="rlbl">Meta ${META_DISP}%</div>
       </div>
       <div class="res-med">
         <div><div class="rlbl">Média Ativos</div><b class="rval">${fmtMil(tot.a/nDias)}</b></div>
         <div><div class="rlbl">Média Indisponíveis</div><b class="rval">${fmtMil(tot.i/nDias)}</b></div>
       </div>
+      <div style="margin-left:auto;padding-bottom:4px">${legDisp()}</div>
     </div>
     <div class="tab-wrap res-graf">
       <div class="rtit">Disponibilidade % · Mensal</div>
@@ -912,12 +926,8 @@ async function renderEstrat(){
   <div style="overflow:auto;min-height:0;flex:1;padding-bottom:10px">
     <div style="display:flex;align-items:flex-end;gap:20px;flex-wrap:wrap;margin-bottom:14px">
       <div><div class="rlbl">Disponibilidade · ${esc(nomeDim)}</div>
-        <div style="font-size:38px;font-weight:800;line-height:1.05;color:${clsDisp(pTot)}">${p1(pTot)}</div></div>
-      <div style="display:flex;gap:20px;padding-bottom:6px">
-        <div><div class="rlbl">Média Ativos</div><b class="rval">${fmtMil(tot.a/nD)}</b></div>
-        <div><div class="rlbl">Média Indisponíveis</div><b class="rval">${fmtMil(tot.i/nD)}</b></div>
-        <div><div class="rlbl">Linhas</div><b class="rval">${itens.length}</b></div>
-      </div>
+        <div class="res-big" style="font-size:38px">${p1(pTot)}<span class="dfarol" style="background:${clsDisp(pTot)}"></span></div></div>
+      <div style="padding-bottom:6px">${legDisp()}</div>
       <div style="margin-left:auto;display:flex;gap:6px;padding-bottom:6px;flex-wrap:wrap">
         ${DIMS_EST.map(([d,rot])=>`<button class="btn-mini${d===DIM_EST?' on':''}" data-est="${d}">${esc(rot)}</button>`).join('')}
       </div>
