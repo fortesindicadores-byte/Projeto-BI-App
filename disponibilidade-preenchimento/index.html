@@ -154,7 +154,7 @@ body{font-family:'Montserrat',-apple-system,BlinkMacSystemFont,sans-serif;font-s
    (a largura sai da altura pelo aspect-ratio) — Renan, 15/08/2026 */
 .res-cols{flex:1;min-height:0;display:flex;gap:12px;}
 .res-esq{flex:1 1 auto;min-width:0;min-height:0;display:flex;flex-direction:column;gap:12px;}
-.cols .tab-wrap.res-cal{flex:0 0 auto;width:clamp(250px,30%,430px);aspect-ratio:1;align-self:center;
+.cols .tab-wrap.res-cal{flex:0 0 auto;width:clamp(250px,30%,430px);align-self:stretch;
   overflow:hidden;padding:12px 14px 12px;display:flex;flex-direction:column;}
 .cal-grid{flex:1;min-height:0;display:grid;grid-template-columns:repeat(7,1fr);gap:4px;margin-top:2px;}
 .cal-h{font-size:9px;font-weight:700;color:var(--txt3);text-align:center;letter-spacing:.5px;}
@@ -888,7 +888,6 @@ async function renderResumo(){
   //    linhas de meta/sonho tracejadas com pontos, mês do filtro em destaque) ──
   const claro=document.body.classList.contains('claro');
   const tickC=claro?'#444':'#94A3B8';
-  const lineC=claro?'#1a1a1a':'#F1F5F9';
   // as barras leem as PRÓPRIAS variáveis do tema, então nunca divergem do número
   // nem da tabela — trocar a cor no :root troca o gráfico junto
   const cor=n=>getComputedStyle(document.body).getPropertyValue(n).trim();
@@ -901,8 +900,8 @@ async function renderResumo(){
       plugins:{legend:{display:false},
         tooltip:{backgroundColor:'#141B26',titleColor:'#F97316',bodyColor:'#F1F5F9',borderColor:'#1E2D40',borderWidth:1,
           titleFont:{family:'Montserrat'},bodyFont:{family:'Montserrat'},
-          callbacks:{label:c=>c.dataset.type==='line'?c.dataset.label:((c.parsed.y!=null?c.parsed.y.toFixed(0):'—')+'%')}},
-        datalabels:{display:c=>c.dataset.type!=='line',color:'#fff',
+          callbacks:{label:c=>(c.parsed.y!=null?c.parsed.y.toFixed(0):'—')+'%'}},
+        datalabels:{color:'#fff',
           font:{family:'Montserrat',size:11,weight:'700'},anchor:'end',align:'start',offset:2,
           formatter:v=>v!=null?v.toFixed(0)+'%':''}},
       // sem grade e sem linha de eixo — estilo do layout moderno (Renan, 15/08/2026)
@@ -911,15 +910,10 @@ async function renderResumo(){
               y:{min:lo,max:100,ticks:{color:tickC,font:{family:'Montserrat',size:10},maxTicksLimit:6,callback:v=>v+'%'},
                  grid:{display:false},border:{display:false}}}};
   };
-  const metaLines=(n,vs)=>{
-    const pts=i=>vs&&vs[i]==null?0:6;   // marcadores maiores
-    return [META_DISP,SONHO_DISP].map((y,k)=>({type:'line',label:(k?'Sonho ':'Meta ')+y+'%',
-      data:Array(n).fill(y),borderColor:lineC,borderWidth:2,tension:0,fill:false,borderDash:[5,3],
-      pointRadius:Array.from({length:n},(_,i)=>pts(i)),pointBackgroundColor:lineC,pointBorderWidth:0,
-      pointHoverRadius:9,datalabels:{display:false},order:0}));
-  };
-  // barras largas e quase encostadas, com topo bem arredondado
-  const BARRA={borderRadius:8,borderSkipped:false,barPercentage:.97,categoryPercentage:.94};
+  // sem as linhas de meta/sonho no gráfico (Renan, 15/08/2026) — a régua está
+  // escrita no subtítulo do card e embaixo do número
+  // barras largas e quase encostadas, e SEM cantos arredondados
+  const BARRA={borderRadius:0,barPercentage:.97,categoryPercentage:.94};
   if(CH1)CH1.destroy(); if(CH2)CH2.destroy();
   // mês em destaque = o que está no filtro de vigência (todos, se vazio)
   const hi=i=>!FVIG.size||FVIG.has(cy+'-'+String(i+1).padStart(2,'0'));
@@ -928,8 +922,7 @@ async function renderResumo(){
        backgroundColor:vals.map((v,i)=>v==null?'transparent':corDisp(v)+(hi(i)?'CC':'33')),
        borderColor:vals.map((v,i)=>v==null?'transparent':corDisp(v)+(hi(i)?'':'55')),
        borderWidth:1,order:1,
-       datalabels:{display:c=>vals[c.dataIndex]!=null&&hi(c.dataIndex)}},
-      ...metaLines(12,vals)]},options:opts(vals)});
+       datalabels:{display:c=>vals[c.dataIndex]!=null&&hi(c.dataIndex)}}]},options:opts(vals)});
   const pv=projs.map(x=>x.p);
   CH2=new Chart($('chProj'),{type:'bar',data:{labels:projs.map(x=>x.k),datasets:[
       {type:'bar',label:'Disp. %',data:pv,...BARRA,backgroundColor:pv.map(v=>corDisp(v)+(v!=null?'CC':'44')),
