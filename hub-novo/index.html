@@ -1,0 +1,1071 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<title>Gestão em Movimento · Hub</title>
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+/* ════════════════════════════════════════════════════════════════════════════
+   Hub no layout padrão do portal (o mesmo da Visão Financeira nova):
+   moldura de app, topo fino e o conteúdo em COLUNAS — um cluster por coluna,
+   tudo numa tela só, sem barra de rolagem. Sem menu lateral.
+   ════════════════════════════════════════════════════════════════════════════ */
+:root{
+  --fundo:   #0B0B0D;
+  --app:     #101014;
+  --side:    #16161B;
+  --card:    #1A1A20;
+  --card-brd:#26262E;
+  --linha:   #202027;
+  --cabec:   #2B2B30;
+  --hover:   rgba(255,255,255,.045);
+  --brilho:  linear-gradient(180deg,rgba(255,255,255,.028),rgba(255,255,255,0));
+  --txt:     #EEF2FA;
+  --txt2:    #B2BCD2;
+  --txt3:    #7B849B;
+  --txt4:    #565E70;
+  --laranja: #F97316;
+  --azul:    #2E90E8;
+  --verde:   #22A85A;
+  --vermelho:#E5484D;
+}
+body.claro{
+  --fundo:#E8EAEE; --app:#FFFFFF; --side:#F4F5F8; --card:#FFFFFF; --card-brd:#DFE2E9;
+  --linha:#E9EBF0; --cabec:#DCDFE6; --hover:rgba(15,23,42,.045);
+  --brilho:linear-gradient(180deg,rgba(15,23,42,.02),rgba(15,23,42,0));
+  --txt:#161D2B; --txt2:#3C4658; --txt3:#4A5568; --txt4:#79839A;
+  --laranja:#E2620A; --azul:#1B6FC4; --verde:#12894A; --vermelho:#C4242A;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+html,body{height:100%;}
+body{background:var(--fundo);color:var(--txt);font-family:'Montserrat',-apple-system,sans-serif;
+  font-size:13px;overflow:hidden;-webkit-font-smoothing:antialiased;}
+
+#loading{position:fixed;inset:0;background:var(--fundo);display:flex;align-items:center;justify-content:center;z-index:999;}
+.spinner{width:30px;height:30px;border:3px solid rgba(249,115,22,.2);border-top-color:var(--laranja);border-radius:50%;animation:spin .7s linear infinite;}
+@keyframes spin{to{transform:rotate(360deg);}}
+
+/* ── moldura do app ── */
+.app{position:fixed;inset:12px;display:flex;flex-direction:column;overflow:hidden;
+  background:var(--app);border:1px solid var(--card-brd);border-radius:16px;
+  box-shadow:0 24px 60px rgba(0,0,0,.45);}
+body.claro .app{box-shadow:0 24px 60px rgba(15,23,42,.12);}
+.app::before{content:'';position:absolute;inset:0;pointer-events:none;z-index:0;
+  background:radial-gradient(ellipse at 12% 0%,rgba(249,115,22,.07),transparent 55%),
+             radial-gradient(ellipse at 92% 100%,rgba(46,144,232,.06),transparent 55%);}
+.app>*{position:relative;z-index:1;}
+
+/* ── topo ── */
+.top{flex:0 0 auto;display:flex;align-items:center;gap:14px;padding:14px 22px 12px;}
+.marca{display:flex;align-items:center;gap:10px;min-width:0;}
+.marca .mk{width:30px;height:30px;border-radius:9px;flex:0 0 30px;display:flex;align-items:center;justify-content:center;
+  background:color-mix(in srgb,var(--laranja) 16%,transparent);border:1px solid color-mix(in srgb,var(--laranja) 32%,transparent);}
+.marca .mk svg{width:16px;height:16px;stroke:var(--laranja);}
+.marca h1{font-size:17px;font-weight:800;letter-spacing:-.2px;color:var(--txt);line-height:1.1;}
+.marca p{font-size:9.5px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:1.2px;margin-top:2px;}
+.top-dir{margin-left:auto;display:flex;align-items:center;gap:8px;}
+.busca{position:relative;}
+.busca svg{position:absolute;left:10px;top:50%;transform:translateY(-50%);width:13px;height:13px;stroke:var(--txt3);pointer-events:none;}
+.busca input{width:196px;background:var(--side);border:1px solid var(--card-brd);border-radius:20px;
+  padding:7px 12px 7px 30px;font-family:inherit;font-size:12px;color:var(--txt);outline:0;}
+.busca input:focus{border-color:color-mix(in srgb,var(--laranja) 55%,transparent);}
+.busca input::placeholder{color:var(--txt4);}
+.ico-btn{width:30px;height:30px;flex:0 0 30px;display:flex;align-items:center;justify-content:center;cursor:pointer;
+  background:transparent;border:1px solid var(--card-brd);border-radius:50%;color:var(--txt2);}
+.ico-btn:hover{background:var(--hover);color:var(--txt);}
+.quem{display:flex;align-items:center;gap:8px;padding:4px 5px 4px 4px;border-radius:20px;border:1px solid var(--card-brd);}
+.av{width:24px;height:24px;flex:0 0 24px;border-radius:50%;display:flex;align-items:center;justify-content:center;
+  background:var(--laranja);color:#2A1405;font-size:9.5px;font-weight:800;}
+.quem b{font-size:11.5px;font-weight:700;color:var(--txt);white-space:nowrap;max-width:150px;overflow:hidden;text-overflow:ellipsis;}
+.sair{background:transparent;border:0;border-radius:50%;width:24px;height:24px;display:flex;align-items:center;justify-content:center;
+  cursor:pointer;color:var(--txt3);}
+.sair:hover{color:var(--vermelho);background:var(--hover);}
+
+/* ── tabuleiro de clusters (uma coluna por cluster, tudo numa tela) ── */
+.board{flex:1;min-height:0;display:grid;gap:12px;padding:4px 22px 20px;align-items:start;}
+.clu{display:flex;flex-direction:column;gap:8px;min-width:0;min-height:0;}
+.clu-h{display:flex;align-items:center;gap:8px;padding:0 2px 2px;}
+.clu-h span{font-size:9px;font-weight:800;color:var(--txt3);text-transform:uppercase;letter-spacing:1.3px;white-space:nowrap;
+  overflow:hidden;text-overflow:ellipsis;}
+.clu-h i{flex:1;height:1px;background:var(--linha);}
+.clu-h b{flex:0 0 auto;font-size:9px;font-weight:800;color:var(--txt4);}
+.clu-cards{display:flex;flex-direction:column;gap:8px;min-height:0;}
+
+.hcard{display:flex;flex-direction:column;gap:5px;padding:11px 12px 12px;border-radius:12px;cursor:pointer;
+  background:var(--brilho),var(--side);border:1px solid var(--card-brd);text-decoration:none;color:inherit;
+  transition:border-color .18s,transform .18s,box-shadow .18s;}
+.hcard:hover{border-color:color-mix(in srgb,var(--laranja) 45%,transparent);transform:translateY(-2px);
+  box-shadow:0 10px 24px rgba(0,0,0,.32);}
+body.claro .hcard:hover{box-shadow:0 10px 24px rgba(15,23,42,.10);}
+.hcard-top{display:flex;align-items:center;gap:8px;}
+.hcard .ic{width:26px;height:26px;flex:0 0 26px;border-radius:8px;display:flex;align-items:center;justify-content:center;
+  background:color-mix(in srgb,var(--laranja) 12%,transparent);border:1px solid color-mix(in srgb,var(--laranja) 22%,transparent);}
+.hcard .ic svg{width:13px;height:13px;stroke:var(--laranja);fill:none;}
+.hcard .tit{font-size:11.5px;font-weight:800;color:var(--txt);line-height:1.2;min-width:0;}
+.hcard .seta{margin-left:auto;flex:0 0 auto;opacity:0;color:var(--laranja);display:flex;transition:opacity .18s;}
+.hcard:hover .seta{opacity:1;}
+.hcard .dsc{font-size:9.5px;color:var(--txt3);line-height:1.45;
+  display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;}
+.hcard .pnd{margin-left:auto;flex:0 0 auto;font-size:8.5px;font-weight:800;padding:2px 7px;border-radius:10px;
+  color:#2A1405;background:var(--laranja);}
+.vazio{grid-column:1/-1;padding:40px;text-align:center;font-size:12px;color:var(--txt3);}
+
+@media(max-height:820px){ .hcard .dsc{-webkit-line-clamp:2;} }
+@media(max-height:720px){ .hcard{padding:9px 11px 10px;} .hcard .dsc{-webkit-line-clamp:2;font-size:9px;} .board{gap:10px;} }
+
+/* ── celular: vira lista rolável ── */
+@media(max-width:900px){
+  body{overflow:auto;}
+  .app{position:static;inset:auto;min-height:100%;border:0;border-radius:0;box-shadow:none;}
+  .app::before{position:fixed;inset:0;}
+  .top{flex-wrap:wrap;padding:12px 14px 10px;}
+  .busca{order:3;width:100%;} .busca input{width:100%;}
+  .board{grid-template-columns:1fr!important;padding:4px 14px 24px;}
+  .hcard .dsc{-webkit-line-clamp:3;}
+}
+
+/* ── autenticação (mesma mecânica, casca nova) ── */
+.auth-screen,.pending-screen{display:none;position:fixed;inset:0;align-items:center;justify-content:center;padding:20px;
+  background:radial-gradient(ellipse at 15% 20%,rgba(249,115,22,.08),transparent 55%),
+             radial-gradient(ellipse at 85% 80%,rgba(46,144,232,.06),transparent 55%),var(--fundo);overflow:auto;}
+.auth-card{background:var(--brilho),var(--app);border:1px solid var(--card-brd);border-radius:16px;padding:40px 36px;
+  width:100%;max-width:396px;box-shadow:0 24px 64px rgba(0,0,0,.5);}
+body.claro .auth-card{box-shadow:0 24px 64px rgba(15,23,42,.14);}
+.auth-logo{text-align:center;margin-bottom:30px;}
+.auth-logo-mark{width:46px;height:46px;border-radius:13px;display:flex;align-items:center;justify-content:center;margin:0 auto 13px;
+  background:color-mix(in srgb,var(--laranja) 16%,transparent);border:1px solid color-mix(in srgb,var(--laranja) 32%,transparent);}
+.auth-logo-mark svg{width:23px;height:23px;stroke:var(--laranja);}
+.auth-logo h1{font-size:18px;font-weight:800;color:var(--txt);letter-spacing:.2px;}
+.auth-logo p{font-size:9.5px;color:var(--txt3);margin-top:5px;text-transform:uppercase;letter-spacing:1.2px;font-weight:700;}
+.auth-tabs{display:flex;margin-bottom:24px;background:var(--side);border:1px solid var(--card-brd);border-radius:10px;padding:3px;}
+.auth-tab{flex:1;padding:8px;font-family:inherit;font-size:10px;font-weight:800;border:0;border-radius:7px;cursor:pointer;
+  background:transparent;color:var(--txt3);text-transform:uppercase;letter-spacing:.7px;}
+.auth-tab.active{background:var(--laranja);color:#2A1405;}
+.field{margin-bottom:13px;}
+.field label{display:block;font-size:9px;font-weight:800;color:var(--txt3);text-transform:uppercase;letter-spacing:.7px;margin-bottom:6px;}
+.field input{width:100%;background:var(--side);border:1px solid var(--card-brd);border-radius:9px;padding:11px 13px;
+  font-family:inherit;font-size:13px;color:var(--txt);outline:none;}
+.field input:focus{border-color:color-mix(in srgb,var(--laranja) 55%,transparent);}
+.field input::placeholder{color:var(--txt4);}
+.pass-wrap{position:relative;} .pass-wrap input{padding-right:40px;}
+.eye-btn{position:absolute;right:11px;top:50%;transform:translateY(-50%);background:none;border:0;cursor:pointer;
+  color:var(--txt3);display:flex;padding:2px;}
+.eye-btn:hover{color:var(--txt2);}
+.forgot-wrap{text-align:right;margin:-4px 0 6px;}
+.forgot-link,.back-link{background:none;border:0;color:var(--txt3);font-family:inherit;font-size:10px;cursor:pointer;padding:0;}
+.forgot-link:hover{color:var(--laranja);}
+.back-link{display:block;margin-top:13px;text-align:center;width:100%;}
+.back-link:hover{color:var(--txt2);}
+.form-hint{font-size:11.5px;color:var(--txt2);margin-bottom:15px;line-height:1.55;}
+.auth-btn{width:100%;background:var(--laranja);border:0;border-radius:9px;padding:12px;font-family:inherit;font-size:12px;
+  font-weight:800;color:#2A1405;cursor:pointer;text-transform:uppercase;letter-spacing:.7px;margin-top:6px;}
+.auth-btn:hover{filter:brightness(1.06);}
+.auth-btn:disabled{opacity:.4;cursor:not-allowed;}
+.auth-msg{font-size:11px;margin-top:13px;text-align:center;min-height:16px;line-height:1.4;}
+.auth-msg.error{color:var(--vermelho);}
+.auth-msg.success{color:var(--verde);}
+.pending-card{text-align:center;}
+.pending-spinner-wrap{width:62px;height:62px;border-radius:50%;display:flex;align-items:center;justify-content:center;margin:0 auto 20px;
+  background:color-mix(in srgb,var(--laranja) 10%,transparent);border:1px solid color-mix(in srgb,var(--laranja) 22%,transparent);}
+.pending-card h3{font-size:17px;font-weight:800;color:var(--txt);margin-bottom:10px;}
+.pending-card .desc{font-size:12px;color:var(--txt2);line-height:1.6;}
+.pending-card .hint{font-size:10px;color:var(--txt3);margin-top:10px;}
+.pending-logout{width:100%;margin-top:22px;background:transparent;border:1px solid var(--card-brd);border-radius:9px;padding:10px 20px;
+  font-family:inherit;font-size:10px;font-weight:800;color:var(--txt3);cursor:pointer;text-transform:uppercase;letter-spacing:.6px;}
+.pending-logout:hover{color:var(--txt2);border-color:var(--txt4);}
+
+/* ── gerenciar acessos, dentro da mesma moldura ── */
+.adm-main{flex:1;min-height:0;overflow:auto;padding:0 22px 20px;}
+.rt{background:transparent;border:1px solid var(--card-brd);border-radius:20px;padding:5px 12px;cursor:pointer;
+  font-family:inherit;font-size:9.5px;font-weight:800;color:var(--txt2);letter-spacing:.6px;text-transform:uppercase;white-space:nowrap;}
+.rt:hover{background:var(--hover);color:var(--txt);}
+.admin-tabs{display:flex;gap:4px;margin-bottom:16px;background:var(--side);border:1px solid var(--card-brd);border-radius:10px;padding:3px;width:fit-content;}
+.admin-tab{padding:7px 18px;font-family:inherit;font-size:10px;font-weight:800;border:0;border-radius:7px;cursor:pointer;
+  background:transparent;color:var(--txt3);text-transform:uppercase;letter-spacing:.7px;display:flex;align-items:center;gap:6px;}
+.admin-tab.active{background:var(--laranja);color:#2A1405;}
+.admin-cnt{border-radius:10px;padding:1px 7px;font-size:9px;font-weight:800;background:rgba(0,0,0,.18);}
+.admin-tab:not(.active) .admin-cnt{background:var(--card-brd);color:var(--txt2);}
+.admin-toolbar{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:14px;}
+.admin-search-wrap{position:relative;flex:1;min-width:240px;max-width:440px;}
+.admin-search-wrap input{width:100%;background:var(--side);border:1px solid var(--card-brd);border-radius:9px;color:var(--txt);
+  font-family:inherit;font-size:13px;padding:10px 14px 10px 36px;outline:none;}
+.admin-search-wrap input:focus{border-color:color-mix(in srgb,var(--laranja) 55%,transparent);}
+.admin-search-wrap input::placeholder{color:var(--txt4);}
+.admin-search-wrap svg{position:absolute;left:12px;top:50%;transform:translateY(-50%);width:15px;height:15px;stroke:var(--txt3);pointer-events:none;fill:none;}
+.admin-export{display:inline-flex;align-items:center;gap:7px;border-radius:9px;padding:9px 15px;font-family:inherit;font-weight:800;
+  font-size:12px;cursor:pointer;white-space:nowrap;color:var(--verde);
+  background:color-mix(in srgb,var(--verde) 14%,transparent);border:1px solid color-mix(in srgb,var(--verde) 38%,transparent);}
+.admin-export:hover{background:color-mix(in srgb,var(--verde) 26%,transparent);}
+.admin-export svg{width:15px;height:15px;stroke:currentColor;fill:none;}
+.user-card{position:relative;background:var(--brilho),var(--side);border:1px solid var(--card-brd);border-radius:12px;
+  padding:14px 18px;display:flex;align-items:center;gap:16px;margin-bottom:9px;}
+.user-card.farol-open{z-index:500;}
+.user-avatar{width:38px;height:38px;flex:0 0 38px;border-radius:50%;display:flex;align-items:center;justify-content:center;
+  font-size:15px;font-weight:800;color:var(--laranja);
+  background:color-mix(in srgb,var(--laranja) 14%,transparent);border:1px solid color-mix(in srgb,var(--laranja) 26%,transparent);}
+.user-info{flex:1;min-width:0;}
+.user-name{font-size:13px;font-weight:800;color:var(--txt);text-transform:uppercase;}
+.user-email{font-size:11px;color:var(--txt2);margin-top:2px;}
+.user-phone{font-size:11px;color:var(--txt3);margin-top:2px;}
+.user-phone a{color:var(--txt3);text-decoration:none;display:inline-flex;align-items:center;gap:5px;}
+.user-phone a:hover{color:#25D366;} .user-phone a:hover .wa-ico{stroke:#25D366;}
+.wa-ico{width:13px;height:13px;stroke:var(--txt3);fill:none;flex-shrink:0;}
+.edit-name{background:none;border:0;color:var(--txt3);cursor:pointer;font-size:12px;padding:1px 5px;margin-left:6px;border-radius:4px;line-height:1;}
+.edit-name:hover{color:var(--laranja);background:var(--hover);}
+.user-date{font-size:10px;color:var(--txt4);margin-top:4px;}
+.user-fca,.user-farol{margin-top:8px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;position:relative;}
+.user-fca label{font-size:10px;font-weight:800;color:var(--laranja);text-transform:uppercase;letter-spacing:.5px;}
+.user-farol>label{font-size:10px;font-weight:800;color:var(--azul);text-transform:uppercase;letter-spacing:.5px;}
+.farol-btn{background:var(--card);color:var(--txt);border:1px solid var(--card-brd);border-radius:8px;font-family:inherit;
+  font-size:11px;font-weight:700;padding:5px 10px;cursor:pointer;outline:none;display:flex;align-items:center;gap:7px;min-width:150px;}
+.farol-btn:hover{border-color:var(--azul);}
+.farol-btn .fcnt{background:var(--azul);color:#fff;border-radius:10px;padding:1px 7px;font-size:9px;font-weight:800;}
+.user-fca .farol-btn:hover{border-color:var(--laranja);}
+.user-fca .farol-btn .fcnt{background:var(--laranja);color:#2A1405;}
+.user-fca .farol-opt input{accent-color:var(--laranja);}
+.farol-panel{display:none;position:absolute;top:calc(100% + 4px);left:0;z-index:60;background:var(--card);
+  border:1px solid var(--card-brd);border-radius:10px;min-width:210px;max-height:260px;overflow:auto;
+  box-shadow:0 14px 32px rgba(0,0,0,.5);padding:4px;}
+body.claro .farol-panel{box-shadow:0 14px 32px rgba(15,23,42,.14);}
+.farol-panel.open{display:block;}
+.farol-opt{display:flex;align-items:center;gap:8px;padding:6px 10px;cursor:pointer;font-size:11px;color:var(--txt2);border-radius:6px;}
+.farol-opt:hover{background:var(--hover);color:var(--txt);}
+.farol-opt.all-opt{border-bottom:1px solid var(--linha);color:var(--txt);font-weight:700;margin-bottom:2px;}
+.farol-opt input{accent-color:var(--azul);width:14px;height:14px;cursor:pointer;}
+.user-fca select{background:var(--card);color:var(--txt);border:1px solid var(--card-brd);border-radius:8px;font-family:inherit;
+  font-size:11px;font-weight:700;padding:5px 9px;cursor:pointer;outline:none;}
+.user-fca select:hover{border-color:var(--laranja);}
+.user-actions{display:flex;gap:8px;flex-shrink:0;}
+.btn-approve,.btn-unblock{border-radius:8px;padding:7px 15px;font-family:inherit;font-size:10px;font-weight:800;cursor:pointer;
+  text-transform:uppercase;letter-spacing:.5px;color:var(--verde);
+  background:color-mix(in srgb,var(--verde) 14%,transparent);border:1px solid color-mix(in srgb,var(--verde) 32%,transparent);}
+.btn-approve:hover,.btn-unblock:hover{background:color-mix(in srgb,var(--verde) 28%,transparent);}
+.btn-block{border-radius:8px;padding:7px 15px;font-family:inherit;font-size:10px;font-weight:800;cursor:pointer;
+  text-transform:uppercase;letter-spacing:.5px;color:var(--vermelho);
+  background:color-mix(in srgb,var(--vermelho) 12%,transparent);border:1px solid color-mix(in srgb,var(--vermelho) 26%,transparent);}
+.btn-block:hover{background:color-mix(in srgb,var(--vermelho) 24%,transparent);}
+.btn-reject,.btn-remove{background:transparent;border:1px solid var(--card-brd);border-radius:8px;padding:7px 12px;font-family:inherit;
+  font-size:10px;font-weight:800;color:var(--txt3);cursor:pointer;text-transform:uppercase;letter-spacing:.5px;}
+.btn-reject:hover,.btn-remove:hover{border-color:var(--vermelho);color:var(--vermelho);}
+.admin-empty{text-align:center;padding:44px 24px;color:var(--txt3);font-size:12px;}
+.tit-pg{flex:0 0 auto;padding:0 22px 12px;}
+.tit-pg h2{font-size:20px;font-weight:800;color:var(--txt);letter-spacing:-.2px;}
+.tit-pg p{font-size:11px;color:var(--txt3);margin-top:3px;}
+</style>
+</head>
+<body>
+
+<div id="loading"><div class="spinner"></div></div>
+
+<div class="auth-screen" id="auth-screen">
+  <div class="auth-card">
+    <div class="auth-logo">
+      <div class="auth-logo-mark"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg></div>
+      <h1>GESTÃO EM MOVIMENTO</h1>
+      <p>Business Intelligence · Frota</p>
+    </div>
+    <div class="auth-tabs">
+      <button class="auth-tab active" id="tab-login" onclick="switchTab('login')">Entrar</button>
+      <button class="auth-tab" id="tab-register" onclick="switchTab('register')">Criar conta</button>
+    </div>
+    <div id="form-login">
+      <div class="field"><label>E-mail</label><input type="email" id="login-email" placeholder="seu@email.com" autocomplete="email"></div>
+      <div class="field"><label>Senha</label><div class="pass-wrap"><input type="password" id="login-pass" placeholder="••••••••" autocomplete="current-password"><button type="button" class="eye-btn" onclick="togglePass('login-pass',this)" tabindex="-1"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button></div></div>
+      <div class="forgot-wrap"><button type="button" class="forgot-link" onclick="showForgot()">Esqueceu sua senha?</button></div>
+      <button class="auth-btn" id="btn-login" onclick="doLogin()">Entrar</button>
+    </div>
+    <div id="form-forgot" style="display:none;">
+      <p class="form-hint">Informe seu e-mail e enviaremos um link para redefinir sua senha.</p>
+      <div class="field"><label>E-mail</label><input type="email" id="forgot-email" placeholder="seu@email.com" autocomplete="email"></div>
+      <button class="auth-btn" id="btn-forgot" onclick="doForgotPassword()">Enviar link</button>
+      <button type="button" class="back-link" onclick="showLogin()">← Voltar ao login</button>
+    </div>
+    <div id="form-recovery" style="display:none;">
+      <p class="form-hint">Defina sua nova senha.</p>
+      <div class="field"><label>Nova senha</label><div class="pass-wrap"><input type="password" id="new-pass" placeholder="mínimo 6 caracteres" autocomplete="new-password"><button type="button" class="eye-btn" onclick="togglePass('new-pass',this)" tabindex="-1"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button></div></div>
+      <button class="auth-btn" id="btn-recovery" onclick="doUpdatePassword()">Salvar nova senha</button>
+    </div>
+    <div id="form-register" style="display:none;">
+      <div class="field"><label>Nome completo</label><input type="text" id="reg-name" placeholder="Seu nome completo" style="text-transform:uppercase;" oninput="this.value=this.value.toUpperCase()"></div>
+      <div class="field"><label>E-mail</label><input type="email" id="reg-email" placeholder="seu@email.com" autocomplete="email"></div>
+      <div class="field"><label>Celular (WhatsApp)</label><input type="tel" id="reg-phone" placeholder="(51) 99999-9999"></div>
+      <div class="field"><label>Senha</label><div class="pass-wrap"><input type="password" id="reg-pass" placeholder="mínimo 6 caracteres" autocomplete="new-password"><button type="button" class="eye-btn" onclick="togglePass('reg-pass',this)" tabindex="-1"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button></div></div>
+      <button class="auth-btn" id="btn-register" onclick="doRegister()">Criar conta</button>
+    </div>
+    <div class="auth-msg" id="auth-msg"></div>
+  </div>
+</div>
+
+<div class="pending-screen" id="pending-screen">
+  <div class="auth-card pending-card">
+    <div class="auth-logo">
+      <div class="auth-logo-mark"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg></div>
+      <h1>GESTÃO EM MOVIMENTO</h1>
+      <p>Business Intelligence · Frota</p>
+    </div>
+    <div class="pending-spinner-wrap"><div class="spinner"></div></div>
+    <h3>Cadastro recebido!</h3>
+    <p class="desc">Seu cadastro foi enviado com sucesso.<br>Aguarde a confirmação do administrador para acessar o portal.</p>
+    <p class="hint">Esta página atualiza automaticamente quando seu acesso for liberado.</p>
+    <button class="pending-logout" onclick="doLogout()">Sair</button>
+  </div>
+</div>
+
+<div class="app" id="hub-screen" style="display:none">
+  <header class="top">
+    <div class="marca">
+      <div class="mk"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg></div>
+      <div><h1>Gestão em Movimento</h1><p>Business Intelligence · Frota</p></div>
+    </div>
+    <div class="top-dir">
+      <div class="busca">
+        <svg viewBox="0 0 24 24" fill="none" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M16.5 16.5 21 21"/></svg>
+        <input type="text" id="busca-painel" placeholder="Buscar painel…" oninput="filtraBoard(this.value)" autocomplete="off">
+      </div>
+      <button class="ico-btn" id="btTema" onclick="trocaTema()" title="Claro / escuro"></button>
+      <div class="quem"><span class="av" id="hub-avatar">—</span><b id="hub-username">—</b>
+        <button class="sair" onclick="doLogout()" title="Sair">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+        </button>
+      </div>
+    </div>
+  </header>
+  <div class="board" id="board"></div>
+</div>
+
+<div class="app" id="admin-screen" style="display:none">
+  <header class="top">
+    <div class="marca">
+      <div class="mk"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg></div>
+      <div><h1>Gestão em Movimento</h1><p>Business Intelligence · Frota</p></div>
+    </div>
+    <div class="top-dir">
+      <button class="rt" onclick="goToHub()">← Hub</button>
+      <button class="ico-btn" onclick="trocaTema()" title="Claro / escuro"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg></button>
+      <div class="quem"><span class="av" id="admin-avatar">—</span><b id="admin-username">—</b>
+        <button class="sair" onclick="doLogout()" title="Sair">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+        </button>
+      </div>
+    </div>
+  </header>
+  <div class="tit-pg"><h2>Gerenciar Acessos</h2><p>Aprove, bloqueie ou remova o acesso de usuários ao portal.</p></div>
+  <main class="adm-main">
+    <div class="admin-tabs">
+      <button class="admin-tab active" id="atab-pending" onclick="switchAdminTab('pending')">Pendentes <span class="admin-cnt" id="admin-cnt-pending">0</span></button>
+      <button class="admin-tab" id="atab-approved" onclick="switchAdminTab('approved')">Usuários <span class="admin-cnt" id="admin-cnt-approved">0</span></button>
+      <button class="admin-tab" id="atab-blocked" onclick="switchAdminTab('blocked')">Bloqueados <span class="admin-cnt" id="admin-cnt-blocked">0</span></button>
+    </div>
+    <div class="admin-toolbar">
+      <div class="admin-search-wrap">
+        <svg viewBox="0 0 24 24" fill="none" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        <input type="text" id="admin-search" placeholder="Pesquisar por nome ou e-mail…" oninput="onAdminSearch(this.value)" autocomplete="off">
+      </div>
+      <button class="admin-export" onclick="exportUsersExcel()" title="Exportar nome, e-mail e telefone de todos os usuários">
+        <svg viewBox="0 0 24 24" fill="none" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        Exportar Excel
+      </button>
+    </div>
+    <div id="admin-users-list"></div>
+  </main>
+</div>
+
+<script>
+
+/* ── clusters do hub: um por coluna, tudo numa tela só ────────────────────── */
+const CLUSTERS = [{"nome": "Administração", "cards": [{"t": "Gerenciar Acessos", "d": "Aprove, bloqueie ou remova o acesso de usuários ao portal.", "h": null, "ico": "<svg viewBox=\"0 0 24 24\" fill=\"none\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2\"/><circle cx=\"9\" cy=\"7\" r=\"4\"/><path d=\"M23 21v-2a4 4 0 0 0-3-3.87\"/><path d=\"M16 3.13a4 4 0 0 1 0 7.75\"/></svg>", "onc": "showAdmin()", "badge": "admin-pending-badge"}, {"t": "Acessos", "d": "Auditoria de uso do portal — quantidade de acessos por usuário, por painel e por dia.", "h": "acessos/", "ico": "<svg viewBox=\"0 0 24 24\" fill=\"none\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><polyline points=\"22 12 18 12 15 21 9 3 6 12 2 12\"/></svg>", "onc": null}, {"t": "Farol Frota", "d": "Farol semanal dos indicadores — visão geral e por unidade. E-mail automático toda segunda às 14h.", "h": "farol-frota/", "ico": "<svg viewBox=\"0 0 24 24\" fill=\"none\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><rect x=\"8\" y=\"2\" width=\"8\" height=\"20\" rx=\"4\"/><circle cx=\"12\" cy=\"7\" r=\"1.6\"/><circle cx=\"12\" cy=\"12\" r=\"1.6\"/><circle cx=\"12\" cy=\"17\" r=\"1.6\"/></svg>", "onc": null}], "adm": true}, {"nome": "Planejamento Estratégico", "cards": [{"t": "Estratégia e Governança", "d": "Missão, visão e valores da frota + ritos de gestão (checkpoint, custos e planejamento mensal) com follow das ações.", "h": "governanca/", "ico": "<svg viewBox=\"0 0 24 24\" fill=\"none\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z\"/><path d=\"M9 12l2 2 4-4\"/></svg>", "onc": null}, {"t": "Papéis e Responsabilidades", "d": "Blocos de gestão da frota, descrição de cada responsabilidade e o dono responsável.", "h": "papeis-responsabilidades/", "ico": "<svg viewBox=\"0 0 24 24\" fill=\"none\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2\"/><circle cx=\"9\" cy=\"7\" r=\"4\"/><path d=\"M23 21v-2a4 4 0 0 0-3-3.87\"/><path d=\"M16 3.13a4 4 0 0 1 0 7.75\"/></svg>", "onc": null}]}, {"nome": "Visão Geral", "cards": [{"t": "Scorecard", "d": "Visão consolidada — principais indicadores de todos os painéis e ranking das unidades por pontuação.", "h": "scorecard/", "ico": "<svg viewBox=\"0 0 24 24\" fill=\"none\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><rect x=\"3\" y=\"3\" width=\"7\" height=\"9\"/><rect x=\"14\" y=\"3\" width=\"7\" height=\"5\"/><rect x=\"14\" y=\"12\" width=\"7\" height=\"9\"/><rect x=\"3\" y=\"16\" width=\"7\" height=\"5\"/></svg>", "onc": null}, {"t": "Diagnóstico", "d": "Inteligência de frota — cruza ICs, DPO e FCA por unidade e gera forças, alertas e tendências.", "h": "diagnostico/", "ico": "<svg viewBox=\"0 0 24 24\" fill=\"none\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M9 11l3 3L22 4\"/><path d=\"M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11\"/></svg>", "onc": null}, {"t": "Resumo Executivo", "d": "Leitura automática dos indicadores em 4 quadrantes: pontos positivos, negativos, atenção e próximos passos.", "h": "resumo-executivo/", "ico": "<svg viewBox=\"0 0 24 24\" fill=\"none\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><rect x=\"3\" y=\"3\" width=\"18\" height=\"18\" rx=\"2\"/><line x1=\"12\" y1=\"3\" x2=\"12\" y2=\"21\"/><line x1=\"3\" y1=\"12\" x2=\"21\" y2=\"12\"/></svg>", "onc": null}, {"t": "Ativos", "d": "Composição da frota — quantidade de ativos, idade média, por unidade, tipo, modelo e faixa de idade. Direto do Ginfo.", "h": "ativos/", "ico": "<svg viewBox=\"0 0 24 24\" fill=\"none\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><rect x=\"1\" y=\"3\" width=\"15\" height=\"13\" rx=\"2\"/><path d=\"M16 8h4l3 3v5h-7V8z\"/><circle cx=\"5.5\" cy=\"18.5\" r=\"2.5\"/><circle cx=\"18.5\" cy=\"18.5\" r=\"2.5\"/></svg>", "onc": null}]}, {"nome": "Financeiro", "cards": [{"t": "Visão Financeira", "d": "DRE Consolidado — custos, receita líquida, AV% e desvios vs remunerado e orçado.", "h": "visao-financeira/", "ico": "<svg viewBox=\"0 0 24 24\" fill=\"none\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><polyline points=\"22 12 18 12 15 21 9 3 6 12 2 12\"/></svg>", "onc": null}, {"t": "Painel KM", "d": "Dispersão de quilometragem — realizado vs remunerado, impacto financeiro e eficiência.", "h": "painel-km/", "ico": "<svg viewBox=\"0 0 24 24\" fill=\"none\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><circle cx=\"12\" cy=\"12\" r=\"10\"/><polyline points=\"12 6 12 12 16 14\"/></svg>", "onc": null}, {"t": "R$/KM", "d": "Custo por quilômetro rodado — R$/km por conta, análise vs remunerado e impacto financeiro.", "h": "rs-por-km/", "ico": "<svg viewBox=\"0 0 24 24\" fill=\"none\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><line x1=\"12\" y1=\"1\" x2=\"12\" y2=\"23\"/><path d=\"M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6\"/></svg>", "onc": null}, {"t": "Árvore de Custo da Frota", "d": "Custo da frota por pacote e conta — R$/km, R$/Frota Ativa e AV s/ receita. Base do ROIC. Só Transportes.", "h": "arvore-frota/", "ico": "<svg viewBox=\"0 0 24 24\" fill=\"none\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><line x1=\"6\" y1=\"3\" x2=\"6\" y2=\"15\"/><circle cx=\"18\" cy=\"6\" r=\"3\"/><circle cx=\"6\" cy=\"18\" r=\"3\"/><path d=\"M18 9a9 9 0 0 1-9 9\"/></svg>", "onc": null}, {"t": "Carta de Custos", "d": "A unidade lança os custos de Manutenção e Pneus por conta e grupo; compara com orçado/remunerado e gera gráficos.", "h": "carta-custos/", "ico": "<svg viewBox=\"0 0 24 24\" fill=\"none\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z\"/><polyline points=\"14 2 14 8 20 8\"/><line x1=\"9\" y1=\"15\" x2=\"15\" y2=\"15\"/><line x1=\"9\" y1=\"18\" x2=\"13\" y2=\"18\"/></svg>", "onc": null}]}, {"nome": "Operacional", "cards": [{"t": "Ativação de Frota", "d": "Indicadores de eficiência no processo de ativação de veículos e contratos.", "h": "eficiencia-ativacao/", "ico": "<svg viewBox=\"0 0 24 24\" fill=\"none\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><rect x=\"1\" y=\"3\" width=\"15\" height=\"13\" rx=\"2\"/><path d=\"M16 8h4l3 3v5h-7V8z\"/><circle cx=\"5.5\" cy=\"18.5\" r=\"2.5\"/><circle cx=\"18.5\" cy=\"18.5\" r=\"2.5\"/></svg>", "onc": null}, {"t": "Disponibilidade", "d": "Taxa de disponibilidade da frota — manutenção, ociosidade e uptime por veículo.", "h": "disponibilidade/", "ico": "<svg viewBox=\"0 0 24 24\" fill=\"none\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M22 11.08V12a10 10 0 1 1-5.93-9.14\"/><polyline points=\"22 4 12 14.01 9 11.01\"/></svg>", "onc": null}, {"t": "Combustível", "d": "Hub de painéis de combustível — eficiência Km/L, árvore de custo, preço R$/L e emissões.", "h": "combustivel/", "ico": "<svg viewBox=\"0 0 24 24\" fill=\"none\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><line x1=\"3\" y1=\"22\" x2=\"15\" y2=\"22\"/><line x1=\"4\" y1=\"9\" x2=\"14\" y2=\"9\"/><path d=\"M14 22V4a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v18\"/><path d=\"M14 13h2a2 2 0 0 1 2 2v2a2 2 0 0 0 2 2a2 2 0 0 0 2-2V9.83a2 2 0 0 0-.59-1.42L18 5\"/></svg>", "onc": null}, {"t": "Pneus", "d": "Gestão de pneus da frota — saúde, milimetragem, pressão, CPK, previsão de troca, orçamento e visão de eixos.", "h": "pneus/", "ico": "<svg viewBox=\"0 0 24 24\" fill=\"none\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><circle cx=\"12\" cy=\"12\" r=\"9\"/><circle cx=\"12\" cy=\"12\" r=\"3.5\"/></svg>", "onc": null}, {"t": "Termômetro", "d": "Pontuação de conformidade por unidade e tier — ranking, evolução por vigência e posições mês a mês.", "h": "termometro/", "ico": "<svg viewBox=\"0 0 24 24\" fill=\"none\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M14 14.76V3.5a2.5 2.5 0 0 0-5 0v11.26a4.5 4.5 0 1 0 5 0z\"/></svg>", "onc": null}, {"t": "Manutenção", "d": "Detalhamento por NF do pacote de manutenção — total de notas, por fornecedor/centro de custo e tabela geral.", "h": "manutencao/", "ico": "<svg viewBox=\"0 0 24 24\" fill=\"none\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z\"/></svg>", "onc": null}, {"t": "Catálogo de Peças", "d": "Lista de peças da frota — NCM, material, aplicação por tipo de veículo e índice da TIPI.", "h": "catalogo-pecas/", "ico": "<svg viewBox=\"0 0 24 24\" fill=\"none\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M4 19.5A2.5 2.5 0 0 1 6.5 17H20\"/><path d=\"M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z\"/></svg>", "onc": null}]}, {"nome": "Processos", "cards": [{"t": "Gerot", "d": "Reunião de Planejamento Mensal — KPIs por bloco, meta, real e % de atingimento por vigência.", "h": "gerot/", "ico": "<svg viewBox=\"0 0 24 24\" fill=\"none\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z\"/><polyline points=\"14 2 14 8 20 8\"/></svg>", "onc": null}, {"t": "Auditorias", "d": "Consolidado Demarco &amp; DPO — níveis por unidade e semestre (1H25 a 2H26).", "h": "auditorias/", "ico": "<svg viewBox=\"0 0 24 24\" fill=\"none\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M9 11l3 3L22 4\"/><path d=\"M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11\"/></svg>", "onc": null}, {"t": "FCA", "d": "Fatos do mês por unidade, causas automáticas e plano de ação — com Kanban, Tabela e Gantt.", "h": "fca-preenchimento/", "ico": "<svg viewBox=\"0 0 24 24\" fill=\"none\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M12 20h9\"/><path d=\"M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4z\"/></svg>", "onc": null}, {"t": "Indisponibilidade", "d": "Frota do dia por unidade — abra e feche indisponibilidades e confirme a frota (check-in diário).", "h": "disponibilidade-preenchimento/", "ico": "<svg viewBox=\"0 0 24 24\" fill=\"none\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><rect x=\"1\" y=\"3\" width=\"15\" height=\"13\" rx=\"1\"/><path d=\"M16 8h4l3 3v5h-7z\"/><circle cx=\"5.5\" cy=\"18.5\" r=\"2.5\"/><circle cx=\"18.5\" cy=\"18.5\" r=\"2.5\"/></svg>", "onc": null}, {"t": "MPR", "d": "Monthly Performance Review — indicadores do termômetro por unidade/GEO, com Plan vs 2026 e plano de ação.", "h": "mpr/", "ico": "<svg viewBox=\"0 0 24 24\" fill=\"none\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><line x1=\"18\" y1=\"20\" x2=\"18\" y2=\"10\"/><line x1=\"12\" y1=\"20\" x2=\"12\" y2=\"4\"/><line x1=\"6\" y1=\"20\" x2=\"6\" y2=\"14\"/></svg>", "onc": null}, {"t": "Planner Corporativo", "d": "Ações do time corporativo — Ação, Responsável, Prazo, Status e Acompanhamento. Tabela, Kanban e Relatório. Independente do FCA.", "h": "planner-corporativo/", "ico": "<svg viewBox=\"0 0 24 24\" fill=\"none\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><rect x=\"3\" y=\"4\" width=\"18\" height=\"18\" rx=\"2\"/><line x1=\"3\" y1=\"10\" x2=\"21\" y2=\"10\"/><line x1=\"9\" y1=\"10\" x2=\"9\" y2=\"22\"/><line x1=\"15\" y1=\"10\" x2=\"15\" y2=\"22\"/></svg>", "onc": null, "adm": true}]}, {"nome": "Resultados", "cards": [{"t": "Programa de Reconhecimento", "d": "Ranking Frota de Elite — pontuação por unidade, pódio e evolução mensal dos indicadores.", "h": "programa-reconhecimento/", "ico": "<svg viewBox=\"0 0 24 24\" fill=\"none\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><polygon points=\"12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2\"/></svg>", "onc": null}, {"t": "Aderência ao FCA", "d": "FCA Gerencial — aderência ao prazo e à conclusão por unidade, projeto e vigência.", "h": "fca-gerencial/", "ico": "<svg viewBox=\"0 0 24 24\" fill=\"none\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><circle cx=\"12\" cy=\"12\" r=\"10\"/><circle cx=\"12\" cy=\"12\" r=\"6\"/><circle cx=\"12\" cy=\"12\" r=\"2\"/></svg>", "onc": null}, {"t": "Painel de Metas", "d": "DRE Frota — pontuação total, evolução mensal vs meta 80% e pontos por indicador.", "h": "painel-metas/", "ico": "<svg viewBox=\"0 0 24 24\" fill=\"none\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M18 20V10M12 20V4M6 20v-6\"/></svg>", "onc": null}]}];
+
+const inic = n => String(n||'?').trim().split(/\s+/).slice(0,2).map(p=>p[0]).join('').toUpperCase();
+function setQuem(tela, nome){
+  const b=document.getElementById(tela+'-username'), a=document.getElementById(tela+'-avatar');
+  if(b) b.textContent=nome; if(a) a.textContent=inic(nome);
+}
+const SETA='<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>';
+function cardHtml(k){
+  const badge = k.badge ? `<span class="pnd" id="${k.badge}" style="display:none"></span>` : '';
+  const dentro = `<div class="hcard-top"><span class="ic">${k.ico}</span><span class="tit">${k.t}</span>${badge}<span class="seta">${SETA}</span></div>`
+               + `<div class="dsc">${k.d}</div>`;
+  const busca = (k.t + ' ' + k.d).toLowerCase().replace(/"/g,'');
+  return k.h ? `<a class="hcard card-link" href="../${k.h}" data-b="${busca}" title="${k.d.replace(/"/g,'')}">${dentro}</a>`
+             : `<div class="hcard" onclick="${k.onc}" data-b="${busca}" title="${k.d.replace(/"/g,'')}">${dentro}</div>`;
+}
+function renderBoard(isAdmin){
+  const vis = CLUSTERS
+    .filter(c => !c.adm || isAdmin)
+    .map(c => ({...c, cards: c.cards.filter(k => !k.adm || isAdmin)}))
+    .filter(c => c.cards.length);
+  const b = document.getElementById('board');
+  b.style.gridTemplateColumns = 'repeat(' + vis.length + ',minmax(0,1fr))';
+  b.innerHTML = vis.map(c => `<section class="clu">
+      <div class="clu-h"><span>${c.nome}</span><i></i><b>${c.cards.length}</b></div>
+      <div class="clu-cards">${c.cards.map(cardHtml).join('')}</div>
+    </section>`).join('');
+  const busca = document.getElementById('busca-painel');
+  if (busca && busca.value) filtraBoard(busca.value);
+}
+function filtraBoard(q){
+  const t = String(q||'').toLowerCase().trim();
+  let achou = 0;
+  document.querySelectorAll('#board .clu').forEach(clu => {
+    let n = 0;
+    clu.querySelectorAll('.hcard').forEach(c => {
+      const ok = !t || (c.dataset.b||'').includes(t);
+      c.style.display = ok ? '' : 'none';
+      if (ok) n++;
+    });
+    clu.style.display = n ? '' : 'none';
+    achou += n;
+  });
+  const b = document.getElementById('board');
+  let vazio = document.getElementById('board-vazio');
+  if (!achou) {
+    if (!vazio) { vazio = document.createElement('div'); vazio.id='board-vazio'; vazio.className='vazio'; b.appendChild(vazio); }
+    vazio.textContent = `Nenhum painel com “${q}”.`;
+    vazio.style.display = '';
+  } else if (vazio) vazio.style.display = 'none';
+}
+
+/* ── tema claro / escuro (mesma chave dos painéis) ── */
+const _SOL='<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4.5"/><path d="M12 1.5v2M12 20.5v2M4.2 4.2l1.4 1.4M18.4 18.4l1.4 1.4M1.5 12h2M20.5 12h2M4.2 19.8l1.4-1.4M18.4 5.6l1.4-1.4"/></svg>';
+const _LUA='<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>';
+function aplicaTema(t){
+  document.body.classList.toggle('claro', t==='light');
+  localStorage.setItem('bi_theme', t);
+  const b=document.getElementById('btTema'); if(b) b.innerHTML = t==='light' ? _LUA : _SOL;
+}
+function trocaTema(){ aplicaTema(document.body.classList.contains('claro') ? 'dark' : 'light'); }
+aplicaTema(localStorage.getItem('bi_theme') || 'dark');
+
+const SUPABASE_URL = 'https://lozwipoeacpvplgkrxkq.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_ggKEEebc5zjgQDVsF92Upw_6uoLmKe9';
+const ADMIN_EMAIL  = 'fortesindicadores@gmail.com';
+
+const { createClient } = supabase;
+const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
+
+let currentUser    = null;
+let adminTabActive = 'pending';
+let allApprovals   = [];
+// Acesso FCA por usuário (perfil): uma ou mais unidades (lista com vírgula) ou admin.
+// CBA e MCC são separadas por projeto/tier (unidades independentes).
+const FCA_UNITS = ['CGR','BLC','CBA T1','CBA T1 WH','CBA T2','FLP','GRL','NFR','PLT','RON','MCC T1','MCC T2','PIR'];
+const FCA_ALL   = [...FCA_UNITS, 'ANG'];   // ANG só tem Custos (sem Gerot) — entra no acesso FCA
+let _fcaProf = {};   // user_id -> { unidade, is_admin }
+
+// ── Telefone: formatação BR + link WhatsApp + máscara de digitação ──
+function phoneDigits(s){ let d = String(s == null ? '' : s).replace(/\D/g, ''); if (d.length > 11 && d.startsWith('55')) d = d.slice(2); return d; }
+function fmtPhone(s){ const d = phoneDigits(s); if (d.length === 11) return `(${d.slice(0,2)}) ${d.slice(2,7)}-${d.slice(7)}`; if (d.length === 10) return `(${d.slice(0,2)}) ${d.slice(2,6)}-${d.slice(6)}`; return String(s == null ? '' : s).trim(); }
+function waLink(s){ const d = phoneDigits(s); return d.length >= 10 ? 'https://wa.me/55' + d : null; }
+function maskPhone(v){ let d = String(v || '').replace(/\D/g, ''); if (d.startsWith('55') && d.length > 11) d = d.slice(2); d = d.slice(0, 11); if (!d) return ''; if (d.length <= 2) return '(' + d; if (d.length <= 6) return `(${d.slice(0,2)}) ${d.slice(2)}`; if (d.length <= 10) return `(${d.slice(0,2)}) ${d.slice(2,6)}-${d.slice(6)}`; return `(${d.slice(0,2)}) ${d.slice(2,7)}-${d.slice(7)}`; }
+(function(){ const el = document.getElementById('reg-phone'); if (el) el.addEventListener('input', () => { el.value = maskPhone(el.value); }); })();
+let isRegistering  = false;
+let isApproved     = false;
+let pollingInterval = null;
+
+function generateToken() {
+  return ([1e7]+-1e3+-4e3+-8e3+-1e11).replace(/[018]/g, c =>
+    (c ^ crypto.getRandomValues(new Uint8Array(1))[0] & 15 >> c / 4).toString(16));
+}
+
+const FN_SLUGS = { 'notify-admin': 'smooth-responder', 'notify-user': 'quick-task', 'approve-user': 'bright-api' };
+const fnCall = (name, body) => fetch(`${SUPABASE_URL}/functions/v1/${FN_SLUGS[name]||name}`, {
+  method: 'POST',
+  headers: { 'Authorization': `Bearer ${SUPABASE_KEY}`, 'Content-Type': 'application/json' },
+  body: JSON.stringify(body)
+});
+
+function hideAll() {
+  ['loading','auth-screen','pending-screen','hub-screen','admin-screen']
+    .forEach(id => document.getElementById(id).style.display = 'none');
+}
+
+// ── Log de acessos (tabela access_log; painel /acessos/ lê — só admin). Falha silenciosa se a tabela não existir. ──
+let _accTok = null, _hubLogged = false;
+async function logAcesso(painel, user) {
+  try {
+    if (!_accTok) { const r = await sb.auth.getSession(); _accTok = r.data.session && r.data.session.access_token; }
+    if (!_accTok) return;
+    const email = (user || currentUser || {}).email || null;
+    fetch(SUPABASE_URL + '/rest/v1/access_log', {
+      method: 'POST', keepalive: true,   // keepalive: sobrevive à navegação p/ o painel clicado
+      headers: { apikey: SUPABASE_KEY, Authorization: 'Bearer ' + _accTok, 'Content-Type': 'application/json', Prefer: 'return=minimal' },
+      body: JSON.stringify({ email, painel })
+    }).catch(() => {});
+  } catch (e) {}
+}
+// clique em qualquer card do hub → registra o painel de destino
+document.addEventListener('click', e => {
+  const a = e.target.closest && e.target.closest('a.card-link[href]');
+  if (!a) return;
+  const painel = (a.getAttribute('href') || '').replace(/^(\.\.?\/)+/, '').replace(/\/?(index\.html)?$/, '').replace(/\/+$/, '') || 'hub';
+  logAcesso(painel);
+});
+
+// Roteamento por papel: gestor (perfil com unidade e não-admin) vai direto pro preenchimento.
+// Trava por sessão p/ não prender (ele pode voltar ao hub). Falha silenciosa se a tabela não existir.
+async function maybeRouteByRole(user) {
+  if (sessionStorage.getItem('gem_routed')) return false;
+  try {
+    const { data: prof } = await sb.from('fca_profiles').select('unidade,is_admin').eq('user_id', user.id).maybeSingle();
+    if (prof && prof.unidade && !prof.is_admin) {
+      sessionStorage.setItem('gem_routed', '1');
+      sessionStorage.setItem('gem_hub', '1'); // libera acesso ao painel nesta sessão
+      await logAcesso('fca-preenchimento', user);   // gestor roteado direto não passa pelo hub
+      location.href = '../fca-preenchimento/';
+      return true;
+    }
+  } catch (e) {}
+  return false;
+}
+
+async function showHub(user) {
+  if (await maybeRouteByRole(user)) return;
+  currentUser = user;
+  isApproved = true;
+  localStorage.setItem('bi_approved_' + user.id, '1');
+  sessionStorage.setItem('gem_hub', '1');   // libera o acesso aos painéis nesta sessão (gate via hub)
+  stopPolling();
+  hideAll();
+  document.getElementById('hub-screen').style.display = 'flex';
+  const name = user.user_metadata?.name || user.email.split('@')[0];
+  setQuem('hub', name);
+  let isAdmin = user.email === ADMIN_EMAIL;
+  if (!isAdmin) {
+    try { const { data: prof } = await sb.from('fca_profiles').select('is_admin').eq('user_id', user.id).maybeSingle(); isAdmin = !!(prof && prof.is_admin); } catch (e) {}
+  }
+  renderBoard(isAdmin);
+  if (isAdmin) loadAdminBadge();
+  if (!_hubLogged) { _hubLogged = true; logAcesso('hub', user); }   // 1 registro por entrada no hub
+}
+
+function showAuth() {
+  isApproved = false;
+  sessionStorage.removeItem('gem_hub');   // sem acesso liberado fora do hub
+  stopPolling();
+  hideAll();
+  document.getElementById('auth-screen').style.display = 'flex';
+}
+
+function showPending(user) {
+  currentUser = user;
+  stopPolling();
+  hideAll();
+  document.getElementById('pending-screen').style.display = 'flex';
+  startPolling(user);
+}
+
+function showAdmin() {
+  hideAll();
+  document.getElementById('admin-screen').style.display = 'flex';
+  const name = currentUser?.user_metadata?.name || currentUser?.email?.split('@')[0] || '';
+  setQuem('admin', name);
+  adminTabActive = 'pending';
+  ['pending','approved','blocked'].forEach(t =>
+    document.getElementById(`atab-${t}`).classList.toggle('active', t === 'pending'));
+  loadAdminData();
+}
+
+function goToHub() { showHub(currentUser); }
+
+function startPolling(user) {
+  pollingInterval = setInterval(async () => {
+    try {
+      const { data } = await sb.from('user_approvals').select('status').eq('user_id', user.id).single();
+      if (data?.status === 'approved') { stopPolling(); showHub(user); }
+      else if (data?.status === 'blocked') {
+        stopPolling();
+        await sb.auth.signOut();
+        setMsg('Seu acesso foi bloqueado.', 'error');
+        showAuth();
+      }
+    } catch(e) { }
+  }, 15000);
+}
+
+function stopPolling() {
+  if (pollingInterval) { clearInterval(pollingInterval); pollingInterval = null; }
+}
+
+async function checkApproval(user) {
+  if (user.email === ADMIN_EMAIL) { showHub(user); return; }
+  const cached = localStorage.getItem('bi_approved_' + user.id);
+  if (cached) showHub(user);
+  try {
+    const result = await Promise.race([
+      sb.from('user_approvals').select('status').eq('user_id', user.id).single(),
+      new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), 5000))
+    ]);
+    const data = result?.data;
+    if (data?.status === 'blocked') {
+      localStorage.removeItem('bi_approved_' + user.id);
+      setMsg('Seu acesso está bloqueado. Entre em contato com o administrador.', 'error');
+      await sb.auth.signOut();
+      showAuth();
+      return;
+    }
+    if (data?.status === 'approved') { showHub(user); return; }
+    if (!cached) showPending(user);
+  } catch(e) {
+    console.error('checkApproval:', e);
+    if (!isApproved) showAuth();
+  }
+}
+
+async function init() {
+  try {
+    const result = await Promise.race([
+      sb.auth.getSession(),
+      new Promise(res => setTimeout(() => res({ data: { session: null } }), 5000))
+    ]);
+    const session = result?.data?.session;
+    if (session) await checkApproval(session.user);
+    else showAuth();
+  } catch(e) { showAuth(); }
+}
+
+sb.auth.onAuthStateChange(async (event, session) => {
+  if (event === 'SIGNED_IN' && session && !isRegistering && !isApproved) await checkApproval(session.user);
+  if (event === 'SIGNED_OUT' && !isRegistering) showAuth();
+  if (event === 'PASSWORD_RECOVERY') {
+    hideAll();
+    document.getElementById('auth-screen').style.display = 'flex';
+    document.getElementById('form-login').style.display = 'none';
+    document.getElementById('form-forgot').style.display = 'none';
+    document.getElementById('form-recovery').style.display = '';
+    setMsg('', '');
+  }
+});
+
+function switchTab(tab) {
+  const isLogin = tab === 'login';
+  document.getElementById('tab-login').classList.toggle('active', isLogin);
+  document.getElementById('tab-register').classList.toggle('active', !isLogin);
+  document.getElementById('form-login').style.display = isLogin ? '' : 'none';
+  document.getElementById('form-register').style.display = isLogin ? 'none' : '';
+  setMsg('', '');
+}
+
+function setMsg(text, type) {
+  const el = document.getElementById('auth-msg');
+  el.textContent = text;
+  el.className = 'auth-msg' + (type ? ' ' + type : '');
+}
+
+async function doLogin() {
+  const email = document.getElementById('login-email').value.trim();
+  const pass  = document.getElementById('login-pass').value;
+  if (!email || !pass) { setMsg('Preencha e-mail e senha.', 'error'); return; }
+  const btn = document.getElementById('btn-login');
+  btn.disabled = true; btn.textContent = 'Entrando…';
+  try {
+    const { error } = await Promise.race([
+      sb.auth.signInWithPassword({ email, password: pass }),
+      new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), 10000))
+    ]);
+    if (error) setMsg(traduzirErro(error.message), 'error');
+  } catch(e) {
+    setMsg(e.message === 'timeout' ? 'Tempo esgotado. Tente novamente.' : traduzirErro(e.message), 'error');
+  } finally {
+    btn.disabled = false; btn.textContent = 'Entrar';
+  }
+}
+
+async function doRegister() {
+  const name  = document.getElementById('reg-name').value.trim().toUpperCase();
+  const email = document.getElementById('reg-email').value.trim();
+  const phone = document.getElementById('reg-phone').value.trim();
+  const pass  = document.getElementById('reg-pass').value;
+  if (!name || !email || !phone || !pass) { setMsg('Preencha todos os campos.', 'error'); return; }
+  if (pass.length < 6) { setMsg('Senha deve ter pelo menos 6 caracteres.', 'error'); return; }
+  const btn = document.getElementById('btn-register');
+  btn.disabled = true; btn.textContent = 'Criando conta…';
+  isRegistering = true;
+  const { data, error } = await sb.auth.signUp({ email, password: pass, options: { data: { name, phone } } });
+  if (error) {
+    isRegistering = false;
+    btn.disabled = false; btn.textContent = 'Criar conta';
+    setMsg(traduzirErro(error.message), 'error');
+    return;
+  }
+  const token = generateToken();
+  if (data.user) {
+    await sb.from('user_approvals').upsert(
+      { user_id: data.user.id, email, name, phone, status: 'pending', approval_token: token },
+      { onConflict: 'user_id' }
+    );
+    fnCall('notify-admin', { name, email, phone, token }).catch(() => {});
+  }
+  isRegistering = false;
+  btn.disabled = false; btn.textContent = 'Criar conta';
+  if (data.user) showPending(data.user);
+  else { setMsg('Erro ao criar conta. Tente novamente.', 'error'); }
+}
+
+async function doLogout() {
+  stopPolling();
+  if (currentUser) localStorage.removeItem('bi_approved_' + currentUser.id);
+  await sb.auth.signOut();
+}
+
+function showForgot() {
+  const email = document.getElementById('login-email').value.trim();
+  if (email) document.getElementById('forgot-email').value = email;
+  document.getElementById('form-login').style.display = 'none';
+  document.getElementById('form-forgot').style.display = '';
+  setMsg('', '');
+}
+
+function showLogin() {
+  document.getElementById('form-forgot').style.display = 'none';
+  document.getElementById('form-recovery').style.display = 'none';
+  document.getElementById('form-login').style.display = '';
+  setMsg('', '');
+}
+
+async function doForgotPassword() {
+  const email = document.getElementById('forgot-email').value.trim();
+  if (!email) { setMsg('Informe o e-mail.', 'error'); return; }
+  const btn = document.getElementById('btn-forgot');
+  btn.disabled = true; btn.textContent = 'Enviando…';
+  const { error } = await sb.auth.resetPasswordForEmail(email, { redirectTo: window.location.href.split('#')[0] });
+  btn.disabled = false; btn.textContent = 'Enviar link';
+  if (error) { setMsg(traduzirErro(error.message), 'error'); return; }
+  setMsg('Link enviado! Verifique seu e-mail.', 'success');
+}
+
+async function doUpdatePassword() {
+  const pass = document.getElementById('new-pass').value;
+  if (pass.length < 6) { setMsg('Senha deve ter pelo menos 6 caracteres.', 'error'); return; }
+  const btn = document.getElementById('btn-recovery');
+  btn.disabled = true; btn.textContent = 'Salvando…';
+  const { error } = await sb.auth.updateUser({ password: pass });
+  btn.disabled = false; btn.textContent = 'Salvar nova senha';
+  if (error) { setMsg(traduzirErro(error.message), 'error'); return; }
+  setMsg('Senha atualizada! Faça login para continuar.', 'success');
+  setTimeout(() => { sb.auth.signOut(); showLogin(); }, 2000);
+}
+
+async function loadAdminData() {
+  const { data } = await sb.from('user_approvals').select('*').order('created_at', { ascending: false });
+  allApprovals = data || [];
+  try {
+    // farol_unidades pode ainda não existir (migração farol-acessos.sql não rodada) —
+    // se o select falhar por causa dela, cai no select sem a coluna p/ não zerar os acessos.
+    let res = await sb.from('fca_profiles').select('user_id,unidade,is_admin,farol_unidades');
+    if (res.error) res = await sb.from('fca_profiles').select('user_id,unidade,is_admin');
+    _fcaProf = {}; (res.data || []).forEach(p => { _fcaProf[p.user_id] = p; });
+  } catch (e) { _fcaProf = {}; }
+  renderAdminUsers();
+  updateAdminCounts();
+}
+
+// ── Acesso FCA — seleção múltipla de unidades (flags) ou Admin (todas) ──
+// fca_profiles.unidade guarda a lista separada por vírgula (ex.: 'CBA T1,MCC T1').
+// A pessoa pode acessar mais de um FCA; zero flags + sem admin = sem acesso.
+const fcaUnitsOf = p => String((p && p.unidade) || '').toUpperCase().split(',').map(s => s.trim()).filter(Boolean);
+function fcaSummary(isAdm, units) {
+  if (isAdm) return 'Admin (todas)';
+  if (!units.length) return '— sem acesso —';
+  return units.length === 1 ? units[0] : units.length + ' unidades';
+}
+function renderFcaPicker(userId, p, nm) {
+  const units = fcaUnitsOf(p), isAdm = !!(p && p.is_admin), cnt = isAdm ? 0 : units.length;
+  const opts = `<label class="farol-opt all-opt">
+      <input type="checkbox" class="fa-adm" ${isAdm ? 'checked' : ''} onchange="onFcaChange('${userId}','${nm}')"> Admin (todas)</label>` +
+    FCA_ALL.map(c => `<label class="farol-opt">
+      <input type="checkbox" class="fa-unit" value="${c}" ${!isAdm && units.includes(c) ? 'checked' : ''} ${isAdm ? 'disabled' : ''} onchange="onFcaChange('${userId}','${nm}')"> ${c}</label>`).join('');
+  return `<div class="user-fca">
+    <label>Acesso FCA:</label>
+    <button type="button" class="farol-btn" onclick="toggleFcaPanel('${userId}')">
+      <span id="fasum-${userId}">${fcaSummary(isAdm, units)}</span>
+      <span class="fcnt" id="facnt-${userId}" style="${cnt ? '' : 'display:none'}">${cnt}</span>
+    </button>
+    <div class="farol-panel" id="fapanel-${userId}">${opts}</div>
+  </div>`;
+}
+function toggleFcaPanel(userId) {
+  const panel = document.getElementById('fapanel-' + userId);
+  const card = panel.closest('.user-card');
+  const open = panel.classList.toggle('open');
+  if (card) card.classList.toggle('farol-open', open);
+  if (open) {
+    setTimeout(() => document.addEventListener('click', function h(e) {
+      if (!panel.parentElement.contains(e.target)) { panel.classList.remove('open'); if (card) card.classList.remove('farol-open'); document.removeEventListener('click', h); }
+    }), 0);
+  }
+}
+function onFcaChange(userId, nm) {
+  const panel = document.getElementById('fapanel-' + userId);
+  const adm = panel.querySelector('.fa-adm');
+  const units = [...panel.querySelectorAll('.fa-unit')];
+  if (adm.checked) units.forEach(u => { u.checked = false; u.disabled = true; });
+  else units.forEach(u => { u.disabled = false; });
+  const checked = units.filter(u => u.checked).map(u => u.value);
+  const csv = adm.checked ? '' : checked.join(',');
+  document.getElementById('fasum-' + userId).textContent = fcaSummary(adm.checked, checked);
+  const badge = document.getElementById('facnt-' + userId);
+  badge.textContent = checked.length; badge.style.display = (!adm.checked && checked.length) ? '' : 'none';
+  setUserUnit(userId, adm.checked, csv, nm);
+}
+// Grava o acesso FCA no fca_profiles. Mantém a linha mesmo sem acesso (unidade
+// null) para não perder o "Recebe Farol" já configurado.
+async function setUserUnit(userId, isAdmin, csv, nome) {
+  if (!userId) return;
+  try {
+    const row = { user_id: userId, nome: nome || null, unidade: isAdmin ? null : (csv || null), is_admin: !!isAdmin };
+    const { error } = await sb.from('fca_profiles').upsert(row, { onConflict: 'user_id' });
+    if (error) throw error;
+    _fcaProf[userId] = { ..._fcaProf[userId], ...row };
+  } catch (e) { alert('Erro ao salvar acesso FCA: ' + (e.message || e)); }
+}
+
+// ── Recebe Farol (segunda, 14h) — seleção múltipla de unidades + "Todas" ──
+function farolSummary(v) {
+  if (!v) return 'Não recebe';
+  if (v === 'TODAS') return 'Todas as unidades';
+  const n = v.split(',').filter(Boolean).length;
+  return n + (n === 1 ? ' unidade' : ' unidades');
+}
+function renderFarolPicker(userId, cur, nm) {
+  cur = cur || '';
+  const isTodas = cur === 'TODAS';
+  const set = new Set(isTodas ? FCA_UNITS : cur.split(',').map(s => s.trim().toUpperCase()).filter(Boolean));
+  const allChk = set.size === FCA_UNITS.length && FCA_UNITS.length > 0;
+  const cnt = set.size;
+  const sumVal = cnt === 0 ? '' : (allChk ? 'TODAS' : [...set].join(','));
+  const opts = `<label class="farol-opt all-opt">
+      <input type="checkbox" class="f-all" ${allChk ? 'checked' : ''} onchange="onFarolChange('${userId}','${nm}','all')"> Todas as unidades</label>` +
+    FCA_UNITS.map(c => `<label class="farol-opt">
+      <input type="checkbox" class="f-unit" value="${c}" ${set.has(c) ? 'checked' : ''} onchange="onFarolChange('${userId}','${nm}','unit')"> ${c}</label>`).join('');
+  return `<div class="user-farol">
+    <label>Recebe Farol:</label>
+    <button type="button" class="farol-btn" onclick="toggleFarolPanel('${userId}')">
+      <span id="fsum-${userId}">${farolSummary(sumVal)}</span>
+      <span class="fcnt" id="fcnt-${userId}" style="${cnt ? '' : 'display:none'}">${cnt}</span>
+    </button>
+    <div class="farol-panel" id="fpanel-${userId}">${opts}</div>
+  </div>`;
+}
+function toggleFarolPanel(userId) {
+  const panel = document.getElementById('fpanel-' + userId);
+  const card = panel.closest('.user-card');
+  const open = panel.classList.toggle('open');
+  if (card) card.classList.toggle('farol-open', open);
+  if (open) {
+    setTimeout(() => document.addEventListener('click', function h(e) {
+      if (!panel.parentElement.contains(e.target)) { panel.classList.remove('open'); if (card) card.classList.remove('farol-open'); document.removeEventListener('click', h); }
+    }), 0);
+  }
+}
+function onFarolChange(userId, nm, changed) {
+  const panel = document.getElementById('fpanel-' + userId);
+  const todas = panel.querySelector('.f-all');
+  const units = [...panel.querySelectorAll('.f-unit')];
+  if (changed === 'all') units.forEach(u => u.checked = todas.checked);
+  else todas.checked = units.every(u => u.checked);
+  const checked = units.filter(u => u.checked).map(u => u.value);
+  const cnt = checked.length;
+  const val = cnt === 0 ? '' : (cnt === units.length ? 'TODAS' : checked.join(','));
+  document.getElementById('fsum-' + userId).textContent = farolSummary(val);
+  const badge = document.getElementById('fcnt-' + userId);
+  badge.textContent = cnt; badge.style.display = cnt ? '' : 'none';
+  setUserFarol(userId, val, nm);
+}
+async function setUserFarol(userId, value, nome) {
+  if (!userId) return;
+  try {
+    const row = { user_id: userId, nome: nome || null, farol_unidades: value || null };
+    const { error } = await sb.from('fca_profiles').upsert(row, { onConflict: 'user_id' });
+    if (error) throw error;
+    _fcaProf[userId] = { ..._fcaProf[userId], ...row };
+  } catch (e) {
+    const m = e.message || String(e);
+    if (/farol_unidades/.test(m)) alert('Para usar o campo "Recebe Farol", rode antes o script scripts/farol-acessos.sql no Supabase (SQL Editor). A coluna ainda não existe no banco.');
+    else alert('Erro ao salvar Recebe Farol: ' + m);
+  }
+}
+
+async function loadAdminBadge() {
+  const { data } = await sb.from('user_approvals').select('id').eq('status', 'pending');
+  const count = data?.length || 0;
+  const badge = document.getElementById('admin-pending-badge');
+  if (count > 0) {
+    badge.textContent = `${count} pendente${count > 1 ? 's' : ''}`;
+    badge.style.display = '';
+  } else {
+    badge.style.display = 'none';
+  }
+}
+
+function updateAdminCounts() {
+  document.getElementById('admin-cnt-pending').textContent  = allApprovals.filter(u => u.status === 'pending').length;
+  document.getElementById('admin-cnt-approved').textContent = allApprovals.filter(u => u.status === 'approved').length;
+  document.getElementById('admin-cnt-blocked').textContent  = allApprovals.filter(u => u.status === 'blocked').length;
+}
+
+function switchAdminTab(tab) {
+  adminTabActive = tab;
+  ['pending','approved','blocked'].forEach(t =>
+    document.getElementById(`atab-${t}`).classList.toggle('active', t === tab));
+  renderAdminUsers();
+}
+
+let adminSearch = '';
+function onAdminSearch(v) { adminSearch = (v || '').toLowerCase().trim(); renderAdminUsers(); }
+function renderAdminUsers() {
+  let filtered = allApprovals.filter(u => u.status === adminTabActive);
+  if (adminSearch) filtered = filtered.filter(u => ((u.name || '') + ' ' + (u.email || '')).toLowerCase().includes(adminSearch));
+  const list = document.getElementById('admin-users-list');
+  if (filtered.length === 0) {
+    const msg = adminSearch
+      ? `Nenhum usuário encontrado para “${adminSearch.replace(/[<>&]/g, '')}”.`
+      : {pending:'Nenhum cadastro aguardando aprovação.',approved:'Nenhum usuário ativo.',blocked:'Nenhum usuário bloqueado.'}[adminTabActive];
+    list.innerHTML = `<div class="admin-empty">${msg}</div>`;
+    return;
+  }
+  list.innerHTML = filtered.map(u => {
+    const initial = (u.name || u.email)[0].toUpperCase();
+    const dt = new Date(u.created_at).toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'});
+    const idx = allApprovals.indexOf(u);
+    let actions = '';
+    if (u.status === 'pending') {
+      actions = `<button class="btn-approve" onclick="approveUser(${idx})">Aprovar</button>
+                 <button class="btn-reject" onclick="rejectUser(${idx})">Rejeitar</button>`;
+    } else if (u.status === 'approved') {
+      actions = `<button class="btn-remove" onclick="removeUser(${idx})">Remover</button>
+                 <button class="btn-block" onclick="blockUser(${idx})">Bloquear</button>`;
+    } else {
+      actions = `<button class="btn-remove" onclick="removeUser(${idx})">Remover</button>
+                 <button class="btn-unblock" onclick="unblockUser(${idx})">Desbloquear</button>`;
+    }
+    let fcaSel = '', farolSel = '';
+    if (u.status === 'approved' && u.user_id) {
+      const p = _fcaProf[u.user_id] || {};
+      const nm = (u.name || '').replace(/'/g, '’');
+      fcaSel = renderFcaPicker(u.user_id, p, nm);
+      farolSel = renderFarolPicker(u.user_id, p.farol_unidades, nm);
+    }
+    const waHref = waLink(u.phone);
+    const phoneFmt = fmtPhone(u.phone);
+    const phoneHtml = waHref
+      ? `<a href="${waHref}" target="_blank" rel="noopener" title="Abrir no WhatsApp"><svg class="wa-ico" viewBox="0 0 24 24" stroke-width="2"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>${phoneFmt}</a>`
+      : (phoneFmt || '—');
+    return `<div class="user-card">
+      <div class="user-avatar">${initial}</div>
+      <div class="user-info">
+        <div class="user-name">${u.name || '—'} <button class="edit-name" title="Editar nome" onclick="editUserName(${idx})">✎</button></div>
+        <div class="user-email">${u.email}</div>
+        <div class="user-phone">${phoneHtml}</div>
+        <div class="user-date">Cadastro: ${dt}</div>
+        ${fcaSel}
+        ${farolSel}
+      </div>
+      <div class="user-actions">${actions}</div>
+    </div>`;
+  }).join('');
+}
+
+async function editUserName(idx) {
+  const u = allApprovals[idx];
+  const nv = prompt('Editar nome do usuário:', u.name || '');
+  if (nv === null) return;
+  const name = nv.trim().replace(/\s+/g, ' ').toUpperCase();
+  if (!name) { alert('O nome não pode ficar vazio.'); return; }
+  if (name === (u.name || '')) return;
+  const { error } = await sb.from('user_approvals').update({ name }).eq('id', u.id);
+  if (error) { alert('Erro ao salvar o nome: ' + error.message); return; }
+  try { if (u.user_id) await sb.from('fca_profiles').update({ nome: name }).eq('user_id', u.user_id); } catch (e) {}
+  await loadAdminData();
+}
+
+function exportUsersExcel() {
+  const rows = allApprovals.slice().sort((a, b) => String(a.name || '').localeCompare(String(b.name || ''), 'pt'));
+  if (!rows.length) { alert('Não há usuários para exportar.'); return; }
+  const statusMap = { pending: 'Pendente', approved: 'Ativo', blocked: 'Bloqueado' };
+  const cell = v => { v = String(v == null ? '' : v); return /[";\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; };
+  const lines = [['Nome', 'E-mail', 'Telefone', 'Status'].join(';')];
+  rows.forEach(u => lines.push([(u.name || '').toUpperCase(), u.email || '', fmtPhone(u.phone), statusMap[u.status] || u.status || ''].map(cell).join(';')));
+  const csv = '﻿' + lines.join('\r\n');
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'usuarios-gestao-em-movimento.csv';
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+}
+
+async function approveUser(idx) {
+  const u = allApprovals[idx];
+  await sb.from('user_approvals').update({ status: 'approved', approval_token: null }).eq('id', u.id);
+  fnCall('notify-user', { email: u.email, name: u.name }).catch(() => {});
+  await loadAdminData();
+}
+
+async function rejectUser(idx) {
+  const u = allApprovals[idx];
+  if (!confirm(`Rejeitar cadastro de ${u.name || u.email}?\nO cadastro será removido.`)) return;
+  await sb.rpc('delete_user_by_id', { p_user_id: u.user_id });
+  await loadAdminData();
+}
+
+async function blockUser(idx) {
+  const u = allApprovals[idx];
+  if (!confirm(`Bloquear acesso de ${u.name || u.email}?`)) return;
+  await sb.from('user_approvals').update({ status: 'blocked' }).eq('id', u.id);
+  await loadAdminData();
+}
+
+async function unblockUser(idx) {
+  const u = allApprovals[idx];
+  await sb.from('user_approvals').update({ status: 'approved' }).eq('id', u.id);
+  fnCall('notify-user', { email: u.email, name: u.name }).catch(() => {});
+  await loadAdminData();
+}
+
+async function removeUser(idx) {
+  const u = allApprovals[idx];
+  if (!confirm(`Remover completamente ${u.name || u.email}?\n\nO usuário terá que se cadastrar novamente.`)) return;
+  const { error } = await sb.rpc('delete_user_by_id', { p_user_id: u.user_id });
+  if (error) { alert('Erro ao remover: ' + error.message); return; }
+  await loadAdminData();
+}
+
+function traduzirErro(msg) {
+  if (!msg) return 'Erro desconhecido.';
+  const m = msg.toLowerCase();
+  if (m.includes('invalid login') || m.includes('invalid credentials')) return 'E-mail ou senha incorretos.';
+  if (m.includes('email not confirmed')) return 'Confirme seu e-mail antes de entrar.';
+  if (m.includes('user already registered')) return 'Este e-mail já está cadastrado.';
+  if (m.includes('rate limit') || m.includes('too many')) return 'Muitas tentativas. Aguarde alguns minutos.';
+  if (m.includes('user not found')) return 'E-mail não encontrado.';
+  if (m.includes('weak password') || m.includes('should be at least')) return 'Senha muito fraca. Use pelo menos 6 caracteres.';
+  if (m.includes('network') || m.includes('fetch')) return 'Erro de conexão. Verifique sua internet.';
+  return msg;
+}
+
+const _eyeOn=`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>`;
+const _eyeOff=`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>`;
+
+function togglePass(id, btn) {
+  const inp = document.getElementById(id);
+  const show = inp.type === 'password';
+  inp.type = show ? 'text' : 'password';
+  btn.innerHTML = show ? _eyeOff : _eyeOn;
+}
+
+document.addEventListener('keydown', e => {
+  if (e.key !== 'Enter') return;
+  if (document.getElementById('auth-screen').style.display === 'none') return;
+  const loginVisible = document.getElementById('form-login').style.display !== 'none';
+  if (loginVisible) doLogin(); else doRegister();
+});
+
+
+init();
+</script>
+<script src="../assets/mobile.js"></script>
+</body>
+</html>
