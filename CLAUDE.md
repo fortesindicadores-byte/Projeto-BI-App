@@ -698,7 +698,12 @@ Barra fina com título + subtítulo à esquerda (`JUL/26 · atualizado …`) e, 
 
 ## Hub sem menu lateral (`hub-novo/`)
 
-Mesma casca, **sem `.side`**: topo com marca + busca de painel + tema + usuário, e o miolo em `.board` — **um cluster por coluna** (`grid-template-columns:repeat(N,minmax(0,1fr))`, N = clusters visíveis), cada card compacto (ícone 26px + título 11.5px + descrição de 2–3 linhas com `-webkit-line-clamp`). **Tudo cabe numa tela só, sem rolagem** — validado em 1600×900 e 1366×768. Busca no topo filtra cards e esconde cluster vazio. Cluster **Administração** e o card **Planner Corporativo** só aparecem para admin. Os cards saem de um array `CLUSTERS` no JS (não são HTML solto), e os links levam `../` porque a página mora numa subpasta.
+Mesma casca, **sem `.side`**: topo com marca + busca de painel + tema + usuário, e o miolo em `.board`. **Dois arranjos para o mesmo conteúdo**, alternados pelo botão `#btModo` no topo (chave `gem_hub_modo`):
+
+- **LISTA (padrão)** — clusters empilhados, cada um é um painel de vidro com cabeçalho clicável e um **"+" que vira "−"** ao abrir; os cards aparecem em grade (`repeat(auto-fill,minmax(212px,1fr))`). Fechados, os 7 clusters ocupam ~390px; com 3 abertos ainda cabe em 1600×900 sem rolagem, e se abrir todos **quem rola é o `.board`, nunca a página** (por isso `.board.lista .clu{flex:0 0 auto}` — sem isso os painéis encolhem e cortam o conteúdo). O que está aberto fica em `gem_hub_abertos`.
+- **COLUNAS** — um cluster por coluna (`grid-template-columns:repeat(N,minmax(0,1fr))`, N = clusters visíveis). Tudo aberto numa tela só, sem rolagem — validado de 1280×720 a 1920×1080, com a densidade caindo por altura de tela (descrição em 3 linhas acima de 940px, 2 abaixo; paddings menores abaixo de 800px).
+
+A busca do topo filtra os cards e esconde cluster vazio; no modo lista ela **abre sozinha** o cluster que tem resultado e devolve o estado do usuário ao limpar. Cluster **Administração** e o card **Planner Corporativo** só aparecem para admin. Os cards saem de um array `CLUSTERS` no JS (não são HTML solto), e os links levam `../` porque a página mora numa subpasta.
 
 ## Regras que não se negociam
 
