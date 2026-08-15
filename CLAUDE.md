@@ -636,6 +636,81 @@ Terceira referência escolhida pelo Renan (dashboard "Metric Flow"): **`docs/lay
 
 ---
 
+# ⭐ LAYOUT PADRÃO DO PORTAL (Renan, 15/08/2026) — usar em TUDO daqui pra frente
+
+Decisão do Renan em 15/08/2026, vendo a `visao-financeira-app`: **"essa visão ficou sensacional, quero que seja o nosso novo padrão. Vamos aplicar em todos os painéis que já existem."** Referências vivas: **`visao-financeira-app/index.html`** (painel completo: menu lateral, filtros, cards, gráficos, tabelas, forecast editável) e **`hub-novo/index.html`** (a mesma casca **sem** menu lateral, com os clusters em colunas numa tela só). O `disponibilidade-preenchimento` foi onde a linguagem nasceu.
+
+## A casca (app shell)
+
+```css
+body{background:var(--fundo);overflow:hidden;font-family:'Montserrat';font-size:13px;}
+.app{position:fixed;inset:12px;display:flex;overflow:hidden;
+  background:var(--app);border:1px solid var(--card-brd);border-radius:16px;
+  box-shadow:0 24px 60px rgba(0,0,0,.45);}
+.app::before{content:'';position:absolute;inset:0;pointer-events:none;z-index:0;
+  background:radial-gradient(ellipse at 12% 0%,rgba(249,115,22,.07),transparent 55%),
+             radial-gradient(ellipse at 92% 100%,rgba(46,144,232,.06),transparent 55%);}
+.app>*{position:relative;z-index:1;}
+```
+A página **não rola** — o app ocupa a tela e cada área resolve o próprio espaço com flex. O brilho laranja/azul é da moldura (`::before`), não do body.
+
+## Tokens (substituem a paleta antiga nos painéis novos)
+
+```css
+:root{
+  --fundo:#0B0B0D; --app:#101014; --side:#16161B; --card:#1A1A20; --card-brd:#26262E;
+  --linha:#202027; --cabec:#2B2B30; --hover:rgba(255,255,255,.045);
+  --brilho:linear-gradient(180deg,rgba(255,255,255,.028),rgba(255,255,255,0));
+  --txt:#EEF2FA; --txt2:#B2BCD2; --txt3:#7B849B; --txt4:#565E70;
+  --laranja:#F97316; --azul:#2E90E8; --verde:#22A85A; --vermelho:#E5484D;
+}
+body.claro{
+  --fundo:#E8EAEE; --app:#FFFFFF; --side:#F4F5F8; --card:#FFFFFF; --card-brd:#DFE2E9;
+  --linha:#E9EBF0; --cabec:#DCDFE6; --hover:rgba(15,23,42,.045);
+  --brilho:linear-gradient(180deg,rgba(15,23,42,.02),rgba(15,23,42,0));
+  --txt:#161D2B; --txt2:#3C4658; --txt3:#4A5568; --txt4:#79839A;
+  --laranja:#E2620A; --azul:#1B6FC4; --verde:#12894A; --vermelho:#C4242A;
+}
+```
+**Tema claro é classe `body.claro`** (não `light-mode`), chave `bi_theme`, botão sol/lua no topo. Cards usam `background:var(--side)` — o mesmo tom do menu lateral (regra do Renan). Tudo que é "um degrau acima" (painéis, chips, inputs) usa `--side`; nada de `rgba` chapado.
+
+## Menu lateral (painéis)
+
+`.side{width:206px}` · `.side.mini{width:56px}` (chave `<painel>_mini`), com:
+- `.s-top` — ícone + nome do painel + botão de recolher;
+- `.s-sec` — rótulo de seção em caixa alta (`Visões`, `Atalhos`);
+- `.s-item` — item com ícone 14px + rótulo; ativo = fundo `--hover` + texto `--txt`;
+- `.s-user` no rodapé — avatar circular + nome + sair. **`.av` precisa de `.s-user .av`** para não virar elipse (o `.s-user div{flex:1}` vence pela especificidade);
+- **dica ao passar o mouse quando recolhido**: um `.dica` `position:fixed` posicionado por JS no `mouseenter`.
+
+## Topo e filtros
+
+Barra fina com título + subtítulo à esquerda (`JUL/26 · atualizado …`) e, à direita, os filtros multi-select como **botões-texto fantasma** (`.ms-btn`) que abrem `.ms-panel` com busca e "Todos". Contagem em pílula laranja (`.ms-cnt`). Botão de tema no fim.
+
+## Conteúdo
+
+- `.vw` — uma seção por visão, `display:none` / `.on` visível; a navegação é `setVw(v)` + `TIT[v]` no título.
+- **Cards de KPI**: `.kpis{display:grid;grid-template-columns:repeat(5,1fr);gap:10px}` + `.kpi{padding:19px 16px;border-radius:11px;background:var(--side);border:1px solid var(--card-brd)}`, rótulo 9.5px caixa alta, valor 25px/800, meta 10.5px.
+- **Gráficos**: `.card.gcard` com título, subtítulo, legenda própria (`.gleg`) e `.gcv` com o canvas. Sem grade, barras coladas, rótulo de dados no topo. **Série condicional (vermelho/verde) tem legenda NEUTRA** — o quadradinho só diz "isso é a barra".
+- **Tabelas** (`table.dre`): cabeçalho sticky em `--cabec`, `td` 9px 12px, `.sep-l` separando blocos, drill de pacote → contas (`tr.pac-row` / `tr.sub-row.show`). **Totalizadores (Total, EBITDA) levam `background:var(--cabec)`** — mesmo tom do cabeçalho, nos dois temas. Δ em BRL **e** em % ficam em negrito.
+- **Cores de resultado**: `table.dre td.cr,.cr{color:var(--vermelho)!important;font-weight:700}` (idem `cg`, `cr-t`, `cg-t`) — **o `!important` é obrigatório**, senão `table.dre td{color:…}` vence pela especificidade.
+- **Célula editável** (forecast): `td.edit` com fundo laranja 7%, borda tracejada, foco com anel; `td.edit.changed` em laranja. Ao focar troca para o número cru; ao sair, `parseNum` aceita `-2,87 mi`, `566k` e pt-BR.
+
+## Hub sem menu lateral (`hub-novo/`)
+
+Mesma casca, **sem `.side`**: topo com marca + busca de painel + tema + usuário, e o miolo em `.board` — **um cluster por coluna** (`grid-template-columns:repeat(N,minmax(0,1fr))`, N = clusters visíveis), cada card compacto (ícone 26px + título 11.5px + descrição de 2–3 linhas com `-webkit-line-clamp`). **Tudo cabe numa tela só, sem rolagem** — validado em 1600×900 e 1366×768. Busca no topo filtra cards e esconde cluster vazio. Cluster **Administração** e o card **Planner Corporativo** só aparecem para admin. Os cards saem de um array `CLUSTERS` no JS (não são HTML solto), e os links levam `../` porque a página mora numa subpasta.
+
+## Regras que não se negociam
+
+1. **Nada de rolagem em desktop** — se não coube, encolhe fonte/padding ou divide em mais visões (foi o que levou o YTG + TGT e o Forecast a virarem "Bridge / Cenário 1 / Cenário 2").
+2. **Celular**: `@media(max-width:860px)` desliga o flex de altura (`display:block`), devolve `overflow:auto` no body, transforma o menu lateral numa fileira horizontal e dá altura explícita a gráfico e tabela — senão eles colapsam para 0.
+3. Todo painel inclui `assets/mobile.js`, `assets/sortable-table.js` e `assets/excel-export.js` (o exportador já entende `.tab-wrap`, `.tsec` e `.rtit`).
+4. Nomes de visão em português curto e sem jargão de arquivo: *Resumo · Análise Nominal · AH e AV · YTG + TGT · Bridge/Cenário 1/Cenário 2 · Forecast · Cenário 1/Cenário 2*.
+
+**Roteiro de aplicação (a fazer):** `visao-financeira-app` vira a `visao-financeira` oficial e, na sequência, os demais painéis migram para esta casca. O hub-novo substitui o `index.html` da raiz quando o Renan aprovar.
+
+---
+
 ## Como criar um novo painel
 
 1. Copiar `visao-financeira/index.html` como base (painel de referência)
