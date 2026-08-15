@@ -755,12 +755,17 @@ async function renderResumo(){
   }
   // agrupadores das tabelas (com TOGGLE: unidade↔projeto · tipo↔modelo)
   const agrupa=campo=>{
+    // o modelo só existe nas fotos a partir do scripts/disp-modelo.sql: nesses
+    // dias a média é sobre eles, senão a linha '—' engoliria a tabela
+    const base=campo==='modelo'?rows.filter(r=>String(r.modelo||'').trim()):rows;
+    const nD=new Set(base.map(r=>r.data)).size||1;
     const m=new Map();
-    rows.forEach(r=>{const k=r[campo]||'—'; if(!m.has(k))m.set(k,{a:0,i:0});
+    base.forEach(r=>{const k=r[campo]||'—'; if(!m.has(k))m.set(k,{a:0,i:0});
       const g=m.get(k); g.a+=r.ativos||0; g.i+=r.indisponiveis||0;});
-    return [...m.entries()].map(([k,g])=>({k,a:g.a/nDias,i:g.i/nDias,p:dispPct(g.a,g.i)}))
+    return [...m.entries()].map(([k,g])=>({k,a:g.a/nD,i:g.i/nD,p:dispPct(g.a,g.i)}))
       .sort((x,y)=>(x.p??101)-(y.p??101));   // pior primeiro, como no painel antigo
   };
+  const diasModelo=new Set(rows.filter(r=>String(r.modelo||'').trim()).map(r=>r.data));
   const dimA=DIM_UNI==='uni'?'unidade':'projeto', dimB=DIM_TIPO==='tipo'?'tipo_veiculo':'modelo';
   const tabA=agrupa(dimA), tabB=agrupa(dimB);
   // série mensal do ANO (jan→dez), ignorando o filtro de vigência
@@ -805,7 +810,8 @@ async function renderResumo(){
     </div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
       ${miniTab('Disponibilidade % · '+(DIM_UNI==='uni'?'Unidade':'Projeto'),DIM_UNI==='uni'?'Unidade':'Projeto',tabA,'uni',DIM_UNI==='uni'?'Ver por projeto':'Ver por unidade')}
-      ${miniTab('Disponibilidade % · '+(DIM_TIPO==='tipo'?'Tipo de Veículo':'Modelo'),DIM_TIPO==='tipo'?'Tipo':'Modelo',tabB,'tipo',DIM_TIPO==='tipo'?'Ver por modelo':'Ver por tipo')}
+      ${miniTab('Disponibilidade % · '+(DIM_TIPO==='tipo'?'Tipo de Veículo':'Modelo'),DIM_TIPO==='tipo'?'Tipo':'Modelo',tabB,'tipo',DIM_TIPO==='tipo'?'Ver por modelo':'Ver por tipo',
+        DIM_TIPO==='modelo'&&diasModelo.size<nDias?`Período selecionado · ${diasModelo.size} dia(s) com modelo na foto`:null)}
     </div>
   </div>`;
   // ── gráficos: MESMAS opções do painel antigo (eixo Y adaptativo, datalabels,
@@ -856,10 +862,10 @@ const pctFmt=v=>v==null?'—':(v>=0?'+':'')+v.toFixed(1).replace('.',',')+'%';
 const dl=(txt,v)=>`<b class="${v==null?'':v>=0?'grn':'red'}">${txt}</b>`;
 // tabelas Unidade/Tipo — inteiras (sem rolagem própria) e com TOGGLE de dimensão
 let DIM_UNI='uni', DIM_TIPO='tipo';
-function miniTab(titulo,col1,itens,dim,rotulo){
+function miniTab(titulo,col1,itens,dim,rotulo,sub){
   return `<div class="tab-wrap inteira">
     <div style="padding:14px 16px 0;display:flex;align-items:flex-start;gap:10px">
-      <div style="flex:1"><div class="rtit">${esc(titulo)}</div><div class="rsub">Período selecionado</div></div>
+      <div style="flex:1"><div class="rtit">${esc(titulo)}</div><div class="rsub">${esc(sub||'Período selecionado')}</div></div>
       <button class="btn-mini dimbt" data-dim="${dim}">${esc(rotulo)}</button>
     </div>
     <table class="tab"><thead><tr><th>${esc(col1)}</th><th class="num">Ativos</th><th class="num">Indisp.</th><th class="num">Disp. %</th></tr></thead>
