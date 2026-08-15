@@ -596,6 +596,15 @@ const frota=()=>{const S=new Set(unisSel());return ATIVOS.filter(a=>S.has(a.cod)
 const abertos=()=>{const S=new Set(unisSel());return EVENTS.filter(e=>!e.data_retorno&&S.has(e.unidade));};
 
 /* ── filtros ── */
+// ── PROJETO: de-para de exibição e os que não entram (Renan, 14/08/2026) ──
+//   DISTRIBUIÇÃO URBANA → DU · ARMAZÉM → WH · EMPURRADA → T1
+//   FREITEIRO/FRETEIRO e ADM ficam de fora (a base escreve "FREITEIRO", com o
+//   I antes do T, e por isso escapou do filtro de FRETEIRO do SQL).
+const _pn=x=>String(x==null?'':x).normalize('NFD').replace(/[\u0300-\u036f]/g,'').toUpperCase().replace(/\s+/g,' ').trim();
+const PROJ_MAP={'DISTRIBUICAO URBANA':'DU','ARMAZEM':'WH','ARMAZÉM':'WH','EMPURRADA':'T1'};
+const projFora=p=>/^(FRE?I?TEIRO|ADM|ADMINISTRATIVO)$/.test(_pn(p));
+const projLbl=p=>{const u=_pn(p); return PROJ_MAP[u]||(String(p||'').trim()||'—');};
+
 // vigência (YYYY-MM) e data (YYYY-MM-DD) da PARADA do evento
 const vigDe=e=>String(e.data_parada||'').slice(0,7);
 function daVisao(e,v){
@@ -606,10 +615,11 @@ function daVisao(e,v){
   return true;
 }
 function passa(e,exceto){
+  if(projFora(e.projeto)) return false;                      // FREITEIRO/ADM fora
   if(exceto!=='uni'  && FUNI.size  && !FUNI.has(e.unidade)) return false;
   if(exceto!=='vig'  && FVIG.size  && !FVIG.has(vigDe(e))) return false;
   if(exceto!=='data' && FDATA.size && !FDATA.has(String(e.data_parada||''))) return false;
-  if(exceto!=='proj' && FPROJ.size && !FPROJ.has(e.projeto||'—')) return false;
+  if(exceto!=='proj' && FPROJ.size && !FPROJ.has(projLbl(e.projeto))) return false;
   if(exceto!=='grupo' && FGRUPO.size && !FGRUPO.has(e.grupo||'—')) return false;
   if(exceto!=='tipo' && FTIPO.size && !FTIPO.has(e.tipo_veiculo||'—')) return false;
   if(BUSCA && ![e.placa,e.descricao_problema,e.projeto,e.rc_oc,e.status,e.observacao]
@@ -648,7 +658,7 @@ function htmlLista(){
       const dp=diasParado(e);
       const atras=e.previsao_retorno&&e.previsao_retorno<hojeBRT();
       return `<tr data-id="${esc(e.id)}">
-        <td class="forte">${esc(e.placa)}</td><td class="c-proj wrap">${esc(e.projeto||'—')}</td>
+        <td class="forte">${esc(e.placa)}</td><td class="c-proj wrap">${esc(projLbl(e.projeto))}</td>
         <td class="c-tipo wrap">${esc(e.tipo_veiculo||'—')}</td>
         <td class="c-grupo wrap">${esc(e.grupo||'—')}</td><td class="livre">${esc(e.descricao_problema||'—')}</td>
         <td>${esc(e.local_manutencao||'—')}</td><td>${esc(e.rc_oc||'—')}</td>
@@ -663,7 +673,7 @@ function htmlFrota(){
   const abertaSet=new Map(abertos().map(e=>[normP(e.placa),e]));
   const q=BUSCA.toUpperCase();
   const lista=(q?fr.filter(a=>[a.placa,a.projeto,a.tipo,a.modelo].some(x=>String(x).toUpperCase().includes(q))):fr)
-    .filter(a=>!FPROJ.size||FPROJ.has(a.projeto||'—'))
+    .filter(a=>!FPROJ.size||FPROJ.has(projLbl(a.projeto)))
     .filter(a=>!FTIPO.size||FTIPO.has(a.tipo||'—'))
     // parados primeiro, do que está parado há MAIS tempo para o menos
     .sort((a,b)=>{const ea=abertaSet.get(a.placa),eb=abertaSet.get(b.placa);
@@ -679,7 +689,7 @@ function htmlFrota(){
       // começa uma nova indisponibilidade para a placa (Renan, 14/08/2026)
       return `<tr ${ev?`data-id="${esc(ev.id)}"`:`data-parou="${esc(a.placa)}"`} title="${ev?'Abrir a indisponibilidade':'Lançar indisponibilidade'}">
         <td class="forte">${esc(a.placa)}${a.manual&&UNIT==='ANG'?` <span class="lapis" data-editv="${esc(a.placa)}" title="Editar veículo (manual)">✎</span>`:''}</td>
-        <td class="c-proj wrap">${esc(a.projeto||'—')}</td><td class="c-tipo wrap">${esc(a.tipo||'—')}</td>
+        <td class="c-proj wrap">${esc(projLbl(a.projeto))}</td><td class="c-tipo wrap">${esc(a.tipo||'—')}</td>
         <td class="c-modelo wrap">${esc(a.modelo||'—')}</td>
         <td class="c-grupo wrap">${ev?esc(ev.grupo||'—'):'—'}</td>
         <td class="livre">${ev?esc(ev.descricao_problema||'—'):'—'}</td>
@@ -742,7 +752,8 @@ async function renderResumo(){
     if(!Suni.has(r.unidade)) return false;
     if(exceto!=='vig'  && FVIG.size  && !FVIG.has(String(r.data||'').slice(0,7))) return false;
     if(exceto!=='data' && FDATA.size && !FDATA.has(String(r.data||''))) return false;
-    if(exceto!=='proj' && FPROJ.size && !FPROJ.has(r.projeto||'—')) return false;
+    if(projFora(r.projeto)) return false;                       // FREITEIRO/ADM fora
+    if(exceto!=='proj' && FPROJ.size && !FPROJ.has(projLbl(r.projeto))) return false;
     if(exceto!=='tipo' && FTIPO.size && !FTIPO.has(r.tipo_veiculo||'—')) return false;
     return true;
   };
@@ -776,7 +787,7 @@ async function renderResumo(){
     const base=campo==='modelo'?rows.filter(r=>String(r.modelo||'').trim()):rows;
     const nD=new Set(base.map(r=>r.data)).size||1;
     const m=new Map();
-    base.forEach(r=>{const k=r[campo]||'—'; if(!m.has(k))m.set(k,{a:0,i:0});
+    base.forEach(r=>{const k=campo==='projeto'?projLbl(r.projeto):(r[campo]||'—'); if(!m.has(k))m.set(k,{a:0,i:0});
       const g=m.get(k); g.a+=r.ativos||0; g.i+=r.indisponiveis||0;});
     return [...m.entries()].map(([k,g])=>({k,a:g.a/nD,i:g.i/nD,p:dispPct(g.a,g.i)}))
       .sort((x,y)=>(x.p??101)-(y.p??101));   // pior primeiro, como no painel antigo
@@ -1049,7 +1060,7 @@ function menuLista(rotulos,sel,tipo,valores){
 function montaMenus(){
   const pt=(a,b)=>a.localeCompare(b,'pt');
   const base=VER==='historico'?EVENTS.filter(e=>!!e.data_retorno):abertos();
-  const proj=[...new Set(base.filter(e=>passa(e,'proj')).map(e=>e.projeto||'—'))].sort(pt);
+  const proj=[...new Set(base.filter(e=>passa(e,'proj')&&!projFora(e.projeto)).map(e=>projLbl(e.projeto)))].sort(pt);
   FPROJ.forEach(v=>{if(!proj.includes(v))proj.unshift(v);});
   $('lstProj').innerHTML=menuLista(proj,FPROJ,'p');
   const gru=[...new Set(base.filter(e=>passa(e,'grupo')).map(e=>e.grupo||'—'))].sort(pt);
