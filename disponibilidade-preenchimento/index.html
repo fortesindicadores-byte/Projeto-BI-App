@@ -122,6 +122,13 @@ body{font-family:'Montserrat',-apple-system,BlinkMacSystemFont,sans-serif;font-s
 .s-item .n{margin-left:auto;font-size:11px;color:var(--txt3);font-weight:600;}
 .s-item .n.alerta{color:var(--vermelho);}
 /* resumo da disponibilidade na lateral */
+.rlbl{font-size:9.5px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:.9px;}
+.rval{font-size:18px;font-weight:800;}
+.rsep{width:1px;background:var(--linha);align-self:stretch;margin:2px 2px;}
+.rtit{font-size:12px;font-weight:800;letter-spacing:-.1px;}
+.rsub{font-size:10px;color:var(--txt3);margin:2px 0 10px;}
+.grn{color:var(--verde);font-size:18px;font-weight:800;}
+.red{color:var(--vermelho);font-size:18px;font-weight:800;}
 .s-res{margin:2px 8px 0;border:1px solid var(--card-brd);border-radius:10px;overflow:hidden;
   background:var(--brilho), var(--card);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);}
 .s-hero{padding:12px 12px 10px;border-bottom:1px solid var(--linha);}
@@ -265,11 +272,37 @@ input[type=date]::-webkit-calendar-picker-indicator{cursor:pointer;}
       <span class="s-kbd">Ctrl + K</span>
     </label>
 
-    <div class="s-sec"><b id="resTit">Resumo</b></div>
-    <div class="s-res" id="sRes"><div class="s-ck pend">carregando…</div></div>
+    <div class="s-sec"><b>Visões</b></div>
+    <button class="s-item" data-ver="lista">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 6h16M4 12h16M4 18h10"/></svg>
+      Indisponíveis <span class="n" data-n="indisp"></span>
+    </button>
+    <button class="s-item" data-ver="frota">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><rect x="1" y="5" width="14" height="11" rx="1"/><path d="M15 9h4l3 3v4h-7z"/><circle cx="5.5" cy="18.5" r="2"/><circle cx="18" cy="18.5" r="2"/></svg>
+      Frota completa <span class="n" data-n="frota"></span>
+    </button>
+    <button class="s-item" data-ver="historico">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 4v4h4"/><path d="M12 8v4l3 2"/></svg>
+      Histórico
+    </button>
+    <button class="s-item" data-ver="resumo">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 19V9M10 19V5M16 19v-7M22 19H2"/></svg>
+      Resumo
+    </button>
+    <button class="s-item" data-ver="aderencia" id="itAder" style="display:none">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M9 11l3 3 7-7"/><path d="M20 12v7H4V5h11"/></svg>
+      Aderência
+    </button>
 
-    <div class="s-sec"><b>Unidades</b></div>
-    <div id="lstUnidades"></div>
+    <div class="s-sec"><b>Ações</b></div>
+    <button class="s-item" onclick="novoEvento()">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+      Nova indisponibilidade
+    </button>
+    <button class="s-item" id="itVeic" onclick="novoVeiculo()" style="display:none">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+      Veículo
+    </button>
 
     <div class="s-sec"><b>Atalhos</b></div>
     <button class="s-item" data-vis="previsao">
@@ -303,14 +336,30 @@ input[type=date]::-webkit-calendar-picker-indicator{cursor:pointer;}
     <div class="top">
       <h1 id="tit">Indisponíveis</h1>
 
-      <button class="tool novo" onclick="novoEvento()">+ Nova indisponibilidade</button>
+      <!-- UNIDADE: filtro (admin vê todas; a unidade escolhe entre as dela) -->
+      <div class="menu-wrap">
+        <button class="tool" id="btUni" onclick="abreMenu('mUni')">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M3 21h18M5 21V7l7-4 7 4v14"/><path d="M10 21v-6h4v6"/></svg>
+          Unidade
+        </button>
+        <div class="menu" id="mUni"><div class="tit">Unidade</div><div class="rol" id="lstUni"></div></div>
+      </div>
 
-      <button class="tool" id="btVeic" onclick="novoVeiculo()" style="display:none">+ Veículo</button>
+      <div class="menu-wrap">
+        <button class="tool" id="btVig" onclick="abreMenu('mVig')">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3.5" y="5" width="17" height="15" rx="2"/><path d="M8 3v4M16 3v4M3.5 10h17"/></svg>
+          Vigência
+        </button>
+        <div class="menu" id="mVig"><div class="tit">Vigência</div><div class="rol" id="lstVig"></div></div>
+      </div>
 
-      <button class="tool" id="btLista" onclick="setVer('lista')">Indisponíveis</button>
-      <button class="tool" id="btFrota" onclick="setVer('frota')">Frota completa</button>
-      <button class="tool" id="btHist" onclick="setVer('historico')">Histórico</button>
-      <button class="tool" id="btRes" onclick="setVer('resumo')">Resumo</button>
+      <div class="menu-wrap">
+        <button class="tool" id="btData" onclick="abreMenu('mData')">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+          Data
+        </button>
+        <div class="menu" id="mData"><div class="tit">Data</div><div class="rol" id="lstData"></div></div>
+      </div>
 
       <div class="menu-wrap">
         <button class="tool" id="btProj" onclick="abreMenu('mProj')">
@@ -471,6 +520,8 @@ function unitCod(nome,projeto){
 let sb=null, PROFILE=null, ADMIN=false, MY_UNITS=[], UNIT=null, USER=null, EU='';
 let ATIVOS=[], EVENTS=[], ABERTAS_POR={};
 let BUSCA='', VISAO='', VER='lista', ID=null;
+// filtros do topo: unidade (multi), vigência (YYYY-MM) e data (dia exato)
+const FUNI=new Set(), FVIG=new Set(), FDATA=new Set();
 const FPROJ=new Set(), FGRUPO=new Set(), FTIPO=new Set();
 
 const hojeBRT=()=>new Date().toLocaleDateString('en-CA',{timeZone:'America/Sao_Paulo'});
@@ -500,8 +551,10 @@ async function loadAtivos(){
   ATIVOS=[...ginfo,...manuais];
 }
 async function loadEvents(){
-  const {data,error}=await sb.from('indisponibilidade').select('*').eq('unidade',UNIT)
-    .order('data_parada',{ascending:false}).limit(2000);
+  // carrega TODAS as unidades liberadas — o recorte por unidade virou FILTRO
+  // de tela (Renan, 14/08/2026), então o dado precisa estar todo em memória.
+  const {data,error}=await sb.from('indisponibilidade').select('*').in('unidade',MY_UNITS)
+    .order('data_parada',{ascending:false}).limit(8000);
   if(error)throw error;
   EVENTS=data||[];
 }
@@ -513,10 +566,14 @@ async function contaAbertas(){
     montaUnidades();
   }catch(e){}
 }
-const frota=()=>ATIVOS.filter(a=>a.cod===UNIT);
-const abertos=()=>EVENTS.filter(e=>!e.data_retorno);
+// unidades em foco: nenhuma marcada = todas as liberadas
+const unisSel=()=>FUNI.size?[...FUNI]:MY_UNITS;
+const frota=()=>{const S=new Set(unisSel());return ATIVOS.filter(a=>S.has(a.cod));};
+const abertos=()=>{const S=new Set(unisSel());return EVENTS.filter(e=>!e.data_retorno&&S.has(e.unidade));};
 
 /* ── filtros ── */
+// vigência (YYYY-MM) e data (YYYY-MM-DD) da PARADA do evento
+const vigDe=e=>String(e.data_parada||'').slice(0,7);
 function daVisao(e,v){
   if(v==='previsao') return !e.data_retorno && !!e.previsao_retorno && e.previsao_retorno<hojeBRT();
   if(v==='cronicos') return !e.data_retorno && diasParado(e)>=30;
@@ -525,6 +582,9 @@ function daVisao(e,v){
   return true;
 }
 function passa(e,exceto){
+  if(exceto!=='uni'  && FUNI.size  && !FUNI.has(e.unidade)) return false;
+  if(exceto!=='vig'  && FVIG.size  && !FVIG.has(vigDe(e))) return false;
+  if(exceto!=='data' && FDATA.size && !FDATA.has(String(e.data_parada||''))) return false;
   if(exceto!=='proj' && FPROJ.size && !FPROJ.has(e.projeto||'—')) return false;
   if(exceto!=='grupo' && FGRUPO.size && !FGRUPO.has(e.grupo||'—')) return false;
   if(exceto!=='tipo' && FTIPO.size && !FTIPO.has(e.tipo_veiculo||'—')) return false;
@@ -543,6 +603,7 @@ function render(){
   if(VER==='lista') $('cols').innerHTML=htmlLista();
   else if(VER==='frota') $('cols').innerHTML=htmlFrota();
   else if(VER==='resumo'){ renderResumo(); pintaLateral(); return; }
+  else if(VER==='aderencia'){ renderAderencia(); pintaLateral(); return; }
   else $('cols').innerHTML=htmlHistorico();
   pintaLateral();
 }
@@ -599,100 +660,269 @@ function htmlHistorico(){
       <td class="num">${diasParado(e)}</td></tr>`).join('')}</tbody></table></div>`;
 }
 
-/* ── visão RESUMO: o painel de disponibilidade (substitui /disponibilidade/) ── */
+/* ── visão RESUMO = o painel /disponibilidade/ (mesmos cards, gráficos e
+      tabelas), agora sobre o disp_snapshot do Supabase. Renan, 14/08/2026:
+      "a visão resumo deve ser igual ao painel Disponibilidade que já existe".
+      Meta 93% · Sonho 97% — as mesmas réguas do painel antigo.            ── */
 let RES=null, CH1=null, CH2=null;
+const META_DISP=93, SONHO_DISP=97;
 async function loadResumo(){
   if(RES)return RES;
   const out=[]; const PG=1000;
   for(let i=0;;i+=PG){
-    const {data,error}=await sb.from('disp_resumo').select('*').order('data',{ascending:true}).range(i,i+PG-1);
+    const {data,error}=await sb.from('disp_snapshot').select('data,unidade,projeto,tipo_veiculo,ativos,indisponiveis')
+      .order('data',{ascending:true}).range(i,i+PG-1);
     if(error)throw error;
     out.push(...(data||[]));
     if(!data||data.length<PG)break;
   }
   RES=out; return RES;
 }
+const dispPct=(a,i)=>a?((a-i)/a*100):null;
+const clsDisp=v=>v==null?'var(--txt3)':v>=SONHO_DISP?'var(--verde)':v<META_DISP?'var(--vermelho)':'var(--ambar)';
+const p1=v=>v==null?'—':v.toFixed(1).replace('.',',')+'%';
+const ppFmt=v=>v==null?'—':(v>=0?'+':'')+v.toFixed(1).replace('.',',')+' pp';
 async function renderResumo(){
   $('cols').innerHTML='<div class="cvazia" style="padding:30px">Carregando resumo…</div>';
-  let rows;
-  try{ rows=await loadResumo(); }
-  catch(e){ $('cols').innerHTML=`<div class="cvazia">Erro: ${esc(e.message||e)} — rode scripts/ativos-manual.sql (view disp_resumo).</div>`; return; }
+  let all;
+  try{ all=await loadResumo(); }
+  catch(e){ $('cols').innerHTML=`<div class="cvazia">Erro: ${esc(e.message||e)}</div>`; return; }
   if(VER!=='resumo')return;
-  if(!rows.length){ $('cols').innerHTML='<div class="cvazia">Sem fotos ainda — rode a migração do histórico e aguarde as fotos diárias.</div>'; return; }
-  // por dia (todas as unidades)
-  const porDia=new Map();
-  rows.forEach(r=>{
-    if(!porDia.has(r.data))porDia.set(r.data,{a:0,i:0});
-    const g=porDia.get(r.data); g.a+=r.ativos; g.i+=r.indisponiveis;
-  });
-  const dias=[...porDia.keys()].sort();
-  const ult=dias[dias.length-1];
-  const win=dias.slice(-60);                    // últimos 60 dias no gráfico
-  const pct=d=>{const g=porDia.get(d);return g.a?((g.a-g.i)/g.a*100):null;};
-  const gU=porDia.get(ult);
-  const dispHoje=gU.a?((gU.a-gU.i)/gU.a*100):null;
-  // médias do período visível
-  const med=arr=>arr.length?arr.reduce((s,v)=>s+v,0)/arr.length:null;
-  const medDisp=med(win.map(pct).filter(v=>v!=null));
-  const medAtv=med(win.map(d=>porDia.get(d).a));
-  const medInd=med(win.map(d=>porDia.get(d).i));
-  // por unidade no último dia + média 30d
-  const unis=[...new Set(rows.map(r=>r.unidade).filter(Boolean))].sort();
-  const d30=dias.slice(-30);
-  const porUni=unis.map(u=>{
-    const hoje=rows.find(r=>r.data===ult&&r.unidade===u);
-    const hist=rows.filter(r=>d30.includes(r.data)&&r.unidade===u&&r.ativos);
-    const m=hist.length?med(hist.map(r=>(r.ativos-r.indisponiveis)/r.ativos*100)):null;
-    return {u,a:hoje?hoje.ativos:0,i:hoje?hoje.indisponiveis:0,
-            p:hoje&&hoje.ativos?((hoje.ativos-hoje.indisponiveis)/hoje.ativos*100):null,m};
-  }).filter(x=>x.a||x.i);
-  const corP=v=>v==null?'var(--txt3)':v>=95?'var(--verde)':v>=90?'var(--ambar)':'var(--vermelho)';
+  if(!all.length){ $('cols').innerHTML='<div class="cvazia">Sem fotos ainda — rode a migração do histórico e aguarde as fotos diárias.</div>'; return; }
+  // filtros da tela valem aqui também (unidade, vigência, data, projeto, tipo)
+  const Suni=new Set(unisSel());
+  const passaS=(r,exceto)=>{
+    if(!Suni.has(r.unidade)) return false;
+    if(exceto!=='vig'  && FVIG.size  && !FVIG.has(String(r.data||'').slice(0,7))) return false;
+    if(exceto!=='data' && FDATA.size && !FDATA.has(String(r.data||''))) return false;
+    if(exceto!=='proj' && FPROJ.size && !FPROJ.has(r.projeto||'—')) return false;
+    if(exceto!=='tipo' && FTIPO.size && !FTIPO.has(r.tipo_veiculo||'—')) return false;
+    return true;
+  };
+  const rows=all.filter(r=>passaS(r));
+  if(!rows.length){ $('cols').innerHTML='<div class="cvazia">Nada com os filtros atuais.</div>'; return; }
+  const soma=(arr)=>arr.reduce((g,r)=>{g.a+=r.ativos||0;g.i+=r.indisponiveis||0;g.d.add(r.data);return g;},{a:0,i:0,d:new Set()});
+  const tot=soma(rows), nDias=tot.d.size||1;
+  const pctTot=dispPct(tot.a,tot.i);
+  // Δ vs vigência anterior (sem o filtro de vigência, como no painel antigo)
+  const semVig=all.filter(r=>passaS(r,'vig'));
+  const vigs=[...new Set(semVig.map(r=>String(r.data||'').slice(0,7)))].sort();
+  let dpp=null,dpct=null;
+  if(vigs.length>=2){
+    const pL=dispPct(...(x=>[x.a,x.i])(soma(semVig.filter(r=>String(r.data).slice(0,7)===vigs[vigs.length-1]))));
+    const pP=dispPct(...(x=>[x.a,x.i])(soma(semVig.filter(r=>String(r.data).slice(0,7)===vigs[vigs.length-2]))));
+    if(pL!=null&&pP!=null){ dpp=pL-pP; dpct=(pL-pP)/Math.abs(pP)*100; }
+  }
+  // Δ YTD (ano atual vs anterior)
+  const cy=new Date().getFullYear();
+  const aY=soma(semVig.filter(r=>+String(r.data).slice(0,4)===cy));
+  const aPY=soma(semVig.filter(r=>+String(r.data).slice(0,4)===cy-1));
+  let ypp=null,ypct=null;
+  if(aY.d.size&&aPY.d.size){
+    const pY=dispPct(aY.a,aY.i), pPY=dispPct(aPY.a,aPY.i);
+    if(pY!=null&&pPY!=null){ ypp=pY-pPY; ypct=(pY-pPY)/Math.abs(pPY)*100; }
+  }
+  // séries
+  const porVig=new Map();
+  rows.forEach(r=>{const v=String(r.data).slice(0,7);
+    if(!porVig.has(v))porVig.set(v,{a:0,i:0}); const g=porVig.get(v); g.a+=r.ativos||0; g.i+=r.indisponiveis||0;});
+  const vigsL=[...porVig.keys()].sort();
+  const porChave=(campo)=>{
+    const m=new Map();
+    rows.forEach(r=>{const k=r[campo]||'—'; if(!m.has(k))m.set(k,{a:0,i:0});
+      const g=m.get(k); g.a+=r.ativos||0; g.i+=r.indisponiveis||0;});
+    return [...m.entries()].map(([k,g])=>({k,a:g.a,i:g.i,p:dispPct(g.a,g.i),
+      mA:g.a/nDias,mI:g.i/nDias})).sort((x,y)=>(y.p??-1)-(x.p??-1));
+  };
+  const porProj=porChave('projeto'), porUni=porChave('unidade'), porTipo=porChave('tipo_veiculo');
+  // cenário atual = eventos ABERTOS (dado vivo), com os filtros da tela
+  const cen=abertos().filter(e=>passa(e)).sort((a,b)=>diasParado(b)-diasParado(a));
+  const dl=(v,cls)=>`<b class="${cls}">${v}</b>`;
   $('cols').innerHTML=`
-  <div style="overflow:auto;min-height:0;flex:1">
-    <div style="display:flex;gap:26px;align-items:flex-end;flex-wrap:wrap;margin-bottom:14px">
-      <div><div style="font-size:10px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:1px">Disponibilidade · ${dataBR(ult)}</div>
-        <div style="font-size:44px;font-weight:800;letter-spacing:-1.5px;line-height:1.05;color:${corP(dispHoje)}">${dispHoje==null?'—':dispHoje.toFixed(1).replace('.',',')+'%'}</div></div>
-      <div style="display:flex;gap:22px;padding-bottom:6px;flex-wrap:wrap">
-        <div><div style="font-size:9.5px;color:var(--txt3);text-transform:uppercase;letter-spacing:.7px">Média 60d</div><b style="font-size:17px">${medDisp==null?'—':medDisp.toFixed(1).replace('.',',')+'%'}</b></div>
-        <div><div style="font-size:9.5px;color:var(--txt3);text-transform:uppercase;letter-spacing:.7px">Média Ativos</div><b style="font-size:17px">${medAtv==null?'—':Math.round(medAtv)}</b></div>
-        <div><div style="font-size:9.5px;color:var(--txt3);text-transform:uppercase;letter-spacing:.7px">Média Indisponíveis</div><b style="font-size:17px">${medInd==null?'—':Math.round(medInd)}</b></div>
+  <div style="overflow:auto;min-height:0;flex:1;padding-bottom:10px">
+    <!-- HERO -->
+    <div style="display:flex;gap:30px;align-items:flex-end;flex-wrap:wrap;margin-bottom:16px">
+      <div>
+        <div class="rlbl">Disponibilidade Total</div>
+        <div style="font-size:46px;font-weight:800;letter-spacing:-1.6px;line-height:1.04;color:${clsDisp(pctTot)}">${p1(pctTot)}</div>
+      </div>
+      <div style="display:flex;gap:24px;padding-bottom:8px;flex-wrap:wrap">
+        <div><div class="rlbl">Média Ativos</div><b class="rval">${Math.round(tot.a/nDias)}</b></div>
+        <div><div class="rlbl">Média Indisponíveis</div><b class="rval">${Math.round(tot.i/nDias)}</b></div>
+        <div class="rsep"></div>
+        <div><div class="rlbl">Δ pp</div>${dl(ppFmt(dpp),dpp==null?'':dpp>=0?'grn':'red')}</div>
+        <div><div class="rlbl">Δ %</div>${dl(dpct==null?'—':(dpct>=0?'+':'')+dpct.toFixed(1).replace('.',',')+'%',dpct==null?'':dpct>=0?'grn':'red')}</div>
+        <div class="rsep"></div>
+        <div><div class="rlbl">Δ YTD pp</div>${dl(ppFmt(ypp),ypp==null?'':ypp>=0?'grn':'red')}</div>
+        <div><div class="rlbl">Δ YTD %</div>${dl(ypct==null?'—':(ypct>=0?'+':'')+ypct.toFixed(1).replace('.',',')+'%',ypct==null?'':ypct>=0?'grn':'red')}</div>
       </div>
     </div>
-    <div class="tab-wrap" style="padding:14px 16px;margin-bottom:14px">
-      <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;margin-bottom:10px">Disponibilidade % · por dia</div>
-      <div style="height:200px"><canvas id="chDia"></canvas></div>
-    </div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+    <!-- GRÁFICOS -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px">
       <div class="tab-wrap" style="padding:14px 16px">
-        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;margin-bottom:10px">Disponibilidade % · por unidade (${dataBR(ult)})</div>
-        <div style="height:230px"><canvas id="chUni"></canvas></div>
+        <div class="rtit">Disponibilidade % · Mensal</div>
+        <div class="rsub">Evolução por vigência — Meta ${META_DISP}% · Sonho ${SONHO_DISP}%</div>
+        <div style="height:210px"><canvas id="chVig"></canvas></div>
       </div>
-      <div class="tab-wrap" style="overflow:auto;max-height:290px">
-        <table class="tab"><thead><tr><th>Unidade</th><th class="num">Ativos</th><th class="num">Indisp.</th><th class="num">Disp. hoje</th><th class="num">Média 30d</th></tr></thead>
-        <tbody>${porUni.map(x=>`<tr>
-          <td class="forte">${esc(x.u)}</td><td class="num">${x.a}</td>
-          <td class="num" style="color:${x.i?'var(--vermelho)':'inherit'}">${x.i}</td>
-          <td class="num"><b style="color:${corP(x.p)}">${x.p==null?'—':x.p.toFixed(1).replace('.',',')+'%'}</b></td>
-          <td class="num">${x.m==null?'—':x.m.toFixed(1).replace('.',',')+'%'}</td></tr>`).join('')}</tbody></table>
+      <div class="tab-wrap" style="padding:14px 16px">
+        <div class="rtit">Disponibilidade % · Projeto</div>
+        <div class="rsub">Período selecionado</div>
+        <div style="height:210px"><canvas id="chProj"></canvas></div>
       </div>
+    </div>
+    <!-- TABELAS Unidade / Tipo -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px">
+      ${miniTab('Disponibilidade % · Unidade','Unidade',porUni)}
+      ${miniTab('Disponibilidade % · Tipo de Veículo','Tipo',porTipo)}
+    </div>
+    <!-- CENÁRIO ATUAL -->
+    <div class="tab-wrap">
+      <div style="padding:14px 16px 0">
+        <div class="rtit">Indisponibilidade · Cenário Atual</div>
+        <div class="rsub">${cen.length} veículo(s) parado(s) agora</div>
+      </div>
+      <table class="tab"><thead><tr>
+        <th>Unid</th><th>Proj.</th><th>Placa</th><th>Tipo</th><th>Grupo</th><th>Descrição</th>
+        <th>Observações</th><th>Dt. Parada</th><th>Prev. Retorno</th><th class="num">Dias Prazo</th>
+        <th>Status</th><th class="num">Dias Ind.</th></tr></thead>
+      <tbody>${cen.length?cen.map(e=>{
+        const dp=diasParado(e);
+        const prazo=e.previsao_retorno?Math.round((new Date(e.previsao_retorno)-new Date(hojeBRT()))/864e5):null;
+        return `<tr>
+          <td>${esc(e.unidade||'—')}</td><td>${esc(e.projeto||'—')}</td><td class="forte">${esc(e.placa)}</td>
+          <td>${esc(e.tipo_veiculo||'—')}</td><td>${esc(e.grupo||'—')}</td>
+          <td class="livre">${esc(e.descricao_problema||'—')}</td>
+          <td class="livre">${esc(e.observacao||'—')}</td>
+          <td>${dataBR(e.data_parada)}</td><td>${e.previsao_retorno?dataBR(e.previsao_retorno):'—'}</td>
+          <td class="num" style="color:${prazo!=null&&prazo<0?'var(--vermelho)':'inherit'}">${prazo==null?'—':prazo}</td>
+          <td>${chip(e.status)}</td>
+          <td class="num"><b>${dp}</b></td></tr>`;}).join('')
+        :'<tr><td colspan="12" style="text-align:center;color:var(--txt3);padding:18px">Nenhum veículo parado 🎉</td></tr>'}</tbody></table>
     </div>
   </div>`;
-  // gráficos (tema-aware)
+  // ── gráficos (tema-aware, mesmas cores do painel antigo) ──
   const claro=document.body.classList.contains('claro');
-  const grid={color:claro?'rgba(0,0,0,.08)':'rgba(255,255,255,.06)'};
+  const grid={color:claro?'rgba(0,0,0,.07)':'rgba(255,255,255,.06)'};
   const tick={color:claro?'#444':'#B2BCD2',font:{family:'Montserrat',size:10}};
+  const lineC=claro?'#8A93A6':'#94A3B8';
   if(CH1)CH1.destroy(); if(CH2)CH2.destroy();
-  CH1=new Chart($('chDia'),{type:'line',data:{labels:win.map(dataBR),
-    datasets:[{data:win.map(pct),borderColor:'#F97316',borderWidth:2.5,pointRadius:0,tension:.3,fill:false}]},
-    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},
-      tooltip:{callbacks:{label:c=>c.parsed.y==null?'—':c.parsed.y.toFixed(1).replace('.',',')+'%'}}},
-      scales:{x:{grid,ticks:{...tick,maxTicksLimit:10}},y:{grid,ticks:{...tick,callback:v=>v+'%'}}}}});
-  CH2=new Chart($('chUni'),{type:'bar',data:{labels:porUni.map(x=>x.u),
-    datasets:[{data:porUni.map(x=>x.p),backgroundColor:porUni.map(x=>x.p==null?'#5B657C':x.p>=95?'#3BB33B':x.p>=90?'#F4A100':'#FF5252')}]},
+  const serie=vigsL.map(v=>{const g=porVig.get(v);return dispPct(g.a,g.i);});
+  CH1=new Chart($('chVig'),{data:{labels:vigsL.map(vigBR),datasets:[
+      {type:'bar',label:'Disp. %',data:serie,backgroundColor:serie.map(v=>v==null?'#5B657C':v>=SONHO_DISP?'#3BB33B':v<META_DISP?'#FF5252':'#F4A100'),borderRadius:3,order:1},
+      {type:'line',label:'Meta '+META_DISP+'%',data:vigsL.map(()=>META_DISP),borderColor:lineC,borderWidth:2,borderDash:[5,3],pointRadius:0,fill:false,order:0},
+      {type:'line',label:'Sonho '+SONHO_DISP+'%',data:vigsL.map(()=>SONHO_DISP),borderColor:lineC,borderWidth:2,borderDash:[2,3],pointRadius:0,fill:false,order:0}]},
+    options:{responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{labels:{color:claro?'#161D2B':'#EEF2FA',font:{family:'Montserrat',size:10},boxWidth:12}},
+        tooltip:{callbacks:{label:c=>c.dataset.label+': '+(c.parsed.y==null?'—':c.parsed.y.toFixed(1).replace('.',',')+'%')}}},
+      scales:{x:{grid:{display:false},ticks:tick},y:{grid,ticks:{...tick,callback:v=>v+'%'},suggestedMin:80,max:100}}}});
+  CH2=new Chart($('chProj'),{type:'bar',data:{labels:porProj.map(x=>x.k),
+    datasets:[{data:porProj.map(x=>x.p),backgroundColor:porProj.map(x=>x.p==null?'#5B657C':x.p>=SONHO_DISP?'#3BB33B':x.p<META_DISP?'#FF5252':'#F4A100'),borderRadius:3}]},
     options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},
       tooltip:{callbacks:{label:c=>c.parsed.y==null?'—':c.parsed.y.toFixed(1).replace('.',',')+'%'}}},
       scales:{x:{grid:{display:false},ticks:{...tick,font:{family:'Montserrat',size:9}}},
               y:{grid,ticks:{...tick,callback:v=>v+'%'},suggestedMin:80,max:100}}}});
+}
+// tabelinha Unidade/Tipo — mesmas colunas do painel antigo
+function miniTab(titulo,col1,itens){
+  return `<div class="tab-wrap" style="overflow:auto;max-height:300px">
+    <div style="padding:14px 16px 0"><div class="rtit">${esc(titulo)}</div><div class="rsub">Período selecionado</div></div>
+    <table class="tab"><thead><tr><th>${esc(col1)}</th><th class="num">Ativos</th><th class="num">Indisp.</th><th class="num">Disp. %</th></tr></thead>
+    <tbody>${itens.map(x=>`<tr>
+      <td class="forte">${esc(x.k)}</td>
+      <td class="num">${Math.round(x.mA)}</td>
+      <td class="num" style="color:${x.mI>=1?'var(--vermelho)':'inherit'}">${Math.round(x.mI)}</td>
+      <td class="num"><b style="color:${clsDisp(x.p)}">${p1(x.p)}</b></td></tr>`).join('')}</tbody></table></div>`;
+}
+
+/* ── visão ADERÊNCIA: quem está preenchendo (Renan, 14/08/2026) ───────────
+   Vale de TERÇA 19/08/2026 em diante — antes disso a rotina ainda não tinha
+   começado, então contar seria injusto. Fonte: os próprios eventos
+   (created_at/updated_at + quem mexeu). Só admin. Estilo do painel de acessos:
+   uma linha por unidade, com dias preenchidos, último toque e quem foi.      */
+const ADER_INICIO='2026-08-19';
+let PERFIS=null;
+async function loadPerfis(){
+  if(PERFIS)return PERFIS;
+  PERFIS={};
+  try{
+    const {data}=await sb.from('fca_profiles').select('id,nome,email,unidade');
+    (data||[]).forEach(r=>{PERFIS[r.id]={nome:(r.nome||'').trim()||(r.email||'').split('@')[0],email:r.email};});
+  }catch(e){}
+  return PERFIS;
+}
+// dias ÚTEIS (seg–sex) de ADER_INICIO até hoje
+function diasUteis(de,ate){
+  const out=[]; const d=new Date(de+'T12:00:00'), fim=new Date(ate+'T12:00:00');
+  while(d<=fim){ const dw=d.getDay(); if(dw>=1&&dw<=5) out.push(d.toISOString().slice(0,10)); d.setDate(d.getDate()+1); }
+  return out;
+}
+async function renderAderencia(){
+  $('cols').innerHTML='<div class="cvazia" style="padding:30px">Carregando aderência…</div>';
+  const perfis=await loadPerfis();
+  if(VER!=='aderencia')return;
+  const hoje=hojeBRT();
+  const dias=diasUteis(ADER_INICIO,hoje);
+  if(!dias.length){
+    $('cols').innerHTML=`<div class="tab-wrap" style="max-width:560px;margin:40px auto;padding:26px;text-align:center">
+      <div class="rlbl">Aderência do preenchimento</div>
+      <div style="font-size:15px;font-weight:700;margin:8px 0 6px">A contagem começa em ${dataBR(ADER_INICIO)}</div>
+      <p style="font-size:12.5px;color:var(--txt2);line-height:1.55;margin:0">
+        A partir dessa terça-feira, cada unidade aparece aqui com os dias úteis em que
+        criou ou mexeu em algum evento, quem preencheu e quando foi o último toque.</p></div>`;
+    return;
+  }
+  const diaDe=t=>t?new Date(t).toLocaleDateString('en-CA',{timeZone:'America/Sao_Paulo'}):null;
+  // toques por unidade: cada create/update de evento conta como preenchimento do dia
+  const toques={};   // unidade → {dia → Set(quem)}
+  const ultimo={};   // unidade → {t, quem}
+  EVENTS.forEach(e=>{
+    [[e.created_at,e.created_by],[e.updated_at,e.updated_by]].forEach(([t,quem])=>{
+      if(!t)return;
+      const d=diaDe(t); if(!d||d<ADER_INICIO)return;
+      const u=e.unidade; if(!u)return;
+      ((toques[u]=toques[u]||{})[d]=toques[u][d]||new Set()).add(quem||'—');
+      if(!ultimo[u]||t>ultimo[u].t) ultimo[u]={t,quem};
+    });
+  });
+  const nome=id=>(perfis[id]&&perfis[id].nome)||(id?'—':'—');
+  const linhas=unisSel().map(u=>{
+    const dd=toques[u]||{};
+    const feitos=dias.filter(d=>dd[d]).length;
+    const pct=dias.length?feitos/dias.length*100:null;
+    const ult=ultimo[u];
+    const pessoas=[...new Set(Object.values(dd).flatMap(s=>[...s]))].map(nome).filter(n=>n&&n!=='—');
+    const hj=!!dd[hoje];
+    return {u,feitos,total:dias.length,pct,ult,pessoas,hj};
+  }).sort((a,b)=>(a.pct??-1)-(b.pct??-1));
+  const qdo=t=>{ if(!t)return '—';
+    const d=new Date(t), dia=diaDe(t)===hoje?'hoje':d.toLocaleDateString('pt-BR',{timeZone:'America/Sao_Paulo'});
+    return dia+' '+d.toLocaleTimeString('pt-BR',{timeZone:'America/Sao_Paulo',hour:'2-digit',minute:'2-digit'}); };
+  const corP=v=>v==null?'var(--txt3)':v>=90?'var(--verde)':v>=60?'var(--ambar)':'var(--vermelho)';
+  const okHoje=linhas.filter(x=>x.hj).length;
+  $('cols').innerHTML=`
+  <div style="overflow:auto;min-height:0;flex:1">
+    <div style="display:flex;gap:30px;align-items:flex-end;flex-wrap:wrap;margin-bottom:16px">
+      <div><div class="rlbl">Atualizaram hoje</div>
+        <div style="font-size:46px;font-weight:800;letter-spacing:-1.6px;line-height:1.04;color:${okHoje===linhas.length?'var(--verde)':okHoje?'var(--ambar)':'var(--vermelho)'}">${okHoje}<span style="font-size:20px;color:var(--txt3)">/${linhas.length}</span></div></div>
+      <div style="padding-bottom:8px">
+        <div class="rlbl">Janela</div>
+        <b class="rval">${dataBR(ADER_INICIO)} → ${dataBR(hoje)}</b>
+        <div style="font-size:10px;color:var(--txt3);margin-top:2px">${dias.length} dia(s) útil(eis) · conta quem criou ou mexeu em evento no dia</div>
+      </div>
+    </div>
+    <div class="tab-wrap">
+      <table class="tab"><thead><tr>
+        <th>Unidade</th><th class="num">Dias preenchidos</th><th class="num">Aderência</th>
+        <th>Hoje</th><th>Último preenchimento</th><th>Quem preencheu</th></tr></thead>
+      <tbody>${linhas.map(x=>`<tr>
+        <td class="forte">${esc(x.u)}</td>
+        <td class="num">${x.feitos}<span style="color:var(--txt3)">/${x.total}</span></td>
+        <td class="num"><b style="color:${corP(x.pct)}">${x.pct==null?'—':x.pct.toFixed(0)+'%'}</b></td>
+        <td>${x.hj?'<span class="tag" style="--c:var(--verde)">sim</span>':'<span class="tag" style="--c:var(--vermelho)">não</span>'}</td>
+        <td>${qdo(x.ult&&x.ult.t)}${x.ult&&x.ult.quem?` · <span style="color:var(--txt2)">${esc(nome(x.ult.quem))}</span>`:''}</td>
+        <td class="livre">${x.pessoas.length?esc(x.pessoas.join(', ')):'<span style="color:var(--txt3)">—</span>'}</td></tr>`).join('')}</tbody></table>
+    </div>
+  </div>`;
 }
 
 /* ── lateral: resumo + unidades + contadores ── */
@@ -710,15 +940,9 @@ function pintaLateral(){
     const dia=hj?'hoje':d.toLocaleDateString('pt-BR',{timeZone:'America/Sao_Paulo'});
     const hora=d.toLocaleTimeString('pt-BR',{timeZone:'America/Sao_Paulo',hour:'2-digit',minute:'2-digit'});
     return dia+' '+hora;})():'—';
-  $('resTit').textContent='Resumo · '+(UNIT||'');
-  $('sRes').innerHTML=`
-    <div class="s-hero"><span class="hl">Disponibilidade</span>
-      <div class="hv" style="color:${disp==null?'var(--txt)':disp>=95?'var(--verde)':disp>=90?'var(--ambar)':'var(--vermelho)'}">${disp==null?'—':disp.toFixed(1).replace('.',',')+'%'}</div></div>
-    <div class="rrow"><span>Frota (ativos)</span><b>${fr.length}</b></div>
-    <div class="rrow"><span>Disponíveis</span><b class="grn">${fr.length-nInd}</b></div>
-    <div class="rrow"><span>Indisponíveis</span><b class="${nInd?'red':'grn'}">${nInd}</b></div>
-    ${foraBase?`<div class="rrow"><span>Fora da base ativos</span><b>${foraBase}</b></div>`:''}
-    <div class="s-ck ${ult?'ok':'pend'}">Última atualização: ${ultTxt}</div>`;
+  // (o card de disponibilidade dentro do menu saiu — o número mora no Resumo)
+  document.querySelectorAll('.n[data-n="indisp"]').forEach(el=>el.textContent=nInd||'');
+  document.querySelectorAll('.n[data-n="frota"]').forEach(el=>el.textContent=fr.length||'');
   const ab2=abertos();
   const N={previsao:ab2.filter(e=>daVisao(e,'previsao')).length,
            cronicos:ab2.filter(e=>daVisao(e,'cronicos')).length,
@@ -726,24 +950,26 @@ function pintaLateral(){
            semrcoc:ab2.filter(e=>daVisao(e,'semrcoc')).length};
   document.querySelectorAll('.n[data-n]').forEach(el=>{el.textContent=N[el.dataset.n]||'';});
   document.querySelectorAll('.s-item[data-vis]').forEach(b=>b.classList.toggle('on',VISAO===b.dataset.vis));
-  document.querySelectorAll('#lstUnidades .s-item').forEach(b=>b.classList.toggle('on',b.dataset.uni===UNIT));
-  ['lista','frota','historico','resumo'].forEach(v=>{
-    const bt=$({'lista':'btLista','frota':'btFrota','historico':'btHist','resumo':'btRes'}[v]);
-    if(bt)bt.classList.toggle('on',VER===v);
-  });
-  $('btVeic').style.display=(UNIT==='ANG')?'':'none';   // cadastro de veículo: só ANG
+  document.querySelectorAll('.s-item[data-ver]').forEach(b=>b.classList.toggle('on',VER===b.dataset.ver));
+  const itV=$('itVeic'); if(itV) itV.style.display=(UNIT==='ANG')?'':'none';   // cadastro de veículo: só ANG
+  const itA=$('itAder'); if(itA) itA.style.display=ADMIN?'':'none';            // aderência: só admin
   $('btProj').classList.toggle('on',FPROJ.size>0);
   $('btGrupo').classList.toggle('on',FGRUPO.size>0);
   $('btTipo').classList.toggle('on',FTIPO.size>0);
-  $('euUni').textContent=UNIT||'—';
+  $('btUni').classList.toggle('on',FUNI.size>0);
+  $('btVig').classList.toggle('on',FVIG.size>0);
+  $('btData').classList.toggle('on',FDATA.size>0);
+  $('btUni').style.display=(MY_UNITS.length>1)?'':'none';                      // 1 unidade: filtro não faz sentido
+  $('euUni').textContent=(FUNI.size?[...FUNI].join(', '):(MY_UNITS.length>1?'todas':UNIT))||'—';
 }
+// as unidades viraram FILTRO no topo (Renan, 14/08/2026)
 function montaUnidades(){
-  $('lstUnidades').innerHTML=MY_UNITS.map(u=>
-    `<button class="s-item${u===UNIT?' on':''}" data-uni="${esc(u)}">
-      ${esc(u)} <span class="n ${ABERTAS_POR[u]?'alerta':''}">${ABERTAS_POR[u]||''}</span>
-    </button>`).join('');
-  document.querySelectorAll('#lstUnidades .s-item').forEach(b=>
-    b.addEventListener('click',()=>setUnit(b.dataset.uni)));
+  const el=$('lstUni'); if(!el) return;
+  const all=FUNI.size===0;
+  el.innerHTML=`<label class="mall"><input type="checkbox" data-all="u" ${all?'checked':''}> Todas</label>`+
+    MY_UNITS.map(u=>`<label><input type="checkbox" data-u="${esc(u)}" ${all||FUNI.has(u)?'checked':''}>
+      <span class="mtx">${esc(u)}</span>${ABERTAS_POR[u]?`<span class="n alerta">${ABERTAS_POR[u]}</span>`:''}
+      <span class="so" data-so="${esc(u)}">só</span></label>`).join('');
 }
 
 /* ── menus de filtro ── */
@@ -754,11 +980,12 @@ function abreMenu(id){
 document.addEventListener('click',e=>{
   if(!e.target.closest('.menu-wrap')) document.querySelectorAll('.menu.open').forEach(m=>m.classList.remove('open'));
 });
-function menuLista(itens,sel,tipo){
-  const all=sel.size===0;
+function menuLista(rotulos,sel,tipo,valores){
+  const all=sel.size===0, vals=valores||rotulos;
   return `<label class="mall"><input type="checkbox" data-all="${tipo}" ${all?'checked':''}> Todos</label>`+
-    (itens.length?itens.map(v=>`<label><input type="checkbox" data-${tipo}="${esc(v)}" ${all||sel.has(v)?'checked':''}>
-      <span class="mtx">${esc(v)}</span><span class="so" data-so="${esc(v)}">só</span></label>`).join('')
+    (rotulos.length?rotulos.map((rot,i)=>{const v=vals[i];
+      return `<label><input type="checkbox" data-${tipo}="${esc(v)}" ${all||sel.has(v)?'checked':''}>
+      <span class="mtx">${esc(rot)}</span><span class="so" data-so="${esc(v)}">só</span></label>`;}).join('')
     :'<div class="tit">nada com os filtros atuais</div>');
 }
 function montaMenus(){
@@ -773,7 +1000,18 @@ function montaMenus(){
   const tip=[...new Set(base.filter(e=>passa(e,'tipo')).map(e=>e.tipo_veiculo||'—'))].sort(pt);
   FTIPO.forEach(v=>{if(!tip.includes(v))tip.unshift(v);});
   $('lstTipo').innerHTML=menuLista(tip,FTIPO,'t');
+  // Vigência (mês da parada) e Data (dia exato) — do mais recente para o mais antigo
+  const vg=[...new Set(base.filter(e=>passa(e,'vig')).map(vigDe).filter(Boolean))].sort().reverse();
+  FVIG.forEach(v=>{if(!vg.includes(v))vg.unshift(v);});
+  $('lstVig').innerHTML=menuLista(vg.map(vigBR),FVIG,'v',vg);
+  const dt=[...new Set(base.filter(e=>passa(e,'data')).map(e=>String(e.data_parada||'')).filter(Boolean))].sort().reverse();
+  FDATA.forEach(v=>{if(!dt.includes(v))dt.unshift(v);});
+  $('lstData').innerHTML=menuLista(dt.map(dataBR),FDATA,'d',dt);
+  montaUnidades();
 }
+// '2026-08' → 'ago/26'
+const _MES3=['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
+const vigBR=v=>{const p=String(v).split('-');return p.length>1?_MES3[+p[1]-1]+'/'+p[0].slice(2):v;};
 function ligaMenu(el,sel,attr){
   el.addEventListener('change',e=>{
     const b=e.target;
@@ -794,8 +1032,11 @@ function ligaMenu(el,sel,attr){
 ligaMenu($('lstProj'),FPROJ,'p');
 ligaMenu($('lstGrupo'),FGRUPO,'g');
 ligaMenu($('lstTipo'),FTIPO,'t');
+ligaMenu($('lstUni'),FUNI,'u');
+ligaMenu($('lstVig'),FVIG,'v');
+ligaMenu($('lstData'),FDATA,'d');
 function limpaFiltros(){
-  FPROJ.clear();FGRUPO.clear();FTIPO.clear();VISAO='';BUSCA='';$('busca').value='';
+  FPROJ.clear();FGRUPO.clear();FTIPO.clear();FUNI.clear();FVIG.clear();FDATA.clear();VISAO='';BUSCA='';$('busca').value='';
   document.querySelectorAll('.menu.open').forEach(m=>m.classList.remove('open'));
   render();
 }
@@ -807,8 +1048,9 @@ async function recarregar(){
 }
 
 /* ── navegação ── */
-const TIT={lista:'Indisponíveis',frota:'Frota completa',historico:'Histórico',resumo:'Resumo · Disponibilidade'};
+const TIT={lista:'Indisponíveis',frota:'Frota completa',historico:'Histórico',resumo:'Resumo · Disponibilidade',aderencia:'Aderência do preenchimento'};
 function setVer(v){VER=v;$('tit').textContent=TIT[v];render();}
+document.querySelectorAll('.s-item[data-ver]').forEach(b=>b.addEventListener('click',()=>setVer(b.dataset.ver)));
 document.querySelectorAll('.s-item[data-vis]').forEach(b=>b.addEventListener('click',()=>{
   VISAO=(VISAO===b.dataset.vis)?'':b.dataset.vis;
   if(VER==='frota')VER='lista';
@@ -863,7 +1105,7 @@ async function salvarVeiculo(){
   if(!placa){alert('Informe a placa.');return;}
   if(!$('vTipo').value.trim()){alert('Informe o tipo de veículo.');return;}
   const dados={
-    placa, unidade:UNIT,
+    placa, unidade:unitEscrita(),
     filial:$('vFilial').value.trim()||null,
     projeto:$('vProjeto').value.trim()||null,
     marca:$('vMarca').value.trim()||null,
@@ -969,7 +1211,7 @@ async function salvar(){
   if(retISO&&retISO<parada){alert('O retorno não pode ser antes da parada.');return;}
   const a=ATIVOS.find(x=>x.placa===placa);
   const dados={
-    unidade:UNIT, unidade_nome:a?normU(a.filial):null,
+    unidade:unitEscrita(), unidade_nome:a?normU(a.filial):null,
     projeto:a?a.projeto:null, placa,
     modelo:a?a.modelo:null, tipo_veiculo:a?a.tipo:null,
     grupo:$('mGrupo2').value, local_manutencao:$('mLocal').value,
@@ -1007,11 +1249,14 @@ async function excluir(){
   contaAbertas(); render(); fechaModal();
 }
 /* ── unidade ── */
-async function setUnit(u){
-  UNIT=u; localStorage.setItem('disp_unit',u);
-  try{ await loadEvents(); render(); }
-  catch(e){ $('cols').innerHTML=`<div class="cvazia">Erro ao carregar: ${esc(e.message||e)}</div>`; }
+// Com o filtro multi, a unidade de ESCRITA (novo evento / novo veículo) é a
+// única selecionada; se houver várias (ou nenhuma), o modal pergunta.
+function unitEscrita(){
+  if(FUNI.size===1) return [...FUNI][0];
+  if(MY_UNITS.length===1) return MY_UNITS[0];
+  return UNIT||MY_UNITS[0];
 }
+function setUnit(u){ UNIT=u; try{localStorage.setItem('disp_unit',u);}catch(e){} }
 
 /* ── tema ── */
 const _SOL=`<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4.6"/><path d="M12 2v2M12 20v2M4.2 4.2l1.4 1.4M18.4 18.4l1.4 1.4M2 12h2M20 12h2M4.2 19.8l1.4-1.4M18.4 5.6l1.4-1.4"/></svg>`;
@@ -1045,9 +1290,12 @@ async function iniciar(){
   $('euNome').textContent=EU||'—';
   $('euAv').textContent=iniciais(EU);
   try{ await loadAtivos(); }catch(e){ semAcesso('Erro ao carregar a base de ativos: '+(e.message||e)); return; }
-  montaUnidades(); contaAbertas();
   const salva=localStorage.getItem('disp_unit');
-  await setUnit(MY_UNITS.includes(salva)?salva:MY_UNITS[0]);
+  setUnit(MY_UNITS.includes(salva)?salva:MY_UNITS[0]);
+  // uma unidade só: já entra filtrada nela (não faz sentido escolher)
+  if(MY_UNITS.length===1) FUNI.add(MY_UNITS[0]);
+  try{ await loadEvents(); }catch(e){ semAcesso('Erro ao carregar os eventos: '+(e.message||e)); return; }
+  contaAbertas(); render();
 }
 iniciar();
 </script>
