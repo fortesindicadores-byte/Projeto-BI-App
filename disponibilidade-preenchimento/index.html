@@ -1261,11 +1261,17 @@ function montaMenus(){
   // marcado mas sumiu do recorte entra na lista SEM furar a ordem
   const ordena=(lista,sel,cmp)=>{sel.forEach(v=>{if(!lista.includes(v))lista.push(v);}); return lista.sort(cmp);};
   const base=VER==='historico'?EVENTS.filter(e=>!!e.data_retorno):abertos();
-  const proj=ordena([...new Set(base.filter(e=>passa(e,'proj')&&!projFora(projDe(e))).map(e=>projLbl(projDe(e))))],FPROJ,pt);
+  // Projeto e Tipo listam a FROTA das unidades em foco, não só quem está parado
+  // (Renan, 15/08/2026): senão o filtro do Resumo perde projeto que não tem
+  // nenhum veículo indisponível no momento — DU, APOIO, AS e LATA sumiam.
+  const daFrota=fn=>frota().filter(a=>!projFora(a.projeto)).map(fn).filter(Boolean);
+  const proj=ordena([...new Set([...daFrota(a=>projLbl(a.projeto)),
+      ...base.filter(e=>passa(e,'proj')&&!projFora(projDe(e))).map(e=>projLbl(projDe(e)))])],FPROJ,pt);
   $('lstProj').innerHTML=menuLista(proj,FPROJ,'p');
   const gru=ordena([...new Set(base.filter(e=>passa(e,'grupo')).map(e=>e.grupo||'—'))],FGRUPO,pt);
   $('lstGrupo').innerHTML=menuLista(gru,FGRUPO,'g');
-  const tip=ordena([...new Set(base.filter(e=>passa(e,'tipo')).map(e=>tipoDe(e)||'—'))],FTIPO,pt);
+  const tip=ordena([...new Set([...daFrota(a=>a.tipo||''),
+      ...base.filter(e=>passa(e,'tipo')).map(e=>tipoDe(e)||'—')])],FTIPO,pt);
   $('lstTipo').innerHTML=menuLista(tip,FTIPO,'t');
   // Vigência e Data vêm do MAIOR para o menor — o dia de hoje primeiro (Renan)
   const vg=ordena([...new Set(base.filter(e=>passa(e,'vig')).map(vigDe).filter(Boolean))],FVIG)
