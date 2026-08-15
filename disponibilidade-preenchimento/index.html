@@ -138,7 +138,19 @@ body{font-family:'Montserrat',-apple-system,BlinkMacSystemFont,sans-serif;font-s
 .rval{font-size:18px;font-weight:800;}
 .rsep{width:1px;background:var(--linha);align-self:stretch;margin:2px 2px;}
 .rtit{font-size:12px;font-weight:800;letter-spacing:-.1px;}
-.rsub{font-size:10px;color:var(--txt3);margin:2px 0 10px;}
+.rsub{font-size:10px;color:var(--txt3);margin:2px 0 8px;}
+/* Resumo: hero enxuto + os dois gráficos EMPILHADOS, cabendo na tela sem rolagem
+   (Renan, 15/08/2026) — as alturas saem do espaço que sobra, via flex */
+.res-wrap{flex:1;min-height:0;display:flex;flex-direction:column;gap:12px;padding-bottom:6px;}
+.res-hero{display:flex;align-items:flex-end;gap:34px;flex-wrap:wrap;flex:0 0 auto;}
+.res-big{font-size:clamp(30px,4.2vh,46px);font-weight:800;line-height:1;margin:2px 0 5px;}
+.res-med{display:flex;gap:26px;padding-bottom:3px;}
+.cols .res-graf{flex:1 1 0;min-height:150px;overflow:hidden;padding:12px 16px 10px;display:flex;flex-direction:column;}
+.res-cv{flex:1;min-height:0;position:relative;}
+@media(max-width:900px){
+  .cols .res-graf{flex:0 0 auto;height:240px;}
+  .res-wrap{overflow:auto;}
+}
 .grn{color:var(--verde);font-size:18px;font-weight:800;}
 .red{color:var(--vermelho);font-size:18px;font-weight:800;}
 .s-res{margin:2px 8px 0;border:1px solid var(--card-brd);border-radius:10px;overflow:hidden;
@@ -745,7 +757,6 @@ async function loadResumo(){
 const dispPct=(a,i)=>a?((a-i)/a*100):null;
 const clsDisp=v=>v==null?'var(--txt3)':v>=SONHO_DISP?'var(--verde)':v<META_DISP?'var(--vermelho)':'var(--ambar)';
 const p1=v=>v==null?'—':v.toFixed(1).replace('.',',')+'%';
-const ppFmt=v=>v==null?'—':(v>=0?'+':'')+v.toFixed(1).replace('.',',')+' pp';
 async function renderResumo(){
   $('cols').innerHTML='<div class="cvazia" style="padding:30px">Carregando resumo…</div>';
   let all;
@@ -768,24 +779,8 @@ async function renderResumo(){
   const soma=arr=>arr.reduce((g,r)=>{g.a+=r.ativos||0;g.i+=r.indisponiveis||0;g.d.add(r.data);return g;},{a:0,i:0,d:new Set()});
   const tot=soma(rows), nDias=tot.d.size||1;
   const pctTot=dispPct(tot.a,tot.i);
-  // Δ vigência anterior e Δ YTD (mesma conta do painel antigo)
   const semVig=all.filter(r=>passaS(r,'vig'));
-  const vigs=[...new Set(semVig.map(r=>String(r.data||'').slice(0,7)))].sort();
-  let dpp=null,dpct=null;
-  if(vigs.length>=2){
-    const g1=soma(semVig.filter(r=>String(r.data).slice(0,7)===vigs[vigs.length-1]));
-    const g2=soma(semVig.filter(r=>String(r.data).slice(0,7)===vigs[vigs.length-2]));
-    const pL=dispPct(g1.a,g1.i), pP=dispPct(g2.a,g2.i);
-    if(pL!=null&&pP!=null){ dpp=pL-pP; dpct=(pL-pP)/Math.abs(pP)*100; }
-  }
   const cy=new Date().getFullYear();
-  const aY=soma(semVig.filter(r=>+String(r.data).slice(0,4)===cy));
-  const aPY=soma(semVig.filter(r=>+String(r.data).slice(0,4)===cy-1));
-  let ypp=null,ypct=null;
-  if(aY.d.size&&aPY.d.size){
-    const pY=dispPct(aY.a,aY.i), pPY=dispPct(aPY.a,aPY.i);
-    if(pY!=null&&pPY!=null){ ypp=pY-pPY; ypct=(pY-pPY)/Math.abs(pPY)*100; }
-  }
   // agrupadores das tabelas (com TOGGLE: unidade↔projeto · tipo↔modelo)
   const agrupa=campo=>{
     // o modelo só existe nas fotos a partir do scripts/disp-modelo.sql: nesses
@@ -810,34 +805,28 @@ async function renderResumo(){
   porMes.forEach((g,m)=>{vals[m]=dispPct(g.a,g.i);});
   const projs=agrupa('projeto');
   $('cols').innerHTML=`
-  <div style="overflow:auto;min-height:0;flex:1;padding-bottom:10px">
-    <!-- HERO — empilhado, como no painel antigo -->
-    <div style="margin-bottom:18px">
-      <div class="rlbl">Disponibilidade Total</div>
-      <div style="font-size:50px;font-weight:800;line-height:1;margin:2px 0 10px;color:${clsDisp(pctTot)}">${p1(pctTot)}</div>
-      <div style="display:flex;gap:28px;margin-bottom:10px">
+  <div class="res-wrap">
+    <!-- HERO — número + meta, e as médias ao lado -->
+    <div class="res-hero">
+      <div>
+        <div class="rlbl">Disponibilidade Total</div>
+        <div class="res-big" style="color:${clsDisp(pctTot)}">${p1(pctTot)}</div>
+        <div class="rlbl">Meta ${META_DISP}%</div>
+      </div>
+      <div class="res-med">
         <div><div class="rlbl">Média Ativos</div><b class="rval">${fmtMil(tot.a/nDias)}</b></div>
         <div><div class="rlbl">Média Indisponíveis</div><b class="rval">${fmtMil(tot.i/nDias)}</b></div>
       </div>
-      <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
-        <div><div class="rlbl">Δ pp</div>${dl(ppFmt(dpp),dpp)}</div>
-        <div><div class="rlbl">Δ %</div>${dl(pctFmt(dpct),dpct)}</div>
-        <div class="hsep"></div>
-        <div><div class="rlbl">Δ YTD pp</div>${dl(ppFmt(ypp),ypp)}</div>
-        <div><div class="rlbl">Δ YTD %</div>${dl(pctFmt(ypct),ypct)}</div>
-      </div>
     </div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px">
-      <div class="tab-wrap" style="padding:14px 16px">
-        <div class="rtit">Disponibilidade % · Mensal</div>
-        <div class="rsub">Evolução por vigência — Meta ${META_DISP}% · Sonho ${SONHO_DISP}%</div>
-        <div style="height:250px"><canvas id="chVig"></canvas></div>
-      </div>
-      <div class="tab-wrap" style="padding:14px 16px">
-        <div class="rtit">Disponibilidade % · Projeto</div>
-        <div class="rsub">Período selecionado</div>
-        <div style="height:250px"><canvas id="chProj"></canvas></div>
-      </div>
+    <div class="tab-wrap res-graf">
+      <div class="rtit">Disponibilidade % · Mensal</div>
+      <div class="rsub">Evolução por vigência — Meta ${META_DISP}% · Sonho ${SONHO_DISP}%</div>
+      <div class="res-cv"><canvas id="chVig"></canvas></div>
+    </div>
+    <div class="tab-wrap res-graf">
+      <div class="rtit">Disponibilidade % · Projeto</div>
+      <div class="rsub">Período selecionado</div>
+      <div class="res-cv"><canvas id="chProj"></canvas></div>
     </div>
   </div>`;
   // ── gráficos: MESMAS opções do painel antigo (eixo Y adaptativo, datalabels,
@@ -856,10 +845,10 @@ async function renderResumo(){
           titleFont:{family:'Montserrat'},bodyFont:{family:'Montserrat'},
           callbacks:{label:c=>c.dataset.type==='line'?c.dataset.label:((c.parsed.y!=null?c.parsed.y.toFixed(0):'—')+'%')}},
         datalabels:{display:c=>c.dataset.type!=='line',color:'#fff',
-          font:{family:'Montserrat',size:13,weight:'700'},anchor:'end',align:'start',offset:2,
+          font:{family:'Montserrat',size:11,weight:'700'},anchor:'end',align:'start',offset:2,
           formatter:v=>v!=null?v.toFixed(0)+'%':''}},
-      scales:{x:{ticks:{color:tickC,font:{family:'Montserrat',size:11},maxRotation:35},grid:{color:gridC}},
-              y:{min:lo,max:100,ticks:{color:tickC,font:{family:'Montserrat',size:11},callback:v=>v+'%'},grid:{color:gridC}}}};
+      scales:{x:{ticks:{color:tickC,font:{family:'Montserrat',size:10},maxRotation:35},grid:{color:gridC}},
+              y:{min:lo,max:100,ticks:{color:tickC,font:{family:'Montserrat',size:10},maxTicksLimit:6,callback:v=>v+'%'},grid:{color:gridC}}}};
   };
   const metaLines=(n,vs)=>{
     const pts=i=>vs&&vs[i]==null?0:3;
@@ -884,8 +873,6 @@ async function renderResumo(){
        borderColor:pv.map(v=>corDisp(v)),borderWidth:1,borderRadius:3,order:1}]},options:opts(pv)});
 }
 const fmtMil=v=>v==null?'—':Math.round(v).toLocaleString('pt-BR');
-const pctFmt=v=>v==null?'—':(v>=0?'+':'')+v.toFixed(1).replace('.',',')+'%';
-const dl=(txt,v)=>`<b class="${v==null?'':v>=0?'grn':'red'}">${txt}</b>`;
 // tabelas Unidade/Tipo — inteiras (sem rolagem própria) e com TOGGLE de dimensão
 /* ── visão ESTRATIFICAÇÃO: a mesma foto, quebrada pela dimensão escolhida
       (Unidade · Projeto · Tipo de Veículo · Modelo) — Renan, 14/08/2026   ── */
