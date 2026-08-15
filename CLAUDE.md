@@ -686,6 +686,8 @@ body.claro{                              /* claro */
 ```
 **Tema claro é classe `body.claro`** (não `light-mode`), chave `bi_theme`, botão sol/lua no topo. Cards usam `background:var(--side)` — o mesmo tom do menu lateral (regra do Renan). Tudo que é "um degrau acima" (painéis, chips, inputs) usa `--side`; nada de `rgba` chapado. **Não mexer no valor de `--side` para ganhar contraste** — já tentei e quebrou a regra; o contraste vem do fundo uniforme e da sombra do card.
 
+**Menus suspensos são OPACOS** — token `--pop` (`#26262B` escuro / `#FFFFFF` claro). Filtro (`.ms-panel`), seletor de unidades do Gerenciar Acessos (`.farol-panel`) e a dica da lateral usam `--pop` com sombra em duas camadas. Com fundo translúcido dá para ler o card de baixo através do menu — foi exatamente o que aconteceu.
+
 **São cores TRANSLÚCIDAS de propósito** — é o empilhamento `--fundo` → `.app` (com `backdrop-filter:blur(20px)`) → `--side`/`--card` (com blur próprio e `--luz-card`) que dá o vidro. Trocar por hex chapado mata o efeito (já aconteceu). A moldura leva `.app{position:absolute;inset:34px;border-radius:22px;box-shadow:0 28px 70px rgba(0,0,0,.55), var(--luz)}` — **a sombra forte vale nos dois temas**, não suavizar no claro — e o `body::after` com a textura de grão fica por cima do fundo.
 
 ## Menu lateral (painéis)
