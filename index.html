@@ -6,177 +6,347 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<meta name="build" content="202608061817">
 <title>Gestão em Movimento · BI Hub</title>
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
-:root{--bg:#0C1017;--card:#141B26;--border:#1E2D40;--orange:#F97316;--blue:#38BDF8;--text:#F1F5F9;--text2:#94A3B8;--text3:#475569;--green:#3BB33B;--red:#FF6666;}
-*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
-body{background:radial-gradient(ellipse at 15% 20%,rgba(249,115,22,.07) 0%,transparent 50%),radial-gradient(ellipse at 85% 80%,rgba(56,189,248,.05) 0%,transparent 50%),var(--bg);color:var(--text);font-family:'Montserrat',-apple-system,sans-serif;min-height:100vh;}
+/* ============================================================================
+   HUB · o mesmo painel de vidro da Visão Financeira nova, SEM menu lateral.
+   Os clusters viram colunas e cabem todos numa tela só, sem rolagem.
+   Tokens, moldura, textura e vidro: idênticos ao painel — nada reinventado.
+   ============================================================================ */
+:root{
+  /* fundo UNIFORME no tom DO MEIO do degradê do painel (#1D1D1F / #E1E2E5):
+     travar na ponta escura deixava o hub um degrau abaixo do painel
+     (miolo #d9d9dc contra os #eeeef0 de lá). O relevo vem da sombra. */
+  --fundo:
+    radial-gradient(80% 60% at 90% 0%, rgba(255,244,232,.035) 0%, transparent 60%),
+    linear-gradient(45deg, #202022 0%, #202022 100%);
+  --luz:      inset 0 1px 0 rgba(255,255,255,.09);
+  --luz-card: inset 0 1px 0 rgba(255,255,255,.08);
+  --app:      rgba(18,18,18,.30);
+  --side:     rgba(38,38,41,.62);
+  --linha:    rgba(255,255,255,.06);
+  --card:     rgba(44,44,46,.78);
+  --brilho:   linear-gradient(180deg, rgba(255,255,255,.022) 0%, rgba(255,255,255,0) 46%);
+  --card-brd: rgba(255,255,255,.07);
+  --txt:      #EEF2FA;
+  --txt2:     #B2BCD2;
+  --txt3:     #676F83;
+  --txt4:     #4C505C;
+  --hover:    rgba(255,255,255,.06);
+  --azul:     #2E90E8;
+  --verde:    #3BB33B;
+  --vermelho: #FF5252;
+  --laranja:  #F97316;
+  --ambar:    #F4A100;
+  --cabec:    #2B2B30;
+}
+body.claro{
+  --fundo:
+    radial-gradient(80% 60% at 90% 0%, rgba(255,255,255,.35) 0%, transparent 60%),
+    linear-gradient(45deg, #E1E2E5 0%, #E1E2E5 100%);
+  --luz:      inset 0 1px 0 rgba(255,255,255,.9);
+  --luz-card: inset 0 1px 0 rgba(255,255,255,1);
+  --app:      rgba(255,255,255,.34);
+  --side:     rgba(255,255,255,.78);
+  --linha:    rgba(15,23,42,.10);
+  --card:     rgba(255,255,255,.74);
+  --brilho:   linear-gradient(180deg, rgba(255,255,255,.6) 0%, rgba(255,255,255,0) 46%);
+  --card-brd: rgba(15,23,42,.10);
+  --txt:      #161D2B;
+  --txt2:     #4A5568;
+  --txt3:     #737D91;
+  --txt4:     #8B94A6;
+  --hover:    rgba(15,23,42,.05);
+  --azul:     #1B6FC4;
+  --verde:    #00B300;
+  --vermelho: #FF0000;
+  --ambar:    #E9A400;
+  --cabec:    #DCDFE6;
+}
+*{margin:0;padding:0;box-sizing:border-box;}
+@supports not selector(::-webkit-scrollbar){
+  *{scrollbar-width:thin;scrollbar-color:color-mix(in srgb,var(--txt3) 42%,transparent) transparent;}
+}
+::-webkit-scrollbar{width:11px;height:11px;}
+::-webkit-scrollbar-track{background:transparent;}
+::-webkit-scrollbar-thumb{background:color-mix(in srgb,var(--txt3) 42%,transparent);
+  border:3px solid transparent;background-clip:content-box;border-radius:9px;}
+::-webkit-scrollbar-thumb:hover{background:color-mix(in srgb,var(--txt3) 72%,transparent);background-clip:content-box;}
+::-webkit-scrollbar-corner{background:transparent;}
+::-webkit-scrollbar-button{display:none;width:0;height:0;}
+html,body{height:100%;overflow:hidden;}
+body{font-family:'Montserrat',-apple-system,BlinkMacSystemFont,sans-serif;font-size:13px;color:var(--txt);
+  background:var(--fundo);}
+/* textura de grão por cima do fundo — é ela que dá o ar de vidro fosco */
+body::after{content:'';position:fixed;inset:0;z-index:0;pointer-events:none;opacity:.5;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='3'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)' opacity='.05'/%3E%3C/svg%3E");}
 
-#loading{position:fixed;inset:0;background:var(--bg);display:flex;align-items:center;justify-content:center;z-index:999;}
-.spinner{width:32px;height:32px;border:3px solid rgba(249,115,22,.2);border-top-color:var(--orange);border-radius:50%;animation:spin .7s linear infinite;}
+#loading{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;z-index:999;background:var(--fundo);}
+.spinner{width:30px;height:30px;border:3px solid rgba(249,115,22,.2);border-top-color:var(--laranja);border-radius:50%;animation:spin .7s linear infinite;}
 @keyframes spin{to{transform:rotate(360deg);}}
 
-.auth-screen,.pending-screen{display:none;align-items:center;justify-content:center;min-height:100vh;padding:20px;}
-.auth-card{background:rgba(20,27,38,.85);border:1px solid rgba(255,255,255,.08);border-radius:16px;padding:44px 40px;width:100%;max-width:400px;backdrop-filter:blur(24px);box-shadow:0 24px 64px rgba(0,0,0,.55);}
-.auth-logo{text-align:center;margin-bottom:36px;}
-.auth-logo-mark{width:48px;height:48px;background:rgba(249,115,22,.15);border:1px solid rgba(249,115,22,.3);border-radius:12px;display:flex;align-items:center;justify-content:center;margin:0 auto 14px;}
-.auth-logo-mark svg{width:24px;height:24px;color:var(--orange);}
-.auth-logo h1{font-size:20px;font-weight:800;color:var(--text);letter-spacing:.3px;}
-.auth-logo p{font-size:10px;color:var(--text2);margin-top:4px;text-transform:uppercase;letter-spacing:1.2px;}
-.auth-tabs{display:flex;gap:0;margin-bottom:28px;background:rgba(0,0,0,.35);border-radius:7px;padding:3px;}
-.auth-tab{flex:1;padding:8px;font-family:'Montserrat',sans-serif;font-size:10px;font-weight:800;border:none;border-radius:5px;cursor:pointer;background:transparent;color:var(--text2);text-transform:uppercase;letter-spacing:.7px;transition:all .2s;}
-.auth-tab.active{background:var(--orange);color:#fff;box-shadow:0 2px 8px rgba(249,115,22,.3);}
-.field{margin-bottom:14px;}
-.field label{display:block;font-size:9px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:.7px;margin-bottom:6px;}
-.field input{width:100%;background:rgba(0,0,0,.45);border:1px solid rgba(255,255,255,.09);border-radius:7px;padding:11px 14px;font-family:'Montserrat',sans-serif;font-size:13px;color:var(--text);outline:none;transition:border-color .2s;}
-.field input:focus{border-color:rgba(249,115,22,.6);}
-.field input::placeholder{color:var(--text3);}
-.pass-wrap{position:relative;}
-.pass-wrap input{padding-right:40px;}
-.eye-btn{position:absolute;right:12px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:var(--text3);display:flex;align-items:center;padding:2px;transition:color .2s;}
-.eye-btn:hover{color:var(--text2);}
-.forgot-wrap{text-align:right;margin-top:-6px;margin-bottom:6px;}
-.forgot-link{background:none;border:none;color:var(--text3);font-family:'Montserrat',sans-serif;font-size:10px;cursor:pointer;padding:0;transition:color .2s;letter-spacing:.3px;}
-.forgot-link:hover{color:var(--orange);}
-.back-link{display:block;margin-top:14px;background:none;border:none;color:var(--text3);font-family:'Montserrat',sans-serif;font-size:10px;cursor:pointer;padding:0;text-align:center;width:100%;transition:color .2s;}
-.back-link:hover{color:var(--text2);}
-.form-hint{font-size:11px;color:var(--text2);margin-bottom:16px;line-height:1.55;}
-.auth-btn{width:100%;background:var(--orange);border:none;border-radius:7px;padding:13px;font-family:'Montserrat',sans-serif;font-size:12px;font-weight:800;color:#fff;cursor:pointer;text-transform:uppercase;letter-spacing:.7px;margin-top:6px;transition:opacity .2s,transform .1s;box-shadow:0 4px 16px rgba(249,115,22,.3);}
-.auth-btn:hover{opacity:.88;}
-.auth-btn:active{transform:scale(.98);}
-.auth-btn:disabled{opacity:.35;cursor:not-allowed;transform:none;}
-.auth-msg{font-size:11px;margin-top:14px;text-align:center;min-height:16px;line-height:1.4;}
-.auth-msg.error{color:var(--red);}
-.auth-msg.success{color:var(--green);}
+/* ── moldura de vidro ── */
+.app{position:absolute;inset:34px;z-index:1;display:flex;flex-direction:column;border-radius:22px;overflow:hidden;
+  border:1px solid rgba(255,255,255,.10);box-shadow:0 28px 70px rgba(0,0,0,.55), var(--luz);}
+.app::before{content:'';position:absolute;inset:0;background:var(--app);
+  backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);z-index:0;}
+.app>*{position:relative;z-index:1;}
 
+/* ── topo ── */
+.top{flex:0 0 auto;display:flex;align-items:center;gap:14px;padding:20px 24px 12px;flex-wrap:wrap;}
+.marca{display:flex;align-items:center;gap:11px;min-width:0;}
+.marca .mk{width:34px;height:34px;flex:0 0 34px;border-radius:11px;display:flex;align-items:center;justify-content:center;
+  background:var(--brilho), color-mix(in srgb,var(--laranja) 16%,transparent);
+  border:1px solid color-mix(in srgb,var(--laranja) 30%,transparent);box-shadow:var(--luz-card);}
+.marca .mk svg{width:17px;height:17px;stroke:var(--laranja);fill:none;}
+.marca h1{font-size:21px;font-weight:600;letter-spacing:-.3px;line-height:1.1;}
+.marca p{font-size:11px;color:var(--txt3);font-weight:600;margin-top:2px;letter-spacing:.2px;}
+.top-dir{margin-left:auto;display:flex;align-items:center;gap:8px;}
+.busca{position:relative;}
+.busca svg{position:absolute;left:11px;top:50%;transform:translateY(-50%);width:13px;height:13px;stroke:var(--txt3);fill:none;pointer-events:none;}
+.busca input{width:212px;border-radius:20px;padding:8px 13px 8px 32px;font-family:inherit;font-size:12.5px;color:var(--txt);outline:0;
+  background:var(--brilho), var(--side);border:1px solid var(--card-brd);box-shadow:var(--luz-card);
+  backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);}
+.busca input:focus{border-color:color-mix(in srgb,var(--laranja) 50%,transparent);}
+.busca input::placeholder{color:var(--txt4);}
+.ico-btn{width:32px;height:32px;flex:0 0 32px;display:flex;align-items:center;justify-content:center;cursor:pointer;
+  background:transparent;border:1px solid var(--card-brd);border-radius:50%;color:var(--txt2);}
+.ico-btn:hover{background:var(--hover);color:var(--txt);}
+.quem{display:flex;align-items:center;gap:9px;padding:4px 6px 4px 5px;border-radius:20px;
+  background:var(--brilho), var(--side);border:1px solid var(--card-brd);box-shadow:var(--luz-card);
+  backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);}
+.av{width:24px;height:24px;flex:0 0 24px;border-radius:50%;display:flex;align-items:center;justify-content:center;
+  font-size:9px;font-weight:800;letter-spacing:.2px;color:#2A1405;background:var(--laranja);box-shadow:0 1px 4px rgba(0,0,0,.25);}
+.quem b{font-size:12px;font-weight:600;color:var(--txt);white-space:nowrap;max-width:160px;overflow:hidden;text-overflow:ellipsis;}
+.sair{background:transparent;border:0;border-radius:50%;width:24px;height:24px;display:flex;align-items:center;justify-content:center;
+  cursor:pointer;color:var(--txt3);}
+.sair:hover{color:var(--vermelho);background:var(--hover);}
+
+/* ── tabuleiro: um cluster por coluna, tudo numa tela ── */
+.board{flex:1;min-height:0;display:grid;gap:12px;padding:4px 24px 24px;align-items:start;}
+.clu{display:flex;flex-direction:column;gap:9px;min-width:0;min-height:0;}
+.clu-h{display:flex;align-items:center;gap:8px;padding:0 3px 2px;}
+.clu-h span{font-size:10px;font-weight:600;color:var(--txt3);text-transform:uppercase;letter-spacing:1.1px;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.clu-h i{flex:1;height:1px;background:var(--linha);}
+.clu-h b{flex:0 0 auto;font-size:10px;font-weight:600;color:var(--txt4);}
+.clu-cards{display:flex;flex-direction:column;gap:9px;min-height:0;}
+
+/* ── modo LISTA: clusters empilhados; o cluster é só a barra de título e,
+      ao abrir, mostra os cards inteiros (com o resumo) ── */
+.board.lista{display:flex;flex-direction:column;gap:6px;overflow:auto;align-items:stretch;}
+.board.lista .clu{flex:0 0 auto;gap:0;background:transparent;border:0;border-radius:0;
+  box-shadow:none;backdrop-filter:none;-webkit-backdrop-filter:none;overflow:visible;}
+.board.lista .clu-h{width:100%;display:flex;align-items:center;gap:10px;padding:7px 2px 9px;cursor:pointer;
+  background:transparent;border:0;font-family:inherit;text-align:left;}
+.board.lista .clu-h span{font-size:10px;font-weight:600;color:var(--txt3);letter-spacing:1.1px;text-transform:uppercase;}
+.board.lista .clu-h:hover span{color:var(--txt2);}
+.board.lista .clu.aberto .clu-h span{color:var(--txt2);}
+.board.lista .clu-h b{font-size:10px;font-weight:600;color:var(--txt4);}
+/* o "+" que vira "−" ao abrir */
+.mais{position:relative;width:19px;height:19px;flex:0 0 19px;border-radius:6px;display:flex;
+  background:color-mix(in srgb,var(--laranja) 14%,transparent);
+  border:1px solid color-mix(in srgb,var(--laranja) 26%,transparent);}
+.mais i{position:absolute;top:50%;left:50%;width:9px;height:1.6px;border-radius:2px;background:var(--laranja);
+  transform:translate(-50%,-50%);transition:transform .2s;}
+.mais i:last-child{transform:translate(-50%,-50%) rotate(90deg);}
+.clu.aberto .mais i:last-child{transform:translate(-50%,-50%) rotate(0deg);}
+.board.lista .clu-cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(228px,1fr));gap:9px;
+  padding:0 0 6px;}
+.board.lista .clu:not(.aberto) .clu-cards{display:none;}
+/* na lista o miolo rola, então o resumo pode aparecer inteiro em 3 linhas */
+.board.lista .hcard .dsc{-webkit-line-clamp:3;}
+@media(max-width:900px){ .board.lista .clu-cards{grid-template-columns:1fr;} }
+
+.hcard{display:flex;flex-direction:column;gap:6px;padding:12px 13px 13px;border-radius:12px;cursor:pointer;
+  background:var(--brilho), var(--side);border:1px solid var(--card-brd);
+  box-shadow:var(--luz-card), 0 8px 20px rgba(0,0,0,.40), 0 2px 5px rgba(0,0,0,.28);
+  backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);
+  text-decoration:none;color:inherit;transition:border-color .18s,transform .18s,box-shadow .18s;}
+body.claro .hcard{box-shadow:var(--luz-card), 0 8px 20px rgba(15,23,42,.13), 0 2px 5px rgba(15,23,42,.09);}
+.hcard:hover{border-color:color-mix(in srgb,var(--laranja) 42%,transparent);transform:translateY(-3px);
+  box-shadow:var(--luz-card), 0 16px 34px rgba(0,0,0,.50), 0 3px 8px rgba(0,0,0,.32);}
+body.claro .hcard:hover{box-shadow:var(--luz-card), 0 16px 34px rgba(15,23,42,.20), 0 3px 8px rgba(15,23,42,.12);}
+.hcard-top{display:flex;align-items:center;gap:9px;}
+.hcard .ic{width:28px;height:28px;flex:0 0 28px;border-radius:9px;display:flex;align-items:center;justify-content:center;
+  background:color-mix(in srgb,var(--laranja) 13%,transparent);
+  border:1px solid color-mix(in srgb,var(--laranja) 22%,transparent);}
+.hcard .ic svg{width:14px;height:14px;stroke:var(--laranja);fill:none;}
+.hcard .tit{font-size:12.5px;font-weight:600;color:var(--txt);line-height:1.2;min-width:0;}
+.hcard .seta{margin-left:auto;flex:0 0 auto;opacity:0;color:var(--laranja);display:flex;transition:opacity .18s;}
+.hcard:hover .seta{opacity:1;}
+.hcard .dsc{font-size:10px;color:var(--txt3);line-height:1.5;
+  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}
+.hcard .pnd{margin-left:auto;flex:0 0 auto;font-size:8.5px;font-weight:800;padding:2px 7px;border-radius:10px;
+  color:#2A1405;background:var(--laranja);}
+.vazio{grid-column:1/-1;padding:40px;text-align:center;font-size:12px;color:var(--txt3);}
+
+/* densidade por altura de tela — a coluna mais alta (7 cards) tem de caber
+   sem rolagem em 1600x900 e em 1366x768 */
+@media(min-height:940px){ .hcard .dsc{-webkit-line-clamp:3;} }
+@media(max-height:900px){ .app{inset:22px;} }
+@media(max-height:800px){
+  .app{inset:14px;border-radius:18px;}
+  .board.lista{gap:7px;}
+  .board.lista .clu-h{padding:9px 14px;}
+  .board.lista .hcard{padding:5px 9px;}
+  .top{padding:14px 18px 10px;}
+  .marca h1{font-size:18px;} .marca .mk{width:30px;height:30px;flex:0 0 30px;}
+  .board{gap:8px;padding:2px 18px 16px;}
+  .clu-cards{gap:8px;}
+  .hcard{padding:9px 11px 10px;gap:5px;}
+  .hcard .ic{width:25px;height:25px;flex:0 0 25px;border-radius:8px;}
+  .hcard .tit{font-size:12px;}
+  .hcard .dsc{font-size:9.5px;line-height:1.42;}
+}
+
+/* ── celular: vira lista rolável ── */
+@media(max-width:900px){
+  html,body{overflow:auto;}
+  .app{position:static;inset:auto;min-height:100%;border:0;border-radius:0;box-shadow:none;}
+  .app::before{position:fixed;inset:0;}
+  .top{padding:14px 16px 10px;}
+  .marca h1{font-size:17px;} .marca p{font-size:10px;}
+  .busca{order:3;width:100%;} .busca input{width:100%;}
+  .board{grid-template-columns:1fr!important;padding:4px 16px 26px;}
+  .hcard .dsc{-webkit-line-clamp:3;}
+}
+
+/* ── autenticação: mesmo vidro ── */
+.auth-screen,.pending-screen{display:none;position:fixed;inset:0;z-index:2;align-items:center;justify-content:center;padding:20px;overflow:auto;}
+.auth-card{width:100%;max-width:396px;padding:40px 36px;border-radius:20px;
+  background:var(--brilho), var(--card);border:1px solid var(--card-brd);
+  backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);
+  box-shadow:0 28px 70px rgba(0,0,0,.55), var(--luz-card);}
+body.claro .auth-card{box-shadow:0 28px 70px rgba(15,23,42,.16), var(--luz-card);}
+.auth-logo{text-align:center;margin-bottom:30px;}
+.auth-logo-mark{width:46px;height:46px;border-radius:14px;display:flex;align-items:center;justify-content:center;margin:0 auto 13px;
+  background:var(--brilho), color-mix(in srgb,var(--laranja) 16%,transparent);
+  border:1px solid color-mix(in srgb,var(--laranja) 30%,transparent);box-shadow:var(--luz-card);}
+.auth-logo-mark svg{width:23px;height:23px;stroke:var(--laranja);fill:none;}
+.auth-logo h1{font-size:18px;font-weight:700;color:var(--txt);letter-spacing:.2px;}
+.auth-logo p{font-size:10px;color:var(--txt3);margin-top:5px;text-transform:uppercase;letter-spacing:1.1px;font-weight:600;}
+.auth-tabs{display:flex;margin-bottom:24px;border-radius:11px;padding:3px;
+  background:var(--side);border:1px solid var(--card-brd);}
+.auth-tab{flex:1;padding:8px;font-family:inherit;font-size:10px;font-weight:800;border:0;border-radius:8px;cursor:pointer;
+  background:transparent;color:var(--txt3);text-transform:uppercase;letter-spacing:.7px;}
+.auth-tab.active{background:var(--laranja);color:#2A1405;}
+.field{margin-bottom:13px;}
+.field label{display:block;font-size:9px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:.7px;margin-bottom:6px;}
+.field input{width:100%;border-radius:10px;padding:11px 13px;font-family:inherit;font-size:13px;color:var(--txt);outline:none;
+  background:var(--side);border:1px solid var(--card-brd);}
+.field input:focus{border-color:color-mix(in srgb,var(--laranja) 50%,transparent);}
+.field input::placeholder{color:var(--txt4);}
+.pass-wrap{position:relative;} .pass-wrap input{padding-right:40px;}
+.eye-btn{position:absolute;right:11px;top:50%;transform:translateY(-50%);background:none;border:0;cursor:pointer;
+  color:var(--txt3);display:flex;padding:2px;}
+.eye-btn:hover{color:var(--txt2);}
+.forgot-wrap{text-align:right;margin:-4px 0 6px;}
+.forgot-link,.back-link{background:none;border:0;color:var(--txt3);font-family:inherit;font-size:10px;cursor:pointer;padding:0;}
+.forgot-link:hover{color:var(--laranja);}
+.back-link{display:block;margin-top:13px;text-align:center;width:100%;}
+.back-link:hover{color:var(--txt2);}
+.form-hint{font-size:11.5px;color:var(--txt2);margin-bottom:15px;line-height:1.55;}
+.auth-btn{width:100%;background:var(--laranja);border:0;border-radius:10px;padding:12px;font-family:inherit;font-size:12px;
+  font-weight:800;color:#2A1405;cursor:pointer;text-transform:uppercase;letter-spacing:.7px;margin-top:6px;
+  box-shadow:0 6px 18px rgba(249,115,22,.28);}
+.auth-btn:hover{filter:brightness(1.06);}
+.auth-btn:disabled{opacity:.4;cursor:not-allowed;box-shadow:none;}
+.auth-msg{font-size:11px;margin-top:13px;text-align:center;min-height:16px;line-height:1.4;}
+.auth-msg.error{color:var(--vermelho);}
+.auth-msg.success{color:var(--verde);}
 .pending-card{text-align:center;}
-.pending-spinner-wrap{width:64px;height:64px;border-radius:50%;background:rgba(249,115,22,.1);border:1px solid rgba(249,115,22,.2);display:flex;align-items:center;justify-content:center;margin:0 auto 22px;}
-.pending-card h3{font-size:17px;font-weight:800;color:var(--text);margin-bottom:10px;}
-.pending-card .desc{font-size:12px;color:var(--text2);line-height:1.6;}
-.pending-card .hint{font-size:10px;color:var(--text3);margin-top:10px;}
-.pending-logout{background:transparent;border:1px solid rgba(255,255,255,.1);border-radius:7px;padding:10px 20px;font-family:'Montserrat',sans-serif;font-size:10px;font-weight:700;color:var(--text3);cursor:pointer;text-transform:uppercase;letter-spacing:.5px;margin-top:24px;transition:all .2s;width:100%;}
-.pending-logout:hover{border-color:rgba(255,255,255,.2);color:var(--text2);}
+.pending-spinner-wrap{width:62px;height:62px;border-radius:50%;display:flex;align-items:center;justify-content:center;margin:0 auto 20px;
+  background:color-mix(in srgb,var(--laranja) 10%,transparent);border:1px solid color-mix(in srgb,var(--laranja) 22%,transparent);}
+.pending-card h3{font-size:17px;font-weight:700;color:var(--txt);margin-bottom:10px;}
+.pending-card .desc{font-size:12px;color:var(--txt2);line-height:1.6;}
+.pending-card .hint{font-size:10px;color:var(--txt3);margin-top:10px;}
+.pending-logout{width:100%;margin-top:22px;background:transparent;border:1px solid var(--card-brd);border-radius:10px;padding:10px 20px;
+  font-family:inherit;font-size:10px;font-weight:800;color:var(--txt3);cursor:pointer;text-transform:uppercase;letter-spacing:.6px;}
+.pending-logout:hover{color:var(--txt2);border-color:var(--txt4);}
 
-.hub-screen{display:none;}
-.hub-header{background:rgba(12,16,23,.82);border-bottom:1px solid rgba(255,255,255,.06);padding:12px 32px;display:flex;align-items:center;gap:16px;position:sticky;top:0;z-index:100;backdrop-filter:blur(24px);box-shadow:0 2px 16px rgba(0,0,0,.3);}
-.hub-logo h1{font-size:15px;font-weight:800;color:var(--orange);letter-spacing:.3px;}
-.hub-logo p{font-size:9px;color:var(--text2);margin-top:2px;text-transform:uppercase;letter-spacing:.8px;}
-.hub-header-right{margin-left:auto;display:flex;align-items:center;gap:12px;}
-.hub-user{font-size:11px;color:var(--text2);}
-.hub-user b{color:var(--text);font-weight:600;}
-.logout-btn{background:transparent;border:1px solid rgba(255,255,255,.1);border-radius:5px;padding:5px 12px;font-family:'Montserrat',sans-serif;font-size:9px;font-weight:700;color:var(--text3);cursor:pointer;text-transform:uppercase;letter-spacing:.5px;transition:all .2s;}
-.logout-btn:hover{border-color:var(--red);color:var(--red);}
-.back-nav-btn{background:transparent;border:1px solid rgba(255,255,255,.1);border-radius:5px;padding:5px 12px;font-family:'Montserrat',sans-serif;font-size:9px;font-weight:700;color:var(--text3);cursor:pointer;text-transform:uppercase;letter-spacing:.5px;transition:all .2s;}
-.back-nav-btn:hover{border-color:var(--orange);color:var(--orange);}
-.hub-main{padding:36px 32px 80px;}
-.hub-welcome{margin-bottom:36px;}
-.hub-welcome h2{font-size:28px;font-weight:800;color:var(--text);}
-.hub-welcome p{font-size:12px;color:var(--text2);margin-top:5px;}
-.category{margin-bottom:40px;}
-.category-header{display:flex;align-items:center;margin-bottom:16px;}
-.category-title{font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:1.8px;white-space:nowrap;padding-right:14px;}
-.category-line{height:1px;background:rgba(255,255,255,.05);flex:0 0 auto;}
-.cards-grid{display:grid;grid-template-columns:repeat(3,minmax(200px,300px));gap:14px;}
-.dash-card{background:rgba(20,27,38,.55);border:1px solid rgba(255,255,255,.07);border-radius:12px;padding:22px;backdrop-filter:blur(16px);box-shadow:0 2px 16px rgba(0,0,0,.2);display:flex;flex-direction:column;gap:12px;transition:border-color .25s,transform .2s,box-shadow .25s;}
-.dash-card.active:hover{border-color:rgba(249,115,22,.4);transform:translateY(-3px);box-shadow:0 8px 32px rgba(0,0,0,.35);}
-.dash-card.inactive{opacity:.4;cursor:not-allowed;}
-.card-top{display:flex;align-items:flex-start;justify-content:space-between;gap:8px;}
-.card-icon{width:38px;height:38px;border-radius:10px;background:rgba(249,115,22,.1);border:1px solid rgba(249,115,22,.15);display:flex;align-items:center;justify-content:center;flex-shrink:0;}
-.card-icon svg{width:18px;height:18px;stroke:var(--orange);}
-.badge{font-size:8px;font-weight:800;text-transform:uppercase;letter-spacing:.6px;padding:3px 8px;border-radius:10px;white-space:nowrap;}
-.badge.on{background:rgba(59,179,59,.2);color:#4ADE80;border:1px solid rgba(59,179,59,.5);box-shadow:0 0 8px rgba(59,179,59,.25);}
-.badge.off{background:rgba(255,255,255,.04);color:var(--text3);border:1px solid rgba(255,255,255,.07);}
-.badge.warn{background:rgba(249,115,22,.15);color:var(--orange);border:1px solid rgba(249,115,22,.3);}
-.card-title{font-size:14px;font-weight:800;color:var(--text);line-height:1.25;}
-.card-desc{font-size:11px;color:var(--text2);line-height:1.55;flex:1;}
-.card-link{display:inline-flex;align-items:center;gap:6px;background:rgba(249,115,22,.12);border:1px solid rgba(249,115,22,.25);border-radius:6px;padding:8px 14px;font-family:'Montserrat',sans-serif;font-size:10px;font-weight:800;color:var(--orange);text-decoration:none;text-transform:uppercase;letter-spacing:.6px;transition:background .2s;margin-top:auto;width:fit-content;cursor:pointer;}
-.card-link:hover{background:rgba(249,115,22,.25);}
-.card-link svg{width:11px;height:11px;stroke:var(--orange);}
-.card-soon{display:inline-flex;align-items:center;font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.6px;margin-top:auto;padding:8px 0;}
-
-.admin-screen{display:none;}
-.admin-tabs{display:flex;gap:4px;margin-bottom:24px;background:rgba(0,0,0,.3);border-radius:7px;padding:3px;width:fit-content;}
-.admin-tab{padding:7px 20px;font-family:'Montserrat',sans-serif;font-size:10px;font-weight:800;border:none;border-radius:5px;cursor:pointer;background:transparent;color:var(--text2);text-transform:uppercase;letter-spacing:.7px;transition:all .2s;display:flex;align-items:center;gap:6px;}
-.admin-tab.active{background:var(--orange);color:#fff;}
-.admin-cnt{border-radius:10px;padding:1px 7px;font-size:9px;font-weight:800;background:rgba(255,255,255,.2);color:#fff;}
-.admin-tab:not(.active) .admin-cnt{background:rgba(249,115,22,.2);color:var(--orange);}
-.user-card{background:rgba(20,27,38,.55);border:1px solid rgba(255,255,255,.07);border-radius:10px;padding:16px 20px;display:flex;align-items:center;gap:16px;margin-bottom:10px;backdrop-filter:blur(16px);}
-.user-avatar{width:40px;height:40px;border-radius:50%;background:rgba(249,115,22,.15);border:1px solid rgba(249,115,22,.2);display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:800;color:var(--orange);flex-shrink:0;}
-.user-info{flex:1;min-width:0;}
-.user-name{font-size:13px;font-weight:700;color:var(--text);text-transform:uppercase;}
-.user-email{font-size:11px;color:var(--text2);margin-top:2px;}
-.user-phone{font-size:11px;color:var(--text3);margin-top:2px;}
-.user-phone a{color:var(--text3);text-decoration:none;display:inline-flex;align-items:center;gap:5px;}
-.user-phone a:hover{color:#25D366;}
-.user-phone a:hover .wa-ico{stroke:#25D366;}
-.wa-ico{width:13px;height:13px;stroke:var(--text3);fill:none;flex-shrink:0;}
-.edit-name{background:none;border:none;color:var(--text3);cursor:pointer;font-size:12px;padding:1px 5px;margin-left:6px;border-radius:4px;line-height:1;}
-.edit-name:hover{color:var(--orange);background:rgba(249,115,22,.14);}
-.user-date{font-size:10px;color:var(--text3);margin-top:4px;}
-.user-fca{margin-top:8px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;position:relative;}
-.user-fca label{font-size:10px;font-weight:700;color:var(--orange);text-transform:uppercase;letter-spacing:.5px;}
-.user-fca .farol-btn:hover{border-color:var(--orange);}
-.user-fca .farol-btn .fcnt{background:var(--orange);color:#000;}
-.user-fca .farol-opt input{accent-color:var(--orange);}
-.user-farol{margin-top:8px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;position:relative;}
-.user-farol>label{font-size:10px;font-weight:700;color:#38BDF8;text-transform:uppercase;letter-spacing:.5px;}
-.farol-btn{background:#0a0f18;color:var(--text);border:1px solid #2a3a50;border-radius:6px;font-family:'Montserrat',sans-serif;font-size:11px;font-weight:700;padding:5px 10px;cursor:pointer;outline:none;display:flex;align-items:center;gap:7px;min-width:150px;}
-.farol-btn:hover{border-color:#38BDF8;}
-.farol-btn .fcnt{background:#38BDF8;color:#08121c;border-radius:10px;padding:1px 7px;font-size:9px;font-weight:800;}
-.farol-panel{display:none;position:absolute;top:calc(100% + 4px);left:0;z-index:60;background:#0f1824;border:1px solid #2a3a50;border-radius:8px;min-width:210px;max-height:260px;overflow:auto;box-shadow:0 10px 28px rgba(0,0,0,.6);padding:4px;}
-.farol-panel.open{display:block;}
-.user-card{position:relative;}
-.user-card.farol-open{z-index:500;}
-.farol-opt{display:flex;align-items:center;gap:8px;padding:6px 10px;cursor:pointer;font-size:11px;color:var(--text2);border-radius:5px;}
-.farol-opt:hover{background:rgba(255,255,255,.05);color:var(--text);}
-.farol-opt.all-opt{border-bottom:1px solid #1e2d40;color:var(--text);font-weight:700;margin-bottom:2px;}
-.farol-opt input{accent-color:#38BDF8;width:14px;height:14px;cursor:pointer;}
-.user-fca select{background:#0a0f18;color:var(--text);border:1px solid #2a3a50;border-radius:6px;font-family:'Montserrat',sans-serif;font-size:11px;font-weight:700;padding:5px 9px;cursor:pointer;outline:none;}
-.user-fca select:hover{border-color:var(--orange);}
-.user-actions{display:flex;gap:8px;flex-shrink:0;}
-.btn-approve{background:rgba(59,179,59,.15);border:1px solid rgba(59,179,59,.3);border-radius:6px;padding:7px 16px;font-family:'Montserrat',sans-serif;font-size:10px;font-weight:800;color:var(--green);cursor:pointer;text-transform:uppercase;letter-spacing:.5px;transition:all .2s;}
-.btn-approve:hover{background:rgba(59,179,59,.3);}
-.btn-reject{background:transparent;border:1px solid rgba(255,255,255,.1);border-radius:6px;padding:7px 12px;font-family:'Montserrat',sans-serif;font-size:10px;font-weight:700;color:var(--text3);cursor:pointer;text-transform:uppercase;letter-spacing:.5px;transition:all .2s;}
-.btn-reject:hover{border-color:var(--red);color:var(--red);}
-.btn-block{background:rgba(255,102,102,.1);border:1px solid rgba(255,102,102,.2);border-radius:6px;padding:7px 16px;font-family:'Montserrat',sans-serif;font-size:10px;font-weight:800;color:var(--red);cursor:pointer;text-transform:uppercase;letter-spacing:.5px;transition:all .2s;}
-.btn-block:hover{background:rgba(255,102,102,.25);}
-.btn-unblock{background:rgba(59,179,59,.15);border:1px solid rgba(59,179,59,.3);border-radius:6px;padding:7px 16px;font-family:'Montserrat',sans-serif;font-size:10px;font-weight:800;color:var(--green);cursor:pointer;text-transform:uppercase;letter-spacing:.5px;transition:all .2s;}
-.btn-unblock:hover{background:rgba(59,179,59,.3);}
-.btn-remove{background:transparent;border:1px solid rgba(255,255,255,.1);border-radius:6px;padding:7px 12px;font-family:'Montserrat',sans-serif;font-size:10px;font-weight:700;color:var(--text3);cursor:pointer;text-transform:uppercase;letter-spacing:.5px;transition:all .2s;}
-.btn-remove:hover{border-color:var(--red);color:var(--red);}
-.admin-empty{text-align:center;padding:48px 24px;color:var(--text3);font-size:12px;}
-.admin-toolbar{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin:0 0 18px;}
+/* ── gerenciar acessos, dentro da mesma moldura ── */
+.tit-pg{flex:0 0 auto;padding:0 24px 12px;}
+.tit-pg h2{font-size:19px;font-weight:600;color:var(--txt);letter-spacing:-.2px;}
+.tit-pg p{font-size:11px;color:var(--txt3);margin-top:3px;font-weight:600;}
+.adm-main{flex:1;min-height:0;overflow:auto;padding:0 24px 24px;}
+.rt{background:transparent;border:1px solid var(--card-brd);border-radius:20px;padding:6px 13px;cursor:pointer;
+  font-family:inherit;font-size:9.5px;font-weight:800;color:var(--txt2);letter-spacing:.6px;text-transform:uppercase;white-space:nowrap;}
+.rt:hover{background:var(--hover);color:var(--txt);}
+.admin-tabs{display:flex;gap:4px;margin-bottom:16px;border-radius:11px;padding:3px;width:fit-content;
+  background:var(--side);border:1px solid var(--card-brd);}
+.admin-tab{padding:7px 18px;font-family:inherit;font-size:10px;font-weight:800;border:0;border-radius:8px;cursor:pointer;
+  background:transparent;color:var(--txt3);text-transform:uppercase;letter-spacing:.7px;display:flex;align-items:center;gap:6px;}
+.admin-tab.active{background:var(--laranja);color:#2A1405;}
+.admin-cnt{border-radius:10px;padding:1px 7px;font-size:9px;font-weight:800;background:rgba(0,0,0,.18);}
+.admin-tab:not(.active) .admin-cnt{background:var(--hover);color:var(--txt2);}
+.admin-toolbar{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:14px;}
 .admin-search-wrap{position:relative;flex:1;min-width:240px;max-width:440px;}
-.admin-export{display:inline-flex;align-items:center;gap:7px;background:rgba(59,179,59,.15);border:1px solid rgba(59,179,59,.4);color:#3BB33B;border-radius:7px;padding:9px 16px;font-family:'Montserrat',sans-serif;font-weight:800;font-size:12px;cursor:pointer;white-space:nowrap;}
-.admin-export:hover{background:rgba(59,179,59,.28);}
+.admin-search-wrap input{width:100%;border-radius:10px;color:var(--txt);font-family:inherit;font-size:13px;
+  padding:10px 14px 10px 36px;outline:none;background:var(--side);border:1px solid var(--card-brd);}
+.admin-search-wrap input:focus{border-color:color-mix(in srgb,var(--laranja) 50%,transparent);}
+.admin-search-wrap input::placeholder{color:var(--txt4);}
+.admin-search-wrap svg{position:absolute;left:12px;top:50%;transform:translateY(-50%);width:15px;height:15px;stroke:var(--txt3);pointer-events:none;fill:none;}
+.admin-export{display:inline-flex;align-items:center;gap:7px;border-radius:10px;padding:9px 15px;font-family:inherit;font-weight:800;
+  font-size:12px;cursor:pointer;white-space:nowrap;color:var(--verde);
+  background:color-mix(in srgb,var(--verde) 14%,transparent);border:1px solid color-mix(in srgb,var(--verde) 38%,transparent);}
+.admin-export:hover{background:color-mix(in srgb,var(--verde) 26%,transparent);}
 .admin-export svg{width:15px;height:15px;stroke:currentColor;fill:none;}
-.admin-search-wrap input{width:100%;background:#0a0f18;border:1px solid #2a3a50;border-radius:7px;color:var(--text);font-family:'Montserrat',sans-serif;font-size:13px;padding:10px 14px 10px 38px;outline:none;}
-.admin-search-wrap input:focus{border-color:var(--orange);}
-.admin-search-wrap input::placeholder{color:var(--text3);}
-.admin-search-wrap svg{position:absolute;left:13px;top:50%;transform:translateY(-50%);width:15px;height:15px;stroke:var(--text3);pointer-events:none;}
-
-@media(max-width:768px){
-  .hub-main{padding:20px 16px;}
-  .hub-header{padding:10px 16px;}
-  .hub-logo h1{font-size:13px;}
-  .hub-welcome h2{font-size:22px;}
-  .cards-grid{grid-template-columns:repeat(2,1fr);}
-  .hub-user span:first-child{display:none;}
-  .user-card{flex-wrap:wrap;}
-  .user-actions{width:100%;justify-content:flex-end;margin-top:4px;}
-}
-@media(max-width:480px){
-  .cards-grid{grid-template-columns:1fr;}
-  .auth-card{padding:32px 24px;}
-}
+.user-card{position:relative;border-radius:12px;padding:14px 18px;display:flex;align-items:center;gap:16px;margin-bottom:9px;
+  background:var(--brilho), var(--card);border:1px solid var(--card-brd);box-shadow:var(--luz-card);
+  backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);}
+.user-card.farol-open{z-index:500;}
+.user-avatar{width:38px;height:38px;flex:0 0 38px;border-radius:50%;display:flex;align-items:center;justify-content:center;
+  font-size:15px;font-weight:800;color:var(--laranja);
+  background:color-mix(in srgb,var(--laranja) 14%,transparent);border:1px solid color-mix(in srgb,var(--laranja) 26%,transparent);}
+.user-info{flex:1;min-width:0;}
+.user-name{font-size:13px;font-weight:700;color:var(--txt);text-transform:uppercase;}
+.user-email{font-size:11px;color:var(--txt2);margin-top:2px;}
+.user-phone{font-size:11px;color:var(--txt3);margin-top:2px;}
+.user-phone a{color:var(--txt3);text-decoration:none;display:inline-flex;align-items:center;gap:5px;}
+.user-phone a:hover{color:#25D366;} .user-phone a:hover .wa-ico{stroke:#25D366;}
+.wa-ico{width:13px;height:13px;stroke:var(--txt3);fill:none;flex-shrink:0;}
+.edit-name{background:none;border:0;color:var(--txt3);cursor:pointer;font-size:12px;padding:1px 5px;margin-left:6px;border-radius:4px;line-height:1;}
+.edit-name:hover{color:var(--laranja);background:var(--hover);}
+.user-date{font-size:10px;color:var(--txt4);margin-top:4px;}
+.user-fca,.user-farol{margin-top:8px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;position:relative;}
+.user-fca label{font-size:10px;font-weight:700;color:var(--laranja);text-transform:uppercase;letter-spacing:.5px;}
+.user-farol>label{font-size:10px;font-weight:700;color:var(--azul);text-transform:uppercase;letter-spacing:.5px;}
+.farol-btn{background:var(--side);color:var(--txt);border:1px solid var(--card-brd);border-radius:9px;font-family:inherit;
+  font-size:11px;font-weight:700;padding:5px 10px;cursor:pointer;outline:none;display:flex;align-items:center;gap:7px;min-width:150px;}
+.farol-btn:hover{border-color:var(--azul);}
+.farol-btn .fcnt{background:var(--azul);color:#fff;border-radius:10px;padding:1px 7px;font-size:9px;font-weight:800;}
+.user-fca .farol-btn:hover{border-color:var(--laranja);}
+.user-fca .farol-btn .fcnt{background:var(--laranja);color:#2A1405;}
+.user-fca .farol-opt input{accent-color:var(--laranja);}
+.farol-panel{display:none;position:absolute;top:calc(100% + 4px);left:0;z-index:60;border-radius:11px;padding:4px;
+  min-width:210px;max-height:260px;overflow:auto;background:var(--brilho), var(--card);border:1px solid var(--card-brd);
+  backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);box-shadow:0 18px 40px rgba(0,0,0,.5);}
+body.claro .farol-panel{box-shadow:0 18px 40px rgba(15,23,42,.16);}
+.farol-panel.open{display:block;}
+.farol-opt{display:flex;align-items:center;gap:8px;padding:6px 10px;cursor:pointer;font-size:11px;color:var(--txt2);border-radius:7px;}
+.farol-opt:hover{background:var(--hover);color:var(--txt);}
+.farol-opt.all-opt{border-bottom:1px solid var(--linha);color:var(--txt);font-weight:700;margin-bottom:2px;}
+.farol-opt input{accent-color:var(--azul);width:14px;height:14px;cursor:pointer;}
+.user-fca select{background:var(--side);color:var(--txt);border:1px solid var(--card-brd);border-radius:9px;font-family:inherit;
+  font-size:11px;font-weight:700;padding:5px 9px;cursor:pointer;outline:none;}
+.user-fca select:hover{border-color:var(--laranja);}
+.user-actions{display:flex;gap:8px;flex-shrink:0;}
+.btn-approve,.btn-unblock{border-radius:9px;padding:7px 15px;font-family:inherit;font-size:10px;font-weight:800;cursor:pointer;
+  text-transform:uppercase;letter-spacing:.5px;color:var(--verde);
+  background:color-mix(in srgb,var(--verde) 14%,transparent);border:1px solid color-mix(in srgb,var(--verde) 32%,transparent);}
+.btn-approve:hover,.btn-unblock:hover{background:color-mix(in srgb,var(--verde) 28%,transparent);}
+.btn-block{border-radius:9px;padding:7px 15px;font-family:inherit;font-size:10px;font-weight:800;cursor:pointer;
+  text-transform:uppercase;letter-spacing:.5px;color:var(--vermelho);
+  background:color-mix(in srgb,var(--vermelho) 12%,transparent);border:1px solid color-mix(in srgb,var(--vermelho) 26%,transparent);}
+.btn-block:hover{background:color-mix(in srgb,var(--vermelho) 24%,transparent);}
+.btn-reject,.btn-remove{background:transparent;border:1px solid var(--card-brd);border-radius:9px;padding:7px 12px;font-family:inherit;
+  font-size:10px;font-weight:800;color:var(--txt3);cursor:pointer;text-transform:uppercase;letter-spacing:.5px;}
+.btn-reject:hover,.btn-remove:hover{border-color:var(--vermelho);color:var(--vermelho);}
+.admin-empty{text-align:center;padding:44px 24px;color:var(--txt3);font-size:12px;}
 </style>
-<!-- Fundo com a foto do caminhão: DESLIGADO a pedido do Renan (10/08/2026).
-     Para religar, basta devolver esta linha:
-     <link rel="stylesheet" href="assets/fundo.css">
-     O arquivo e a imagem continuam no repositório. -->
 </head>
 <body>
 
@@ -236,128 +406,47 @@ body{background:radial-gradient(ellipse at 15% 20%,rgba(249,115,22,.07) 0%,trans
   </div>
 </div>
 
-<div class="hub-screen" id="hub-screen">
-  <header class="hub-header">
-    <div class="hub-logo"><h1>GESTÃO EM MOVIMENTO</h1><p>Business Intelligence · Frota</p></div>
-    <div class="hub-header-right">
-      <span class="hub-user">Olá, <b id="hub-username">—</b></span>
-      <button class="logout-btn" onclick="doLogout()">Sair</button>
+<div class="app" id="hub-screen" style="display:none">
+  <header class="top">
+    <div class="marca">
+      <div class="mk"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg></div>
+      <div><h1>Gestão em Movimento</h1><p>Business Intelligence · Frota</p></div>
+    </div>
+    <div class="top-dir">
+      <div class="busca">
+        <svg viewBox="0 0 24 24" fill="none" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M16.5 16.5 21 21"/></svg>
+        <input type="text" id="busca-painel" placeholder="Buscar painel…" oninput="filtraBoard(this.value)" autocomplete="off">
+      </div>
+      <button class="ico-btn" id="btModo" onclick="trocaModo()" title="Ver em colunas"></button>
+      <button class="ico-btn" id="btTema" onclick="trocaTema()" title="Claro / escuro"></button>
+      <div class="quem"><span class="av" id="hub-avatar">—</span><b id="hub-username">—</b>
+        <button class="sair" onclick="doLogout()" title="Sair">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+        </button>
+      </div>
     </div>
   </header>
-  <main class="hub-main">
-    <div class="hub-welcome"><h2>Painéis de BI</h2><p>Selecione um painel para visualizar os indicadores da frota.</p></div>
-
-    <div id="admin-card-wrapper" style="display:none;">
-      <div class="category">
-        <div class="category-header"><span class="category-title">Administração</span><span class="category-line" id="cl-adm"></span></div>
-        <div class="cards-grid">
-          <div class="dash-card active" style="cursor:pointer;" onclick="showAdmin()">
-            <div class="card-top">
-              <div class="card-icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></div>
-              <span class="badge warn" id="admin-pending-badge" style="display:none;"></span>
-            </div>
-            <div class="card-title">Gerenciar Acessos</div>
-            <div class="card-desc">Aprove, bloqueie ou remova o acesso de usuários ao portal.</div>
-            <span class="card-link">Abrir <svg viewBox="0 0 24 24" fill="none" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg></span>
-          </div>
-          <div class="dash-card active">
-            <div class="card-top">
-              <div class="card-icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg></div>
-              <span class="badge on">Admin</span>
-            </div>
-            <div class="card-title">Acessos</div>
-            <div class="card-desc">Auditoria de uso do portal — quantidade de acessos por usuário, por painel e por dia.</div>
-            <a class="card-link" href="acessos/">Abrir <svg viewBox="0 0 24 24" fill="none" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg></a>
-          </div>
-          <div class="dash-card active">
-            <div class="card-top">
-              <div class="card-icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="2" width="8" height="20" rx="4"/><circle cx="12" cy="7" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="12" cy="17" r="1.6"/></svg></div>
-              <span class="badge on">Admin</span>
-            </div>
-            <div class="card-title">Farol Frota</div>
-            <div class="card-desc">Farol semanal dos indicadores — visão geral e por unidade. E-mail automático toda segunda às 14h.</div>
-            <a class="card-link" href="farol-frota/">Abrir <svg viewBox="0 0 24 24" fill="none" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg></a>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <div class="category">
-      <div class="category-header"><span class="category-title">Planejamento Estratégico</span><span class="category-line" id="cl-pe"></span></div>
-      <div class="cards-grid">
-        <div class="dash-card active"><div class="card-top"><div class="card-icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="M9 12l2 2 4-4"/></svg></div><span class="badge on">Ativo</span></div><div class="card-title">Estratégia e Governança</div><div class="card-desc">Missão, visão e valores da frota + ritos de gestão (checkpoint, custos e planejamento mensal) com follow das ações.</div><a class="card-link" href="governanca/">Abrir <svg viewBox="0 0 24 24" fill="none" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg></a></div>
-        <div class="dash-card active"><div class="card-top"><div class="card-icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></div><span class="badge on">Ativo</span></div><div class="card-title">Papéis e Responsabilidades</div><div class="card-desc">Blocos de gestão da frota, descrição de cada responsabilidade e o dono responsável.</div><a class="card-link" href="papeis-responsabilidades/">Abrir <svg viewBox="0 0 24 24" fill="none" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg></a></div>
-      </div>
-    </div>
-
-    <div class="category">
-      <div class="category-header"><span class="category-title">Visão Geral</span><span class="category-line" id="cl-vg"></span></div>
-      <div class="cards-grid">
-        <div class="dash-card active"><div class="card-top"><div class="card-icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="9"/><rect x="14" y="3" width="7" height="5"/><rect x="14" y="12" width="7" height="9"/><rect x="3" y="16" width="7" height="5"/></svg></div><span class="badge on">Ativo</span></div><div class="card-title">Scorecard</div><div class="card-desc">Visão consolidada — principais indicadores de todos os painéis e ranking das unidades por pontuação.</div><a class="card-link" href="scorecard/">Abrir <svg viewBox="0 0 24 24" fill="none" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg></a></div>
-        <div class="dash-card active"><div class="card-top"><div class="card-icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg></div><span class="badge on">Ativo</span></div><div class="card-title">Diagnóstico</div><div class="card-desc">Inteligência de frota — cruza ICs, DPO e FCA por unidade e gera forças, alertas e tendências.</div><a class="card-link" href="diagnostico/">Abrir <svg viewBox="0 0 24 24" fill="none" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg></a></div>
-        <div class="dash-card active"><div class="card-top"><div class="card-icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="12" y1="3" x2="12" y2="21"/><line x1="3" y1="12" x2="21" y2="12"/></svg></div><span class="badge on">Ativo</span></div><div class="card-title">Resumo Executivo</div><div class="card-desc">Leitura automática dos indicadores em 4 quadrantes: pontos positivos, negativos, atenção e próximos passos.</div><a class="card-link" href="resumo-executivo/">Abrir <svg viewBox="0 0 24 24" fill="none" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg></a></div>
-        <div class="dash-card active"><div class="card-top"><div class="card-icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="3" width="15" height="13" rx="2"/><path d="M16 8h4l3 3v5h-7V8z"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg></div><span class="badge on">Ativo</span></div><div class="card-title">Ativos</div><div class="card-desc">Composição da frota — quantidade de ativos, idade média, por unidade, tipo, modelo e faixa de idade. Direto do Ginfo.</div><a class="card-link" href="ativos/">Abrir <svg viewBox="0 0 24 24" fill="none" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg></a></div>
-      </div>
-    </div>
-
-    <div class="category">
-      <div class="category-header"><span class="category-title">Financeiro</span><span class="category-line" id="cl-fin"></span></div>
-      <div class="cards-grid">
-        <div class="dash-card active"><div class="card-top"><div class="card-icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg></div><span class="badge on">Ativo</span></div><div class="card-title">Visão Financeira</div><div class="card-desc">DRE Consolidado — custos, receita líquida, AV% e desvios vs remunerado e orçado.</div><a class="card-link" href="visao-financeira/">Abrir <svg viewBox="0 0 24 24" fill="none" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg></a></div>
-        <div class="dash-card active"><div class="card-top"><div class="card-icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></div><span class="badge on">Ativo</span></div><div class="card-title">Painel KM</div><div class="card-desc">Dispersão de quilometragem — realizado vs remunerado, impacto financeiro e eficiência.</div><a class="card-link" href="painel-km/">Abrir <svg viewBox="0 0 24 24" fill="none" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg></a></div>
-        <div class="dash-card active"><div class="card-top"><div class="card-icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg></div><span class="badge on">Ativo</span></div><div class="card-title">R$/KM</div><div class="card-desc">Custo por quilômetro rodado — R$/km por conta, análise vs remunerado e impacto financeiro.</div><a class="card-link" href="rs-por-km/">Abrir <svg viewBox="0 0 24 24" fill="none" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg></a></div>
-        <div class="dash-card active"><div class="card-top"><div class="card-icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="6" y1="3" x2="6" y2="15"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/></svg></div><span class="badge on">Ativo</span></div><div class="card-title">Árvore de Custo da Frota</div><div class="card-desc">Custo da frota por pacote e conta — R$/km, R$/Frota Ativa e AV s/ receita. Base do ROIC. Só Transportes.</div><a class="card-link" href="arvore-frota/">Abrir <svg viewBox="0 0 24 24" fill="none" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg></a></div>
-        <div class="dash-card active"><div class="card-top"><div class="card-icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="15" x2="15" y2="15"/><line x1="9" y1="18" x2="13" y2="18"/></svg></div><span class="badge on">Ativo</span></div><div class="card-title">Carta de Custos</div><div class="card-desc">A unidade lança os custos de Manutenção e Pneus por conta e grupo; compara com orçado/remunerado e gera gráficos.</div><a class="card-link" href="carta-custos/">Abrir <svg viewBox="0 0 24 24" fill="none" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg></a></div>
-      </div>
-    </div>
-
-    <div class="category">
-      <div class="category-header"><span class="category-title">Operacional</span><span class="category-line" id="cl-op"></span></div>
-      <div class="cards-grid">
-        <div class="dash-card active"><div class="card-top"><div class="card-icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="3" width="15" height="13" rx="2"/><path d="M16 8h4l3 3v5h-7V8z"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg></div><span class="badge on">Ativo</span></div><div class="card-title">Ativação de Frota</div><div class="card-desc">Indicadores de eficiência no processo de ativação de veículos e contratos.</div><a class="card-link" href="eficiencia-ativacao/">Abrir <svg viewBox="0 0 24 24" fill="none" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg></a></div>
-        <div class="dash-card active"><div class="card-top"><div class="card-icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg></div><span class="badge on">Ativo</span></div><div class="card-title">Disponibilidade</div><div class="card-desc">Taxa de disponibilidade da frota — manutenção, ociosidade e uptime por veículo.</div><a class="card-link" href="disponibilidade/">Abrir <svg viewBox="0 0 24 24" fill="none" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg></a></div>
-        <div class="dash-card active"><div class="card-top"><div class="card-icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="22" x2="15" y2="22"/><line x1="4" y1="9" x2="14" y2="9"/><path d="M14 22V4a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v18"/><path d="M14 13h2a2 2 0 0 1 2 2v2a2 2 0 0 0 2 2a2 2 0 0 0 2-2V9.83a2 2 0 0 0-.59-1.42L18 5"/></svg></div><span class="badge on">Ativo</span></div><div class="card-title">Combustível</div><div class="card-desc">Hub de painéis de combustível — eficiência Km/L, árvore de custo, preço R$/L e emissões.</div><a class="card-link" href="combustivel/">Abrir <svg viewBox="0 0 24 24" fill="none" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg></a></div>
-        <div class="dash-card active"><div class="card-top"><div class="card-icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3.5"/></svg></div><span class="badge on">Ativo</span></div><div class="card-title">Pneus</div><div class="card-desc">Gestão de pneus da frota — saúde, milimetragem, pressão, CPK, previsão de troca, orçamento e visão de eixos.</div><a class="card-link" href="pneus/">Abrir <svg viewBox="0 0 24 24" fill="none" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg></a></div>
-        <div class="dash-card active"><div class="card-top"><div class="card-icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 14.76V3.5a2.5 2.5 0 0 0-5 0v11.26a4.5 4.5 0 1 0 5 0z"/></svg></div><span class="badge on">Ativo</span></div><div class="card-title">Termômetro</div><div class="card-desc">Pontuação de conformidade por unidade e tier — ranking, evolução por vigência e posições mês a mês.</div><a class="card-link" href="termometro/">Abrir <svg viewBox="0 0 24 24" fill="none" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg></a></div>
-        <div class="dash-card active"><div class="card-top"><div class="card-icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg></div><span class="badge on">Ativo</span></div><div class="card-title">Manutenção</div><div class="card-desc">Detalhamento por NF do pacote de manutenção — total de notas, por fornecedor/centro de custo e tabela geral.</div><a class="card-link" href="manutencao/">Abrir <svg viewBox="0 0 24 24" fill="none" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg></a></div>
-        <div class="dash-card active"><div class="card-top"><div class="card-icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg></div><span class="badge on">Ativo</span></div><div class="card-title">Catálogo de Peças</div><div class="card-desc">Lista de peças da frota — NCM, material, aplicação por tipo de veículo e índice da TIPI.</div><a class="card-link" href="catalogo-pecas/">Abrir <svg viewBox="0 0 24 24" fill="none" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg></a></div>
-      </div>
-    </div>
-
-    <div class="category">
-      <div class="category-header"><span class="category-title">Processos</span><span class="category-line" id="cl-pr"></span></div>
-      <div class="cards-grid">
-        <div class="dash-card active"><div class="card-top"><div class="card-icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg></div><span class="badge on">Ativo</span></div><div class="card-title">Gerot</div><div class="card-desc">Reunião de Planejamento Mensal — KPIs por bloco, meta, real e % de atingimento por vigência.</div><a class="card-link" href="gerot/">Abrir <svg viewBox="0 0 24 24" fill="none" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg></a></div>
-        <div class="dash-card active"><div class="card-top"><div class="card-icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg></div><span class="badge on">Ativo</span></div><div class="card-title">Auditorias</div><div class="card-desc">Consolidado Demarco &amp; DPO — níveis por unidade e semestre (1H25 a 2H26).</div><a class="card-link" href="auditorias/">Abrir <svg viewBox="0 0 24 24" fill="none" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg></a></div>
-        <div class="dash-card active"><div class="card-top"><div class="card-icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4z"/></svg></div><span class="badge on">Ativo</span></div><div class="card-title">FCA</div><div class="card-desc">Fatos do mês por unidade, causas automáticas e plano de ação — com Kanban, Tabela e Gantt.</div><a class="card-link" href="fca-preenchimento/">Abrir <svg viewBox="0 0 24 24" fill="none" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg></a></div>
-        <div class="dash-card active"><div class="card-top"><div class="card-icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="3" width="15" height="13" rx="1"/><path d="M16 8h4l3 3v5h-7z"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg></div><span class="badge on">Ativo</span></div><div class="card-title">Indisponibilidade</div><div class="card-desc">Frota do dia por unidade — abra e feche indisponibilidades e confirme a frota (check-in diário).</div><a class="card-link" href="disponibilidade-preenchimento/">Abrir <svg viewBox="0 0 24 24" fill="none" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg></a></div>
-        <div class="dash-card active"><div class="card-top"><div class="card-icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg></div><span class="badge on">Ativo</span></div><div class="card-title">MPR</div><div class="card-desc">Monthly Performance Review — indicadores do termômetro por unidade/GEO, com Plan vs 2026 e plano de ação.</div><a class="card-link" href="mpr/">Abrir <svg viewBox="0 0 24 24" fill="none" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg></a></div>
-        <div class="dash-card active" id="planner-proc-card" style="display:none;"><div class="card-top"><div class="card-icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="3" y1="10" x2="21" y2="10"/><line x1="9" y1="10" x2="9" y2="22"/><line x1="15" y1="10" x2="15" y2="22"/></svg></div><span class="badge on">Admin</span></div><div class="card-title">Planner Corporativo</div><div class="card-desc">Ações do time corporativo — Ação, Responsável, Prazo, Status e Acompanhamento. Tabela, Kanban e Relatório. Independente do FCA.</div><a class="card-link" href="planner-corporativo/">Abrir <svg viewBox="0 0 24 24" fill="none" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg></a></div>
-      </div>
-    </div>
-
-    <div class="category">
-      <div class="category-header"><span class="category-title">Resultados</span><span class="category-line" id="cl-re"></span></div>
-      <div class="cards-grid">
-        <div class="dash-card active"><div class="card-top"><div class="card-icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg></div><span class="badge on">Ativo</span></div><div class="card-title">Programa de Reconhecimento</div><div class="card-desc">Ranking Frota de Elite — pontuação por unidade, pódio e evolução mensal dos indicadores.</div><a class="card-link" href="programa-reconhecimento/">Abrir <svg viewBox="0 0 24 24" fill="none" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg></a></div>
-        <div class="dash-card active"><div class="card-top"><div class="card-icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg></div><span class="badge on">Ativo</span></div><div class="card-title">Aderência ao FCA</div><div class="card-desc">FCA Gerencial — aderência ao prazo e à conclusão por unidade, projeto e vigência.</div><a class="card-link" href="fca-gerencial/">Abrir <svg viewBox="0 0 24 24" fill="none" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg></a></div>
-        <div class="dash-card active"><div class="card-top"><div class="card-icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 20V10M12 20V4M6 20v-6"/></svg></div><span class="badge on">Ativo</span></div><div class="card-title">Painel de Metas</div><div class="card-desc">DRE Frota — pontuação total, evolução mensal vs meta 80% e pontos por indicador.</div><a class="card-link" href="painel-metas/">Abrir <svg viewBox="0 0 24 24" fill="none" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg></a></div>
-      </div>
-    </div>
-  </main>
+  <div class="board" id="board"></div>
 </div>
 
-<div class="admin-screen" id="admin-screen">
-  <header class="hub-header">
-    <div class="hub-logo"><h1>GESTÃO EM MOVIMENTO</h1><p>Business Intelligence · Frota</p></div>
-    <div class="hub-header-right">
-      <button class="back-nav-btn" onclick="goToHub()">← Hub</button>
-      <span class="hub-user">Olá, <b id="admin-username">—</b></span>
-      <button class="logout-btn" onclick="doLogout()">Sair</button>
+<div class="app" id="admin-screen" style="display:none">
+  <header class="top">
+    <div class="marca">
+      <div class="mk"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg></div>
+      <div><h1>Gestão em Movimento</h1><p>Business Intelligence · Frota</p></div>
+    </div>
+    <div class="top-dir">
+      <button class="rt" onclick="goToHub()">← Hub</button>
+      <button class="ico-btn" onclick="trocaTema()" title="Claro / escuro"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg></button>
+      <div class="quem"><span class="av" id="admin-avatar">—</span><b id="admin-username">—</b>
+        <button class="sair" onclick="doLogout()" title="Sair">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+        </button>
+      </div>
     </div>
   </header>
-  <main class="hub-main">
-    <div class="hub-welcome" style="margin-bottom:24px;"><h2>Gerenciar Acessos</h2><p>Aprove, bloqueie ou remova o acesso de usuários ao portal.</p></div>
+  <div class="tit-pg"><h2>Gerenciar Acessos</h2><p>Aprove, bloqueie ou remova o acesso de usuários ao portal.</p></div>
+  <main class="adm-main">
     <div class="admin-tabs">
       <button class="admin-tab active" id="atab-pending" onclick="switchAdminTab('pending')">Pendentes <span class="admin-cnt" id="admin-cnt-pending">0</span></button>
       <button class="admin-tab" id="atab-approved" onclick="switchAdminTab('approved')">Usuários <span class="admin-cnt" id="admin-cnt-approved">0</span></button>
@@ -378,6 +467,111 @@ body{background:radial-gradient(ellipse at 15% 20%,rgba(249,115,22,.07) 0%,trans
 </div>
 
 <script>
+
+/* ── clusters do hub: um por coluna, tudo numa tela só ────────────────────── */
+const CLUSTERS = [{"nome": "Administração", "cards": [{"t": "Gerenciar Acessos", "d": "Aprove, bloqueie ou remova o acesso de usuários ao portal.", "h": null, "ico": "<svg viewBox=\"0 0 24 24\" fill=\"none\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2\"/><circle cx=\"9\" cy=\"7\" r=\"4\"/><path d=\"M23 21v-2a4 4 0 0 0-3-3.87\"/><path d=\"M16 3.13a4 4 0 0 1 0 7.75\"/></svg>", "onc": "showAdmin()", "badge": "admin-pending-badge"}, {"t": "Acessos", "d": "Auditoria de uso do portal — quantidade de acessos por usuário, por painel e por dia.", "h": "acessos/", "ico": "<svg viewBox=\"0 0 24 24\" fill=\"none\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><polyline points=\"22 12 18 12 15 21 9 3 6 12 2 12\"/></svg>", "onc": null}, {"t": "Farol Frota", "d": "Farol semanal dos indicadores — visão geral e por unidade. E-mail automático toda segunda às 14h.", "h": "farol-frota/", "ico": "<svg viewBox=\"0 0 24 24\" fill=\"none\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><rect x=\"8\" y=\"2\" width=\"8\" height=\"20\" rx=\"4\"/><circle cx=\"12\" cy=\"7\" r=\"1.6\"/><circle cx=\"12\" cy=\"12\" r=\"1.6\"/><circle cx=\"12\" cy=\"17\" r=\"1.6\"/></svg>", "onc": null}], "adm": true}, {"nome": "Planejamento Estratégico", "cards": [{"t": "Estratégia e Governança", "d": "Missão, visão e valores da frota + ritos de gestão (checkpoint, custos e planejamento mensal) com follow das ações.", "h": "governanca/", "ico": "<svg viewBox=\"0 0 24 24\" fill=\"none\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z\"/><path d=\"M9 12l2 2 4-4\"/></svg>", "onc": null}, {"t": "Papéis e Responsabilidades", "d": "Blocos de gestão da frota, descrição de cada responsabilidade e o dono responsável.", "h": "papeis-responsabilidades/", "ico": "<svg viewBox=\"0 0 24 24\" fill=\"none\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2\"/><circle cx=\"9\" cy=\"7\" r=\"4\"/><path d=\"M23 21v-2a4 4 0 0 0-3-3.87\"/><path d=\"M16 3.13a4 4 0 0 1 0 7.75\"/></svg>", "onc": null}]}, {"nome": "Visão Geral", "cards": [{"t": "Scorecard", "d": "Visão consolidada — principais indicadores de todos os painéis e ranking das unidades por pontuação.", "h": "scorecard/", "ico": "<svg viewBox=\"0 0 24 24\" fill=\"none\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><rect x=\"3\" y=\"3\" width=\"7\" height=\"9\"/><rect x=\"14\" y=\"3\" width=\"7\" height=\"5\"/><rect x=\"14\" y=\"12\" width=\"7\" height=\"9\"/><rect x=\"3\" y=\"16\" width=\"7\" height=\"5\"/></svg>", "onc": null}, {"t": "Diagnóstico", "d": "Inteligência de frota — cruza ICs, DPO e FCA por unidade e gera forças, alertas e tendências.", "h": "diagnostico/", "ico": "<svg viewBox=\"0 0 24 24\" fill=\"none\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M9 11l3 3L22 4\"/><path d=\"M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11\"/></svg>", "onc": null}, {"t": "Resumo Executivo", "d": "Leitura automática dos indicadores em 4 quadrantes: pontos positivos, negativos, atenção e próximos passos.", "h": "resumo-executivo/", "ico": "<svg viewBox=\"0 0 24 24\" fill=\"none\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><rect x=\"3\" y=\"3\" width=\"18\" height=\"18\" rx=\"2\"/><line x1=\"12\" y1=\"3\" x2=\"12\" y2=\"21\"/><line x1=\"3\" y1=\"12\" x2=\"21\" y2=\"12\"/></svg>", "onc": null}, {"t": "Ativos", "d": "Composição da frota — quantidade de ativos, idade média, por unidade, tipo, modelo e faixa de idade. Direto do Ginfo.", "h": "ativos/", "ico": "<svg viewBox=\"0 0 24 24\" fill=\"none\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><rect x=\"1\" y=\"3\" width=\"15\" height=\"13\" rx=\"2\"/><path d=\"M16 8h4l3 3v5h-7V8z\"/><circle cx=\"5.5\" cy=\"18.5\" r=\"2.5\"/><circle cx=\"18.5\" cy=\"18.5\" r=\"2.5\"/></svg>", "onc": null}]}, {"nome": "Financeiro", "cards": [{"t": "Visão Financeira", "d": "DRE Consolidado — custos, receita líquida, AV% e desvios vs remunerado e orçado.", "h": "visao-financeira/", "ico": "<svg viewBox=\"0 0 24 24\" fill=\"none\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><polyline points=\"22 12 18 12 15 21 9 3 6 12 2 12\"/></svg>", "onc": null}, {"t": "Painel KM", "d": "Dispersão de quilometragem — realizado vs remunerado, impacto financeiro e eficiência.", "h": "painel-km/", "ico": "<svg viewBox=\"0 0 24 24\" fill=\"none\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><circle cx=\"12\" cy=\"12\" r=\"10\"/><polyline points=\"12 6 12 12 16 14\"/></svg>", "onc": null}, {"t": "R$/KM", "d": "Custo por quilômetro rodado — R$/km por conta, análise vs remunerado e impacto financeiro.", "h": "rs-por-km/", "ico": "<svg viewBox=\"0 0 24 24\" fill=\"none\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><line x1=\"12\" y1=\"1\" x2=\"12\" y2=\"23\"/><path d=\"M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6\"/></svg>", "onc": null}, {"t": "Árvore de Custo da Frota", "d": "Custo da frota por pacote e conta — R$/km, R$/Frota Ativa e AV s/ receita. Base do ROIC. Só Transportes.", "h": "arvore-frota/", "ico": "<svg viewBox=\"0 0 24 24\" fill=\"none\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><line x1=\"6\" y1=\"3\" x2=\"6\" y2=\"15\"/><circle cx=\"18\" cy=\"6\" r=\"3\"/><circle cx=\"6\" cy=\"18\" r=\"3\"/><path d=\"M18 9a9 9 0 0 1-9 9\"/></svg>", "onc": null}, {"t": "Carta de Custos", "d": "A unidade lança os custos de Manutenção e Pneus por conta e grupo; compara com orçado/remunerado e gera gráficos.", "h": "carta-custos/", "ico": "<svg viewBox=\"0 0 24 24\" fill=\"none\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z\"/><polyline points=\"14 2 14 8 20 8\"/><line x1=\"9\" y1=\"15\" x2=\"15\" y2=\"15\"/><line x1=\"9\" y1=\"18\" x2=\"13\" y2=\"18\"/></svg>", "onc": null}]}, {"nome": "Operacional", "cards": [{"t": "Ativação de Frota", "d": "Indicadores de eficiência no processo de ativação de veículos e contratos.", "h": "eficiencia-ativacao/", "ico": "<svg viewBox=\"0 0 24 24\" fill=\"none\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><rect x=\"1\" y=\"3\" width=\"15\" height=\"13\" rx=\"2\"/><path d=\"M16 8h4l3 3v5h-7V8z\"/><circle cx=\"5.5\" cy=\"18.5\" r=\"2.5\"/><circle cx=\"18.5\" cy=\"18.5\" r=\"2.5\"/></svg>", "onc": null}, {"t": "Disponibilidade", "d": "Taxa de disponibilidade da frota — manutenção, ociosidade e uptime por veículo.", "h": "disponibilidade/", "ico": "<svg viewBox=\"0 0 24 24\" fill=\"none\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M22 11.08V12a10 10 0 1 1-5.93-9.14\"/><polyline points=\"22 4 12 14.01 9 11.01\"/></svg>", "onc": null}, {"t": "Combustível", "d": "Hub de painéis de combustível — eficiência Km/L, árvore de custo, preço R$/L e emissões.", "h": "combustivel/", "ico": "<svg viewBox=\"0 0 24 24\" fill=\"none\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><line x1=\"3\" y1=\"22\" x2=\"15\" y2=\"22\"/><line x1=\"4\" y1=\"9\" x2=\"14\" y2=\"9\"/><path d=\"M14 22V4a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v18\"/><path d=\"M14 13h2a2 2 0 0 1 2 2v2a2 2 0 0 0 2 2a2 2 0 0 0 2-2V9.83a2 2 0 0 0-.59-1.42L18 5\"/></svg>", "onc": null}, {"t": "Pneus", "d": "Gestão de pneus da frota — saúde, milimetragem, pressão, CPK, previsão de troca, orçamento e visão de eixos.", "h": "pneus/", "ico": "<svg viewBox=\"0 0 24 24\" fill=\"none\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><circle cx=\"12\" cy=\"12\" r=\"9\"/><circle cx=\"12\" cy=\"12\" r=\"3.5\"/></svg>", "onc": null}, {"t": "Termômetro", "d": "Pontuação de conformidade por unidade e tier — ranking, evolução por vigência e posições mês a mês.", "h": "termometro/", "ico": "<svg viewBox=\"0 0 24 24\" fill=\"none\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M14 14.76V3.5a2.5 2.5 0 0 0-5 0v11.26a4.5 4.5 0 1 0 5 0z\"/></svg>", "onc": null}, {"t": "Manutenção", "d": "Detalhamento por NF do pacote de manutenção — total de notas, por fornecedor/centro de custo e tabela geral.", "h": "manutencao/", "ico": "<svg viewBox=\"0 0 24 24\" fill=\"none\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z\"/></svg>", "onc": null}, {"t": "Catálogo de Peças", "d": "Lista de peças da frota — NCM, material, aplicação por tipo de veículo e índice da TIPI.", "h": "catalogo-pecas/", "ico": "<svg viewBox=\"0 0 24 24\" fill=\"none\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M4 19.5A2.5 2.5 0 0 1 6.5 17H20\"/><path d=\"M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z\"/></svg>", "onc": null}]}, {"nome": "Processos", "cards": [{"t": "Gerot", "d": "Reunião de Planejamento Mensal — KPIs por bloco, meta, real e % de atingimento por vigência.", "h": "gerot/", "ico": "<svg viewBox=\"0 0 24 24\" fill=\"none\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z\"/><polyline points=\"14 2 14 8 20 8\"/></svg>", "onc": null}, {"t": "Auditorias", "d": "Consolidado Demarco &amp; DPO — níveis por unidade e semestre (1H25 a 2H26).", "h": "auditorias/", "ico": "<svg viewBox=\"0 0 24 24\" fill=\"none\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M9 11l3 3L22 4\"/><path d=\"M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11\"/></svg>", "onc": null}, {"t": "FCA", "d": "Fatos do mês por unidade, causas automáticas e plano de ação — com Kanban, Tabela e Gantt.", "h": "fca-preenchimento/", "ico": "<svg viewBox=\"0 0 24 24\" fill=\"none\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M12 20h9\"/><path d=\"M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4z\"/></svg>", "onc": null}, {"t": "Indisponibilidade", "d": "Frota do dia por unidade — abra e feche indisponibilidades e confirme a frota (check-in diário).", "h": "disponibilidade-preenchimento/", "ico": "<svg viewBox=\"0 0 24 24\" fill=\"none\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><rect x=\"1\" y=\"3\" width=\"15\" height=\"13\" rx=\"1\"/><path d=\"M16 8h4l3 3v5h-7z\"/><circle cx=\"5.5\" cy=\"18.5\" r=\"2.5\"/><circle cx=\"18.5\" cy=\"18.5\" r=\"2.5\"/></svg>", "onc": null}, {"t": "MPR", "d": "Monthly Performance Review — indicadores do termômetro por unidade/GEO, com Plan vs 2026 e plano de ação.", "h": "mpr/", "ico": "<svg viewBox=\"0 0 24 24\" fill=\"none\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><line x1=\"18\" y1=\"20\" x2=\"18\" y2=\"10\"/><line x1=\"12\" y1=\"20\" x2=\"12\" y2=\"4\"/><line x1=\"6\" y1=\"20\" x2=\"6\" y2=\"14\"/></svg>", "onc": null}, {"t": "Planner Corporativo", "d": "Ações do time corporativo — Ação, Responsável, Prazo, Status e Acompanhamento. Tabela, Kanban e Relatório. Independente do FCA.", "h": "planner-corporativo/", "ico": "<svg viewBox=\"0 0 24 24\" fill=\"none\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><rect x=\"3\" y=\"4\" width=\"18\" height=\"18\" rx=\"2\"/><line x1=\"3\" y1=\"10\" x2=\"21\" y2=\"10\"/><line x1=\"9\" y1=\"10\" x2=\"9\" y2=\"22\"/><line x1=\"15\" y1=\"10\" x2=\"15\" y2=\"22\"/></svg>", "onc": null, "adm": true}]}, {"nome": "Resultados", "cards": [{"t": "Programa de Reconhecimento", "d": "Ranking Frota de Elite — pontuação por unidade, pódio e evolução mensal dos indicadores.", "h": "programa-reconhecimento/", "ico": "<svg viewBox=\"0 0 24 24\" fill=\"none\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><polygon points=\"12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2\"/></svg>", "onc": null}, {"t": "Aderência ao FCA", "d": "FCA Gerencial — aderência ao prazo e à conclusão por unidade, projeto e vigência.", "h": "fca-gerencial/", "ico": "<svg viewBox=\"0 0 24 24\" fill=\"none\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><circle cx=\"12\" cy=\"12\" r=\"10\"/><circle cx=\"12\" cy=\"12\" r=\"6\"/><circle cx=\"12\" cy=\"12\" r=\"2\"/></svg>", "onc": null}, {"t": "Painel de Metas", "d": "DRE Frota — pontuação total, evolução mensal vs meta 80% e pontos por indicador.", "h": "painel-metas/", "ico": "<svg viewBox=\"0 0 24 24\" fill=\"none\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M18 20V10M12 20V4M6 20v-6\"/></svg>", "onc": null}]}];
+
+const inic = n => String(n||'?').trim().split(/\s+/).slice(0,2).map(p=>p[0]).join('').toUpperCase();
+function setQuem(tela, nome){
+  const b=document.getElementById(tela+'-username'), a=document.getElementById(tela+'-avatar');
+  if(b) b.textContent=nome; if(a) a.textContent=inic(nome);
+}
+const SETA='<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>';
+function cardHtml(k){
+  const badge = k.badge ? `<span class="pnd" id="${k.badge}" style="display:none"></span>` : '';
+  const dentro = `<div class="hcard-top"><span class="ic">${k.ico}</span><span class="tit">${k.t}</span>${badge}<span class="seta">${SETA}</span></div>`
+               + `<div class="dsc">${k.d}</div>`;
+  const busca = (k.t + ' ' + k.d).toLowerCase().replace(/"/g,'');
+  return k.h ? `<a class="hcard card-link" href="${k.h}" data-b="${busca}" title="${k.d.replace(/"/g,'')}">${dentro}</a>`
+             : `<div class="hcard" onclick="${k.onc}" data-b="${busca}" title="${k.d.replace(/"/g,'')}">${dentro}</div>`;
+}
+/* Dois arranjos para o mesmo conteúdo — o botão do topo alterna:
+   COLUNAS = um cluster por coluna, tudo aberto numa tela só.
+   LISTA   = clusters empilhados, cada um abre no "+".                        */
+let MODO   = localStorage.getItem('gem_hub_modo') || 'lista';
+const _abSalvo = localStorage.getItem('gem_hub_abertos');
+let ABERTO = _abSalvo === null ? CLUSTERS.map(c => c.nome)   // primeira visita: tudo aberto
+                               : _abSalvo.split('|').filter(Boolean);
+let _isAdmin = false;
+
+function renderBoard(isAdmin){
+  if (typeof isAdmin === 'boolean') _isAdmin = isAdmin;
+  const vis = CLUSTERS
+    .filter(c => !c.adm || _isAdmin)
+    .map(c => ({...c, cards: c.cards.filter(k => !k.adm || _isAdmin)}))
+    .filter(c => c.cards.length);
+  const b = document.getElementById('board');
+  b.classList.toggle('lista', MODO === 'lista');
+  b.style.gridTemplateColumns = MODO === 'lista' ? '' : 'repeat(' + vis.length + ',minmax(0,1fr))';
+
+  b.innerHTML = vis.map(c => MODO === 'lista'
+    ? `<section class="clu${ABERTO.includes(c.nome) ? ' aberto' : ''}" data-clu="${c.nome}">
+         <button class="clu-h" onclick="abreClu('${c.nome.replace(/'/g,"\\'")}')">
+           <span class="mais"><i></i><i></i></span><span>${c.nome}</span><i class="ln"></i><b>${c.cards.length}</b>
+         </button>
+         <div class="clu-cards">${c.cards.map(cardHtml).join('')}</div>
+       </section>`
+    : `<section class="clu" data-clu="${c.nome}">
+         <div class="clu-h"><span>${c.nome}</span><i class="ln"></i><b>${c.cards.length}</b></div>
+         <div class="clu-cards">${c.cards.map(cardHtml).join('')}</div>
+       </section>`).join('');
+
+  const bt = document.getElementById('btModo');
+  if (bt){
+    bt.innerHTML = MODO === 'lista' ? _COLS : _LISTA;
+    bt.title = MODO === 'lista' ? 'Ver em colunas' : 'Ver em lista';
+  }
+  const busca = document.getElementById('busca-painel');
+  if (busca && busca.value) filtraBoard(busca.value);
+}
+function abreClu(nome){
+  ABERTO = ABERTO.includes(nome) ? ABERTO.filter(n => n !== nome) : ABERTO.concat(nome);
+  localStorage.setItem('gem_hub_abertos', ABERTO.join('|'));
+  const s = document.querySelector(`#board .clu[data-clu="${nome}"]`);
+  if (s) s.classList.toggle('aberto', ABERTO.includes(nome));
+}
+function trocaModo(){
+  MODO = MODO === 'lista' ? 'colunas' : 'lista';
+  localStorage.setItem('gem_hub_modo', MODO);
+  renderBoard();
+}
+function filtraBoard(q){
+  const t = String(q||'').toLowerCase().trim();
+  let achou = 0;
+  document.querySelectorAll('#board .clu').forEach(clu => {
+    let n = 0;
+    clu.querySelectorAll('.hcard').forEach(c => {
+      const ok = !t || (c.dataset.b||'').includes(t);
+      c.style.display = ok ? '' : 'none';
+      if (ok) n++;
+    });
+    clu.style.display = n ? '' : 'none';
+    // buscando, o cluster que tem resultado abre sozinho; sem busca, volta ao que o usuário deixou
+    if (MODO === 'lista') clu.classList.toggle('aberto', t ? n > 0 : ABERTO.includes(clu.dataset.clu));
+    achou += n;
+  });
+  const b = document.getElementById('board');
+  let vazio = document.getElementById('board-vazio');
+  if (!achou) {
+    if (!vazio) { vazio = document.createElement('div'); vazio.id='board-vazio'; vazio.className='vazio'; b.appendChild(vazio); }
+    vazio.textContent = `Nenhum painel com “${q}”.`;
+    vazio.style.display = '';
+  } else if (vazio) vazio.style.display = 'none';
+}
+const _COLS ='<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><rect x="3" y="4" width="5" height="16" rx="1.5"/><rect x="9.5" y="4" width="5" height="16" rx="1.5"/><rect x="16" y="4" width="5" height="16" rx="1.5"/></svg>';
+const _LISTA='<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><rect x="3" y="4" width="18" height="4.5" rx="1.5"/><rect x="3" y="10.5" width="18" height="4.5" rx="1.5"/><rect x="3" y="17" width="18" height="4.5" rx="1.5"/></svg>';
+
+/* ── tema claro / escuro (mesma chave dos painéis) ── */
+const _SOL='<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4.5"/><path d="M12 1.5v2M12 20.5v2M4.2 4.2l1.4 1.4M18.4 18.4l1.4 1.4M1.5 12h2M20.5 12h2M4.2 19.8l1.4-1.4M18.4 5.6l1.4-1.4"/></svg>';
+const _LUA='<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>';
+function aplicaTema(t){
+  document.body.classList.toggle('claro', t==='light');
+  localStorage.setItem('bi_theme', t);
+  const b=document.getElementById('btTema'); if(b) b.innerHTML = t==='light' ? _LUA : _SOL;
+}
+function trocaTema(){ aplicaTema(document.body.classList.contains('claro') ? 'dark' : 'light'); }
+aplicaTema(localStorage.getItem('bi_theme') || 'dark');
+
 const SUPABASE_URL = 'https://lozwipoeacpvplgkrxkq.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_ggKEEebc5zjgQDVsF92Upw_6uoLmKe9';
 const ADMIN_EMAIL  = 'fortesindicadores@gmail.com';
@@ -439,7 +633,7 @@ async function logAcesso(painel, user) {
 document.addEventListener('click', e => {
   const a = e.target.closest && e.target.closest('a.card-link[href]');
   if (!a) return;
-  const painel = (a.getAttribute('href') || '').replace(/^\.\//, '').replace(/\/?(index\.html)?$/, '').replace(/\/+$/, '') || 'hub';
+  const painel = (a.getAttribute('href') || '').replace(/^(\.\.?\/)+/, '').replace(/\/?(index\.html)?$/, '').replace(/\/+$/, '') || 'hub';
   logAcesso(painel);
 });
 
@@ -468,19 +662,16 @@ async function showHub(user) {
   sessionStorage.setItem('gem_hub', '1');   // libera o acesso aos painéis nesta sessão (gate via hub)
   stopPolling();
   hideAll();
-  document.getElementById('hub-screen').style.display = 'block';
+  document.getElementById('hub-screen').style.display = 'flex';
   const name = user.user_metadata?.name || user.email.split('@')[0];
-  document.getElementById('hub-username').textContent = name;
+  setQuem('hub', name);
   let isAdmin = user.email === ADMIN_EMAIL;
   if (!isAdmin) {
     try { const { data: prof } = await sb.from('fca_profiles').select('is_admin').eq('user_id', user.id).maybeSingle(); isAdmin = !!(prof && prof.is_admin); } catch (e) {}
   }
-  document.getElementById('admin-card-wrapper').style.display = isAdmin ? '' : 'none';
-  const plannerProc = document.getElementById('planner-proc-card');
-  if (plannerProc) plannerProc.style.display = isAdmin ? '' : 'none';
+  renderBoard(isAdmin);
   if (isAdmin) loadAdminBadge();
   if (!_hubLogged) { _hubLogged = true; logAcesso('hub', user); }   // 1 registro por entrada no hub
-  syncCategoryLines();
 }
 
 function showAuth() {
@@ -501,9 +692,9 @@ function showPending(user) {
 
 function showAdmin() {
   hideAll();
-  document.getElementById('admin-screen').style.display = 'block';
+  document.getElementById('admin-screen').style.display = 'flex';
   const name = currentUser?.user_metadata?.name || currentUser?.email?.split('@')[0] || '';
-  document.getElementById('admin-username').textContent = name;
+  setQuem('admin', name);
   adminTabActive = 'pending';
   ['pending','approved','blocked'].forEach(t =>
     document.getElementById(`atab-${t}`).classList.toggle('active', t === 'pending'));
@@ -1005,19 +1196,9 @@ document.addEventListener('keydown', e => {
   if (loginVisible) doLogin(); else doRegister();
 });
 
-function syncCategoryLines() {
-  document.querySelectorAll('.category').forEach(cat => {
-    const grid = cat.querySelector('.cards-grid');
-    const line = cat.querySelector('.category-line');
-    if (grid && line) line.style.width = grid.offsetWidth + 'px';
-  });
-}
-window.addEventListener('resize', syncCategoryLines);
-setTimeout(syncCategoryLines, 100);
 
 init();
 </script>
 <script src="assets/mobile.js"></script>
-<script src="assets/build-check.js?v=202608061817"></script>
 </body>
 </html>

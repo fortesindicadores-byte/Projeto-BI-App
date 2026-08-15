@@ -638,7 +638,7 @@ Terceira referência escolhida pelo Renan (dashboard "Metric Flow"): **`docs/lay
 
 # ⭐ LAYOUT PADRÃO DO PORTAL (Renan, 15/08/2026) — usar em TUDO daqui pra frente
 
-Decisão do Renan em 15/08/2026, vendo a `visao-financeira-app`: **"essa visão ficou sensacional, quero que seja o nosso novo padrão. Vamos aplicar em todos os painéis que já existem."** Referências vivas: **`visao-financeira-app/index.html`** (painel completo: menu lateral, filtros, cards, gráficos, tabelas, forecast editável) e **`hub-novo/index.html`** (a mesma casca **sem** menu lateral, com os clusters em colunas numa tela só). O `disponibilidade-preenchimento` foi onde a linguagem nasceu.
+Decisão do Renan em 15/08/2026, vendo a `visao-financeira-app`: **"essa visão ficou sensacional, quero que seja o nosso novo padrão. Vamos aplicar em todos os painéis que já existem."** Referências vivas: **`visao-financeira/index.html`** (painel completo: menu lateral, filtros, cards, gráficos, tabelas, forecast editável) e **`index.html` da raiz** (a mesma casca **sem** menu lateral, com os clusters em lista/colunas). Os dois entraram no ar em 15/08/2026, substituindo o hub e o painel antigos. O `disponibilidade-preenchimento` foi onde a linguagem nasceu.
 
 ## A casca (app shell)
 
@@ -657,21 +657,34 @@ A página **não rola** — o app ocupa a tela e cada área resolve o próprio e
 ## Tokens (substituem a paleta antiga nos painéis novos)
 
 ```css
-:root{
-  --fundo:#0B0B0D; --app:#101014; --side:#16161B; --card:#1A1A20; --card-brd:#26262E;
-  --linha:#202027; --cabec:#2B2B30; --hover:rgba(255,255,255,.045);
-  --brilho:linear-gradient(180deg,rgba(255,255,255,.028),rgba(255,255,255,0));
-  --txt:#EEF2FA; --txt2:#B2BCD2; --txt3:#7B849B; --txt4:#565E70;
-  --laranja:#F97316; --azul:#2E90E8; --verde:#22A85A; --vermelho:#E5484D;
+:root{                                   /* escuro */
+  --fundo:  radial-gradient(80% 60% at 90% 0%, rgba(255,244,232,.045), transparent 60%),
+            linear-gradient(45deg,#202022 0%,#202022 100%);   /* UNIFORME, ver nota abaixo */
+  --luz:      inset 0 1px 0 rgba(255,255,255,.09);
+  --luz-card: inset 0 1px 0 rgba(255,255,255,.08);
+  --app:      rgba(18,18,18,.30);   --side:  rgba(30,30,30,.50);
+  --card:     rgba(44,44,46,.78);   --linha: rgba(255,255,255,.06);
+  --card-brd: rgba(255,255,255,.07);
+  --brilho:   linear-gradient(180deg,rgba(255,255,255,.022) 0%,rgba(255,255,255,0) 46%);
+  --txt:#EEF2FA; --txt2:#B2BCD2; --txt3:#676F83; --txt4:#4C505C;
+  --hover:rgba(255,255,255,.06); --cabec:#2B2B30;
+  --azul:#2E90E8; --verde:#3BB33B; --vermelho:#FF5252; --laranja:#F97316; --ambar:#F4A100;
 }
-body.claro{
-  --fundo:#E8EAEE; --app:#FFFFFF; --side:#F4F5F8; --card:#FFFFFF; --card-brd:#DFE2E9;
-  --linha:#E9EBF0; --cabec:#DCDFE6; --hover:rgba(15,23,42,.045);
-  --brilho:linear-gradient(180deg,rgba(15,23,42,.02),rgba(15,23,42,0));
-  --txt:#161D2B; --txt2:#3C4658; --txt3:#4A5568; --txt4:#79839A;
-  --laranja:#E2620A; --azul:#1B6FC4; --verde:#12894A; --vermelho:#C4242A;
+body.claro{                              /* claro */
+  --fundo:  radial-gradient(80% 60% at 90% 0%, rgba(255,255,255,.35), transparent 60%),
+            linear-gradient(45deg,#E1E2E5 0%,#E1E2E5 100%);
+  --luz:      inset 0 1px 0 rgba(255,255,255,.9);
+  --luz-card: inset 0 1px 0 rgba(255,255,255,1);
+  --app:      rgba(255,255,255,.34);  --side:  rgba(255,255,255,.50);
+  --card:     rgba(255,255,255,.74);  --linha: rgba(15,23,42,.10);
+  --card-brd: rgba(15,23,42,.10);
+  --brilho:   linear-gradient(180deg,rgba(255,255,255,.6) 0%,rgba(255,255,255,0) 46%);
+  --txt:#161D2B; --txt2:#4A5568; --txt3:#737D91; --txt4:#8B94A6;
+  --hover:rgba(15,23,42,.05); --cabec:#DCDFE6;
+  --azul:#1B6FC4; --verde:#00B300; --vermelho:#FF0000; --ambar:#E9A400;
 }
 ```
+**São cores TRANSLÚCIDAS de propósito** — é o empilhamento `--fundo` → `.app` (com `backdrop-filter:blur(20px)`) → `--side`/`--card` (com blur próprio e `--luz-card`) que dá o vidro. Trocar por hex chapado mata o efeito (já aconteceu). A moldura leva `.app{position:absolute;inset:34px;border-radius:22px;box-shadow:0 28px 70px rgba(0,0,0,.55), var(--luz)}` — **a sombra forte vale nos dois temas**, não suavizar no claro — e o `body::after` com a textura de grão fica por cima do fundo.
 **Tema claro é classe `body.claro`** (não `light-mode`), chave `bi_theme`, botão sol/lua no topo. Cards usam `background:var(--side)` — o mesmo tom do menu lateral (regra do Renan). Tudo que é "um degrau acima" (painéis, chips, inputs) usa `--side`; nada de `rgba` chapado.
 
 ## Menu lateral (painéis)
@@ -696,14 +709,14 @@ Barra fina com título + subtítulo à esquerda (`JUL/26 · atualizado …`) e, 
 - **Cores de resultado**: `table.dre td.cr,.cr{color:var(--vermelho)!important;font-weight:700}` (idem `cg`, `cr-t`, `cg-t`) — **o `!important` é obrigatório**, senão `table.dre td{color:…}` vence pela especificidade.
 - **Célula editável** (forecast): `td.edit` com fundo laranja 7%, borda tracejada, foco com anel; `td.edit.changed` em laranja. Ao focar troca para o número cru; ao sair, `parseNum` aceita `-2,87 mi`, `566k` e pt-BR.
 
-## Hub sem menu lateral (`hub-novo/`)
+## Hub sem menu lateral (`index.html` da raiz)
 
 Mesma casca, **sem `.side`**: topo com marca + busca de painel + tema + usuário, e o miolo em `.board`. **Dois arranjos para o mesmo conteúdo**, alternados pelo botão `#btModo` no topo (chave `gem_hub_modo`):
 
 - **LISTA (padrão)** — clusters empilhados. O cluster **não é um card**: é só a barra de título (rótulo em caixa alta + filete + contagem) com o **"+" que vira "−"**. Ao abrir, mostra os **cards inteiros**, do tamanho normal e com o resumo em até 3 linhas. A primeira visita abre todos (`gem_hub_abertos` ausente ⇒ todos) e, quando não couber, **quem rola é o `.board`, nunca a página** — por isso `.board.lista .clu{flex:0 0 auto}`, senão o flex column comprime os clusters e corta os cards em vez de rolar.
 - **COLUNAS** — um cluster por coluna (`grid-template-columns:repeat(N,minmax(0,1fr))`, N = clusters visíveis). Tudo aberto numa tela só, sem rolagem — validado de 1280×720 a 1920×1080, com a densidade caindo por altura de tela (descrição em 3 linhas acima de 940px, 2 abaixo; paddings menores abaixo de 800px).
 
-A busca do topo filtra os cards e esconde cluster vazio; no modo lista ela **abre sozinha** o cluster que tem resultado e devolve o estado do usuário ao limpar. Cluster **Administração** e o card **Planner Corporativo** só aparecem para admin. Os cards saem de um array `CLUSTERS` no JS (não são HTML solto), e os links levam `../` porque a página mora numa subpasta.
+A busca do topo filtra os cards e esconde cluster vazio; no modo lista ela **abre sozinha** o cluster que tem resultado e devolve o estado do usuário ao limpar. Cluster **Administração** e o card **Planner Corporativo** só aparecem para admin. Os cards saem de um array `CLUSTERS` no JS, não são HTML solto.
 
 ## Regras que não se negociam
 
@@ -712,7 +725,9 @@ A busca do topo filtra os cards e esconde cluster vazio; no modo lista ela **abr
 3. Todo painel inclui `assets/mobile.js`, `assets/sortable-table.js` e `assets/excel-export.js` (o exportador já entende `.tab-wrap`, `.tsec` e `.rtit`).
 4. Nomes de visão em português curto e sem jargão de arquivo: *Resumo · Análise Nominal · AH e AV · YTG + TGT · Bridge/Cenário 1/Cenário 2 · Forecast · Cenário 1/Cenário 2*.
 
-**Roteiro de aplicação (a fazer):** `visao-financeira-app` vira a `visao-financeira` oficial e, na sequência, os demais painéis migram para esta casca. O hub-novo substitui o `index.html` da raiz quando o Renan aprovar.
+**Fundo é UNIFORME, não degradê** (Renan, 15/08/2026): o degradê diagonal clareava para o canto superior direito e os cards de lá sumiam. Os dois temas param no tom do MEIO do degradê antigo — `#E1E2E5` no claro, `#202022` no escuro —, que é o que reproduz o miolo do painel (`#eeeef0` / `#1c1c1e` medidos no pixel). Ao mexer nisso, **medir o pixel do miolo nas duas telas**, não confiar no olho.
+
+**Roteiro de aplicação:** hub e Visão Financeira migrados em 15/08/2026. Faltam os demais painéis.
 
 ---
 
