@@ -709,6 +709,10 @@ Barra fina com título + subtítulo à esquerda (`JUL/26 · atualizado …`) e, 
 - **Cores de resultado**: `table.dre td.cr,.cr{color:var(--vermelho)!important;font-weight:700}` (idem `cg`, `cr-t`, `cg-t`) — **o `!important` é obrigatório**, senão `table.dre td{color:…}` vence pela especificidade.
 - **Célula editável** (forecast): `td.edit` com fundo laranja 7%, borda tracejada, foco com anel; `td.edit.changed` em laranja. Ao focar troca para o número cru; ao sair, `parseNum` aceita `-2,87 mi`, `566k` e pt-BR.
 
+## Gerenciar Acessos (dentro do hub)
+
+Mesma moldura do hub, com o botão **← Hub** no topo. A lista de usuários é uma **grade** (`repeat(auto-fill,minmax(430px,1fr))`) — em tela cheia dá três colunas, em vez de uma linha por usuário com meia tela vazia entre o nome e os botões. O card segue a regra dos outros: fundo `--side`, borda `--card-brd` e a sombra em duas camadas. **Remover/Bloquear ficam absolutos no canto superior direito** e as linhas de texto levam `padding-right`, para os seletores de Acesso FCA e Recebe Farol usarem a largura inteira do card sem quebrar linha.
+
 ## Hub sem menu lateral (`index.html` da raiz)
 
 Mesma casca, **sem `.side`**: topo com marca + busca de painel + tema + usuário, e o miolo em `.board`. **Dois arranjos para o mesmo conteúdo**, alternados pelo botão `#btModo` no topo (chave `gem_hub_modo`):
