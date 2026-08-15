@@ -42,6 +42,7 @@
   --ambar:    #F4A100;
   --cabec:    #2B2B30;
   --pop:      #26262B;   /* menus suspensos: OPACOS, nunca translúcidos */
+  --gem-foto: url('assets/img/fundo-conlog.jpg');
 }
 body.claro{
   --fundo:
@@ -185,40 +186,23 @@ body.claro .hcard:hover{box-shadow:var(--luz-card), 0 16px 34px rgba(15,23,42,.2
   color:#2A1405;background:var(--laranja);}
 .vazio{grid-column:1/-1;padding:40px;text-align:center;font-size:12px;color:var(--txt3);}
 
-/* ── EXPERIMENTO · vidro mais evidente no tema escuro ──────────────────────
-   O fundo uniforme não dava nada para a translucidez mostrar, e sem isso o
-   card virava um retângulo chapado. Três camadas resolvem:
-   1. brilho radial mais forte na moldura → tem cor para atravessar o vidro
-   2. lustro diagonal no próprio card, vindo do canto superior esquerdo
-   3. aresta de cima viva + aresta de baixo escura, que é o que dá espessura */
+/* ── tema ESCURO: o vidro é o PAINEL, não o card ────────────────────────────
+   Atrás da moldura entra a foto da estrada bem escurecida; o .app fica
+   translúcido com blur alto, então é ele que vira o vidro fosco. Os cards
+   continuam lisos, no tom do menu lateral. */
+body:not(.claro){
+  background:
+    linear-gradient(180deg, rgba(8,9,12,.52) 0%, rgba(8,9,12,.80) 100%),
+    var(--gem-foto) center/cover fixed no-repeat,
+    #0A0B0D;
+}
 body:not(.claro) .app::before{
-  background:
-    radial-gradient(ellipse 60% 50% at 8% -5%, rgba(249,115,22,.16), transparent 62%),
-    radial-gradient(ellipse 55% 45% at 95% 105%, rgba(46,144,232,.13), transparent 60%),
-    radial-gradient(ellipse 40% 40% at 60% 40%, rgba(255,255,255,.020), transparent 70%);
+  background:rgba(18,18,20,.55);
+  backdrop-filter:blur(26px) saturate(130%);-webkit-backdrop-filter:blur(26px) saturate(130%);
 }
-body:not(.claro) .hcard{
-  background:
-    linear-gradient(152deg, rgba(255,255,255,.085) 0%, rgba(255,255,255,.022) 34%, rgba(255,255,255,0) 62%),
-    var(--side);
-  border:1px solid rgba(255,255,255,.10);
-  backdrop-filter:blur(18px) saturate(150%);-webkit-backdrop-filter:blur(18px) saturate(150%);
-  box-shadow:inset 0 1px 0 rgba(255,255,255,.16), inset 0 -1px 0 rgba(0,0,0,.30),
-             0 10px 26px rgba(0,0,0,.45), 0 2px 6px rgba(0,0,0,.30);
-}
-body:not(.claro) .hcard:hover{
-  border-color:color-mix(in srgb,var(--laranja) 48%,transparent);
-  box-shadow:inset 0 1px 0 rgba(255,255,255,.22), inset 0 -1px 0 rgba(0,0,0,.30),
-             0 18px 38px rgba(0,0,0,.55), 0 3px 9px rgba(0,0,0,.35);
-}
-body:not(.claro) .hcard .ic{
-  background:linear-gradient(160deg, color-mix(in srgb,var(--laranja) 26%,transparent), color-mix(in srgb,var(--laranja) 10%,transparent));
-  border-color:color-mix(in srgb,var(--laranja) 34%,transparent);
-  box-shadow:inset 0 1px 0 rgba(255,255,255,.18);
-}
-body:not(.claro) .quem, body:not(.claro) .busca input{
-  border-color:rgba(255,255,255,.10);
-  box-shadow:inset 0 1px 0 rgba(255,255,255,.12);
+body:not(.claro) .app{
+  border-color:rgba(255,255,255,.13);
+  box-shadow:0 32px 80px rgba(0,0,0,.70), inset 0 1px 0 rgba(255,255,255,.14);
 }
 
 /* densidade por altura de tela — a coluna mais alta (7 cards) tem de caber
@@ -333,38 +317,76 @@ body.claro .auth-card{box-shadow:0 28px 70px rgba(15,23,42,.16), var(--luz-card)
 .admin-export:hover{background:color-mix(in srgb,var(--verde) 26%,transparent);}
 .admin-export svg{width:15px;height:15px;stroke:currentColor;fill:none;}
 #admin-users-list{display:grid;grid-template-columns:repeat(auto-fill,minmax(430px,1fr));gap:10px;align-items:start;}
-.user-card{position:relative;border-radius:12px;padding:13px 15px;display:flex;align-items:flex-start;gap:13px;
-  background:var(--brilho), var(--side);border:1px solid var(--card-brd);
+.user-card{position:relative;border-radius:14px;padding:13px 15px 12px;display:flex;flex-direction:column;gap:11px;
+  overflow:hidden;background:var(--brilho), var(--side);border:1px solid var(--card-brd);
   box-shadow:var(--luz-card), 0 8px 20px rgba(0,0,0,.40), 0 2px 5px rgba(0,0,0,.28);
   backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);}
 body.claro .user-card{box-shadow:var(--luz-card), 0 8px 20px rgba(15,23,42,.13), 0 2px 5px rgba(15,23,42,.09);}
 @media(max-width:1180px){ #admin-users-list{grid-template-columns:1fr;} }
 .user-card.farol-open{z-index:500;}
-.user-avatar{width:34px;height:34px;flex:0 0 34px;border-radius:50%;display:flex;align-items:center;justify-content:center;
+/* faixa de status na lateral esquerda */
+.user-card::before{content:'';position:absolute;left:0;top:0;bottom:0;width:3px;}
+.user-card.st-approved::before{background:linear-gradient(180deg,var(--verde),transparent 85%);}
+.user-card.st-pending::before {background:linear-gradient(180deg,var(--ambar),transparent 85%);}
+.user-card.st-blocked::before {background:linear-gradient(180deg,var(--vermelho),transparent 85%);}
+
+.user-topo{display:flex;align-items:flex-start;gap:11px;padding-right:74px;}
+.user-avatar{width:38px;height:38px;flex:0 0 38px;border-radius:50%;display:flex;align-items:center;justify-content:center;
   font-size:15px;font-weight:800;color:var(--laranja);
-  background:color-mix(in srgb,var(--laranja) 14%,transparent);border:1px solid color-mix(in srgb,var(--laranja) 26%,transparent);}
-.user-info{flex:1;min-width:0;}
-.user-name{font-size:12.5px;font-weight:700;color:var(--txt);text-transform:uppercase;}
-.user-email{font-size:11px;color:var(--txt2);margin-top:2px;}
-.user-phone{font-size:11px;color:var(--txt3);margin-top:2px;}
+  background:linear-gradient(160deg, color-mix(in srgb,var(--laranja) 26%,transparent), color-mix(in srgb,var(--laranja) 10%,transparent));
+  border:1px solid color-mix(in srgb,var(--laranja) 30%,transparent);box-shadow:inset 0 1px 0 rgba(255,255,255,.16);}
+.user-id{flex:1;min-width:0;}
+.user-name{font-size:12.5px;font-weight:700;color:var(--txt);text-transform:uppercase;letter-spacing:.2px;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.user-email{font-size:11px;color:var(--txt2);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.user-meta{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:5px;}
+.user-phone{font-size:10.5px;color:var(--txt3);}
 .user-phone a{color:var(--txt3);text-decoration:none;display:inline-flex;align-items:center;gap:5px;}
 .user-phone a:hover{color:#25D366;} .user-phone a:hover .wa-ico{stroke:#25D366;}
-.wa-ico{width:13px;height:13px;stroke:var(--txt3);fill:none;flex-shrink:0;}
-.edit-name{background:none;border:0;color:var(--txt3);cursor:pointer;font-size:12px;padding:1px 5px;margin-left:6px;border-radius:4px;line-height:1;}
+.wa-ico{width:12px;height:12px;stroke:var(--txt3);fill:none;flex-shrink:0;}
+.user-date{font-size:10px;color:var(--txt4);}
+.user-date::before{content:'· ';}
+.edit-name{background:none;border:0;color:var(--txt4);cursor:pointer;font-size:11px;padding:0 3px;border-radius:4px;line-height:1;opacity:0;}
+.user-card:hover .edit-name{opacity:1;}
 .edit-name:hover{color:var(--laranja);background:var(--hover);}
-.user-date{font-size:10px;color:var(--txt4);margin-top:4px;}
-.user-fca,.user-farol{margin-top:7px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;position:relative;}
-.user-fca label{font-size:10px;font-weight:700;color:var(--laranja);text-transform:uppercase;letter-spacing:.5px;}
-.user-farol>label{font-size:10px;font-weight:700;color:var(--azul);text-transform:uppercase;letter-spacing:.5px;}
-.farol-btn{background:var(--side);color:var(--txt);border:1px solid var(--card-brd);border-radius:9px;font-family:inherit;
-  font-size:11px;font-weight:700;padding:5px 10px;cursor:pointer;outline:none;display:flex;align-items:center;gap:7px;min-width:150px;}
-.farol-btn:hover{border-color:var(--azul);}
-.farol-btn .fcnt{background:var(--azul);color:#fff;border-radius:10px;padding:1px 7px;font-size:9px;font-weight:800;}
-.user-fca .farol-btn:hover{border-color:var(--laranja);}
+
+/* ações em ícones redondos, no canto do card */
+.user-actions{position:absolute;top:11px;right:12px;display:flex;gap:6px;z-index:2;}
+.uact{width:28px;height:28px;flex:0 0 28px;display:flex;align-items:center;justify-content:center;cursor:pointer;
+  border-radius:50%;background:transparent;border:1px solid var(--card-brd);color:var(--txt3);padding:0;}
+.uact svg{width:14px;height:14px;}
+.uact:hover{background:var(--hover);color:var(--txt);}
+.uact.ok:hover{color:var(--verde);border-color:color-mix(in srgb,var(--verde) 45%,transparent);
+  background:color-mix(in srgb,var(--verde) 12%,transparent);}
+.uact.bad:hover{color:var(--vermelho);border-color:color-mix(in srgb,var(--vermelho) 45%,transparent);
+  background:color-mix(in srgb,var(--vermelho) 12%,transparent);}
+
+/* permissões: rótulo em cima, chips das unidades embaixo */
+.user-perms{border-top:1px solid var(--linha);padding-top:10px;display:flex;flex-direction:column;gap:8px;}
+.user-fca,.user-farol{display:flex;align-items:center;gap:9px;position:relative;}
+.user-fca label,.user-farol>label{flex:0 0 88px;font-size:9px;white-space:nowrap;font-weight:800;text-transform:uppercase;letter-spacing:.6px;}
+.user-fca label{color:var(--laranja);} .user-farol>label{color:var(--azul);}
+.farol-btn{flex:1;min-width:0;background:transparent;color:var(--txt);border:1px dashed var(--card-brd);border-radius:9px;
+  font-family:inherit;font-size:11px;font-weight:700;padding:5px 8px;cursor:pointer;outline:none;
+  display:flex;align-items:center;gap:5px;flex-wrap:wrap;text-align:left;}
+.farol-btn:hover{border-style:solid;background:var(--hover);}
+.user-fca .farol-btn:hover{border-color:color-mix(in srgb,var(--laranja) 55%,transparent);}
+.user-farol .farol-btn:hover{border-color:color-mix(in srgb,var(--azul) 55%,transparent);}
+.farol-btn .fcnt{margin-left:auto;flex:0 0 auto;border-radius:10px;padding:1px 7px;font-size:9px;font-weight:800;}
 .user-fca .farol-btn .fcnt{background:var(--laranja);color:#2A1405;}
-.user-fca .farol-opt input{accent-color:var(--laranja);}
-.farol-panel{display:none;position:absolute;top:calc(100% + 4px);left:0;z-index:60;border-radius:11px;padding:4px;
-  min-width:210px;max-height:280px;overflow:auto;background:var(--pop);border:1px solid var(--card-brd);
+.user-farol .farol-btn .fcnt{background:var(--azul);color:#fff;}
+/* chips das unidades */
+.uchip{display:inline-flex;align-items:center;font-style:normal;font-size:9.5px;font-weight:800;letter-spacing:.3px;
+  padding:2px 7px;border-radius:6px;white-space:nowrap;}
+.uchip.fca{color:var(--laranja);background:color-mix(in srgb,var(--laranja) 14%,transparent);
+  border:1px solid color-mix(in srgb,var(--laranja) 26%,transparent);}
+.uchip.farol{color:var(--azul);background:color-mix(in srgb,var(--azul) 14%,transparent);
+  border:1px solid color-mix(in srgb,var(--azul) 26%,transparent);}
+.uchip.mais{opacity:.75;}
+.uchip.todas{text-transform:uppercase;}
+.uchip.vazio{color:var(--txt4);background:transparent;border:1px dashed var(--card-brd);font-weight:700;}
+.farol-panel{display:none;position:absolute;top:calc(100% + 5px);left:88px;z-index:60;border-radius:11px;padding:4px;
+  min-width:210px;max-height:290px;overflow:auto;background:var(--pop);border:1px solid var(--card-brd);
   box-shadow:0 18px 44px rgba(0,0,0,.55), 0 3px 10px rgba(0,0,0,.35);}
 body.claro .farol-panel{box-shadow:0 18px 44px rgba(15,23,42,.20), 0 3px 10px rgba(15,23,42,.10);}
 .farol-panel.open{display:block;}
@@ -372,23 +394,7 @@ body.claro .farol-panel{box-shadow:0 18px 44px rgba(15,23,42,.20), 0 3px 10px rg
 .farol-opt:hover{background:var(--hover);color:var(--txt);}
 .farol-opt.all-opt{border-bottom:1px solid var(--linha);color:var(--txt);font-weight:700;margin-bottom:2px;}
 .farol-opt input{accent-color:var(--azul);width:14px;height:14px;cursor:pointer;}
-.user-fca select{background:var(--side);color:var(--txt);border:1px solid var(--card-brd);border-radius:9px;font-family:inherit;
-  font-size:11px;font-weight:700;padding:5px 9px;cursor:pointer;outline:none;}
-.user-fca select:hover{border-color:var(--laranja);}
-/* ações no canto do card; assim os seletores de FCA/Farol usam a largura toda */
-.user-actions{position:absolute;top:13px;right:15px;display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end;}
-.user-name,.user-email,.user-phone,.user-date{padding-right:176px;}
-.btn-approve,.btn-unblock{border-radius:9px;padding:7px 15px;font-family:inherit;font-size:10px;font-weight:800;cursor:pointer;
-  text-transform:uppercase;letter-spacing:.5px;color:var(--verde);
-  background:color-mix(in srgb,var(--verde) 14%,transparent);border:1px solid color-mix(in srgb,var(--verde) 32%,transparent);}
-.btn-approve:hover,.btn-unblock:hover{background:color-mix(in srgb,var(--verde) 28%,transparent);}
-.btn-block{border-radius:9px;padding:7px 15px;font-family:inherit;font-size:10px;font-weight:800;cursor:pointer;
-  text-transform:uppercase;letter-spacing:.5px;color:var(--vermelho);
-  background:color-mix(in srgb,var(--vermelho) 12%,transparent);border:1px solid color-mix(in srgb,var(--vermelho) 26%,transparent);}
-.btn-block:hover{background:color-mix(in srgb,var(--vermelho) 24%,transparent);}
-.btn-reject,.btn-remove{background:transparent;border:1px solid var(--card-brd);border-radius:9px;padding:7px 12px;font-family:inherit;
-  font-size:10px;font-weight:800;color:var(--txt3);cursor:pointer;text-transform:uppercase;letter-spacing:.5px;}
-.btn-reject:hover,.btn-remove:hover{border-color:var(--vermelho);color:var(--vermelho);}
+.user-fca .farol-opt input{accent-color:var(--laranja);}
 .admin-empty{text-align:center;padding:44px 24px;color:var(--txt3);font-size:12px;}
 </style>
 </head>
@@ -943,10 +949,16 @@ async function loadAdminData() {
 // fca_profiles.unidade guarda a lista separada por vírgula (ex.: 'CBA T1,MCC T1').
 // A pessoa pode acessar mais de um FCA; zero flags + sem admin = sem acesso.
 const fcaUnitsOf = p => String((p && p.unidade) || '').toUpperCase().split(',').map(s => s.trim()).filter(Boolean);
+// Mostra as unidades como chips no próprio botão — dá para ver quem tem o quê
+// sem abrir o menu; acima de 3, o resto vira "+N".
+function chipsDe(units, cls) {
+  const vis = units.slice(0, 3).map(u => `<i class="uchip ${cls}">${u}</i>`).join('');
+  return vis + (units.length > 3 ? `<i class="uchip ${cls} mais">+${units.length - 3}</i>` : '');
+}
 function fcaSummary(isAdm, units) {
-  if (isAdm) return 'Admin (todas)';
-  if (!units.length) return '— sem acesso —';
-  return units.length === 1 ? units[0] : units.length + ' unidades';
+  if (isAdm) return '<i class="uchip fca todas">Admin · todas</i>';
+  if (!units.length) return '<i class="uchip vazio">sem acesso</i>';
+  return chipsDe(units, 'fca');
 }
 function renderFcaPicker(userId, p, nm) {
   const units = fcaUnitsOf(p), isAdm = !!(p && p.is_admin), cnt = isAdm ? 0 : units.length;
@@ -982,7 +994,7 @@ function onFcaChange(userId, nm) {
   else units.forEach(u => { u.disabled = false; });
   const checked = units.filter(u => u.checked).map(u => u.value);
   const csv = adm.checked ? '' : checked.join(',');
-  document.getElementById('fasum-' + userId).textContent = fcaSummary(adm.checked, checked);
+  document.getElementById('fasum-' + userId).innerHTML = fcaSummary(adm.checked, checked);
   const badge = document.getElementById('facnt-' + userId);
   badge.textContent = checked.length; badge.style.display = (!adm.checked && checked.length) ? '' : 'none';
   setUserUnit(userId, adm.checked, csv, nm);
@@ -1001,10 +1013,9 @@ async function setUserUnit(userId, isAdmin, csv, nome) {
 
 // ── Recebe Farol (segunda, 14h) — seleção múltipla de unidades + "Todas" ──
 function farolSummary(v) {
-  if (!v) return 'Não recebe';
-  if (v === 'TODAS') return 'Todas as unidades';
-  const n = v.split(',').filter(Boolean).length;
-  return n + (n === 1 ? ' unidade' : ' unidades');
+  if (!v) return '<i class="uchip vazio">não recebe</i>';
+  if (v === 'TODAS') return '<i class="uchip farol todas">todas as unidades</i>';
+  return chipsDe(v.split(',').filter(Boolean), 'farol');
 }
 function renderFarolPicker(userId, cur, nm) {
   cur = cur || '';
@@ -1046,7 +1057,7 @@ function onFarolChange(userId, nm, changed) {
   const checked = units.filter(u => u.checked).map(u => u.value);
   const cnt = checked.length;
   const val = cnt === 0 ? '' : (cnt === units.length ? 'TODAS' : checked.join(','));
-  document.getElementById('fsum-' + userId).textContent = farolSummary(val);
+  document.getElementById('fsum-' + userId).innerHTML = farolSummary(val);
   const badge = document.getElementById('fcnt-' + userId);
   badge.textContent = cnt; badge.style.display = cnt ? '' : 'none';
   setUserFarol(userId, val, nm);
@@ -1109,14 +1120,14 @@ function renderAdminUsers() {
     const idx = allApprovals.indexOf(u);
     let actions = '';
     if (u.status === 'pending') {
-      actions = `<button class="btn-approve" onclick="approveUser(${idx})">Aprovar</button>
-                 <button class="btn-reject" onclick="rejectUser(${idx})">Rejeitar</button>`;
+      actions = `<button class="uact ok"  onclick="approveUser(${idx})" title="Aprovar acesso"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></button>
+                 <button class="uact bad" onclick="rejectUser(${idx})"  title="Rejeitar cadastro"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>`;
     } else if (u.status === 'approved') {
-      actions = `<button class="btn-remove" onclick="removeUser(${idx})">Remover</button>
-                 <button class="btn-block" onclick="blockUser(${idx})">Bloquear</button>`;
+      actions = `<button class="uact bad" onclick="blockUser(${idx})"  title="Bloquear acesso"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><line x1="5.6" y1="5.6" x2="18.4" y2="18.4"/></svg></button>
+                 <button class="uact"     onclick="removeUser(${idx})" title="Remover do portal"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></button>`;
     } else {
-      actions = `<button class="btn-remove" onclick="removeUser(${idx})">Remover</button>
-                 <button class="btn-unblock" onclick="unblockUser(${idx})">Desbloquear</button>`;
+      actions = `<button class="uact ok"  onclick="unblockUser(${idx})" title="Desbloquear acesso"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0"/></svg></button>
+                 <button class="uact"     onclick="removeUser(${idx})"  title="Remover do portal"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></button>`;
     }
     let fcaSel = '', farolSel = '';
     if (u.status === 'approved' && u.user_id) {
@@ -1130,17 +1141,17 @@ function renderAdminUsers() {
     const phoneHtml = waHref
       ? `<a href="${waHref}" target="_blank" rel="noopener" title="Abrir no WhatsApp"><svg class="wa-ico" viewBox="0 0 24 24" stroke-width="2"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>${phoneFmt}</a>`
       : (phoneFmt || '—');
-    return `<div class="user-card">
-      <div class="user-avatar">${initial}</div>
-      <div class="user-info">
-        <div class="user-name">${u.name || '—'} <button class="edit-name" title="Editar nome" onclick="editUserName(${idx})">✎</button></div>
-        <div class="user-email">${u.email}</div>
-        <div class="user-phone">${phoneHtml}</div>
-        <div class="user-date">Cadastro: ${dt}</div>
-        ${fcaSel}
-        ${farolSel}
-      </div>
+    return `<div class="user-card st-${u.status}">
       <div class="user-actions">${actions}</div>
+      <div class="user-topo">
+        <div class="user-avatar">${initial}</div>
+        <div class="user-id">
+          <div class="user-name">${u.name || '—'} <button class="edit-name" title="Editar nome" onclick="editUserName(${idx})">✎</button></div>
+          <div class="user-email">${u.email}</div>
+          <div class="user-meta"><span class="user-phone">${phoneHtml}</span><span class="user-date">${dt}</span></div>
+        </div>
+      </div>
+      ${fcaSel || farolSel ? `<div class="user-perms">${fcaSel}${farolSel}</div>` : ''}
     </div>`;
   }).join('');
 }
