@@ -131,6 +131,7 @@ body{font-family:'Montserrat',-apple-system,BlinkMacSystemFont,sans-serif;font-s
 /* no Resumo as tabelas mostram TUDO — sem barra interna (Renan, 14/08/2026) */
 .tab-wrap.inteira{overflow:visible;}
 .dimbt{white-space:nowrap;}
+.btn-mini.on{background:var(--azul);color:#fff;border-color:transparent;}
 .lapis{color:var(--txt3);font-size:11px;margin-left:5px;cursor:pointer;}
 .lapis:hover{color:var(--txt);}
 .rlbl{font-size:9.5px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:.9px;}
@@ -312,6 +313,10 @@ input[type=date]::-webkit-calendar-picker-indicator{cursor:pointer;}
     <button class="s-item" data-ver="resumo">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 19V9M10 19V5M16 19v-7M22 19H2"/></svg>
       Resumo
+    </button>
+    <button class="s-item" data-ver="estrat">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 6h18M3 12h12M3 18h7"/></svg>
+      Estratificação
     </button>
     <button class="s-item" data-ver="aderencia" id="itAder" style="display:none">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M9 11l3 3 7-7"/><path d="M20 12v7H4V5h11"/></svg>
@@ -643,6 +648,7 @@ function render(){
   if(VER==='lista') $('cols').innerHTML=htmlLista();
   else if(VER==='frota') $('cols').innerHTML=htmlFrota();
   else if(VER==='resumo'){ renderResumo(); pintaLateral(); return; }
+  else if(VER==='estrat'){ renderEstrat(); pintaLateral(); return; }
   else if(VER==='aderencia'){ renderAderencia(); pintaLateral(); return; }
   else $('cols').innerHTML=htmlHistorico();
   pintaLateral();
@@ -793,8 +799,6 @@ async function renderResumo(){
       .sort((x,y)=>(x.p??101)-(y.p??101));   // pior primeiro, como no painel antigo
   };
   const diasModelo=new Set(rows.filter(r=>String(r.modelo||'').trim()).map(r=>r.data));
-  const dimA=DIM_UNI==='uni'?'unidade':'projeto', dimB=DIM_TIPO==='tipo'?'tipo_veiculo':'modelo';
-  const tabA=agrupa(dimA), tabB=agrupa(dimB);
   // série mensal do ANO (jan→dez), ignorando o filtro de vigência
   const MES3=['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
   const vals=Array(12).fill(null);
@@ -834,11 +838,6 @@ async function renderResumo(){
         <div class="rsub">Período selecionado</div>
         <div style="height:250px"><canvas id="chProj"></canvas></div>
       </div>
-    </div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
-      ${miniTab('Disponibilidade % · '+(DIM_UNI==='uni'?'Unidade':'Projeto'),DIM_UNI==='uni'?'Unidade':'Projeto',tabA,'uni',DIM_UNI==='uni'?'Ver por projeto':'Ver por unidade')}
-      ${miniTab('Disponibilidade % · '+(DIM_TIPO==='tipo'?'Tipo de Veículo':'Modelo'),DIM_TIPO==='tipo'?'Tipo':'Modelo',tabB,'tipo',DIM_TIPO==='tipo'?'Ver por modelo':'Ver por tipo',
-        DIM_TIPO==='modelo'&&diasModelo.size<nDias?`Período selecionado · ${diasModelo.size} dia(s) com modelo na foto`:null)}
     </div>
   </div>`;
   // ── gráficos: MESMAS opções do painel antigo (eixo Y adaptativo, datalabels,
@@ -888,19 +887,66 @@ const fmtMil=v=>v==null?'—':Math.round(v).toLocaleString('pt-BR');
 const pctFmt=v=>v==null?'—':(v>=0?'+':'')+v.toFixed(1).replace('.',',')+'%';
 const dl=(txt,v)=>`<b class="${v==null?'':v>=0?'grn':'red'}">${txt}</b>`;
 // tabelas Unidade/Tipo — inteiras (sem rolagem própria) e com TOGGLE de dimensão
-let DIM_UNI='uni', DIM_TIPO='tipo';
-function miniTab(titulo,col1,itens,dim,rotulo,sub){
-  return `<div class="tab-wrap inteira">
-    <div style="padding:14px 16px 0;display:flex;align-items:flex-start;gap:10px">
-      <div style="flex:1"><div class="rtit">${esc(titulo)}</div><div class="rsub">${esc(sub||'Período selecionado')}</div></div>
-      <button class="btn-mini dimbt" data-dim="${dim}">${esc(rotulo)}</button>
+/* ── visão ESTRATIFICAÇÃO: a mesma foto, quebrada pela dimensão escolhida
+      (Unidade · Projeto · Tipo de Veículo · Modelo) — Renan, 14/08/2026   ── */
+let DIM_EST='unidade';
+const DIMS_EST=[['unidade','Unidade'],['projeto','Projeto'],['tipo_veiculo','Tipo de Veículo'],['modelo','Modelo']];
+async function renderEstrat(){
+  $('cols').innerHTML='<div class="cvazia" style="padding:30px">Carregando…</div>';
+  let all;
+  try{ all=await loadResumo(); }
+  catch(e){ $('cols').innerHTML=`<div class="cvazia">Erro: ${esc(e.message||e)}</div>`; return; }
+  if(VER!=='estrat')return;
+  if(!all.length){ $('cols').innerHTML='<div class="cvazia">Sem fotos ainda — rode a migração do histórico e aguarde as fotos diárias.</div>'; return; }
+  const Suni=new Set(unisSel());
+  const rows=all.filter(r=>{
+    if(!Suni.has(r.unidade)) return false;
+    if(projFora(r.projeto)) return false;
+    if(FVIG.size  && !FVIG.has(String(r.data||'').slice(0,7))) return false;
+    if(FDATA.size && !FDATA.has(String(r.data||''))) return false;
+    if(FPROJ.size && !FPROJ.has(projLbl(r.projeto))) return false;
+    if(FTIPO.size && !FTIPO.has(r.tipo_veiculo||'—')) return false;
+    return true;
+  });
+  if(!rows.length){ $('cols').innerHTML='<div class="cvazia">Nada com os filtros atuais.</div>'; return; }
+  // no recorte por MODELO só valem as fotos que já têm o campo
+  const base=DIM_EST==='modelo'?rows.filter(r=>String(r.modelo||'').trim()):rows;
+  const nD=new Set(base.map(r=>r.data)).size||1;
+  const m=new Map();
+  base.forEach(r=>{const k=DIM_EST==='projeto'?projLbl(r.projeto):(r[DIM_EST]||'—');
+    if(!m.has(k))m.set(k,{a:0,i:0}); const g=m.get(k); g.a+=r.ativos||0; g.i+=r.indisponiveis||0;});
+  const itens=[...m.entries()].map(([k,g])=>({k,a:g.a/nD,i:g.i/nD,p:dispPct(g.a,g.i)}))
+    .sort((x,y)=>(x.p??101)-(y.p??101));
+  const tot=base.reduce((g,r)=>{g.a+=r.ativos||0;g.i+=r.indisponiveis||0;return g;},{a:0,i:0});
+  const pTot=dispPct(tot.a,tot.i);
+  const nomeDim=(DIMS_EST.find(d=>d[0]===DIM_EST)||[])[1]||'Unidade';
+  const semModelo=DIM_EST==='modelo'&&nD<new Set(rows.map(r=>r.data)).size;
+  $('cols').innerHTML=`
+  <div style="overflow:auto;min-height:0;flex:1;padding-bottom:10px">
+    <div style="display:flex;align-items:flex-end;gap:20px;flex-wrap:wrap;margin-bottom:14px">
+      <div><div class="rlbl">Disponibilidade · ${esc(nomeDim)}</div>
+        <div style="font-size:38px;font-weight:800;line-height:1.05;color:${clsDisp(pTot)}">${p1(pTot)}</div></div>
+      <div style="display:flex;gap:20px;padding-bottom:6px">
+        <div><div class="rlbl">Média Ativos</div><b class="rval">${fmtMil(tot.a/nD)}</b></div>
+        <div><div class="rlbl">Média Indisponíveis</div><b class="rval">${fmtMil(tot.i/nD)}</b></div>
+        <div><div class="rlbl">Linhas</div><b class="rval">${itens.length}</b></div>
+      </div>
+      <div style="margin-left:auto;display:flex;gap:6px;padding-bottom:6px;flex-wrap:wrap">
+        ${DIMS_EST.map(([d,rot])=>`<button class="btn-mini${d===DIM_EST?' on':''}" data-est="${d}">${esc(rot)}</button>`).join('')}
+      </div>
     </div>
-    <table class="tab"><thead><tr><th>${esc(col1)}</th><th class="num">Ativos</th><th class="num">Indisp.</th><th class="num">Disp. %</th></tr></thead>
-    <tbody>${itens.map(x=>`<tr>
-      <td class="forte">${esc(x.k)}</td>
-      <td class="num">${fmtMil(x.a)}</td>
-      <td class="num" style="color:${x.i>=1?'var(--vermelho)':'inherit'}">${fmtMil(x.i)}</td>
-      <td class="num"><b style="color:${clsDisp(x.p)}">${x.p==null?'—':x.p.toFixed(0)+'%'}</b></td></tr>`).join('')}</tbody></table></div>`;
+    <div class="tab-wrap inteira">
+      <table class="tab"><thead><tr>
+        <th>${esc(nomeDim)}</th><th class="num">Ativos</th><th class="num">Indisp.</th><th class="num">Disp. %</th>
+      </tr></thead><tbody>${itens.map(x=>`<tr>
+        <td class="forte wrap">${esc(x.k)}</td>
+        <td class="num">${fmtMil(x.a)}</td>
+        <td class="num" style="color:${x.i>=1?'var(--vermelho)':'inherit'}">${fmtMil(x.i)}</td>
+        <td class="num"><b style="color:${clsDisp(x.p)}">${x.p==null?'—':x.p.toFixed(0)+'%'}</b></td></tr>`).join('')}
+      </tbody></table>
+    </div>
+    ${semModelo?`<div class="rsub" style="margin-top:8px">Modelo só existe nas fotos a partir do script de migração — ${nD} dia(s) considerado(s).</div>`:''}
+  </div>`;
 }
 
 /* ── visão ADERÊNCIA: quem está preenchendo (Renan, 14/08/2026) ───────────
@@ -1117,7 +1163,7 @@ async function recarregar(){
 }
 
 /* ── navegação ── */
-const TIT={lista:'Indisponíveis',frota:'Frota completa',historico:'Histórico',resumo:'Resumo · Disponibilidade',aderencia:'Aderência do preenchimento'};
+const TIT={lista:'Indisponíveis',frota:'Frota completa',historico:'Histórico',resumo:'Resumo · Disponibilidade',estrat:'Estratificação',aderencia:'Aderência do preenchimento'};
 function setVer(v){VER=v;$('tit').textContent=TIT[v];render();}
 document.querySelectorAll('.s-item[data-ver]').forEach(b=>b.addEventListener('click',()=>setVer(b.dataset.ver)));
 document.querySelectorAll('.s-item[data-vis]').forEach(b=>b.addEventListener('click',()=>{
@@ -1134,11 +1180,8 @@ document.addEventListener('keydown',e=>{
 
 /* ── cliques na área de conteúdo ── */
 $('cols').addEventListener('click',e=>{
-  const dim=e.target.closest('[data-dim]');
-  if(dim){ if(dim.dataset.dim==='uni') DIM_UNI=DIM_UNI==='uni'?'proj':'uni';
-           else { if(SEM_MODELO&&DIM_TIPO==='tipo'){ alert('A foto diária ainda não guarda o modelo.\nRode scripts/disp-modelo.sql no Supabase.'); return; }
-                  DIM_TIPO=DIM_TIPO==='tipo'?'modelo':'tipo'; }
-           renderResumo(); return; }
+  const est=e.target.closest('[data-est]');
+  if(est){ DIM_EST=est.dataset.est; renderEstrat(); return; }
   const edv=e.target.closest('[data-editv]');
   if(edv){abreVeic(edv.dataset.editv);return;}
   const parou=e.target.closest('[data-parou]');
