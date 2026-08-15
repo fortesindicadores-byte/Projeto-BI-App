@@ -906,11 +906,9 @@ async function renderResumo(){
   const soma=arr=>arr.reduce((g,r)=>{g.a+=r.ativos||0;g.i+=r.indisponiveis||0;g.d.add(r.data);return g;},{a:0,i:0,d:new Set()});
   const tot=soma(rows);
   const pctTot=dispPct(tot.a,tot.i);
-  // a evolução do ano ignora vigência E data — senão, com o filtro de Data já
-  // vindo no último dia, o gráfico do ano viraria uma barra só
-  const semVig=all.filter(r=>Suni.has(r.unidade)&&!projFora(r.projeto)
-    &&(!FPROJ.size||FPROJ.has(projLbl(r.projeto)))
-    &&(!FTIPO.size||FTIPO.has(r.tipo_veiculo||'—')));
+  // a evolução do ano ignora só a VIGÊNCIA: filtrando um dia, fica a barra do
+  // mês daquele dia, com o valor do dia (Renan, 15/08/2026)
+  const semVig=all.filter(r=>passaS(r,'vig'));
   const cy=new Date().getFullYear();
   // agrupadores das tabelas (com TOGGLE: unidade↔projeto · tipo↔modelo)
   const agrupa=campo=>{
@@ -936,16 +934,21 @@ async function renderResumo(){
   porMes.forEach((g,m)=>{vals[m]=dispPct(g.a,g.i);});
   const projs=agrupa('projeto');
   /* ── calendário: um quadradinho por dia, pintado com a disponibilidade
-        daquele dia. Segue a vigência quando há UMA marcada; com várias (ou
-        nenhuma) mostra o mês corrente (Renan, 15/08/2026)                 ── */
+        daquele dia. Vai para o mês do DIA filtrado — e aí só ele fica pintado;
+        sem dia, segue a vigência quando há UMA marcada; sem nada, mês corrente
+        (Renan, 15/08/2026)                                                ── */
   const hj=new Date();
-  const pref=FVIG.size===1 ? [...FVIG][0] : hj.getFullYear()+'-'+String(hj.getMonth()+1).padStart(2,'0');
+  const diasSel=[...FDATA].sort();
+  const pref=diasSel.length ? diasSel[diasSel.length-1].slice(0,7)
+           : (FVIG.size===1 ? [...FVIG][0]
+           : hj.getFullYear()+'-'+String(hj.getMonth()+1).padStart(2,'0'));
   const calY=+pref.slice(0,4), calM=+pref.slice(5,7)-1;
   const porDia=new Map();
   all.forEach(r=>{
     if(!Suni.has(r.unidade)||projFora(r.projeto)) return;
     if(FPROJ.size && !FPROJ.has(projLbl(r.projeto))) return;
     if(FTIPO.size && !FTIPO.has(r.tipo_veiculo||'—')) return;
+    if(FDATA.size && !FDATA.has(String(r.data||'').slice(0,10))) return;
     if(String(r.data||'').slice(0,7)!==pref) return;
     const d=+String(r.data).slice(8,10);
     if(!porDia.has(d)) porDia.set(d,{a:0,i:0});
