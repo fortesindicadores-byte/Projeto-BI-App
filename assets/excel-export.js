@@ -169,16 +169,43 @@
       setTimeout(()=>URL.revokeObjectURL(a.href),1500);
     },'image/png');
   }
-  function bgDe(el){
-    // Fundo p/ o PNG: precisa ser OPACO. Cards têm fundo semi-transparente (rgba .14/.55) que,
-    // pintado sobre preto, escurece a imagem no modo claro — então pulamos e subimos até achar
-    // um fundo opaco (o .main = #F0F0F0 no claro / var(--bg) no escuro).
-    const alpha=c=>{const m=String(c).match(/rgba?\(([^)]+)\)/);if(!m)return 1;const p=m[1].split(',');return p.length>3?parseFloat(p[3]):1;};
-    let e=el;
-    while(e){ const c=getComputedStyle(e).backgroundColor; if(c && c!=='transparent' && alpha(c)>=0.9) return c; e=e.parentElement; }
-    const body=getComputedStyle(document.body).backgroundColor;
-    return (body && alpha(body)>=0.9) ? body : (document.body.classList.contains('light-mode')?'#F0F0F0':'#0C1017');
+  // ---- achatamento de cor p/ o layout de vidro ---------------------------
+  // No layout novo TUDO é translúcido (fundo uniforme → .app::before com blur
+  // → card rgba). O html2canvas pinta cada rgba isolado, sem as camadas de
+  // baixo — foi o PNG azul-marinho com cards cinza. Como o fundo é UNIFORME,
+  // a composição de alfa é exata: dá p/ calcular a cor sólida de cada nó.
+  function parseC(c){ const m=String(c).match(/rgba?\(([^)]+)\)/); if(!m) return null;
+    const p=m[1].split(',').map(parseFloat); return {r:p[0],g:p[1],b:p[2],a:p.length>3?p[3]:1}; }
+  const sobre=(fg,bg)=>({r:fg.r*fg.a+bg.r*(1-fg.a), g:fg.g*fg.a+bg.g*(1-fg.a), b:fg.b*fg.a+bg.b*(1-fg.a), a:1});
+  const cstr=c=>'rgb('+Math.round(c.r)+', '+Math.round(c.g)+', '+Math.round(c.b)+')';
+  function baseSolida(){
+    const cs=getComputedStyle(document.body);
+    const c=parseC(cs.backgroundColor);
+    if(c && c.a>=0.9) return c;                                   // painéis antigos: body sólido
+    // layout de vidro: o tom uniforme é a ÚLTIMA cor do background-image do body
+    const stops=String(cs.backgroundImage).match(/rgba?\([^)]+\)/g);
+    if(stops && stops.length){ const u=parseC(stops[stops.length-1]);
+      if(u) return u.a>=1?u:sobre(u,{r:255,g:255,b:255,a:1}); }
+    return parseC(document.body.classList.contains('claro')?'rgb(225, 226, 229)'
+                : document.body.classList.contains('light-mode')?'rgb(240, 240, 240)':'rgb(12, 16, 23)');
   }
+  // cor efetiva ATRÁS+INCLUINDO o fundo do elemento (composição pela árvore).
+  // O vidro do .app mora num ::before — entra logo depois do próprio .app.
+  function effOf(el, cache){
+    if(!el || el===document.documentElement) return baseSolida();
+    if(el===document.body) return baseSolida();
+    if(cache.has(el)) return cache.get(el);
+    let acc=effOf(el.parentElement, cache);
+    const c=parseC(getComputedStyle(el).backgroundColor);
+    if(c && c.a>0) acc=sobre(c,acc);
+    if(el.classList && el.classList.contains('app')){
+      const pb=parseC(getComputedStyle(el,'::before').backgroundColor);
+      if(pb && pb.a>0) acc=sobre(pb,acc);
+    }
+    cache.set(el,acc);
+    return acc;
+  }
+  function bgDe(el){ return cstr(effOf(el, new Map())); }
   const SCALE=4; // fallback
   // Escala ADAPTATIVA: elementos menores (cards de gráfico) saem muito mais nítidos (até 8×);
   // elementos grandes (tabelões) limitam a escala para não estourar memória (~32MP alvo).
@@ -209,7 +236,12 @@
       // html2canvas 1.4.1 NÃO resolve var(--x) em 'color'/'background' (pinta preto).
       // Solução: grava a cor/fundo COMPUTADOS num atributo p/ reaplicar como valor concreto no clone.
       const nodes=[el].concat([].slice.call(el.querySelectorAll('*')));
-      nodes.forEach(n=>{ try{ const cs=getComputedStyle(n); n.setAttribute('data-h2c-c',cs.color); n.setAttribute('data-h2c-bg',cs.backgroundColor); }catch(e){} });
+      const effCache=new Map();
+      nodes.forEach(n=>{ try{ const cs=getComputedStyle(n); n.setAttribute('data-h2c-c',cs.color);
+        const c=parseC(cs.backgroundColor);
+        // translúcido → grava a cor composta (sólida); opaco/transparente ficam como estão
+        n.setAttribute('data-h2c-bg', (c && c.a>0.02 && c.a<0.98) ? cstr(effOf(n, effCache)) : cs.backgroundColor);
+      }catch(e){} });
       html2canvas(el,{scale:scl,backgroundColor:transp?null:bgDe(el),useCORS:true,logging:false,scrollX:0,scrollY:-window.scrollY,
         onclone:(doc)=>{
           doc.querySelectorAll('[data-h2c-c]').forEach(n=>{ n.style.color=n.getAttribute('data-h2c-c'); const bg=n.getAttribute('data-h2c-bg'); if(bg&&bg!=='rgba(0, 0, 0, 0)'&&bg!=='transparent') n.style.backgroundColor=bg; });
@@ -289,7 +321,7 @@
       if(ch){
         e.preventDefault();
         const nome=tituloGrafico(canvas);
-        const card=canvas.closest('.chart-card,.tab-wrap')||canvas.closest('.tbl-section,section')||canvas.parentElement;
+        const card=canvas.closest('.chart-card,.tab-wrap,.gcard,.card')||canvas.closest('.tbl-section,section')||canvas.parentElement;
         showMenu(e.clientX,e.clientY,[
           {icon:IC_FILE,label:'Exportar Excel',action:()=>baixarGrafico(ch, nome)},
           {icon:IC_IMG, label:'Exportar imagem (PNG)',action:()=>capturaImagem(card, nome, ch)},
