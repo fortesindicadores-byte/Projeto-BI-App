@@ -623,8 +623,11 @@ async function loadAtivos(){
     const filial=String(r['Filial']||'').trim(), projeto=String(r['Projeto']||'').trim();
     return {placa:normP(r['Placa']),filial,projeto,tipo:String(r['Tipo Veículo']||'').trim(),
             modelo:String(r['Modelo']||'').trim(),cod:unitCod(filial,projeto)};
-  }).filter(r=>r.placa&&!/FRETEIRO/i.test(r.projeto)     // FRETEIRO fora (Renan, 14/08/2026)
-             &&!placasManuais.has(r.placa));             // manual tem prioridade
+  }).filter(r=>/^[A-Z0-9]{7}$/.test(r.placa)             // o export do Ginfo traz uma
+             // linha de rodapé ("FILTROS APLICADOS: CONTABILIZAR VEICULO?…") que
+             // virava veículo e unidade fantasma no filtro — só entra placa de 7
+             && !/FRETEIRO/i.test(r.projeto)             // FRETEIRO fora (Renan, 14/08/2026)
+             && !placasManuais.has(r.placa));            // manual tem prioridade
   ATIVOS=[...ginfo,...manuais];
   ATIVO_POR={}; ATIVOS.forEach(a=>{ATIVO_POR[a.placa]=a;});
 }
