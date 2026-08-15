@@ -577,6 +577,65 @@ td.num { text-align:right; }
 
 ---
 
+## Layout Laranja Moderno — referência visual (Renan, 15/08/2026)
+
+Referência de layout que o Renan escolheu para usarmos: **`docs/layout-laranja-moderno.webp`** (abrir a imagem antes de desenhar qualquer tela nesse estilo). Quando ele disser *"faz no layout laranja moderno"*, é isso aqui.
+
+**O que define o estilo:**
+
+- **Fundo quente, não azulado.** A página é um marrom-escuro alaranjado (~`#1B1113`) com um brilho radial laranja discreto nos cantos — a mesma ideia do nosso `body`, mas puxando para o quente em vez do azul.
+- **Shell de app**: rail estreito à esquerda **só com ícones** (logo laranja no topo, item ativo = círculo laranja preenchido, os demais em `--text3`), busca em **pílula full-width** no topo e, à direita, ícones em círculo (engrenagem, sino) + avatar.
+- **Cards** `border-radius:18–20px`, fundo um degrau mais claro que a página com leve tinta quente, borda de 1px em `rgba(255,255,255,.06)`, sem sombra dura. **Cards dentro de cards** (o "Activity manager" tem sub-cards) — o interno é mais escuro que o externo, nunca mais claro.
+- **Números grandes** (32–40px, peso 800) com o **delta pequeno em laranja logo ao lado**, na mesma linha da base — não embaixo.
+- **Botões**: pílula 100% redonda. Ação principal = laranja preenchido; secundária = contorno em `rgba(255,255,255,.12)` com o texto claro. Ícones de ação (`+`, refresh, export, `⋮`) viram **círculos ghost** no canto superior direito do card.
+- **Barras com gradiente vertical laranja → roxo** (`#F97316` no topo → `#7C3AED` embaixo), topo e base arredondados, valores negativos descendo abaixo do zero com o gradiente invertido. A barra em foco ganha um **ponto branco com anel** e um **tooltip-card flutuante** (fundo escuro, cantos 12px, uma bolinha colorida por série).
+- **Donut** com o arco em laranja sobre trilho cinza-escuro e o valor no centro.
+- **Sparkline** em área com o mesmo gradiente laranja→roxo e um ponto branco marcando o último valor.
+- **Toggle de par** (ex.: "Top performance" / "Worst performance"): duas pílulas lado a lado, a ativa laranja preenchida.
+
+**Como isso conversa com o que já temos:** o laranja é o mesmo `--orange:#F97316`; o roxo `#7C3AED` entra **só como fim de gradiente** em gráfico, não vira cor de dado. Tipografia continua Montserrat. Regra de cor de resultado (verde/vermelho) não muda.
+
+---
+
+## Layout 2 Moderno — referência visual (Renan, 15/08/2026)
+
+Segunda referência escolhida pelo Renan (dashboard "Fintrixity"): **`docs/layout-2-moderno.png`**. Quando ele disser *"faz no layout 2 moderno"*, é este. **Não confundir com o "Layout Laranja Moderno"** — os dois usam laranja, mas a base é oposta.
+
+**O que define o estilo:**
+
+- **Preto neutro, não quente.** Fundo quase preto (~`#0D0D0D`), sem tinta marrom nem brilho radial. O laranja aparece **pontualmente**, como destaque, não como clima da tela.
+- **Sidebar COM rótulo** (não é rail de ícones): painel arredondado um degrau acima do fundo, marca no topo (quadrado laranja arredondado + nome), busca com dica `⌘K`, seções nomeadas em caixa alta (`FEATURES`), **badge de contagem** em pílula escura à direita do item, item ativo = retângulo arredondado mais claro. No rodapé, um **card de destaque** ("Upgrade Pro!") com botão laranja.
+- **Topo:** setas voltar/avançar, **breadcrumb** (`Fintrixity › Dashboard`), e à direita ícones em círculo (ajuda, e-mail, sino) + avatar + **botão laranja de ação** ("Share").
+- **Cabeçalho de conteúdo:** título + subtítulo à esquerda, e à direita pílulas fantasma de controle ("This Month ⌄", "↻ Reset Data").
+- **Fila de KPIs com UM card laranja.** Três cards lado a lado: o principal é **laranja preenchido com texto branco**, os outros ficam escuros. Cada um tem ícone em quadrado arredondado, título + subtítulo, valor grande, **chip de delta** (`+1.5% ↑`) e um **rodapé clicável** ("See details" / "View summary") com botão-seta circular na ponta.
+- **Sub-cards em grade 2×2** dentro de um card (as carteiras), cada um com ícone, valor, linha fina de limite e **status como texto colorido** (verde = ativo, laranja-vermelho = inativo) + `⋮`.
+- **Gráfico cinza com um único destaque laranja:** todas as barras em cinza-escuro e **só a barra em foco** ganha gradiente laranja→branco, ponto branco no topo e **tooltip-card flutuante** com as linhas do valor. É o oposto do Layout Laranja Moderno, onde todas as barras são coloridas.
+- **Toggle de período** (Monthly/Yearly) em pílula escura com a opção ativa em laranja.
+- **Tabela** com coluna de checkbox, busca e "Filter" no cabeçalho do card, ícone redondo ao lado do nome, **status em pílula** com bolinha (verde = concluído) e `⋮` no fim da linha.
+
+**Resumo da diferença:** Layout Laranja Moderno = tela inteira quente, gráficos coloridos em gradiente laranja→roxo. Layout 2 Moderno = tela preta neutra e sóbria, com o laranja reservado para **um** card, **uma** barra e os botões de ação.
+
+---
+
+## Layout 3 Moderno — referência visual (Renan, 15/08/2026)
+
+Terceira referência escolhida pelo Renan (dashboard "Metric Flow"): **`docs/layout-3-moderno.png`**. É o mais **analítico** dos três — o que mais se parece com um painel de BI de verdade.
+
+**O que define o estilo:**
+
+- **Grafite neutro** (~`#141518`), com a sidebar num painel arredondado à parte e todo o app dentro de um container de cantos arredondados. Laranja só no logo, no item ativo e nos dados.
+- **Sidebar com rótulo**, item ativo = pílula escura com **ícone e texto laranja** e borda fina; no rodapé, `Settings` e `Help Center` separados do menu principal.
+- **Topo:** busca em pílula larga à esquerda; à direita **seletor de período com ícone de calendário** ("Wed, 29 May 2024"), sino com bolinha vermelha e avatar.
+- **Fila de 4 KPIs iguais** (nenhum card colorido, ao contrário do Layout 2): rótulo à esquerda, **chip de variação no canto superior direito** — verde `↗ +12.5%` / vermelho `↘ -4.3%`, com fundo tingido —, valor grande e, abaixo de um filete, a **legenda do período** em texto apagado ("From Jun 01,2024 To Jun 29, 2024").
+- **Heatmap "Orders by time"**: grade de quadradinhos arredondados, linhas = horas, colunas = dias da semana, intensidade em degraus de laranja, **legenda de faixas com bolinhas** no topo do card (`200+ · 500+ · 1.000+ · 2.000+`) e células vazias com **textura hachurada** em vez de cor chapada.
+- **Gráfico de linha com crosshair**: duas séries suaves (laranja = Real, azul = Meta), legenda com tracinhos no canto superior direito, **linha vertical tracejada** no ponto em foco com um ponto em cada série e um **tooltip-card flutuante** listando as duas com suas bolinhas.
+- **Mini-cards em grade** ("Sales by Country"): bandeira, nome e valor grande com a unidade pequena embaixo; cabeçalho do card com link **"View All"** à direita.
+- **Tabela limpa**: cabeçalho em caixa alta apagada, valores alinhados, e a coluna de variação com **seta + cor** (verde sobe, vermelho desce).
+
+**Quando usar qual:** Laranja Moderno = vitrine, tela quente e colorida. Layout 2 = app sóbrio com um destaque só. **Layout 3 = painel denso de números** — é o que mais serve para os nossos (KPIs com chip de variação, heatmap, linha Real × Meta, tabela).
+
+---
+
 ## Como criar um novo painel
 
 1. Copiar `visao-financeira/index.html` como base (painel de referência)
