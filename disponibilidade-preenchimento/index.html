@@ -210,7 +210,16 @@ table.tab thead th{position:sticky;top:0;z-index:2;background:var(--cabec);text-
   letter-spacing:.8px;border-bottom:1px solid var(--card-brd);white-space:nowrap;}
 table.tab td{padding:11px 12px;border-bottom:1px solid var(--linha);color:var(--txt2);vertical-align:top;white-space:nowrap;}
 table.tab td.forte{color:var(--txt);font-weight:700;}
-table.tab td.livre{white-space:normal;min-width:220px;line-height:1.45;}
+table.tab td.livre{white-space:normal;min-width:180px;line-height:1.45;}
+/* colunas que podem QUEBRAR o texto em vez de esticar a tabela (Renan,
+   14/08/2026): modelo é a mais estreita — cabe metade e quebra o resto. */
+table.tab td.wrap,table.tab th.wrap{white-space:normal;line-height:1.35;overflow-wrap:anywhere;}
+table.tab th.c-modelo,table.tab td.c-modelo{width:11%;max-width:150px;}
+table.tab th.c-tipo,table.tab td.c-tipo{width:11%;}
+table.tab th.c-proj,table.tab td.c-proj{width:9%;}
+table.tab th.c-grupo,table.tab td.c-grupo{width:8%;}
+table.tab th.c-dias,table.tab td.c-dias{width:5%;}
+table.tab th.c-sit,table.tab td.c-sit{width:9%;}
 table.tab td.num,table.tab th.num{text-align:right;white-space:nowrap;}
 table.tab tbody tr{cursor:pointer;}
 table.tab tbody tr:hover{background:var(--hover);}
@@ -632,18 +641,21 @@ function htmlLista(){
   const rows=abertos().filter(e=>passa(e)).sort((a,b)=>diasParado(b)-diasParado(a));
   if(!rows.length) return '<div class="cvazia">Nenhum veículo indisponível com os filtros atuais 🎉</div>';
   return `<div class="tab-wrap"><table class="tab">
-    <thead><tr><th>Placa</th><th>Projeto</th><th>Tipo</th><th>Grupo</th><th>Problema</th><th>Local</th><th>RC/OC</th><th>Parada</th><th class="num">Dias</th><th>Previsão</th><th>Status</th></tr></thead>
+    <thead><tr><th>Placa</th><th class="c-proj wrap">Projeto</th><th class="c-tipo wrap">Tipo</th>
+      <th class="c-grupo wrap">Grupo</th><th>Problema</th><th>Local</th><th>RC/OC</th><th>Parada</th>
+      <th>Previsão</th><th class="c-sit">Situação</th><th class="num c-dias">Dias</th></tr></thead>
     <tbody>${rows.map(e=>{
       const dp=diasParado(e);
       const atras=e.previsao_retorno&&e.previsao_retorno<hojeBRT();
       return `<tr data-id="${esc(e.id)}">
-        <td class="forte">${esc(e.placa)}</td><td>${esc(e.projeto||'—')}</td><td>${esc(e.tipo_veiculo||'—')}</td>
-        <td>${esc(e.grupo||'—')}</td><td class="livre">${esc(e.descricao_problema||'—')}</td>
+        <td class="forte">${esc(e.placa)}</td><td class="c-proj wrap">${esc(e.projeto||'—')}</td>
+        <td class="c-tipo wrap">${esc(e.tipo_veiculo||'—')}</td>
+        <td class="c-grupo wrap">${esc(e.grupo||'—')}</td><td class="livre">${esc(e.descricao_problema||'—')}</td>
         <td>${esc(e.local_manutencao||'—')}</td><td>${esc(e.rc_oc||'—')}</td>
         <td>${dataBR(e.data_parada)}</td>
-        <td class="num" data-sort="${dp}"><b style="color:${dp>=30?'var(--vermelho)':'inherit'}">${dp}</b></td>
         <td>${prevCel(e)}</td>
-        <td>${chip(e.status)}</td></tr>`;
+        <td class="c-sit">${chip(e.status)}</td>
+        <td class="num c-dias" data-sort="${dp}"><b style="color:${dp>=30?'var(--vermelho)':'inherit'}">${dp}</b></td></tr>`;
     }).join('')}</tbody></table></div>`;
 }
 function htmlFrota(){
@@ -658,19 +670,23 @@ function htmlFrota(){
       return (eb?diasParado(eb):-1)-(ea?diasParado(ea):-1)||a.placa.localeCompare(b.placa);});
   if(!lista.length) return '<div class="cvazia">Nenhum veículo da unidade na base de ativos.</div>';
   return `<div class="tab-wrap"><table class="tab">
-    <thead><tr><th>Placa</th><th>Projeto</th><th>Tipo</th><th>Modelo</th><th>Grupo</th><th>Problema</th><th>Previsão</th><th>Situação</th></tr></thead>
+    <thead><tr><th>Placa</th><th class="c-proj wrap">Projeto</th><th class="c-tipo wrap">Tipo</th>
+      <th class="c-modelo wrap">Modelo</th><th class="c-grupo wrap">Grupo</th><th>Problema</th>
+      <th>Previsão</th><th class="c-sit">Situação</th><th class="num c-dias">Dias</th></tr></thead>
     <tbody>${lista.map(a=>{
       const ev=abertaSet.get(a.placa);
       // sem coluna de ação: clicar na LINHA abre o evento (se parado) ou já
       // começa uma nova indisponibilidade para a placa (Renan, 14/08/2026)
       return `<tr ${ev?`data-id="${esc(ev.id)}"`:`data-parou="${esc(a.placa)}"`} title="${ev?'Abrir a indisponibilidade':'Lançar indisponibilidade'}">
         <td class="forte">${esc(a.placa)}${a.manual&&UNIT==='ANG'?` <span class="lapis" data-editv="${esc(a.placa)}" title="Editar veículo (manual)">✎</span>`:''}</td>
-        <td>${esc(a.projeto||'—')}</td><td>${esc(a.tipo||'—')}</td><td>${esc(a.modelo||'—')}</td>
-        <td>${ev?esc(ev.grupo||'—'):'—'}</td>
+        <td class="c-proj wrap">${esc(a.projeto||'—')}</td><td class="c-tipo wrap">${esc(a.tipo||'—')}</td>
+        <td class="c-modelo wrap">${esc(a.modelo||'—')}</td>
+        <td class="c-grupo wrap">${ev?esc(ev.grupo||'—'):'—'}</td>
         <td class="livre">${ev?esc(ev.descricao_problema||'—'):'—'}</td>
         <td>${ev?prevCel(ev):'—'}</td>
-        <td data-sort="${ev?diasParado(ev):-1}">${ev?`<span class="tag" style="--c:var(--vermelho)">Indisponível · ${diasParado(ev)}d</span>`
-               :`<span class="tag" style="--c:var(--verde)">Disponível</span>`}</td></tr>`;
+        <td class="c-sit">${ev?`<span class="tag" style="--c:var(--vermelho)">Indisponível</span>`
+               :`<span class="tag" style="--c:var(--verde)">Disponível</span>`}</td>
+        <td class="num c-dias" data-sort="${ev?diasParado(ev):-1}">${ev?`<b style="color:${diasParado(ev)>=30?'var(--vermelho)':'inherit'}">${diasParado(ev)}</b>`:'—'}</td></tr>`;
     }).join('')}</tbody></table></div>`;
 }
 function htmlHistorico(){
