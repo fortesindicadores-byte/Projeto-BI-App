@@ -780,6 +780,7 @@
   ];
 
   global.GerotBase = { INDICADORES, INDICADORES_GEROT, METAS, atgDe, load, acumFor, FUSAO,
+    COD2UNIT, FIL2COD,     // de-para de unidade (o Scorecard usa p/ voltar ao nome do Gerot)
     unidadeFundida: u => fundido(u),
     fieldLabels: INDICADORES.reduce((m,i)=>{ m[i.field]=i.label; return m; }, {}),
     fieldOrder: INDICADORES.map(i=>i.field) };
