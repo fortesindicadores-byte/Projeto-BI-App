@@ -594,15 +594,12 @@ function render(){
   const prim=new Date(calY,calM,1).getDay(), nDias=new Date(calY,calM+1,0).getDate();
   const semanas=Math.ceil((prim+nDias)/7);
   const ehMesHoje=calY===hoje.getFullYear()&&calM===hoje.getMonth();
-  // escala de calor no nosso farol: pouco acesso = vermelho, muito = verde
+  // escala de calor em laranja: quanto mais acessos, mais forte (Renan preferiu
+  // esta ao farol vermelho/amarelo/verde)
   const calor=n=>{ const t=n/maxDia;
-    if(t>=.80) return 'var(--verde)';
-    if(t>=.60) return 'color-mix(in srgb, var(--verde) 62%, var(--ambar))';
-    if(t>=.40) return 'var(--ambar)';
-    if(t>=.20) return 'color-mix(in srgb, var(--ambar) 60%, var(--vermelho))';
-    return 'var(--vermelho)'; };
-  // no amarelo e no verde o número fica preto (regra do projeto)
-  const escuro=n=>n/maxDia>=.40;
+    const a=t>=.85?1:t>=.6?.78:t>=.35?.55:t>=.15?.34:.2;
+    return 'color-mix(in srgb, var(--laranja) '+Math.round(a*100)+'%, transparent)'; };
+  const escuro=n=>n/maxDia>=.60;   // no laranja forte o número fica preto
   const cels=[...Array(prim)].map(()=>'<div></div>')
     .concat([...Array(nDias)].map((_,k)=>{
       const d=k+1, n=porDia.get(d)||0, forte=n&&escuro(n), hj=ehMesHoje&&d===hoje.getDate();
@@ -654,7 +651,7 @@ function renderUnidades(regs){
     u.users.forEach(p=>{ const la=LAST_ACCESS[p.user_id]; if(la&&(!last||la>last))last=la; acc+=accUid[p.user_id]||0; });
     return {...u, n:u.users.length, last, acc, ok:u.users.length>0};
   });
-  rows.sort((a,b)=>(a.ok-b.ok)|| a.cidade.localeCompare(b.cidade)); // vermelhos primeiro
+  rows.sort((a,b)=>(b.acc-a.acc) || (b.n-a.n) || a.cidade.localeCompare(b.cidade)); // ranking por acessos
   const faltam=rows.filter(r=>!r.ok).length;
   set('sub-uni', `${rows.length} unidades · ${faltam} sem ninguém cadastrado (farol vermelho) · acessos no recorte dos filtros. Cadastros pendentes de aprovação ainda não têm unidade e não contam aqui.`);
   // Sem a coluna "Quem": a lista de nomes estourava a largura e criava barra
