@@ -2,10 +2,13 @@
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
+<meta name="build" content="202608161200">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <title>Visão Financeira · DRE Frota</title>
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.2/dist/jspdf.umd.min.js"></script>
 <style>
 /* ============================================================
    VISÃO FINANCEIRA — a DRE da Frota,
@@ -371,7 +374,7 @@ table.dre tr.rec-row td.conta{font-weight:800;}
     <div class="s-sec">Visões</div>
     <button class="s-item on" data-vw="resumo">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>
-      Resumo
+      Resumo Gerencial
     </button>
     <button class="s-item" data-vw="nominal">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 6h16M4 12h16M4 18h10"/></svg>
@@ -403,6 +406,7 @@ table.dre tr.rec-row td.conta{font-weight:800;}
     </button>
 
     <div class="s-sec">Atalhos</div>
+    <div id="pdf-slot"></div>
     <button class="s-item" onclick="recarregar()">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/></svg>
       Atualizar dados
@@ -420,7 +424,7 @@ table.dre tr.rec-row td.conta{font-weight:800;}
   <!-- ══════════ conteúdo ══════════ -->
   <main class="board">
     <div class="top">
-      <div class="tit-wrap"><h1 id="tit">Resumo</h1><div class="tit-sub" id="titSub">Carregando…</div></div>
+      <div class="tit-wrap"><h1 id="tit">Resumo Gerencial</h1><div class="tit-sub" id="titSub">Carregando…</div></div>
 
       <div class="filtros">
       <div class="ms-wrap" id="ms-ano"><button class="ms-btn" onclick="toggleMs('ms-ano')">
@@ -1964,7 +1968,7 @@ function renderFCT(){
 loadDraft(); loadCens(); renderCenBar();
 
 /* ── navegação entre as visões ── */
-const TIT={resumo:'Resumo',nominal:'Análise Nominal',av:'Análise Horizontal e Vertical',
+const TIT={resumo:'Resumo Gerencial',nominal:'Análise Nominal',av:'Análise Horizontal e Vertical',
   ytg:'YTG + TGT · Bridge',cen1:'YTG + TGT · Cenário 1',cen2:'YTG + TGT · Cenário 2',
   fct1:'Forecast · Cenário 1 — Receita Fixa',fct2:'Forecast · Cenário 2 — Receita Tendência'};
 function setVw(v){
@@ -2055,5 +2059,19 @@ window.addEventListener('resize',()=>{ clearTimeout(_rt); _rt=setTimeout(()=>{ i
 <script src="../assets/mobile.js"></script>
 <script src="../assets/sortable-table.js"></script>
 <script src="../assets/excel-export.js"></script>
+<script src="../assets/pdf-export.js"></script>
+<script>
+/* PDF: um relatório com TODAS as visões (o painel antigo rolava a página inteira;
+   aqui as visões se revezam, então o exportador passa por cada uma). */
+initPdfExport({
+  btnContainer:'#pdf-slot', btnClass:'s-item', btnAoFim:true,
+  title:'Visão Financeira', subtitle:()=>document.getElementById('titSub').textContent,
+  fileBase:'visao-financeira', main:()=>document.querySelector('.vw.on'),
+  views:()=>Object.keys(TIT).map(k=>({label:TIT[k], ativar:()=>setVw(k)})),
+  viewAtual:()=>VW, irPara:setVw,
+  isLight:()=>document.body.classList.contains('claro'), setTheme:aplicaTema
+});
+</script>
+<script src="../assets/build-check.js?v=202608161200"></script>
 </body>
 </html>

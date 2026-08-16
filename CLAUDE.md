@@ -730,13 +730,45 @@ A busca do topo filtra os cards e esconde cluster vazio; no modo lista ela **abr
 1. **Nada de rolagem em desktop** — se não coube, encolhe fonte/padding ou divide em mais visões (foi o que levou o YTG + TGT e o Forecast a virarem "Bridge / Cenário 1 / Cenário 2").
 2. **Celular**: `@media(max-width:860px)` desliga o flex de altura (`display:block`), devolve `overflow:auto` no body, transforma o menu lateral numa fileira horizontal e dá altura explícita a gráfico e tabela — senão eles colapsam para 0.
 3. Todo painel inclui `assets/mobile.js`, `assets/sortable-table.js` e `assets/excel-export.js` (o exportador já entende `.tab-wrap`, `.tsec`, `.rtit` e `.gcard`). **PNG no layout de vidro:** o exportador ACHATA as camadas translúcidas (fundo uniforme → `.app::before` → card) compondo o alfa nó a nó (`effOf` no excel-export.js) — sem isso o html2canvas pinta cada `rgba` sobre o fundo errado e o PNG sai azul-marinho com cards cinza (bug real, 15/08/2026). O achatamento só é exato porque o fundo é uniforme — mais um motivo para não voltar o degradê.
-4. Nomes de visão em português curto e sem jargão de arquivo: *Resumo · Análise Nominal · AH e AV · YTG + TGT · Bridge/Cenário 1/Cenário 2 · Forecast · Cenário 1/Cenário 2*.
+4. Nomes de visão em português curto e sem jargão de arquivo: *Análise Nominal · AH e AV · YTG + TGT · Bridge/Cenário 1/Cenário 2 · Forecast · Cenário 1/Cenário 2*. **A primeira visão de TODO painel chama-se "Resumo Gerencial"** (Renan, 16/08/2026) — nunca só "Resumo".
+5. **NADA DE FUNÇÃO QUE SOME NA RECONSTRUÇÃO** (Renan, 16/08/2026): Excel, PNG, PDF, ordenação, mobile — tudo que o painel antigo tinha continua no novo. Antes de promover um clone, comparar a lista de `<script src>` do arquivo antigo (`git show <commit>^:<pasta>/index.html | grep "script src"`) com a do novo e explicar cada ausência. Foi assim que o PDF do Acessos ficou de fora.
 
 **A PÁGINA é mais escura que o PAINEL** (15/08/2026): é essa diferença que faz o app flutuar. No escuro a página é `#121214` e a camada do `.app` **clareia** (`rgba(255,255,255,.045)` → miolo ~`#1d1d1f`); no claro a página é `#E1E2E5` e o `.app` é `rgba(255,255,255,.34)` (miolo ~`#eaebed`). Quando uniformizei o fundo mantendo o `--app` escuro, os dois ficaram no mesmo tom e o painel virou um buraco — o efeito de painel flutuante vinha do degradê, que colocava a moldura sobre a ponta clara. Ao mexer, medir os DOIS pixels: página e miolo.
 
 **Fundo é UNIFORME, não degradê** (Renan, 15/08/2026): o degradê diagonal clareava para o canto superior direito e os cards de lá sumiam. Os dois temas param no tom do MEIO do degradê antigo — `#E1E2E5` no claro, `#202022` no escuro —, que é o que reproduz o miolo do painel (`#eeeef0` / `#1c1c1e` medidos no pixel). Ao mexer nisso, **medir o pixel do miolo nas duas telas**, não confiar no olho.
 
 **Roteiro de aplicação:** hub e Visão Financeira migrados em 15/08/2026; **Acessos** em 16/08/2026. Faltam os demais painéis.
+
+## Exportações no layout novo (Excel · PNG · PDF) — 16/08/2026
+
+Os três exportadores funcionam no layout padrão; o painel só precisa incluir os scripts **nesta ordem** (`excel-export.js` ANTES do `pdf-export.js`, que reaproveita o preparo dele):
+
+```html
+<script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.2/dist/jspdf.umd.min.js"></script>   <!-- no <head> -->
+...
+<script src="../assets/mobile.js"></script>
+<script src="../assets/sortable-table.js"></script>
+<script src="../assets/excel-export.js"></script>
+<script src="../assets/pdf-export.js"></script>
+<script>initPdfExport({ btnContainer:'#pdf-slot', btnClass:'s-item', btnAoFim:true,
+  title:'Acessos', subtitle:()=>document.getElementById('titSub').textContent, fileBase:'acessos',
+  main:()=>document.querySelector('.vw.on'),
+  views:()=>Object.keys(TIT).map(k=>({label:TIT[k], ativar:()=>setVw(k)})),
+  viewAtual:()=>VW, irPara:setVw,
+  isLight:()=>document.body.classList.contains('claro'), setTheme:aplicaTema });</script>
+<script src="../assets/build-check.js?v=AAAAMMDDHHMM"></script>   <!-- + <meta name="build"> no <head> -->
+```
+
+- **O "Gerar PDF" fica em ATALHOS, na lateral** (Renan, 16/08/2026) — não no topo e não junto das visões. O painel só põe um `<div id="pdf-slot"></div>` dentro do bloco `Atalhos` e passa `btnClass:'s-item'`; a lateral recolhida já reduz o item a ícone sozinha. **O menu suspenso mora no `<body>`**, não no wrap: dentro do `.app` (que tem `backdrop-filter`) um `position:fixed` se ancora no `.app` e não na tela, e o menu aparecia 34px fora do lugar.
+- **UM SLIDE POR VISÃO** (Renan, 16/08/2026): como as visões já são do tamanho da página, cada slide é o **painel inteiro, com o menu lateral recolhido** — o PDF fica igual à tela. O fundo do slide é o tom uniforme da página do portal (`H2CPrep.fundoDe(body)`), e as camadas translúcidas são ACHATADAS na captura (sem isso, no tema claro o card branco sobre fundo branco some). Página 1 é a capa (título, subtítulo, filtros aplicados, data). Acessos = 5 páginas, Visão Financeira = 9.
+- **Tabela que não coube gera uma página extra** com ela inteira (`tabelasCortadas()` detecta `scrollHeight > clientHeight`), para o relatório não perder linhas silenciosamente.
+- **`filters-toggle.js` NÃO entra**: só age sobre `.header-filters`/`.dim-toggle`, que não existem no layout novo. É o único script do painel antigo que não volta.
+
+**Duas armadilhas do html2canvas 1.4.1 (bugs reais, achados em 16/08/2026 e corrigidos no `assets/excel-export.js`, que expõe `window.H2CPrep` p/ os dois exportadores):**
+
+1. **`color-mix()` ABORTA a captura.** O Chromium computa `color-mix(in srgb, …)` como `color(srgb r g b / a)`, e o html2canvas morre com *"Attempting to parse an unsupported color function"* — o PNG/PDF inteiro falha, não é degradação. Usamos `color-mix` no calor do calendário, no farol e nas linhas tingidas. O `normCor()` converte `color(srgb …)` → `rgba()` (é a mesma base, conversão exata) e o valor entra no clone via `data-h2c-*`.
+2. **`box-shadow: inset` vira um bloco chapado.** O filete de luz dos cards (`--luz-card: inset 0 1px 0 rgba(255,255,255,.08)`) era pintado como uma faixa clara cobrindo metade do card. O `semInset()` remove só as camadas `inset` e mantém as de fora.
 
 **Como migrar um painel (método validado no Acessos):** clonar a pasta, **extrair a casca do CSS da `visao-financeira` por script** (do `<style>` até `/* ── YTG + TGT ──` mais o bloco `@media(max-width:860px)`) em vez de reescrever de memória, colar a lógica de dados do painel antigo e trocar só a apresentação: `shell()` sai (o HTML passa a ser estático), `gate()` escreve em `#cols`, `light-mode` vira `claro`, tabelas ganham `class="dre"`, o status vai para `titSub` e entram `setVw`/`trocaMini`/`dica`/`aplicaTema` (chave **`bi_theme`**, a mesma do hub). Depois o Renan valida o clone e só então ele substitui o oficial.
 
