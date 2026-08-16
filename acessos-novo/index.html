@@ -272,10 +272,12 @@ table.dre td.cg-t,.cg-t{color:var(--verde)!important;font-weight:700;}
 /* gráfico e calendário embaixo, em altura menor (Renan) */
 /* gráficos baixos: a altura é fixa e o espaço que sobra vai para os cards */
 /* gráficos baixos: altura fixa; o que sobra vai para o hero e os cards */
-.res-cols{flex:0 0 auto;height:min(47vh,440px);min-height:230px;display:flex;gap:12px;}
-.res-graf{flex:1 1 auto;min-width:0;}
-.res-cal{flex:0 0 auto;width:auto;aspect-ratio:1;align-self:stretch;overflow:hidden;
-  padding:12px 14px;display:flex;flex-direction:column;}
+ /* mesma grade da fileira de cards (3 colunas): o gráfico ocupa 2 e o
+    calendário 1, então as bordas batem exatamente com os cards de cima */
+.res-cols{flex:0 0 auto;height:min(47vh,440px);min-height:230px;
+  display:grid;grid-template-columns:repeat(3,1fr);gap:10px;}
+.res-graf{grid-column:span 2;min-width:0;}
+.res-cal{min-width:0;overflow:hidden;padding:12px 14px;display:flex;flex-direction:column;}
 .cal-grid{flex:1;min-height:0;display:grid;grid-template-columns:repeat(7,1fr);gap:4px;margin-top:6px;}
 .cal-h{font-size:9px;font-weight:700;color:var(--txt3);text-align:center;letter-spacing:.5px;}
 .cal-c{border-radius:6px;display:flex;flex-direction:column;align-items:center;justify-content:center;
@@ -592,13 +594,18 @@ function render(){
   const prim=new Date(calY,calM,1).getDay(), nDias=new Date(calY,calM+1,0).getDate();
   const semanas=Math.ceil((prim+nDias)/7);
   const ehMesHoje=calY===hoje.getFullYear()&&calM===hoje.getMonth();
-  // escala de calor em laranja: quanto mais acessos, mais forte
+  // escala de calor no nosso farol: pouco acesso = vermelho, muito = verde
   const calor=n=>{ const t=n/maxDia;
-    const a=t>=.85?1:t>=.6?.78:t>=.35?.55:t>=.15?.34:.2;
-    return 'color-mix(in srgb, var(--laranja) '+Math.round(a*100)+'%, transparent)'; };
+    if(t>=.80) return 'var(--verde)';
+    if(t>=.60) return 'color-mix(in srgb, var(--verde) 62%, var(--ambar))';
+    if(t>=.40) return 'var(--ambar)';
+    if(t>=.20) return 'color-mix(in srgb, var(--ambar) 60%, var(--vermelho))';
+    return 'var(--vermelho)'; };
+  // no amarelo e no verde o número fica preto (regra do projeto)
+  const escuro=n=>n/maxDia>=.40;
   const cels=[...Array(prim)].map(()=>'<div></div>')
     .concat([...Array(nDias)].map((_,k)=>{
-      const d=k+1, n=porDia.get(d)||0, forte=n/maxDia>=.6, hj=ehMesHoje&&d===hoje.getDate();
+      const d=k+1, n=porDia.get(d)||0, forte=n&&escuro(n), hj=ehMesHoje&&d===hoje.getDate();
       return `<div class="cal-c${n?'':' vaz'}${forte?' esc':''}${hj?' hoje':''}"${n?` style="background:${calor(n)}" title="${d}: ${n} acesso(s)"`:` title="${d}: sem acesso"`}>
         <span class="cal-d">${d}</span>${n?`<span class="cal-n">${n}</span>`:''}</div>`;
     })).join('');
@@ -700,7 +707,7 @@ async function initApp(){
   render();
   renderUnidades();
   const now=new Date();
-  set('titSub',ROWS.length.toLocaleString('pt-BR')+' registros · atualizado '+now.toLocaleDateString('pt-BR')+' '+now.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'}));
+  set('titSub','Atualizado '+now.toLocaleDateString('pt-BR')+' '+now.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'}));
 }
 
 /* ── navegação entre as visões ── */
