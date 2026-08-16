@@ -9,6 +9,8 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.2/dist/jspdf.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="../assets/gerot-base.js?v=202608161930"></script>
 <style>
 /* ============================================================
    SCORECARD — a nota da Frota, no layout padrão do portal.
@@ -254,6 +256,7 @@ table.dre td.cg-t,.cg-t{color:var(--verde)!important;font-weight:700;}
 .kpis.k5{grid-template-columns:repeat(5,1fr);gap:9px;}
 #vw-indicadores .kpis.k5{grid-template-rows:repeat(4,1fr);flex:1;min-height:0;}
 .kpis.kdest{flex:0 0 auto;}
+.kpis.kdest .kpi{padding:19px 14px;}   /* um degrau mais alto que a grade dos 20 */
 /* o .gr2 da casca trava em 44vh (lá há tabela embaixo); aqui o gráfico é o miolo da visão */
 #vw-resumo .gr2{max-height:none;}
 .kpis.k5 .kpi{padding:12px 13px;border-left:3px solid var(--txt4);
@@ -996,12 +999,51 @@ function applyData(d){
   atualizar();
 }
 
+// ── ICs: elite_snapshot, a MESMA fonte do Gerot ───────────────────────────
+// A aba "Base RPM" parou de ser apurada em jul/2026 (as linhas vêm com o
+// "% de Ating." vazio), e como a lista de vigências do painel nasce dos ICs,
+// o Scorecard inteiro travava em junho. O elite_snapshot é alimentado pelo
+// robô do Ginfo todo mês. A Base RPM fica como rede de segurança.
+const IC_ORDEM=['disp','prev','comb','pneus','checkT','checkWH','conf','stVeic','stEmp','sla','civf'];
+const IC_PESOS={disp:20,prev:15,comb:10,pneus:10,checkT:10,checkWH:10,conf:5,stVeic:5,stEmp:5,sla:5,civf:5};
+async function icsDoElite(){
+  if(typeof GerotBase==='undefined') throw new Error('GerotBase ausente');
+  const recs=await GerotBase.load();
+  const COD2UNI=GerotBase.COD2UNIT||{};
+  const por=new Map();
+  recs.forEach(r=>{
+    if(r.soGerot) return;                                  // adicionais do Gerot não pontuam aqui
+    const uni=COD2UNI[r.unit]; if(!uni||!UNI_SET.has(uni)) return;
+    if(r.atg==null||!isFinite(r.atg)) return;
+    const m=String(r.vig||'').match(/^(\d{4})-(\d{2})$/); if(!m) return;
+    const k=r.vig+'|'+uni;
+    if(!por.has(k)) por.set(k,{vigD:new Date(+m[1],+m[2]-1,1),unidade:uni,f:{}});
+    por.get(k).f[r.field]=Math.min(100,r.atg);
+  });
+  return [...por.values()].map(o=>{
+    let num=0,den=0;
+    for(const k in IC_PESOS){ const v=o.f[k]; if(v==null) continue;
+      const w=IC_PESOS[k]/100; den+=w; num+=w*Math.min(1,v/100); }
+    return {vigD:o.vigD, unidade:o.unidade,
+      ic:IC_ORDEM.map(k=>o.f[k]==null?null:o.f[k]/100),
+      pont:den>0?(num/den)*100:null};
+  });
+}
+async function carregarICs(){
+  try{
+    const r=await icsDoElite();
+    if(r.length) return r;
+    console.warn('elite_snapshot vazio — caindo para a aba Base RPM');
+  }catch(e){ console.error('elite_snapshot falhou — caindo para a aba Base RPM', e); }
+  return fetch(BASE_RPM_URL).then(r=>r.text()).then(t=>pivotRPM(parseCSV(t)));
+}
+
 async function carregar(){
   const cached=rd('data2');
   if(cached){try{applyData(cached);STATUS.textContent='Atualizando…';}catch(e){}}
   else STATUS.textContent='Carregando…';
   try{
-    const icRows=await fetch(BASE_RPM_URL).then(r=>r.text()).then(t=>pivotRPM(parseCSV(t)));
+    const icRows=await carregarICs();
     const [dreR,kmR,dpoR,fcaR,rslR,kmlEfR,conlogR]=await Promise.all([gviz(SRC.dre).catch(()=>null),gviz(SRC.km).catch(()=>null),gviz(SRC.dpo).catch(()=>null),gviz(SRC.fca).catch(()=>null),gviz(SRC.rsl).catch(()=>null),gviz(SRC.kmlEf).catch(()=>null),fetchConlog().catch(()=>null)]);
     const d={ics:icRows,dre:dreR,km:kmR,dpo:dpoR,fca:fcaR,rsl:rslR,kmlEf:kmlEfR,conlog:conlogR};
     wr('data2',d);
