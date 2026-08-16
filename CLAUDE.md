@@ -736,7 +736,11 @@ A busca do topo filtra os cards e esconde cluster vazio; no modo lista ela **abr
 
 **Fundo é UNIFORME, não degradê** (Renan, 15/08/2026): o degradê diagonal clareava para o canto superior direito e os cards de lá sumiam. Os dois temas param no tom do MEIO do degradê antigo — `#E1E2E5` no claro, `#202022` no escuro —, que é o que reproduz o miolo do painel (`#eeeef0` / `#1c1c1e` medidos no pixel). Ao mexer nisso, **medir o pixel do miolo nas duas telas**, não confiar no olho.
 
-**Roteiro de aplicação:** hub e Visão Financeira migrados em 15/08/2026. Faltam os demais painéis.
+**Roteiro de aplicação:** hub e Visão Financeira migrados em 15/08/2026; **Acessos** em 16/08/2026. Faltam os demais painéis.
+
+**Como migrar um painel (método validado no Acessos):** clonar a pasta, **extrair a casca do CSS da `visao-financeira` por script** (do `<style>` até `/* ── YTG + TGT ──` mais o bloco `@media(max-width:860px)`) em vez de reescrever de memória, colar a lógica de dados do painel antigo e trocar só a apresentação: `shell()` sai (o HTML passa a ser estático), `gate()` escreve em `#cols`, `light-mode` vira `claro`, tabelas ganham `class="dre"`, o status vai para `titSub` e entram `setVw`/`trocaMini`/`dica`/`aplicaTema` (chave **`bi_theme`**, a mesma do hub). Depois o Renan valida o clone e só então ele substitui o oficial.
+
+**Regras que saíram da validação do Acessos:** cabeçalho de tabela **sempre alinhado com o conteúdo** (texto à esquerda, número à direita — a casca alinha tudo à direita, o que só serve para tabela numérica) · **nunca barra de rolagem horizontal** (a tabela se ajusta; coluna que estoura vira dica na linha) · fileiras de baixo usam **a mesma grade e o mesmo gap dos cards**, para as bordas baterem · a sobra de altura é **dividida** entre cards e gráficos, nunca despejada num só · eixo Y **justo ao pico** (`suggestedMax` ≈ pico × 1,12), senão o gráfico parece alto e vazio.
 
 ---
 
