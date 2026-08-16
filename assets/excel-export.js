@@ -28,14 +28,17 @@
   }
   function slug(s){return String(s||'dados').normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^a-zA-Z0-9]+/g,'-').replace(/^-|-$/g,'').slice(0,60)||'dados';}
   function sheetName(s){return (String(s||'Dados').replace(/[\\\/?*\[\]:]/g,' ').trim().slice(0,28))||'Dados';}
-  function painelTitulo(){ return (document.querySelector('.brand h1')||{}).textContent || document.title || 'BI'; }
+  // títulos: o layout antigo usa .brand/.tbl-title; o padrão do portal usa .s-top b/.ttit/.gtit
+  function painelTitulo(){ return (document.querySelector('.brand h1')||{}).textContent
+    || (document.querySelector('.s-top b')||{}).textContent || document.title || 'BI'; }
+  const TIT_SEL='.tbl-title,.sec-title,.rtit,.ttit,.gtit,.chart-title,h2,h3';
   function tituloTabela(sec){
     if(!sec) return 'Tabela';
-    const t=sec.querySelector('.tbl-title,.sec-title,.rtit,h2,h3'); return (t&&t.textContent.trim())||'Tabela';
+    const t=sec.querySelector(TIT_SEL); return (t&&t.textContent.trim())||'Tabela';
   }
   function tituloGrafico(canvas){
-    const card=canvas.closest('.chart-card,.tbl-section,.tab-wrap,section,div');
-    const t=card&&card.querySelector('.chart-title,.tbl-title,.sec-title,.rtit,h2,h3'); return (t&&t.textContent.trim())||'Grafico';
+    const card=canvas.closest('.chart-card,.tbl-section,.tab-wrap,.gcard,.tsec,section,div');
+    const t=card&&card.querySelector(TIT_SEL); return (t&&t.textContent.trim())||'Grafico';
   }
   // Converte texto formatado em NÚMERO (p/ análise no Excel). Trata pt-BR (vírgula
   // decimal, ponto milhar), toFixed (ponto decimal), %, pp, R$, sufixos mi/bi/k, º.
@@ -94,10 +97,11 @@
     });
   }
   // ---- Exportar CARDS (label + valor numérico) ----
-  const CARD_SEL='.kpi-card,.kpi,.scard,.stat-card,.sc-card,.card';
-  const LBL_SEL='.card-label,.kpi-lbl,.hero-label,.slbl,.sc-label,.card-lbl,.stat-label,.card-title';
-  const VAL_SEL='.card-value,.kpi-val,.hero-value,.sval,.sc-value,.card-val,.stat-value,.card-num';
-  const CARD_GROUP='.cards-row,.cards-grid,.kpi-row,.scards,.sc-row,.cards,.card-grid';
+  // .kl/.kv e .hlbl/.hval são do layout padrão do portal (kpi e hero); o resto é do antigo
+  const CARD_SEL='.kpi-card,.kpi,.scard,.stat-card,.sc-card,.fin-hero,.card';
+  const LBL_SEL='.card-label,.kpi-lbl,.hero-label,.slbl,.sc-label,.card-lbl,.stat-label,.card-title,.kl,.hlbl';
+  const VAL_SEL='.card-value,.kpi-val,.hero-value,.sval,.sc-value,.card-val,.stat-value,.card-num,.kv,.hval';
+  const CARD_GROUP='.cards-row,.cards-grid,.kpi-row,.scards,.sc-row,.cards,.card-grid,.kpis';
   function cardsDe(el){
     const card=el.closest(CARD_SEL); if(!card) return null;
     const group=card.closest(CARD_GROUP)||card.parentElement;
@@ -174,7 +178,20 @@
   // → card rgba). O html2canvas pinta cada rgba isolado, sem as camadas de
   // baixo — foi o PNG azul-marinho com cards cinza. Como o fundo é UNIFORME,
   // a composição de alfa é exata: dá p/ calcular a cor sólida de cada nó.
-  function parseC(c){ const m=String(c).match(/rgba?\(([^)]+)\)/); if(!m) return null;
+  // color-mix() — que usamos no calor do calendário, no farol e nas linhas tingidas —
+  // o navegador COMPUTA como color(srgb r g b / a). O html2canvas 1.4.1 não conhece
+  // essa função e ABORTA a captura inteira ("unsupported color function"). Como srgb
+  // é a mesma base do rgb(), a conversão é exata.
+  function normCor(v){
+    return String(v==null?'':v).replace(/\bcolor\(\s*(?:srgb|srgb-linear|display-p3)\s+([^)]*)\)/g,(_,dentro)=>{
+      const [canais,alfa]=dentro.split('/');
+      const n=canais.trim().split(/\s+/).map(x=>x.endsWith('%')?parseFloat(x)/100:parseFloat(x));
+      const a=(alfa==null)?1:(alfa.trim().endsWith('%')?parseFloat(alfa)/100:parseFloat(alfa));
+      const f=x=>Math.max(0,Math.min(255,Math.round((isFinite(x)?x:0)*255)));
+      return 'rgba('+f(n[0])+', '+f(n[1])+', '+f(n[2])+', '+(isFinite(a)?a:1)+')';
+    });
+  }
+  function parseC(c){ const m=normCor(c).match(/rgba?\(([^)]+)\)/); if(!m) return null;
     const p=m[1].split(',').map(parseFloat); return {r:p[0],g:p[1],b:p[2],a:p.length>3?p[3]:1}; }
   const sobre=(fg,bg)=>({r:fg.r*fg.a+bg.r*(1-fg.a), g:fg.g*fg.a+bg.g*(1-fg.a), b:fg.b*fg.a+bg.b*(1-fg.a), a:1});
   const cstr=c=>'rgb('+Math.round(c.r)+', '+Math.round(c.g)+', '+Math.round(c.b)+')';
@@ -206,6 +223,53 @@
     return acc;
   }
   function bgDe(el){ return cstr(effOf(el, new Map())); }
+  // ---- preparo compartilhado do html2canvas (usado aqui e no pdf-export) ----
+  // Grava nos nós a cor/fundo JÁ COMPUTADOS e sem color(), p/ reaplicar no clone:
+  // o html2canvas 1.4.1 não resolve var(--x) em 'color'/'background' (pinta preto)
+  // e engasga em color(). Também achata o alfa quando o fundo é translúcido.
+  const EXTRA=['border-top-color','border-right-color','border-bottom-color',
+               'border-left-color','text-decoration-color','background-image'];
+  // O html2canvas 1.4.1 pinta box-shadow INSET como um bloco chapado no meio do
+  // elemento — o filete de luz dos cards (--luz-card) virava uma faixa clara
+  // cobrindo metade do card no PNG/PDF. Tira só as camadas inset; as de fora ficam.
+  function semInset(sh){
+    if(!sh || sh==='none' || sh.indexOf('inset')<0) return null;
+    const partes=[]; let nivel=0, atual='';
+    for(const ch of sh){
+      if(ch==='(') nivel++; else if(ch===')') nivel--;
+      if(ch===',' && nivel===0){ partes.push(atual); atual=''; } else atual+=ch;
+    }
+    partes.push(atual);
+    const fora=partes.map(s=>s.trim()).filter(s=>s && s.indexOf('inset')<0);
+    return fora.length?fora.join(', '):'none';
+  }
+  function prepararH2C(el, achatar){
+    const nodes=[el].concat([].slice.call(el.querySelectorAll('*')));
+    const cache=new Map();
+    nodes.forEach(n=>{ try{
+      const cs=getComputedStyle(n);
+      n.setAttribute('data-h2c-c', normCor(cs.color));
+      const c=parseC(cs.backgroundColor);
+      n.setAttribute('data-h2c-bg', (achatar && c && c.a>0.02 && c.a<0.98) ? cstr(effOf(n,cache)) : normCor(cs.backgroundColor));
+      const x={}; EXTRA.forEach(pr=>{ const v=cs.getPropertyValue(pr); if(v && v.indexOf('color(')>=0) x[pr]=normCor(v); });
+      const sh=cs.boxShadow, semIn=semInset(sh);
+      if(semIn!=null) x['box-shadow']=normCor(semIn);
+      else if(sh && sh.indexOf('color(')>=0) x['box-shadow']=normCor(sh);
+      if(Object.keys(x).length) n.setAttribute('data-h2c-x', JSON.stringify(x));
+    }catch(e){} });
+    return nodes;
+  }
+  function limparH2C(nodes){ nodes.forEach(n=>{ n.removeAttribute('data-h2c-c'); n.removeAttribute('data-h2c-bg'); n.removeAttribute('data-h2c-x'); }); }
+  function oncloneH2C(doc){
+    doc.querySelectorAll('[data-h2c-c]').forEach(n=>{
+      n.style.color=n.getAttribute('data-h2c-c');
+      const bg=n.getAttribute('data-h2c-bg');
+      if(bg && bg!=='rgba(0, 0, 0, 0)' && bg!=='transparent') n.style.backgroundColor=bg;
+      const x=n.getAttribute('data-h2c-x');
+      if(x){ try{ const o=JSON.parse(x); Object.keys(o).forEach(k=>n.style.setProperty(k,o[k])); }catch(e){} }
+    });
+  }
+  window.H2CPrep={ preparar:prepararH2C, limpar:limparH2C, onclone:oncloneH2C, cor:normCor, fundoDe:bgDe };
   const SCALE=4; // fallback
   // Escala ADAPTATIVA: elementos menores (cards de gráfico) saem muito mais nítidos (até 8×);
   // elementos grandes (tabelões) limitam a escala para não estourar memória (~32MP alvo).
@@ -233,18 +297,11 @@
       const hi = chart ? chartHiRes(chart, scl) : null;
       if(hi && chart) chart.canvas.setAttribute('data-hires-tgt','1');
       el.setAttribute('data-h2c-root','1');
-      // html2canvas 1.4.1 NÃO resolve var(--x) em 'color'/'background' (pinta preto).
-      // Solução: grava a cor/fundo COMPUTADOS num atributo p/ reaplicar como valor concreto no clone.
-      const nodes=[el].concat([].slice.call(el.querySelectorAll('*')));
-      const effCache=new Map();
-      nodes.forEach(n=>{ try{ const cs=getComputedStyle(n); n.setAttribute('data-h2c-c',cs.color);
-        const c=parseC(cs.backgroundColor);
-        // translúcido → grava a cor composta (sólida); opaco/transparente ficam como estão
-        n.setAttribute('data-h2c-bg', (c && c.a>0.02 && c.a<0.98) ? cstr(effOf(n, effCache)) : cs.backgroundColor);
-      }catch(e){} });
+      // grava cor/fundo computados (sem var() e sem color()) p/ reaplicar no clone
+      const nodes=prepararH2C(el, true);
       html2canvas(el,{scale:scl,backgroundColor:transp?null:bgDe(el),useCORS:true,logging:false,scrollX:0,scrollY:-window.scrollY,
         onclone:(doc)=>{
-          doc.querySelectorAll('[data-h2c-c]').forEach(n=>{ n.style.color=n.getAttribute('data-h2c-c'); const bg=n.getAttribute('data-h2c-bg'); if(bg&&bg!=='rgba(0, 0, 0, 0)'&&bg!=='transparent') n.style.backgroundColor=bg; });
+          oncloneH2C(doc);
           // canto do raiz DETERMINÍSTICO: o html2canvas 1.4.1 clipa o border-radius do elemento raiz
           // de forma inconsistente (às vezes arredonda, às vezes sai quadrado) → forçamos reto p/ o PNG
           // sair sempre igual, independentemente do conteúdo/estado.
@@ -256,11 +313,11 @@
         }
       }).then(cv=>{ baixarPNG(cv, transp? nome+'-transparente' : nome); })
         .catch(e=>{ console.error(e); alert('Erro ao gerar imagem: '+(e.message||e)); })
-        .finally(()=>{ if(chart) chart.canvas.removeAttribute('data-hires-tgt'); el.removeAttribute('data-h2c-root'); nodes.forEach(n=>{ n.removeAttribute('data-h2c-c'); n.removeAttribute('data-h2c-bg'); }); });
+        .finally(()=>{ if(chart) chart.canvas.removeAttribute('data-hires-tgt'); el.removeAttribute('data-h2c-root'); limparH2C(nodes); });
     });
   }
   // bloco "exportável como imagem" mais próximo do clique
-  const IMG_BLOCK='.tbl-section,.chart-card,.tab-wrap,.kpi-card,.card,.kcard,.kcol,.gantt,.rel-section,.fato-block,.peso-box,.podio-section,.hero,section';
+  const IMG_BLOCK='.tbl-section,.chart-card,.tab-wrap,.kpi-card,.gcard,.tsec,.kpi,.fin-hero,.card,.kcard,.kcol,.gantt,.rel-section,.fato-block,.peso-box,.podio-section,.hero,section';
   function blocoImagem(target){ return target.closest(IMG_BLOCK); }
 
   // ---- menu de contexto ----
@@ -302,7 +359,7 @@
   document.addEventListener('contextmenu',e=>{
     if(e.target.closest('#xl-menu')) return;
     // 1) tabela → Excel + Imagem (da seção inteira)
-    const sec=e.target.closest('.tbl-section,.tab-wrap');
+    const sec=e.target.closest('.tbl-section,.tab-wrap,.tsec');
     const table=(sec&&sec.querySelector('table'))||e.target.closest('table');
     if(table){
       e.preventDefault();
@@ -334,7 +391,7 @@
     const bloco=blocoImagem(e.target);
     if(bloco){
       e.preventDefault();
-      const t=bloco.querySelector('.chart-title,.tbl-title,.sec-title,.card-label,.kpi-lbl,h2,h3');
+      const t=bloco.querySelector('.chart-title,.tbl-title,.sec-title,.gtit,.ttit,.card-label,.kpi-lbl,.kl,.hlbl,h2,h3');
       const nome=(t&&t.textContent.trim())||'card';
       const items=[];
       const impEl=findImpactoEl(e.target);

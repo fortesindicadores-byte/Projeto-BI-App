@@ -4,11 +4,21 @@
      <script src="../assets/pdf-export.js"></script>   (ajuste o ../ conforme a profundidade)
      <script> initPdfExport(); </script>               (após o restante carregar)
    Opções (todas opcionais):
-     initPdfExport({ title, subtitle, main, fileBase })
-   - title:    título do relatório (default: .brand h1 ou document.title)
-   - subtitle: subtítulo (default: .brand p)
-   - main:     seletor do container (default: 'main')
-   - fileBase: base do nome do arquivo (default: slug do título)
+     initPdfExport({ title, subtitle, main, fileBase, btnContainer, btnClass,
+                     views, viewAtual, irPara, setTheme, isLight })
+   - title:      título do relatório (default: .brand h1 / .s-top b / document.title)
+   - subtitle:   subtítulo (default: .brand p)
+   - main:       seletor OU função do container do conteúdo (default: 'main')
+   - fileBase:   base do nome do arquivo (default: slug do título)
+   - btnContainer: onde pendurar o botão (default: '.header-right')
+   - btnClass:   classe do botão, p/ reaproveitar o estilo do painel (default: 'pdf-btn')
+   - views:      array/função → [{label, ativar}] — painéis de VISÕES (layout padrão)
+                 exportam TODAS as visões, uma por vez, num relatório só
+   - viewAtual / irPara: leitura e restauração da visão ativa ao terminar
+   - setTheme:   função(t) que aplica 'light'/'dark' (default: applyTheme/aplicaTema)
+   - isLight:    função → true se a tela está no tema claro
+   Funciona nos dois layouts: o antigo (body.light-mode, página que rola) e o
+   padrão do portal (body.claro, .app de altura fixa com áreas que rolam).
    ============================================================ */
 (function(){
   // ---------- CSS ----------
@@ -16,27 +26,38 @@
 .pdf-wrap{position:relative;}
 .pdf-btn{display:flex;align-items:center;gap:5px;background:rgba(249,115,22,.15);border:1px solid rgba(249,115,22,.3);border-radius:4px;padding:5px 9px;cursor:pointer;color:var(--orange,#F97316);font-family:'Montserrat',sans-serif;font-size:11px;font-weight:800;letter-spacing:.5px;}
 .pdf-btn:hover{background:rgba(249,115,22,.32);}
-.pdf-btn:disabled{opacity:.55;cursor:default;}
-.pdf-menu{display:none;position:absolute;top:calc(100% + 4px);right:0;z-index:600;flex-direction:column;background:#0f1824;border:1px solid #2a3a50;border-radius:6px;overflow:hidden;box-shadow:0 8px 24px rgba(0,0,0,.7);min-width:118px;}
+.pdf-btn:disabled,.pdf-wrap button:disabled{opacity:.55;cursor:default;}
+.pdf-menu{display:none;position:absolute;top:calc(100% + 4px);right:0;z-index:600;flex-direction:column;background:var(--pop,#0f1824);border:1px solid var(--card-brd,#2a3a50);border-radius:6px;overflow:hidden;box-shadow:0 18px 44px rgba(0,0,0,.45),0 3px 10px rgba(0,0,0,.30);min-width:118px;}
 .pdf-menu.open{display:flex;}
-.pdf-menu button{background:none;border:none;color:var(--text,#F1F5F9);font-family:'Montserrat',sans-serif;font-size:11px;font-weight:700;text-align:left;padding:8px 12px;cursor:pointer;}
-.pdf-menu button:hover{background:rgba(249,115,22,.18);color:var(--orange,#F97316);}
+.pdf-menu button{background:none;border:none;color:var(--txt,var(--text,#F1F5F9));font-family:'Montserrat',sans-serif;font-size:11px;font-weight:700;text-align:left;padding:8px 12px;cursor:pointer;}
+.pdf-menu button:hover{background:var(--hover,rgba(249,115,22,.18));color:var(--laranja,var(--orange,#F97316));}
 #pdf-overlay{position:fixed;inset:0;z-index:9999;background:rgba(8,11,16,.82);backdrop-filter:blur(3px);display:flex;align-items:center;justify-content:center;}
 #pdf-overlay .pdf-ov-box{display:flex;flex-direction:column;align-items:center;gap:14px;color:#F1F5F9;font-family:'Montserrat',sans-serif;font-size:14px;font-weight:700;letter-spacing:.5px;}
 #pdf-overlay .pdf-ov-spin{width:34px;height:34px;border:3px solid rgba(249,115,22,.25);border-top-color:#F97316;border-radius:50%;animation:pdfspin .8s linear infinite;}
 @keyframes pdfspin{to{transform:rotate(360deg);}}
-#pdf-report-head{display:none;}
+#pdf-report-head,.pdf-view-tit{display:none;}
 body.exporting #pdf-report-head{display:block;background:#FFFFFF;color:#111;padding:0 0 6px;margin-bottom:10px;font-family:'Montserrat',sans-serif;}
-body.exporting:not(.light-mode) #pdf-report-head{background:#0C1017;color:#F1F5F9;}
+body.exporting:not(.light-mode):not(.claro) #pdf-report-head{background:#0C1017;color:#F1F5F9;}
 #pdf-report-head .rh-top{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;}
 #pdf-report-head .rh-title{font-size:30px;font-weight:800;color:#0C1017;letter-spacing:.3px;}
 #pdf-report-head .rh-sub{font-size:11px;color:#555;margin-top:2px;font-weight:600;}
 #pdf-report-head .rh-meta{font-size:10px;color:#555;text-align:right;font-weight:600;line-height:1.5;}
 #pdf-report-head .rh-filtros{margin-top:10px;font-size:10.5px;color:#222;line-height:1.6;}
 #pdf-report-head .rh-filtros b{color:#F97316;}
-body.exporting:not(.light-mode) #pdf-report-head .rh-title{color:#FFFFFF;}
-body.exporting:not(.light-mode) #pdf-report-head .rh-sub,body.exporting:not(.light-mode) #pdf-report-head .rh-meta{color:#94A3B8;}
-body.exporting:not(.light-mode) #pdf-report-head .rh-filtros{color:#CBD5E1;}
+body.exporting:not(.light-mode):not(.claro) #pdf-report-head .rh-title{color:#FFFFFF;}
+body.exporting:not(.light-mode):not(.claro) #pdf-report-head .rh-sub,body.exporting:not(.light-mode):not(.claro) #pdf-report-head .rh-meta{color:#94A3B8;}
+body.exporting:not(.light-mode):not(.claro) #pdf-report-head .rh-filtros{color:#CBD5E1;}
+body.exporting .pdf-view-tit{display:block;font-family:'Montserrat',sans-serif;font-size:19px;font-weight:800;letter-spacing:.2px;color:#0C1017;margin:0 0 9px;}
+body.exporting:not(.light-mode):not(.claro) .pdf-view-tit{color:#FFFFFF;}
+/* Layout padrão do portal: o .app tem altura fixa e cada área rola por dentro.
+   Durante a exportação ele vira documento normal, senão o html2canvas corta
+   tudo que está fora da parte visível (tabelão, gráfico, visão inteira).
+   Tudo preso ao .app, p/ não mexer nos painéis do layout antigo. */
+body.exporting .app{position:static!important;inset:auto!important;height:auto!important;min-height:0!important;overflow:visible!important;box-shadow:none!important;border:0!important;}
+body.exporting .app .side{display:none!important;}
+body.exporting .app .board,body.exporting .app .cols,body.exporting .app .vw,body.exporting .app .card,
+body.exporting .app .tsec,body.exporting .app .twrap,body.exporting .app .tab-wrap,
+body.exporting .app .gcard,body.exporting .app .gcv{height:auto!important;max-height:none!important;min-height:0!important;overflow:visible!important;flex:none!important;}
 @media print{ .pdf-wrap{display:none;} }
 `;
 
@@ -51,11 +72,11 @@ body.exporting:not(.light-mode) #pdf-report-head .rh-filtros{color:#CBD5E1;}
     if(cont){
       const wrap=document.createElement('div'); wrap.className='pdf-wrap';
       wrap.innerHTML =
-        '<button class="pdf-btn" id="pdfBtn" title="Exportar relatório PDF (estado filtrado)">'+
+        '<button class="'+(CFG.btnClass||'pdf-btn')+'" id="pdfBtn" title="Exportar relatório PDF (estado filtrado)">'+
         '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><polyline points="9 15 12 18 15 15"/></svg>'+
         '<span>PDF</span></button>'+
         '<div class="pdf-menu" id="pdfMenu"><button data-mode="light">☀ Claro</button><button data-mode="dark">🌙 Escuro</button></div>';
-      cont.insertBefore(wrap, cont.firstChild);
+      if(CFG.btnAoFim) cont.appendChild(wrap); else cont.insertBefore(wrap, cont.firstChild);
       document.getElementById('pdfBtn').addEventListener('click',e=>{e.stopPropagation();document.getElementById('pdfMenu').classList.toggle('open');});
       wrap.querySelectorAll('.pdf-menu button').forEach(b=>b.addEventListener('click',()=>exportar(b.dataset.mode)));
       document.addEventListener('click',e=>{ if(!e.target.closest('.pdf-wrap')){const m=document.getElementById('pdfMenu'); if(m)m.classList.remove('open');} });
@@ -66,8 +87,12 @@ body.exporting:not(.light-mode) #pdf-report-head .rh-filtros{color:#CBD5E1;}
 
   function getMain(){ const s=CFG.main; let el=null; if(typeof s==='function'){try{el=s();}catch(_){}} else if(s) el=document.querySelector(s); return el || document.querySelector('main') || document.querySelector('.main'); }
   function isTableBlock(e){ return e.classList.contains('tbl-section') || e.classList.contains('adh-table-wrap') || !!(e.querySelector && e.querySelector('table')); }
-  function resolveTitle(){ const t=CFG.title; const v=(typeof t==='function')?t():t; return v || (document.querySelector('.brand h1')||{}).textContent || document.title; }
+  function resolveTitle(){ const t=CFG.title; const v=(typeof t==='function')?t():t;
+    return v || (document.querySelector('.brand h1')||{}).textContent || (document.querySelector('.s-top b')||{}).textContent || document.title; }
   function resolveSub(){ const s=CFG.subtitle; const v=(typeof s==='function')?s():s; return v!=null?v:((document.querySelector('.brand p')||{}).textContent||''); }
+  function resolveViews(){ const v=CFG.views; const a=(typeof v==='function')?v():v; return Array.isArray(a)?a.filter(Boolean):[]; }
+  function temaClaro(){ if(typeof CFG.isLight==='function') return !!CFG.isLight();
+    return document.body.classList.contains('light-mode') || document.body.classList.contains('claro'); }
   // garante o cabeçalho como 1º filho do main atual (cria/move; atualiza título dinâmico)
   function ensureHead(main){
     let head=document.getElementById('pdf-report-head');
@@ -81,79 +106,127 @@ body.exporting:not(.light-mode) #pdf-report-head .rh-filtros{color:#CBD5E1;}
   function esc(s){return String(s==null?'':s).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));}
   function slug(s){return String(s||'relatorio').normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^a-zA-Z0-9]+/g,'-').replace(/^-|-$/g,'');}
 
+  // rótulo do filtro: o botão tem ícone e a pílula de contagem — tira os dois.
+  // (Não dá p/ raspar dígitos do texto: existe filtro chamado "NÍVEL 3".)
+  function rotuloFiltro(w){
+    const prev=w.previousElementSibling;
+    if(prev && prev.classList.contains('filter-label')) return prev.textContent.trim();
+    const b=w.querySelector('.ms-btn');
+    if(!b) return '';
+    const c=b.cloneNode(true); c.querySelectorAll('.ms-cnt,svg').forEach(e=>e.remove());
+    return c.textContent.trim();
+  }
   function filtrosResumo(){
-    const wraps=[...document.querySelectorAll('.ms-wrap')];
+    // só os filtros da barra do topo — o painel pode ter outros .ms-wrap no miolo
+    // (a busca de cenários do Forecast, p.ex.), que não são recorte do relatório
+    let wraps=[...document.querySelectorAll('.filtros .ms-wrap,.header-filters .ms-wrap')];
+    if(!wraps.length) wraps=[...document.querySelectorAll('.ms-wrap')];
+    wraps=wraps.filter(w=>rotuloFiltro(w));
     if(!wraps.length) return '';
     const parts=wraps.map(w=>{
-      let lbl='';
-      const prev=w.previousElementSibling;
-      if(prev && prev.classList.contains('filter-label')) lbl=prev.textContent.trim();
-      else { const b=w.querySelector('.ms-btn'); lbl=(b?b.childNodes[0].textContent:w.id).trim(); }
       const sel=(w._sel && w._sel.size)?[...w._sel] : null;
-      return '<b>'+esc(lbl)+':</b> '+ (sel? esc(sel.join(', ')) : 'Todos');
+      return '<b>'+esc(rotuloFiltro(w))+':</b> '+ (sel? esc(sel.join(', ')) : 'Todos');
     });
     return 'Filtros aplicados &nbsp; '+parts.join(' &nbsp;·&nbsp; ');
   }
+
+  const espera=ms=>new Promise(r=>setTimeout(r,ms));
 
   async function exportar(mode){
     const mn=document.getElementById('pdfMenu'); if(mn)mn.classList.remove('open');
     if(typeof html2canvas==='undefined' || !window.jspdf){ alert('Biblioteca de PDF ainda carregando — tente de novo em instantes.'); return; }
     const claro = mode!=='dark';
     const btn=document.getElementById('pdfBtn');
-    const main=getMain();
-    if(!main){ alert('Não encontrei o conteúdo para exportar.'); return; }
-    const head=ensureHead(main);
-    const fr=document.getElementById('rh-filtros'); if(fr) fr.innerHTML=filtrosResumo();
-    const now=new Date(), rm=document.getElementById('rh-meta');
-    if(rm) rm.innerHTML='Gerado em '+now.toLocaleDateString('pt-BR')+' '+now.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})+'<br>Gestão em Movimento · BI Frota';
-    const setTheme=CFG.setTheme||window.applyTheme;
-    const temaOrig=document.body.classList.contains('light-mode')?'light':'dark';
+    if(!getMain()){ alert('Não encontrei o conteúdo para exportar.'); return; }
+    const setTheme=CFG.setTheme||window.applyTheme||window.aplicaTema;
+    const temaOrig=temaClaro()?'light':'dark';
     const temaAlvo=claro?'light':'dark';
     if(temaOrig!==temaAlvo && typeof setTheme==='function') setTheme(temaAlvo);
+    const vistas=resolveViews();
+    const vwOrig=(vistas.length && typeof CFG.viewAtual==='function')?CFG.viewAtual():null;
+    const temporarios=[];               // títulos de visão criados p/ o relatório
     document.body.classList.add('exporting');
     if(btn){ btn.disabled=true; const s=btn.querySelector('span'); if(s)s.textContent='Gerando…'; }
     const ov=document.createElement('div'); ov.id='pdf-overlay';
-    ov.innerHTML='<div class="pdf-ov-box"><div class="pdf-ov-spin"></div>Gerando PDF…</div>';
+    ov.innerHTML='<div class="pdf-ov-box"><div class="pdf-ov-spin"></div><span id="pdf-ov-txt">Gerando PDF…</span></div>';
     document.body.appendChild(ov);
     window.scrollTo(0,0);
-    await new Promise(r=>setTimeout(r,500));
+    await espera(500);
     try{
       const { jsPDF }=window.jspdf;
       const PW=338.67, PH=190.5, m=9, uw=PW-2*m, uh=PH-2*m, gap=6;   // 16:9 widescreen (PowerPoint)
       const bg=claro?'#FFFFFF':'#0C1017', RGB=claro?[255,255,255]:[12,16,23];
       const baseOpts={scale:2,backgroundColor:bg,useCORS:true,logging:false,ignoreElements:el=>el.id==='pdf-overlay'};
-      const SKIP=/(^|\s)(topbar|toolbar|header|header-filters|filters|sidebar|no-pdf)(\s|$)/;
-      const kids=[...main.children].filter(e=>e.id!=='pdf-report-head' && e.tagName!=='HEADER' && !SKIP.test(e.className) && !e.classList.contains('divider') && e.offsetHeight>2 && getComputedStyle(e).display!=='none');
-      const isTitle=e=>e.classList.contains('sec-title')||['H1','H2','H3','H4'].includes(e.tagName);
-      // separa em: blocos do topo (empacotados) e grupos de tabela (cada tabela leva junto o título de seção que vem antes)
-      const topoEls=[head].filter(Boolean);
-      const tableGroups=[];
-      for(const e of kids){
-        if(isTableBlock(e)){
-          const g=[];
-          const last=topoEls[topoEls.length-1];
-          if(last && last!==head && isTitle(last)) g.push(topoEls.pop()); // puxa o título de seção p/ junto da tabela
-          g.push(e);
-          tableGroups.push(g);
-        } else topoEls.push(e);
-      }
-      // captura: topo AO VIVO; tabelas mais largas (windowWidth) p/ preencher; títulos ao vivo
-      const cap=async(el)=>{
+      const SKIP=/(^|\s)(topbar|toolbar|header|header-filters|filters|filtros|sidebar|side|no-pdf)(\s|$)/;
+      const isTitle=e=>e.classList.contains('sec-title')||e.classList.contains('pdf-view-tit')||['H1','H2','H3','H4'].includes(e.tagName);
+      // captura: tabelas na largura natural (sem cortar colunas); o resto ao vivo.
+      // O preparo é o mesmo do PNG (assets/excel-export.js): grava cor/fundo já
+      // computados nos nós, porque o html2canvas 1.4.1 não resolve var(--x) e
+      // ABORTA em color(), que é como o Chromium computa nosso color-mix().
+      const prep=window.H2CPrep||null;
+      const cap=async(el,topo)=>{
         let o=baseOpts;
-        if(isTableBlock(el)){ // tabela: captura na largura natural (sem cortar colunas), min 1560, teto 2800
+        if(isTableBlock(el)){ // tabela: captura na largura natural, min 1560, teto 2800
           const t=el.querySelector('table')||el; const ww=Math.max(1560, Math.min(2800, (t.scrollWidth||1560)+60));
           o=Object.assign({},baseOpts,{windowWidth:ww});
         }
-        const c=await html2canvas(el,o);
-        return {canvas:c, nat:c.height*uw/c.width, head: el===head};
+        const nodes=prep?prep.preparar(el,false):null;
+        if(prep) o=Object.assign({},o,{onclone:prep.onclone});
+        try{ const c=await html2canvas(el,o); return {canvas:c, nat:c.height*uw/c.width, head: !!topo}; }
+        finally{ if(prep) prep.limpar(nodes); }
       };
-      const topoItems=[]; for(const el of topoEls) topoItems.push(await cap(el));
-      const tableSlides=[]; for(const g of tableGroups){ const its=[]; for(const el of g) its.push(await cap(el)); tableSlides.push(its); }
-      // monta slides: empacota blocos do topo (cabe ~1.3 slide e escala p/ caber); cada grupo de tabela = 1 slide
-      const slides=[]; let grp=[], sum=0;
-      for(const it of topoItems){ if(grp.length && (sum+gap+it.nat)>1.3*uh){ slides.push(grp); grp=[]; sum=0; } if(grp.length) sum+=gap; sum+=it.nat; grp.push(it); }
-      if(grp.length) slides.push(grp);
-      for(const ts of tableSlides) slides.push(ts);
+      // monta os slides de UM container (uma visão, ou a página inteira nos painéis antigos)
+      async function slidesDe(main, headEl, label){
+        const kids=[...main.children].filter(e=>e.id!=='pdf-report-head' && !e.classList.contains('pdf-view-tit')
+          && e.tagName!=='HEADER' && !SKIP.test(e.className) && !e.classList.contains('divider')
+          && e.offsetHeight>2 && getComputedStyle(e).display!=='none');
+        const topoEls=[];
+        if(headEl) topoEls.push(headEl);
+        if(label){ const t=document.createElement('div'); t.className='pdf-view-tit'; t.textContent=label;
+          main.insertBefore(t, headEl?headEl.nextSibling:main.firstChild); temporarios.push(t); topoEls.push(t); }
+        const tableGroups=[];
+        for(const e of kids){
+          if(isTableBlock(e)){
+            const g=[];
+            const last=topoEls[topoEls.length-1];
+            if(last && last!==headEl && isTitle(last)) g.push(topoEls.pop()); // título junto da tabela
+            g.push(e);
+            tableGroups.push(g);
+          } else topoEls.push(e);
+        }
+        // topo do slide (sem centralizar) só p/ o cabeçalho do relatório e o título da visão
+        const noTopo=el=>el===headEl||el.classList.contains('pdf-view-tit');
+        const topoItems=[]; for(const el of topoEls) topoItems.push(await cap(el, noTopo(el)));
+        const tableSlides=[]; for(const g of tableGroups){ const its=[]; for(const el of g) its.push(await cap(el, noTopo(el))); tableSlides.push(its); }
+        const out=[]; let grp=[], sum=0;
+        for(const it of topoItems){ if(grp.length && (sum+gap+it.nat)>1.3*uh){ out.push(grp); grp=[]; sum=0; } if(grp.length) sum+=gap; sum+=it.nat; grp.push(it); }
+        if(grp.length) out.push(grp);
+        for(const ts of tableSlides) out.push(ts);
+        return out;
+      }
+      // cabeçalho do relatório (uma vez, no começo)
+      const primeiroMain=vistas.length ? null : getMain();
+      let slides=[];
+      if(!vistas.length){
+        const head=ensureHead(primeiroMain);
+        const fr=document.getElementById('rh-filtros'); if(fr) fr.innerHTML=filtrosResumo();
+        carimbaMeta();
+        slides = await slidesDe(primeiroMain, head, null);
+      } else {
+        let ini=true, i=0;
+        for(const v of vistas){
+          i++; const t=document.getElementById('pdf-ov-txt');
+          if(t) t.textContent='Gerando PDF… '+(v.label||'')+' ('+i+'/'+vistas.length+')';
+          if(typeof v.ativar==='function'){ v.ativar(); await espera(420); }
+          const mainV=getMain();
+          if(!mainV) continue;
+          let head=null;
+          if(ini){ head=ensureHead(mainV); const fr=document.getElementById('rh-filtros'); if(fr) fr.innerHTML=filtrosResumo(); carimbaMeta(); }
+          slides = slides.concat(await slidesDe(mainV, head, v.label||''));
+          ini=false;
+        }
+      }
+      if(!slides.length){ alert('Não encontrei o conteúdo para exportar.'); return; }
       // cada slide é composto num ÚNICO canvas (fundo + blocos + faixa) → 1 imagem por página,
       // sem emendas (o problema da "sombra" retangular vinha de mesclar JPEGs separados com o fundo).
       const COMP_W=2000, COMP_H=Math.round(COMP_W*PH/PW), ppm=COMP_W/PW;
@@ -179,10 +252,17 @@ body.exporting:not(.light-mode) #pdf-report-head .rh-filtros{color:#CBD5E1;}
     }catch(e){ console.error(e); alert('Erro ao gerar PDF: '+(e&&e.message||e)); }
     finally{
       ov.remove();
+      temporarios.forEach(t=>t.remove());
+      const hd=document.getElementById('pdf-report-head'); if(hd) hd.remove();
       document.body.classList.remove('exporting');
       if(btn){ btn.disabled=false; const s=btn.querySelector('span'); if(s)s.textContent='PDF'; }
       if(temaOrig!==temaAlvo && typeof setTheme==='function') setTheme(temaOrig);
+      if(vwOrig!=null && typeof CFG.irPara==='function') CFG.irPara(vwOrig);
     }
+  }
+  function carimbaMeta(){
+    const now=new Date(), rm=document.getElementById('rh-meta');
+    if(rm) rm.innerHTML='Gerado em '+now.toLocaleDateString('pt-BR')+' '+now.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})+'<br>Gestão em Movimento · BI Frota';
   }
   window.exportarPDF = exportar;   // permite chamada externa
 })();
