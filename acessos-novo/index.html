@@ -256,19 +256,23 @@ table.dre td.cg-t,.cg-t{color:var(--verde)!important;font-weight:700;}
 
 
 /* ── Acessos: só o que é próprio deste painel ── */
-.vw#vw-resumo .fin-hero{flex:0 0 auto;padding:2px 0 4px;}
-.vw#vw-resumo .hval{font-size:clamp(32px,4.8vh,48px);}
+ /* o hero cresce e fica com a sobra; os cards ficam baixos e os gráficos,
+    com altura fixa, não mudam (Renan) */
+.vw#vw-resumo .fin-hero{flex:1 1 auto;align-items:center;padding:2px 0;}
+.vw#vw-resumo .hval{font-size:clamp(40px,7vh,68px);margin:6px 0 9px;}
+.vw#vw-resumo .hlbl{font-size:10.5px;}
+.vw#vw-resumo .hdel div{font-size:9.5px;}
 /* o espaço que sobra é DIVIDIDO entre os cards e os gráficos, na proporção
    1 : 1,6 — nem card gigante e vazio, nem gráfico esticado */
-.kpis.k3{grid-template-columns:repeat(3,1fr);flex:1 1 150px;}
-.kpis.k3 .kpi{display:flex;flex-direction:column;justify-content:center;padding:20px 18px;}
-.kpis.k3 .kv{font-size:clamp(25px,3.4vh,34px);}
+.kpis.k3{grid-template-columns:repeat(3,1fr);flex:0 0 auto;}
+.kpis.k3 .kpi{display:flex;flex-direction:column;justify-content:center;padding:15px 18px;}
+.kpis.k3 .kv{font-size:clamp(24px,3vh,30px);margin-top:5px;}
 .kpis.k3 .kpi{display:flex;flex-direction:column;justify-content:center;}
 .kpis.k3 .kv{font-size:clamp(25px,3.2vh,34px);}
 /* gráfico e calendário embaixo, em altura menor (Renan) */
 /* gráficos baixos: a altura é fixa e o espaço que sobra vai para os cards */
 /* gráficos baixos: altura fixa; o que sobra vai para o hero e os cards */
-.res-cols{flex:1.6 1 300px;min-height:230px;display:flex;gap:12px;}
+.res-cols{flex:0 0 auto;height:min(47vh,440px);min-height:230px;display:flex;gap:12px;}
 .res-graf{flex:1 1 auto;min-width:0;}
 .res-cal{flex:0 0 auto;width:auto;aspect-ratio:1;align-self:stretch;overflow:hidden;
   padding:12px 14px;display:flex;flex-direction:column;}
@@ -310,8 +314,12 @@ table.dre thead th.num{text-align:right;}
 table.dre td,table.dre th{white-space:normal;overflow-wrap:anywhere;}
 table.dre td.num,table.dre th.num{white-space:nowrap;}
 @media(max-width:860px){ .res-cols{display:block;max-height:none;} .res-graf{height:260px;margin-bottom:12px;}
-  .res-cal{aspect-ratio:auto;height:300px;width:100%;} .vw#vw-resumo .fin-hero{flex:0 0 auto;padding:2px 0 4px;}
-.vw#vw-resumo .hval{font-size:clamp(32px,4.8vh,48px);}
+  .res-cal{aspect-ratio:auto;height:300px;width:100%;}  /* o hero cresce e fica com a sobra; os cards ficam baixos e os gráficos,
+    com altura fixa, não mudam (Renan) */
+.vw#vw-resumo .fin-hero{flex:1 1 auto;align-items:center;padding:2px 0;}
+.vw#vw-resumo .hval{font-size:clamp(40px,7vh,68px);margin:6px 0 9px;}
+.vw#vw-resumo .hlbl{font-size:10.5px;}
+.vw#vw-resumo .hdel div{font-size:9.5px;}
 .kpis.k3{grid-template-columns:1fr;} }
 
 @media(max-width:860px){
@@ -600,6 +608,8 @@ function render(){
   set('cal-sub', new Date(calY,calM,1).toLocaleDateString('pt-BR',{month:'long',year:'numeric'})
     + ' · pico de ' + maxDia.toLocaleString('pt-BR') + ' num dia');
 
+  renderUnidades(rows);
+
   // por usuário
   const byU={};
   rows.forEach(r=>{const u=byU[r.email]=byU[r.email]||{email:r.email,tot:0,d7:0,last:null,pan:{}};
@@ -622,7 +632,10 @@ function render(){
 }
 
 // ── Por unidade: farol de cadastro (independe dos filtros) ──
-function renderUnidades(){
+function renderUnidades(regs){
+  regs=regs||ROWS;
+  // acessos por usuário no recorte atual → somados na unidade em que ele está
+  const accUid={}; regs.forEach(r=>{ if(r.uid) accUid[r.uid]=(accUid[r.uid]||0)+1; });
   const byUni={};
   Object.keys(DEPARA).forEach(c=>byUni[c]={cod:c,cidade:DEPARA[c],users:[]});
   PROFILES.forEach(p=>{
@@ -630,21 +643,23 @@ function renderUnidades(){
     resolveUnis(p.unidade).forEach(c=>{ if(byUni[c]) byUni[c].users.push(p); });
   });
   const rows=Object.values(byUni).map(u=>{
-    let last=null; u.users.forEach(p=>{const la=LAST_ACCESS[p.user_id]; if(la&&(!last||la>last))last=la;});
-    return {...u, n:u.users.length, last, ok:u.users.length>0};
+    let last=null, acc=0;
+    u.users.forEach(p=>{ const la=LAST_ACCESS[p.user_id]; if(la&&(!last||la>last))last=la; acc+=accUid[p.user_id]||0; });
+    return {...u, n:u.users.length, last, acc, ok:u.users.length>0};
   });
   rows.sort((a,b)=>(a.ok-b.ok)|| a.cidade.localeCompare(b.cidade)); // vermelhos primeiro
   const faltam=rows.filter(r=>!r.ok).length;
-  set('sub-uni', `${rows.length} unidades · ${faltam} sem ninguém cadastrado (farol vermelho). Cadastros pendentes de aprovação ainda não têm unidade e não contam aqui.`);
+  set('sub-uni', `${rows.length} unidades · ${faltam} sem ninguém cadastrado (farol vermelho) · acessos no recorte dos filtros. Cadastros pendentes de aprovação ainda não têm unidade e não contam aqui.`);
   // Sem a coluna "Quem": a lista de nomes estourava a largura e criava barra
   // horizontal. Os nomes ficam na dica da linha (passar o mouse).
-  document.getElementById('t-uni').innerHTML='<table class="dre"><thead><tr><th>Unidade</th><th>Farol</th><th class="num">Cadastrados</th><th>Último acesso</th></tr></thead><tbody>'+
+  document.getElementById('t-uni').innerHTML='<table class="dre"><thead><tr><th>Unidade</th><th>Farol</th><th class="num">Cadastrados</th><th>Último acesso</th><th class="num">Acessos</th></tr></thead><tbody>'+
     rows.map(r=>{ const quem=r.users.length?r.users.map(p=>p.nome||'(sem nome)').join(', '):'ninguém cadastrado';
     return `<tr class="${r.ok?'':'falta'}" title="${esc(quem)}">
       <td class="conta"><b>${esc(r.cidade)}</b> <span class="mut">(${r.cod})</span></td>
       <td><span class="farol ${r.ok?'on':'off'}" title="${r.ok?'Tem cadastro':'Ninguém cadastrado'}"></span></td>
       <td class="num">${r.n||'—'}</td>
       <td class="mut">${r.last?fmtDT(r.last):'—'}</td>
+      <td class="num">${r.acc?`<span class="pill">${r.acc.toLocaleString('pt-BR')}</span>`:'<span class="mut">—</span>'}</td>
     </tr>`;}).join('')+'</tbody></table>';
 }
 
@@ -678,7 +693,7 @@ async function initApp(){
   try{ const {data:profs}=await sb.from('fca_profiles').select('user_id,nome,unidade,is_admin'); PROFILES=profs||[]; }
   catch(e){ PROFILES=[]; }
   // exclui o "Hub (entrada)" da contagem — é só a entrada no portal, não um painel
-  ROWS=all.map(r=>{const dt=new Date(r.created_at);return {email:r.email||'(sem e-mail)',painel:r.painel||'hub',dt,dia:diaKey(dt),mes:mesKey(dt)};}).filter(r=>r.painel!=='hub');
+  ROWS=all.map(r=>{const dt=new Date(r.created_at);return {uid:r.user_id||null,email:r.email||'(sem e-mail)',painel:r.painel||'hub',dt,dia:diaKey(dt),mes:mesKey(dt)};}).filter(r=>r.painel!=='hub');
   buildMs('ms-usr',[...new Set(ROWS.map(r=>r.email))].sort());
   buildMs('ms-pan',[...new Set(ROWS.map(r=>r.painel))].sort((a,b)=>nomePainel(a).localeCompare(nomePainel(b))),nomePainel);
   buildMs('ms-mes',[...new Set(ROWS.map(r=>r.mes))].sort().reverse(),mesLbl);
