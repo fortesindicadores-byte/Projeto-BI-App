@@ -12,8 +12,8 @@
    - fileBase:   base do nome do arquivo (default: slug do título)
    - btnContainer: onde pendurar o botão (default: '.header-right')
    - btnClass:   classe do botão, p/ reaproveitar o estilo do painel (default: 'pdf-btn')
-   - views:      array/função → [{label, ativar}] — painéis de VISÕES (layout padrão)
-                 exportam TODAS as visões, uma por vez, num relatório só
+   - views:      array/função → [{label, ativar}] — painéis de VISÕES (layout padrão):
+                 UM SLIDE POR VISÃO, com o painel inteiro e o menu lateral recolhido
    - viewAtual / irPara: leitura e restauração da visão ativa ao terminar
    - setTheme:   função(t) que aplica 'light'/'dark' (default: applyTheme/aplicaTema)
    - isLight:    função → true se a tela está no tema claro
@@ -27,7 +27,8 @@
 .pdf-btn{display:flex;align-items:center;gap:5px;background:rgba(249,115,22,.15);border:1px solid rgba(249,115,22,.3);border-radius:4px;padding:5px 9px;cursor:pointer;color:var(--orange,#F97316);font-family:'Montserrat',sans-serif;font-size:11px;font-weight:800;letter-spacing:.5px;}
 .pdf-btn:hover{background:rgba(249,115,22,.32);}
 .pdf-btn:disabled,.pdf-wrap button:disabled{opacity:.55;cursor:default;}
-.pdf-menu{display:none;position:absolute;top:calc(100% + 4px);right:0;z-index:600;flex-direction:column;background:var(--pop,#0f1824);border:1px solid var(--card-brd,#2a3a50);border-radius:6px;overflow:hidden;box-shadow:0 18px 44px rgba(0,0,0,.45),0 3px 10px rgba(0,0,0,.30);min-width:118px;}
+/* menu POSICIONADO POR JS (fixed): dentro da lateral, que rola, um absolute seria cortado */
+.pdf-menu{display:none;position:fixed;z-index:9500;flex-direction:column;background:var(--pop,#0f1824);border:1px solid var(--card-brd,#2a3a50);border-radius:6px;overflow:hidden;box-shadow:0 18px 44px rgba(0,0,0,.45),0 3px 10px rgba(0,0,0,.30);min-width:118px;}
 .pdf-menu.open{display:flex;}
 .pdf-menu button{background:none;border:none;color:var(--txt,var(--text,#F1F5F9));font-family:'Montserrat',sans-serif;font-size:11px;font-weight:700;text-align:left;padding:8px 12px;cursor:pointer;}
 .pdf-menu button:hover{background:var(--hover,rgba(249,115,22,.18));color:var(--laranja,var(--orange,#F97316));}
@@ -49,15 +50,18 @@ body.exporting:not(.light-mode):not(.claro) #pdf-report-head .rh-sub,body.export
 body.exporting:not(.light-mode):not(.claro) #pdf-report-head .rh-filtros{color:#CBD5E1;}
 body.exporting .pdf-view-tit{display:block;font-family:'Montserrat',sans-serif;font-size:19px;font-weight:800;letter-spacing:.2px;color:#0C1017;margin:0 0 9px;}
 body.exporting:not(.light-mode):not(.claro) .pdf-view-tit{color:#FFFFFF;}
-/* Layout padrão do portal: o .app tem altura fixa e cada área rola por dentro.
-   Durante a exportação ele vira documento normal, senão o html2canvas corta
-   tudo que está fora da parte visível (tabelão, gráfico, visão inteira).
-   Tudo preso ao .app, p/ não mexer nos painéis do layout antigo. */
-body.exporting .app{position:static!important;inset:auto!important;height:auto!important;min-height:0!important;overflow:visible!important;box-shadow:none!important;border:0!important;}
-body.exporting .app .side{display:none!important;}
-body.exporting .app .board,body.exporting .app .cols,body.exporting .app .vw,body.exporting .app .card,
-body.exporting .app .tsec,body.exporting .app .twrap,body.exporting .app .tab-wrap,
-body.exporting .app .gcard,body.exporting .app .gcv{height:auto!important;max-height:none!important;min-height:0!important;overflow:visible!important;flex:none!important;}
+/* Capa do relatório (layout padrão): ocupa a tela inteira e vira o 1º slide */
+#pdf-capa{display:none;}
+body.exporting #pdf-capa{display:flex;position:fixed;inset:0;z-index:9000;flex-direction:column;justify-content:center;
+  padding:0 7%;font-family:'Montserrat',sans-serif;color:var(--txt,#F1F5F9);}
+#pdf-capa .cp-tit{font-size:78px;font-weight:700;letter-spacing:-2.5px;line-height:1;}
+#pdf-capa .cp-regua{width:120px;height:5px;border-radius:3px;background:var(--laranja,#F97316);margin:22px 0 20px;}
+#pdf-capa .cp-sub{font-size:23px;font-weight:600;color:var(--txt2,#94A3B8);}
+#pdf-capa .cp-fil{font-size:17px;color:var(--txt2,#94A3B8);line-height:2;margin-top:42px;max-width:84%;}
+#pdf-capa .cp-fil b{color:var(--laranja,#F97316);font-weight:700;}
+#pdf-capa .cp-meta{font-size:15px;font-weight:600;color:var(--txt3,#676F83);margin-top:44px;line-height:1.7;}
+/* Durante a captura: o próprio botão de PDF e as dicas saem do quadro */
+body.exporting .pdf-wrap,body.exporting .dica{display:none!important;}
 @media print{ .pdf-wrap{display:none;} }
 `;
 
@@ -77,9 +81,23 @@ body.exporting .app .gcard,body.exporting .app .gcv{height:auto!important;max-he
         '<span>PDF</span></button>'+
         '<div class="pdf-menu" id="pdfMenu"><button data-mode="light">☀ Claro</button><button data-mode="dark">🌙 Escuro</button></div>';
       if(CFG.btnAoFim) cont.appendChild(wrap); else cont.insertBefore(wrap, cont.firstChild);
-      document.getElementById('pdfBtn').addEventListener('click',e=>{e.stopPropagation();document.getElementById('pdfMenu').classList.toggle('open');});
-      wrap.querySelectorAll('.pdf-menu button').forEach(b=>b.addEventListener('click',()=>exportar(b.dataset.mode)));
-      document.addEventListener('click',e=>{ if(!e.target.closest('.pdf-wrap')){const m=document.getElementById('pdfMenu'); if(m)m.classList.remove('open');} });
+      // o menu vai para o BODY: dentro do .app, que tem backdrop-filter, um
+      // position:fixed se ancora no .app (não na tela) e o menu sai do lugar.
+      // Os cliques são ligados ANTES de mover — depois ele não é mais filho do wrap.
+      const menu=document.getElementById('pdfMenu');
+      menu.querySelectorAll('button').forEach(b=>b.addEventListener('click',()=>exportar(b.dataset.mode)));
+      document.body.appendChild(menu);
+      document.getElementById('pdfBtn').addEventListener('click',e=>{e.stopPropagation();
+        const m=menu, b=e.currentTarget;
+        const abrir=!m.classList.contains('open');
+        m.classList.toggle('open', abrir);
+        if(abrir){                                    // posiciona junto do botão, sem depender do container
+          const r=b.getBoundingClientRect();
+          m.style.left=Math.min(r.left, window.innerWidth-m.offsetWidth-8)+'px';
+          m.style.top =Math.min(r.bottom+4, window.innerHeight-m.offsetHeight-8)+'px';
+        }
+      });
+      document.addEventListener('click',e=>{ if(!e.target.closest('.pdf-wrap,.pdf-menu')) menu.classList.remove('open'); });
     }
 
     // o cabeçalho do relatório é criado/movido no momento da exportação (suporta painéis SPA por página)
@@ -144,7 +162,11 @@ body.exporting .app .gcard,body.exporting .app .gcv{height:auto!important;max-he
     if(temaOrig!==temaAlvo && typeof setTheme==='function') setTheme(temaAlvo);
     const vistas=resolveViews();
     const vwOrig=(vistas.length && typeof CFG.viewAtual==='function')?CFG.viewAtual():null;
-    const temporarios=[];               // títulos de visão criados p/ o relatório
+    const temporarios=[];               // elementos criados só p/ o relatório
+    const desfazer=[];                  // estados mexidos durante a captura
+    // menu lateral RECOLHIDO no PDF (Renan, 16/08/2026)
+    const side=vistas.length?document.querySelector('.side'):null;
+    if(side && !side.classList.contains('mini')){ side.classList.add('mini'); desfazer.push(()=>side.classList.remove('mini')); }
     document.body.classList.add('exporting');
     if(btn){ btn.disabled=true; const s=btn.querySelector('span'); if(s)s.textContent='Gerando…'; }
     const ov=document.createElement('div'); ov.id='pdf-overlay';
@@ -155,7 +177,10 @@ body.exporting .app .gcard,body.exporting .app .gcv{height:auto!important;max-he
     try{
       const { jsPDF }=window.jspdf;
       const PW=338.67, PH=190.5, m=9, uw=PW-2*m, uh=PH-2*m, gap=6;   // 16:9 widescreen (PowerPoint)
-      const bg=claro?'#FFFFFF':'#0C1017', RGB=claro?[255,255,255]:[12,16,23];
+      // No layout padrão o slide é o painel inteiro: o fundo da página do PDF é o
+      // MESMO tom uniforme da página do portal, então o slide fica igual à tela.
+      const prep0=window.H2CPrep||null;
+      const bg=(vistas.length && prep0) ? prep0.fundoDe(document.body) : (claro?'#FFFFFF':'#0C1017');
       const baseOpts={scale:2,backgroundColor:bg,useCORS:true,logging:false,ignoreElements:el=>el.id==='pdf-overlay'};
       const SKIP=/(^|\s)(topbar|toolbar|header|header-filters|filters|filtros|sidebar|side|no-pdf)(\s|$)/;
       const isTitle=e=>e.classList.contains('sec-title')||e.classList.contains('pdf-view-tit')||['H1','H2','H3','H4'].includes(e.tagName);
@@ -163,14 +188,17 @@ body.exporting .app .gcard,body.exporting .app .gcv{height:auto!important;max-he
       // O preparo é o mesmo do PNG (assets/excel-export.js): grava cor/fundo já
       // computados nos nós, porque o html2canvas 1.4.1 não resolve var(--x) e
       // ABORTA em color(), que é como o Chromium computa nosso color-mix().
-      const prep=window.H2CPrep||null;
+      const prep=prep0;
+      // no layout de vidro as camadas translúcidas precisam ser ACHATADAS, senão
+      // o card branco sobre fundo branco (tema claro) some no PNG do html2canvas
+      const achatar=!!vistas.length;
       const cap=async(el,topo)=>{
         let o=baseOpts;
-        if(isTableBlock(el)){ // tabela: captura na largura natural, min 1560, teto 2800
+        if(isTableBlock(el) && !el.classList.contains('app')){ // tabela: largura natural, min 1560, teto 2800
           const t=el.querySelector('table')||el; const ww=Math.max(1560, Math.min(2800, (t.scrollWidth||1560)+60));
           o=Object.assign({},baseOpts,{windowWidth:ww});
         }
-        const nodes=prep?prep.preparar(el,false):null;
+        const nodes=prep?prep.preparar(el,achatar):null;
         if(prep) o=Object.assign({},o,{onclone:prep.onclone});
         try{ const c=await html2canvas(el,o); return {canvas:c, nat:c.height*uw/c.width, head: !!topo}; }
         finally{ if(prep) prep.limpar(nodes); }
@@ -204,6 +232,52 @@ body.exporting .app .gcard,body.exporting .app .gcv{height:auto!important;max-he
         for(const ts of tableSlides) out.push(ts);
         return out;
       }
+      // ── layout padrão do portal: UM SLIDE POR VISÃO ──────────────────────
+      // A visão já é do tamanho da página, então o slide é o painel inteiro
+      // (com o menu recolhido), como na tela. Só quando uma tabela não coube
+      // é que entra uma página extra com ela inteira, p/ não perder linhas.
+      async function slidesDasVisoes(){
+        const app=document.querySelector('.app')||getMain();
+        const out=[];
+        out.push([await cap(montaCapa(), false)]);         // capa: título, filtros, data
+        let i=0;
+        for(const v of vistas){
+          i++; const t=document.getElementById('pdf-ov-txt');
+          if(t) t.textContent='Gerando PDF… '+(v.label||'')+' ('+i+'/'+vistas.length+')';
+          if(typeof v.ativar==='function'){ v.ativar(); await espera(520); }
+          out.push([await cap(app, false)]);
+          for(const extra of await tabelasCortadas()) out.push(extra);
+        }
+        return out;
+      }
+      // tabela que rola por dentro → uma página extra com ela inteira
+      async function tabelasCortadas(){
+        const vw=document.querySelector('.vw.on'); if(!vw) return [];
+        const wraps=[...vw.querySelectorAll('.twrap,.tab-wrap')].filter(w=>w.scrollHeight>w.clientHeight+4);
+        const out=[];
+        for(const w of wraps){
+          const alvo=w.closest('.tsec,.card')||w;
+          const mexidos=[[w,w.style.cssText],[alvo,alvo.style.cssText]];
+          w.style.cssText+=';height:auto!important;max-height:none!important;overflow:visible!important;flex:none!important;';
+          alvo.style.cssText+=';height:auto!important;max-height:none!important;overflow:visible!important;flex:none!important;';
+          await espera(60);
+          try{ out.push([await cap(alvo, false)]); }
+          finally{ mexidos.forEach(([el,css])=>{ el.style.cssText=css; }); }
+        }
+        return out;
+      }
+      function montaCapa(){
+        const capa=document.createElement('div'); capa.id='pdf-capa';
+        const now=new Date();
+        capa.innerHTML='<div class="cp-tit"></div><div class="cp-regua"></div><div class="cp-sub"></div>'+
+          '<div class="cp-fil">'+filtrosResumo()+'</div>'+
+          '<div class="cp-meta">Gerado em '+now.toLocaleDateString('pt-BR')+' '+
+          now.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})+'<br>Gestão em Movimento · BI Frota</div>';
+        capa.querySelector('.cp-tit').textContent=resolveTitle();
+        capa.querySelector('.cp-sub').textContent=resolveSub();
+        document.body.appendChild(capa); temporarios.push(capa);
+        return capa;
+      }
       // cabeçalho do relatório (uma vez, no começo)
       const primeiroMain=vistas.length ? null : getMain();
       let slides=[];
@@ -213,18 +287,7 @@ body.exporting .app .gcard,body.exporting .app .gcv{height:auto!important;max-he
         carimbaMeta();
         slides = await slidesDe(primeiroMain, head, null);
       } else {
-        let ini=true, i=0;
-        for(const v of vistas){
-          i++; const t=document.getElementById('pdf-ov-txt');
-          if(t) t.textContent='Gerando PDF… '+(v.label||'')+' ('+i+'/'+vistas.length+')';
-          if(typeof v.ativar==='function'){ v.ativar(); await espera(420); }
-          const mainV=getMain();
-          if(!mainV) continue;
-          let head=null;
-          if(ini){ head=ensureHead(mainV); const fr=document.getElementById('rh-filtros'); if(fr) fr.innerHTML=filtrosResumo(); carimbaMeta(); }
-          slides = slides.concat(await slidesDe(mainV, head, v.label||''));
-          ini=false;
-        }
+        slides = await slidesDasVisoes();
       }
       if(!slides.length){ alert('Não encontrei o conteúdo para exportar.'); return; }
       // cada slide é composto num ÚNICO canvas (fundo + blocos + faixa) → 1 imagem por página,
@@ -253,6 +316,7 @@ body.exporting .app .gcard,body.exporting .app .gcv{height:auto!important;max-he
     finally{
       ov.remove();
       temporarios.forEach(t=>t.remove());
+      desfazer.forEach(f=>{ try{ f(); }catch(e){} });
       const hd=document.getElementById('pdf-report-head'); if(hd) hd.remove();
       document.body.classList.remove('exporting');
       if(btn){ btn.disabled=false; const s=btn.querySelector('span'); if(s)s.textContent='PDF'; }

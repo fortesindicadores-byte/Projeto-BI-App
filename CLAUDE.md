@@ -730,7 +730,7 @@ A busca do topo filtra os cards e esconde cluster vazio; no modo lista ela **abr
 1. **Nada de rolagem em desktop** — se não coube, encolhe fonte/padding ou divide em mais visões (foi o que levou o YTG + TGT e o Forecast a virarem "Bridge / Cenário 1 / Cenário 2").
 2. **Celular**: `@media(max-width:860px)` desliga o flex de altura (`display:block`), devolve `overflow:auto` no body, transforma o menu lateral numa fileira horizontal e dá altura explícita a gráfico e tabela — senão eles colapsam para 0.
 3. Todo painel inclui `assets/mobile.js`, `assets/sortable-table.js` e `assets/excel-export.js` (o exportador já entende `.tab-wrap`, `.tsec`, `.rtit` e `.gcard`). **PNG no layout de vidro:** o exportador ACHATA as camadas translúcidas (fundo uniforme → `.app::before` → card) compondo o alfa nó a nó (`effOf` no excel-export.js) — sem isso o html2canvas pinta cada `rgba` sobre o fundo errado e o PNG sai azul-marinho com cards cinza (bug real, 15/08/2026). O achatamento só é exato porque o fundo é uniforme — mais um motivo para não voltar o degradê.
-4. Nomes de visão em português curto e sem jargão de arquivo: *Resumo · Análise Nominal · AH e AV · YTG + TGT · Bridge/Cenário 1/Cenário 2 · Forecast · Cenário 1/Cenário 2*.
+4. Nomes de visão em português curto e sem jargão de arquivo: *Análise Nominal · AH e AV · YTG + TGT · Bridge/Cenário 1/Cenário 2 · Forecast · Cenário 1/Cenário 2*. **A primeira visão de TODO painel chama-se "Resumo Gerencial"** (Renan, 16/08/2026) — nunca só "Resumo".
 5. **NADA DE FUNÇÃO QUE SOME NA RECONSTRUÇÃO** (Renan, 16/08/2026): Excel, PNG, PDF, ordenação, mobile — tudo que o painel antigo tinha continua no novo. Antes de promover um clone, comparar a lista de `<script src>` do arquivo antigo (`git show <commit>^:<pasta>/index.html | grep "script src"`) com a do novo e explicar cada ausência. Foi assim que o PDF do Acessos ficou de fora.
 
 **A PÁGINA é mais escura que o PAINEL** (15/08/2026): é essa diferença que faz o app flutuar. No escuro a página é `#121214` e a camada do `.app` **clareia** (`rgba(255,255,255,.045)` → miolo ~`#1d1d1f`); no claro a página é `#E1E2E5` e o `.app` é `rgba(255,255,255,.34)` (miolo ~`#eaebed`). Quando uniformizei o fundo mantendo o `--app` escuro, os dois ficaram no mesmo tom e o painel virou um buraco — o efeito de painel flutuante vinha do degradê, que colocava a moldura sobre a ponta clara. Ao mexer, medir os DOIS pixels: página e miolo.
@@ -751,7 +751,7 @@ Os três exportadores funcionam no layout padrão; o painel só precisa incluir 
 <script src="../assets/sortable-table.js"></script>
 <script src="../assets/excel-export.js"></script>
 <script src="../assets/pdf-export.js"></script>
-<script>initPdfExport({ btnContainer:'.top', btnClass:'tool ico', btnAoFim:true,
+<script>initPdfExport({ btnContainer:'#pdf-slot', btnClass:'s-item', btnAoFim:true,
   title:'Acessos', subtitle:()=>document.getElementById('titSub').textContent, fileBase:'acessos',
   main:()=>document.querySelector('.vw.on'),
   views:()=>Object.keys(TIT).map(k=>({label:TIT[k], ativar:()=>setVw(k)})),
@@ -760,8 +760,9 @@ Os três exportadores funcionam no layout padrão; o painel só precisa incluir 
 <script src="../assets/build-check.js?v=AAAAMMDDHHMM"></script>   <!-- + <meta name="build"> no <head> -->
 ```
 
-- **`views` é o pulo do gato:** no layout antigo a página inteira rolava e o PDF pegava tudo; aqui as visões se revezam, então o exportador **passa por todas**, uma por vez, e o relatório sai completo (Acessos = 5 páginas, Visão Financeira = 9). O overlay mostra `Gerando PDF… <visão> (n/N)` porque a Visão Financeira leva ~3 min. No fim ele devolve a visão e o tema que estavam na tela.
-- **`body.exporting` desmonta a casca** (`.app` vira estático, `.side` some, `.cols/.vw/.card/.twrap` viram altura automática) — sem isso o html2canvas corta tudo que está fora da área visível, porque cada região rola por dentro. As regras são todas presas ao `.app`, para não mexer nos painéis antigos.
+- **O "Gerar PDF" fica em ATALHOS, na lateral** (Renan, 16/08/2026) — não no topo e não junto das visões. O painel só põe um `<div id="pdf-slot"></div>` dentro do bloco `Atalhos` e passa `btnClass:'s-item'`; a lateral recolhida já reduz o item a ícone sozinha. **O menu suspenso mora no `<body>`**, não no wrap: dentro do `.app` (que tem `backdrop-filter`) um `position:fixed` se ancora no `.app` e não na tela, e o menu aparecia 34px fora do lugar.
+- **UM SLIDE POR VISÃO** (Renan, 16/08/2026): como as visões já são do tamanho da página, cada slide é o **painel inteiro, com o menu lateral recolhido** — o PDF fica igual à tela. O fundo do slide é o tom uniforme da página do portal (`H2CPrep.fundoDe(body)`), e as camadas translúcidas são ACHATADAS na captura (sem isso, no tema claro o card branco sobre fundo branco some). Página 1 é a capa (título, subtítulo, filtros aplicados, data). Acessos = 5 páginas, Visão Financeira = 9.
+- **Tabela que não coube gera uma página extra** com ela inteira (`tabelasCortadas()` detecta `scrollHeight > clientHeight`), para o relatório não perder linhas silenciosamente.
 - **`filters-toggle.js` NÃO entra**: só age sobre `.header-filters`/`.dim-toggle`, que não existem no layout novo. É o único script do painel antigo que não volta.
 
 **Duas armadilhas do html2canvas 1.4.1 (bugs reais, achados em 16/08/2026 e corrigidos no `assets/excel-export.js`, que expõe `window.H2CPrep` p/ os dois exportadores):**
