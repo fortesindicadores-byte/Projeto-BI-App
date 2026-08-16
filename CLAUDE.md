@@ -737,7 +737,9 @@ A busca do topo filtra os cards e esconde cluster vazio; no modo lista ela **abr
 
 **Fundo é UNIFORME, não degradê** (Renan, 15/08/2026): o degradê diagonal clareava para o canto superior direito e os cards de lá sumiam. Os dois temas param no tom do MEIO do degradê antigo — `#E1E2E5` no claro, `#202022` no escuro —, que é o que reproduz o miolo do painel (`#eeeef0` / `#1c1c1e` medidos no pixel). Ao mexer nisso, **medir o pixel do miolo nas duas telas**, não confiar no olho.
 
-**Roteiro de aplicação:** hub e Visão Financeira migrados em 15/08/2026; **Acessos** em 16/08/2026. Faltam os demais painéis.
+**Roteiro de aplicação:** hub e Visão Financeira migrados em 15/08/2026; **Acessos** e **Scorecard** em 16/08/2026. Faltam os demais painéis.
+
+**A migração é DIRETO NO PAINEL OFICIAL** (Renan, 16/08/2026) — acabou a etapa do clone `<painel>-novo/`. O método continua o mesmo (casca extraída por script, lógica de dados colada inteira, só a apresentação trocada), e o git é a rede de segurança: o painel antigo está no histórico e volta com um `git show <commit>^:<pasta>/index.html`.
 
 ## Exportações no layout novo (Excel · PNG · PDF) — 16/08/2026
 
