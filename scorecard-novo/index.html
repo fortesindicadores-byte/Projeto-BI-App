@@ -1,0 +1,1134 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="build" content="202608161900">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>Scorecard · Gestão em Movimento</title>
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.2/dist/jspdf.umd.min.js"></script>
+<style>
+/* ============================================================
+   SCORECARD — a nota da Frota, no layout padrão do portal.
+   Casca (tokens, moldura, lateral, filtros, tabelas) copiada da
+   visao-financeira; a lógica de dados é a mesma de antes.
+   Quatro visões na lateral, para acabar com a rolagem.
+   ============================================================ */
+:root{
+  /* fundo UNIFORME (mesma regra do hub): o degradê diagonal clareava para o
+     canto superior direito e deixava metade da tela mais clara que a outra */
+  --fundo:
+    radial-gradient(80% 60% at 90% 0%, rgba(255,244,232,.035) 0%, transparent 60%),
+    linear-gradient(45deg, #121214 0%, #121214 100%);
+  --luz:      inset 0 1px 0 rgba(255,255,255,.09);
+  --luz-card: inset 0 1px 0 rgba(255,255,255,.08);
+  --app:      rgba(255,255,255,.030);
+  --side:     rgba(30,30,30,.50);
+  --linha:    rgba(255,255,255,.06);
+  --card:     rgba(44,44,46,.78);
+  --brilho:   linear-gradient(180deg, rgba(255,255,255,.022) 0%, rgba(255,255,255,0) 46%);
+  --card-brd: rgba(255,255,255,.07);
+  --txt:      #EEF2FA;
+  --txt2:     #B2BCD2;
+  --txt3:     #676F83;
+  --txt4:     #4C505C;
+  --hover:    rgba(255,255,255,.06);
+  --azul:     #2E90E8;
+  --verde:    #3BB33B;
+  --vermelho: #FF5252;
+  --laranja:  #F97316;
+  --ambar:    #F4A100;
+  --cinza:    #5B657C;
+  --cabec:    #2B2B30;
+  --pop:      #26262B;   /* menus suspensos: OPACOS, nunca translúcidos */
+}
+body.claro{
+  --fundo:
+    radial-gradient(80% 60% at 90% 0%, rgba(255,255,255,.35) 0%, transparent 60%),
+    linear-gradient(45deg, #E1E2E5 0%, #E1E2E5 100%);
+  --luz:      inset 0 1px 0 rgba(255,255,255,.9);
+  --luz-card: inset 0 1px 0 rgba(255,255,255,1);
+  --app:      rgba(255,255,255,.34);
+  --side:     rgba(255,255,255,.50);
+  --linha:    rgba(15,23,42,.10);
+  --card:     rgba(255,255,255,.74);
+  --brilho:   linear-gradient(180deg, rgba(255,255,255,.6) 0%, rgba(255,255,255,0) 46%);
+  --card-brd: rgba(15,23,42,.10);
+  --txt:      #161D2B;
+  --txt2:     #4A5568;
+  --txt3:     #737D91;
+  --txt4:     #8B94A6;
+  --hover:    rgba(15,23,42,.05);
+  --azul:     #1B6FC4;
+  --verde:    #00B300;
+  --vermelho: #FF0000;
+  --ambar:    #E9A400;
+  --cinza:    #939CAF;
+  --cabec:    #DCDFE6;
+  --pop:      #FFFFFF;
+}
+*{margin:0;padding:0;box-sizing:border-box;}
+@supports not selector(::-webkit-scrollbar){
+  *{scrollbar-width:thin;scrollbar-color:color-mix(in srgb,var(--txt3) 42%,transparent) transparent;}
+}
+::-webkit-scrollbar{width:11px;height:11px;}
+::-webkit-scrollbar-track{background:transparent;}
+::-webkit-scrollbar-thumb{background:color-mix(in srgb,var(--txt3) 42%,transparent);
+  border:3px solid transparent;background-clip:content-box;border-radius:9px;}
+::-webkit-scrollbar-thumb:hover{background:color-mix(in srgb,var(--txt3) 72%,transparent);background-clip:content-box;}
+::-webkit-scrollbar-corner{background:transparent;}
+::-webkit-scrollbar-button{display:none;width:0;height:0;}
+body::after{content:'';position:fixed;inset:0;z-index:0;pointer-events:none;opacity:.5;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='3'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)' opacity='.05'/%3E%3C/svg%3E");}
+.app{z-index:1;}
+html,body{height:100%;overflow:hidden;}
+body{font-family:'Montserrat',-apple-system,BlinkMacSystemFont,sans-serif;font-size:13px;color:var(--txt);
+  background:var(--fundo);overflow:hidden;}
+
+.app{position:absolute;inset:34px;display:flex;border-radius:22px;overflow:hidden;
+  border:1px solid rgba(255,255,255,.10);box-shadow:0 28px 70px rgba(0,0,0,.55), var(--luz);}
+.app::before{content:'';position:absolute;inset:0;background:var(--app);
+  backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);z-index:0;}
+.side,.board{position:relative;z-index:1;}
+
+/* ── barra lateral ── */
+.side{width:264px;flex:0 0 264px;display:flex;flex-direction:column;
+  background:var(--side);border-right:1px solid var(--linha);padding:16px 10px 12px;
+  backdrop-filter:blur(13px);-webkit-backdrop-filter:blur(13px);
+  box-shadow:var(--luz), 8px 0 28px rgba(0,0,0,.25);overflow:auto;}
+.s-top{display:flex;align-items:center;gap:9px;padding:2px 8px 14px;}
+.s-top b{flex:1;font-size:13.5px;font-weight:600;}
+.s-mini{display:flex;align-items:center;justify-content:center;width:24px;height:24px;flex:0 0 24px;
+  background:transparent;border:0;border-radius:6px;color:var(--txt3);cursor:pointer;}
+.s-mini:hover{background:var(--hover);color:var(--txt);}
+.side.mini{width:64px;flex:0 0 64px;padding:16px 8px 12px;}
+.side.mini .s-top{justify-content:center;padding-bottom:12px;}
+.side.mini .s-top b,.side.mini .s-top>svg{display:none;}
+.side.mini .s-sec,.side.mini .s-item .n,.side.mini .s-user div{display:none;}
+.side.mini .s-item{font-size:0;justify-content:center;padding:9px 0;gap:0;}
+.side.mini .s-user{flex-wrap:wrap;gap:6px;justify-content:center;padding:12px 0 2px;}
+.side.mini .s-sair{margin:0;}
+.s-sec{display:flex;align-items:center;gap:6px;padding:14px 8px 8px;
+  font-size:10px;font-weight:600;color:var(--txt3);text-transform:uppercase;letter-spacing:1.1px;}
+.s-item{display:flex;align-items:center;gap:9px;width:100%;padding:7px 8px;border:0;border-radius:7px;
+  background:transparent;color:var(--txt2);font-family:inherit;font-size:12.5px;font-weight:500;text-align:left;cursor:pointer;}
+.s-item:hover{background:var(--hover);color:var(--txt);}
+.s-item.on{background:var(--hover);color:var(--txt);font-weight:600;}
+.s-item .n{margin-left:auto;font-size:11px;color:var(--txt3);font-weight:600;}
+.s-user{margin-top:auto;display:flex;align-items:center;gap:9px;padding:12px 8px 2px;border-top:1px solid var(--linha);}
+.s-user div{flex:1;min-width:0;}
+.s-user b{display:block;font-size:12px;font-weight:600;line-height:1.2;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.s-user i{display:block;font-size:9.5px;font-style:normal;color:var(--txt3);text-transform:uppercase;letter-spacing:.8px;margin-top:2px;}
+.s-user .av{flex:0 0 24px;}
+.av{width:24px;height:24px;border-radius:50%;display:flex;align-items:center;justify-content:center;
+  font-size:9px;font-weight:800;letter-spacing:.2px;color:#2A1405;background:#F97316;flex:0 0 24px;
+  box-shadow:0 1px 4px rgba(0,0,0,.25);}
+.s-sair{display:flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:7px;
+  color:var(--txt3);text-decoration:none;flex:0 0 26px;}
+.s-sair:hover{background:var(--hover);color:var(--txt);}
+.dica{position:fixed;z-index:9000;transform:translateY(-50%);pointer-events:none;opacity:0;
+  background:var(--pop);color:var(--txt);border:1px solid var(--card-brd);border-radius:7px;
+  padding:5px 9px;font-size:11.5px;font-weight:600;white-space:nowrap;
+  box-shadow:0 8px 22px rgba(0,0,0,.45);transition:opacity .12s;}
+.dica.on{opacity:1;}
+
+/* ── quadro ── */
+.board{flex:1;min-width:0;display:flex;flex-direction:column;}
+.top{display:flex;align-items:center;gap:6px;padding:20px 24px 12px;flex-wrap:wrap;}
+.tit-wrap{flex:1;min-width:0;}
+.top h1{font-size:21px;font-weight:600;letter-spacing:-.3px;}
+.tit-sub{font-size:11px;color:var(--txt3);font-weight:600;margin-top:2px;letter-spacing:.2px;}
+.tool{display:flex;align-items:center;gap:7px;background:transparent;border:0;border-radius:7px;
+  padding:6px 10px;color:var(--txt2);font-family:inherit;font-size:12.5px;font-weight:500;cursor:pointer;}
+.tool:hover{background:var(--hover);color:var(--txt);}
+.tool.ico{padding:7px 9px;}
+.filtros{display:flex;align-items:center;gap:4px;min-width:0;}
+
+/* ── filtros multi-select (mesma mecânica do painel original, visual do app) ── */
+.ms-wrap{position:relative;}
+.ms-btn{display:flex;align-items:center;gap:7px;background:transparent;border:0;border-radius:7px;
+  padding:6px 10px;color:var(--txt2);font-family:inherit;font-size:12.5px;font-weight:500;cursor:pointer;white-space:nowrap;}
+.ms-btn:hover{background:var(--hover);color:var(--txt);}
+.ms-wrap.ativo .ms-btn{background:var(--hover);color:var(--txt);}
+.ms-cnt{display:none;min-width:16px;height:16px;padding:0 5px;border-radius:9px;background:var(--laranja);
+  color:#2A1405;font-size:9.5px;font-weight:800;line-height:16px;text-align:center;}
+.ms-panel{display:none;position:absolute;top:calc(100% + 6px);right:0;z-index:60;min-width:236px;
+  background:var(--pop);border:1px solid var(--card-brd);border-radius:10px;padding:6px;
+  box-shadow:0 18px 44px rgba(0,0,0,.55), 0 3px 10px rgba(0,0,0,.35);}
+body.claro .ms-panel{box-shadow:0 18px 44px rgba(15,23,42,.20), 0 3px 10px rgba(15,23,42,.10);}
+.ms-panel.open{display:block;}
+.ms-search{display:flex;align-items:center;gap:7px;padding:6px 8px;margin-bottom:4px;border-bottom:1px solid var(--linha);}
+.ms-search input{flex:1;min-width:0;background:transparent;border:0;outline:0;font-family:inherit;font-size:12px;color:var(--txt);}
+.ms-list{max-height:262px;overflow:auto;}
+.ms-opt{display:flex;align-items:center;gap:9px;min-height:31px;padding:7px 9px;border-radius:7px;
+  color:var(--txt);font-size:12.5px;cursor:pointer;white-space:nowrap;}
+.ms-opt:hover{background:var(--hover);}
+.ms-opt input[type=checkbox]{accent-color:var(--azul);width:14px;height:14px;flex:0 0 14px;cursor:pointer;}
+.ms-opt.all-opt{font-weight:700;border-bottom:1px solid var(--linha);margin-bottom:4px;border-radius:0;}
+.ms-only{margin-left:auto;font-size:9px;font-weight:700;color:var(--laranja);padding:1px 7px;border-radius:4px;opacity:0;flex:0 0 auto;}
+.ms-opt:hover .ms-only{opacity:1;}
+.ms-only:hover{background:rgba(249,115,22,.2);}
+
+/* ── área de conteúdo ── */
+.cols{flex:1;min-height:0;display:flex;flex-direction:column;overflow:hidden;padding:0 24px 24px;}
+.vw{display:none;flex:1;min-height:0;flex-direction:column;gap:12px;}
+.vw.on{display:flex;overflow:auto;}
+.vw.rola{overflow:auto;padding-bottom:6px;}
+.card{border:1px solid var(--card-brd);border-radius:12px;background:var(--side);
+  backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);box-shadow:var(--luz-card);}
+
+/* hero + KPIs */
+/* igual ao painel original: Receita na ponta esquerda, EBITDA na ponta direita
+   com o conteúdo alinhado à direita (.hero-ebitda{margin-left:auto;text-align:right}) */
+.fin-hero{display:flex;align-items:flex-end;gap:20px;flex:0 0 auto;}
+.heb{margin-left:auto;text-align:right;}
+.heb .hdel{justify-content:flex-end;}
+.hlbl{font-size:9.5px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:.9px;}
+.hval{font-size:clamp(26px,3.6vh,40px);font-weight:800;line-height:1;margin:4px 0 7px;color:var(--txt);}
+.hdel{display:flex;gap:18px;flex-wrap:wrap;}
+.hdel div{font-size:9px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:.7px;}
+.hdel b{display:block;font-size:13px;font-weight:800;color:var(--txt);margin-top:2px;letter-spacing:0;text-transform:none;}
+.kpis{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;flex:0 0 auto;}
+.kpi{padding:19px 16px;border:1px solid var(--card-brd);border-radius:11px;background:var(--side);
+  backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);}
+.kpi .kl{font-size:9.5px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:.8px;}
+.kpi .kv{font-size:25px;font-weight:800;color:var(--txt);margin-top:7px;line-height:1.1;}
+.kpi .km{font-size:10.5px;color:var(--txt3);margin-top:8px;font-weight:600;}
+.kpi .km b{font-weight:800;}
+
+/* gráficos */
+.gr2{flex:1 1 auto;min-height:190px;max-height:44vh;display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+.gcard{min-height:0;display:flex;flex-direction:column;padding:12px 16px 10px;position:relative;}
+.gtit{font-size:12px;font-weight:800;}
+.gsub{font-size:10px;color:var(--txt3);margin:2px 0 6px;}
+.gcv{flex:1;min-height:0;position:relative;}
+.gleg{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:4px;}
+.gleg span{display:flex;align-items:center;gap:5px;font-size:9.5px;font-weight:700;color:var(--txt3);letter-spacing:.5px;}
+.gleg i{width:14px;height:0;border-top:2px dashed currentColor;display:inline-block;}
+.gleg i.sq{width:9px;height:9px;border:0;border-radius:2px;background:currentColor;}
+
+/* botões de referência / dimensão */
+.rt{background:transparent;border:1px solid var(--card-brd);border-radius:20px;padding:3px 10px;cursor:pointer;
+  font-family:inherit;font-size:9.5px;font-weight:800;color:var(--txt2);letter-spacing:.6px;white-space:nowrap;}
+.rt:hover{background:var(--hover);color:var(--txt);}
+.rt .l{color:var(--txt3);font-weight:600;}
+.rt.abs{position:absolute;top:10px;right:12px;z-index:3;}
+.dims{display:flex;gap:4px;flex-wrap:wrap;}
+.dimb{background:transparent;border:1px solid var(--card-brd);border-radius:7px;padding:4px 10px;cursor:pointer;
+  font-family:inherit;font-size:10.5px;font-weight:700;color:var(--txt2);}
+.dimb:hover{background:var(--hover);color:var(--txt);}
+.dimb.on{background:var(--azul);border-color:transparent;color:#fff;}
+
+/* tabelas DRE */
+.tsec{flex:1;min-height:0;display:flex;flex-direction:column;padding:14px 16px 12px;}
+.thead-row{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:2px;}
+.ttit{font-size:14px;font-weight:800;}
+.tsub{font-size:10px;color:var(--txt3);margin-bottom:8px;}
+.twrap{flex:1;min-height:0;overflow:auto;border:1px solid var(--card-brd);border-radius:10px;background:var(--side);}
+table.dre{width:100%;border-collapse:collapse;font-size:12px;}
+table.dre thead th{position:sticky;top:0;z-index:2;background:var(--cabec);text-align:right;
+  padding:10px 12px;font-size:9.5px;font-weight:700;color:var(--txt2);text-transform:uppercase;
+  letter-spacing:.7px;border-bottom:1px solid var(--card-brd);white-space:nowrap;}
+table.dre thead th:first-child{text-align:left;}
+table.dre thead th .grp{display:block;font-size:8.5px;color:var(--txt3);letter-spacing:.6px;margin-bottom:1px;}
+table.dre td{padding:9px 12px;border-bottom:1px solid var(--linha);color:var(--txt2);white-space:nowrap;}
+table.dre td.conta{color:var(--txt);font-weight:600;text-align:left;}
+table.dre td.num{text-align:right;}
+table.dre tbody tr:hover{background:var(--hover);}
+/* totalizadores no tom do cabeçalho — vale para todas as tabelas do painel */
+table.dre tr.total td{font-weight:800;color:var(--txt);border-top:1px solid var(--card-brd);background:var(--cabec);}
+table.dre tr.ref-row td{color:var(--txt);background:color-mix(in srgb,var(--azul) 8%,transparent);}
+table.dre tr.ebitda-row td{color:var(--txt);font-weight:700;background:var(--cabec);}
+table.dre .sep-l{border-left:1px solid var(--card-brd);}
+/* precisa vencer o "table.dre td{color:...}", que tem especificidade maior */
+table.dre td.cr,.cr{color:var(--vermelho)!important;font-weight:700;}
+table.dre td.cg,.cg{color:var(--verde)!important;font-weight:700;}
+table.dre td.cr-t,.cr-t{color:var(--vermelho)!important;font-weight:700;}
+table.dre td.cg-t,.cg-t{color:var(--verde)!important;font-weight:700;}
+
+
+/* ── Scorecard: cards de indicador, ranking e metodologia ─────────────────── */
+/* 20 indicadores numa grade só; o farol vira o filete da esquerda + a cor do número */
+.kpis.k5{grid-template-columns:repeat(5,1fr);gap:9px;}
+#vw-indicadores .kpis.k5{grid-template-rows:repeat(4,1fr);flex:1;min-height:0;}
+.kpis.kdest{flex:0 0 auto;}
+/* o .gr2 da casca trava em 44vh (lá há tabela embaixo); aqui o gráfico é o miolo da visão */
+#vw-resumo .gr2{max-height:none;}
+.kpis.k5 .kpi{padding:12px 13px;border-left:3px solid var(--txt4);
+  display:flex;flex-direction:column;justify-content:center;min-height:0;}
+.kpi.g{border-left-color:var(--verde);} .kpi.y{border-left-color:#EAB308;}
+.kpi.o{border-left-color:var(--laranja);} .kpi.r{border-left-color:var(--vermelho);}
+.kpi .kl{min-height:23px;line-height:1.35;}
+#vw-indicadores .kpi .kv{font-size:clamp(20px,3vh,29px);}
+.kpis.k5 .kpi .kv{font-size:22px;margin-top:5px;}
+.kv.g{color:var(--verde);} .kv.y{color:#EAB308;} .kv.o{color:var(--laranja);} .kv.r{color:var(--vermelho);}
+.kpis.k5 .kpi .km{margin-top:5px;font-size:9.5px;}
+
+/* legenda das faixas */
+.faixas{display:flex;gap:14px;flex-wrap:wrap;flex:0 0 auto;padding:0 2px;align-items:center;}
+.faixas div{display:flex;align-items:center;gap:6px;font-size:9px;font-weight:700;
+  color:var(--txt3);text-transform:uppercase;letter-spacing:.4px;white-space:nowrap;}
+.faixas b{color:var(--txt2);font-weight:800;}
+.faixas i{width:9px;height:9px;border-radius:2px;display:inline-block;}
+
+/* seletor de indicador do gráfico (pílula, no padrão dos filtros) */
+#ch-ind{appearance:none;-webkit-appearance:none;background:var(--pop) no-repeat right 10px center;
+  background-image:linear-gradient(45deg,transparent 50%,var(--txt3) 50%),linear-gradient(135deg,var(--txt3) 50%,transparent 50%);
+  background-size:5px 5px,5px 5px;background-position:right 14px center,right 9px center;background-repeat:no-repeat;
+  color:var(--txt2);border:1px solid var(--card-brd);border-radius:20px;
+  font-family:inherit;font-size:9.5px;font-weight:800;letter-spacing:.6px;padding:4px 26px 4px 11px;cursor:pointer;max-width:210px;}
+#ch-ind:hover{color:var(--txt);}
+
+/* destaques do resumo: melhores e piores unidades */
+.dstq{display:flex;flex-direction:column;gap:10px;min-height:0;overflow:auto;}
+.dstq-sec{font-size:9px;font-weight:800;color:var(--txt3);text-transform:uppercase;letter-spacing:1px;}
+.dstq-l{display:flex;align-items:center;gap:9px;padding:6px 0;border-bottom:1px solid var(--linha);}
+.dstq-l:last-child{border-bottom:0;}
+.dstq-p{font-size:10px;font-weight:800;color:var(--txt4);width:16px;flex:0 0 16px;}
+.dstq-u{flex:1;min-width:0;font-size:11.5px;font-weight:700;color:var(--txt);
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.dstq-s{font-size:12px;font-weight:800;}
+
+/* ranking: 20 colunas de indicador cabem sem barra de rolagem lateral */
+#rk-table{font-size:11px;table-layout:fixed;}
+#rk-table th:nth-child(1){width:34px;} #rk-table th:nth-child(2){width:13.5%;} #rk-table th:nth-child(3){width:62px;}
+#rk-table thead th{padding:7px 4px;font-size:8px;letter-spacing:.2px;white-space:normal;line-height:1.2;}
+#rk-table th,#rk-table td{overflow:hidden;text-overflow:ellipsis;}
+#rk-table thead th.lft,#rk-table td.lft{text-align:left;padding-left:12px;}
+#rk-table td{padding:7px 4px;text-align:right;font-size:10px;}
+#rk-table td.uni{color:var(--txt);font-weight:700;}
+#rk-table td.rank{color:var(--txt4);font-weight:800;}
+#rk-table .scol{border-left:1px solid var(--card-brd);padding-left:10px;}
+#rk-table .sc-pill{display:inline-block;min-width:38px;padding:2px 8px;border-radius:5px;
+  font-weight:800;font-size:10.5px;color:#121214;}
+.tbl-ind-toggle{display:none;}
+
+/* celular/telas estreitas: a regra da casca (.kpis) perde para .kpis.k5, então
+   a grade dos indicadores precisa da própria quebra */
+@media(max-width:1100px){
+  .kpis.k5{grid-template-columns:repeat(3,1fr);}
+  #vw-indicadores .kpis.k5{grid-template-rows:none;flex:0 0 auto;}
+}
+@media(max-width:860px){
+  .kpis.k5{grid-template-columns:repeat(2,1fr);}
+  #vw-indicadores .kpis.k5 .kpi{min-height:96px;}
+  .faixas{gap:8px 12px;}
+  #rk-table{table-layout:auto;}
+}
+
+/* metodologia */
+table.meto{width:100%;border-collapse:collapse;font-size:11.5px;}
+table.meto thead th{position:sticky;top:0;z-index:2;background:var(--cabec);text-align:left;
+  padding:9px 12px;font-size:9px;font-weight:700;color:var(--txt2);text-transform:uppercase;
+  letter-spacing:.7px;border-bottom:1px solid var(--card-brd);white-space:nowrap;}
+table.meto td{padding:8px 12px;border-bottom:1px solid var(--linha);color:var(--txt2);vertical-align:top;}
+table.meto tbody tr:hover{background:var(--hover);}
+table.meto td.ind{color:var(--txt);font-weight:700;white-space:nowrap;}
+table.meto td.peso,table.meto th.peso,table.meto td.fxc,table.meto th.fxc{text-align:center;}
+table.meto td.peso{color:var(--laranja);font-weight:800;}
+.fx{display:inline-block;font-size:8.5px;font-weight:800;padding:2px 8px;border-radius:10px;white-space:nowrap;letter-spacing:.4px;}
+.fx.rr{background:rgba(249,115,22,.18);color:var(--laranja);}
+.fx.pd{background:var(--hover);color:var(--txt3);}
+.meto-note{font-size:10px;color:var(--txt4);line-height:1.7;margin-top:10px;flex:0 0 auto;}
+.loading{text-align:center;color:var(--txt4);padding:30px;font-size:11px;}
+
+@media(max-width:1100px){ .kpis{grid-template-columns:repeat(3,1fr);} }
+/* ── celular: nada de altura por flex (colapsava gráfico e tabela para 0);
+      a página rola e cada bloco tem altura própria ── */
+@media(max-width:860px){
+  body{overflow:auto;}
+  .app{position:static;inset:auto;min-height:100%;border-radius:0;flex-direction:column;box-shadow:none;border:0;}
+  .app::before{position:fixed;inset:0;}
+  .side{width:auto;flex:none;border-right:0;border-bottom:1px solid var(--linha);padding:8px 10px;overflow:visible;}
+  .side.mini{width:auto;flex:none;padding:8px 10px;}
+  .s-user,.s-top,.s-sec{display:none;}
+  /* as visões viram uma fileira que rola de lado */
+  .side{display:flex;flex-direction:row;gap:6px;overflow-x:auto;scrollbar-width:none;}
+  .side::-webkit-scrollbar{display:none;}
+  .side .s-item{width:auto;flex:0 0 auto;white-space:nowrap;font-size:12px;padding:7px 11px;
+    border:1px solid var(--card-brd);border-radius:20px;}
+  .side.mini .s-item{font-size:12px;padding:7px 11px;gap:9px;}
+  .side .s-item.on{background:var(--laranja);border-color:transparent;color:#2A1405;}
+  .top{padding:12px 14px 8px;gap:4px;}
+  .tit-wrap{flex:1 1 auto;min-width:0;}
+  .top h1{font-size:17px;}
+  /* filtros numa faixa própria que rola de lado, em vez de quebrar em 3 linhas */
+  .filtros{order:3;flex:1 1 100%;overflow-x:auto;scrollbar-width:none;padding-bottom:2px;}
+  .filtros::-webkit-scrollbar{display:none;}
+  .filtros .ms-wrap{flex:0 0 auto;}
+  .ms-btn{font-size:12px;padding:6px 9px;}
+  .ms-panel{right:auto;left:0;min-width:210px;}
+  .cols{overflow:visible;padding:0 14px 22px;}
+  .vw{display:none;}
+  .vw.on{display:block;}                      /* sem flex: cada bloco cresce sozinho */
+  .vw>*{margin-bottom:12px;}
+  .fin-hero{gap:14px;flex-direction:column;align-items:flex-start;}
+  .heb{margin-left:0;text-align:left;}
+  .heb .hdel{justify-content:flex-start;}
+  .kpis{grid-template-columns:repeat(2,1fr);}
+  .gr2,.wf-grid{display:block;height:auto;}
+  .wf-grid .gcard{height:280px;margin-bottom:12px;}
+  .gcard{height:300px;margin-bottom:12px;}
+  .tsec{display:block;padding:12px 12px 10px;}
+  .thead-row{margin-bottom:6px;}
+  .twrap{max-height:none;overflow-x:auto;}
+  .emb{height:76vh;}
+}
+</style>
+<script>try{if(!sessionStorage.getItem("gem_hub"))location.replace("../");}catch(e){}</script>
+</head>
+<body>
+<div class="app">
+  <aside class="side">
+    <div class="s-top">
+      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="var(--laranja)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2 4 6v6c0 5 3.4 8.7 8 10 4.6-1.3 8-5 8-10V6z"/><path d="m9 12 2 2 4-4"/></svg>
+      <b>Scorecard</b>
+      <button class="s-mini" id="btMini" onclick="trocaMini()" title="Recolher menu">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16"/></svg>
+      </button>
+    </div>
+
+    <div class="s-sec">Visões</div>
+    <button class="s-item on" data-vw="resumo"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg> Resumo Gerencial</button>
+    <button class="s-item" data-vw="indicadores"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg> Indicadores</button>
+    <button class="s-item" data-vw="ranking"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 21V9h8v12M4 21V14h4M16 21v-6h4v6M12 3l1.6 3.3 3.6.5-2.6 2.5.6 3.6L12 11.2 8.8 12.9l.6-3.6L6.8 6.8l3.6-.5z"/></svg> Ranking</button>
+    <button class="s-item" data-vw="metodologia"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H20v16H6.5A2.5 2.5 0 0 0 4 21.5z"/><path d="M9 8h7M9 12h7"/></svg> Metodologia</button>
+
+    <div class="s-sec">Atalhos</div>
+    <div id="pdf-slot"></div>
+    <button class="s-item" onclick="carregar()">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/></svg>
+      Atualizar dados
+    </button>
+    <a class="s-item" href="../" style="text-decoration:none">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V21h14V9.5"/></svg>
+      Hub
+    </a>
+
+    <div class="s-user">
+      <span class="av">GM</span>
+      <div><b>Gestão em Movimento</b><i>Frota</i></div>
+      <a class="s-sair" href="../" title="Sair para o hub">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+      </a>
+    </div>
+  </aside>
+
+  <main class="board">
+    <div class="top">
+      <div class="tit-wrap">
+        <h1 id="tit">Resumo Gerencial</h1>
+        <div class="tit-sub" id="titSub">Carregando…</div>
+      </div>
+      <div class="filtros">
+        <div class="ms-wrap" id="ms-vig"><button class="ms-btn" onclick="toggleMs('ms-vig')"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linejoin="round"><rect x="3" y="4.5" width="18" height="16" rx="2"/><path d="M3 9h18M8 2.5v4M16 2.5v4"/></svg>Vigência<span class="ms-cnt"></span></button>
+        <div class="ms-panel"><div class="ms-search"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M16.5 16.5 21 21"/></svg><input type="text" placeholder="Pesquisar…"></div><div class="ms-list"></div></div></div>
+        <div class="ms-wrap" id="ms-uni"><button class="ms-btn" onclick="toggleMs('ms-uni')"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18M5 21V7l7-4 7 4v14"/><path d="M9 21v-6h6v6"/></svg>Unidade<span class="ms-cnt"></span></button>
+        <div class="ms-panel"><div class="ms-search"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M16.5 16.5 21 21"/></svg><input type="text" placeholder="Pesquisar…"></div><div class="ms-list"></div></div></div>
+      </div>
+      <button class="tool ico" id="btTema" onclick="trocaTema()" title="Claro / escuro"></button>
+    </div>
+
+    <div class="cols" id="cols">
+      <!-- ══ 1 · RESUMO GERENCIAL ══ -->
+      <section class="vw on" id="vw-resumo">
+        <div class="fin-hero">
+          <div>
+            <div class="hlbl">Pontuação geral · Frota</div>
+            <div class="hval" id="h-pont">—</div>
+            <div class="hdel">
+              <div>Unidades<b id="h-uni">—</b></div>
+              <div>Melhor<b id="h-melhor">—</b></div>
+              <div>A recuperar<b id="h-pior">—</b></div>
+              <div>Indicadores críticos<b id="h-crit">—</b></div>
+            </div>
+          </div>
+        </div>
+        <div class="kpis k5 kdest" id="kdest">
+          <div class="kpi"><div class="kl">Custos Frota</div><div class="kv" id="d-custos">—</div><div class="km">peso 11 · Real / Rem</div></div>
+          <div class="kpi"><div class="kl">Disponibilidade</div><div class="kv" id="d-disp">—</div><div class="km">peso 10</div></div>
+          <div class="kpi"><div class="kl">DPO/VPO Sustentável</div><div class="kv" id="d-dpo">—</div><div class="km">peso 9</div></div>
+          <div class="kpi"><div class="kl">Atingimento KM</div><div class="kv" id="d-kmAt">—</div><div class="km">peso 8 · Real / Rem</div></div>
+          <div class="kpi"><div class="kl">Preventivas</div><div class="kv" id="d-prev">—</div><div class="km">peso 7</div></div>
+        </div>
+        <div class="gr2" style="grid-template-columns:2.1fr 1fr">
+          <div class="card gcard">
+            <div class="thead-row">
+              <div><div class="gtit">Evolução mensal</div><div class="gsub" id="ch-sub">—</div></div>
+              <select id="ch-ind" onchange="chSelInd(this.value)" title="Indicador do gráfico"></select>
+            </div>
+            <div class="gcv"><canvas id="ch-temp"></canvas></div>
+          </div>
+          <div class="card gcard">
+            <div class="gtit">Destaques</div>
+            <div class="gsub">Score ponderado por unidade</div>
+            <div class="dstq" id="dstq"><div class="loading">Carregando…</div></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ══ 2 · INDICADORES ══ -->
+      <section class="vw" id="vw-indicadores">
+        <div class="faixas">
+          <div><b>Indicadores:</b></div>
+          <div><i style="background:var(--verde)"></i>≥ 90% Saudável</div>
+          <div><i style="background:#EAB308"></i>80–90% Regular</div>
+          <div><i style="background:var(--laranja)"></i>70–80% Atenção</div>
+          <div><i style="background:var(--vermelho)"></i>&lt; 70% Crítico</div>
+          <div style="margin-left:18px"><b>Real / Remunerado:</b></div>
+          <div><i style="background:var(--verde)"></i>≥ 100%</div>
+          <div><i style="background:#EAB308"></i>98–100%</div>
+          <div><i style="background:var(--laranja)"></i>95–98%</div>
+          <div><i style="background:var(--vermelho)"></i>&lt; 95%</div>
+        </div>
+        <div class="kpis k5" id="cards" style="flex:1;min-height:0;align-content:start"><div class="loading">Carregando…</div></div>
+      </section>
+
+      <!-- ══ 3 · RANKING ══ -->
+      <section class="vw" id="vw-ranking">
+        <div class="card tsec">
+          <div class="thead-row">
+            <div><div class="ttit">Ranking por unidade</div><div class="tsub" id="rk-sub">Score ponderado · melhor → pior</div></div>
+            <button class="rt tbl-ind-toggle" id="tbl-ind-toggle" onclick="toggleIndCols()">+ Ver detalhes</button>
+          </div>
+          <div class="twrap"><table class="dre" id="rk-table"><thead id="rk-head"></thead><tbody id="rk-body"><tr><td class="loading">Carregando…</td></tr></tbody></table></div>
+        </div>
+      </section>
+
+      <!-- ══ 4 · METODOLOGIA ══ -->
+      <section class="vw" id="vw-metodologia">
+        <div class="card tsec">
+          <div class="thead-row">
+            <div><div class="ttit">Critérios dos indicadores</div><div class="tsub">Os 20 indicadores do score, o que cada um mede e quanto pesa</div></div>
+          </div>
+          <div class="twrap"><table class="meto">
+            <thead><tr><th>#</th><th>Indicador</th><th>Critério (o que mede)</th><th>Fonte</th><th class="peso">Peso</th><th class="fxc">Faixa</th></tr></thead>
+            <tbody>
+<tr><td>1</td><td class="ind">Custos Frota</td><td>Gasto vs remunerado da DRE (Rem ÷ Real); 100% = gastou ≤ o remunerado</td><td>DRE</td><td class="peso">11</td><td class="fxc"><span class="fx rr">Real/Rem</span></td></tr>
+<tr><td>2</td><td class="ind">Disponibilidade</td><td>Atingimento do IC de disponibilidade vs meta</td><td>Gerot (IC)</td><td class="peso">10</td><td class="fxc"><span class="fx pd">Padrão</span></td></tr>
+<tr><td>3</td><td class="ind">DPO/VPO Sustentável</td><td>Média da maturidade VPO por unidade (Nível 4+=100, 3=80, 2=60, 1=40); "sustentável" = Nível ≥3</td><td>Aba DPO</td><td class="peso">9</td><td class="fxc"><span class="fx pd">Padrão</span></td></tr>
+<tr><td>4</td><td class="ind">Atingimento KM</td><td>Km rodado real vs remunerado (Rem ÷ Real)</td><td>Painel KM</td><td class="peso">8</td><td class="fxc"><span class="fx rr">Real/Rem</span></td></tr>
+<tr><td>5</td><td class="ind">Preventivas</td><td>Atingimento do IC de manutenções preventivas</td><td>Gerot (IC)</td><td class="peso">7</td><td class="fxc"><span class="fx pd">Padrão</span></td></tr>
+<tr><td>6</td><td class="ind">Consumo Km/L</td><td>Eficiência real vs remunerada (Real ÷ Rem)</td><td>Aba Km/L</td><td class="peso">6</td><td class="fxc"><span class="fx rr">Real/Rem</span></td></tr>
+<tr><td>7</td><td class="ind">Saúde dos Pneus</td><td>% de pneus em estado Bom + Regular</td><td>Conlog</td><td class="peso">5</td><td class="fxc"><span class="fx pd">Padrão</span></td></tr>
+<tr><td>8</td><td class="ind">Conformidade Frota</td><td>Atingimento do IC de conformidade</td><td>Gerot (IC)</td><td class="peso">4</td><td class="fxc"><span class="fx pd">Padrão</span></td></tr>
+<tr><td>9</td><td class="ind">SLA Atendimento</td><td>Atingimento do IC de SLA</td><td>Gerot (IC)</td><td class="peso">4</td><td class="fxc"><span class="fx pd">Padrão</span></td></tr>
+<tr><td>10</td><td class="ind">Checklist T1/T2</td><td>Atingimento do IC de checklist (unidades T1/T2)</td><td>Gerot (IC)</td><td class="peso">4</td><td class="fxc"><span class="fx pd">Padrão</span></td></tr>
+<tr><td>11</td><td class="ind">Stress Test Cam.</td><td>Atingimento do IC de stress test (caminhões)</td><td>Gerot (IC)</td><td class="peso">4</td><td class="fxc"><span class="fx pd">Padrão</span></td></tr>
+<tr><td>12</td><td class="ind">R$/km</td><td>Custo por km real vs remunerado (Rem ÷ Real)</td><td>DRE + Painel KM</td><td class="peso">4</td><td class="fxc"><span class="fx rr">Real/Rem</span></td></tr>
+<tr><td>13</td><td class="ind">Pressão dos Pneus</td><td>% de pneus calibrados</td><td>Conlog</td><td class="peso">4</td><td class="fxc"><span class="fx pd">Padrão</span></td></tr>
+<tr><td>14</td><td class="ind">FCA Conclusão</td><td>% de ações do FCA concluídas</td><td>Base FCA</td><td class="peso">3</td><td class="fxc"><span class="fx pd">Padrão</span></td></tr>
+<tr><td>15</td><td class="ind">FCA Prazo</td><td>% de ações do FCA no prazo</td><td>Base FCA</td><td class="peso">3</td><td class="fxc"><span class="fx pd">Padrão</span></td></tr>
+<tr><td>16</td><td class="ind">R$/L</td><td>Preço por litro real vs remunerado (Rem ÷ Real)</td><td>Aba R$/L</td><td class="peso">3</td><td class="fxc"><span class="fx rr">Real/Rem</span></td></tr>
+<tr><td>17</td><td class="ind">Checklist Apoio</td><td>Atingimento do IC de checklist (unidades de apoio/WH)</td><td>Gerot (IC)</td><td class="peso">3</td><td class="fxc"><span class="fx pd">Padrão</span></td></tr>
+<tr><td>18</td><td class="ind">Stress Test Emp.</td><td>Atingimento do IC de stress test (empilhadeiras)</td><td>Gerot (IC)</td><td class="peso">3</td><td class="fxc"><span class="fx pd">Padrão</span></td></tr>
+<tr><td>19</td><td class="ind">Aferições</td><td>% de pneus com aferição ≤ 30 dias</td><td>Conlog</td><td class="peso">3</td><td class="fxc"><span class="fx pd">Padrão</span></td></tr>
+<tr><td>20</td><td class="ind">CIVF</td><td>Atingimento do IC do CIVF</td><td>Gerot (IC)</td><td class="peso">2</td><td class="fxc"><span class="fx pd">Padrão</span></td></tr>
+
+            </tbody>
+          </table></div>
+          <div class="meto-note">
+            Score geral = média ponderada dos 20 indicadores (os pesos somam 100).<br>
+            Financeiros (Custos, Km/L, Atg. KM, R$/km, R$/L) são travados em 100% — superar o remunerado não passa de 100.<br>
+            Unidades de armazém (sem km/combustível) têm esses indicadores ausentes e os pesos são redistribuídos proporcionalmente.<br>
+            <b>Faixa Padrão:</b> ≥90 Saudável · 80–90 Regular · 70–80 Atenção · &lt;70 Crítico &nbsp;·&nbsp;
+            <b>Faixa Real/Rem:</b> ≥100 Saudável · 98–100 Regular · 95–98 Atenção · &lt;95 Crítico
+          </div>
+        </div>
+      </section>
+    </div>
+  </main>
+</div>
+
+<script>
+const set=(id,v)=>{const e=document.getElementById(id); if(e)e.textContent=v;};
+// o status do painel antigo vira o subtítulo do topo
+let _recorte='', _carga='';
+const STATUS={set textContent(v){ _carga=v; set('titSub', _recorte?_recorte+' · '+v:v); }};
+
+const SRC={
+  ics:'https://docs.google.com/spreadsheets/d/1xGl1Xrk2sPS9zWghEuecFMNBHwmeLiZ02U-QpO8cDPY/gviz/tq?sheet='+encodeURIComponent('Consolidado ICs'),
+  dre:'https://docs.google.com/spreadsheets/d/1qcTy2ppLCGBKKqZCxCYWCTL9kTAuWfHBMyBfWJOyih8/gviz/tq?sheet='+encodeURIComponent('Frota'),   // migrado de "Consolidado DRE"
+  rsl:'https://docs.google.com/spreadsheets/d/1ZZdvG_RK5cTBLdPl3TWCbNeqw-Y4fTYwWsQV4w-e__A/gviz/tq?sheet='+encodeURIComponent('R$/L'),
+  kmlEf:'https://docs.google.com/spreadsheets/d/1ZZdvG_RK5cTBLdPl3TWCbNeqw-Y4fTYwWsQV4w-e__A/gviz/tq?sheet='+encodeURIComponent('Km/L'),
+  km:'https://docs.google.com/spreadsheets/d/1wCoRGsvOgmIvfLW4F9Sxr-5AX9Go-aFlRVjrQ_B2ilM/gviz/tq?sheet='+encodeURIComponent('Dispersão de km'),
+  dpo:'https://docs.google.com/spreadsheets/d/1oW3mss0pXVI6gaDU2z5cDAKvW40LWHCQXpanqSvb12o/gviz/tq?sheet=DPO',
+  fca:'https://docs.google.com/spreadsheets/d/1oW3mss0pXVI6gaDU2z5cDAKvW40LWHCQXpanqSvb12o/gviz/tq?gid=216663799'
+};
+const MESES=['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
+// ICs (col, label curto) — valores 0-1 (fração)
+const IC=[
+  {c:2,l:'Disponibilidade'},{c:3,l:'Preventivas'},{c:4,l:'Consumo Km/L'},{c:5,l:'Aferições'},
+  {c:6,l:'Checklist T1/T2'},{c:7,l:'Checklist Apoio'},{c:8,l:'Conformidade Frota'},
+  {c:9,l:'Stress Test Cam.'},{c:10,l:'Stress Test Emp.'},{c:11,l:'SLA Atendimento'},{c:12,l:'Aderência Conf.'}
+];
+let ICS=[],VIGS=[],XPANEL={},chT=null;
+
+// ── DE-PARA por unidade (spec scorecard_ranking) ──
+// 13 unidades do scorecard (nome ICs) → código FCA/DPO, cidade (DRE), e Conlog.
+const UNI_LIST=['CDD CAMBORIU','CDD CUIABA','CDD FLORIANOPOLIS','CDD GUARULHOS','CDD NOVA FRIBURGO','CDD PELOTAS','CDD RIO DE JANEIRO','CDD RONDONOPOLIS','CDI MACACU','CUIABA','CUIABA EMPURRADA','MACACU EMPURRADA','PIRAI EMPURRADA'];
+// nome ICs → código base (FCA usa este; DPO/Conlog usam subcódigo abaixo)
+const UNI2COD={'CDD CAMBORIU':'BLC','CDD CUIABA':'CBA','CUIABA':'CBA','CUIABA EMPURRADA':'CBA','CDD FLORIANOPOLIS':'FLP','CDD GUARULHOS':'GRL','CDD NOVA FRIBURGO':'NFR','CDD PELOTAS':'PLT','CDD RIO DE JANEIRO':'CGR','CDD RONDONOPOLIS':'RON','CDI MACACU':'MCC','MACACU EMPURRADA':'MCC','PIRAI EMPURRADA':'PIR'};
+// nome ICs → linha da aba DPO (subunidade T1/T2 quando existe)
+const UNI2DPO={'CDD CAMBORIU':'BLC','CDD CUIABA':'CBA T2','CUIABA':'CBA T1','CUIABA EMPURRADA':'CBA T1','CDD FLORIANOPOLIS':'FLP','CDD GUARULHOS':'GRL','CDD NOVA FRIBURGO':'NFR','CDD PELOTAS':'PLT','CDD RIO DE JANEIRO':'CGR','CDD RONDONOPOLIS':'RON','CDI MACACU':'MCC T2','MACACU EMPURRADA':'MCC T1','PIRAI EMPURRADA':'PIR'};
+// nome ICs → cidade (DRE col10, sem acento, upper)
+const UNI2CID={'CDD CAMBORIU':'BALNEARIO CAMBORIU','CDD CUIABA':'CUIABA','CUIABA':'CUIABA','CUIABA EMPURRADA':'CUIABA','CDD FLORIANOPOLIS':'FLORIANOPOLIS','CDD GUARULHOS':'GUARULHOS','CDD NOVA FRIBURGO':'NOVA FRIBURGO','CDD PELOTAS':'PELOTAS','CDD RIO DE JANEIRO':'CAMPO GRANDE','CDD RONDONOPOLIS':'RONDONOPOLIS','CDI MACACU':'CACHOEIRAS DE MACACU','MACACU EMPURRADA':'CACHOEIRAS DE MACACU','PIRAI EMPURRADA':'PIRAI'};
+// nome ICs → código Conlog (UNIDADE_MAP do pneus/painel.html). Armazém (CUIABA/WH) usa CBA T1 WH.
+const UNI2CONLOG={'CDD CAMBORIU':'BLC','CDD CUIABA':'CBA T2','CUIABA':'CBA T1 WH','CUIABA EMPURRADA':'CBA T1','CDD FLORIANOPOLIS':'FLP','CDD GUARULHOS':'GRL','CDD NOVA FRIBURGO':'NFR','CDD PELOTAS':'PLT','CDD RIO DE JANEIRO':'CGR','CDD RONDONOPOLIS':'RON','CDI MACACU':'MCC T2','MACACU EMPURRADA':'MCC T1','PIRAI EMPURRADA':'PIR'};
+// km/KmL: por projeto. Armazém (CUIABA = APOIO/WH) NÃO tem km/combustível → ausente.
+const UNI_SEM_KM=new Set(['CUIABA']);
+// nome ICs → prefixo de projeto na aba km/KmL (col PROJ tipo "EMPURRADA - CBA", "ROTA - BLC").
+// Mapeamos por código+tipo de operação.
+function projMatchUni(uniNome,projStr){
+  const p=NK(projStr);const cod=UNI2COD[uniNome];if(!cod)return false;
+  // o projeto contém o código da cidade? (BLC/CBA/FLP…). Para colisões CBA/MCC, separa por EMPURRADA.
+  const hasCod=p.includes(cod);
+  if(!hasCod)return false;
+  const isEmp=/EMPURRAD/.test(p);
+  if(uniNome==='CUIABA EMPURRADA'||uniNome==='MACACU EMPURRADA')return isEmp;
+  if(uniNome==='CDD CUIABA'||uniNome==='CDI MACACU')return !isEmp; // rota/AS, não empurrada
+  return true; // demais: código único basta
+}
+// SCORE_PESOS por indicador (soma 100) — ordem/labels da spec
+const SCORE_PESOS={custos:11,disp:10,dpo:9,kmAt:8,prev:7,kml:6,saude:5,conf:4,sla:4,chkT:4,stCam:4,rkm:4,pressao:4,fcaC:3,fcaP:3,rl:3,chkApoio:3,stEmp:3,afer:3,civf:2};
+
+// ── Fonte real dos 11 ICs: aba "Base RPM" (gid=0), MESMA FONTE do Frota de Elite ──
+// Recalcula os ICs a partir da base bruta e dispensa a aba "Consolidado ICs" (que parou
+// de ser atualizada — por isso o painel travava em maio). Lido via /export?format=csv
+// porque o gviz trunca abas grandes. Escala: Base RPM dá 0-100; o painel usa ic em 0-1.
+const BASE_RPM_URL=`https://docs.google.com/spreadsheets/d/1xGl1Xrk2sPS9zWghEuecFMNBHwmeLiZ02U-QpO8cDPY/export?format=csv&gid=0`;
+const RPM_WEIGHTS={'IC: % de Disponibilidade Equipamentos':20,'IC: % de Aderência às Preventivas':15,'IC: Consumo Km/l':10,'IC: % de Aderência às Aferições':10,'IC: Aderência ao Checklist - T1 e T2':10,'IC: Aderência ao Checklist - Apoio':10,'IC: % de conformidade da Frota':5,'IC: Aderência ao Stress Test - Caminhões':5,'IC: Aderência ao Stress Test - Empilhadeiras':5,'IC: SLA de atendimento':5,'IC: Aderência à Conformidade':5};
+const RPM_ORDER=Object.keys(RPM_WEIGHTS);
+// mantém o mapeamento histórico (SLA→civf, Conformidade→sla) p/ o painel exibir o mesmo que exibia
+const RPM_FIELD_RAW={'IC: % de Disponibilidade Equipamentos':'disp','IC: % de Aderência às Preventivas':'prev','IC: Consumo Km/l':'comb','IC: % de Aderência às Aferições':'pneus','IC: Aderência ao Checklist - T1 e T2':'checkT','IC: Aderência ao Checklist - Apoio':'checkWH','IC: % de conformidade da Frota':'conf','IC: Aderência ao Stress Test - Caminhões':'stVeic','IC: Aderência ao Stress Test - Empilhadeiras':'stEmp','IC: SLA de atendimento':'civf','IC: Aderência à Conformidade':'sla'};
+function rpmNorm(s){let str=String(s||''),cleaned='';for(let i=0;i<str.length;i++){const c=str.charCodeAt(i);if(c>=0x200B&&c<=0x200D)continue;if(c===0xFEFF)continue;if(c===0x00A0){cleaned+=' ';continue;}cleaned+=str.charAt(i);}const nfd=cleaned.trim().toLowerCase().normalize('NFD');let res='';for(let j=0;j<nfd.length;j++){const cc=nfd.charCodeAt(j);if(cc>=0x0300&&cc<=0x036F)continue;if(cc===0xFF1A){res+=':';continue;}res+=nfd.charAt(j);}return res.replace(/\s+/g,' ');}
+const RPM_FIELD={},RPM_CANON={};Object.entries(RPM_FIELD_RAW).forEach(([k,v])=>RPM_FIELD[rpmNorm(k)]=v);RPM_ORDER.forEach(k=>RPM_CANON[rpmNorm(k)]=k);
+function rpmToNum(v){if(v==null)return null;let s=String(v).trim();if(!s||s==='—'||s==='-'||s==='null')return null;s=s.replace('%','').trim().replace(/\./g,'').replace(',','.');const n=parseFloat(s);return Number.isNaN(n)?null:n;}
+function rpmScore(icVals){let num=0,den=0;for(const nm of RPM_ORDER){const w=(RPM_WEIGHTS[nm]||0)/100,kN=rpmNorm(nm);let v=icVals.get(kN);if(v==null)continue;den+=w;let v01=v/100;if(v01>1)v01=1;num+=w*v01;}return den<=0?null:(num/den)*100;}
+const _RPM_MES={jan:1,fev:2,mar:3,abr:4,mai:5,jun:6,jul:7,ago:8,set:9,out:10,nov:11,dez:12};
+function rpmVigYMD(v){if(v==null)return null;const s=String(v).trim();let m=s.match(/Date\((\d+),(\d+),(\d+)/);if(m)return[+m[1],+m[2],+m[3]];m=s.toLowerCase().match(/([a-zç]{3,})\.?[\s/\-]+(\d{4})/);if(m&&_RPM_MES[m[1].slice(0,3)])return[+m[2],_RPM_MES[m[1].slice(0,3)]-1,1];m=s.match(/^(\d{4})-(\d{2})/);if(m)return[+m[1],+m[2]-1,1];if(s.includes('/')){const p=s.split('/');if(p.length>=3){const y=p[2].length===4?+p[2]:+p[0];const mo=+p[1];const d=p[2].length===4?+p[0]:+p[2];return[y,mo-1,d||1];}if(p.length===2){const a=p[0].trim(),b=p[1].trim();if(b.length===4)return[+b,+a-1,1];if(a.length===4)return[+a,+b-1,1];}}return null;}
+function parseCSV(text){const rows=[];let row=[],cur='',q=false;for(let i=0;i<text.length;i++){const c=text[i];if(q){if(c==='"'){if(text[i+1]==='"'){cur+='"';i++;}else q=false;}else cur+=c;}else if(c==='"')q=true;else if(c===','){row.push(cur);cur='';}else if(c==='\n'){row.push(cur);rows.push(row);row=[];cur='';}else if(c!=='\r')cur+=c;}if(cur!==''||row.length){row.push(cur);rows.push(row);}return rows;}
+const UNI_SET=new Set(UNI_LIST);
+// Base RPM (uma linha por unidade/vigência/KPI) → [{vigD, unidade, ic:[11 frações 0-1], pont 0-100}]
+function pivotRPM(grid){
+  if(!grid.length)return[];
+  const header=grid[0].map(s=>String(s).trim()),H={};header.forEach((h,i)=>{H[rpmNorm(h)]=i;});
+  const col=(...ns)=>{for(const n of ns){const k=rpmNorm(n);if(k in H)return H[k];}return -1;};
+  const iUni=col('Unidade'),iVig=col('Vigência','Vigencia'),iKpi=col('KPI'),iAt=col('% de Ating.','% de Ating','% Ating.','% Ating');
+  if(iUni<0||iVig<0||iKpi<0||iAt<0)return[];
+  const combos=new Map();
+  for(let r=1;r<grid.length;r++){const row=grid[r];const kpiN=rpmNorm(row[iKpi]);if(!(kpiN in RPM_CANON))continue;const at=rpmToNum(row[iAt]);if(at==null)continue;const ymd=rpmVigYMD(row[iVig]);if(!ymd)continue;const unit=String(row[iUni]||'').trim().toUpperCase();if(!UNI_SET.has(unit))continue;const key=ymd.join('-')+'||'+unit;if(!combos.has(key))combos.set(key,{ymd,unit,icVals:new Map(),fields:{}});const o=combos.get(key);o.icVals.set(kpiN,at);o.fields[RPM_FIELD[kpiN]]=at;}
+  const out=[];
+  for(const o of combos.values()){const f=o.fields,gv=k=>(f[k]==null?null:f[k]/100);
+    out.push({vigD:new Date(o.ymd[0],o.ymd[1],o.ymd[2]),unidade:o.unit,
+      ic:[gv('disp'),gv('prev'),gv('comb'),gv('pneus'),gv('checkT'),gv('checkWH'),gv('conf'),gv('stVeic'),gv('stEmp'),gv('civf'),gv('sla')],
+      pont:rpmScore(o.icVals)});}
+  return out;
+}
+
+function parseD(v){if(v==null)return null;const m=String(v).match(/Date\((\d+),(\d+),(\d+)/);return m?new Date(+m[1],+m[2],+m[3]):null;}
+function vigKeyN(d){return d?d.getFullYear()*100+d.getMonth():0;}
+function vigLbl(d){return d?MESES[d.getMonth()]+'/'+String(d.getFullYear()).slice(2):'';}
+function pct1(v){return v==null||!isFinite(v)?'—':v.toFixed(1)+'%';}
+function n1(v){return v==null||!isFinite(v)?'—':Number(v).toLocaleString('pt-BR',{minimumFractionDigits:1,maximumFractionDigits:1});}
+// farol p/ indicadores "maior = melhor" (%): ≥85 verde, ≥70 ambar, <70 vermelho
+// faixas: ≥90 Saudável(verde) · ≥80 Regular(amarelo) · ≥70 Atenção(laranja) · <70 Crítico(vermelho)
+function band(v){return v==null?'':v>=90?'g':v>=80?'y':v>=70?'o':'r';}
+// banda rígida p/ indicadores "Real/Remunerado" (100% = na meta): ≥100 Saudável · ≥98 Regular · ≥95 Atenção · <95 Crítico
+function bandCost(v){return v==null?'':v>=100?'g':v>=98?'y':v>=95?'o':'r';}
+// banda com limiar "bom" por indicador (default 90); Preventivas usa 95
+function bandG(v,good){good=good||90;return v==null?'':v>=good?'g':v>=good-10?'y':v>=good-20?'o':'r';}
+function sumAtt(rows,perKeys,uf){let rem=0,real=0,has=false;rows.forEach(o=>{if(perKeys.has(o.vk)&&(!uf||uf(o))){rem+=o.rem;real+=o.real;has=true;}});return has&&rem?real/rem*100:null;}
+// R$/km atingimento = (custoReal/kmReal) / (custoRem/kmRem)
+function rkmAtt(perKeys,ufDre,ufKm){let cr=0,cR=0,kr=0,kR=0;(XPANEL.dre||[]).forEach(o=>{if(perKeys.has(o.vk)&&(!ufDre||ufDre(o))){cr+=o.rem;cR+=o.real;}});(XPANEL.km||[]).forEach(o=>{if(perKeys.has(o.vk)&&(!ufKm||ufKm(o))){kr+=o.rem;kR+=o.real;}});if(!kR||!kr||!cr)return null;const rem=cr/kr;return rem?(cR/kR)/rem*100:null;}
+// normalização p/ casar Projeto/Combustível entre as abas (igual ao painel Preço/L)
+function NK(s){return String(s==null?'':s).normalize('NFD').replace(/[̀-ͯ]/g,'').toUpperCase().replace(/\s+/g,' ').trim();}
+function NF(s){let x=String(s==null?'':s);const i=x.indexOf(':');if(i>=0)x=x.slice(i+1);return NK(x);}
+// R$/L (igual painel Preço/L): real = ΣtotalRS/Σlitros; rem = Σ(precoOperadora×litros)/Σlitros (lookup aba R$/L por proj+vig+comb)
+function rlAtt(perKeys,uf){let lit=0,tot=0,remxl=0,litrem=0;(XPANEL.kmlEf||[]).forEach(o=>{if(perKeys.has(o.vk)&&(!uf||uf(o))){lit+=o.lit;if(o.tot>0)tot+=o.tot;if(o.rp!=null&&o.rp>0){remxl+=o.rp*o.lit;litrem+=o.lit;}}});if(!lit||!litrem)return null;const rem=remxl/litrem;return rem?(tot/lit)/rem*100:null;}
+// Km/L (aba Km/L do painel): real = Σkm/Σlitros; rem = média simples do "Rem Médio" (col4) — igual ao painel
+function kmlAtt(perKeys,uf){let km=0,lit=0,rs=0,cnt=0;(XPANEL.kmlEf||[]).forEach(o=>{if(perKeys.has(o.vk)&&(!uf||uf(o))){km+=o.km;lit+=o.lit;if(o.remKmL>0){rs+=o.remKmL;cnt++;}}});if(!lit||!cnt)return null;const rem=rs/cnt;return rem?(km/lit)/rem*100:null;}
+// FCA separado: % no prazo e % concluída (acumulado até o mês selecionado)
+function fcaSplit(recs,year,monthIdx){const sel=recs.filter(r=>Math.floor(r.k/100)===year&&(r.k%100)<=monthIdx);if(!sel.length)return{prazo:null,concl:null};const tt=sel.length;return{prazo:sel.filter(r=>!r.venc).length/tt*100,concl:sel.filter(r=>r.concl==='C').length/tt*100};}
+const barLabels={id:'bl',afterDatasetsDraw(c){const ds=c.data.datasets[0],m=c.getDatasetMeta(0),ctx=c.ctx;ctx.save();ctx.font='700 11px Montserrat';ctx.fillStyle=document.body.classList.contains('claro')?'#1a1a1a':'#F1F5F9';ctx.textAlign='center';ctx.textBaseline='bottom';m.data.forEach((b,i)=>{const v=ds.data[i];if(v==null)return;if(ds._on&&!ds._on[i])return;ctx.fillText(n1(v),b.x,b.y-4);});ctx.restore();}};
+function cellBg(cls){return cls==='g'?'rgba(59,179,59,.20)':cls==='a'?'rgba(244,161,0,.20)':cls==='r'?'rgba(255,102,102,.18)':'transparent';}
+function cellFg(cls){return cls==='g'?'#3BB33B':cls==='y'?'#EAB308':cls==='o'?'#F97316':cls==='r'?'#FF6666':'var(--text3)';}
+
+// ── MULTI-SELECT ──
+function _buildMs(wrap,renderFn,getAllFn){
+  if(!(wrap._sel instanceof Set))wrap._sel=new Set();
+  const list=wrap.querySelector('.ms-list'),srch=wrap.querySelector('.ms-search input');
+  wrap._all=getAllFn;
+  wrap._render=(q='')=>{renderFn(list,wrap._sel,q);syncBadge(wrap);};
+  if(!wrap._bound){
+    wrap._bound=true;
+    list.addEventListener('change',e=>{const box=e.target,sel=wrap._sel;if(box.classList.contains('ms-all')){sel.clear();}else if(sel.size===0){if(!box.checked){const all=wrap._all?wrap._all():[];all.forEach(v=>{if(v!==box.dataset.v)sel.add(v);});}}else{if(box.checked)sel.add(box.dataset.v);else sel.delete(box.dataset.v);if(wrap._all){const all=wrap._all();if(all.length>0&&all.every(v=>sel.has(v)))sel.clear();}}wrap._render(srch.value);atualizar();});
+    list.addEventListener('click',e=>{const only=e.target.closest('.ms-only');if(!only)return;e.preventDefault();e.stopPropagation();wrap._sel.clear();wrap._sel.add(only.dataset.v);wrap._render(srch.value);atualizar();});
+    srch.addEventListener('input',()=>wrap._render(srch.value));
+    srch.addEventListener('click',e=>e.stopPropagation());
+  }
+  wrap._render();
+}
+function buildMsFilter(id,items){const wrap=document.getElementById(id);if(!wrap)return;wrap._items=items;_buildMs(wrap,(list,sel,q)=>{const it=wrap._items||[],f=q.toLowerCase(),shown=it.filter(v=>String(v).toLowerCase().includes(f)),allChk=sel.size===0;list.innerHTML=(!q?`<label class="ms-opt all-opt"><input type="checkbox" class="ms-all" ${allChk?'checked':''}> Todas</label>`:'')+shown.map(v=>{const ve=String(v).replace(/"/g,'&quot;');return `<label class="ms-opt"><input type="checkbox" data-v="${ve}" ${allChk||sel.has(v)?'checked':''}> ${v}<span class="ms-only" data-v="${ve}">only</span></label>`;}).join('');},()=>wrap._items||[]);}
+// Atualiza opções de um filtro (cascata) e remove seleções que não existem mais
+function setMsOptions(id,items){const wrap=document.getElementById(id);if(!wrap)return;wrap._items=items;if(wrap._sel&&wrap._sel.size){[...wrap._sel].forEach(v=>{if(!items.includes(v))wrap._sel.delete(v);});}if(wrap._render)wrap._render(wrap.querySelector('.ms-search input').value||'');}
+// ── Cascata: cada filtro mostra só opções existentes nas linhas que passam pelos DEMAIS ──
+// Predicado de uma linha ICS para um filtro, ignorando o próprio (except).
+function rowPassesExcept(o,except){
+  if(except!=='vig'){const selVig=getMsValues('ms-vig');if(selVig.length&&!selVig.includes(vigLbl(o.vigD)))return false;}
+  if(except!=='uni'){const selUni=getMsValues('ms-uni');if(selUni.length&&!selUni.includes(o.unidade))return false;}
+  return true;
+}
+function refreshCascade(){
+  if(!ICS.length)return;
+  // Vigência: opções nas linhas que passam por Unidade (preserva ordem cronológica de VIGS)
+  const vigOk=ICS.filter(o=>rowPassesExcept(o,'vig'));
+  const vigKeys=new Set(vigOk.map(o=>vigLbl(o.vigD)));
+  setMsOptions('ms-vig',VIGS.map(d=>vigLbl(d)).filter(v=>vigKeys.has(v)));
+  // Unidade: opções nas linhas que passam por Vigência
+  const uniOk=ICS.filter(o=>rowPassesExcept(o,'uni'));
+  setMsOptions('ms-uni',[...new Set(uniOk.map(o=>o.unidade))].sort());
+}
+function syncBadge(wrap){const cnt=wrap.querySelector('.ms-cnt'),n=wrap._sel?wrap._sel.size:0;if(cnt){cnt.textContent=n;cnt.style.display=n?'':'none';}}
+function toggleMs(id){document.querySelectorAll('.ms-panel.open').forEach(p=>{if(p.closest('.ms-wrap').id!==id)p.classList.remove('open');});const panel=document.querySelector(`#${id} .ms-panel`);panel.classList.toggle('open');if(panel.classList.contains('open')){const inp=panel.querySelector('input[type=text]');if(inp)setTimeout(()=>inp.focus(),50);}}
+function getMsValues(id){const wrap=document.getElementById(id);if(!wrap)return[];return wrap._sel?[...wrap._sel]:[];}
+document.addEventListener('click',e=>{if(!e.target.closest('.ms-wrap'))document.querySelectorAll('.ms-panel.open').forEach(p=>p.classList.remove('open'));});
+
+// ── Conlog (Supabase) — pneus por unidade (igual pneus/painel.html) ──
+const CONLOG_URL='https://ewbzeqsneeylwkxtcpme.supabase.co';
+const CONLOG_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImV3YnplcXNuZWV5bHdreHRjcG1lIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE4NzY2MTcsImV4cCI6MjA5NzQ1MjYxN30.W8W6Yunt6Z8NB73qpOD8eqYlrsgMRgEG-siYsJFwDwE';
+const CONLOG_BRANCH={1676:'MCC T1',1677:'MCC T2',37:'CGR',1906:'CBA T1 WH',1907:'CBA T1',1878:'CBA T2',20:'FLP',30:'GRL',24:'BLC',2517:'NFR',26:'PLT',38:'PIR',2277:'RON',2550:'ANG'};
+// Busca snapshot por branch (lotes de 3, retries) e agrega por código Conlog.
+async function fetchConlog(){
+  const bids=Object.keys(CONLOG_BRANCH);
+  const merged={vehicles:[],tires:[],inspections:[]};
+  const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+  const fetchBranch=bid=>fetch(`${CONLOG_URL}/rest/v1/snapshot?branch_id=eq.${bid}&select=endpoint,branch_id,data`,{headers:{apikey:CONLOG_KEY,Authorization:'Bearer '+CONLOG_KEY}}).then(r=>r.ok?r.json():null).catch(()=>null);
+  const perBranch=[];const CHUNK=3;
+  for(let i=0;i<bids.length;i+=CHUNK){const batch=bids.slice(i,i+CHUNK);const res=await Promise.all(batch.map(async bid=>{for(let a=0;a<4;a++){const out=await fetchBranch(bid);if(out!==null)return out;await sleep(700);}return[];}));perBranch.push(...res);}
+  perBranch.flat().forEach(r=>{const uni=CONLOG_BRANCH[r.branch_id];const arr=Array.isArray(r.data)?r.data:[];if(!merged[r.endpoint])return;for(const rec of arr){rec.unidade=uni;merged[r.endpoint].push(rec);}});
+  if(!merged.vehicles.length)return null;
+  return conlogAgg(merged);
+}
+// Agrega por código Conlog: saude=(Bom+Regular)/total, pressao=% calibrados (|desvio|≤15%), afer=% placas última aferição ≤30 dias.
+function conlogAgg(d){
+  const tires=(d.tires||[]).filter(t=>t.status==='INSTALLED'&&t.placa&&!/PALETEIRA/i.test(t.tipo||''));
+  const byU={};
+  const ensure=u=>byU[u]=byU[u]||{tBom:0,tTot:0,pOk:0,pTot:0};
+  tires.forEach(t=>{const u=t.unidade;if(!u)return;const o=ensure(u);
+    const mm=+t.menorMM||0;if(mm>0){o.tTot++;if(mm>3)o.tBom++;} // Bom(>6)+Regular(>3) = saudável; ≤3 = recapar/bloquear
+    const id=+t.pressaoIdeal||0;if(id>0){o.pTot++;if(Math.abs(+t.desvioPressao||0)<=15)o.pOk++;}
+  });
+  // Aferições: por placa, última inspeção; ≤30 dias = aderente
+  const ultByPlaca={};
+  (d.inspections||[]).forEach(i=>{if(!i.placa)return;const dt=new Date(i.dataInspecao);const k=i.unidade+'|'+i.placa;if(!ultByPlaca[k]||dt>ultByPlaca[k].dt)ultByPlaca[k]={dt,u:i.unidade};});
+  const afer={};const hoje=new Date();
+  Object.values(ultByPlaca).forEach(x=>{const o=afer[x.u]=afer[x.u]||{ok:0,tot:0};o.tot++;const dias=Math.floor((hoje-x.dt)/86400000);if(dias<=30)o.ok++;});
+  const out={};
+  Object.keys(byU).forEach(u=>{const o=byU[u];out[u]={saude:o.tTot?o.tBom/o.tTot*100:null,pressao:o.pTot?o.pOk/o.pTot*100:null,afer:afer[u]&&afer[u].tot?afer[u].ok/afer[u].tot*100:null};});
+  return out;
+}
+// média de uma métrica Conlog sobre as unidades scorecard selecionadas
+function conlogU(unis,metric){if(!XPANEL.conlog)return null;const vs=unis.map(u=>{const c=XPANEL.conlog[UNI2CONLOG[u]];return c?c[metric]:null;}).filter(v=>v!=null);return vs.length?vs.reduce((a,b)=>a+b,0)/vs.length:null;}
+
+function gviz(url){return new Promise((res,rej)=>{const fn='_gv'+Math.floor(Math.random()*1e9);const s=document.createElement('script');const clr=()=>{try{delete window[fn];s.remove();}catch(e){}};window[fn]=r=>{clr();try{if(r.status!=='ok')throw 0;res((r.table.rows||[]).map(x=>(x.c||[]).map(c=>c?c.v:null)));}catch(e){rej(e);}};s.onerror=()=>{clr();rej(0);};s.src=url+(url.includes('?')?'&':'?')+'tqx=out:json;responseHandler:'+fn;document.head.appendChild(s);});}
+
+// ── Indicadores cross-painel (nível empresa) ──
+function compDisp(rows){const mo={};rows.forEach(r=>{const d=parseD(r[0]);if(!d)return;const proj=String(r[14]||'').split('-')[0].trim().toUpperCase();if(!(proj==='ROTA'||proj==='AUTO SERVIÇO'||proj==='AUTO SERVICO'))return;const k=vigKeyN(d);const rem=r[31]!=null?+r[31]:0,real=r[32]!=null?+r[32]:0;const o=mo[k]=mo[k]||{rem:0,real:0};o.rem+=rem;o.real+=real;});const out={},acc={};Object.keys(mo).map(Number).sort((a,b)=>a-b).forEach(k=>{const y=Math.floor(k/100);acc[y]=acc[y]||{rem:0,real:0};acc[y].rem+=mo[k].rem;acc[y].real+=mo[k].real;out[k]=acc[y].rem?((acc[y].real-acc[y].rem)/acc[y].rem*100):null;});return out;}
+// DPO Sustentável = último H; por unidade ≥ Nível 3 = 100%, senão 0% → % de unidades sustentáveis
+function compDPO(rows){const hdr=rows[0]||[];let li=-1;for(let i=hdr.length-1;i>=1;i--){if(rows.slice(1).some(r=>/Nível/i.test(String(r[i]||'')))){li=i;break;}}if(li<0)return{pct:null,ok:0,tot:0,n4:[],sem:null,byUni:{}};const NOTA=l=>l>=4?100:l===3?80:l===2?60:l===1?40:0;let ok=0,tot=0;const n4=[];const byUni={};rows.slice(1).forEach(r=>{const label=String(r[0]||'').trim().toUpperCase().replace(/\s+/g,' ');if(!label||label==='UNIDADE')return;const code=label.split(' ')[0];const me=String(r[li]||'').match(/Nível\s*(\d+)/i);if(me){tot++;const lvl=+me[1];if(lvl>=3)ok++;if(lvl>=4&&n4.indexOf(code)<0)n4.push(code);}for(let i=li;i>=1;i--){const m=String(r[i]||'').match(/Nível\s*(\d+)/i);if(m){byUni[label]=NOTA(+m[1]);break;}}});return{pct:tot?ok/tot*100:null,ok,tot,n4,sem:String(hdr[li]||''),byUni};}
+// DPO nota por unidade scorecard (média das linhas DPO mapeadas; null se ausente)
+function dpoNotaU(unis){if(!XPANEL.dpo||!XPANEL.dpo.byUni)return null;const vs=unis.map(u=>XPANEL.dpo.byUni[UNI2DPO[u]]).filter(v=>v!=null);return vs.length?vs.reduce((a,b)=>a+b,0)/vs.length:null;}
+function compFCA(rows){const today=new Date();today.setHours(0,0,0,0);const recs=[];rows.forEach(r=>{const d=parseD(r[1]);if(!d)return;const st=String(r[8]||'');const prazo=parseD(r[7]);const concl=/conclu/i.test(st)?'C':/andamento/i.test(st)?'A':'N';const venc=concl==='C'?false:(prazo&&prazo<today);const cod=String(r[2]||'').trim().toUpperCase().split(/\s+/)[0];recs.push({k:vigKeyN(d),cod,concl,venc});});return recs;}
+// FCA por unidade (cods=Set de códigos das unidades selecionadas; null=todas)
+function fcaSplitU(recs,year,monthIdx,cods){const sel=recs.filter(r=>Math.floor(r.k/100)===year&&(r.k%100)<=monthIdx&&(!cods||cods.has(r.cod)));if(!sel.length)return{prazo:null,concl:null};const tt=sel.length;return{prazo:sel.filter(r=>!r.venc).length/tt*100,concl:sel.filter(r=>r.concl==='C').length/tt*100};}
+function fcaAderAte(recs,year,monthIdx){const sel=recs.filter(r=>Math.floor(r.k/100)===year&&(r.k%100)<=monthIdx);if(!sel.length)return null;const tt=sel.length,noP=sel.filter(r=>!r.venc).length,cc=sel.filter(r=>r.concl==='C').length;return((noP/tt*100)+(cc/tt*100))/2;}
+// Consolidação FCAs: média do score por status (Concluída=100, Em andamento=50, Não iniciada=0), acumulado até o mês.
+function fcaConsol(recs,year,monthIdx){const sel=recs.filter(r=>Math.floor(r.k/100)===year&&(r.k%100)<=monthIdx);if(!sel.length)return null;return sel.reduce((s,r)=>s+(r.concl==='C'?100:r.concl==='A'?50:0),0)/sel.length;}
+
+function atualizar(){
+  if(!ICS.length)return;
+  refreshCascade();
+  const selVig=getMsValues('ms-vig'),selUni=getMsValues('ms-uni');
+  const cands=(selVig.length?VIGS.filter(d=>selVig.includes(vigLbl(d))):VIGS.slice()).sort((a,b)=>vigKeyN(a)-vigKeyN(b));
+  const selD=cands.length?cands[cands.length-1]:(VIGS[VIGS.length-1]||null);
+  if(!selD){return;}
+  const perKeys=new Set(cands.map(vigKeyN));
+  const rows=ICS.filter(o=>perKeys.has(vigKeyN(o.vigD))&&(selUni.length===0||selUni.includes(o.unidade)));
+  const periodo=cands.length<=1?vigLbl(selD).toUpperCase():`${vigLbl(cands[0]).toUpperCase()} – ${vigLbl(selD).toUpperCase()} · MÉDIA`;
+
+  // ── Hero: Pontuação geral (média das linhas filtradas) ──
+  const pts=rows.map(o=>o.pont).filter(v=>v!=null);
+  const pontGeral=pts.length?pts.reduce((a,b)=>a+b,0)/pts.length:null;
+  const eP=document.getElementById('h-pont');eP.textContent=pontGeral!=null?n1(pontGeral):'—';
+  const cP=band(pontGeral);eP.style.color=cellFg(cP);
+  // o recorte (período + unidades) vive no subtítulo do topo, junto da hora da carga
+  _recorte=`${periodo} · ${selUni.length?selUni.length+' unidade(s)':rows.length?[...new Set(rows.map(o=>o.unidade))].length+' unidades':'—'}`;
+  set('titSub', _recorte+(_carga?' · '+_carga:''));
+
+  // ── Cards: atingimento 0–100% (100% = bom). Custos/dispersão invertem (menos = melhor). ──
+  const yr=selD.getFullYear(),mi=selD.getMonth();
+  const unisSel=selUni.length?selUni.filter(u=>UNI_LIST.includes(u)):UNI_LIST.slice();
+  const CV=cardVals(perKeys,yr,mi,unisSel);
+  const dpoMeta=XPANEL.dpo&&XPANEL.dpo.sem?XPANEL.dpo.sem+(selUni.length?'':' · '+XPANEL.dpo.ok+'/'+XPANEL.dpo.tot+' ≥ N3'):'nível unidade';
+  const cards=[
+    {lbl:'Custos Frota',         val:CV.custos, meta:'Real / Remunerado'},
+    {lbl:'Disponibilidade',      val:CV.disp},
+    {lbl:'DPO/VPO Sustentável',  val:CV.dpo, meta:dpoMeta},
+    {lbl:'Preventivas',          val:CV.prev, good:95},
+    {lbl:'Consumo Km/L',         val:CV.kml, meta:'Real / Remunerado'},
+    {lbl:'Saúde dos Pneus',      val:CV.saude, meta:'Conlog · Bom+Regular'},
+    {lbl:'Pressão dos Pneus',    val:CV.pressao, meta:'Conlog · calibrados'},
+    {lbl:'Aferições',            val:CV.afer, meta:'Conlog · ≤30 dias'},
+    {lbl:'Checklist T1/T2',      val:CV.chkT},
+    {lbl:'Checklist Apoio',      val:CV.chkApoio},
+    {lbl:'Conformidade Frota',   val:CV.conf},
+    {lbl:'Stress Test Cam.',     val:CV.stCam},
+    {lbl:'Stress Test Emp.',     val:CV.stEmp},
+    {lbl:'SLA Atendimento',      val:CV.sla},
+    {lbl:'CIVF',                 val:CV.civf},
+    {lbl:'Atingimento KM',       val:CV.kmAt, meta:'Real / Remunerado'},
+    {lbl:'R$/km',                val:CV.rkm, meta:'Real / Remunerado'},
+    {lbl:'R$/L',                 val:CV.rl, meta:'Real / Remunerado'},
+    {lbl:'FCA Prazo',            val:CV.fcaP, meta:'% no prazo'},
+    {lbl:'FCA Conclusão',        val:CV.fcaC, meta:'% concluída'}
+  ];
+
+  // ── Gráfico temporal (indicador selecionável, jan→dez) ──
+  _lastPeriodo=periodo;
+  chartTemporal(selD);
+
+  // ── Ranking ponderado por unidade ──
+  // Conta UMA vez e alimenta os três lugares: hero, destaques do resumo e a tabela.
+  const rk=UNI_LIST.map(uni=>{const notes=unitScores(uni,perKeys,yr,mi);return {uni,notes,score:scoreFromNotes(notes)};})
+    .filter(x=>x.score!=null).sort((a,b)=>b.score-a.score);
+  heroDeltas(rk,CV);
+  renderDestaques(rk);
+  renderRanking(rk,periodo);
+  renderCards(cards);
+}
+
+// Valores 0-100 de TODOS os cards para um conjunto de meses (perKeys) e unidades (unisSel).
+// Reutilizado pelos cards (período) e pelo gráfico mensal (1 mês por vez).
+function cardVals(perKeys,yr,mi,unisSel){
+  const cap=v=>v==null?null:Math.min(100,Math.max(0,v));
+  const inv=ratio=>(ratio==null||!ratio)?null:cap(10000/ratio);
+  const rows=ICS.filter(o=>perKeys.has(vigKeyN(o.vigD))&&unisSel.includes(o.unidade));
+  const icAvg=i=>{const vs=rows.map(o=>o.ic[i]).filter(v=>v!=null);return vs.length?vs.reduce((a,b)=>a+b,0)/vs.length*100:null;};
+  const cidSet=new Set(unisSel.map(u=>NK(UNI2CID[u])).filter(Boolean));
+  const codSet=new Set(unisSel.map(u=>UNI2COD[u]).filter(Boolean));
+  const unisKm=unisSel.filter(u=>!UNI_SEM_KM.has(u));
+  const ufDre=o=>cidSet.has(o.cid);
+  const ufProj=o=>unisKm.some(u=>projMatchUni(u,o.proj));
+  const hasKm=unisKm.length>0;
+  const fcaS=XPANEL.fca?fcaSplitU(XPANEL.fca,yr,mi,codSet):{prazo:null,concl:null};
+  return {
+    custos:XPANEL.dre?inv(sumAtt(XPANEL.dre,perKeys,ufDre)):null,
+    disp:cap(icAvg(0)),prev:cap(icAvg(1)),chkT:cap(icAvg(4)),chkApoio:cap(icAvg(5)),
+    conf:cap(icAvg(6)),stCam:cap(icAvg(7)),stEmp:cap(icAvg(8)),sla:cap(icAvg(9)),civf:cap(icAvg(10)),
+    kml:(XPANEL.kmlEf&&hasKm)?cap(kmlAtt(perKeys,ufProj)):null,
+    kmAt:(XPANEL.km&&hasKm)?inv(sumAtt(XPANEL.km,perKeys,ufProj)):null,
+    rkm:(XPANEL.dre&&XPANEL.km&&hasKm)?inv(rkmAtt(perKeys,ufDre,ufProj)):null,
+    rl:(XPANEL.kmlEf&&hasKm)?inv(rlAtt(perKeys,ufProj)):null,
+    dpo:cap(dpoNotaU(unisSel)),
+    saude:cap(conlogU(unisSel,'saude')),pressao:cap(conlogU(unisSel,'pressao')),afer:cap(conlogU(unisSel,'afer')),
+    fcaP:cap(fcaS.prazo),fcaC:cap(fcaS.concl)
+  };
+}
+// Notas 0-100 de cada indicador para UMA unidade scorecard (chaves = SCORE_PESOS).
+function unitScores(uni,perKeys,yr,mi){
+  const cap=v=>v==null?null:Math.min(100,Math.max(0,v));
+  const inv=ratio=>(ratio==null||!ratio)?null:cap(10000/ratio);
+  const r=ICS.filter(o=>perKeys.has(vigKeyN(o.vigD))&&o.unidade===uni);
+  const icAvg=i=>{const vs=r.map(o=>o.ic[i]).filter(v=>v!=null);return vs.length?vs.reduce((a,b)=>a+b,0)/vs.length*100:null;};
+  const cid=NK(UNI2CID[uni]);const ufDre=o=>o.cid===cid;
+  const semKm=UNI_SEM_KM.has(uni);const ufProj=o=>projMatchUni(uni,o.proj);
+  const codSet=new Set([UNI2COD[uni]]);
+  const fcaS=XPANEL.fca?fcaSplitU(XPANEL.fca,yr,mi,codSet):{prazo:null,concl:null};
+  return {
+    custos: XPANEL.dre?inv(sumAtt(XPANEL.dre,perKeys,ufDre)):null,
+    disp:   cap(icAvg(0)),
+    dpo:    cap(dpoNotaU([uni])),
+    kmAt:   (XPANEL.km&&!semKm)?inv(sumAtt(XPANEL.km,perKeys,ufProj)):null,
+    prev:   cap(icAvg(1)),
+    kml:    (XPANEL.kmlEf&&!semKm)?cap(kmlAtt(perKeys,ufProj)):null,
+    saude:  cap(conlogU([uni],'saude')),
+    conf:   cap(icAvg(6)),
+    sla:    cap(icAvg(9)),
+    chkT:   cap(icAvg(4)),
+    stCam:  cap(icAvg(7)),
+    rkm:    (XPANEL.dre&&XPANEL.km&&!semKm)?inv(rkmAtt(perKeys,ufDre,ufProj)):null,
+    pressao:cap(conlogU([uni],'pressao')),
+    fcaC:   cap(fcaS.concl),
+    fcaP:   cap(fcaS.prazo),
+    rl:     (XPANEL.kmlEf&&!semKm)?inv(rlAtt(perKeys,ufProj)):null,
+    chkApoio:cap(icAvg(5)),
+    stEmp:  cap(icAvg(8)),
+    afer:   cap(conlogU([uni],'afer')),
+    civf:   cap(icAvg(10))
+  };
+}
+// Score ponderado renormalizado (ignora indicadores ausentes)
+function scoreFromNotes(notes){let s=0,p=0;for(const k in SCORE_PESOS){const v=notes[k];if(v!=null&&isFinite(v)){s+=SCORE_PESOS[k]*v;p+=SCORE_PESOS[k];}}return p?s/p:null;}
+
+// colunas exibidas na tabela (label, chave, meta-tipo)
+const RK_COLS=[
+  {k:'custos',l:'Custo',rr:1},{k:'disp',l:'Disp'},{k:'dpo',l:'DPO'},
+  {k:'kmAt',l:'Atg. Km',rr:1},{k:'prev',l:'Prev'},{k:'kml',l:'Km/L',rr:1},
+  {k:'saude',l:'Pneu',t:'Saúde dos pneus'},{k:'conf',l:'Conf'},{k:'sla',l:'SLA'},
+  {k:'chkT',l:'Chk T',t:'Checklist T1/T2'},{k:'stCam',l:'ST Cam',t:'Stress Test Caminhões'},{k:'rkm',l:'R$/km',rr:1},
+  {k:'pressao',l:'Pres',t:'Pressão dos pneus'},{k:'fcaC',l:'FCA C',t:'FCA Conclusão'},{k:'fcaP',l:'FCA P',t:'FCA Prazo'},
+  {k:'rl',l:'R$/L',rr:1},{k:'chkApoio',l:'Chk Ap',t:'Checklist Apoio'},{k:'stEmp',l:'ST Emp',t:'Stress Test Empilhadeiras'},
+  {k:'afer',l:'Afer',t:'Aferições'},{k:'civf',l:'CIVF'}
+];
+function renderRanking(rk,periodo){
+  const head=document.getElementById('rk-head'),body=document.getElementById('rk-body');
+  if(!head||!body)return;
+  document.getElementById('rk-sub').textContent='Score ponderado · melhor → pior · '+periodo;
+  head.innerHTML='<tr><th class="lft">#</th><th class="lft">Unidade</th><th class="scol">Score</th>'+
+    RK_COLS.map(c=>`<th class="ind-col" title="${c.t||c.l}">${c.l}</th>`).join('')+'</tr>';
+  if(!rk.length){body.innerHTML='<tr><td class="loading" colspan="3">Sem dados</td></tr>';return;}
+  const cellFg2=(v,rr)=>{if(v==null)return 'var(--text3)';const cls=rr?bandCost(v):band(v);return cellFg(cls);};
+  body.innerHTML=rk.map((x,i)=>{
+    const sc=Math.round(x.score);const scCls=band(x.score);
+    const scBg=scCls==='g'?'#3BB33B':scCls==='y'?'#EAB308':scCls==='o'?'#F97316':scCls==='r'?'#FF6666':'transparent';
+    return `<tr><td class="rank lft">${i+1}</td><td class="uni lft">${x.uni}</td>`+
+      `<td class="scol"><span class="sc-pill" style="background:${scBg}">${sc}</span></td>`+
+      RK_COLS.map(c=>{const v=x.notes[c.k];return `<td class="ind-col" style="color:${cellFg2(v,c.rr)}">${v==null?'—':Math.round(v)}</td>`;}).join('')+'</tr>';
+  }).join('');
+}
+
+// ── Seletor de indicador do gráfico mensal ──
+const CH_INDS=[
+  {key:'pont',lbl:'Pontuação Geral'},
+  {key:'custos',lbl:'Custos Frota',rr:1},
+  {key:'disp',lbl:'Disponibilidade'},
+  {key:'dpo',lbl:'DPO/VPO Sustentável'},
+  {key:'prev',lbl:'Preventivas',good:95},
+  {key:'kml',lbl:'Consumo Km/L',rr:1},
+  {key:'saude',lbl:'Saúde dos Pneus'},
+  {key:'pressao',lbl:'Pressão dos Pneus'},
+  {key:'afer',lbl:'Aferições'},
+  {key:'chkT',lbl:'Checklist T1/T2'},
+  {key:'chkApoio',lbl:'Checklist Apoio'},
+  {key:'conf',lbl:'Conformidade Frota'},
+  {key:'stCam',lbl:'Stress Test Cam.'},
+  {key:'stEmp',lbl:'Stress Test Emp.'},
+  {key:'sla',lbl:'SLA Atendimento'},
+  {key:'civf',lbl:'CIVF'},
+  {key:'kmAt',lbl:'Atingimento KM',rr:1},
+  {key:'rkm',lbl:'R$/km',rr:1},
+  {key:'rl',lbl:'R$/L',rr:1},
+  {key:'fcaP',lbl:'FCA Prazo'},
+  {key:'fcaC',lbl:'FCA Conclusão'}
+];
+let chInd='pont',_lastSelD=null,_lastPeriodo='';
+(function(){const s=document.getElementById('ch-ind');if(s)s.innerHTML=CH_INDS.map(c=>`<option value="${c.key}">${c.lbl}</option>`).join('');})();
+function chSelInd(v){chInd=v;if(_lastSelD)chartTemporal(_lastSelD);}
+
+function chartTemporal(selD){
+  if(typeof Chart==='undefined'||!selD)return;
+  _lastSelD=selD;
+  const isLight=document.body.classList.contains('claro');
+  const selUni=getMsValues('ms-uni'),selVig=getMsValues('ms-vig');
+  const unisSel=selUni.length?selUni.filter(u=>UNI_LIST.includes(u)):UNI_LIST.slice();
+  const ind=CH_INDS.find(c=>c.key===chInd)||CH_INDS[0];
+  const yr=selD.getFullYear();
+  const labels=[],data=[],on=[];
+  for(let m=0;m<12;m++){
+    const lbl=MESES[m]+'/'+String(yr).slice(2);labels.push(lbl);const vk=yr*100+m;
+    let v;
+    if(ind.key==='pont'){const rs=ICS.filter(o=>vigKeyN(o.vigD)===vk&&(selUni.length===0||selUni.includes(o.unidade)));const pv=rs.map(o=>o.pont).filter(x=>x!=null);v=pv.length?pv.reduce((a,b)=>a+b,0)/pv.length:null;}
+    else{const cv=cardVals(new Set([vk]),yr,m,unisSel)[ind.key];v=(cv==null||!isFinite(cv))?null:cv;}
+    data.push(v);on.push(selVig.length===0||selVig.includes(lbl));
+  }
+  const hasFocus=selVig.length>0;
+  const clOf=v=>v==null?'':(ind.key==='pont'?band(v):(ind.rr?bandCost(v):bandG(v,ind.good||90)));
+  const bg=data.map((v,i)=>{if(v==null)return 'transparent';const a=hasFocus?(on[i]?.9:.22):.8;const cl=clOf(v);const rgb=cl==='g'?'59,179,59':cl==='y'?'234,179,8':cl==='o'?'249,115,22':'255,102,102';return `rgba(${rgb},${a})`;});
+  const bc=data.map(v=>v==null?'transparent':cellFg(clOf(v)));
+  const grid={color:isLight?'rgba(0,0,0,.08)':'rgba(255,255,255,.06)'};
+  const tick={color:isLight?'#444':'#94A3B8',font:{family:'Montserrat',size:11}};
+  // eixo Y adaptável, não fixo em 0
+  const vals=data.filter(v=>v!=null);
+  const dMin=vals.length?Math.min(...vals):0,dMax=vals.length?Math.max(...vals):100;
+  const yMin=Math.max(0,Math.floor((dMin-6)/5)*5),yMax=Math.min(100,Math.max(yMin+15,Math.ceil((dMax+4)/5)*5));
+  const sub=document.getElementById('ch-sub');if(sub)sub.textContent=(ind.key==='pont'?'Pontuação média da frota':ind.lbl)+' · '+_lastPeriodo;
+  const unit=ind.key==='pont'?' pts':'%';
+  if(chT)chT.destroy();
+  chT=new Chart(document.getElementById('ch-temp'),{data:{labels,datasets:[
+    {type:'bar',data,backgroundColor:bg,borderColor:bc,borderWidth:1,_on:hasFocus?on:labels.map(()=>true),borderRadius:3,maxBarThickness:70,categoryPercentage:.9,barPercentage:.95}
+  ]},plugins:[barLabels],options:{responsive:true,maintainAspectRatio:false,layout:{padding:{top:22}},plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>n1(c.raw)+unit}}},scales:{x:{grid,ticks:tick},y:{min:yMin,max:yMax,grid,ticks:{...tick}}}}});
+}
+
+// ── Cache local (stale-while-revalidate) ──
+function rd(k){try{return JSON.parse(localStorage.getItem('sc_'+k));}catch(e){return null;}}
+function wr(k,v){try{localStorage.setItem('sc_'+k,JSON.stringify(v));}catch(e){}}
+
+function applyData(d){
+  const selV=getMsValues('ms-vig'),selU=getMsValues('ms-uni'); // preserva seleção ao revalidar
+  XPANEL={};
+  const {ics:icRows,dre:dreR,km:kmR,dpo:dpoR,fca:fcaR,rsl:rslR,kmlEf:kmlEfR,conlog:conlogR}=d;
+  if(conlogR)XPANEL.conlog=conlogR;
+  // Custos = custo da FROTA → EXCLUI a linha "Receita Líquida" (ela só baliza o AV)
+  // Frota: vig=0, unidade=3, conta=5, rem=9, real=10
+  if(dreR)try{XPANEL.dre=dreR.filter(r=>parseD(r[0])&&String(r[5]||'').trim()!=='Receita Líquida').map(r=>({vk:vigKeyN(parseD(r[0])),cid:NK(r[3]),rem:r[9]!=null?+r[9]:0,real:r[10]!=null?+r[10]:0}));}catch(e){}
+  if(kmR)try{XPANEL.km=kmR.filter(r=>parseD(r[0])).map(r=>({vk:vigKeyN(parseD(r[0])),proj:r[14],rem:r[31]!=null?+r[31]:0,real:r[32]!=null?+r[32]:0}));}catch(e){}
+  // R$/L: lookup do preço remunerado (aba R$/L) por Projeto|Vigência|Combustível — proj=0, vig=3, preco=22, comb=23
+  const L1={},L2={};
+  if(rslR)rslR.forEach(r=>{const p=NK(r[0]),dt=parseD(r[3]);if(!p||!dt)return;const ym=vigKeyN(dt),f=NF(r[23]),v=r[22]!=null?+r[22]:0;if(!(v>0))return;const k1=p+'|'+ym+'|'+f,k2=p+'|'+ym;(L1[k1]=L1[k1]||{s:0,n:0}).s+=v;L1[k1].n++;(L2[k2]=L2[k2]||{s:0,n:0}).s+=v;L2[k2].n++;});
+  const remPrice=(p,ym,f)=>{let e=L1[p+'|'+ym+'|'+f];if(!e)e=L2[p+'|'+ym];return e&&e.n>0?e.s/e.n:null;};
+  // aba Km/L (consumo): km=22, lit=23, remKmL=4, totalRS=25, proj=14, comb=20 → guarda rp (preço rem) por linha
+  if(kmlEfR)try{XPANEL.kmlEf=kmlEfR.filter(r=>parseD(r[0])).map(r=>{const vk=vigKeyN(parseD(r[0]));return{vk,proj:r[14],km:r[22]!=null?+r[22]:0,lit:r[23]!=null?+r[23]:0,remKmL:r[4]!=null?+r[4]:0,tot:r[25]!=null?+r[25]:0,rp:remPrice(NK(r[14]),vk,NF(r[20]))};});}catch(e){}
+  if(dpoR)try{XPANEL.dpo=compDPO(dpoR);}catch(e){}
+  if(fcaR)try{XPANEL.fca=compFCA(fcaR);}catch(e){}
+  ICS=(icRows||[]).filter(o=>o&&o.vigD).map(o=>({vigD:new Date(o.vigD),unidade:o.unidade,ic:o.ic,pont:o.pont}));
+  const vm=new Map();ICS.forEach(o=>vm.set(vigKeyN(o.vigD),o.vigD));
+  VIGS=[...vm.values()].sort((a,b)=>vigKeyN(a)-vigKeyN(b));
+  const vigItems=VIGS.map(dd=>vigLbl(dd));
+  const vw=document.getElementById('ms-vig');
+  if(selV.length){vw._sel=new Set(selV.filter(v=>vigItems.includes(v)));}
+  else{const comDados=vigItems.filter(v=>ICS.some(o=>vigLbl(o.vigD)===v&&o.pont!=null));const base=comDados.length?comDados:vigItems;if(base.length)vw._sel=new Set([base[base.length-1]]);}
+  if(selU.length)document.getElementById('ms-uni')._sel=new Set(selU);
+  buildMsFilter('ms-vig',vigItems);
+  buildMsFilter('ms-uni',[...new Set(ICS.map(o=>o.unidade))].sort());
+  atualizar();
+}
+
+async function carregar(){
+  const cached=rd('data2');
+  if(cached){try{applyData(cached);STATUS.textContent='Atualizando…';}catch(e){}}
+  else STATUS.textContent='Carregando…';
+  try{
+    const icRows=await fetch(BASE_RPM_URL).then(r=>r.text()).then(t=>pivotRPM(parseCSV(t)));
+    const [dreR,kmR,dpoR,fcaR,rslR,kmlEfR,conlogR]=await Promise.all([gviz(SRC.dre).catch(()=>null),gviz(SRC.km).catch(()=>null),gviz(SRC.dpo).catch(()=>null),gviz(SRC.fca).catch(()=>null),gviz(SRC.rsl).catch(()=>null),gviz(SRC.kmlEf).catch(()=>null),fetchConlog().catch(()=>null)]);
+    const d={ics:icRows,dre:dreR,km:kmR,dpo:dpoR,fca:fcaR,rsl:rslR,kmlEf:kmlEfR,conlog:conlogR};
+    wr('data2',d);
+    applyData(d);
+    const now=new Date();STATUS.textContent=`${now.toLocaleDateString('pt-BR')} ${now.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})}`;
+  }catch(e){console.error(e);if(!cached)STATUS.textContent='Erro ao carregar';}
+}
+
+// ── Toggle "Ver detalhes" da tabela larga (só mobile; aditivo, no-op se não houver tabela) ──
+let _tblColsVis=false;
+function toggleIndCols(){
+  _tblColsVis=!_tblColsVis;
+  const wrap=document.querySelector('#vw-ranking .tsec');
+  if(wrap)wrap.classList.toggle('tbl-expanded',_tblColsVis);
+  const btn=document.getElementById('tbl-ind-toggle');
+  if(btn)btn.textContent=_tblColsVis?'− Ocultar detalhes':'+ Ver detalhes';
+}
+
+/* ── render dos blocos do layout novo ─────────────────────────────────────── */
+// hero: pontuação + as quatro leituras rápidas ao lado
+function heroDeltas(rk,CV){
+  // os cinco de maior peso repetem no resumo, com o mesmo farol da visão Indicadores
+  [['custos','d-custos',1],['disp','d-disp',0],['dpo','d-dpo',0],['kmAt','d-kmAt',1],['prev','d-prev',0]].forEach(([k,id,rr])=>{
+    const e=document.getElementById(id); if(!e)return;
+    const v=CV[k]; const cls=rr?bandCost(v):bandG(v,k==='prev'?95:90);
+    e.textContent=v==null?'—':Math.round(v)+'%'; e.className='kv '+cls;
+    const card=e.closest('.kpi'); if(card) card.className='kpi '+cls;
+  });
+  const melhor=rk[0],pior=rk[rk.length-1];
+  const crit=Object.keys(SCORE_PESOS).filter(k=>{const v=CV[k];return v!=null&&v<70;}).length;
+  set('h-uni', rk.length||'—');
+  set('h-melhor', melhor?`${melhor.uni} · ${Math.round(melhor.score)}`:'—');
+  set('h-pior',   pior&&rk.length>1?`${pior.uni} · ${Math.round(pior.score)}`:'—');
+  set('h-crit',   crit);
+  const eC=document.getElementById('h-crit'); if(eC) eC.style.color=crit?'var(--vermelho)':'var(--verde)';
+}
+// os 20 cards da visão Indicadores
+function renderCards(cards){
+  const box=document.getElementById('cards'); if(!box)return;
+  box.innerHTML=cards.map(c=>{
+    const cls=c.meta==='Real / Remunerado'?bandCost(c.val):bandG(c.val,c.good);
+    const disp=c.val==null?'—':Math.round(c.val)+'%';
+    return `<div class="kpi ${cls}"><div class="kl">${c.lbl}</div><div class="kv ${cls}">${disp}</div>`+
+           `<div class="km">${c.meta||'&nbsp;'}</div></div>`;
+  }).join('')||'<div class="loading">Sem dados</div>';
+}
+// destaques do resumo: três melhores e três piores
+function renderDestaques(rk){
+  const box=document.getElementById('dstq'); if(!box)return;
+  if(!rk.length){ box.innerHTML='<div class="loading">Sem dados</div>'; return; }
+  const linha=(x,i)=>`<div class="dstq-l"><span class="dstq-p">${i}º</span>`+
+    `<span class="dstq-u">${x.uni}</span>`+
+    `<span class="dstq-s" style="color:${cellFg(band(x.score))}">${Math.round(x.score)}</span></div>`;
+  const n=rk.length>=10?5:3;
+  const top=rk.slice(0,n).map((x,i)=>linha(x,i+1));
+  const bot=rk.slice(-n).reverse().map(x=>linha(x,rk.indexOf(x)+1));
+  box.innerHTML='<div class="dstq-sec">Melhores</div>'+top.join('')+
+    (rk.length>n?'<div class="dstq-sec" style="margin-top:6px">A recuperar</div>'+bot.join(''):'');
+}
+
+/* ── navegação entre as visões ────────────────────────────────────────────── */
+const TIT={resumo:'Resumo Gerencial',indicadores:'Indicadores',ranking:'Ranking por Unidade',metodologia:'Metodologia'};
+let VW='resumo';
+function setVw(v){
+  VW=v;
+  document.querySelectorAll('.s-item[data-vw]').forEach(b=>b.classList.toggle('on',b.dataset.vw===v));
+  document.querySelectorAll('.vw').forEach(x=>x.classList.toggle('on', x.id==='vw-'+v));
+  set('tit', TIT[v]||'');
+  if(v==='resumo'&&_lastSelD) setTimeout(()=>chartTemporal(_lastSelD),30);   // canvas escondido nasce com 0px
+}
+document.querySelectorAll('.s-item[data-vw]').forEach(b=>b.addEventListener('click',()=>setVw(b.dataset.vw)));
+
+/* ── lateral recolhida + dicas ── */
+const DICA=document.createElement('div'); DICA.className='dica'; document.body.appendChild(DICA);
+const escondeDica=()=>DICA.classList.remove('on');
+function rotuloItem(b){ const c=b.cloneNode(true); c.querySelectorAll('svg').forEach(e=>e.remove()); return c.textContent.trim(); }
+document.querySelectorAll('.side .s-item').forEach(b=>{
+  b.addEventListener('mouseenter',()=>{
+    if(!document.querySelector('.side').classList.contains('mini'))return;
+    const r=b.getBoundingClientRect();
+    DICA.textContent=rotuloItem(b); DICA.style.left=(r.right+9)+'px'; DICA.style.top=(r.top+r.height/2)+'px';
+    DICA.classList.add('on');
+  });
+  b.addEventListener('mouseleave',escondeDica);
+  b.addEventListener('click',escondeDica);
+});
+function trocaMini(){
+  const s=document.querySelector('.side'), mini=s.classList.toggle('mini');
+  localStorage.setItem('sc_mini', mini?'1':'0');
+  document.getElementById('btMini').title=mini?'Expandir menu':'Recolher menu';
+  escondeDica();
+  setTimeout(()=>{ if(_lastSelD) chartTemporal(_lastSelD); },260);
+}
+if(localStorage.getItem('sc_mini')==='1'){ document.querySelector('.side').classList.add('mini'); document.getElementById('btMini').title='Expandir menu'; }
+
+/* ── tema (mesma chave do hub, para o tema seguir junto entre as páginas) ── */
+const _SOL=`<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4.5"/><path d="M12 1.5v2M12 20.5v2M4.2 4.2l1.4 1.4M18.4 18.4l1.4 1.4M1.5 12h2M20.5 12h2M4.2 19.8l1.4-1.4M18.4 5.6l1.4-1.4"/></svg>`;
+const _LUA=`<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>`;
+function aplicaTema(t){
+  document.body.classList.toggle('claro', t==='light');
+  localStorage.setItem('bi_theme', t);
+  const b=document.getElementById('btTema'); if(b) b.innerHTML = t==='light'?_LUA:_SOL;
+  if(ICS.length) atualizar();
+}
+function trocaTema(){ aplicaTema(document.body.classList.contains('claro')?'dark':'light'); }
+aplicaTema(localStorage.getItem('bi_theme')||'dark');
+
+let _rt;
+window.addEventListener('resize',()=>{ clearTimeout(_rt); _rt=setTimeout(()=>{ if(_lastSelD) chartTemporal(_lastSelD); },400); });
+
+carregar();
+
+</script>
+<script src="../assets/mobile.js"></script>
+<script src="../assets/sortable-table.js"></script>
+<script src="../assets/excel-export.js"></script>
+<script src="../assets/pdf-export.js"></script>
+<script>
+initPdfExport({
+  btnContainer:'#pdf-slot', btnClass:'s-item', btnAoFim:true,
+  title:'Scorecard', subtitle:()=>document.getElementById('titSub').textContent,
+  fileBase:'scorecard', main:()=>document.querySelector('.vw.on'),
+  views:()=>Object.keys(TIT).map(k=>({label:TIT[k], ativar:()=>setVw(k)})),
+  viewAtual:()=>VW, irPara:setVw,
+  isLight:()=>document.body.classList.contains('claro'), setTheme:aplicaTema
+});
+</script>
+<script src="../assets/build-check.js?v=202608161900"></script>
+</body>
+</html>
