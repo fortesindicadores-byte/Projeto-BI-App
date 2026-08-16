@@ -739,6 +739,8 @@ A busca do topo filtra os cards e esconde cluster vazio; no modo lista ela **abr
 
 **Roteiro de aplicação:** hub e Visão Financeira migrados em 15/08/2026; **Acessos** e **Scorecard** em 16/08/2026. Faltam os demais painéis.
 
+**DIRETO NO OFICIAL E PUBLICADO NA HORA** (Renan, 16/08/2026): o padrão já está definido, então não há mais etapa de validação antes de subir. Mexer no painel oficial, **fazer o merge no `main`** e **avisar no chat que publicou** — nada de PR parado em rascunho esperando "ok". Ele já olhou duas vezes uma tela velha porque a mudança estava num PR não publicado; se a mudança não está no `main`, ela não existe. Ao publicar, subir também o `<meta name="build">` para o `build-check` derrubar o HTML em cache.
+
 **A migração é DIRETO NO PAINEL OFICIAL** (Renan, 16/08/2026) — acabou a etapa do clone `<painel>-novo/`. O método continua o mesmo (casca extraída por script, lógica de dados colada inteira, só a apresentação trocada), e o git é a rede de segurança: o painel antigo está no histórico e volta com um `git show <commit>^:<pasta>/index.html`.
 
 ## Exportações no layout novo (Excel · PNG · PDF) — 16/08/2026

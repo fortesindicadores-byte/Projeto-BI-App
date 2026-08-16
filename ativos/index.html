@@ -2,407 +2,478 @@
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
+<meta name="build" content="202608162100">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-<meta name="build" content="202608061817">
-<title>Ativos · BI Frota</title>
+<title>Ativos · Gestão em Movimento</title>
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0"></script>
 <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.2/dist/jspdf.umd.min.js"></script>
-<script src="../assets/pdf-export.js"></script>
-<script src="../assets/excel-export.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0"></script>
 <style>
+/* ============================================================
+   ATIVOS — a composição da frota, no layout padrão do portal.
+   Casca copiada da visao-financeira; a lógica de dados (Ginfo via
+   Supabase, de-para de unidade, filtros em cascata) é a mesma de antes.
+   Três visões na lateral, para acabar com a rolagem.
+   ============================================================ */
 :root{
-  --bg:#0C1017;--card:#141B26;--card2:#1A2335;--border:#1E2D40;
-  --orange:#F97316;--blue:#38BDF8;--text:#F1F5F9;--text2:#94A3B8;--text3:#475569;
-  --green:#3BB33B;--red:#FF6666;--yellow:#F59E0B;
+  /* fundo UNIFORME (mesma regra do hub): o degradê diagonal clareava para o
+     canto superior direito e deixava metade da tela mais clara que a outra */
+  --fundo:
+    radial-gradient(80% 60% at 90% 0%, rgba(255,244,232,.035) 0%, transparent 60%),
+    linear-gradient(45deg, #121214 0%, #121214 100%);
+  --luz:      inset 0 1px 0 rgba(255,255,255,.09);
+  --luz-card: inset 0 1px 0 rgba(255,255,255,.08);
+  --app:      rgba(255,255,255,.030);
+  --side:     rgba(30,30,30,.50);
+  --linha:    rgba(255,255,255,.06);
+  --card:     rgba(44,44,46,.78);
+  --brilho:   linear-gradient(180deg, rgba(255,255,255,.022) 0%, rgba(255,255,255,0) 46%);
+  --card-brd: rgba(255,255,255,.07);
+  --txt:      #EEF2FA;
+  --txt2:     #B2BCD2;
+  --txt3:     #676F83;
+  --txt4:     #4C505C;
+  --hover:    rgba(255,255,255,.06);
+  --azul:     #2E90E8;
+  --verde:    #3BB33B;
+  --vermelho: #FF5252;
+  --laranja:  #F97316;
+  --ambar:    #F4A100;
+  --cinza:    #5B657C;
+  --cabec:    #2B2B30;
+  --pop:      #26262B;   /* menus suspensos: OPACOS, nunca translúcidos */
 }
-*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
-body{font-family:'Montserrat',-apple-system,sans-serif;background:radial-gradient(ellipse at 10% 25%,rgba(249,115,22,.06) 0%,transparent 50%),radial-gradient(ellipse at 90% 75%,rgba(56,189,248,.05) 0%,transparent 50%),var(--bg);color:var(--text);min-height:100vh;font-size:15px;}
+body.claro{
+  --fundo:
+    radial-gradient(80% 60% at 90% 0%, rgba(255,255,255,.35) 0%, transparent 60%),
+    linear-gradient(45deg, #E1E2E5 0%, #E1E2E5 100%);
+  --luz:      inset 0 1px 0 rgba(255,255,255,.9);
+  --luz-card: inset 0 1px 0 rgba(255,255,255,1);
+  --app:      rgba(255,255,255,.34);
+  --side:     rgba(255,255,255,.50);
+  --linha:    rgba(15,23,42,.10);
+  --card:     rgba(255,255,255,.74);
+  --brilho:   linear-gradient(180deg, rgba(255,255,255,.6) 0%, rgba(255,255,255,0) 46%);
+  --card-brd: rgba(15,23,42,.10);
+  --txt:      #161D2B;
+  --txt2:     #4A5568;
+  --txt3:     #737D91;
+  --txt4:     #8B94A6;
+  --hover:    rgba(15,23,42,.05);
+  --azul:     #1B6FC4;
+  --verde:    #00B300;
+  --vermelho: #FF0000;
+  --ambar:    #E9A400;
+  --cinza:    #939CAF;
+  --cabec:    #DCDFE6;
+  --pop:      #FFFFFF;
+}
+*{margin:0;padding:0;box-sizing:border-box;}
+@supports not selector(::-webkit-scrollbar){
+  *{scrollbar-width:thin;scrollbar-color:color-mix(in srgb,var(--txt3) 42%,transparent) transparent;}
+}
+::-webkit-scrollbar{width:11px;height:11px;}
+::-webkit-scrollbar-track{background:transparent;}
+::-webkit-scrollbar-thumb{background:color-mix(in srgb,var(--txt3) 42%,transparent);
+  border:3px solid transparent;background-clip:content-box;border-radius:9px;}
+::-webkit-scrollbar-thumb:hover{background:color-mix(in srgb,var(--txt3) 72%,transparent);background-clip:content-box;}
+::-webkit-scrollbar-corner{background:transparent;}
+::-webkit-scrollbar-button{display:none;width:0;height:0;}
+body::after{content:'';position:fixed;inset:0;z-index:0;pointer-events:none;opacity:.5;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='3'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)' opacity='.05'/%3E%3C/svg%3E");}
+.app{z-index:1;}
+html,body{height:100%;overflow:hidden;}
+body{font-family:'Montserrat',-apple-system,BlinkMacSystemFont,sans-serif;font-size:13px;color:var(--txt);
+  background:var(--fundo);overflow:hidden;}
 
-/* ── Header ── */
-.header{background:rgba(12,16,23,.75);border-bottom:1px solid rgba(255,255,255,.07);padding:10px 24px 12px;display:flex;flex-wrap:wrap;align-items:center;position:sticky;top:0;z-index:100;backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);box-shadow:0 2px 12px rgba(0,0,0,.3);}
-.brand{flex:1;order:1;}
-.brand h1{font-size:18px;font-weight:700;color:var(--orange);}
-.brand p{font-size:12px;color:var(--text2);margin-top:2px;}
-.header-right{flex-shrink:0;order:2;display:flex;align-items:center;gap:8px;}
-.status-badge{font-size:11px;color:var(--text);background:rgba(249,115,22,.15);border:1px solid rgba(249,115,22,.3);border-radius:4px;padding:2px 8px;white-space:nowrap;}
-.access-badge{font-size:11px;color:var(--text2);background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);border-radius:4px;padding:2px 8px;white-space:nowrap;}
-.refresh-btn{background:rgba(249,115,22,.15);border:1px solid rgba(249,115,22,.3);border-radius:4px;padding:4px 8px;cursor:pointer;color:var(--orange);display:flex;align-items:center;}
-.refresh-btn:hover{background:rgba(249,115,22,.25);}
-.theme-btn{background:rgba(249,115,22,.15);border:1px solid rgba(249,115,22,.3);border-radius:4px;padding:4px 6px;cursor:pointer;color:var(--orange);display:flex;align-items:center;}
-.theme-btn:hover{background:rgba(249,115,22,.25);}
-.back-btn{background:rgba(249,115,22,.15);border:1px solid rgba(249,115,22,.3);border-radius:4px;padding:4px 8px;display:flex;align-items:center;color:var(--orange);text-decoration:none;}
-.back-btn:hover{background:rgba(249,115,22,.32);}
-.header-filters{flex-basis:100%;order:3;margin-top:10px;display:flex;gap:10px;flex-wrap:wrap;align-items:flex-start;}
-.filter-group{display:flex;flex-direction:column;gap:3px;}
-.filter-label{display:none;}
+.app{position:absolute;inset:34px;display:flex;border-radius:22px;overflow:hidden;
+  border:1px solid rgba(255,255,255,.10);box-shadow:0 28px 70px rgba(0,0,0,.55), var(--luz);}
+.app::before{content:'';position:absolute;inset:0;background:var(--app);
+  backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);z-index:0;}
+.side,.board{position:relative;z-index:1;}
 
-/* ── Multi-select ── */
+/* ── barra lateral ── */
+.side{width:264px;flex:0 0 264px;display:flex;flex-direction:column;
+  background:var(--side);border-right:1px solid var(--linha);padding:16px 10px 12px;
+  backdrop-filter:blur(13px);-webkit-backdrop-filter:blur(13px);
+  box-shadow:var(--luz), 8px 0 28px rgba(0,0,0,.25);overflow:auto;}
+.s-top{display:flex;align-items:center;gap:9px;padding:2px 8px 14px;}
+.s-top b{flex:1;font-size:13.5px;font-weight:600;}
+.s-mini{display:flex;align-items:center;justify-content:center;width:24px;height:24px;flex:0 0 24px;
+  background:transparent;border:0;border-radius:6px;color:var(--txt3);cursor:pointer;}
+.s-mini:hover{background:var(--hover);color:var(--txt);}
+.side.mini{width:64px;flex:0 0 64px;padding:16px 8px 12px;}
+.side.mini .s-top{justify-content:center;padding-bottom:12px;}
+.side.mini .s-top b,.side.mini .s-top>svg{display:none;}
+.side.mini .s-sec,.side.mini .s-item .n,.side.mini .s-user div{display:none;}
+.side.mini .s-item{font-size:0;justify-content:center;padding:9px 0;gap:0;}
+.side.mini .s-user{flex-wrap:wrap;gap:6px;justify-content:center;padding:12px 0 2px;}
+.side.mini .s-sair{margin:0;}
+.s-sec{display:flex;align-items:center;gap:6px;padding:14px 8px 8px;
+  font-size:10px;font-weight:600;color:var(--txt3);text-transform:uppercase;letter-spacing:1.1px;}
+.s-item{display:flex;align-items:center;gap:9px;width:100%;padding:7px 8px;border:0;border-radius:7px;
+  background:transparent;color:var(--txt2);font-family:inherit;font-size:12.5px;font-weight:500;text-align:left;cursor:pointer;}
+.s-item:hover{background:var(--hover);color:var(--txt);}
+.s-item.on{background:var(--hover);color:var(--txt);font-weight:600;}
+.s-item .n{margin-left:auto;font-size:11px;color:var(--txt3);font-weight:600;}
+.s-user{margin-top:auto;display:flex;align-items:center;gap:9px;padding:12px 8px 2px;border-top:1px solid var(--linha);}
+.s-user div{flex:1;min-width:0;}
+.s-user b{display:block;font-size:12px;font-weight:600;line-height:1.2;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.s-user i{display:block;font-size:9.5px;font-style:normal;color:var(--txt3);text-transform:uppercase;letter-spacing:.8px;margin-top:2px;}
+.s-user .av{flex:0 0 24px;}
+.av{width:24px;height:24px;border-radius:50%;display:flex;align-items:center;justify-content:center;
+  font-size:9px;font-weight:800;letter-spacing:.2px;color:#2A1405;background:#F97316;flex:0 0 24px;
+  box-shadow:0 1px 4px rgba(0,0,0,.25);}
+.s-sair{display:flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:7px;
+  color:var(--txt3);text-decoration:none;flex:0 0 26px;}
+.s-sair:hover{background:var(--hover);color:var(--txt);}
+.dica{position:fixed;z-index:9000;transform:translateY(-50%);pointer-events:none;opacity:0;
+  background:var(--pop);color:var(--txt);border:1px solid var(--card-brd);border-radius:7px;
+  padding:5px 9px;font-size:11.5px;font-weight:600;white-space:nowrap;
+  box-shadow:0 8px 22px rgba(0,0,0,.45);transition:opacity .12s;}
+.dica.on{opacity:1;}
+
+/* ── quadro ── */
+.board{flex:1;min-width:0;display:flex;flex-direction:column;}
+.top{display:flex;align-items:center;gap:6px;padding:20px 24px 12px;flex-wrap:wrap;}
+.tit-wrap{flex:1;min-width:0;}
+.top h1{font-size:21px;font-weight:600;letter-spacing:-.3px;}
+.tit-sub{font-size:11px;color:var(--txt3);font-weight:600;margin-top:2px;letter-spacing:.2px;}
+.tool{display:flex;align-items:center;gap:7px;background:transparent;border:0;border-radius:7px;
+  padding:6px 10px;color:var(--txt2);font-family:inherit;font-size:12.5px;font-weight:500;cursor:pointer;}
+.tool:hover{background:var(--hover);color:var(--txt);}
+.tool.ico{padding:7px 9px;}
+.filtros{display:flex;align-items:center;gap:4px;min-width:0;}
+
+/* ── filtros multi-select (mesma mecânica do painel original, visual do app) ── */
 .ms-wrap{position:relative;}
-.ms-btn{display:flex;align-items:center;gap:8px;background:#0a0f18;color:var(--text);border:1px solid #2a3a50;border-radius:4px;font-family:'Montserrat',sans-serif;font-size:11px;font-weight:700;padding:6px 12px;cursor:pointer;text-transform:uppercase;letter-spacing:.5px;white-space:nowrap;min-width:110px;}
-.ms-btn:hover{border-color:var(--orange);}
-.ms-lbl{flex:1;}
-.ms-cnt{background:var(--orange);color:#000;border-radius:10px;padding:1px 6px;font-size:11px;font-weight:800;display:none;}
-.ms-btn svg{flex-shrink:0;opacity:.8;}
-.ms-panel{display:none;flex-direction:column;position:absolute;top:calc(100% + 4px);left:0;z-index:500;background:#0f1824;border:1px solid #2a3a50;border-radius:4px;min-width:230px;max-height:300px;box-shadow:0 8px 24px rgba(0,0,0,.7);}
-.ms-panel.open{display:flex;}
-.ms-search{padding:7px 10px;border-bottom:1px solid #1e2d40;display:flex;align-items:center;gap:6px;flex-shrink:0;}
-.ms-search svg{opacity:.4;flex-shrink:0;}
-.ms-search input{flex:1;background:transparent;border:none;color:var(--text);font-family:'Montserrat',sans-serif;font-size:13px;outline:none;}
-.ms-search input::placeholder{color:var(--text3);}
-.ms-list{overflow-y:auto;flex:1;}
-.ms-opt{display:flex;align-items:center;gap:8px;padding:7px 12px;cursor:pointer;font-size:13px;color:var(--text2);text-transform:uppercase;letter-spacing:.3px;}
-.ms-opt:hover{background:rgba(255,255,255,.05);color:var(--text);}
-.ms-opt.all-opt{border-bottom:1px solid #1e2d40;color:var(--text);font-weight:700;}
-.ms-opt input[type=checkbox]{accent-color:var(--orange);cursor:pointer;width:14px;height:14px;flex-shrink:0;}
-.ms-only{margin-left:auto;font-size:10px;color:var(--orange);padding:1px 5px;border-radius:2px;cursor:pointer;white-space:nowrap;flex-shrink:0;opacity:0;transition:opacity .12s;}
+.ms-btn{display:flex;align-items:center;gap:7px;background:transparent;border:0;border-radius:7px;
+  padding:6px 10px;color:var(--txt2);font-family:inherit;font-size:12.5px;font-weight:500;cursor:pointer;white-space:nowrap;}
+.ms-btn:hover{background:var(--hover);color:var(--txt);}
+.ms-wrap.ativo .ms-btn{background:var(--hover);color:var(--txt);}
+.ms-cnt{display:none;min-width:16px;height:16px;padding:0 5px;border-radius:9px;background:var(--laranja);
+  color:#2A1405;font-size:9.5px;font-weight:800;line-height:16px;text-align:center;}
+.ms-panel{display:none;position:absolute;top:calc(100% + 6px);right:0;z-index:60;min-width:236px;
+  background:var(--pop);border:1px solid var(--card-brd);border-radius:10px;padding:6px;
+  box-shadow:0 18px 44px rgba(0,0,0,.55), 0 3px 10px rgba(0,0,0,.35);}
+body.claro .ms-panel{box-shadow:0 18px 44px rgba(15,23,42,.20), 0 3px 10px rgba(15,23,42,.10);}
+.ms-panel.open{display:block;}
+.ms-search{display:flex;align-items:center;gap:7px;padding:6px 8px;margin-bottom:4px;border-bottom:1px solid var(--linha);}
+.ms-search input{flex:1;min-width:0;background:transparent;border:0;outline:0;font-family:inherit;font-size:12px;color:var(--txt);}
+.ms-list{max-height:262px;overflow:auto;}
+.ms-opt{display:flex;align-items:center;gap:9px;min-height:31px;padding:7px 9px;border-radius:7px;
+  color:var(--txt);font-size:12.5px;cursor:pointer;white-space:nowrap;}
+.ms-opt:hover{background:var(--hover);}
+.ms-opt input[type=checkbox]{accent-color:var(--azul);width:14px;height:14px;flex:0 0 14px;cursor:pointer;}
+.ms-opt.all-opt{font-weight:700;border-bottom:1px solid var(--linha);margin-bottom:4px;border-radius:0;}
+.ms-only{margin-left:auto;font-size:9px;font-weight:700;color:var(--laranja);padding:1px 7px;border-radius:4px;opacity:0;flex:0 0 auto;}
 .ms-opt:hover .ms-only{opacity:1;}
 .ms-only:hover{background:rgba(249,115,22,.2);}
-.ms-list::-webkit-scrollbar{width:4px;}
-.ms-list::-webkit-scrollbar-track{background:transparent;}
-.ms-list::-webkit-scrollbar-thumb{background:#2a3a50;border-radius:2px;}
 
-/* ── Light mode ── */
-body.light-mode .main{background:#F0F0F0;--text:#1a1a1a;--text2:#444444;--text3:#666666;color:var(--text);--red:#ff0000;--green:#0E8C0E;}body.light-mode .hero-sep{background:rgba(0,0,0,.18)!important;color:rgba(0,0,0,.2)!important;}
-body.light-mode .kpi-card,body.light-mode .chart-card,body.light-mode .tbl-section{background:rgba(128,128,128,.14)!important;border:none!important;box-shadow:none!important;--text:#1a1a1a;--text2:#444444;--text3:#555555;}
-body.light-mode thead th{border-bottom-color:rgba(0,0,0,.10);background:#F0F0F0;}
-body.light-mode tfoot tr.total td{border-top-color:rgba(0,0,0,.12);}
-body.light-mode tbody tr{border-bottom:1px solid rgba(0,0,0,.06);}
-body.light-mode td{color:var(--text);}
+/* ── área de conteúdo ── */
+.cols{flex:1;min-height:0;display:flex;flex-direction:column;overflow:hidden;padding:0 24px 24px;}
+.vw{display:none;flex:1;min-height:0;flex-direction:column;gap:12px;}
+.vw.on{display:flex;overflow:auto;}
+.vw.rola{overflow:auto;padding-bottom:6px;}
+.card{border:1px solid var(--card-brd);border-radius:12px;background:var(--side);
+  backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);box-shadow:var(--luz-card);}
 
-/* ── Main ── */
-.main{padding:20px 24px;}
+/* hero + KPIs */
+/* igual ao painel original: Receita na ponta esquerda, EBITDA na ponta direita
+   com o conteúdo alinhado à direita (.hero-ebitda{margin-left:auto;text-align:right}) */
+.fin-hero{display:flex;align-items:flex-end;gap:20px;flex:0 0 auto;}
+.heb{margin-left:auto;text-align:right;}
+.heb .hdel{justify-content:flex-end;}
+.hlbl{font-size:9.5px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:.9px;}
+.hval{font-size:clamp(26px,3.6vh,40px);font-weight:800;line-height:1;margin:4px 0 7px;color:var(--txt);}
+.hdel{display:flex;gap:18px;flex-wrap:wrap;}
+.hdel div{font-size:9px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:.7px;}
+.hdel b{display:block;font-size:13px;font-weight:800;color:var(--txt);margin-top:2px;letter-spacing:0;text-transform:none;}
+.kpis{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;flex:0 0 auto;}
+.kpi{padding:19px 16px;border:1px solid var(--card-brd);border-radius:11px;background:var(--side);
+  backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);}
+.kpi .kl{font-size:9.5px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:.8px;}
+.kpi .kv{font-size:25px;font-weight:800;color:var(--txt);margin-top:7px;line-height:1.1;}
+.kpi .km{font-size:10.5px;color:var(--txt3);margin-top:8px;font-weight:600;}
+.kpi .km b{font-weight:800;}
 
-/* ── Hero ── */
-.hero-wrap{margin-bottom:20px;padding:4px 0 0;}
-.hero-label{font-size:12px;font-weight:700;color:var(--text);text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;}
-.hero-value{font-size:54px;font-weight:800;line-height:1;margin-bottom:10px;}
-.disp-red{color:var(--red)!important;}
-.disp-yellow{color:var(--yellow)!important;}
-.disp-green{color:var(--green)!important;}
-.hero-row2{display:flex;gap:28px;margin-bottom:10px;}
-.hero-sub-item{display:flex;flex-direction:column;gap:2px;}
-.hero-sub-label{font-size:11px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.5px;}
-.hero-sub-val{font-size:22px;font-weight:800;color:var(--text);}
-.hero-deltas{display:flex;align-items:center;gap:10px;flex-wrap:wrap;}
-.hero-delta{display:flex;flex-direction:column;gap:1px;}
-.hero-delta span{font-size:11px;color:var(--text3);}
-.hero-delta b{font-size:15px;font-weight:700;}
-.hero-sep{color:var(--text3);font-size:22px;font-weight:300;padding:0 4px;}
-.cr{color:var(--red)!important;font-weight:700;}
-.cg{color:var(--green)!important;font-weight:700;}
-.cy{color:var(--yellow)!important;font-weight:700;}
+/* gráficos */
+.gr2{flex:1 1 auto;min-height:190px;max-height:44vh;display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+.gcard{min-height:0;display:flex;flex-direction:column;padding:12px 16px 10px;position:relative;}
+.gtit{font-size:12px;font-weight:800;}
+.gsub{font-size:10px;color:var(--txt3);margin:2px 0 6px;}
+.gcv{flex:1;min-height:0;position:relative;}
+.gleg{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:4px;}
+.gleg span{display:flex;align-items:center;gap:5px;font-size:9.5px;font-weight:700;color:var(--txt3);letter-spacing:.5px;}
+.gleg i{width:14px;height:0;border-top:2px dashed currentColor;display:inline-block;}
+.gleg i.sq{width:9px;height:9px;border:0;border-radius:2px;background:currentColor;}
 
-/* ── Charts ── */
-.charts-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px;}
-.chart-card{min-width:0;background:rgba(20,27,38,.55);border:1px solid rgba(255,255,255,.07);border-radius:8px;padding:18px 20px;backdrop-filter:blur(16px);box-shadow:0 2px 12px rgba(0,0,0,.25);}
-.chart-title{font-size:15px;font-weight:800;color:var(--text);margin-bottom:2px;}
-.chart-sub{font-size:12px;color:var(--text2);margin-bottom:14px;}
-.chart-wrap{position:relative;height:240px;}
-.chart-wrap-tall{position:relative;height:260px;}
-.mini-tbl-wrap{height:520px;overflow-y:auto;}
-.mini-tbl-wrap::-webkit-scrollbar{width:4px;}
-.mini-tbl-wrap::-webkit-scrollbar-track{background:transparent;}
-.mini-tbl-wrap::-webkit-scrollbar-thumb{background:#2a3a50;border-radius:2px;}
+/* botões de referência / dimensão */
+.rt{background:transparent;border:1px solid var(--card-brd);border-radius:20px;padding:3px 10px;cursor:pointer;
+  font-family:inherit;font-size:9.5px;font-weight:800;color:var(--txt2);letter-spacing:.6px;white-space:nowrap;}
+.rt:hover{background:var(--hover);color:var(--txt);}
+.rt .l{color:var(--txt3);font-weight:600;}
+.rt.abs{position:absolute;top:10px;right:12px;z-index:3;}
+.dims{display:flex;gap:4px;flex-wrap:wrap;}
+.dimb{background:transparent;border:1px solid var(--card-brd);border-radius:7px;padding:4px 10px;cursor:pointer;
+  font-family:inherit;font-size:10.5px;font-weight:700;color:var(--txt2);}
+.dimb:hover{background:var(--hover);color:var(--txt);}
+.dimb.on{background:var(--azul);border-color:transparent;color:#fff;}
 
-/* ── Título de card com botão de toggle (Projeto/Idade · Modelo/Tipo · Unidade/Projeto) ── */
-.chart-title-row{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;}
-.chart-toggle{background:rgba(249,115,22,.12);border:1px solid rgba(249,115,22,.3);border-radius:4px;padding:4px 10px;font-family:'Montserrat',sans-serif;font-size:11px;font-weight:700;color:var(--orange);cursor:pointer;white-space:nowrap;text-transform:uppercase;letter-spacing:.3px;flex-shrink:0;}
-.chart-toggle:hover{background:rgba(249,115,22,.25);}
+/* tabelas DRE */
+.tsec{flex:1;min-height:0;display:flex;flex-direction:column;padding:14px 16px 12px;}
+.thead-row{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:2px;}
+.ttit{font-size:14px;font-weight:800;}
+.tsub{font-size:10px;color:var(--txt3);margin-bottom:8px;}
+.twrap{flex:1;min-height:0;overflow:auto;border:1px solid var(--card-brd);border-radius:10px;background:var(--side);}
+table.dre{width:100%;border-collapse:collapse;font-size:12px;}
+table.dre thead th{position:sticky;top:0;z-index:2;background:var(--cabec);text-align:right;
+  padding:10px 12px;font-size:9.5px;font-weight:700;color:var(--txt2);text-transform:uppercase;
+  letter-spacing:.7px;border-bottom:1px solid var(--card-brd);white-space:nowrap;}
+table.dre thead th:first-child{text-align:left;}
+table.dre thead th .grp{display:block;font-size:8.5px;color:var(--txt3);letter-spacing:.6px;margin-bottom:1px;}
+table.dre td{padding:9px 12px;border-bottom:1px solid var(--linha);color:var(--txt2);white-space:nowrap;}
+table.dre td.conta{color:var(--txt);font-weight:600;text-align:left;}
+table.dre td.num{text-align:right;}
+table.dre tbody tr:hover{background:var(--hover);}
+/* totalizadores no tom do cabeçalho — vale para todas as tabelas do painel */
+table.dre tr.total td{font-weight:800;color:var(--txt);border-top:1px solid var(--card-brd);background:var(--cabec);}
+table.dre tr.ref-row td{color:var(--txt);background:color-mix(in srgb,var(--azul) 8%,transparent);}
+table.dre tr.ebitda-row td{color:var(--txt);font-weight:700;background:var(--cabec);}
+table.dre .sep-l{border-left:1px solid var(--card-brd);}
+/* precisa vencer o "table.dre td{color:...}", que tem especificidade maior */
+table.dre td.cr,.cr{color:var(--vermelho)!important;font-weight:700;}
+table.dre td.cg,.cg{color:var(--verde)!important;font-weight:700;}
+table.dre td.cr-t,.cr-t{color:var(--vermelho)!important;font-weight:700;}
+table.dre td.cg-t,.cg-t{color:var(--verde)!important;font-weight:700;}
 
-.mini-tbl thead th{position:sticky;top:0;background:var(--card);z-index:2;}
-body.light-mode .mini-tbl thead th{background:#F0F0F0;}
-.mini-tbl td.disp-val{font-weight:800;}
 
-/* ── Table ── */
-.tbl-section{background:rgba(20,27,38,.55);border:1px solid rgba(255,255,255,.07);border-radius:8px;padding:18px 20px 16px;margin-bottom:16px;backdrop-filter:blur(16px);box-shadow:0 2px 12px rgba(0,0,0,.25);}
-.tbl-title{font-size:18px;font-weight:800;color:var(--text);margin-bottom:3px;}
-.tbl-sub{font-size:12px;color:var(--text2);margin-bottom:16px;}
-.tbl-wrap{overflow-x:auto;}
-table{width:100%;border-collapse:collapse;font-size:13px;}
-thead th{background:var(--card);color:var(--text);font-size:12px;font-weight:700;padding:6px 8px 10px;border-bottom:1px solid rgba(255,255,255,.10);text-transform:uppercase;letter-spacing:.5px;white-space:nowrap;text-align:left;}
-td{padding:8px 8px;border:none;color:var(--text);white-space:nowrap;font-size:13px;}
-tbody tr:hover{background:rgba(255,255,255,.035);}
-table td:first-child,table th:first-child{text-align:left;}
-td.num,th.num{text-align:right;}
-td.desc{max-width:180px;overflow:hidden;text-overflow:ellipsis;}
-td.obs{max-width:140px;overflow:hidden;text-overflow:ellipsis;}
+/* ── Ativos: cards de faixa, mini-tabelas de composição e o tabelão ───────── */
+.kpis.k4{grid-template-columns:repeat(4,1fr);gap:10px;flex:0 0 auto;}
+/* o .gr2 da casca trava em 44vh (lá há tabela embaixo); aqui o gráfico é o miolo */
+#vw-resumo .gr2{max-height:none;}
+.kpis.k4 .kpi{padding:22px 15px;}
+.kv.cg{color:var(--verde);} .kv.cy{color:var(--ambar);} .kv.cr{color:var(--vermelho);}
 
-/* ── Status badges ── */
-.badge{display:inline-flex;align-items:center;gap:4px;padding:2px 7px;border-radius:10px;font-size:11px;font-weight:700;white-space:nowrap;}
-.badge-vencida{background:rgba(255,102,102,.18);color:#FF6666;}
-.badge-prazo{background:rgba(59,179,59,.18);color:#3BB33B;}
-.badge-sem{background:rgba(148,163,184,.18);color:#94A3B8;}
-.badge-dot{width:6px;height:6px;border-radius:50%;background:currentColor;flex-shrink:0;}
+/* duas mini-tabelas lado a lado, cada uma com o próprio botão de alternância */
+.comp2{flex:1;min-height:0;display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+.comp2 .tsec{min-height:0;}
+table.dre td.num,table.dre th.num{text-align:right;}
+table.dre td.cg{color:var(--verde)!important;} table.dre td.cy{color:var(--ambar)!important;}
+table.dre td.cr{color:var(--vermelho)!important;}
+#tbl-body td b{color:var(--txt);font-weight:700;}
 
-/* ── Dias Indisp. cell ── */
-.di-cell{font-weight:700;border-radius:4px;padding:2px 8px;display:inline-block;min-width:36px;text-align:right;}
-.di-hi{background:rgba(255,102,102,.22);color:var(--red);}
-.di-md{background:rgba(234,179,8,.20);color:#EAB308;}
-.di-lo{background:rgba(59,179,59,.18);color:var(--green);}
-
-/* ── Toggle detalhes (mobile) ── */
+/* o tabelão da frota: coluna estreita p/ caber sem rolagem lateral */
+#tbl-frota{table-layout:fixed;}
+#tbl-frota th,#tbl-frota td{overflow:hidden;text-overflow:ellipsis;}
+#tbl-frota th{font-size:8.5px;}
+#tbl-frota td{font-size:11px;padding:8px 10px;}
 .tbl-det-toggle{display:none;}
-
-/* ── Warn bar ── */
-.warn-bar{background:rgba(234,179,8,.08);border:1px solid rgba(234,179,8,.2);border-radius:8px;color:#a16207;font-size:12px;padding:10px 16px;margin-bottom:16px;display:none;}
-.warn-bar.show{display:flex;align-items:center;gap:10px;}
-.warn-bar button{background:none;border:1px solid #a16207;border-radius:5px;color:#a16207;font-size:13px;padding:3px 10px;cursor:pointer;}
-
-/* ── Mobile ── */
-@media(max-width:768px){
-  /* ── Header compacto ── */
-  .header{padding:8px 12px 10px;}
-  .brand h1{font-size:14px;}
-  .brand p{font-size:10px;}
-  .header-right{flex-direction:row;align-items:center;gap:4px;flex-wrap:wrap;justify-content:flex-end;}
-  .header-right .refresh-btn{display:none;}
-  .status-badge,.access-badge{font-size:10px;padding:2px 6px;}
-  .access-badge{max-width:160px;overflow:hidden;text-overflow:ellipsis;}
-  .back-btn{padding:3px 6px;}
-  .back-btn svg{width:12px;height:12px;}
-  .theme-btn{padding:3px 5px;}
-  .theme-btn svg{width:13px;height:13px;}
-
-  /* ── Filtros full-width ~2/linha ── */
-  .header-filters{gap:5px;margin-top:8px;}
-  .filter-group{flex:0 0 calc(50% - 3px);min-width:0;}
-  .ms-wrap{width:100%;}
-  .ms-btn{width:100%;min-width:0;font-size:10px;padding:4px 6px;gap:3px;}
-  .ms-btn svg{width:9px;height:9px;}
-  .ms-panel{min-width:0;width:max(100%,180px);}
-
-  /* ── Main ── */
-  .main{padding:12px;}
-
-  /* ── Hero/cards menores e empilhados ── */
-  .hero-wrap{margin-bottom:14px;}
-  .hero-value{font-size:36px;}
-  .hero-row2{gap:18px;}
-  .hero-sub-val{font-size:18px;}
-  .hero-deltas{gap:8px;}
-  .hero-delta b{font-size:12px;}
-  .kpi-card{min-width:0;width:100%;}
-
-  /* ── Gráficos empilhados 1 coluna, ~220px ── */
-  .charts-grid{grid-template-columns:1fr;gap:10px;margin-bottom:10px;}
-  .chart-card{padding:14px 14px;}
-  .chart-wrap,.chart-wrap-tall{height:240px;}
-  .chart-title-row{flex-wrap:wrap;}
-  .chart-toggle{font-size:10px;padding:3px 8px;}
-  .mini-tbl-wrap{height:240px;}
-
-  /* Colunas secundárias do tabelão ocultas por padrão */
-  .m-hide{display:none;}
-
-  /* Mini tabelas (unidade/tipo): fonte compacta */
-  .mini-tbl{font-size:12px;}
-  .mini-tbl thead th{font-size:11px;padding:5px 4px;}
-  .mini-tbl td{padding:6px 4px;font-size:12px;}
-
-  /* Tabelão indisponibilidade: fonte compacta + botão expande/recolhe */
-  .tbl-section{padding:14px 14px 14px;}
-  .tbl-title{font-size:14px;}
-  table{font-size:12px;}
-  thead th{font-size:11px;padding:6px 5px 8px;letter-spacing:.2px;}
-  td{padding:7px 5px;font-size:12px;}
-  .tbl-det-toggle{
-    display:inline-flex;align-items:center;gap:6px;
-    margin-bottom:10px;
-    background:rgba(249,115,22,.12);border:1px solid rgba(249,115,22,.3);
-    border-radius:4px;padding:5px 12px;
-    font-family:'Montserrat',sans-serif;font-size:12px;font-weight:700;
-    color:var(--orange);cursor:pointer;text-transform:uppercase;letter-spacing:.5px;
-  }
-  /* Quando expandido: mostrar colunas e permitir scroll horizontal (.tbl-wrap já tem overflow-x:auto) */
-  .tbl-expanded .m-hide{display:table-cell;}
-  .tbl-expanded table{font-size:11px;}
-  .tbl-expanded thead th{font-size:10px;padding:5px 3px;}
-  .tbl-expanded td{padding:6px 3px;font-size:11px;}
-  .tbl-expanded td.desc{max-width:120px;}
-  .tbl-expanded td.obs{max-width:100px;}
+.loading{text-align:center;color:var(--txt4);padding:26px;font-size:11px;}
+@media(max-width:1100px){ .kpis.k4{grid-template-columns:repeat(2,1fr);} }
+@media(max-width:860px){
+  .comp2{display:block;}
+  .comp2 .tsec{margin-bottom:12px;}
+  #tbl-frota{table-layout:auto;}
 }
 
-/* ── Telas muito estreitas (≤480px) ── */
-@media(max-width:480px){
-  .hero-value{font-size:32px;}
-  .hero-row2{gap:14px;}
-  .chart-wrap,.chart-wrap-tall{height:220px;}
-  .mini-tbl-wrap{height:220px;}
-  /* Filtros: garantir 2/linha sem estourar a 380px */
-  .filter-group{flex:0 0 calc(50% - 3px);}
-  .ms-btn{font-size:7px;padding:4px 5px;}
+@media(max-width:1100px){ .kpis{grid-template-columns:repeat(3,1fr);} }
+/* ── celular: nada de altura por flex (colapsava gráfico e tabela para 0);
+      a página rola e cada bloco tem altura própria ── */
+@media(max-width:860px){
+  body{overflow:auto;}
+  .app{position:static;inset:auto;min-height:100%;border-radius:0;flex-direction:column;box-shadow:none;border:0;}
+  .app::before{position:fixed;inset:0;}
+  .side{width:auto;flex:none;border-right:0;border-bottom:1px solid var(--linha);padding:8px 10px;overflow:visible;}
+  .side.mini{width:auto;flex:none;padding:8px 10px;}
+  .s-user,.s-top,.s-sec{display:none;}
+  /* as visões viram uma fileira que rola de lado */
+  .side{display:flex;flex-direction:row;gap:6px;overflow-x:auto;scrollbar-width:none;}
+  .side::-webkit-scrollbar{display:none;}
+  .side .s-item{width:auto;flex:0 0 auto;white-space:nowrap;font-size:12px;padding:7px 11px;
+    border:1px solid var(--card-brd);border-radius:20px;}
+  .side.mini .s-item{font-size:12px;padding:7px 11px;gap:9px;}
+  .side .s-item.on{background:var(--laranja);border-color:transparent;color:#2A1405;}
+  .top{padding:12px 14px 8px;gap:4px;}
+  .tit-wrap{flex:1 1 auto;min-width:0;}
+  .top h1{font-size:17px;}
+  /* filtros numa faixa própria que rola de lado, em vez de quebrar em 3 linhas */
+  .filtros{order:3;flex:1 1 100%;overflow-x:auto;scrollbar-width:none;padding-bottom:2px;}
+  .filtros::-webkit-scrollbar{display:none;}
+  .filtros .ms-wrap{flex:0 0 auto;}
+  .ms-btn{font-size:12px;padding:6px 9px;}
+  .ms-panel{right:auto;left:0;min-width:210px;}
+  .cols{overflow:visible;padding:0 14px 22px;}
+  .vw{display:none;}
+  .vw.on{display:block;}                      /* sem flex: cada bloco cresce sozinho */
+  .vw>*{margin-bottom:12px;}
+  .fin-hero{gap:14px;flex-direction:column;align-items:flex-start;}
+  .heb{margin-left:0;text-align:left;}
+  .heb .hdel{justify-content:flex-start;}
+  .kpis{grid-template-columns:repeat(2,1fr);}
+  .gr2,.wf-grid{display:block;height:auto;}
+  .wf-grid .gcard{height:280px;margin-bottom:12px;}
+  .gcard{height:300px;margin-bottom:12px;}
+  .tsec{display:block;padding:12px 12px 10px;}
+  .thead-row{margin-bottom:6px;}
+  .twrap{max-height:none;overflow-x:auto;}
+  .emb{height:76vh;}
 }
 </style>
-<script>try{if(!sessionStorage.getItem("gem_hub"))location.replace("../");}catch(e){}</script>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 <body>
+<div class="app">
+  <aside class="side">
+    <div class="s-top">
+      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="var(--laranja)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="5" width="14" height="11" rx="1"/><path d="M15 9h4l3 3v4h-7z"/><circle cx="5.5" cy="18.5" r="2"/><circle cx="18" cy="18.5" r="2"/></svg>
+      <b>Ativos</b>
+      <button class="s-mini" id="btMini" onclick="trocaMini()" title="Recolher menu">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16"/></svg>
+      </button>
+    </div>
 
-<header class="header">
-  <div class="brand">
-    <h1>Ativos</h1>
-    <p>BI Frota — Gestão em Movimento · composição da frota</p>
-  </div>
-  <div class="header-right">
-    <a href="../" class="back-btn" title="Voltar ao Hub"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg></a>
-    <button class="theme-btn" id="themeBtn" title="Modo claro/escuro"></button>
-    <button class="refresh-btn" onclick="atualizar()" title="Atualizar dados">
-      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/></svg>
+    <div class="s-sec">Visões</div>
+    <button class="s-item on" data-vw="resumo"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg> Resumo Gerencial</button>
+    <button class="s-item" data-vw="composicao"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><rect x="3" y="3" width="7" height="9"/><rect x="14" y="3" width="7" height="5"/><rect x="14" y="12" width="7" height="9"/><rect x="3" y="16" width="7" height="5"/></svg> Composição</button>
+    <button class="s-item" data-vw="frota"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 6h16M4 12h16M4 18h10"/></svg> Frota</button>
+
+    <div class="s-sec">Atalhos</div>
+    <div id="pdf-slot"></div>
+    <button class="s-item" onclick="atualizar()">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/></svg>
+      Atualizar dados
     </button>
-    <span class="status-badge" id="status-badge">Carregando…</span>
-    <span class="access-badge" id="access-badge" style="display:none"></span>
-  </div>
-  <div class="header-filters">
-    <div class="filter-group">
-      <div class="ms-wrap" id="ms-uni">
-        <button class="ms-btn" onclick="toggleMs('ms-uni')"><span class="ms-lbl">Unidade</span><span class="ms-cnt"></span><svg width="10" height="6" viewBox="0 0 10 6"><path d="M0 0l5 6 5-6z" fill="#F97316"/></svg></button>
-        <div class="ms-panel"><div class="ms-search"><svg width="12" height="12" viewBox="0 0 12 12"><circle cx="5" cy="5" r="4" stroke="#94A3B8" stroke-width="1.5" fill="none"/><line x1="8.5" y1="8.5" x2="11" y2="11" stroke="#94A3B8" stroke-width="1.5"/></svg><input type="text" placeholder="Pesquisar…"></div><div class="ms-list"></div></div>
-      </div>
-    </div>
-    <div class="filter-group">
-      <div class="ms-wrap" id="ms-proj">
-        <button class="ms-btn" onclick="toggleMs('ms-proj')"><span class="ms-lbl">Projeto</span><span class="ms-cnt"></span><svg width="10" height="6" viewBox="0 0 10 6"><path d="M0 0l5 6 5-6z" fill="#F97316"/></svg></button>
-        <div class="ms-panel"><div class="ms-search"><svg width="12" height="12" viewBox="0 0 12 12"><circle cx="5" cy="5" r="4" stroke="#94A3B8" stroke-width="1.5" fill="none"/><line x1="8.5" y1="8.5" x2="11" y2="11" stroke="#94A3B8" stroke-width="1.5"/></svg><input type="text" placeholder="Pesquisar…"></div><div class="ms-list"></div></div>
-      </div>
-    </div>
-    <div class="filter-group">
-      <div class="ms-wrap" id="ms-tipo">
-        <button class="ms-btn" onclick="toggleMs('ms-tipo')"><span class="ms-lbl">Tipo Veículo</span><span class="ms-cnt"></span><svg width="10" height="6" viewBox="0 0 10 6"><path d="M0 0l5 6 5-6z" fill="#F97316"/></svg></button>
-        <div class="ms-panel"><div class="ms-search"><svg width="12" height="12" viewBox="0 0 12 12"><circle cx="5" cy="5" r="4" stroke="#94A3B8" stroke-width="1.5" fill="none"/><line x1="8.5" y1="8.5" x2="11" y2="11" stroke="#94A3B8" stroke-width="1.5"/></svg><input type="text" placeholder="Pesquisar…"></div><div class="ms-list"></div></div>
-      </div>
-    </div>
-    <div class="filter-group">
-      <div class="ms-wrap" id="ms-marca">
-        <button class="ms-btn" onclick="toggleMs('ms-marca')"><span class="ms-lbl">Marca</span><span class="ms-cnt"></span><svg width="10" height="6" viewBox="0 0 10 6"><path d="M0 0l5 6 5-6z" fill="#F97316"/></svg></button>
-        <div class="ms-panel"><div class="ms-search"><svg width="12" height="12" viewBox="0 0 12 12"><circle cx="5" cy="5" r="4" stroke="#94A3B8" stroke-width="1.5" fill="none"/><line x1="8.5" y1="8.5" x2="11" y2="11" stroke="#94A3B8" stroke-width="1.5"/></svg><input type="text" placeholder="Pesquisar…"></div><div class="ms-list"></div></div>
-      </div>
-    </div>
-    <div class="filter-group">
-      <div class="ms-wrap" id="ms-modelo">
-        <button class="ms-btn" onclick="toggleMs('ms-modelo')"><span class="ms-lbl">Modelo</span><span class="ms-cnt"></span><svg width="10" height="6" viewBox="0 0 10 6"><path d="M0 0l5 6 5-6z" fill="#F97316"/></svg></button>
-        <div class="ms-panel"><div class="ms-search"><svg width="12" height="12" viewBox="0 0 12 12"><circle cx="5" cy="5" r="4" stroke="#94A3B8" stroke-width="1.5" fill="none"/><line x1="8.5" y1="8.5" x2="11" y2="11" stroke="#94A3B8" stroke-width="1.5"/></svg><input type="text" placeholder="Pesquisar…"></div><div class="ms-list"></div></div>
-      </div>
-    </div>
-    <div class="filter-group">
-      <div class="ms-wrap" id="ms-ano">
-        <button class="ms-btn" onclick="toggleMs('ms-ano')"><span class="ms-lbl">Ano</span><span class="ms-cnt"></span><svg width="10" height="6" viewBox="0 0 10 6"><path d="M0 0l5 6 5-6z" fill="#F97316"/></svg></button>
-        <div class="ms-panel"><div class="ms-search"><svg width="12" height="12" viewBox="0 0 12 12"><circle cx="5" cy="5" r="4" stroke="#94A3B8" stroke-width="1.5" fill="none"/><line x1="8.5" y1="8.5" x2="11" y2="11" stroke="#94A3B8" stroke-width="1.5"/></svg><input type="text" placeholder="Pesquisar…"></div><div class="ms-list"></div></div>
-      </div>
-    </div>
-    <div class="filter-group">
-      <div class="ms-wrap" id="ms-estado">
-        <button class="ms-btn" onclick="toggleMs('ms-estado')"><span class="ms-lbl">Estado</span><span class="ms-cnt"></span><svg width="10" height="6" viewBox="0 0 10 6"><path d="M0 0l5 6 5-6z" fill="#F97316"/></svg></button>
-        <div class="ms-panel"><div class="ms-search"><svg width="12" height="12" viewBox="0 0 12 12"><circle cx="5" cy="5" r="4" stroke="#94A3B8" stroke-width="1.5" fill="none"/><line x1="8.5" y1="8.5" x2="11" y2="11" stroke="#94A3B8" stroke-width="1.5"/></svg><input type="text" placeholder="Pesquisar…"></div><div class="ms-list"></div></div>
-      </div>
-    </div>
-  </div>
-</header>
+    <a class="s-item" href="../" style="text-decoration:none">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V21h14V9.5"/></svg>
+      Hub
+    </a>
 
-<div class="main">
-  <div class="warn-bar" id="warnBar"><span id="warnMsg">⚠ Erro ao carregar dados.</span><button onclick="atualizar()">Tentar novamente ↺</button></div>
+    <div class="s-user">
+      <span class="av">GM</span>
+      <div><b>Gestão em Movimento</b><i id="euSub">Frota do Ginfo</i></div>
+      <a class="s-sair" href="../" title="Sair para o hub">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+      </a>
+    </div>
+  </aside>
 
-  <!-- Hero -->
-  <div class="hero-wrap">
-    <div class="hero-label">Frota Ativa</div>
-    <div class="hero-value" id="hero-qtd">—</div>
-    <div class="hero-row2">
-      <div class="hero-sub-item">
-        <span class="hero-sub-label">Idade Média</span>
-        <span class="hero-sub-val" id="hero-idade">—</span>
+  <main class="board">
+    <div class="top">
+      <div class="tit-wrap">
+        <h1 id="tit">Resumo Gerencial</h1>
+        <div class="tit-sub" id="titSub">Carregando…</div>
       </div>
-      <div class="hero-sub-item">
-        <span class="hero-sub-label">Tipos de Veículo</span>
-        <span class="hero-sub-val" id="hero-tipos">—</span>
+      <div class="filtros">
+        <div class="ms-wrap" id="ms-uni"><button class="ms-btn" onclick="toggleMs('ms-uni')"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18M5 21V7l7-4 7 4v14"/><path d="M9 21v-6h6v6"/></svg>Unidade<span class="ms-cnt"></span></button>
+        <div class="ms-panel"><div class="ms-search"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M16.5 16.5 21 21"/></svg><input type="text" placeholder="Pesquisar…"></div><div class="ms-list"></div></div></div>
+        <div class="ms-wrap" id="ms-proj"><button class="ms-btn" onclick="toggleMs('ms-proj')"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M6 12h12M9 18h6"/></svg>Projeto<span class="ms-cnt"></span></button>
+        <div class="ms-panel"><div class="ms-search"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M16.5 16.5 21 21"/></svg><input type="text" placeholder="Pesquisar…"></div><div class="ms-list"></div></div></div>
+        <div class="ms-wrap" id="ms-tipo"><button class="ms-btn" onclick="toggleMs('ms-tipo')"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="5" width="14" height="11" rx="1"/><path d="M15 9h4l3 3v4h-7z"/><circle cx="5.5" cy="18.5" r="2"/><circle cx="18" cy="18.5" r="2"/></svg>Tipo<span class="ms-cnt"></span></button>
+        <div class="ms-panel"><div class="ms-search"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M16.5 16.5 21 21"/></svg><input type="text" placeholder="Pesquisar…"></div><div class="ms-list"></div></div></div>
+        <div class="ms-wrap" id="ms-marca"><button class="ms-btn" onclick="toggleMs('ms-marca')"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2 4 6v6c0 5 3.4 8.7 8 10 4.6-1.3 8-5 8-10V6z"/></svg>Marca<span class="ms-cnt"></span></button>
+        <div class="ms-panel"><div class="ms-search"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M16.5 16.5 21 21"/></svg><input type="text" placeholder="Pesquisar…"></div><div class="ms-list"></div></div></div>
+        <div class="ms-wrap" id="ms-modelo"><button class="ms-btn" onclick="toggleMs('ms-modelo')"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>Modelo<span class="ms-cnt"></span></button>
+        <div class="ms-panel"><div class="ms-search"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M16.5 16.5 21 21"/></svg><input type="text" placeholder="Pesquisar…"></div><div class="ms-list"></div></div></div>
+        <div class="ms-wrap" id="ms-ano"><button class="ms-btn" onclick="toggleMs('ms-ano')"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4.5" width="18" height="16" rx="2"/><path d="M3 9h18M8 2.5v4M16 2.5v4"/></svg>Ano<span class="ms-cnt"></span></button>
+        <div class="ms-panel"><div class="ms-search"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M16.5 16.5 21 21"/></svg><input type="text" placeholder="Pesquisar…"></div><div class="ms-list"></div></div></div>
+        <div class="ms-wrap" id="ms-estado"><button class="ms-btn" onclick="toggleMs('ms-estado')"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 6-9 12-9 12s-9-6-9-12a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>Estado<span class="ms-cnt"></span></button>
+        <div class="ms-panel"><div class="ms-search"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M16.5 16.5 21 21"/></svg><input type="text" placeholder="Pesquisar…"></div><div class="ms-list"></div></div></div>
       </div>
-      <div class="hero-sub-item">
-        <span class="hero-sub-label">Unidades</span>
-        <span class="hero-sub-val" id="hero-unis">—</span>
-      </div>
+      <button class="tool ico" id="btTema" onclick="trocaTema()" title="Claro / escuro"></button>
     </div>
-    <div class="hero-deltas">
-      <div class="hero-delta"><span>Até 5 anos</span><b id="h-f5" class="cg">—</b></div>
-      <div class="hero-delta"><span>6 a 10 anos</span><b id="h-f10" class="cy">—</b></div>
-      <div class="hero-delta"><span>Acima de 10 anos</span><b id="h-f99" class="cr">—</b></div>
-    </div>
-  </div>
 
-  <!-- Charts linha 1: Projeto / Faixa de Idade -->
-  <div class="charts-grid">
-    <div class="chart-card">
-      <div class="chart-title-row">
-        <div><div class="chart-title">Ativos · Projeto</div><div class="chart-sub" id="ch-projeto-sub">Quantidade por projeto</div></div>
-        <button class="chart-toggle" id="tg-proj-chart" onclick="toggleProjChart()">Ver idade média</button>
-      </div>
-      <div class="chart-wrap"><canvas id="ch-projeto"></canvas></div>
-    </div>
-    <div class="chart-card">
-      <div class="chart-title">Ativos · Faixa de Idade</div>
-      <div class="chart-sub">Distribuição da frota por idade</div>
-      <div class="chart-wrap"><canvas id="ch-faixa"></canvas></div>
-    </div>
-  </div>
+    <div class="cols" id="cols">
+      <!-- ══ 1 · RESUMO GERENCIAL ══ -->
+      <section class="vw on" id="vw-resumo">
+        <div class="fin-hero">
+          <div>
+            <div class="hlbl">Frota ativa</div>
+            <div class="hval" id="hero-qtd">—</div>
+            <div class="hdel">
+              <div>Idade média<b id="hero-idade">—</b></div>
+              <div>Tipos de veículo<b id="hero-tipos">—</b></div>
+              <div>Unidades<b id="hero-unis">—</b></div>
+            </div>
+          </div>
+        </div>
+        <div class="kpis k4">
+          <div class="kpi"><div class="kl">Até 5 anos</div><div class="kv cg" id="h-f5">—</div><div class="km">da frota com ano de fabricação</div></div>
+          <div class="kpi"><div class="kl">6 a 10 anos</div><div class="kv cy" id="h-f10">—</div><div class="km">renovação no radar</div></div>
+          <div class="kpi"><div class="kl">Acima de 10 anos</div><div class="kv cr" id="h-f99">—</div><div class="km">candidatos à substituição</div></div>
+          <div class="kpi"><div class="kl">Coleta do Ginfo</div><div class="kv" id="h-coleta">—</div><div class="km">robô roda todo dia às 7h</div></div>
+        </div>
+        <div class="gr2" id="gr-ativos">
+          <div class="card gcard">
+            <div class="thead-row">
+              <div><div class="gtit">Ativos · Projeto</div><div class="gsub" id="ch-projeto-sub">Quantidade por projeto</div></div>
+              <button class="rt" id="tg-proj-chart" onclick="toggleProjChart()">Ver idade média</button>
+            </div>
+            <div class="gcv"><canvas id="ch-projeto"></canvas></div>
+          </div>
+          <div class="card gcard">
+            <div class="gtit">Ativos · Faixa de idade</div>
+            <div class="gsub">Distribuição da frota por idade</div>
+            <div class="gcv"><canvas id="ch-faixa"></canvas></div>
+          </div>
+        </div>
+      </section>
 
-  <!-- Composição: Unidade/Projeto · Tipo/Modelo (toggle) -->
-  <div class="charts-grid">
-    <div class="chart-card">
-      <div class="chart-title-row">
-        <div><div class="chart-title" id="tbl-uni-title">Composição · Unidade</div><div class="chart-sub" id="tbl-uni-sub">Qtde e idade média por unidade</div></div>
-        <button class="chart-toggle" id="tg-uni" onclick="toggleUniTbl()">Ver por Projeto</button>
-      </div>
-      <div class="mini-tbl-wrap">
-        <table class="mini-tbl">
-          <thead><tr><th id="th-uni-1">Unidade</th><th class="num">Qtde</th><th class="num">Idade Média</th><th class="num">% da frota</th></tr></thead>
-          <tbody id="tb-uni"></tbody>
-        </table>
-      </div>
-    </div>
-    <div class="chart-card">
-      <div class="chart-title-row">
-        <div><div class="chart-title" id="tbl-modelo-title">Composição · Tipo de Veículo</div><div class="chart-sub" id="tbl-modelo-sub">Qtde e idade média por tipo</div></div>
-        <button class="chart-toggle" id="tg-modelo" onclick="toggleModeloTbl()">Ver por Modelo</button>
-      </div>
-      <div class="mini-tbl-wrap">
-        <table class="mini-tbl">
-          <thead id="th-modelo"><tr><th>Tipo</th><th class="num">Qtde</th><th class="num">Idade Média</th><th class="num">% da frota</th></tr></thead>
-          <tbody id="tb-modelo"></tbody>
-        </table>
-      </div>
-    </div>
-  </div>
+      <!-- ══ 2 · COMPOSIÇÃO ══ -->
+      <section class="vw" id="vw-composicao">
+        <div class="comp2">
+          <div class="card tsec">
+            <div class="thead-row">
+              <div><div class="ttit" id="tbl-uni-title">Composição · Unidade</div><div class="tsub" id="tbl-uni-sub">Qtde e idade média por unidade</div></div>
+              <button class="rt" id="tg-uni" onclick="toggleUniTbl()">Ver por Projeto</button>
+            </div>
+            <div class="twrap"><table class="dre">
+              <thead><tr><th id="th-uni-1">Unidade</th><th class="num">Qtde</th><th class="num">Idade média</th><th class="num">% da frota</th></tr></thead>
+              <tbody id="tb-uni"><tr><td class="loading" colspan="4">Carregando…</td></tr></tbody>
+            </table></div>
+          </div>
+          <div class="card tsec">
+            <div class="thead-row">
+              <div><div class="ttit" id="tbl-modelo-title">Composição · Tipo de veículo</div><div class="tsub" id="tbl-modelo-sub">Qtde e idade média por tipo</div></div>
+              <button class="rt" id="tg-modelo" onclick="toggleModeloTbl()">Ver por Modelo</button>
+            </div>
+            <div class="twrap"><table class="dre">
+              <thead id="th-modelo"><tr><th>Tipo</th><th class="num">Qtde</th><th class="num">Idade média</th><th class="num">% da frota</th></tr></thead>
+              <tbody id="tb-modelo"><tr><td class="loading" colspan="4">Carregando…</td></tr></tbody>
+            </table></div>
+          </div>
+        </div>
+      </section>
 
-  <!-- Tabela frota completa -->
-  <div class="tbl-section">
-    <div class="tbl-title">Frota · Ativo a Ativo</div>
-    <div class="tbl-sub" id="tbl-sub">Carregando…</div>
-    <button class="tbl-det-toggle" id="tbl-det-toggle" onclick="toggleDetCols()">+ Ver detalhes</button>
-    <div class="tbl-wrap">
-      <table>
-        <thead>
-          <tr>
-            <th>Unid</th>
-            <th class="m-hide">Proj.</th>
-            <th>Placa</th>
-            <th class="m-hide">Marca</th>
-            <th class="m-hide">Modelo</th>
-            <th>Tipo</th>
-            <th class="m-hide">Estado</th>
-            <th class="m-hide num">Ano Fab.</th>
-            <th class="num">Idade</th>
-          </tr>
-        </thead>
-        <tbody id="tbl-body"></tbody>
-      </table>
+      <!-- ══ 3 · FROTA ══ -->
+      <section class="vw" id="vw-frota">
+        <div class="card tsec">
+          <div class="thead-row">
+            <div><div class="ttit">Frota · ativo a ativo</div><div class="tsub" id="tbl-sub">Carregando…</div></div>
+            <button class="rt tbl-det-toggle" id="tbl-det-toggle" onclick="toggleDetCols()">+ Ver detalhes</button>
+          </div>
+          <div class="twrap"><table class="dre" id="tbl-frota">
+            <thead><tr>
+              <th>Unidade</th><th class="m-hide">Projeto</th><th>Placa</th>
+              <th class="m-hide">Marca</th><th class="m-hide">Modelo</th><th>Tipo</th>
+              <th class="m-hide">Estado</th><th class="m-hide num">Ano fab.</th><th class="num">Idade</th>
+            </tr></thead>
+            <tbody id="tbl-body"><tr><td class="loading" colspan="9">Carregando…</td></tr></tbody>
+          </table></div>
+        </div>
+      </section>
     </div>
-  </div>
+  </main>
 </div>
 
 <script>
 Chart.register(ChartDataLabels);
+// o status do painel antigo vira o subtítulo do topo, junto do recorte
+let _recorte='', _carga='';
+function setStatus(v){ _carga=v; const e=document.getElementById('titSub'); if(e) e.textContent=_recorte?_recorte+' · '+v:v; }
 
-// ── Fonte: Supabase (ginfo_snapshot, chave 'ativos' — coletada pelo robô Ginfo) ──
 const SB_URL='https://lozwipoeacpvplgkrxkq.supabase.co';
 const SB_KEY='sb_publishable_ggKEEebc5zjgQDVsF92Upw_6uoLmKe9';
 const IDADE_OK=5, IDADE_ATENCAO=10;   // ≤5 verde · ≤10 amarelo · >10 vermelho
@@ -597,7 +668,7 @@ function renderHero(rows){
   set('h-f99',pct0(com.filter(r=>r.idade>IDADE_ATENCAO).length/n*100));
 }
 function chartOpts(fmtLbl){
-  const isLight=document.body.classList.contains('light-mode');
+  const isLight=document.body.classList.contains('claro');
   const tickC=isLight?'#444':'#94A3B8';
   return {
     responsive:true,maintainAspectRatio:false,layout:{padding:{top:14}},
@@ -700,7 +771,7 @@ function renderTable(rows){
 let detColsVisible=false;
 function toggleDetCols(){
   detColsVisible=!detColsVisible;
-  document.querySelector('.tbl-section').classList.toggle('tbl-expanded',detColsVisible);
+  document.querySelector('#vw-frota .tsec').classList.toggle('tbl-expanded',detColsVisible);
   const btn=$('tbl-det-toggle');
   if(btn)btn.textContent=detColsVisible?'− Ocultar detalhes':'+ Ver detalhes';
 }
@@ -714,8 +785,7 @@ function renderAll(){
 }
 
 async function atualizar(){
-  set('status-badge','Carregando…');
-  const warn=$('warnBar');
+  setStatus('Carregando…');
   try{
     await fetchAtivos();
     buildMs('ms-uni',[...new Set(ROWS.map(r=>r.uniMap).filter(Boolean))].sort());
@@ -727,12 +797,10 @@ async function atualizar(){
     buildMs('ms-estado',[...new Set(ROWS.map(r=>r.estado).filter(Boolean))].sort());
     renderAll();
     const d=new Date();
-    set('status-badge',`Atualizado ${d.toLocaleDateString('pt-BR')} ${d.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})}`);
-    if(warn)warn.classList.remove('show');
+    setStatus(`Atualizado ${d.toLocaleDateString('pt-BR')} ${d.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})}`);
   }catch(err){
     console.error(err);
-    set('status-badge','Erro ao carregar');
-    if(warn){warn.classList.add('show');const wm=$('warnMsg');if(wm)wm.textContent='⚠ '+err.message;}
+    setStatus('⚠ '+err.message);
   }
 }
 
@@ -750,27 +818,84 @@ function initAccessLog(){
   localStorage.setItem('bi_last_user',name);
 }
 
-// ── Theme ──
-const _sun=`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>`;
-const _moon=`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>`;
-function applyTheme(t){
-  document.body.classList.toggle('light-mode',t==='light');
-  localStorage.setItem('bi_theme',t);
-  const b=$('themeBtn');if(b)b.innerHTML=t==='light'?_moon:_sun;
-  if(ROWS.length)renderAll();
-}
-(function(){
-  const t=localStorage.getItem('bi_theme')||'dark';
-  applyTheme(t);
-  $('themeBtn').addEventListener('click',()=>applyTheme(document.body.classList.contains('light-mode')?'dark':'light'));
-})();
 
-window.addEventListener('load',()=>{initAccessLog();atualizar();});
+/* ── render dos blocos do layout novo ─────────────────────────────────────── */
+// o recorte do filtro vive no subtítulo, e a coleta do robô vira card
+const _renderHero=renderHero;
+renderHero=function(rows){
+  _renderHero(rows);
+  set('h-coleta', ATT?ATT.toLocaleDateString('pt-BR'):'—');
+  const f=getF(), n=Object.values(f).filter(a=>a.length).length;
+  _recorte=fmt(rows.length)+' ativos'+(n?' · '+n+' filtro'+(n>1?'s':''):' · frota inteira');
+  const e=document.getElementById('titSub'); if(e) e.textContent=_recorte+(_carga?' · '+_carga:'');
+};
+
+/* ── navegação entre as visões ────────────────────────────────────────────── */
+const TIT={resumo:'Resumo Gerencial',composicao:'Composição da Frota',frota:'Frota · Ativo a Ativo'};
+let VW='resumo';
+function setVw(v){
+  VW=v;
+  document.querySelectorAll('.s-item[data-vw]').forEach(b=>b.classList.toggle('on',b.dataset.vw===v));
+  document.querySelectorAll('.vw').forEach(x=>x.classList.toggle('on', x.id==='vw-'+v));
+  set('tit', TIT[v]||'');
+  if(v==='resumo'&&ROWS.length) setTimeout(()=>renderCharts(filtrar(ROWS)),30);   // canvas escondido nasce com 0px
+}
+document.querySelectorAll('.s-item[data-vw]').forEach(b=>b.addEventListener('click',()=>setVw(b.dataset.vw)));
+
+/* ── lateral recolhida + dicas ── */
+const DICA=document.createElement('div'); DICA.className='dica'; document.body.appendChild(DICA);
+const escondeDica=()=>DICA.classList.remove('on');
+function rotuloItem(b){ const c=b.cloneNode(true); c.querySelectorAll('svg').forEach(e=>e.remove()); return c.textContent.trim(); }
+document.querySelectorAll('.side .s-item').forEach(b=>{
+  b.addEventListener('mouseenter',()=>{
+    if(!document.querySelector('.side').classList.contains('mini'))return;
+    const r=b.getBoundingClientRect();
+    DICA.textContent=rotuloItem(b); DICA.style.left=(r.right+9)+'px'; DICA.style.top=(r.top+r.height/2)+'px';
+    DICA.classList.add('on');
+  });
+  b.addEventListener('mouseleave',escondeDica);
+  b.addEventListener('click',escondeDica);
+});
+function trocaMini(){
+  const s=document.querySelector('.side'), mini=s.classList.toggle('mini');
+  localStorage.setItem('at_mini', mini?'1':'0');
+  document.getElementById('btMini').title=mini?'Expandir menu':'Recolher menu';
+  escondeDica();
+  setTimeout(()=>{ if(ROWS.length) renderCharts(filtrar(ROWS)); },260);
+}
+if(localStorage.getItem('at_mini')==='1'){ document.querySelector('.side').classList.add('mini'); document.getElementById('btMini').title='Expandir menu'; }
+
+/* ── tema (mesma chave do hub) ── */
+const _SOL=`<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4.5"/><path d="M12 1.5v2M12 20.5v2M4.2 4.2l1.4 1.4M18.4 18.4l1.4 1.4M1.5 12h2M20.5 12h2M4.2 19.8l1.4-1.4M18.4 5.6l1.4-1.4"/></svg>`;
+const _LUA=`<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>`;
+function aplicaTema(t){
+  document.body.classList.toggle('claro', t==='light');
+  localStorage.setItem('bi_theme', t);
+  const b=document.getElementById('btTema'); if(b) b.innerHTML = t==='light'?_LUA:_SOL;
+  if(ROWS.length) renderAll();
+}
+function trocaTema(){ aplicaTema(document.body.classList.contains('claro')?'dark':'light'); }
+aplicaTema(localStorage.getItem('bi_theme')||'dark');
+
+let _rt;
+window.addEventListener('resize',()=>{ clearTimeout(_rt); _rt=setTimeout(()=>{ if(ROWS.length) renderCharts(filtrar(ROWS)); },400); });
+
+window.addEventListener('load',()=>{ initAccessLog(); atualizar(); });
 </script>
-<script>(function(){function go(){try{initPdfExport();}catch(e){console.error(e);}}if(document.readyState!=='loading')go();else document.addEventListener('DOMContentLoaded',go);})();</script>
-<script src="../assets/filters-toggle.js"></script>
 <script src="../assets/mobile.js"></script>
 <script src="../assets/sortable-table.js"></script>
-<script src="../assets/build-check.js?v=202608061817"></script>
+<script src="../assets/excel-export.js"></script>
+<script src="../assets/pdf-export.js"></script>
+<script>
+initPdfExport({
+  btnContainer:'#pdf-slot', btnClass:'s-item', btnAoFim:true,
+  title:'Ativos', subtitle:()=>document.getElementById('titSub').textContent,
+  fileBase:'ativos', main:()=>document.querySelector('.vw.on'),
+  views:()=>Object.keys(TIT).map(k=>({label:TIT[k], ativar:()=>setVw(k)})),
+  viewAtual:()=>VW, irPara:setVw,
+  isLight:()=>document.body.classList.contains('claro'), setTheme:aplicaTema
+});
+</script>
+<script src="../assets/build-check.js?v=202608162100"></script>
 </body>
 </html>
