@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="build" content="202608172000">
+<meta name="build" content="202608172200">
 <title>Conferência de Locação · Gestão em Movimento</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -331,8 +331,15 @@ table.dre td.cg-t,.cg-t{color:var(--verde)!important;font-weight:700;}
 
 /* gráfico com a altura do padrão; a sobra vai para a fileira de cards
    (mesma regra do FCA Admin e do Acessos) */
-#vw-resumo .gr2{flex:0 1 auto;height:47vh;max-height:none;}
-#vw-resumo .kpis{flex:1 1 auto;}
+#vw-resumo .gr2{flex:0 1 auto;height:52vh;max-height:none;}
+#vw-resumo .kpis{flex:0 0 auto;min-height:clamp(120px,17vh,165px);}
+#vw-resumo .kpi{display:flex;flex-direction:column;justify-content:center;}
+.flash{position:fixed;left:50%;bottom:26px;transform:translate(-50%,14px);z-index:9500;
+  padding:9px 16px;border-radius:99px;background:var(--pop,#26262B);color:var(--txt);
+  border:1px solid var(--card-brd);font-size:11.5px;font-weight:700;
+  box-shadow:0 14px 34px rgba(0,0,0,.4);opacity:0;pointer-events:none;transition:.16s;}
+.flash.on{opacity:1;transform:translate(-50%,0);}
+.flash.ruim{color:var(--vermelho);}
 .mut{color:var(--txt3);}
 .vazio{flex:1;display:flex;align-items:center;justify-content:center;text-align:center;
   font-size:12.5px;color:var(--txt3);line-height:1.8;padding:24px;}
@@ -561,6 +568,10 @@ async function recebeArquivos(lista){
               : info.tipo || ('desconhecido-'+f.name);
     ARQ[chave]={nome:f.name, ...info, abas, erro};
   }
+  if(ARQ['previa-mensal']||ARQ['previa-provisao']){
+    const L=analisa();
+    if(PERIODO) await guardaMes(vigTxt(PERIODO), L);
+  }
   pinta();
 }
 function tiraArquivo(k){ delete ARQ[k]; pinta(); }
@@ -575,6 +586,12 @@ function rotuloArq(a){
 }
 function pintaImportar(){
   const ks=Object.keys(ARQ);
+  const meses=[...BASE.keys()].sort().reverse().map(v=>{
+    const b=BASE.get(v);
+    return `<div class="arq ok"><span class="ic">✓</span><div><b>${vigRot(v)}</b>
+      <i>${num(b.linhas.length)} ativos · ${b.arquivos&&b.arquivos.length?b.arquivos.length+' planilhas':'—'}
+      ${b.updated_at?' · '+new Date(b.updated_at).toLocaleDateString('pt-BR'):''}</i></div></div>`;}).join('');
+  $('meses').innerHTML = meses || '<div class="vazio">Nenhum mês gravado ainda.</div>';
   $('arqs').innerHTML = ks.length ? ks.map(k=>{
     const a=ARQ[k], ok=!!a.tipo && !a.erro;
     const det=a.erro ? 'Erro: '+esc(a.erro)
@@ -798,7 +815,8 @@ function analisa(){
       linhasFat: b ? b.linhas : 0,
     });
   });
-  LINHAS.forEach(l=>{
+  const vg=vigTxt(PERIODO);
+  LINHAS.forEach(l=>{ l.vig=vg;
     l.dPF = (l.prev||0)-(l.ft||0);          // prévia contra a remuneração
     l.dFP = (l.fat||0)-(l.prev||0);         // faturado contra a prévia criticada
     l.motivos = motivosDe(l);
@@ -848,24 +866,30 @@ function montaTela(){
       </div>
       <div class="gr2">
         <div class="card gcard">
-          <div class="gtit">Fonte a fonte</div>
-          <div class="gsub">Freightech (líquido de PIS/COFINS) · Prévia · Faturado, por etapa</div>
+          <div class="gtit">Fonte a fonte, mês a mês</div>
+          <div class="gsub">Freightech (líquido de PIS/COFINS) · Prévia · Faturado</div>
           <div class="gleg" id="leg-etapa"></div>
           <div class="gcv"><canvas id="ch-etapa"></canvas></div>
         </div>
         <div class="card gcard">
-          <div class="gtit">Δ Prévia × Freightech por unidade</div>
+          <div class="gtit">Divergência mês a mês</div>
           <div class="gsub">Acima de zero, a Vamos cobra mais do que a Ambev remunera</div>
-          <div class="gcv"><canvas id="ch-uni"></canvas></div>
+          <div class="gleg" id="leg-mes"></div>
+          <div class="gcv"><canvas id="ch-mes"></canvas></div>
         </div>
       </div>
     </section>
 
     <section class="vw" id="vw-unidades">
       <div class="card tsec">
-        <div class="thead-row"><div><div class="ttit">Abertura por unidade</div>
-          <div class="tsub" id="sub-uni">—</div></div></div>
-        <div class="twrap"><table class="dre" id="tbl-uni"></table></div>
+        <div class="thead-row"><div><div class="ttit">Ativos por unidade</div>
+          <div class="tsub" id="sub-uni-q">—</div></div></div>
+        <div class="twrap"><table class="dre" id="tbl-uni-q"></table></div>
+      </div>
+      <div class="card tsec">
+        <div class="thead-row"><div><div class="ttit">Valores por unidade</div>
+          <div class="tsub" id="sub-uni-v">—</div></div></div>
+        <div class="twrap"><table class="dre" id="tbl-uni-v"></table></div>
       </div>
     </section>
 
@@ -893,7 +917,10 @@ function montaTela(){
                 O tipo sai do nome do arquivo; o mês, do <code>MM_AAAA</code> no fim.</span>
           <input type="file" id="fileInput" multiple accept=".xlsx,.xlsm,.xls,.csv" style="display:none">
         </div>
+        <div class="ttit" style="margin-top:6px">Planilhas desta importação</div>
         <div class="arqs" id="arqs"></div>
+        <div class="ttit" style="margin-top:10px">Meses gravados</div>
+        <div class="arqs" id="meses"></div>
       </div>
     </section>`;
 
@@ -910,8 +937,8 @@ function montaTela(){
 }
 
 /* ── filtros multi-select (mesmo desenho dos outros painéis) ── */
-const FILTROS=[{id:'ms-etapa',rot:'Etapa'},{id:'ms-uni',rot:'Unidade'},{id:'ms-mot',rot:'Desvio'}];
-const SEL={'ms-etapa':new Set(),'ms-uni':new Set(),'ms-mot':new Set()};
+const FILTROS=[{id:'ms-vig',rot:'Vigência'},{id:'ms-etapa',rot:'Etapa'},{id:'ms-uni',rot:'Unidade'},{id:'ms-mot',rot:'Desvio'}];
+const SEL={'ms-vig':new Set(),'ms-etapa':new Set(),'ms-uni':new Set(),'ms-mot':new Set()};
 function montaFiltros(){
   $('filtros').innerHTML=FILTROS.map(f=>`
     <div class="ms-wrap" id="${f.id}"><button class="ms-btn" onclick="abreMs('${f.id}')">${f.rot}<span class="ms-cnt"></span></button>
@@ -928,9 +955,11 @@ function abreMs(id){
   if(!ab){ p.classList.add('open'); w.classList.add('ativo'); w.querySelector('input').focus(); }
 }
 function opcoesDe(id){
+  const T=todasLinhas();
+  if(id==='ms-vig')   return [...new Set(T.map(l=>l.vig))].sort().reverse().map(vigRot);
   if(id==='ms-etapa') return Object.values(ETAPAS);
-  if(id==='ms-uni')   return [...new Set(LINHAS.map(l=>l.uni))].sort();
-  return [...new Set(LINHAS.flatMap(l=>l.motivos))].sort();
+  if(id==='ms-uni')   return [...new Set(T.map(l=>l.uni))].sort();
+  return [...new Set(T.flatMap(l=>l.motivos||[]))].sort();
 }
 function pintaFiltros(){
   FILTROS.forEach(f=>{
@@ -948,33 +977,69 @@ function pintaFiltros(){
 function marcaMs(id,on,v){ on?SEL[id].add(v):SEL[id].delete(v); pinta(); }
 function limpaMs(id){ SEL[id].clear(); pinta(); }
 function filtradas(){
-  const et=SEL['ms-etapa'], un=SEL['ms-uni'], mo=SEL['ms-mot'];
-  return LINHAS.filter(l=>(!et.size||et.has(ETAPAS[l.etapa]))
+  const vg=SEL['ms-vig'], et=SEL['ms-etapa'], un=SEL['ms-uni'], mo=SEL['ms-mot'];
+  return todasLinhas().filter(l=>(!vg.size||vg.has(vigRot(l.vig)))
+    &&(!et.size||et.has(ETAPAS[l.etapa]))
     &&(!un.size||un.has(l.uni))
-    &&(!mo.size||l.motivos.some(m=>mo.has(m))));
+    &&(!mo.size||(l.motivos||[]).some(m=>mo.has(m))));
+}
+
+/* ══════════ base do mês (Supabase) ══════════
+   Cada importação vira um registro por vigência, e é isso que dá a série
+   MÊS A MÊS do Resumo — sem gravar, o painel só enxergaria o mês aberto. */
+let BASE=new Map();        // 'AAAA-MM' → {linhas, arquivos, updated_at}
+const vigTxt = p => p ? p.ano+'-'+String(p.mes).padStart(2,'0') : '';
+const vigRot = v => v ? v.slice(5)+'/'+v.slice(0,4) : '—';
+
+async function carregaBase(){
+  try{
+    const {data}=await sb.from('locacao_conferencia').select('*').order('vigencia');
+    (data||[]).forEach(r=>BASE.set(r.vigencia,{
+      linhas:Array.isArray(r.linhas)?r.linhas:[], arquivos:r.arquivos||[], updated_at:r.updated_at}));
+  }catch(e){ console.warn('base de conferência indisponível:',e.message||e); }
+}
+async function guardaMes(vig,linhas){
+  BASE.set(vig,{linhas, arquivos:Object.values(ARQ).map(a=>a.nome), updated_at:new Date().toISOString()});
+  try{
+    const {error}=await sb.from('locacao_conferencia').upsert({
+      vigencia:vig, linhas,
+      resumo:{ft:soma(linhas,'ft'),prev:soma(linhas,'prev'),fat:soma(linhas,'fat'),n:linhas.length},
+      arquivos:Object.values(ARQ).map(a=>a.nome),
+      updated_at:new Date().toISOString(),
+      updated_by:(SESSION&&SESSION.user&&SESSION.user.email)||null,
+    },{onConflict:'vigencia'});
+    if(error) throw error;
+    flash('Mês '+vigRot(vig)+' salvo');
+  }catch(e){ flash('Não salvou no banco: '+(e.message||e), true); }
+}
+function flash(txt,ruim){
+  let e=$('flash');
+  if(!e){ e=document.createElement('div'); e.id='flash'; document.body.appendChild(e); }
+  e.textContent=txt; e.className='flash on'+(ruim?' ruim':'');
+  clearTimeout(e._t); e._t=setTimeout(()=>e.className='flash',3200);
 }
 
 /* ── render ── */
 const cor = v => v>TOL?'cr':(v<-TOL?'cg':'');
 const seta = v => v>TOL?'▲ ':(v<-TOL?'▼ ':'');
+const soma=(L,c)=>L.reduce((a,l)=>a+(l[c]||0),0);
+const todasLinhas = () => [...BASE.values()].flatMap(b=>b.linhas);
+
 function pinta(){
   if(!$('arqs')) return;
   pintaImportar();
-  const temPrevia=!!(ARQ['previa-mensal']||ARQ['previa-provisao']);
-  if(!temPrevia){
-    $('titSub').textContent = Object.keys(ARQ).length ? 'Faltam as prévias' : 'Nenhuma planilha importada';
+  const L=filtradas();
+  if(!L.length && !BASE.size){
+    $('titSub').textContent = Object.keys(ARQ).length ? 'Faltam as prévias' : 'Nenhum mês importado';
     ['resumo','unidades','ativos','diag'].forEach(v=>$('vw-'+v).innerHTML=AVISO_VAZIO);
     return;
   }
-  analisa();
-  pintaFiltros();
-  const L=filtradas();
-  const mm=PERIODO?String(PERIODO.mes).padStart(2,'0')+'/'+PERIODO.ano:'—';
-  $('titSub').textContent=`${mm} · ${num(L.length)} ativos · FT ${brl(soma(L,'ft'))} · prévia ${brl(soma(L,'prev'))}`;
   if($('vw-resumo').innerHTML.indexOf('fin-hero')<0) montaTela();
+  pintaFiltros();
+  const vs=[...new Set(L.map(l=>l.vig))].sort();
+  $('titSub').textContent=`${vs.length?vs.map(vigRot).join(' · '):'—'} · ${num(L.length)} ativos`;
   pintaResumo(L); pintaUnidades(L); pintaAtivos(L); pintaDiag(L);
 }
-const soma=(L,c)=>L.reduce((a,l)=>a+(l[c]||0),0);
 
 function pintaResumo(L){
   const ft=soma(L,'ft'), pv=soma(L,'prev'), fa=soma(L,'fat');
@@ -992,23 +1057,26 @@ function pintaResumo(L){
   põe('k-rt', num(rt.length), brl(soma(rt,'ft'))+' remunerados · '+brl(soma(rt,'prev'))+' cobrados');
   $('k-fp').textContent=fa?brl(dFP):'—'; $('k-fp').className='kv '+(fa?cor(dFP):'');
   $('k-fp-m').textContent=fa?'faturado contra a prévia':'faturamento não importado';
-  graficoEtapa(L); graficoUni(L);
+  graficoFontes(L); graficoMes(L);
 }
 
 const gGrid=()=>({display:false});
 const gTick=(sz=10)=>({color:document.body.classList.contains('claro')?'#737D91':'#676F83',
   font:{family:'Montserrat',size:sz,weight:'600'}});
-let chE=null,chU=null;
-function graficoEtapa(L){
+let chF=null,chM=null;
+const mesesDe = L => [...new Set(L.map(l=>l.vig))].sort();
+
+/* as três fontes, mês a mês */
+function graficoFontes(L){
   const cv=$('ch-etapa'); if(!cv||typeof Chart==='undefined') return;
-  const ets=Object.keys(ETAPAS).filter(e=>L.some(l=>l.etapa===e));
-  const dd=c=>ets.map(e=>soma(L.filter(l=>l.etapa===e),c));
+  const ms=mesesDe(L);
+  const dd=c=>ms.map(v=>soma(L.filter(l=>l.vig===v),c));
   const cores=['#2E90E8','#F97316','#3BB33B'];
   $('leg-etapa').innerHTML=['Freightech','Prévia','Faturado']
     .map((r,i)=>`<span><i class="sq" style="color:${cores[i]}"></i>${r}</span>`).join('');
-  if(chE) chE.destroy();
-  chE=new Chart(cv,{type:'bar',
-    data:{labels:ets.map(e=>ETAPAS[e]),datasets:[
+  if(chF) chF.destroy();
+  chF=new Chart(cv,{type:'bar',
+    data:{labels:ms.map(vigRot),datasets:[
       {label:'Freightech',data:dd('ft'),backgroundColor:cores[0]},
       {label:'Prévia',data:dd('prev'),backgroundColor:cores[1]},
       {label:'Faturado',data:dd('fat'),backgroundColor:cores[2]}]},
@@ -1018,21 +1086,26 @@ function graficoEtapa(L){
       scales:{x:{grid:gGrid(),border:{display:false},ticks:gTick(11)},y:{display:false,beginAtZero:true}}},
     plugins:[rotuloBarra]});
 }
-function graficoUni(L){
-  const cv=$('ch-uni'); if(!cv||typeof Chart==='undefined') return;
-  const m={}; L.forEach(l=>{ m[l.uni]=(m[l.uni]||0)+((l.prev||0)-(l.ft||0)); });
-  const ent=Object.entries(m).sort((a,b)=>Math.abs(b[1])-Math.abs(a[1])).slice(0,10);
-  const cores=ent.map(([,v])=>v>0?'#FF5252':'#3BB33B');
-  if(chU) chU.destroy();
-  chU=new Chart(cv,{type:'bar',
-    data:{labels:ent.map(e=>e[0]),datasets:[{data:ent.map(e=>e[1]),backgroundColor:cores,
-      barPercentage:.97,categoryPercentage:.9}]},
+/* as duas divergências, mês a mês */
+function graficoMes(L){
+  const cv=$('ch-mes'); if(!cv||typeof Chart==='undefined') return;
+  const ms=mesesDe(L);
+  const dPF=ms.map(v=>{const l=L.filter(x=>x.vig===v);return soma(l,'prev')-soma(l,'ft');});
+  const dFP=ms.map(v=>{const l=L.filter(x=>x.vig===v);return soma(l,'fat')-soma(l,'prev');});
+  $('leg-mes').innerHTML=[['Prévia × Freightech','#F97316'],['Faturado × Prévia','#2E90E8']]
+    .map(([r,c])=>`<span><i class="sq" style="color:${c}"></i>${r}</span>`).join('');
+  if(chM) chM.destroy();
+  chM=new Chart(cv,{type:'bar',
+    data:{labels:ms.map(vigRot),datasets:[
+      {label:'Prévia × Freightech',data:dPF,backgroundColor:'#F97316'},
+      {label:'Faturado × Prévia',data:dFP,backgroundColor:'#2E90E8'}]},
     options:{responsive:true,maintainAspectRatio:false,animation:false,
       layout:{padding:{top:18}},
-      plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>brl(c.raw)}}},
-      scales:{x:{grid:gGrid(),border:{display:false},ticks:gTick(10)},y:{display:false}}},
+      plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>c.dataset.label+': '+brl(c.raw)}}},
+      scales:{x:{grid:gGrid(),border:{display:false},ticks:gTick(11)},y:{display:false}}},
     plugins:[rotuloBarra]});
 }
+
 /* rótulo em cima da barra — padrão do portal (o eixo Y some) */
 const rotuloBarra={id:'rot',afterDatasetsDraw(c){
   const ctx=c.ctx; ctx.save();
@@ -1060,21 +1133,36 @@ function tabela(el,cols,linhas,total){
 }
 function pintaUnidades(L){
   const m={};
-  L.forEach(l=>{ const u=m[l.uni]=m[l.uni]||{uni:l.uni,n:0,nFt:0,nPv:0,nFa:0,ft:0,prev:0,fat:0};
-    u.n++; if(l.ft!=null)u.nFt++; if(l.prev!=null)u.nPv++; if(l.fat!=null)u.nFa++;
+  L.forEach(l=>{ const u=m[l.uni]=m[l.uni]||{uni:l.uni,nFt:0,nPv:0,nFa:0,ft:0,prev:0,fat:0};
+    if(l.ft!=null)u.nFt++; if(l.prev!=null)u.nPv++; if(l.fat!=null)u.nFa++;
     u.ft+=l.ft||0; u.prev+=l.prev||0; u.fat+=l.fat||0; });
-  const rows=Object.values(m).map(u=>({...u,dPF:u.prev-u.ft,dFP:u.fat-u.prev}))
-    .sort((a,b)=>Math.abs(b.dPF)-Math.abs(a.dPF));
-  $('sub-uni').textContent=`${rows.length} unidade(s) · da maior divergência para a menor`;
-  tabela($('tbl-uni'),[
+  const rows=Object.values(m).map(u=>({...u,dnP:u.nPv-u.nFt,dnF:u.nFa-u.nPv,
+    dPF:u.prev-u.ft,dFP:u.fat-u.prev}));
+  const sm=(r,c)=>r.reduce((a,x)=>a+x[c],0);
+
+  // 1) quantidade de ativos
+  rows.sort((a,b)=>Math.abs(b.dnP)-Math.abs(a.dnP)||b.nFt-a.nFt);
+  $('sub-uni-q').textContent=`${rows.length} unidade(s) · quantidade de ativos em cada fonte`;
+  tabela($('tbl-uni-q'),[
     {rot:'Unidade',get:l=>esc(l.uni)},
-    {rot:'Ativos',num:1,get:l=>num(l.n),tot:r=>num(r.reduce((a,x)=>a+x.n,0))},
-    {rot:'FT',num:1,get:l=>brl(l.ft),tot:r=>brl(r.reduce((a,x)=>a+x.ft,0))},
-    {rot:'Prévia',num:1,get:l=>brl(l.prev),tot:r=>brl(r.reduce((a,x)=>a+x.prev,0))},
-    {rot:'Δ Prévia × FT',num:1,cls:l=>cor(l.dPF),get:l=>seta(l.dPF)+brl(l.dPF),tot:r=>brl(r.reduce((a,x)=>a+x.dPF,0))},
-    {rot:'Faturado',num:1,get:l=>l.fat?brl(l.fat):'—',tot:r=>brl(r.reduce((a,x)=>a+x.fat,0))},
-    {rot:'Δ Fat × Prévia',num:1,cls:l=>cor(l.dFP),get:l=>l.fat?seta(l.dFP)+brl(l.dFP):'—',tot:r=>brl(r.reduce((a,x)=>a+x.dFP,0))},
+    {rot:'# Ativos',num:1,get:l=>num(l.nFt),tot:r=>num(sm(r,'nFt'))},
+    {rot:'# Prévia',num:1,get:l=>num(l.nPv),tot:r=>num(sm(r,'nPv'))},
+    {rot:'# Faturado',num:1,get:l=>num(l.nFa),tot:r=>num(sm(r,'nFa'))},
+    {rot:'▲ Prévia',num:1,cls:l=>cor(l.dnP),get:l=>seta(l.dnP)+num(l.dnP),tot:r=>num(sm(r,'dnP'))},
+    {rot:'▲ Faturado',num:1,cls:l=>cor(l.dnF),get:l=>seta(l.dnF)+num(l.dnF),tot:r=>num(sm(r,'dnF'))},
   ],rows,true);
+
+  // 2) o mesmo em R$
+  const rv=rows.slice().sort((a,b)=>Math.abs(b.dPF)-Math.abs(a.dPF));
+  $('sub-uni-v').textContent=`${rows.length} unidade(s) · da maior divergência para a menor`;
+  tabela($('tbl-uni-v'),[
+    {rot:'Unidade',get:l=>esc(l.uni)},
+    {rot:'Freightech',num:1,get:l=>brl(l.ft),tot:r=>brl(sm(r,'ft'))},
+    {rot:'Prévia',num:1,get:l=>brl(l.prev),tot:r=>brl(sm(r,'prev'))},
+    {rot:'Faturado',num:1,get:l=>brl(l.fat),tot:r=>brl(sm(r,'fat'))},
+    {rot:'▲ Prévia',num:1,cls:l=>cor(l.dPF),get:l=>seta(l.dPF)+brl(l.dPF),tot:r=>brl(sm(r,'dPF'))},
+    {rot:'▲ Faturado',num:1,cls:l=>cor(l.dFP),get:l=>seta(l.dFP)+brl(l.dFP),tot:r=>brl(sm(r,'dFP'))},
+  ],rv,true);
 }
 function pintaAtivos(L){
   const rows=L.slice().sort((a,b)=>Math.abs(b.dPF)-Math.abs(a.dPF));
@@ -1082,13 +1170,14 @@ function pintaAtivos(L){
   tabela($('tbl-ativos'),[
     {rot:'Ativo',get:l=>esc(l.placa||l.chassi||l.k)},
     {rot:'Unidade',get:l=>esc(l.uni)},
+    {rot:'Mês',get:l=>vigRot(l.vig)},
     {rot:'Etapa',get:l=>ETAPAS[l.etapa]},
     {rot:'Status',get:l=>esc(l.status||'—')},
-    {rot:'FT',num:1,get:l=>l.ft==null?'—':brl(l.ft),tot:r=>brl(soma(r,'ft'))},
+    {rot:'Freightech',num:1,get:l=>l.ft==null?'—':brl(l.ft),tot:r=>brl(soma(r,'ft'))},
     {rot:'Prévia',num:1,get:l=>l.prev==null?'—':brl(l.prev),tot:r=>brl(soma(r,'prev'))},
-    {rot:'Δ Prévia × FT',num:1,cls:l=>cor(l.dPF),get:l=>seta(l.dPF)+brl(l.dPF),tot:r=>brl(soma(r,'prev')-soma(r,'ft'))},
+    {rot:'▲ Prévia',num:1,cls:l=>cor(l.dPF),get:l=>seta(l.dPF)+brl(l.dPF),tot:r=>brl(soma(r,'prev')-soma(r,'ft'))},
     {rot:'Faturado',num:1,get:l=>l.fat==null?'—':brl(l.fat),tot:r=>brl(soma(r,'fat'))},
-    {rot:'Δ Fat × Prévia',num:1,cls:l=>cor(l.dFP),get:l=>l.fat==null?'—':seta(l.dFP)+brl(l.dFP),tot:r=>brl(soma(r,'fat')-soma(r,'prev'))},
+    {rot:'▲ Faturado',num:1,cls:l=>cor(l.dFP),get:l=>l.fat==null?'—':seta(l.dFP)+brl(l.dFP),tot:r=>brl(soma(r,'fat')-soma(r,'prev'))},
   ],rows,true);
 }
 function pintaDiag(L){
@@ -1102,9 +1191,9 @@ function pintaDiag(L){
     {rot:'Unidade',get:l=>esc(l.uni)},
     {rot:'Etapa',get:l=>ETAPAS[l.etapa]},
     {rot:'Desvio',get:l=>l.motivos.map(m=>esc(m)).join(' · ')},
-    {rot:'FT',num:1,get:l=>l.ft==null?'—':brl(l.ft)},
+    {rot:'Freightech',num:1,get:l=>l.ft==null?'—':brl(l.ft)},
     {rot:'Prévia',num:1,get:l=>l.prev==null?'—':brl(l.prev)},
-    {rot:'Δ Prévia × FT',num:1,cls:l=>cor(l.dPF),get:l=>seta(l.dPF)+brl(l.dPF)},
+    {rot:'▲ Prévia',num:1,cls:l=>cor(l.dPF),get:l=>seta(l.dPF)+brl(l.dPF)},
     {rot:'Faturado',num:1,get:l=>l.fat==null?'—':brl(l.fat)},
   ],rows,false);
 }
@@ -1113,6 +1202,6 @@ initApp();
 <script src="../assets/mobile.js"></script>
 <script src="../assets/sortable-table.js"></script>
 <script src="../assets/excel-export.js"></script>
-<script src="../assets/build-check.js?v=202608172000"></script>
+<script src="../assets/build-check.js?v=202608172200"></script>
 </body>
 </html>
