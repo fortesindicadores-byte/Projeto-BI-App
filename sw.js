@@ -19,7 +19,7 @@
 //
 // Registrado por assets/build-check.js, que está em todos os painéis.
 // ============================================================
-const VERSAO = 4;   // suba aqui para forçar a troca do próprio SW
+const VERSAO = 5;   // suba aqui para forçar a troca do próprio SW
 
 self.addEventListener('install', () => self.skipWaiting());
 self.addEventListener('activate', e => e.waitUntil(self.clients.claim()));
