@@ -126,6 +126,14 @@ body::after{content:'';position:fixed;inset:0;z-index:0;pointer-events:none;opac
   cursor:pointer;color:var(--txt3);}
 .sair:hover{color:var(--vermelho);background:var(--hover);}
 
+/* ── barra do tabuleiro: abrir/fechar todos os clusters (só no modo lista) ── */
+.board-bar{display:flex;padding:0 24px;}
+.tudo-btn{display:flex;align-items:center;gap:7px;margin-left:-6px;
+  background:transparent;border:0;border-radius:7px;cursor:pointer;
+  font-family:inherit;font-size:10px;font-weight:600;color:var(--txt3);
+  text-transform:uppercase;letter-spacing:1.1px;padding:5px 8px;}
+.tudo-btn:hover{background:var(--hover);color:var(--txt2);}
+
 /* ── tabuleiro: um cluster por coluna, tudo numa tela ── */
 .board{flex:1;min-height:0;display:grid;gap:12px;padding:4px 24px 24px;align-items:start;}
 .clu{display:flex;flex-direction:column;gap:9px;min-width:0;min-height:0;}
@@ -451,6 +459,7 @@ body.claro .farol-panel{box-shadow:0 18px 44px rgba(15,23,42,.20), 0 3px 10px rg
       </div>
     </div>
   </header>
+  <div class="board-bar" id="boardBar"><button class="tudo-btn" id="btTudo" onclick="alternaTudo()"></button></div>
   <div class="board" id="board"></div>
 </div>
 
@@ -546,6 +555,7 @@ function renderBoard(isAdmin){
     bt.innerHTML = MODO === 'lista' ? _COLS : _LISTA;
     bt.title = MODO === 'lista' ? 'Ver em colunas' : 'Ver em lista';
   }
+  pintaBtTudo();
   const busca = document.getElementById('busca-painel');
   if (busca && busca.value) filtraBoard(busca.value);
 }
@@ -554,7 +564,30 @@ function abreClu(nome){
   localStorage.setItem('gem_hub_abertos', ABERTO.join('|'));
   const s = document.querySelector(`#board .clu[data-clu="${nome}"]`);
   if (s) s.classList.toggle('aberto', ABERTO.includes(nome));
+  pintaBtTudo();
 }
+/* Abrir/fechar TODOS: enquanto houver cluster fechado o botão expande;
+   com todos abertos, ele recolhe. Só aparece no modo lista — em colunas
+   está tudo aberto por definição. */
+const _CLUS_VIS = () => CLUSTERS.filter(c => !c.adm || _isAdmin)
+  .filter(c => c.cards.some(k => !k.adm || _isAdmin)).map(c => c.nome);
+const _TUDO_ABERTO = () => { const v = _CLUS_VIS(); return v.length > 0 && v.every(n => ABERTO.includes(n)); };
+function alternaTudo(){
+  ABERTO = _TUDO_ABERTO() ? [] : _CLUS_VIS();
+  localStorage.setItem('gem_hub_abertos', ABERTO.join('|'));
+  document.querySelectorAll('#board .clu').forEach(s =>
+    s.classList.toggle('aberto', ABERTO.includes(s.dataset.clu)));
+  pintaBtTudo();
+}
+function pintaBtTudo(){
+  const bar = document.getElementById('boardBar'), b = document.getElementById('btTudo');
+  if (!bar || !b) return;
+  bar.style.display = MODO === 'lista' ? '' : 'none';
+  const ab = _TUDO_ABERTO();
+  b.innerHTML = (ab ? _CIMA : _BAIXO) + (ab ? 'Recolher tudo' : 'Expandir tudo');
+}
+const _BAIXO='<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="7 6 12 11 17 6"/><polyline points="7 13 12 18 17 13"/></svg>';
+const _CIMA ='<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="7 11 12 6 17 11"/><polyline points="7 18 12 13 17 18"/></svg>';
 function trocaModo(){
   MODO = MODO === 'lista' ? 'colunas' : 'lista';
   localStorage.setItem('gem_hub_modo', MODO);
