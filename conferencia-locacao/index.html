@@ -328,6 +328,11 @@ table.dre td.cg-t,.cg-t{color:var(--verde)!important;font-weight:700;}
 .chip.ok{color:var(--verde);border-color:color-mix(in srgb,var(--verde) 40%,transparent);}
 .chip.falta{color:var(--txt4);}
 
+
+/* gráfico com a altura do padrão; a sobra vai para a fileira de cards
+   (mesma regra do FCA Admin e do Acessos) */
+#vw-resumo .gr2{flex:0 1 auto;height:47vh;max-height:none;}
+#vw-resumo .kpis{flex:1 1 auto;}
 .mut{color:var(--txt3);}
 .vazio{flex:1;display:flex;align-items:center;justify-content:center;text-align:center;
   font-size:12.5px;color:var(--txt3);line-height:1.8;padding:24px;}
@@ -529,7 +534,9 @@ const SEGS=[['wh',/\bwh\b|armaz/i],['empurrada',/empurrad/i],['as',/\bas\b|auto 
 let ARQ={};   // chave → {nome, tipo, seg, mes, ano, abas:[{nome,linhas,cols}]}
 
 function tipoDoNome(nome){
-  const n=nome.replace(/\.[a-z]+$/i,'');
+  // sem acento: o nome do arquivo pode chegar em NFD ('Pre'+acento) e aí
+  // um /prévia/ literal não casa — já aconteceu no teste
+  const n=String(nome).replace(/\.[a-z]+$/i,'').normalize('NFD').replace(/[\u0300-\u036f]/g,'');
   const mm=n.match(/(\d{1,2})[_\-\/](\d{4})/);
   const per=mm?{mes:+mm[1],ano:+mm[2]}:{};
   if(/pr[ée]via/i.test(n)) return {...per, tipo:'previa', sub:/provis/i.test(n)?'provisao':'mensal'};
@@ -559,35 +566,6 @@ async function recebeArquivos(lista){
 function tiraArquivo(k){ delete ARQ[k]; pinta(); }
 
 /* ══════════ tela ══════════ */
-function montaTela(){
-  $('titSub').textContent='Nenhuma planilha importada';
-  $('cols').innerHTML=`
-    <section class="vw on" id="vw-resumo"></section>
-    <section class="vw" id="vw-unidades"></section>
-    <section class="vw" id="vw-ativos"></section>
-    <section class="vw" id="vw-diag"></section>
-    <section class="vw" id="vw-importar">
-      <div class="imp">
-        <div class="drop" id="drop">
-          <b>Arraste as planilhas aqui — ou clique para escolher</b>
-          <span>Prévia (Mensal e Provisão) · Faturamento · Freightech (WH, Empurrada, AS, Rota, Van)<br>
-                O tipo é reconhecido pelo nome do arquivo; o mês, pelo <code>MM_AAAA</code> no fim.</span>
-          <input type="file" id="fileInput" multiple accept=".xlsx,.xls,.csv" style="display:none">
-        </div>
-        <div class="arqs" id="arqs"></div>
-      </div>
-    </section>`;
-  const drop=$('drop'), inp=$('fileInput');
-  drop.addEventListener('click',()=>inp.click());
-  inp.addEventListener('change',e=>{ recebeArquivos([...e.target.files]); inp.value=''; });
-  ['dragenter','dragover'].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();drop.classList.add('sobre');}));
-  ['dragleave','drop'].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();drop.classList.remove('sobre');}));
-  drop.addEventListener('drop',e=>recebeArquivos([...e.dataTransfer.files]));
-  // arrastar em qualquer canto da página também vale
-  ['dragover','drop'].forEach(ev=>document.addEventListener(ev,e=>e.preventDefault()));
-  setVw('resumo');
-}
-
 const ROT_TIPO={previa:'Prévia',faturamento:'Faturamento',ft:'Freightech'};
 function rotuloArq(a){
   if(a.tipo==='previa') return 'Prévia · '+(a.sub==='provisao'?'Provisão':'Mensal');
@@ -611,15 +589,525 @@ function pintaImportar(){
 }
 const AVISO_VAZIO=`<div class="vazio">Importe as planilhas do mês para ver a conferência.<br>
   <span class="mut">Menu lateral → Importar planilhas</span></div>`;
-function pinta(){
-  // o tema chama pinta() já na carga, antes de a tela existir
-  if(!$('arqs')) return;
-  pintaImportar();
-  const n=Object.keys(ARQ).length;
-  $('titSub').textContent = n ? n+' planilha(s) importada(s)' : 'Nenhuma planilha importada';
-  ['resumo','unidades','ativos','diag'].forEach(v=>{ const e=$('vw-'+v); if(e&&!e.dataset.pronto) e.innerHTML=AVISO_VAZIO; });
+
+/* ══════════════════════════════════════════════════════════════════
+   BASES E MOTOR DA CONFERÊNCIA
+   ══════════════════════════════════════════════════════════════════ */
+
+/* PIS/COFINS: o FT remunera com imposto, a Vamos cobra sem. Para
+   comparar banana com banana, o valor do FT entra líquido. */
+const FATOR_FT = 1 - 0.0925*0.70;      // 0,93525
+const TOL = 0.01;                       // diferença de centavo não é desvio
+
+/* de-para de unidade: mesma régua do painel Ativos (Filial + Projeto do
+   Ginfo → código do portal), para a unidade ser a MESMA em todo lugar */
+const _nrm=v=>String(v||'').toUpperCase().normalize('NFD').replace(/[̀-ͯ]/g,'').trim();
+const UNI_MAP={
+  'CUIABA EMPURRADA':'CBA - T1','MACACU EMPURRADA':'MCC - T1',
+  'CDD FLORIANOPOLIS':'FLP','CDI MACACU':'MCC - T2',
+  'CDD RONDONOPOLIS':'RON','CDD RIO DE JANEIRO':'CGR',
+  'CDD GUARULHOS':'GRL','CDD PELOTAS':'PLT',
+  'PIRAI EMPURRADA':'PIR','CDD CUIABA':'CBA T2',
+  'CDD NOVA FRIBURGO':'NFR','CDD CAMBORIU':'BLC',
+  'ANHANGUERA':'ANG','CAMPO GRANDE':'CGR',
+};
+function mapUni(fil,proj,tipo){
+  const u=_nrm(fil),p=_nrm(proj),t=_nrm(tipo);
+  if(u==='CUIABA'){
+    if(p==='APOIO'||t.includes('EMPILHADEIRA')) return 'CBA - T1 WH';
+    if(p==='EMPURRADA') return 'CBA - T1';
+    return 'CBA T2';
+  }
+  if(u==='CACHOEIRAS DE MACACU'||u==='MACACU') return p==='EMPURRADA'?'MCC - T1':'MCC - T2';
+  return UNI_MAP[u]||fil||'—';
 }
 
+/* base de ativos do robô Ginfo — é ela que diz a unidade de cada placa */
+let ATIVOS=new Map(), ATIVOS_ATT=null;
+async function carregaAtivos(){
+  try{
+    const {data:row}=await sb.from('ginfo_snapshot').select('data,updated_at').eq('chave','ativos').maybeSingle();
+    if(!row||!Array.isArray(row.data)) return;
+    const s=row.data[0]||{};
+    const kDe=(...alvos)=>Object.keys(s).find(k=>alvos.some(a=>chaveCol(k)===chaveCol(a)));
+    const K={fil:kDe('Filial'),proj:kDe('Projeto'),pla:kDe('Placa'),tv:kDe('Tipo Veículo','Tipo Veiculo','Tipo')};
+    row.data.forEach(r=>{
+      const p=placaCanon(r[K.pla]); if(!p) return;
+      ATIVOS.set(p,{fil:r[K.fil],proj:r[K.proj],tipo:r[K.tv],uni:mapUni(r[K.fil],r[K.proj],r[K.tv])});
+    });
+    ATIVOS_ATT=row.updated_at?new Date(row.updated_at):null;
+  }catch(e){ console.warn('base de ativos indisponível:',e.message||e); }
+}
+
+/* ── leitura das planilhas ──
+   Cada aba vira uma lista de objetos com o cabeçalho achado pela primeira
+   linha "cheia" (a prévia da Vamos tem um cabeçalho de logotipo em cima). */
+function objetos(linhas){
+  if(!linhas||!linhas.length) return [];
+  let hi=linhas.findIndex(l=>l.filter(c=>c!=null&&String(c).trim()!=='').length>5);
+  if(hi<0) hi=0;
+  const H=linhas[hi].map(c=>String(c==null?'':c).trim());
+  return linhas.slice(hi+1)
+    .filter(l=>l.some(c=>c!=null&&String(c).trim()!==''))
+    .map(l=>{const o={}; H.forEach((h,i)=>{ if(h) o[h]=l[i]; }); return o;});
+}
+/* pega o valor de uma coluna pelo NOME normalizado (aceita apelidos) */
+function col(o,...nomes){
+  const alvo=nomes.map(chaveCol);
+  for(const k of Object.keys(o)) if(alvo.includes(chaveCol(k))) return o[k];
+  return undefined;
+}
+const n = v => {
+  if(typeof v==='number') return isFinite(v)?v:0;
+  const t=String(v==null?'':v).trim(); if(!t) return 0;
+  // texto pt-BR ('1.234,56') vira número; texto simples cai no parseFloat
+  const x=parseFloat(/,/.test(t) ? t.replace(/\./g,'').replace(',','.') : t);
+  return isFinite(x)?x:0;
+};
+const ehEmpilhadeira = d => /EMPILHADEIRA/i.test(String(d||''));
+/* chave de cruzamento: empilhadeira pelo sufixo do chassi, o resto pela placa */
+const chaveAtivo = (div,placa,chassi) => ehEmpilhadeira(div) ? 'C:'+chassiCanon(chassi) : 'P:'+placaCanon(placa);
+const locadora = o => String(col(o,'Empresa locadora')||'').replace(/^EmpresaLocadora:\s*/i,'').trim();
+
+/* ── Freightech ──
+   Um arquivo por segmento, cada um com TODAS as vigências do período
+   (ARMAZEM_1_7_2026, EMPURRADA_2_6_2026…): NOME_<vigência>_<mês>_<ano>.
+   Só entram os ativos com Empresa locadora = Vamos. */
+function linhasFT(){
+  const out=[];
+  Object.values(ARQ).filter(a=>a.tipo==='ft'&&!a.erro).forEach(a=>{
+    a.abas.forEach(ab=>{
+      objetos(ab.linhas).forEach(o=>{
+        if(!/vamos/i.test(locadora(o))) return;
+        const vig=String(col(o,'Vigencia','Vigência')||'');
+        const m=vig.match(/_(\d+)_(\d{1,2})_(\d{4})$/); if(!m) return;
+        const chassi=col(o,'chassi','chassis'), placa=col(o,'Placa','placa');
+        const emp=a.seg==='wh'||!placa;
+        out.push({
+          seg:a.seg, aba:ab.nome, vigN:+m[1], mes:+m[2], ano:+m[3],
+          valor:n(col(o,COL_VALOR_FT[a.seg],'custoAluguelLeasing','custoAluguel','Custo Aluguel')),
+          k: emp ? 'C:'+chassiCanon(chassi) : 'P:'+placaCanon(placa),
+          placa, chassi, uniFT: col(o,'Unidade - Nome'), proj: a.seg,
+        });
+      });
+    });
+  });
+  return out;
+}
+/* Valor do FT do mês: com DUAS vigências (o mês fechado, que a prévia
+   Mensal paga) vale a MÉDIA; com uma só (o mês corrente, da Provisão),
+   vale ela mesma. A média é por ATIVO — ativo que só aparece numa das
+   vigências vale o que tem, não metade. */
+function ftDoMes(rows,mes,ano){
+  const porAtivo=new Map();
+  rows.filter(r=>r.mes===mes&&r.ano===ano).forEach(r=>{
+    if(!porAtivo.has(r.k)) porAtivo.set(r.k,{k:r.k, vigs:new Map(), ref:r});
+    const p=porAtivo.get(r.k);
+    p.vigs.set(r.vigN,(p.vigs.get(r.vigN)||0)+r.valor);
+  });
+  const m=new Map();
+  porAtivo.forEach((p,k)=>{
+    const vs=[...p.vigs.values()];
+    m.set(k,{valor: vs.reduce((a,b)=>a+b,0)/vs.length, vigs:vs.length, ref:p.ref});
+  });
+  return m;
+}
+
+/* ── prévias e faturamento (planilhas da Vamos) ── */
+function linhasVamos(a){
+  if(!a||a.erro) return [];
+  return objetos(a.abas[0].linhas).map(o=>{
+    const div=col(o,'DIVISÃO','Divisão','Divisao');
+    const placa=col(o,'PLACA','Placa'), chassi=col(o,'CHASSI','Chassi');
+    return {
+      k:chaveAtivo(div,placa,chassi), div, placa, chassi,
+      status:String(col(o,'STATUS DO ATIVO','Status do Ativo')||'').trim(),
+      modelo:col(o,'MODELO','Modelo'), cc:col(o,'C/C'),
+      dias:n(col(o,'QTD. DE DIAS','Qtd. de Dias')),
+      total:n(col(o,'TOTAL','Total')),
+      contrato:n(col(o,'VALOR CONTRATO','Valor Locação','Valor Contrato')),
+    };
+  }).filter(r=>r.k&&r.k!=='P:'&&r.k!=='C:');
+}
+/* o faturamento vem consolidado: a coluna Divisão diz se a linha é da
+   MENSAL ou da PROVisão. O que não traz o rótulo é classificado pela
+   prévia em que o ativo aparece. */
+function etapaFat(div,k,kM,kP){
+  const d=String(div||'').toUpperCase();
+  if(/MENSAL/.test(d)) return 'mensal';
+  if(/PROV/.test(d))   return 'provisao';
+  if(kM.has(k)) return 'mensal';
+  if(kP.has(k)) return 'provisao';
+  return null;
+}
+
+/* ══════════ a conferência ══════════
+   Uma linha por ativo e etapa, com as três fontes lado a lado:
+     FT      = remuneração da Ambev, líquida de PIS/COFINS
+     Prévia  = o que a Vamos quer cobrar
+     Faturamento = o que a Vamos faturou depois da nossa crítica       */
+const ETAPAS={mensal:'Mensal',provisao:'Provisão'};
+let LINHAS=[], PERIODO=null;
+
+function analisa(){
+  const aM=ARQ['previa-mensal'], aP=ARQ['previa-provisao'], aF=ARQ['faturamento'];
+  const ft=linhasFT();
+  const mesRef=(aM&&aM.mes)||(aP&&aP.mes)||(aF&&aF.mes)||null;
+  const anoRef=(aM&&aM.ano)||(aP&&aP.ano)||(aF&&aF.ano)||null;
+  PERIODO = mesRef ? {mes:mesRef, ano:anoRef,
+    ant: mesRef===1?{mes:12,ano:anoRef-1}:{mes:mesRef-1,ano:anoRef}} : null;
+
+  const prev={mensal:linhasVamos(aM), provisao:linhasVamos(aP)};
+  const kM=new Set(prev.mensal.map(r=>r.k)), kP=new Set(prev.provisao.map(r=>r.k));
+  const fat={mensal:new Map(), provisao:new Map()};
+  linhasVamos(aF).forEach(r=>{
+    const e=etapaFat(r.div,r.k,kM,kP); if(!e) return;
+    const m=fat[e]; const p=m.get(r.k)||{total:0,linhas:0,status:r.status,div:r.div,placa:r.placa,chassi:r.chassi,modelo:r.modelo};
+    p.total+=r.total; p.linhas++; m.set(r.k,p);
+  });
+  const ftMes={ mensal: PERIODO?ftDoMes(ft,PERIODO.ant.mes,PERIODO.ant.ano):new Map(),
+                provisao: PERIODO?ftDoMes(ft,PERIODO.mes,PERIODO.ano):new Map() };
+
+  LINHAS=[];
+  const etapaDe=k => kM.has(k)?'mensal' : kP.has(k)?'provisao'
+                   : fat.mensal.has(k)?'mensal' : fat.provisao.has(k)?'provisao' : 'provisao';
+  const semPrevia=k => !kM.has(k)&&!kP.has(k);
+  const pvM=new Map(prev.mensal.map(r=>[r.k,r])), pvP=new Map(prev.provisao.map(r=>[r.k,r]));
+  const todas=new Set([...pvM.keys(),...pvP.keys(),...fat.mensal.keys(),...fat.provisao.keys(),
+                       ...ftMes.mensal.keys(),...ftMes.provisao.keys()]);
+  todas.forEach(k=>{
+    const et=etapaDe(k);
+    const p=(et==='mensal'?pvM:pvP).get(k);
+    const f=ftMes[et].get(k);
+    const b=fat[et].get(k)||fat[et==='mensal'?'provisao':'mensal'].get(k);
+    const placa=(p&&p.placa)||(b&&b.placa)||(f&&f.ref&&f.ref.placa)||'';
+    const chassi=(p&&p.chassi)||(b&&b.chassi)||(f&&f.ref&&f.ref.chassi)||'';
+    const at=ATIVOS.get(placaCanon(placa));
+    LINHAS.push({
+      etapa:et, k, placa, chassi, semPrevia:semPrevia(k),
+      modelo:(p&&p.modelo)||(b&&b.modelo)||'',
+      div:(p&&p.div)||(b&&b.div)||(f&&f.ref&&f.ref.seg)||'',
+      status:(p&&p.status)||(b&&b.status)||'',
+      uni: at ? at.uni : (f&&f.ref&&f.ref.uniFT ? mapUni(f.ref.uniFT,'','') : '—'),
+      naBase: !!at,
+      ft: f ? f.valor*FATOR_FT : null,
+      ftBruto: f ? f.valor : null,
+      vigsFT: f ? f.vigs : 0,
+      prev: p ? p.total : null,
+      fat: b ? b.total : null,
+      linhasFat: b ? b.linhas : 0,
+    });
+  });
+  LINHAS.forEach(l=>{
+    l.dPF = (l.prev||0)-(l.ft||0);          // prévia contra a remuneração
+    l.dFP = (l.fat||0)-(l.prev||0);         // faturado contra a prévia criticada
+    l.motivos = motivosDe(l);
+  });
+  return LINHAS;
+}
+
+/* o que é desvio (e o nome que ele leva no Diagnóstico) */
+function motivosDe(l){
+  const m=[];
+  const temP=l.prev!=null&&Math.abs(l.prev)>TOL, temF=l.ft!=null&&Math.abs(l.ft)>TOL, temB=l.fat!=null&&Math.abs(l.fat)>TOL;
+  if(/RESERVA/i.test(l.status)&&temP) m.push('Reserva técnica cobrada');
+  if(temP&&!temF) m.push('Cobrado sem remuneração');
+  if(temF&&!temP) m.push(/RESERVA/i.test(l.status)?'Reserva técnica remunerada, sem cobrança':'Remunerado sem cobrança');
+  if(temP&&temF&&Math.abs(l.dPF)>TOL) m.push('Valor da prévia ≠ remuneração');
+  if(l.fat!=null&&l.prev!=null&&Math.abs(l.dFP)>TOL) m.push(l.dFP>0?'Faturado acima da prévia':'Faturado abaixo da prévia');
+  if(temB&&l.prev==null) m.push('Faturado sem prévia');
+  if(l.prev!=null&&l.fat==null&&temP) m.push('Prévia sem faturamento');
+  if(ATIVOS.size&&!l.naBase&&(temP||temB)) m.push('Placa fora da base de ativos');
+  return m;
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   TELA
+   ══════════════════════════════════════════════════════════════════ */
+function montaTela(){
+  $('cols').innerHTML=`
+    <section class="vw on" id="vw-resumo">
+      <div class="fin-hero">
+        <div>
+          <div class="hlbl">Δ Prévia × Freightech</div>
+          <div class="hval" id="h-val">—</div>
+          <div class="hdel">
+            <div>Remuneração (FT)<b id="h-ft">—</b></div>
+            <div>Prévia Vamos<b id="h-prev">—</b></div>
+            <div>Faturado<b id="h-fat">—</b></div>
+            <div>Ativos conferidos<b id="h-n">—</b></div>
+          </div>
+        </div>
+      </div>
+      <div class="kpis k5">
+        <div class="kpi"><div class="kl">Cobrado sem remuneração</div><div class="kv" id="k-sem">—</div><div class="km" id="k-sem-m">—</div></div>
+        <div class="kpi"><div class="kl">Remunerado sem cobrança</div><div class="kv" id="k-rem">—</div><div class="km" id="k-rem-m">—</div></div>
+        <div class="kpi"><div class="kl">Valor divergente</div><div class="kv" id="k-val">—</div><div class="km" id="k-val-m">—</div></div>
+        <div class="kpi"><div class="kl">Reserva técnica</div><div class="kv" id="k-rt">—</div><div class="km" id="k-rt-m">—</div></div>
+        <div class="kpi"><div class="kl">Δ Faturado × Prévia</div><div class="kv" id="k-fp">—</div><div class="km" id="k-fp-m">—</div></div>
+      </div>
+      <div class="gr2">
+        <div class="card gcard">
+          <div class="gtit">Fonte a fonte</div>
+          <div class="gsub">Freightech (líquido de PIS/COFINS) · Prévia · Faturado, por etapa</div>
+          <div class="gleg" id="leg-etapa"></div>
+          <div class="gcv"><canvas id="ch-etapa"></canvas></div>
+        </div>
+        <div class="card gcard">
+          <div class="gtit">Δ Prévia × Freightech por unidade</div>
+          <div class="gsub">Acima de zero, a Vamos cobra mais do que a Ambev remunera</div>
+          <div class="gcv"><canvas id="ch-uni"></canvas></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="vw" id="vw-unidades">
+      <div class="card tsec">
+        <div class="thead-row"><div><div class="ttit">Abertura por unidade</div>
+          <div class="tsub" id="sub-uni">—</div></div></div>
+        <div class="twrap"><table class="dre" id="tbl-uni"></table></div>
+      </div>
+    </section>
+
+    <section class="vw" id="vw-ativos">
+      <div class="card tsec">
+        <div class="thead-row"><div><div class="ttit">Abertura por ativo</div>
+          <div class="tsub" id="sub-ativos">—</div></div></div>
+        <div class="twrap"><table class="dre" id="tbl-ativos"></table></div>
+      </div>
+    </section>
+
+    <section class="vw" id="vw-diag">
+      <div class="card tsec">
+        <div class="thead-row"><div><div class="ttit">Diagnóstico</div>
+          <div class="tsub" id="sub-diag">—</div></div></div>
+        <div class="twrap"><table class="dre" id="tbl-diag"></table></div>
+      </div>
+    </section>
+
+    <section class="vw" id="vw-importar">
+      <div class="imp">
+        <div class="drop" id="drop">
+          <b>Arraste as planilhas aqui — ou clique para escolher</b>
+          <span>Prévia (Mensal e Provisão) · Faturamento · Freightech (WH, Empurrada, AS, Rota/Van)<br>
+                O tipo sai do nome do arquivo; o mês, do <code>MM_AAAA</code> no fim.</span>
+          <input type="file" id="fileInput" multiple accept=".xlsx,.xlsm,.xls,.csv" style="display:none">
+        </div>
+        <div class="arqs" id="arqs"></div>
+      </div>
+    </section>`;
+
+  const drop=$('drop'), inp=$('fileInput');
+  drop.addEventListener('click',()=>inp.click());
+  inp.addEventListener('change',e=>{ recebeArquivos([...e.target.files]); inp.value=''; });
+  ['dragenter','dragover'].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();drop.classList.add('sobre');}));
+  ['dragleave','drop'].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();drop.classList.remove('sobre');}));
+  drop.addEventListener('drop',e=>recebeArquivos([...e.dataTransfer.files]));
+  ['dragover','drop'].forEach(ev=>document.addEventListener(ev,e=>e.preventDefault()));
+
+  montaFiltros();
+  setVw('resumo');
+}
+
+/* ── filtros multi-select (mesmo desenho dos outros painéis) ── */
+const FILTROS=[{id:'ms-etapa',rot:'Etapa'},{id:'ms-uni',rot:'Unidade'},{id:'ms-mot',rot:'Desvio'}];
+const SEL={'ms-etapa':new Set(),'ms-uni':new Set(),'ms-mot':new Set()};
+function montaFiltros(){
+  $('filtros').innerHTML=FILTROS.map(f=>`
+    <div class="ms-wrap" id="${f.id}"><button class="ms-btn" onclick="abreMs('${f.id}')">${f.rot}<span class="ms-cnt"></span></button>
+      <div class="ms-panel"><div class="ms-search"><input type="text" placeholder="Pesquisar…"></div><div class="ms-list"></div></div>
+    </div>`).join('');
+  document.addEventListener('click',e=>{
+    if(!e.target.closest('.ms-wrap')) document.querySelectorAll('.ms-panel.open').forEach(p=>{
+      p.classList.remove('open'); p.parentElement.classList.remove('ativo'); });
+  });
+}
+function abreMs(id){
+  const w=$(id), p=w.querySelector('.ms-panel'), ab=p.classList.contains('open');
+  document.querySelectorAll('.ms-panel.open').forEach(o=>{o.classList.remove('open');o.parentElement.classList.remove('ativo');});
+  if(!ab){ p.classList.add('open'); w.classList.add('ativo'); w.querySelector('input').focus(); }
+}
+function opcoesDe(id){
+  if(id==='ms-etapa') return Object.values(ETAPAS);
+  if(id==='ms-uni')   return [...new Set(LINHAS.map(l=>l.uni))].sort();
+  return [...new Set(LINHAS.flatMap(l=>l.motivos))].sort();
+}
+function pintaFiltros(){
+  FILTROS.forEach(f=>{
+    const w=$(f.id); if(!w) return;
+    const sel=SEL[f.id], ops=opcoesDe(f.id);
+    const q=(w.querySelector('.ms-search input').value||'').toLowerCase();
+    w.querySelector('.ms-list').innerHTML=
+      `<label class="ms-opt all-opt"><input type="checkbox" ${sel.size?'':'checked'} onchange="limpaMs('${f.id}')"> Todos</label>`+
+      ops.filter(o=>!q||o.toLowerCase().includes(q)).map(o=>
+        `<label class="ms-opt"><input type="checkbox" ${sel.has(o)?'checked':''} onchange="marcaMs('${f.id}',this.checked,${JSON.stringify(o).replace(/"/g,'&quot;')})"> ${esc(o)}</label>`).join('');
+    const c=w.querySelector('.ms-cnt'); c.textContent=sel.size||''; c.style.display=sel.size?'':'none';
+    if(!w._busca){ w._busca=1; w.querySelector('.ms-search input').addEventListener('input',()=>pintaFiltros()); }
+  });
+}
+function marcaMs(id,on,v){ on?SEL[id].add(v):SEL[id].delete(v); pinta(); }
+function limpaMs(id){ SEL[id].clear(); pinta(); }
+function filtradas(){
+  const et=SEL['ms-etapa'], un=SEL['ms-uni'], mo=SEL['ms-mot'];
+  return LINHAS.filter(l=>(!et.size||et.has(ETAPAS[l.etapa]))
+    &&(!un.size||un.has(l.uni))
+    &&(!mo.size||l.motivos.some(m=>mo.has(m))));
+}
+
+/* ── render ── */
+const cor = v => v>TOL?'cr':(v<-TOL?'cg':'');
+const seta = v => v>TOL?'▲ ':(v<-TOL?'▼ ':'');
+function pinta(){
+  if(!$('arqs')) return;
+  pintaImportar();
+  const temPrevia=!!(ARQ['previa-mensal']||ARQ['previa-provisao']);
+  if(!temPrevia){
+    $('titSub').textContent = Object.keys(ARQ).length ? 'Faltam as prévias' : 'Nenhuma planilha importada';
+    ['resumo','unidades','ativos','diag'].forEach(v=>$('vw-'+v).innerHTML=AVISO_VAZIO);
+    return;
+  }
+  analisa();
+  pintaFiltros();
+  const L=filtradas();
+  const mm=PERIODO?String(PERIODO.mes).padStart(2,'0')+'/'+PERIODO.ano:'—';
+  $('titSub').textContent=`${mm} · ${num(L.length)} ativos · FT ${brl(soma(L,'ft'))} · prévia ${brl(soma(L,'prev'))}`;
+  if($('vw-resumo').innerHTML.indexOf('fin-hero')<0) montaTela();
+  pintaResumo(L); pintaUnidades(L); pintaAtivos(L); pintaDiag(L);
+}
+const soma=(L,c)=>L.reduce((a,l)=>a+(l[c]||0),0);
+
+function pintaResumo(L){
+  const ft=soma(L,'ft'), pv=soma(L,'prev'), fa=soma(L,'fat');
+  const dPF=pv-ft, dFP=fa-pv;
+  $('h-val').textContent=brl(dPF); $('h-val').className='hval '+cor(dPF);
+  $('h-ft').textContent=brl(ft); $('h-prev').textContent=brl(pv);
+  $('h-fat').textContent=fa?brl(fa):'—'; $('h-n').textContent=num(L.length);
+  const g=m=>L.filter(l=>l.motivos.includes(m));
+  const semRem=g('Cobrado sem remuneração'), semCob=g('Remunerado sem cobrança').concat(g('Reserva técnica remunerada, sem cobrança')),
+        valDif=g('Valor da prévia ≠ remuneração'), rt=L.filter(l=>/RESERVA/i.test(l.status));
+  const põe=(id,v,m)=>{ $(id).textContent=v; $(id+'-m').innerHTML=m; };
+  põe('k-sem',num(semRem.length), brl(soma(semRem,'prev'))+' cobrados sem FT');
+  põe('k-rem',num(semCob.length), brl(soma(semCob,'ft'))+' remunerados sem cobrança');
+  põe('k-val',num(valDif.length), '<b class="'+cor(soma(valDif,'prev')-soma(valDif,'ft'))+'">'+brl(soma(valDif,'prev')-soma(valDif,'ft'))+'</b> de diferença');
+  põe('k-rt', num(rt.length), brl(soma(rt,'ft'))+' remunerados · '+brl(soma(rt,'prev'))+' cobrados');
+  $('k-fp').textContent=fa?brl(dFP):'—'; $('k-fp').className='kv '+(fa?cor(dFP):'');
+  $('k-fp-m').textContent=fa?'faturado contra a prévia':'faturamento não importado';
+  graficoEtapa(L); graficoUni(L);
+}
+
+const gGrid=()=>({display:false});
+const gTick=(sz=10)=>({color:document.body.classList.contains('claro')?'#737D91':'#676F83',
+  font:{family:'Montserrat',size:sz,weight:'600'}});
+let chE=null,chU=null;
+function graficoEtapa(L){
+  const cv=$('ch-etapa'); if(!cv||typeof Chart==='undefined') return;
+  const ets=Object.keys(ETAPAS).filter(e=>L.some(l=>l.etapa===e));
+  const dd=c=>ets.map(e=>soma(L.filter(l=>l.etapa===e),c));
+  const cores=['#2E90E8','#F97316','#3BB33B'];
+  $('leg-etapa').innerHTML=['Freightech','Prévia','Faturado']
+    .map((r,i)=>`<span><i class="sq" style="color:${cores[i]}"></i>${r}</span>`).join('');
+  if(chE) chE.destroy();
+  chE=new Chart(cv,{type:'bar',
+    data:{labels:ets.map(e=>ETAPAS[e]),datasets:[
+      {label:'Freightech',data:dd('ft'),backgroundColor:cores[0]},
+      {label:'Prévia',data:dd('prev'),backgroundColor:cores[1]},
+      {label:'Faturado',data:dd('fat'),backgroundColor:cores[2]}]},
+    options:{responsive:true,maintainAspectRatio:false,animation:false,
+      layout:{padding:{top:18}},
+      plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>c.dataset.label+': '+brl(c.raw)}}},
+      scales:{x:{grid:gGrid(),border:{display:false},ticks:gTick(11)},y:{display:false,beginAtZero:true}}},
+    plugins:[rotuloBarra]});
+}
+function graficoUni(L){
+  const cv=$('ch-uni'); if(!cv||typeof Chart==='undefined') return;
+  const m={}; L.forEach(l=>{ m[l.uni]=(m[l.uni]||0)+((l.prev||0)-(l.ft||0)); });
+  const ent=Object.entries(m).sort((a,b)=>Math.abs(b[1])-Math.abs(a[1])).slice(0,10);
+  const cores=ent.map(([,v])=>v>0?'#FF5252':'#3BB33B');
+  if(chU) chU.destroy();
+  chU=new Chart(cv,{type:'bar',
+    data:{labels:ent.map(e=>e[0]),datasets:[{data:ent.map(e=>e[1]),backgroundColor:cores,
+      barPercentage:.97,categoryPercentage:.9}]},
+    options:{responsive:true,maintainAspectRatio:false,animation:false,
+      layout:{padding:{top:18}},
+      plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>brl(c.raw)}}},
+      scales:{x:{grid:gGrid(),border:{display:false},ticks:gTick(10)},y:{display:false}}},
+    plugins:[rotuloBarra]});
+}
+/* rótulo em cima da barra — padrão do portal (o eixo Y some) */
+const rotuloBarra={id:'rot',afterDatasetsDraw(c){
+  const ctx=c.ctx; ctx.save();
+  ctx.font='800 9.5px Montserrat'; ctx.textAlign='center'; ctx.textBaseline='bottom';
+  ctx.fillStyle=document.body.classList.contains('claro')?'#161D2B':'#EEF2FA';
+  c.data.datasets.forEach((ds,di)=>c.getDatasetMeta(di).data.forEach((b,i)=>{
+    const v=ds.data[i]; if(v==null||!isFinite(v)||Math.abs(v)<1) return;
+    ctx.fillText(kbrl(v), b.x, (v>=0?b.y:b.base)-5);
+  }));
+  ctx.restore();
+}};
+const kbrl = v => { const a=Math.abs(v), s=v<0?'-':'';
+  if(a>=1e6) return s+(a/1e6).toFixed(1).replace('.',',')+' mi';
+  if(a>=1e3) return s+Math.round(a/1e3)+'k';
+  return s+Math.round(a); };
+
+function tabela(el,cols,linhas,total){
+  const th=cols.map(c=>`<th class="${c.num?'num':''}">${esc(c.rot)}</th>`).join('');
+  const tr=linhas.map(l=>'<tr>'+cols.map(c=>{
+    const v=c.get(l);
+    return `<td class="${c.num?'num ':''}${c.cls?c.cls(l):''}">${v==null?'—':v}</td>`;}).join('')+'</tr>').join('');
+  const tt=total?'<tr class="total">'+cols.map(c=>{
+    const v=c.tot?c.tot(linhas):''; return `<td class="${c.num?'num':''}">${v==null?'':v}</td>`;}).join('')+'</tr>':'';
+  el.innerHTML=`<thead><tr>${th}</tr></thead><tbody>${tr}${tt}</tbody>`;
+}
+function pintaUnidades(L){
+  const m={};
+  L.forEach(l=>{ const u=m[l.uni]=m[l.uni]||{uni:l.uni,n:0,nFt:0,nPv:0,nFa:0,ft:0,prev:0,fat:0};
+    u.n++; if(l.ft!=null)u.nFt++; if(l.prev!=null)u.nPv++; if(l.fat!=null)u.nFa++;
+    u.ft+=l.ft||0; u.prev+=l.prev||0; u.fat+=l.fat||0; });
+  const rows=Object.values(m).map(u=>({...u,dPF:u.prev-u.ft,dFP:u.fat-u.prev}))
+    .sort((a,b)=>Math.abs(b.dPF)-Math.abs(a.dPF));
+  $('sub-uni').textContent=`${rows.length} unidade(s) · da maior divergência para a menor`;
+  tabela($('tbl-uni'),[
+    {rot:'Unidade',get:l=>esc(l.uni)},
+    {rot:'Ativos',num:1,get:l=>num(l.n),tot:r=>num(r.reduce((a,x)=>a+x.n,0))},
+    {rot:'FT',num:1,get:l=>brl(l.ft),tot:r=>brl(r.reduce((a,x)=>a+x.ft,0))},
+    {rot:'Prévia',num:1,get:l=>brl(l.prev),tot:r=>brl(r.reduce((a,x)=>a+x.prev,0))},
+    {rot:'Δ Prévia × FT',num:1,cls:l=>cor(l.dPF),get:l=>seta(l.dPF)+brl(l.dPF),tot:r=>brl(r.reduce((a,x)=>a+x.dPF,0))},
+    {rot:'Faturado',num:1,get:l=>l.fat?brl(l.fat):'—',tot:r=>brl(r.reduce((a,x)=>a+x.fat,0))},
+    {rot:'Δ Fat × Prévia',num:1,cls:l=>cor(l.dFP),get:l=>l.fat?seta(l.dFP)+brl(l.dFP):'—',tot:r=>brl(r.reduce((a,x)=>a+x.dFP,0))},
+  ],rows,true);
+}
+function pintaAtivos(L){
+  const rows=L.slice().sort((a,b)=>Math.abs(b.dPF)-Math.abs(a.dPF));
+  $('sub-ativos').textContent=`${rows.length} ativo(s) · da maior divergência para a menor`;
+  tabela($('tbl-ativos'),[
+    {rot:'Ativo',get:l=>esc(l.placa||l.chassi||l.k)},
+    {rot:'Unidade',get:l=>esc(l.uni)},
+    {rot:'Etapa',get:l=>ETAPAS[l.etapa]},
+    {rot:'Status',get:l=>esc(l.status||'—')},
+    {rot:'FT',num:1,get:l=>l.ft==null?'—':brl(l.ft),tot:r=>brl(soma(r,'ft'))},
+    {rot:'Prévia',num:1,get:l=>l.prev==null?'—':brl(l.prev),tot:r=>brl(soma(r,'prev'))},
+    {rot:'Δ Prévia × FT',num:1,cls:l=>cor(l.dPF),get:l=>seta(l.dPF)+brl(l.dPF),tot:r=>brl(soma(r,'prev')-soma(r,'ft'))},
+    {rot:'Faturado',num:1,get:l=>l.fat==null?'—':brl(l.fat),tot:r=>brl(soma(r,'fat'))},
+    {rot:'Δ Fat × Prévia',num:1,cls:l=>cor(l.dFP),get:l=>l.fat==null?'—':seta(l.dFP)+brl(l.dFP),tot:r=>brl(soma(r,'fat')-soma(r,'prev'))},
+  ],rows,true);
+}
+function pintaDiag(L){
+  const rows=L.filter(l=>l.motivos.length).sort((a,b)=>Math.abs(b.dPF)-Math.abs(a.dPF));
+  const porMot={}; rows.forEach(l=>l.motivos.forEach(m=>porMot[m]=(porMot[m]||0)+1));
+  $('sub-diag').textContent = rows.length
+    ? `${rows.length} ativo(s) com desvio · ${Object.entries(porMot).map(([m,n])=>m+' ('+n+')').join(' · ')}`
+    : 'Nenhum desvio com os filtros atuais';
+  tabela($('tbl-diag'),[
+    {rot:'Ativo',get:l=>esc(l.placa||l.chassi||l.k)},
+    {rot:'Unidade',get:l=>esc(l.uni)},
+    {rot:'Etapa',get:l=>ETAPAS[l.etapa]},
+    {rot:'Desvio',get:l=>l.motivos.map(m=>esc(m)).join(' · ')},
+    {rot:'FT',num:1,get:l=>l.ft==null?'—':brl(l.ft)},
+    {rot:'Prévia',num:1,get:l=>l.prev==null?'—':brl(l.prev)},
+    {rot:'Δ Prévia × FT',num:1,cls:l=>cor(l.dPF),get:l=>seta(l.dPF)+brl(l.dPF)},
+    {rot:'Faturado',num:1,get:l=>l.fat==null?'—':brl(l.fat)},
+  ],rows,false);
+}
 initApp();
 </script>
 <script src="../assets/mobile.js"></script>
