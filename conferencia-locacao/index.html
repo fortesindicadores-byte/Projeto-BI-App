@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="build" content="202608180030">
+<meta name="build" content="202608180130">
 <title>Conferência de Locação · Gestão em Movimento</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -333,6 +333,7 @@ table.dre td.cg-t,.cg-t{color:var(--verde)!important;font-weight:700;}
    (mesma regra do FCA Admin e do Acessos) */
 #vw-resumo .gr2{flex:0 1 auto;height:52vh;max-height:none;}
 .gr2.um{grid-template-columns:1fr;}
+.hdel-tri{margin-top:6px;}
 /* Unidades: as duas tabelas lado a lado (quantidade e R$) */
 .vw#vw-unidades.on{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
 #vw-unidades table.dre{font-size:11.5px;}
@@ -865,22 +866,24 @@ function montaTela(){
     <section class="vw on" id="vw-resumo">
       <div class="fin-hero">
         <div>
-          <div class="hlbl">Δ Prévia × Freightech</div>
-          <div class="hval" id="h-val">—</div>
+          <div class="hlbl">Faturado Vamos</div>
+          <div class="hval" id="h-fat">—</div>
           <div class="hdel">
-            <div>Remuneração (FT)<b id="h-ft">—</b></div>
+            <div>Remuneração (Freightech)<b id="h-ft">—</b></div>
             <div>Prévia Vamos<b id="h-prev">—</b></div>
-            <div>Faturado<b id="h-fat">—</b></div>
-            <div>Ativos conferidos<b id="h-n">—</b></div>
+          </div>
+          <div class="hdel hdel-tri">
+            <div>▲ Prévia × Freightech<b id="h-dpf">—</b></div>
+            <div>▲ Faturado × Prévia<b id="h-dfp">—</b></div>
           </div>
         </div>
       </div>
       <div class="kpis k5">
-        <div class="kpi"><div class="kl">Cobrado sem remuneração</div><div class="kv" id="k-sem">—</div><div class="km" id="k-sem-m">—</div></div>
-        <div class="kpi"><div class="kl">Remunerado sem cobrança</div><div class="kv" id="k-rem">—</div><div class="km" id="k-rem-m">—</div></div>
-        <div class="kpi"><div class="kl">Valor divergente</div><div class="kv" id="k-val">—</div><div class="km" id="k-val-m">—</div></div>
+        <div class="kpi"><div class="kl">Ativos conferidos</div><div class="kv" id="k-n">—</div><div class="km" id="k-n-m">—</div></div>
+        <div class="kpi"><div class="kl">Cobrados sem remuneração</div><div class="kv" id="k-sem">—</div><div class="km" id="k-sem-m">—</div></div>
+        <div class="kpi"><div class="kl">Remunerados sem cobrança</div><div class="kv" id="k-rem">—</div><div class="km" id="k-rem-m">—</div></div>
+        <div class="kpi"><div class="kl"># Valores divergentes</div><div class="kv" id="k-val">—</div><div class="km" id="k-val-m">—</div></div>
         <div class="kpi"><div class="kl">Reserva técnica</div><div class="kv" id="k-rt">—</div><div class="km" id="k-rt-m">—</div></div>
-        <div class="kpi"><div class="kl">Δ Faturado × Prévia</div><div class="kv" id="k-fp">—</div><div class="km" id="k-fp-m">—</div></div>
       </div>
       <div class="gr2 um">
         <div class="card gcard">
@@ -1094,19 +1097,23 @@ function pinta(){
 function pintaResumo(L){
   const ft=soma(L,'ft'), pv=soma(L,'prev'), fa=soma(L,'fat');
   const dPF=pv-ft, dFP=fa-pv;
-  $('h-val').textContent=brl(dPF); $('h-val').className='hval '+cor(dPF);
-  $('h-ft').textContent=brl(ft); $('h-prev').textContent=brl(pv);
-  $('h-fat').textContent=fa?brl(fa):'—'; $('h-n').textContent=num(L.length);
+  $('h-fat').textContent=brl(fa);
+  $('h-ft').textContent=brl(ft);
+  $('h-prev').textContent=brl(pv);
+  $('h-dpf').textContent=seta(dPF)+brl(dPF); $('h-dpf').className=cor(dPF);
+  $('h-dfp').textContent=seta(dFP)+brl(dFP); $('h-dfp').className=cor(dFP);
   const g=m=>L.filter(l=>l.motivos.includes(m));
-  const semRem=g('Cobrado sem remuneração'), semCob=g('Remunerado sem cobrança').concat(g('Reserva técnica remunerada, sem cobrança')),
+  const semRem=g('Cobrado sem remuneração'),
+        semCob=g('Remunerado sem cobrança').concat(g('Reserva técnica remunerada, sem cobrança')),
         valDif=g('Valor da prévia ≠ remuneração'), rt=L.filter(l=>/RESERVA/i.test(l.status));
   const põe=(id,v,m)=>{ $(id).textContent=v; $(id+'-m').innerHTML=m; };
-  põe('k-sem',num(semRem.length), brl(soma(semRem,'prev'))+' cobrados sem FT');
-  põe('k-rem',num(semCob.length), brl(soma(semCob,'ft'))+' remunerados sem cobrança');
-  põe('k-val',num(valDif.length), '<b class="'+cor(soma(valDif,'prev')-soma(valDif,'ft'))+'">'+brl(soma(valDif,'prev')-soma(valDif,'ft'))+'</b> de diferença');
-  põe('k-rt', num(rt.length), brl(soma(rt,'ft'))+' remunerados · '+brl(soma(rt,'prev'))+' cobrados');
-  $('k-fp').textContent=fa?brl(dFP):'—'; $('k-fp').className='kv '+(fa?cor(dFP):'');
-  $('k-fp-m').textContent=fa?'faturado contra a prévia':'faturamento não importado';
+  const ms=mesesDe(L);
+  põe('k-n',   num(L.length), ms.length>1 ? ms.length+' meses' : (ms[0]?vigRot(ms[0]):'—'));
+  põe('k-sem', num(semRem.length), brl(soma(semRem,'prev'))+' cobrados sem FT');
+  põe('k-rem', num(semCob.length), brl(soma(semCob,'ft'))+' remunerados sem cobrança');
+  põe('k-val', num(valDif.length), '<b class="'+cor(soma(valDif,'prev')-soma(valDif,'ft'))+'">'
+       +brl(soma(valDif,'prev')-soma(valDif,'ft'))+'</b> de diferença');
+  põe('k-rt',  num(rt.length), brl(soma(rt,'ft'))+' remunerados · '+brl(soma(rt,'prev'))+' cobrados');
   graficoMes(L);
 }
 
@@ -1115,11 +1122,23 @@ const gTick=(sz=10)=>({color:document.body.classList.contains('claro')?'#737D91'
   font:{family:'Montserrat',size:sz,weight:'600'}});
 let chM=null;
 const mesesDe = L => [...new Set(L.map(l=>l.vig))].sort();
+/* o eixo mostra os ÚLTIMOS 12 MESES terminando no mês mais recente com
+   dado — mês sem importação fica vazio, e não some do gráfico */
+function ultimos12(L){
+  const ms=mesesDe(L); if(!ms.length) return [];
+  const [a,m]=ms[ms.length-1].split('-').map(Number);
+  const out=[];
+  for(let k=11;k>=0;k--){
+    const d=new Date(a,m-1-k,1);
+    out.push(d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0'));
+  }
+  return out;
+}
 function graficoMes(L){
   const cv=$('ch-mes'); if(!cv||typeof Chart==='undefined') return;
   const claro=document.body.classList.contains('claro');
-  const ms=mesesDe(L);
-  const dd=c=>ms.map(v=>soma(L.filter(l=>l.vig===v),c));
+  const ms=ultimos12(L), comDado=new Set(mesesDe(L));
+  const dd=c=>ms.map(v=>comDado.has(v)?soma(L.filter(l=>l.vig===v),c):null);
   const LARANJA='#F97316', AZUL=claro?'#1B6FC4':'#2E90E8';
   const PRETO=claro?'#161D2B':'#EEF2FA';   // "preta" no claro; no escuro, o mesmo papel da linha do Orçado
   $('leg-mes').innerHTML=
@@ -1135,7 +1154,7 @@ function graficoMes(L){
        borderWidth:2,borderDash:[5,3],tension:.3,fill:false,pointRadius:4,pointHoverRadius:7,
        pointStyle:'circle',pointBackgroundColor:PRETO,order:1},
       {type:'line',label:'Prévia',data:dd('prev'),borderColor:AZUL,backgroundColor:AZUL,
-       borderWidth:2,borderDash:[5,3],tension:.3,fill:false,pointRadius:ms.length>1?0:3,pointHoverRadius:6,order:2},
+       borderWidth:2,borderDash:[5,3],tension:.3,fill:false,pointRadius:3,pointHoverRadius:6,order:2},
     ]},
     options:{responsive:true,maintainAspectRatio:false,animation:false,
       layout:{padding:{top:18}},
@@ -1242,6 +1261,6 @@ initApp();
 <script src="../assets/mobile.js"></script>
 <script src="../assets/sortable-table.js"></script>
 <script src="../assets/excel-export.js"></script>
-<script src="../assets/build-check.js?v=202608180030"></script>
+<script src="../assets/build-check.js?v=202608180130"></script>
 </body>
 </html>
