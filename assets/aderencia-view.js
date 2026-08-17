@@ -175,19 +175,17 @@
     const comTabela = !(opts && opts.tabela === false);
     return `<div class="adv">
       <div class="adv-hero">
-        <div>
-          <div class="adv-hlbl">Aderência Total</div>
-          <div class="adv-hval" data-adv="total">—</div>
-          <div class="adv-faixas">
-            <span><i style="background:var(--band-red,#FF5252)"></i>&lt; 70% — Crítico</span>
-            <span><i style="background:var(--band-amber,#F4A100)"></i>≥ 70% e &lt; 85% — Atenção</span>
-            <span><i style="background:var(--band-green,#3BB33B)"></i>≥ 85% — Adequado</span>
-          </div>
-        </div>
-        <div class="adv-heb"><div class="adv-hdel">
+        <div class="adv-hlbl">Aderência Total</div>
+        <div class="adv-hval" data-adv="total">—</div>
+        <div class="adv-hdel">
           <div>Aderência ao Prazo<b data-adv="prazo">—</b></div>
           <div>Aderência à Conclusão<b data-adv="concl">—</b></div>
-        </div></div>
+        </div>
+        <div class="adv-faixas">
+          <span><i style="background:var(--band-red,#FF5252)"></i>&lt; 70% — Crítico</span>
+          <span><i style="background:var(--band-amber,#F4A100)"></i>≥ 70% e &lt; 85% — Atenção</span>
+          <span><i style="background:var(--band-green,#3BB33B)"></i>≥ 85% — Adequado</span>
+        </div>
       </div>
 
       <div class="adv-kpis">
