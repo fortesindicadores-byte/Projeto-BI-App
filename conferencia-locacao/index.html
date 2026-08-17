@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="build" content="202608172200">
+<meta name="build" content="202608172330">
 <title>Conferência de Locação · Gestão em Movimento</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -332,6 +332,12 @@ table.dre td.cg-t,.cg-t{color:var(--verde)!important;font-weight:700;}
 /* gráfico com a altura do padrão; a sobra vai para a fileira de cards
    (mesma regra do FCA Admin e do Acessos) */
 #vw-resumo .gr2{flex:0 1 auto;height:52vh;max-height:none;}
+.gr2.um{grid-template-columns:1fr;}
+/* Unidades: as duas tabelas lado a lado (quantidade e R$) */
+.vw#vw-unidades.on{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+#vw-unidades table.dre{font-size:11.5px;}
+#vw-unidades table.dre thead th,#vw-unidades table.dre td{padding:8px 9px;}
+@media(max-width:1180px){ .vw#vw-unidades.on{grid-template-columns:1fr;} }
 #vw-resumo .kpis{flex:0 0 auto;min-height:clamp(120px,17vh,165px);}
 #vw-resumo .kpi{display:flex;flex-direction:column;justify-content:center;}
 .flash{position:fixed;left:50%;bottom:26px;transform:translate(-50%,14px);z-index:9500;
@@ -864,16 +870,10 @@ function montaTela(){
         <div class="kpi"><div class="kl">Reserva técnica</div><div class="kv" id="k-rt">—</div><div class="km" id="k-rt-m">—</div></div>
         <div class="kpi"><div class="kl">Δ Faturado × Prévia</div><div class="kv" id="k-fp">—</div><div class="km" id="k-fp-m">—</div></div>
       </div>
-      <div class="gr2">
+      <div class="gr2 um">
         <div class="card gcard">
-          <div class="gtit">Fonte a fonte, mês a mês</div>
-          <div class="gsub">Freightech (líquido de PIS/COFINS) · Prévia · Faturado</div>
-          <div class="gleg" id="leg-etapa"></div>
-          <div class="gcv"><canvas id="ch-etapa"></canvas></div>
-        </div>
-        <div class="card gcard">
-          <div class="gtit">Divergência mês a mês</div>
-          <div class="gsub">Acima de zero, a Vamos cobra mais do que a Ambev remunera</div>
+          <div class="gtit">Mês a mês</div>
+          <div class="gsub">Faturado em barra · Freightech e Prévia em linha</div>
           <div class="gleg" id="leg-mes"></div>
           <div class="gcv"><canvas id="ch-mes"></canvas></div>
         </div>
@@ -1057,64 +1057,54 @@ function pintaResumo(L){
   põe('k-rt', num(rt.length), brl(soma(rt,'ft'))+' remunerados · '+brl(soma(rt,'prev'))+' cobrados');
   $('k-fp').textContent=fa?brl(dFP):'—'; $('k-fp').className='kv '+(fa?cor(dFP):'');
   $('k-fp-m').textContent=fa?'faturado contra a prévia':'faturamento não importado';
-  graficoFontes(L); graficoMes(L);
+  graficoMes(L);
 }
 
 const gGrid=()=>({display:false});
 const gTick=(sz=10)=>({color:document.body.classList.contains('claro')?'#737D91':'#676F83',
   font:{family:'Montserrat',size:sz,weight:'600'}});
-let chF=null,chM=null;
+let chM=null;
 const mesesDe = L => [...new Set(L.map(l=>l.vig))].sort();
-
-/* as três fontes, mês a mês */
-function graficoFontes(L){
-  const cv=$('ch-etapa'); if(!cv||typeof Chart==='undefined') return;
-  const ms=mesesDe(L);
-  const dd=c=>ms.map(v=>soma(L.filter(l=>l.vig===v),c));
-  const cores=['#2E90E8','#F97316','#3BB33B'];
-  $('leg-etapa').innerHTML=['Freightech','Prévia','Faturado']
-    .map((r,i)=>`<span><i class="sq" style="color:${cores[i]}"></i>${r}</span>`).join('');
-  if(chF) chF.destroy();
-  chF=new Chart(cv,{type:'bar',
-    data:{labels:ms.map(vigRot),datasets:[
-      {label:'Freightech',data:dd('ft'),backgroundColor:cores[0]},
-      {label:'Prévia',data:dd('prev'),backgroundColor:cores[1]},
-      {label:'Faturado',data:dd('fat'),backgroundColor:cores[2]}]},
-    options:{responsive:true,maintainAspectRatio:false,animation:false,
-      layout:{padding:{top:18}},
-      plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>c.dataset.label+': '+brl(c.raw)}}},
-      scales:{x:{grid:gGrid(),border:{display:false},ticks:gTick(11)},y:{display:false,beginAtZero:true}}},
-    plugins:[rotuloBarra]});
-}
-/* as duas divergências, mês a mês */
 function graficoMes(L){
   const cv=$('ch-mes'); if(!cv||typeof Chart==='undefined') return;
+  const claro=document.body.classList.contains('claro');
   const ms=mesesDe(L);
-  const dPF=ms.map(v=>{const l=L.filter(x=>x.vig===v);return soma(l,'prev')-soma(l,'ft');});
-  const dFP=ms.map(v=>{const l=L.filter(x=>x.vig===v);return soma(l,'fat')-soma(l,'prev');});
-  $('leg-mes').innerHTML=[['Prévia × Freightech','#F97316'],['Faturado × Prévia','#2E90E8']]
-    .map(([r,c])=>`<span><i class="sq" style="color:${c}"></i>${r}</span>`).join('');
+  const dd=c=>ms.map(v=>soma(L.filter(l=>l.vig===v),c));
+  const LARANJA='#F97316', AZUL=claro?'#1B6FC4':'#2E90E8';
+  const PRETO=claro?'#161D2B':'#EEF2FA';   // "preta" no claro; no escuro, o mesmo papel da linha do Orçado
+  $('leg-mes').innerHTML=
+    `<span><i class="sq" style="color:${LARANJA}"></i>Faturado</span>`+
+    `<span><i style="color:${PRETO}"></i>Freightech</span>`+
+    `<span><i style="color:${AZUL}"></i>Prévia</span>`;
   if(chM) chM.destroy();
-  chM=new Chart(cv,{type:'bar',
+  chM=new Chart(cv,{
     data:{labels:ms.map(vigRot),datasets:[
-      {label:'Prévia × Freightech',data:dPF,backgroundColor:'#F97316'},
-      {label:'Faturado × Prévia',data:dFP,backgroundColor:'#2E90E8'}]},
+      {type:'bar',label:'Faturado',data:dd('fat'),backgroundColor:LARANJA,borderColor:LARANJA,
+       barPercentage:.62,categoryPercentage:.9,maxBarThickness:78,order:3},
+      {type:'line',label:'Freightech',data:dd('ft'),borderColor:PRETO,backgroundColor:PRETO,
+       borderWidth:2,borderDash:[5,3],tension:.3,fill:false,pointRadius:4,pointHoverRadius:7,
+       pointStyle:'circle',pointBackgroundColor:PRETO,order:1},
+      {type:'line',label:'Prévia',data:dd('prev'),borderColor:AZUL,backgroundColor:AZUL,
+       borderWidth:2,borderDash:[5,3],tension:.3,fill:false,pointRadius:ms.length>1?0:3,pointHoverRadius:6,order:2},
+    ]},
     options:{responsive:true,maintainAspectRatio:false,animation:false,
       layout:{padding:{top:18}},
-      plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>c.dataset.label+': '+brl(c.raw)}}},
-      scales:{x:{grid:gGrid(),border:{display:false},ticks:gTick(11)},y:{display:false}}},
+      plugins:{legend:{display:false},
+        tooltip:{callbacks:{label:c=>c.dataset.label+': '+brl(c.raw)}}},
+      scales:{x:{grid:gGrid(),border:{display:false},ticks:gTick(11)},
+              y:{display:false,beginAtZero:true}}},
     plugins:[rotuloBarra]});
 }
-
 /* rótulo em cima da barra — padrão do portal (o eixo Y some) */
 const rotuloBarra={id:'rot',afterDatasetsDraw(c){
   const ctx=c.ctx; ctx.save();
   ctx.font='800 9.5px Montserrat'; ctx.textAlign='center'; ctx.textBaseline='bottom';
   ctx.fillStyle=document.body.classList.contains('claro')?'#161D2B':'#EEF2FA';
-  c.data.datasets.forEach((ds,di)=>c.getDatasetMeta(di).data.forEach((b,i)=>{
+  c.data.datasets.forEach((ds,di)=>{ if(ds.type&&ds.type!=='bar') return;
+    c.getDatasetMeta(di).data.forEach((b,i)=>{
     const v=ds.data[i]; if(v==null||!isFinite(v)||Math.abs(v)<1) return;
-    ctx.fillText(kbrl(v), b.x, (v>=0?b.y:b.base)-5);
-  }));
+      ctx.fillText(kbrl(v), b.x, (v>=0?b.y:b.base)-5);
+    });});
   ctx.restore();
 }};
 const kbrl = v => { const a=Math.abs(v), s=v<0?'-':'';
@@ -1202,6 +1192,6 @@ initApp();
 <script src="../assets/mobile.js"></script>
 <script src="../assets/sortable-table.js"></script>
 <script src="../assets/excel-export.js"></script>
-<script src="../assets/build-check.js?v=202608172200"></script>
+<script src="../assets/build-check.js?v=202608172330"></script>
 </body>
 </html>
