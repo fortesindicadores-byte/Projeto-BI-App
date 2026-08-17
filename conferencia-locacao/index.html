@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="build" content="202608180130">
+<meta name="build" content="202608180230">
 <title>Conferência de Locação · Gestão em Movimento</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -333,11 +333,16 @@ table.dre td.cg-t,.cg-t{color:var(--verde)!important;font-weight:700;}
    (mesma regra do FCA Admin e do Acessos) */
 #vw-resumo .gr2{flex:0 1 auto;height:52vh;max-height:none;}
 .gr2.um{grid-template-columns:1fr;}
-.hdel-tri{margin-top:6px;}
+/* referências e ▲ na MESMA grade: as colunas batem entre as duas linhas */
+.hgrid{display:grid;grid-template-columns:repeat(3,minmax(150px,max-content));gap:5px 26px;margin-top:2px;}
+.hgrid>div{min-width:0;}
+.hgrid span{display:block;font-size:9px;font-weight:700;color:var(--txt3);
+  text-transform:uppercase;letter-spacing:.7px;}
+.hgrid b{display:block;font-size:13.5px;font-weight:800;color:var(--txt);margin-top:2px;}
 /* Unidades: as duas tabelas lado a lado (quantidade e R$) */
 .vw#vw-unidades.on{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
-#vw-unidades table.dre{font-size:11.5px;}
-#vw-unidades table.dre thead th,#vw-unidades table.dre td{padding:8px 9px;}
+#vw-unidades table.dre{font-size:10.5px;}
+#vw-unidades table.dre thead th,#vw-unidades table.dre td{padding:7px 7px;}
 @media(max-width:1180px){ .vw#vw-unidades.on{grid-template-columns:1fr;} }
 #vw-resumo .kpis{flex:0 0 auto;min-height:clamp(120px,17vh,165px);}
 #vw-resumo .kpi{display:flex;flex-direction:column;justify-content:center;}
@@ -351,6 +356,11 @@ table.dre td.cg-t,.cg-t{color:var(--verde)!important;font-weight:700;}
   background:var(--side);border:1px solid var(--card-brd);color:var(--txt3);min-width:210px;}
 .busca input{flex:1;min-width:0;background:transparent;border:0;outline:0;
   font-family:inherit;font-size:12px;color:var(--txt);}
+/* CABEÇALHO SEMPRE ALINHADO COM O CONTEÚDO: a casca alinha todo th à
+   direita, o que só serve para coluna numérica. Coluna de texto (Ativo,
+   Unidade, Etapa, Status, Desvio) tem de ter o título à esquerda. */
+#cols table.dre thead th:not(.num){text-align:left;}
+#cols table.dre td:not(.num){text-align:left;}
 .mut{color:var(--txt3);}
 .vazio{flex:1;display:flex;align-items:center;justify-content:center;text-align:center;
   font-size:12.5px;color:var(--txt3);line-height:1.8;padding:24px;}
@@ -445,7 +455,7 @@ let sb=null, SESSION=null, PROFILE=null;
 /* ── util ── */
 const $ = id => document.getElementById(id);
 const esc = s => String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-const brl = v => (v<0?'-':'')+'R$ '+Math.abs(Math.round(v||0)).toLocaleString('pt-BR');
+const brl = v => (v<0?'-':'')+Math.abs(Math.round(v||0)).toLocaleString('pt-BR');
 const num = v => Math.round(v||0).toLocaleString('pt-BR');
 
 /* nome de coluna normalizado: 'Custo Aluguel', 'custoAluguel' e
@@ -868,13 +878,13 @@ function montaTela(){
         <div>
           <div class="hlbl">Faturado Vamos</div>
           <div class="hval" id="h-fat">—</div>
-          <div class="hdel">
-            <div>Remuneração (Freightech)<b id="h-ft">—</b></div>
-            <div>Prévia Vamos<b id="h-prev">—</b></div>
-          </div>
-          <div class="hdel hdel-tri">
-            <div>▲ Prévia × Freightech<b id="h-dpf">—</b></div>
-            <div>▲ Faturado × Prévia<b id="h-dfp">—</b></div>
+          <div class="hgrid">
+            <div><span>Remuneração (Freightech)</span><b id="h-ft">—</b></div>
+            <div><span>Prévia Vamos</span><b id="h-prev">—</b></div>
+            <div></div>
+            <div><span>▲ Prévia × Freightech</span><b id="h-dpf">—</b></div>
+            <div><span>▲ Faturado × Prévia</span><b id="h-dfp">—</b></div>
+            <div><span>▲ Faturado × Freightech</span><b id="h-dff">—</b></div>
           </div>
         </div>
       </div>
@@ -1102,6 +1112,8 @@ function pintaResumo(L){
   $('h-prev').textContent=brl(pv);
   $('h-dpf').textContent=seta(dPF)+brl(dPF); $('h-dpf').className=cor(dPF);
   $('h-dfp').textContent=seta(dFP)+brl(dFP); $('h-dfp').className=cor(dFP);
+  const dFF=fa-ft;   // faturado contra a remuneração: o gap que sobra de fato
+  $('h-dff').textContent=seta(dFF)+brl(dFF); $('h-dff').className=cor(dFF);
   const g=m=>L.filter(l=>l.motivos.includes(m));
   const semRem=g('Cobrado sem remuneração'),
         semCob=g('Remunerado sem cobrança').concat(g('Reserva técnica remunerada, sem cobrança')),
@@ -1182,7 +1194,7 @@ const kbrl = v => { const a=Math.abs(v), s=v<0?'-':'';
   return s+Math.round(a); };
 
 function tabela(el,cols,linhas,total){
-  const th=cols.map(c=>`<th class="${c.num?'num':''}">${esc(c.rot)}</th>`).join('');
+  const th=cols.map(c=>`<th class="${c.num?'num':''}">${c.grp?`<span class="grp">${esc(c.grp)}</span>`:''}${esc(c.rot)}</th>`).join('');
   const tr=linhas.map(l=>'<tr>'+cols.map(c=>{
     const v=c.get(l);
     return `<td class="${c.num?'num ':''}${c.cls?c.cls(l):''}">${v==null?'—':v}</td>`;}).join('')+'</tr>').join('');
@@ -1195,8 +1207,8 @@ function pintaUnidades(L){
   L.forEach(l=>{ const u=m[l.uni]=m[l.uni]||{uni:l.uni,nFt:0,nPv:0,nFa:0,ft:0,prev:0,fat:0};
     if(l.ft!=null)u.nFt++; if(l.prev!=null)u.nPv++; if(l.fat!=null)u.nFa++;
     u.ft+=l.ft||0; u.prev+=l.prev||0; u.fat+=l.fat||0; });
-  const rows=Object.values(m).map(u=>({...u,dnP:u.nPv-u.nFt,dnF:u.nFa-u.nPv,
-    dPF:u.prev-u.ft,dFP:u.fat-u.prev}));
+  const rows=Object.values(m).map(u=>({...u,dnP:u.nPv-u.nFt,dnF:u.nFa-u.nPv,dnG:u.nFa-u.nFt,
+    dPF:u.prev-u.ft,dFP:u.fat-u.prev,dFF:u.fat-u.ft}));
   const sm=(r,c)=>r.reduce((a,x)=>a+x[c],0);
 
   // 1) quantidade de ativos
@@ -1207,8 +1219,9 @@ function pintaUnidades(L){
     {rot:'# Ativos',num:1,get:l=>num(l.nFt),tot:r=>num(sm(r,'nFt'))},
     {rot:'# Prévia',num:1,get:l=>num(l.nPv),tot:r=>num(sm(r,'nPv'))},
     {rot:'# Faturado',num:1,get:l=>num(l.nFa),tot:r=>num(sm(r,'nFa'))},
-    {rot:'▲ Prévia',num:1,cls:l=>cor(l.dnP),get:l=>seta(l.dnP)+num(l.dnP),tot:r=>num(sm(r,'dnP'))},
-    {rot:'▲ Faturado',num:1,cls:l=>cor(l.dnF),get:l=>seta(l.dnF)+num(l.dnF),tot:r=>num(sm(r,'dnF'))},
+    {rot:'▲ Prévia',grp:'× FT',num:1,cls:l=>cor(l.dnP),get:l=>seta(l.dnP)+num(l.dnP),tot:r=>num(sm(r,'dnP'))},
+    {rot:'▲ Faturado',grp:'× Prévia',num:1,cls:l=>cor(l.dnF),get:l=>seta(l.dnF)+num(l.dnF),tot:r=>num(sm(r,'dnF'))},
+    {rot:'▲ Gap',grp:'Fat × FT',num:1,cls:l=>cor(l.dnG),get:l=>seta(l.dnG)+num(l.dnG),tot:r=>num(sm(r,'dnG'))},
   ],rows,true);
 
   // 2) o mesmo em R$
@@ -1219,8 +1232,9 @@ function pintaUnidades(L){
     {rot:'Freightech',num:1,get:l=>brl(l.ft),tot:r=>brl(sm(r,'ft'))},
     {rot:'Prévia',num:1,get:l=>brl(l.prev),tot:r=>brl(sm(r,'prev'))},
     {rot:'Faturado',num:1,get:l=>brl(l.fat),tot:r=>brl(sm(r,'fat'))},
-    {rot:'▲ Prévia',num:1,cls:l=>cor(l.dPF),get:l=>seta(l.dPF)+brl(l.dPF),tot:r=>brl(sm(r,'dPF'))},
-    {rot:'▲ Faturado',num:1,cls:l=>cor(l.dFP),get:l=>seta(l.dFP)+brl(l.dFP),tot:r=>brl(sm(r,'dFP'))},
+    {rot:'▲ Prévia',grp:'× FT',num:1,cls:l=>cor(l.dPF),get:l=>seta(l.dPF)+brl(l.dPF),tot:r=>brl(sm(r,'dPF'))},
+    {rot:'▲ Faturado',grp:'× Prévia',num:1,cls:l=>cor(l.dFP),get:l=>seta(l.dFP)+brl(l.dFP),tot:r=>brl(sm(r,'dFP'))},
+    {rot:'▲ Gap',grp:'Fat × FT',num:1,cls:l=>cor(l.dFF),get:l=>seta(l.dFF)+brl(l.dFF),tot:r=>brl(sm(r,'dFF'))},
   ],rv,true);
 }
 function pintaAtivos(L){
@@ -1234,9 +1248,10 @@ function pintaAtivos(L){
     {rot:'Status',get:l=>esc(l.status||'—')},
     {rot:'Freightech',num:1,get:l=>l.ft==null?'—':brl(l.ft),tot:r=>brl(soma(r,'ft'))},
     {rot:'Prévia',num:1,get:l=>l.prev==null?'—':brl(l.prev),tot:r=>brl(soma(r,'prev'))},
-    {rot:'▲ Prévia',num:1,cls:l=>cor(l.dPF),get:l=>seta(l.dPF)+brl(l.dPF),tot:r=>brl(soma(r,'prev')-soma(r,'ft'))},
+    {rot:'▲ Prévia',grp:'× FT',num:1,cls:l=>cor(l.dPF),get:l=>seta(l.dPF)+brl(l.dPF),tot:r=>brl(soma(r,'prev')-soma(r,'ft'))},
     {rot:'Faturado',num:1,get:l=>l.fat==null?'—':brl(l.fat),tot:r=>brl(soma(r,'fat'))},
-    {rot:'▲ Faturado',num:1,cls:l=>cor(l.dFP),get:l=>l.fat==null?'—':seta(l.dFP)+brl(l.dFP),tot:r=>brl(soma(r,'fat')-soma(r,'prev'))},
+    {rot:'▲ Faturado',grp:'× Prévia',num:1,cls:l=>cor(l.dFP),get:l=>l.fat==null?'—':seta(l.dFP)+brl(l.dFP),tot:r=>brl(soma(r,'fat')-soma(r,'prev'))},
+    {rot:'▲ Gap',grp:'Fat × FT',num:1,cls:l=>cor((l.fat||0)-(l.ft||0)),get:l=>seta((l.fat||0)-(l.ft||0))+brl((l.fat||0)-(l.ft||0)),tot:r=>brl(soma(r,'fat')-soma(r,'ft'))},
   ],rows,true);
 }
 function pintaDiag(L){
@@ -1252,8 +1267,9 @@ function pintaDiag(L){
     {rot:'Desvio',get:l=>l.motivos.map(m=>esc(m)).join(' · ')},
     {rot:'Freightech',num:1,get:l=>l.ft==null?'—':brl(l.ft)},
     {rot:'Prévia',num:1,get:l=>l.prev==null?'—':brl(l.prev)},
-    {rot:'▲ Prévia',num:1,cls:l=>cor(l.dPF),get:l=>seta(l.dPF)+brl(l.dPF)},
+    {rot:'▲ Prévia',grp:'× FT',num:1,cls:l=>cor(l.dPF),get:l=>seta(l.dPF)+brl(l.dPF)},
     {rot:'Faturado',num:1,get:l=>l.fat==null?'—':brl(l.fat)},
+    {rot:'▲ Gap',grp:'Fat × FT',num:1,cls:l=>cor((l.fat||0)-(l.ft||0)),get:l=>seta((l.fat||0)-(l.ft||0))+brl((l.fat||0)-(l.ft||0))},
   ],rows,false);
 }
 initApp();
@@ -1261,6 +1277,6 @@ initApp();
 <script src="../assets/mobile.js"></script>
 <script src="../assets/sortable-table.js"></script>
 <script src="../assets/excel-export.js"></script>
-<script src="../assets/build-check.js?v=202608180130"></script>
+<script src="../assets/build-check.js?v=202608180230"></script>
 </body>
 </html>
