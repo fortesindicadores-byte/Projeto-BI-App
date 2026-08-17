@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="build" content="202608180400">
+<meta name="build" content="202608180500">
 <title>Conferência de Locação · Gestão em Movimento</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -543,9 +543,9 @@ async function initApp(){
     gate('<h2>Somente administradores</h2><p>A conferência de locação é restrita ao time de administração. <a href="../">Voltar ao hub</a>.</p>');
     return;
   }
-  // base de ativos (unidade de cada placa) e os meses já gravados — é isto
-  // que faz o painel reabrir com tudo no lugar, sem reimportar
-  await Promise.all([carregaAtivos(), carregaBase()]);
+  // os meses já gravados — é isto que faz o painel reabrir com tudo no
+  // lugar, sem reimportar
+  await carregaBase();
   montaTela();
 }
 
@@ -643,45 +643,10 @@ const AVISO_VAZIO=`<div class="vazio">Importe as planilhas do mês para ver a co
 const FATOR_FT = 1 - 0.0925*0.70;      // 0,93525
 const TOL = 0.01;                       // diferença de centavo não é desvio
 
-/* de-para de unidade: mesma régua do painel Ativos (Filial + Projeto do
-   Ginfo → código do portal), para a unidade ser a MESMA em todo lugar */
-const _nrm=v=>String(v||'').toUpperCase().normalize('NFD').replace(/[̀-ͯ]/g,'').trim();
-const UNI_MAP={
-  'CUIABA EMPURRADA':'CBA - T1','MACACU EMPURRADA':'MCC - T1',
-  'CDD FLORIANOPOLIS':'FLP','CDI MACACU':'MCC - T2',
-  'CDD RONDONOPOLIS':'RON','CDD RIO DE JANEIRO':'CGR',
-  'CDD GUARULHOS':'GRL','CDD PELOTAS':'PLT',
-  'PIRAI EMPURRADA':'PIR','CDD CUIABA':'CBA T2',
-  'CDD NOVA FRIBURGO':'NFR','CDD CAMBORIU':'BLC',
-  'ANHANGUERA':'ANG','CAMPO GRANDE':'CGR',
-};
-function mapUni(fil,proj,tipo){
-  const u=_nrm(fil),p=_nrm(proj),t=_nrm(tipo);
-  if(u==='CUIABA'){
-    if(p==='APOIO'||t.includes('EMPILHADEIRA')) return 'CBA - T1 WH';
-    if(p==='EMPURRADA') return 'CBA - T1';
-    return 'CBA T2';
-  }
-  if(u==='CACHOEIRAS DE MACACU'||u==='MACACU') return p==='EMPURRADA'?'MCC - T1':'MCC - T2';
-  return UNI_MAP[u]||fil||'—';
-}
-
-/* base de ativos do robô Ginfo — é ela que diz a unidade de cada placa */
-let ATIVOS=new Map(), ATIVOS_ATT=null;
-async function carregaAtivos(){
-  try{
-    const {data:row}=await sb.from('ginfo_snapshot').select('data,updated_at').eq('chave','ativos').maybeSingle();
-    if(!row||!Array.isArray(row.data)) return;
-    const s=row.data[0]||{};
-    const kDe=(...alvos)=>Object.keys(s).find(k=>alvos.some(a=>chaveCol(k)===chaveCol(a)));
-    const K={fil:kDe('Filial'),proj:kDe('Projeto'),pla:kDe('Placa'),tv:kDe('Tipo Veículo','Tipo Veiculo','Tipo')};
-    row.data.forEach(r=>{
-      const p=placaCanon(r[K.pla]); if(!p) return;
-      ATIVOS.set(p,{fil:r[K.fil],proj:r[K.proj],tipo:r[K.tv],uni:mapUni(r[K.fil],r[K.proj],r[K.tv])});
-    });
-    ATIVOS_ATT=row.updated_at?new Date(row.updated_at):null;
-  }catch(e){ console.warn('base de ativos indisponível:',e.message||e); }
-}
+/* A unidade vem da planilha do Freightech, na coluna "Unidade - Nome", com
+   o NOME COMO ESTÁ LÁ (Renan, 17/08/2026) — sem de-para e sem a base de
+   ativos do Ginfo. Ativo que não aparece no FT fica sem unidade ("—"),
+   e isso por si só já é um achado do Diagnóstico. */
 
 /* ── leitura das planilhas ──
    Cada aba vira uma lista de objetos com o cabeçalho achado pela primeira
@@ -826,14 +791,12 @@ function analisa(){
     const b=fat[et].get(k)||fat[et==='mensal'?'provisao':'mensal'].get(k);
     const placa=(p&&p.placa)||(b&&b.placa)||(f&&f.ref&&f.ref.placa)||'';
     const chassi=(p&&p.chassi)||(b&&b.chassi)||(f&&f.ref&&f.ref.chassi)||'';
-    const at=ATIVOS.get(placaCanon(placa));
     LINHAS.push({
       etapa:et, k, placa, chassi, semPrevia:semPrevia(k),
       modelo:(p&&p.modelo)||(b&&b.modelo)||'',
       div:(p&&p.div)||(b&&b.div)||(f&&f.ref&&f.ref.seg)||'',
       status:(p&&p.status)||(b&&b.status)||'',
-      uni: at ? at.uni : (f&&f.ref&&f.ref.uniFT ? mapUni(f.ref.uniFT,'','') : '—'),
-      naBase: !!at,
+      uni: (f&&f.ref&&f.ref.uniFT) ? String(f.ref.uniFT).trim() : '—',
       ft: f ? f.valor*FATOR_FT : null,
       ftBruto: f ? f.valor : null,
       vigsFT: f ? f.vigs : 0,
@@ -862,7 +825,6 @@ function motivosDe(l){
   if(l.fat!=null&&l.prev!=null&&Math.abs(l.dFP)>TOL) m.push(l.dFP>0?'Faturado acima da prévia':'Faturado abaixo da prévia');
   if(temB&&l.prev==null) m.push('Faturado sem prévia');
   if(l.prev!=null&&l.fat==null&&temP) m.push('Prévia sem faturamento');
-  if(ATIVOS.size&&!l.naBase&&(temP||temB)) m.push('Placa fora da base de ativos');
   return m;
 }
 
@@ -1279,6 +1241,6 @@ initApp();
 <script src="../assets/mobile.js"></script>
 <script src="../assets/sortable-table.js"></script>
 <script src="../assets/excel-export.js"></script>
-<script src="../assets/build-check.js?v=202608180400"></script>
+<script src="../assets/build-check.js?v=202608180500"></script>
 </body>
 </html>
