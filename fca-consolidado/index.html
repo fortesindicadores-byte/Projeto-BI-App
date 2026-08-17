@@ -3,13 +3,13 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-<meta name="build" content="202608162300">
+<meta name="build" content="202608171200">
 <title>FCA · Admin</title>
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
-<link rel="stylesheet" href="../assets/aderencia-view.css?v=202608102100">
-<script src="../assets/aderencia-view.js?v=202608102100"></script>
+<link rel="stylesheet" href="../assets/aderencia-view.css?v=202608171200">
+<script src="../assets/aderencia-view.js?v=202608171200"></script>
 <style>
 :root{--bg:#0C1017;--card:#141B26;--border:#1E2D40;--orange:#F97316;--blue:#38BDF8;--text:#F1F5F9;--text2:#94A3B8;--text3:#475569;--green:#3BB33B;--red:#FF6666;--amber:#F4A100;}
 *{margin:0;padding:0;box-sizing:border-box;}
@@ -53,11 +53,14 @@ body{background:radial-gradient(ellipse at 10% 25%,rgba(249,115,22,.06) 0%,trans
 .main{flex:1;min-height:0;overflow:auto;padding:0 24px 24px;}
 /* Resumo Gerencial no padrão: a visão inteira ocupa a área e quem rola é a
    tabela, dentro do próprio card — não a página. */
-#content:has(.adv-hero){display:flex;flex-direction:column;gap:12px;height:100%;min-height:0;}
-#content:has(.adv-hero) .adv-wrap{height:clamp(150px,26vh,240px);}
-#content:has(.adv-hero) .adv{display:flex;flex-direction:column;gap:12px;height:100%;min-height:0;}
-#content:has(.adv-hero) .adv-tbl{flex:1;min-height:0;display:flex;flex-direction:column;}
-#content:has(.adv-hero) .adv-rola{flex:1;min-height:0;overflow:auto;}
+/* Resumo e Ranking ocupam a altura da visão — nada de rolagem de página.
+   A sobra é DIVIDIDA: a fileira de cards tem altura própria e o gráfico
+   tem teto, senão toda a sobra vai para o gráfico e os cards achatam. */
+#content:has(.adv){display:flex;flex-direction:column;height:100%;min-height:0;}
+#content:has(.adv) .adv{height:100%;min-height:0;}
+#content:has(.adv) .adv-kpis{min-height:clamp(120px,19.5vh,185px);}
+#content:has(.adv) .adv-gr2{max-height:48vh;}
+#content:has(.adv-tsec){display:flex;flex-direction:column;height:100%;min-height:0;}
 .intro{font-size:12px;color:var(--text2);margin-bottom:16px;line-height:1.5;}
 .intro b{color:var(--text);}
 .loading{text-align:center;color:var(--text3);padding:50px;font-size:14px;}
@@ -366,7 +369,10 @@ body{
 .s-item .n{margin-left:auto;font-size:11px;color:var(--txt3);font-weight:600;}
 .s-user{margin-top:auto;display:flex;align-items:center;gap:9px;padding:12px 8px 2px;border-top:1px solid var(--linha);}
 .s-user div{flex:1;min-width:0;}
-.s-user b{display:block;font-size:12px;font-weight:600;line-height:1.2;}
+.s-user b{display:block;font-size:12px;font-weight:600;line-height:1.2;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+/* sem isto o avatar vira elipse: `.s-user div{flex:1}` vence pela ordem */
+.s-user .av{flex:0 0 24px;margin-left:0;}
 .s-sair{display:flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:7px;
   color:var(--txt3);text-decoration:none;flex:0 0 26px;}
 .s-sair:hover{background:var(--hover);color:var(--txt);}
@@ -817,6 +823,10 @@ table.cons{min-width:1560px!important;}
       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 19V9M10 19V5M16 19v-7M22 19H2"/></svg>
       Resumo Gerencial
     </button>
+    <button class="s-item" data-v="ranking" title="Ranking de aderência">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h11M4 12h7M4 17h15"/></svg>
+      Ranking
+    </button>
     <button class="s-item on" data-v="kanban" title="Kanban">
       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M4 4h5v16H4zM10 4h5v11h-5zM16 4h4v7h-4z"/></svg>
       Kanban
@@ -841,6 +851,8 @@ table.cons{min-width:1560px!important;}
     </button>
 
     <div class="s-user">
+      <span class="av" id="euAv">—</span>
+      <div><b id="euNome">—</b><i>administrador</i></div>
       <a class="s-sair" href="../fca-preenchimento/" title="Voltar às unidades">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M9 6l-6 6 6 6M3 12h13"/></svg>
       </a>
@@ -1120,14 +1132,15 @@ function render(){
   if(!vis.length){body='<div class="tbl-section"><div class="empty">Nenhuma ação para os filtros selecionados.</div></div>';}
   else if(VIEW==='kanban'){body=kanbanHTML(vis);}
   else if(VIEW==='gantt'){body=ganttHTML(vis);}
-  else if(VIEW==='resumo'){body=AderenciaView.html({dims:DIMS_ADER});}
+  else if(VIEW==='resumo'){body=AderenciaView.html({dims:DIMS_ADER,tabela:false});}
+  else if(VIEW==='ranking'){body=AderenciaView.htmlTabela({dims:DIMS_ADER});}
   else{body=relatorioHTML(vis);}
   const mn=document.querySelector('.board .main');
   if(mn){ mn.classList.toggle('rola', VIEW==='tabela'||VIEW==='gantt');
            mn.classList.toggle('kan', VIEW==='kanban'); }
   setTimeout(function(){alinhaCabecalhos();focaQuadro();},0);
   c.innerHTML=body;
-  if(VIEW==='resumo'){
+  if(VIEW==='resumo'||VIEW==='ranking'){
     // idem: a série mensal enxerga todas as vigências, e o filtro só acende as escolhidas
     const visSemVig=_ROWS.filter(r=>(!fu.length||fu.includes(r.unidade))&&(!fo.length||fo.includes(r.origem))&&(!fs.length||fs.includes(r.status||DEFAULT_STATUS))&&(!fp.length||fp.includes(projLabel(r.projeto)))&&(!fc.length||fc.includes(fillState(r.causa)))&&(!fa.length||fa.includes(fillState(r.acao)))&&(!ff.length||ff.includes(r.fato))&&(!fct.length||contasDe(r).some(c=>fct.includes(c)))&&(!fpz.length||fpz.includes(prazoState(r))));
     pintaResumoAdmin(vis,visSemVig,fv);
@@ -1344,7 +1357,7 @@ function updViewBtns(){const b=document.getElementById('viewBtn');if(b)b.textCon
 function toggleView(){VIEW=VIEW==='kanban'?'tabela':'kanban';updViewBtns();render();}
 function showGantt(){VIEW=VIEW==='gantt'?'kanban':'gantt';updViewBtns();render();}
 // ── menu lateral: troca de visão e recolher ──
-const TIT={resumo:'Resumo Gerencial',kanban:'Kanban',tabela:'Tabela',gantt:'Gantt'};
+const TIT={resumo:'Resumo Gerencial',ranking:'Ranking',kanban:'Kanban',tabela:'Tabela',gantt:'Gantt'};
 function vaiPara(v){
   VIEW=v; updViewBtns();
   const t=document.getElementById('tituloVista'); if(t) t.textContent=TIT[v]||'';
@@ -1547,6 +1560,15 @@ document.addEventListener('click',e=>{if(!e.target.closest('.ms-wrap'))document.
 // (o cabeçalho fixo não depende mais da altura do header: a tabela rola
 // dentro do próprio quadro, então basta `top:0` no thead)
 
+// ── rodapé da lateral: avatar + quem está logado (padrão do portal) ──
+function pintaUsuario(user,prof){
+  const nome=(prof&&(prof.nome||prof.name))||(user&&(user.user_metadata||{}).nome)
+           ||String((user&&user.email)||'').split('@')[0].replace(/[._-]+/g,' ')||'—';
+  const ini=nome.trim().split(/\s+/).slice(0,2).map(p=>p[0]||'').join('').toUpperCase()||'—';
+  const a=document.getElementById('euAv'), n=document.getElementById('euNome');
+  if(a) a.textContent=ini;
+  if(n){ n.textContent=nome.replace(/\b\w/g,c=>c.toUpperCase()); n.title=(user&&user.email)||''; }
+}
 // ── Início: exige login + admin (mesmo fluxo do fca-preenchimento) ──
 async function initApp(){
   try{ sb=supabase.createClient(SUPABASE_URL,SUPABASE_KEY); }
@@ -1563,6 +1585,7 @@ async function initApp(){
     return;
   }
   PROFILE=prof||{};
+  pintaUsuario(session.user, PROFILE);
   if(!PROFILE.is_admin){ gateAdmin(); return; }
   carregar();
 }
@@ -1571,6 +1594,6 @@ initApp();
 <script src="../assets/mobile.js"></script>
 <script src="../assets/excel-export.js"></script>
 <script src="../assets/sortable-table.js"></script>
-<script src="../assets/build-check.js?v=202608162300"></script>
+<script src="../assets/build-check.js?v=202608171200"></script>
 </body>
 </html>

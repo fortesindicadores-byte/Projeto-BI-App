@@ -7,9 +7,16 @@
    métrica, as faixas de cor e o desenho da barra — se mudar aqui, muda
    nos três, que era justamente o pedido ("tudo igual ao Planner").
 
+   Desenhada no LAYOUT PADRÃO DO PORTAL: hero solto (número grande sem
+   card), fileira de KPIs em cards --side, gráficos sem grade com o
+   rótulo em cima da barra e a tabela numa VISÃO PRÓPRIA — o Resumo
+   Gerencial fica só com hero + cards + gráficos (Renan, 16/08/2026).
+
    USO
-     container.innerHTML = AderenciaView.html({dims:[{k:'unidade',rot:'Unidade'},…]});
-     AderenciaView.render(container, {linhas, dim, aoTrocarDim});
+     container.innerHTML = AderenciaView.html({dims:[…]});         // tudo junto
+     container.innerHTML = AderenciaView.html({dims:[…], tabela:false});  // sem tabela
+     container.innerHTML = AderenciaView.htmlTabela({dims:[…]});   // só a tabela
+     AderenciaView.render(container, {linhas, dim, aoTrocarDim});  // pinta o que existir
 
    CADA LINHA (o painel normaliza antes de entregar)
      {
@@ -28,6 +35,9 @@
   const esc = s => String(s == null ? '' : s)
     .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
+  const claroAgora = () => document.body.classList.contains('light-mode')
+                        || document.body.classList.contains('claro');
+
   // ── faixas de cor: lidas do CSS, para o claro poder usar os tons fortes ──
   function band(p) {
     const cs = getComputedStyle(document.body), v = n => cs.getPropertyValue(n).trim();
@@ -41,7 +51,8 @@
     if (c[0] !== '#' || c.length < 7) return c;
     return `rgba(${parseInt(c.slice(1,3),16)},${parseInt(c.slice(3,5),16)},${parseInt(c.slice(5,7),16)},${a})`;
   }
-  const pct = v => v == null ? '—' : Math.round(v) + '%';
+  const pct  = v => v == null ? '—' : Math.round(v) + '%';
+  const pct1 = v => v == null ? '—' : (Math.round(v * 10) / 10).toLocaleString('pt-BR') + '%';
 
   // ── métrica: a mesma conta do FCA Gerencial ──
   // total = (concluídas*100 + em andamento*50) / total de ações
@@ -76,21 +87,20 @@
     return saida;
   }
 
-  // rótulo em cima da barra — igual ao do FCA Gerencial
+  // rótulo em cima da barra — padrão do portal (o eixo Y some, o número fica na barra)
   const barLabels = {
     id: 'aderencia-bar-labels',
     afterDatasetsDraw(c) {
       const ds = c.data.datasets[0], m = c.getDatasetMeta(0), ctx = c.ctx;
       ctx.save();
-      ctx.font = '700 11px Montserrat';
+      ctx.font = '800 10.5px Montserrat';
       ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
-      ctx.fillStyle = document.body.classList.contains('light-mode') || document.body.classList.contains('claro')
-        ? '#1a1a1a' : '#F1F5F9';
+      ctx.fillStyle = claroAgora() ? '#161D2B' : '#EEF2FA';
       m.data.forEach((b, i) => {
         const v = ds.data[i];
         if (v == null) return;
         if (ds._on && !ds._on[i]) return;   // mês fora do filtro: barra apagada, sem rótulo
-        ctx.fillText(Math.round(v) + '%', b.x, b.y - 4);
+        ctx.fillText(Math.round(v) + '%', b.x, b.y - 5);
       });
       ctx.restore();
     },
@@ -104,75 +114,104 @@
   function grafico(canvasId, labels, data, foco) {
     const cv = document.getElementById(canvasId);
     if (!cv || typeof Chart === 'undefined') return;
-    const claro = document.body.classList.contains('light-mode') || document.body.classList.contains('claro');
+    const claro = claroAgora();
     const temFoco = !!(foco && foco.some(f => !f) && foco.some(f => f));
     const aceso = i => !temFoco || foco[i];
-    const bg = data.map((v, i) => v == null ? 'transparent' : bandRgba(v, temFoco ? (aceso(i) ? .85 : .18) : .65));
-    const bc = data.map((v, i) => v == null ? 'transparent' : (temFoco && !aceso(i) ? bandRgba(v, .30) : band(v)));
-    const grid = { color: claro ? 'rgba(0,0,0,.08)' : 'rgba(255,255,255,.06)' };
-    const tick = { color: claro ? '#444' : '#94A3B8', font: { family: 'Montserrat', size: 11 } };
+    const bg = data.map((v, i) => v == null ? 'transparent' : (temFoco && !aceso(i) ? bandRgba(v, .22) : band(v)));
+    const tick = { color: claro ? '#737D91' : '#676F83', font: { family: 'Montserrat', size: 10, weight: '600' } };
     // eixo Y adaptável em múltiplos de 10 — não fica travado em 0..100
     const vals = data.filter(v => v != null);
     const dMin = vals.length ? Math.min(...vals) : 0, dMax = vals.length ? Math.max(...vals) : 100;
     const yMin = Math.max(0, Math.floor((dMin - 8) / 10) * 10);
-    const yMax = Math.min(100, Math.max(yMin + 20, Math.ceil((dMax + 6) / 10) * 10));
+    const yMax = Math.max(yMin + 20, Math.min(112, Math.ceil((dMax + 6) / 10) * 10));
     if (_charts[canvasId]) _charts[canvasId].destroy();
     _charts[canvasId] = new Chart(cv, {
       type: 'bar',
-      data: { labels, datasets: [{ data, backgroundColor: bg, borderColor: bc, borderWidth: 1, borderRadius: 3, maxBarThickness: 46,
+      data: { labels, datasets: [{ data, backgroundColor: bg, borderColor: bg, borderWidth: 0,
+        borderRadius: 2, barPercentage: .97, categoryPercentage: .94,
         _on: data.map((_, i) => aceso(i)) }] },
       plugins: [barLabels],
       options: {
         responsive: true, maintainAspectRatio: false,
-        layout: { padding: { top: 22 } },
-        plugins: { legend: { display: false }, tooltip: { callbacks: { label: c => Math.round(c.raw) + '%' } } },
-        scales: { x: { grid, ticks: tick }, y: { min: yMin, max: yMax, grid, ticks: { ...tick, callback: v => v + '%' } } },
+        animation: false,
+        layout: { padding: { top: 18 } },
+        plugins: {
+          legend: { display: false },
+          datalabels: { display: false },
+          tooltip: { callbacks: { label: c => Math.round(c.raw) + '%' } },
+        },
+        scales: {
+          x: { grid: { display: false }, border: { display: false }, ticks: tick },
+          y: { display: false, min: yMin, max: yMax },
+        },
       },
     });
   }
 
   // ── markup ──
-  function html(opts) {
-    const dims = (opts && opts.dims) || [];
-    const toggle = dims.length > 1
+  function blocoToggle(dims) {
+    return dims.length > 1
       ? `<div class="adv-toggle">${dims.map((d, i) =>
           `<button class="adv-dim${i ? '' : ' on'}" data-dim="${esc(d.k)}">${esc(d.rot)}</button>`).join('')}</div>`
       : '';
+  }
+
+  function htmlTabela(opts) {
+    const dims = (opts && opts.dims) || [];
+    return `<div class="adv-tsec">
+      <div class="adv-thead">
+        <div><div class="adv-ttit" data-adv="tbl-titulo">Aderência</div>
+             <div class="adv-tsub" data-adv="tbl-sub">Da menor aderência para a maior</div></div>
+        ${blocoToggle(dims)}
+      </div>
+      <div class="adv-twrap"><table class="adv-table"><thead><tr>
+        <th data-adv="th-dim">—</th><th class="num">TT Ações</th><th class="num">Concluídas</th>
+        <th class="num">No Prazo</th><th class="num">Conclusão</th><th class="num">Prazo</th><th class="num">Aderência</th>
+      </tr></thead><tbody data-adv="tbody"></tbody></table></div>
+    </div>`;
+  }
+
+  function html(opts) {
+    const comTabela = !(opts && opts.tabela === false);
     return `<div class="adv">
       <div class="adv-hero">
-        <div class="adv-hl">Aderência Total</div>
-        <div class="adv-hn" data-adv="total">—</div>
-        <div class="adv-sub">
-          <div><span class="adv-hl">Aderência ao Prazo</span><b data-adv="prazo">—</b></div>
-          <div><span class="adv-hl">Aderência à Conclusão</span><b data-adv="concl">—</b></div>
+        <div>
+          <div class="adv-hlbl">Aderência Total</div>
+          <div class="adv-hval" data-adv="total">—</div>
+          <div class="adv-faixas">
+            <span><i style="background:var(--band-red,#FF5252)"></i>&lt; 70% — Crítico</span>
+            <span><i style="background:var(--band-amber,#F4A100)"></i>≥ 70% e &lt; 85% — Atenção</span>
+            <span><i style="background:var(--band-green,#3BB33B)"></i>≥ 85% — Adequado</span>
+          </div>
         </div>
-        <div class="adv-faixas">
-          <span><i style="background:var(--band-red,#FF5252)"></i>&lt; 70% — Crítico</span>
-          <span><i style="background:var(--band-amber,#F4A100)"></i>≥ 70% e &lt; 85% — Atenção</span>
-          <span><i style="background:var(--band-green,#3BB33B)"></i>≥ 85% — Adequado</span>
-        </div>
+        <div class="adv-heb"><div class="adv-hdel">
+          <div>Aderência ao Prazo<b data-adv="prazo">—</b></div>
+          <div>Aderência à Conclusão<b data-adv="concl">—</b></div>
+        </div></div>
       </div>
 
       <div class="adv-kpis">
-        <div class="adv-kpi"><div class="adv-kl"><i class="adv-dot cinza"></i>Total de Ações</div><b data-adv="k-tt">—</b></div>
-        <div class="adv-kpi"><div class="adv-kl"><i class="adv-dot verde"></i>Concluídas</div><b data-adv="k-concl">—</b></div>
-        <div class="adv-kpi"><div class="adv-kl"><i class="adv-dot ambar"></i>Em Andamento</div><b data-adv="k-andam">—</b></div>
-        <div class="adv-kpi"><div class="adv-kl"><i class="adv-dot vermelho"></i>Não Iniciadas</div><b data-adv="k-nini">—</b></div>
-        <div class="adv-kpi"><div class="adv-kl"><i class="adv-dot verde"></i>No Prazo</div><b data-adv="k-nop">—</b></div>
-        <div class="adv-kpi"><div class="adv-kl"><i class="adv-dot vermelho"></i>Fora do Prazo</div><b data-adv="k-venc">—</b></div>
+        <div class="adv-kpi"><div class="kl">Total de Ações</div><div class="kv" data-adv="k-tt">—</div><div class="km" data-adv="m-tt">—</div></div>
+        <div class="adv-kpi k-verde"><div class="kl">Concluídas</div><div class="kv" data-adv="k-concl">—</div><div class="km" data-adv="m-concl">—</div></div>
+        <div class="adv-kpi k-ambar"><div class="kl">Em Andamento</div><div class="kv" data-adv="k-andam">—</div><div class="km" data-adv="m-andam">—</div></div>
+        <div class="adv-kpi k-vermelho"><div class="kl">Não Iniciadas</div><div class="kv" data-adv="k-nini">—</div><div class="km" data-adv="m-nini">—</div></div>
+        <div class="adv-kpi k-verde"><div class="kl">No Prazo</div><div class="kv" data-adv="k-nop">—</div><div class="km" data-adv="m-nop">—</div></div>
+        <div class="adv-kpi k-vermelho"><div class="kl">Fora do Prazo</div><div class="kv" data-adv="k-venc">—</div><div class="km" data-adv="m-venc">—</div></div>
       </div>
 
-      <div class="adv-graficos">
-        <div class="adv-card"><h3>Aderência ao Prazo · Mensal</h3><div class="adv-wrap"><canvas id="adv-ch-prazo"></canvas></div></div>
-        <div class="adv-card"><h3>Aderência à Conclusão · Mensal</h3><div class="adv-wrap"><canvas id="adv-ch-concl"></canvas></div></div>
+      <div class="adv-gr2">
+        <div class="adv-gcard">
+          <div class="adv-gtit">Aderência ao Prazo</div>
+          <div class="adv-gsub">% de ações dentro do prazo, mês a mês</div>
+          <div class="adv-gcv"><canvas id="adv-ch-prazo"></canvas></div>
+        </div>
+        <div class="adv-gcard">
+          <div class="adv-gtit">Aderência à Conclusão</div>
+          <div class="adv-gsub">% de ações concluídas, mês a mês</div>
+          <div class="adv-gcv"><canvas id="adv-ch-concl"></canvas></div>
+        </div>
       </div>
-
-      <div class="adv-card adv-tbl">
-        <div class="adv-thead"><h3 data-adv="tbl-titulo">Aderência</h3>${toggle}</div>
-        <div class="adv-rola"><table class="adv-table"><thead><tr>
-          <th data-adv="th-dim">—</th><th class="num">TT Ações</th><th class="num">Conclusão</th><th class="num">Prazo</th><th class="num">Total</th>
-        </tr></thead><tbody data-adv="tbody"></tbody></table></div>
-      </div>
+      ${comTabela ? htmlTabela(opts) : ''}
     </div>`;
   }
 
@@ -187,10 +226,15 @@
 
     const g = metrics(linhas);
     const setN = (k, v) => { const e = q(k); if (e) e.textContent = v.toLocaleString('pt-BR'); };
+    const setT = (k, v) => { const e = q(k); if (e) e.textContent = v; };
     const setP = (k, v) => { const e = q(k); if (e) { e.textContent = pct(v); e.style.color = band(v); } };
+    const share = n => g.tt ? Math.round(n / g.tt * 100) + '% do total' : '—';
     setP('total', g.total); setP('prazo', g.pPrazo); setP('concl', g.pConcl);
     setN('k-tt', g.tt); setN('k-concl', g.concl); setN('k-andam', g.andam);
     setN('k-nini', g.nini); setN('k-nop', g.noP); setN('k-venc', g.venc);
+    setT('m-tt', g.tt ? 'no recorte atual' : '—');
+    setT('m-concl', share(g.concl)); setT('m-andam', share(g.andam)); setT('m-nini', share(g.nini));
+    setT('m-nop', share(g.noP));     setT('m-venc', share(g.venc));
 
     // A série mensal usa as linhas SEM o filtro de vigência (quando o painel as
     // manda), para os outros meses continuarem no gráfico — apagados.
@@ -210,16 +254,24 @@
     const itens = chaves.map(k => ({ k, ...metrics(linhas.filter(o => (o.dims || {})[dim] === k)) }))
       .sort((a, b) => (a.total == null ? 999 : a.total) - (b.total == null ? 999 : b.total)
                    || String(a.k).localeCompare(String(b.k), 'pt'));
+    const ts = q('tbl-sub');
+    if (ts) ts.textContent = itens.length
+      ? `${itens.length} ${itens.length === 1 ? 'linha' : 'linhas'} · da menor aderência para a maior`
+      : 'Da menor aderência para a maior';
     const tb = q('tbody');
     if (tb) tb.innerHTML = itens.length
       ? itens.map(it => `<tr>
-          <td>${esc(it.k)}</td>
+          <td class="nome">${esc(it.k)}</td>
           <td class="num">${it.tt}</td>
+          <td class="num">${it.concl}</td>
+          <td class="num">${it.noP}</td>
           <td class="num" style="color:${band(it.pConcl)};font-weight:800">${pct(it.pConcl)}</td>
           <td class="num" style="color:${band(it.pPrazo)};font-weight:800">${pct(it.pPrazo)}</td>
-          <td class="num"><span class="adv-pct" style="background:${band(it.total)}">${pct(it.total)}</span></td>
+          <td class="num"><span class="adv-barra">
+            <s><i style="width:${Math.max(2, Math.round(it.total || 0))}%;background:${band(it.total)}"></i></s>
+            <b style="color:${band(it.total)}">${pct1(it.total)}</b></span></td>
         </tr>`).join('')
-      : '<tr><td colspan="5" class="adv-vazio">Nenhuma ação com os filtros atuais.</td></tr>';
+      : '<tr><td colspan="7" class="adv-vazio">Nenhuma ação com os filtros atuais.</td></tr>';
 
     // troca de dimensão (Unidade ⇄ Projeto ⇄ Conta, Assunto ⇄ Pessoa…)
     root.querySelectorAll('.adv-dim').forEach(b => {
@@ -233,5 +285,5 @@
     });
   }
 
-  global.AderenciaView = { html, render, metrics, band, bandRgba, pct };
+  global.AderenciaView = { html, htmlTabela, render, metrics, band, bandRgba, pct };
 })(window);
