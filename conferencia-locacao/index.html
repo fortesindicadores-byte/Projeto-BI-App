@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="build" content="202608172330">
+<meta name="build" content="202608180030">
 <title>Conferência de Locação · Gestão em Movimento</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -346,6 +346,10 @@ table.dre td.cg-t,.cg-t{color:var(--verde)!important;font-weight:700;}
   box-shadow:0 14px 34px rgba(0,0,0,.4);opacity:0;pointer-events:none;transition:.16s;}
 .flash.on{opacity:1;transform:translate(-50%,0);}
 .flash.ruim{color:var(--vermelho);}
+.busca{display:flex;align-items:center;gap:7px;padding:6px 11px;border-radius:99px;
+  background:var(--side);border:1px solid var(--card-brd);color:var(--txt3);min-width:210px;}
+.busca input{flex:1;min-width:0;background:transparent;border:0;outline:0;
+  font-family:inherit;font-size:12px;color:var(--txt);}
 .mut{color:var(--txt3);}
 .vazio{flex:1;display:flex;align-items:center;justify-content:center;text-align:center;
   font-size:12.5px;color:var(--txt3);line-height:1.8;padding:24px;}
@@ -405,6 +409,8 @@ table.dre td.cg-t,.cg-t{color:var(--verde)!important;font-weight:700;}
   <main class="board">
     <div class="top">
       <div class="tit-wrap"><h1 id="tit">Resumo Gerencial</h1><div class="tit-sub" id="titSub">Verificando acesso…</div></div>
+      <div class="busca"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M16.5 16.5 21 21"/></svg>
+        <input type="text" id="q" placeholder="Pesquisar placa, unidade, modelo…" autocomplete="off" oninput="pinta()"></div>
       <div class="filtros" id="filtros"></div>
       <button class="tool ico" id="btTema" onclick="trocaTema()" title="Claro / escuro"></button>
     </div>
@@ -528,6 +534,9 @@ async function initApp(){
     gate('<h2>Somente administradores</h2><p>A conferência de locação é restrita ao time de administração. <a href="../">Voltar ao hub</a>.</p>');
     return;
   }
+  // base de ativos (unidade de cada placa) e os meses já gravados — é isto
+  // que faz o painel reabrir com tudo no lugar, sem reimportar
+  await Promise.all([carregaAtivos(), carregaBase()]);
   montaTela();
 }
 
@@ -593,11 +602,14 @@ function rotuloArq(a){
 function pintaImportar(){
   const ks=Object.keys(ARQ);
   const meses=[...BASE.keys()].sort().reverse().map(v=>{
-    const b=BASE.get(v);
-    return `<div class="arq ok"><span class="ic">✓</span><div><b>${vigRot(v)}</b>
-      <i>${num(b.linhas.length)} ativos · ${b.arquivos&&b.arquivos.length?b.arquivos.length+' planilhas':'—'}
-      ${b.updated_at?' · '+new Date(b.updated_at).toLocaleDateString('pt-BR'):''}</i></div></div>`;}).join('');
-  $('meses').innerHTML = meses || '<div class="vazio">Nenhum mês gravado ainda.</div>';
+    const b=BASE.get(v), ok=b.salvo!==false;
+    return `<div class="arq ${ok?'ok':'erro'}"><span class="ic">${ok?'✓':'!'}</span>
+      <div><b>${vigRot(v)}</b><i>${num(b.linhas.length)} ativos ·
+      ${ok?('no banco'+(b.updated_at?' · '+new Date(b.updated_at).toLocaleDateString('pt-BR'):'')) 
+          :('NÃO gravado — '+esc(b.erro||'erro desconhecido'))}</i></div>
+      ${ok?'':`<button class="x" title="Tentar gravar de novo" onclick="salvaMes('${v}')">↻</button>`}</div>`;}).join('');
+  $('meses').innerHTML = (ERRO_BASE?`<div class="arq erro"><span class="ic">!</span><div><b>Banco</b><i>${esc(ERRO_BASE)}</i></div></div>`:'')
+    + (meses || '<div class="vazio">Nenhum mês gravado ainda.</div>');
   $('arqs').innerHTML = ks.length ? ks.map(k=>{
     const a=ARQ[k], ok=!!a.tipo && !a.erro;
     const det=a.erro ? 'Erro: '+esc(a.erro)
@@ -919,7 +931,7 @@ function montaTela(){
         </div>
         <div class="ttit" style="margin-top:6px">Planilhas desta importação</div>
         <div class="arqs" id="arqs"></div>
-        <div class="ttit" style="margin-top:10px">Meses gravados</div>
+        <div class="thead-row" style="margin-top:10px"><div class="ttit">Meses gravados</div><button class="tool" onclick="recarregaBase()">↻ Recarregar do banco</button></div>
         <div class="arqs" id="meses"></div>
       </div>
     </section>`;
@@ -937,8 +949,8 @@ function montaTela(){
 }
 
 /* ── filtros multi-select (mesmo desenho dos outros painéis) ── */
-const FILTROS=[{id:'ms-vig',rot:'Vigência'},{id:'ms-etapa',rot:'Etapa'},{id:'ms-uni',rot:'Unidade'},{id:'ms-mot',rot:'Desvio'}];
-const SEL={'ms-vig':new Set(),'ms-etapa':new Set(),'ms-uni':new Set(),'ms-mot':new Set()};
+const FILTROS=[{id:'ms-ano',rot:'Ano'},{id:'ms-vig',rot:'Vigência'},{id:'ms-etapa',rot:'Etapa'},{id:'ms-uni',rot:'Unidade'},{id:'ms-ativo',rot:'Ativo'},{id:'ms-mot',rot:'Desvio'}];
+const SEL={'ms-ano':new Set(),'ms-vig':new Set(),'ms-etapa':new Set(),'ms-uni':new Set(),'ms-ativo':new Set(),'ms-mot':new Set()};
 function montaFiltros(){
   $('filtros').innerHTML=FILTROS.map(f=>`
     <div class="ms-wrap" id="${f.id}"><button class="ms-btn" onclick="abreMs('${f.id}')">${f.rot}<span class="ms-cnt"></span></button>
@@ -956,7 +968,9 @@ function abreMs(id){
 }
 function opcoesDe(id){
   const T=todasLinhas();
+  if(id==='ms-ano')   return [...new Set(T.map(l=>String(l.vig||'').slice(0,4)))].filter(Boolean).sort().reverse();
   if(id==='ms-vig')   return [...new Set(T.map(l=>l.vig))].sort().reverse().map(vigRot);
+  if(id==='ms-ativo') return [...new Set(T.map(l=>l.placa||l.chassi||l.k))].sort();
   if(id==='ms-etapa') return Object.values(ETAPAS);
   if(id==='ms-uni')   return [...new Set(T.map(l=>l.uni))].sort();
   return [...new Set(T.flatMap(l=>l.motivos||[]))].sort();
@@ -976,12 +990,22 @@ function pintaFiltros(){
 }
 function marcaMs(id,on,v){ on?SEL[id].add(v):SEL[id].delete(v); pinta(); }
 function limpaMs(id){ SEL[id].clear(); pinta(); }
+/* texto que a busca varre: tudo que identifica a linha */
+const textoDe = l => [l.placa,l.chassi,l.uni,l.modelo,l.status,l.div,ETAPAS[l.etapa],vigRot(l.vig)]
+  .concat(l.motivos||[]).join(' ').toLowerCase();
 function filtradas(){
-  const vg=SEL['ms-vig'], et=SEL['ms-etapa'], un=SEL['ms-uni'], mo=SEL['ms-mot'];
-  return todasLinhas().filter(l=>(!vg.size||vg.has(vigRot(l.vig)))
+  const an=SEL['ms-ano'], vg=SEL['ms-vig'], et=SEL['ms-etapa'], un=SEL['ms-uni'],
+        at=SEL['ms-ativo'], mo=SEL['ms-mot'];
+  const qEl=$('q'), q=(qEl&&qEl.value||'').trim().toLowerCase();
+  const termos=q?q.split(/\s+/):[];
+  return todasLinhas().filter(l=>
+       (!an.size||an.has(String(l.vig||'').slice(0,4)))
+    &&(!vg.size||vg.has(vigRot(l.vig)))
     &&(!et.size||et.has(ETAPAS[l.etapa]))
     &&(!un.size||un.has(l.uni))
-    &&(!mo.size||(l.motivos||[]).some(m=>mo.has(m))));
+    &&(!at.size||at.has(l.placa||l.chassi||l.k))
+    &&(!mo.size||(l.motivos||[]).some(m=>mo.has(m)))
+    &&(!termos.length||(()=>{const t=textoDe(l);return termos.every(x=>t.includes(x));})()));
 }
 
 /* ══════════ base do mês (Supabase) ══════════
@@ -991,27 +1015,53 @@ let BASE=new Map();        // 'AAAA-MM' → {linhas, arquivos, updated_at}
 const vigTxt = p => p ? p.ano+'-'+String(p.mes).padStart(2,'0') : '';
 const vigRot = v => v ? v.slice(5)+'/'+v.slice(0,4) : '—';
 
+let ERRO_BASE=null;
 async function carregaBase(){
   try{
-    const {data}=await sb.from('locacao_conferencia').select('*').order('vigencia');
+    const {data,error}=await sb.from('locacao_conferencia').select('*').order('vigencia');
+    if(error) throw error;
+    BASE=new Map();
     (data||[]).forEach(r=>BASE.set(r.vigencia,{
-      linhas:Array.isArray(r.linhas)?r.linhas:[], arquivos:r.arquivos||[], updated_at:r.updated_at}));
-  }catch(e){ console.warn('base de conferência indisponível:',e.message||e); }
+      linhas:Array.isArray(r.linhas)?r.linhas:[], arquivos:r.arquivos||[],
+      updated_at:r.updated_at, updated_by:r.updated_by, salvo:true}));
+    ERRO_BASE=null;
+  }catch(e){
+    ERRO_BASE='Não consegui LER a tabela locacao_conferencia: '+(e.message||e)
+      +(e.hint?' — '+e.hint:'')+(e.code?' ('+e.code+')':'');
+    console.error(e);
+  }
 }
 async function guardaMes(vig,linhas){
-  BASE.set(vig,{linhas, arquivos:Object.values(ARQ).map(a=>a.nome), updated_at:new Date().toISOString()});
+  BASE.set(vig,{linhas, arquivos:Object.values(ARQ).map(a=>a.nome),
+                updated_at:new Date().toISOString(), salvo:false});
+  return salvaMes(vig);
+}
+/* a gravação é o que faz o mês sobreviver ao F5 — se falhar, o painel
+   mostra o erro do banco e deixa o botão de tentar de novo */
+async function salvaMes(vig){
+  const b=BASE.get(vig); if(!b) return;
   try{
     const {error}=await sb.from('locacao_conferencia').upsert({
-      vigencia:vig, linhas,
-      resumo:{ft:soma(linhas,'ft'),prev:soma(linhas,'prev'),fat:soma(linhas,'fat'),n:linhas.length},
-      arquivos:Object.values(ARQ).map(a=>a.nome),
+      vigencia:vig, linhas:b.linhas,
+      resumo:{ft:soma(b.linhas,'ft'),prev:soma(b.linhas,'prev'),fat:soma(b.linhas,'fat'),n:b.linhas.length},
+      arquivos:b.arquivos||[],
       updated_at:new Date().toISOString(),
       updated_by:(SESSION&&SESSION.user&&SESSION.user.email)||null,
     },{onConflict:'vigencia'});
     if(error) throw error;
-    flash('Mês '+vigRot(vig)+' salvo');
-  }catch(e){ flash('Não salvou no banco: '+(e.message||e), true); }
+    b.salvo=true; b.erro=null;
+    ERRO_BASE=null;
+    flash('Mês '+vigRot(vig)+' salvo no banco');
+  }catch(e){
+    b.salvo=false;
+    b.erro=(e.message||String(e))+(e.hint?' — '+e.hint:'')+(e.code?' ('+e.code+')':'');
+    ERRO_BASE='Não consegui GRAVAR '+vigRot(vig)+': '+b.erro;
+    console.error(e);
+    flash('Não salvou: '+b.erro, true);
+  }
+  pinta();
 }
+async function recarregaBase(){ await carregaBase(); pinta(); flash(BASE.size+' mês(es) no banco'); }
 function flash(txt,ruim){
   let e=$('flash');
   if(!e){ e=document.createElement('div'); e.id='flash'; document.body.appendChild(e); }
@@ -1192,6 +1242,6 @@ initApp();
 <script src="../assets/mobile.js"></script>
 <script src="../assets/sortable-table.js"></script>
 <script src="../assets/excel-export.js"></script>
-<script src="../assets/build-check.js?v=202608172330"></script>
+<script src="../assets/build-check.js?v=202608180030"></script>
 </body>
 </html>
