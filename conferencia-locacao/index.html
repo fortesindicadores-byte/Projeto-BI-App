@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="build" content="202608180230">
+<meta name="build" content="202608180400">
 <title>Conferência de Locação · Gestão em Movimento</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -338,12 +338,10 @@ table.dre td.cg-t,.cg-t{color:var(--verde)!important;font-weight:700;}
 .hgrid>div{min-width:0;}
 .hgrid span{display:block;font-size:9px;font-weight:700;color:var(--txt3);
   text-transform:uppercase;letter-spacing:.7px;}
+.hgrid span i{font-style:normal;font-weight:600;color:var(--txt4);text-transform:none;letter-spacing:0;margin-left:6px;}
 .hgrid b{display:block;font-size:13.5px;font-weight:800;color:var(--txt);margin-top:2px;}
 /* Unidades: as duas tabelas lado a lado (quantidade e R$) */
-.vw#vw-unidades.on{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
-#vw-unidades table.dre{font-size:10.5px;}
-#vw-unidades table.dre thead th,#vw-unidades table.dre td{padding:7px 7px;}
-@media(max-width:1180px){ .vw#vw-unidades.on{grid-template-columns:1fr;} }
+
 #vw-resumo .kpis{flex:0 0 auto;min-height:clamp(120px,17vh,165px);}
 #vw-resumo .kpi{display:flex;flex-direction:column;justify-content:center;}
 .flash{position:fixed;left:50%;bottom:26px;transform:translate(-50%,14px);z-index:9500;
@@ -384,13 +382,13 @@ table.dre td.cg-t,.cg-t{color:var(--verde)!important;font-weight:700;}
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>
       Resumo Gerencial
     </button>
-    <button class="s-item" data-vw="unidades">
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M3 21h18M5 21V7l7-4 7 4v14"/><path d="M10 21v-6h4v6"/></svg>
-      Unidades
-    </button>
-    <button class="s-item" data-vw="ativos">
+    <button class="s-item" data-vw="qtd">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 16V9h13l3 4v3"/><circle cx="7.5" cy="18" r="2"/><circle cx="17" cy="18" r="2"/></svg>
-      Ativos
+      Visão Quantitativa
+    </button>
+    <button class="s-item" data-vw="fin">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+      Visão Financeira
     </button>
     <button class="s-item" data-vw="diag">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><path d="M12 9v4M12 17h.01"/></svg>
@@ -493,7 +491,7 @@ function trocaTema(){ aplicaTema(document.body.classList.contains('claro')?'dark
 aplicaTema(localStorage.getItem('bi_theme')||'dark');
 
 /* ── menu lateral ── */
-const TIT={resumo:'Resumo Gerencial',unidades:'Unidades',ativos:'Ativos',diag:'Diagnóstico',importar:'Importar planilhas'};
+const TIT={resumo:'Resumo Gerencial',qtd:'Visão Quantitativa',fin:'Visão Financeira',diag:'Diagnóstico',importar:'Importar planilhas'};
 let VW='resumo';
 function setVw(v){
   VW=v;
@@ -879,12 +877,12 @@ function montaTela(){
           <div class="hlbl">Faturado Vamos</div>
           <div class="hval" id="h-fat">—</div>
           <div class="hgrid">
-            <div><span>Remuneração (Freightech)</span><b id="h-ft">—</b></div>
+            <div><span>Remunerado</span><b id="h-ft">—</b></div>
             <div><span>Prévia Vamos</span><b id="h-prev">—</b></div>
             <div></div>
-            <div><span>▲ Prévia × Freightech</span><b id="h-dpf">—</b></div>
-            <div><span>▲ Faturado × Prévia</span><b id="h-dfp">—</b></div>
-            <div><span>▲ Faturado × Freightech</span><b id="h-dff">—</b></div>
+            <div><span>▲ Rem.<i>Faturado × Remunerado</i></span><b id="h-dff">—</b></div>
+            <div><span>▲ Prévia<i>Prévia × Remunerado</i></span><b id="h-dpf">—</b></div>
+            <div><span>▲ Fat. vs Prévia<i>Faturado × Prévia</i></span><b id="h-dfp">—</b></div>
           </div>
         </div>
       </div>
@@ -905,24 +903,25 @@ function montaTela(){
       </div>
     </section>
 
-    <section class="vw" id="vw-unidades">
+    <section class="vw" id="vw-qtd">
       <div class="card tsec">
-        <div class="thead-row"><div><div class="ttit">Ativos por unidade</div>
-          <div class="tsub" id="sub-uni-q">—</div></div></div>
-        <div class="twrap"><table class="dre" id="tbl-uni-q"></table></div>
-      </div>
-      <div class="card tsec">
-        <div class="thead-row"><div><div class="ttit">Valores por unidade</div>
-          <div class="tsub" id="sub-uni-v">—</div></div></div>
-        <div class="twrap"><table class="dre" id="tbl-uni-v"></table></div>
+        <div class="thead-row">
+          <div><div class="ttit" id="tit-qtd">Quantidade por unidade</div>
+            <div class="tsub" id="sub-qtd">—</div></div>
+          <button class="rt" id="tg-qtd" onclick="trocaDim('qtd')">Ver por Ativo</button>
+        </div>
+        <div class="twrap"><table class="dre" id="tbl-qtd"></table></div>
       </div>
     </section>
 
-    <section class="vw" id="vw-ativos">
+    <section class="vw" id="vw-fin">
       <div class="card tsec">
-        <div class="thead-row"><div><div class="ttit">Abertura por ativo</div>
-          <div class="tsub" id="sub-ativos">—</div></div></div>
-        <div class="twrap"><table class="dre" id="tbl-ativos"></table></div>
+        <div class="thead-row">
+          <div><div class="ttit" id="tit-fin">Valores por unidade</div>
+            <div class="tsub" id="sub-fin">—</div></div>
+          <button class="rt" id="tg-fin" onclick="trocaDim('fin')">Ver por Ativo</button>
+        </div>
+        <div class="twrap"><table class="dre" id="tbl-fin"></table></div>
       </div>
     </section>
 
@@ -1094,14 +1093,14 @@ function pinta(){
   const L=filtradas();
   if(!L.length && !BASE.size){
     $('titSub').textContent = Object.keys(ARQ).length ? 'Faltam as prévias' : 'Nenhum mês importado';
-    ['resumo','unidades','ativos','diag'].forEach(v=>$('vw-'+v).innerHTML=AVISO_VAZIO);
+    ['resumo','qtd','fin','diag'].forEach(v=>$('vw-'+v).innerHTML=AVISO_VAZIO);
     return;
   }
   if($('vw-resumo').innerHTML.indexOf('fin-hero')<0) montaTela();
   pintaFiltros();
   const vs=[...new Set(L.map(l=>l.vig))].sort();
   $('titSub').textContent=`${vs.length?vs.map(vigRot).join(' · '):'—'} · ${num(L.length)} ativos`;
-  pintaResumo(L); pintaUnidades(L); pintaAtivos(L); pintaDiag(L);
+  pintaResumo(L); pintaQtd(L); pintaFin(L); pintaDiag(L);
 }
 
 function pintaResumo(L){
@@ -1202,57 +1201,57 @@ function tabela(el,cols,linhas,total){
     const v=c.tot?c.tot(linhas):''; return `<td class="${c.num?'num':''}">${v==null?'':v}</td>`;}).join('')+'</tr>':'';
   el.innerHTML=`<thead><tr>${th}</tr></thead><tbody>${tr}${tt}</tbody>`;
 }
-function pintaUnidades(L){
-  const m={};
-  L.forEach(l=>{ const u=m[l.uni]=m[l.uni]||{uni:l.uni,nFt:0,nPv:0,nFa:0,ft:0,prev:0,fat:0};
-    if(l.ft!=null)u.nFt++; if(l.prev!=null)u.nPv++; if(l.fat!=null)u.nFa++;
-    u.ft+=l.ft||0; u.prev+=l.prev||0; u.fat+=l.fat||0; });
-  const rows=Object.values(m).map(u=>({...u,dnP:u.nPv-u.nFt,dnF:u.nFa-u.nPv,dnG:u.nFa-u.nFt,
-    dPF:u.prev-u.ft,dFP:u.fat-u.prev,dFF:u.fat-u.ft}));
-  const sm=(r,c)=>r.reduce((a,x)=>a+x[c],0);
+/* Unidade ou Ativo: a mesma tabela, trocando só o que agrupa */
+let DIM={qtd:'uni', fin:'uni'};
+function trocaDim(v){ DIM[v]=DIM[v]==='uni'?'ativo':'uni'; pinta(); }
 
-  // 1) quantidade de ativos
-  rows.sort((a,b)=>Math.abs(b.dnP)-Math.abs(a.dnP)||b.nFt-a.nFt);
-  $('sub-uni-q').textContent=`${rows.length} unidade(s) · quantidade de ativos em cada fonte`;
-  tabela($('tbl-uni-q'),[
-    {rot:'Unidade',get:l=>esc(l.uni)},
-    {rot:'# Ativos',num:1,get:l=>num(l.nFt),tot:r=>num(sm(r,'nFt'))},
+function agrupa(L,dim){
+  const m={};
+  L.forEach(l=>{
+    const k = dim==='uni' ? (l.uni||'—') : (l.placa||l.chassi||l.k);
+    const g = m[k] = m[k] || {k, sub:dim==='uni'?'':(l.uni||'—'),
+      nFt:0,nPv:0,nFa:0, ft:0,prev:0,fat:0};
+    if(l.ft!=null)g.nFt++; if(l.prev!=null)g.nPv++; if(l.fat!=null)g.nFa++;
+    g.ft+=l.ft||0; g.prev+=l.prev||0; g.fat+=l.fat||0;
+  });
+  return Object.values(m).map(g=>({...g,
+    dnR:g.nFa-g.nFt, dnP:g.nPv-g.nFt, dnF:g.nFa-g.nPv,     // ▲ das quantidades
+    dR:g.fat-g.ft,   dP:g.prev-g.ft,  dF:g.fat-g.prev}));   // ▲ dos valores
+}
+const sm=(r,c)=>r.reduce((a,x)=>a+x[c],0);
+/* ordem que o Renan fechou: Rem · Prévia · Faturado · ▲ Rem · ▲ Prévia · ▲ Fat vs Prévia */
+function colsDim(dim){
+  return dim==='uni'
+    ? [{rot:'Unidade',get:l=>esc(l.k)}]
+    : [{rot:'Ativo',get:l=>esc(l.k)},{rot:'Unidade',get:l=>esc(l.sub)}];
+}
+function pintaQtd(L){
+  const dim=DIM.qtd, rows=agrupa(L,dim).sort((a,b)=>Math.abs(b.dnR)-Math.abs(a.dnR)||b.nFt-a.nFt);
+  $('tit-qtd').textContent='Quantidade por '+(dim==='uni'?'unidade':'ativo');
+  $('tg-qtd').textContent=dim==='uni'?'Ver por Ativo':'Ver por Unidade';
+  $('sub-qtd').textContent=`${rows.length} ${dim==='uni'?'unidade(s)':'ativo(s)'} · quantidade em cada fonte`;
+  tabela($('tbl-qtd'), colsDim(dim).concat([
+    {rot:'# Rem.',num:1,get:l=>num(l.nFt),tot:r=>num(sm(r,'nFt'))},
     {rot:'# Prévia',num:1,get:l=>num(l.nPv),tot:r=>num(sm(r,'nPv'))},
     {rot:'# Faturado',num:1,get:l=>num(l.nFa),tot:r=>num(sm(r,'nFa'))},
-    {rot:'▲ Prévia',grp:'× FT',num:1,cls:l=>cor(l.dnP),get:l=>seta(l.dnP)+num(l.dnP),tot:r=>num(sm(r,'dnP'))},
-    {rot:'▲ Faturado',grp:'× Prévia',num:1,cls:l=>cor(l.dnF),get:l=>seta(l.dnF)+num(l.dnF),tot:r=>num(sm(r,'dnF'))},
-    {rot:'▲ Gap',grp:'Fat × FT',num:1,cls:l=>cor(l.dnG),get:l=>seta(l.dnG)+num(l.dnG),tot:r=>num(sm(r,'dnG'))},
-  ],rows,true);
-
-  // 2) o mesmo em R$
-  const rv=rows.slice().sort((a,b)=>Math.abs(b.dPF)-Math.abs(a.dPF));
-  $('sub-uni-v').textContent=`${rows.length} unidade(s) · da maior divergência para a menor`;
-  tabela($('tbl-uni-v'),[
-    {rot:'Unidade',get:l=>esc(l.uni)},
-    {rot:'Freightech',num:1,get:l=>brl(l.ft),tot:r=>brl(sm(r,'ft'))},
+    {rot:'▲ Rem.',grp:'Fat × Rem',num:1,cls:l=>cor(l.dnR),get:l=>seta(l.dnR)+num(l.dnR),tot:r=>num(sm(r,'dnR'))},
+    {rot:'▲ Prévia',grp:'Prévia × Rem',num:1,cls:l=>cor(l.dnP),get:l=>seta(l.dnP)+num(l.dnP),tot:r=>num(sm(r,'dnP'))},
+    {rot:'▲ Fat. vs Prévia',num:1,cls:l=>cor(l.dnF),get:l=>seta(l.dnF)+num(l.dnF),tot:r=>num(sm(r,'dnF'))},
+  ]), rows, true);
+}
+function pintaFin(L){
+  const dim=DIM.fin, rows=agrupa(L,dim).sort((a,b)=>Math.abs(b.dR)-Math.abs(a.dR));
+  $('tit-fin').textContent='Valores por '+(dim==='uni'?'unidade':'ativo');
+  $('tg-fin').textContent=dim==='uni'?'Ver por Ativo':'Ver por Unidade';
+  $('sub-fin').textContent=`${rows.length} ${dim==='uni'?'unidade(s)':'ativo(s)'} · do maior gap para o menor`;
+  tabela($('tbl-fin'), colsDim(dim).concat([
+    {rot:'Rem.',num:1,get:l=>brl(l.ft),tot:r=>brl(sm(r,'ft'))},
     {rot:'Prévia',num:1,get:l=>brl(l.prev),tot:r=>brl(sm(r,'prev'))},
     {rot:'Faturado',num:1,get:l=>brl(l.fat),tot:r=>brl(sm(r,'fat'))},
-    {rot:'▲ Prévia',grp:'× FT',num:1,cls:l=>cor(l.dPF),get:l=>seta(l.dPF)+brl(l.dPF),tot:r=>brl(sm(r,'dPF'))},
-    {rot:'▲ Faturado',grp:'× Prévia',num:1,cls:l=>cor(l.dFP),get:l=>seta(l.dFP)+brl(l.dFP),tot:r=>brl(sm(r,'dFP'))},
-    {rot:'▲ Gap',grp:'Fat × FT',num:1,cls:l=>cor(l.dFF),get:l=>seta(l.dFF)+brl(l.dFF),tot:r=>brl(sm(r,'dFF'))},
-  ],rv,true);
-}
-function pintaAtivos(L){
-  const rows=L.slice().sort((a,b)=>Math.abs(b.dPF)-Math.abs(a.dPF));
-  $('sub-ativos').textContent=`${rows.length} ativo(s) · da maior divergência para a menor`;
-  tabela($('tbl-ativos'),[
-    {rot:'Ativo',get:l=>esc(l.placa||l.chassi||l.k)},
-    {rot:'Unidade',get:l=>esc(l.uni)},
-    {rot:'Mês',get:l=>vigRot(l.vig)},
-    {rot:'Etapa',get:l=>ETAPAS[l.etapa]},
-    {rot:'Status',get:l=>esc(l.status||'—')},
-    {rot:'Freightech',num:1,get:l=>l.ft==null?'—':brl(l.ft),tot:r=>brl(soma(r,'ft'))},
-    {rot:'Prévia',num:1,get:l=>l.prev==null?'—':brl(l.prev),tot:r=>brl(soma(r,'prev'))},
-    {rot:'▲ Prévia',grp:'× FT',num:1,cls:l=>cor(l.dPF),get:l=>seta(l.dPF)+brl(l.dPF),tot:r=>brl(soma(r,'prev')-soma(r,'ft'))},
-    {rot:'Faturado',num:1,get:l=>l.fat==null?'—':brl(l.fat),tot:r=>brl(soma(r,'fat'))},
-    {rot:'▲ Faturado',grp:'× Prévia',num:1,cls:l=>cor(l.dFP),get:l=>l.fat==null?'—':seta(l.dFP)+brl(l.dFP),tot:r=>brl(soma(r,'fat')-soma(r,'prev'))},
-    {rot:'▲ Gap',grp:'Fat × FT',num:1,cls:l=>cor((l.fat||0)-(l.ft||0)),get:l=>seta((l.fat||0)-(l.ft||0))+brl((l.fat||0)-(l.ft||0)),tot:r=>brl(soma(r,'fat')-soma(r,'ft'))},
-  ],rows,true);
+    {rot:'▲ Rem.',grp:'Fat × Rem',num:1,cls:l=>cor(l.dR),get:l=>seta(l.dR)+brl(l.dR),tot:r=>brl(sm(r,'dR'))},
+    {rot:'▲ Prévia',grp:'Prévia × Rem',num:1,cls:l=>cor(l.dP),get:l=>seta(l.dP)+brl(l.dP),tot:r=>brl(sm(r,'dP'))},
+    {rot:'▲ Fat. vs Prévia',num:1,cls:l=>cor(l.dF),get:l=>seta(l.dF)+brl(l.dF),tot:r=>brl(sm(r,'dF'))},
+  ]), rows, true);
 }
 function pintaDiag(L){
   const rows=L.filter(l=>l.motivos.length).sort((a,b)=>Math.abs(b.dPF)-Math.abs(a.dPF));
@@ -1260,16 +1259,19 @@ function pintaDiag(L){
   $('sub-diag').textContent = rows.length
     ? `${rows.length} ativo(s) com desvio · ${Object.entries(porMot).map(([m,n])=>m+' ('+n+')').join(' · ')}`
     : 'Nenhum desvio com os filtros atuais';
+  const dR=l=>(l.fat||0)-(l.ft||0);
   tabela($('tbl-diag'),[
     {rot:'Ativo',get:l=>esc(l.placa||l.chassi||l.k)},
     {rot:'Unidade',get:l=>esc(l.uni)},
+    {rot:'Mês',get:l=>vigRot(l.vig)},
     {rot:'Etapa',get:l=>ETAPAS[l.etapa]},
     {rot:'Desvio',get:l=>l.motivos.map(m=>esc(m)).join(' · ')},
-    {rot:'Freightech',num:1,get:l=>l.ft==null?'—':brl(l.ft)},
+    {rot:'Rem.',num:1,get:l=>l.ft==null?'—':brl(l.ft)},
     {rot:'Prévia',num:1,get:l=>l.prev==null?'—':brl(l.prev)},
-    {rot:'▲ Prévia',grp:'× FT',num:1,cls:l=>cor(l.dPF),get:l=>seta(l.dPF)+brl(l.dPF)},
     {rot:'Faturado',num:1,get:l=>l.fat==null?'—':brl(l.fat)},
-    {rot:'▲ Gap',grp:'Fat × FT',num:1,cls:l=>cor((l.fat||0)-(l.ft||0)),get:l=>seta((l.fat||0)-(l.ft||0))+brl((l.fat||0)-(l.ft||0))},
+    {rot:'▲ Rem.',grp:'Fat × Rem',num:1,cls:l=>cor(dR(l)),get:l=>seta(dR(l))+brl(dR(l))},
+    {rot:'▲ Prévia',grp:'Prévia × Rem',num:1,cls:l=>cor(l.dPF),get:l=>seta(l.dPF)+brl(l.dPF)},
+    {rot:'▲ Fat. vs Prévia',num:1,cls:l=>cor(l.dFP),get:l=>l.fat==null?'—':seta(l.dFP)+brl(l.dFP)},
   ],rows,false);
 }
 initApp();
@@ -1277,6 +1279,6 @@ initApp();
 <script src="../assets/mobile.js"></script>
 <script src="../assets/sortable-table.js"></script>
 <script src="../assets/excel-export.js"></script>
-<script src="../assets/build-check.js?v=202608180230"></script>
+<script src="../assets/build-check.js?v=202608180400"></script>
 </body>
 </html>
