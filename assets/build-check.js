@@ -30,7 +30,18 @@
       const sc = document.currentScript
         || [...document.scripts].find(x => /assets\/build-check\.js/.test(x.src));
       const raiz = sc ? sc.src.replace(/assets\/build-check\.js.*$/, '') : '/';
-      navigator.serviceWorker.register(raiz + 'sw.js', { scope: raiz }).catch(() => {});
+      navigator.serviceWorker.register(raiz + 'sw.js', { scope: raiz })
+        .then(reg => { try { reg.update(); } catch (e) {} })
+        .catch(() => {});
+      // Na PRIMEIRA visita o SW só passa a mandar na navegação seguinte. Quando
+      // ele assume, recarrega uma vez para a tela já vir do arquivo publicado.
+      if (!navigator.serviceWorker.controller) {
+        navigator.serviceWorker.addEventListener('controllerchange', function () {
+          if (sessionStorage.getItem('gem_sw_reload')) return;
+          sessionStorage.setItem('gem_sw_reload', '1');
+          location.reload();
+        });
+      }
     } catch (e) { /* navegador sem SW ou origem sem https: segue sem ele */ }
   }
 
@@ -44,10 +55,14 @@
   // Com o SW no comando o HTML já veio da rede — não gasta uma requisição extra.
   if (navigator.serviceWorker && navigator.serviceWorker.controller) return;
 
-  // Sem SW (primeira visita, navegador antigo): confere UMA vez por sessão.
+  // Sem SW (primeira visita, navegador antigo, aba anônima): confere a CADA
+  // carga. A versão anterior conferia uma vez por sessão e guardava o build
+  // que estava rodando; se o deploy saísse depois dessa checagem, F5 nenhum
+  // adiantava — a aba ficava presa na versão velha até o cache expirar.
+  // O guarda contra laço agora é um contador: no máximo 3 recargas por sessão.
   const chave = 'gem_reload_' + location.pathname;
-  if (sessionStorage.getItem(chave) === atual) return;
-  sessionStorage.setItem(chave, atual);
+  const tentativas = +(sessionStorage.getItem(chave) || 0);
+  if (tentativas >= 3) return;
 
   fetch(location.pathname + '?cb=' + Date.now(), { cache: 'no-store' })
     .then(r => r.ok ? r.text() : null)
@@ -55,7 +70,7 @@
       if (!html) return;
       const m = html.match(/<meta\s+name="build"\s+content="(\d+)"/i);
       if (m && m[1] > atual) {
-        sessionStorage.setItem(chave, m[1]);
+        sessionStorage.setItem(chave, String(tentativas + 1));
         location.replace(location.pathname + '?v=' + m[1]);
       }
     })
