@@ -3,13 +3,15 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-<meta name="build" content="202608180700">
+<meta name="build" content="202608180915">
 <title>Resumo Executivo</title>
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.2/dist/jspdf.umd.min.js"></script>
 <script src="../assets/pdf-export.js"></script>
 <script src="../assets/excel-export.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="../assets/gerot-base.js?v=202608180900"></script>
 <style>
 :root{--bg:#0C1017;--card:#141B26;--border:#1E2D40;--orange:#F97316;--blue:#38BDF8;--text:#F1F5F9;--text2:#94A3B8;--text3:#475569;--green:#3BB33B;--red:#FF6666;--amber:#F4A100;}
 *{margin:0;padding:0;box-sizing:border-box;}
@@ -168,6 +170,46 @@ function pivotRPM(grid){
   return out;
 }
 
+// ── ICs: elite_snapshot, a MESMA fonte do Gerot e do Scorecard ────────────
+// A aba "Base RPM" parou de ser apurada em jul/2026 (as linhas vêm com o
+// "% de Ating." vazio) e, como a lista de vigências nasce dos ICs, o painel
+// travava em junho. O elite_snapshot é alimentado pelo robô do Frota de Elite
+// todo mês. A Base RPM fica como rede de segurança.
+const IC_ORDEM=['disp','prev','comb','pneus','checkT','checkWH','conf','stVeic','stEmp','sla','civf'];
+const IC_PESOS={disp:20,prev:15,comb:10,pneus:10,checkT:10,checkWH:10,conf:5,stVeic:5,stEmp:5,sla:5,civf:5};
+async function icsDoElite(){
+  if(typeof GerotBase==='undefined') throw new Error('GerotBase ausente');
+  const recs=await GerotBase.load();
+  const COD2UNI=GerotBase.COD2UNIT||{};
+  const nomeDe=u=>UNI_SET.has(u)?u:COD2UNI[u];   // r.unit já vem com o nome
+  const por=new Map();
+  recs.forEach(r=>{
+    if(r.soGerot) return;                        // adicionais do Gerot não pontuam aqui
+    const uni=nomeDe(r.unit); if(!uni||!UNI_SET.has(uni)) return;
+    if(r.atg==null||!isFinite(r.atg)) return;
+    const m=String(r.vig||'').match(/^(\d{4})-(\d{2})$/); if(!m) return;
+    const k=r.vig+'|'+uni;
+    if(!por.has(k)) por.set(k,{vigD:new Date(+m[1],+m[2]-1,1),unidade:uni,f:{}});
+    por.get(k).f[r.field]=Math.min(100,r.atg);
+  });
+  return [...por.values()].map(o=>{
+    let num=0,den=0;
+    for(const k in IC_PESOS){ const v=o.f[k]; if(v==null) continue;
+      const w=IC_PESOS[k]/100; den+=w; num+=w*Math.min(1,v/100); }
+    return {vigD:o.vigD, unidade:o.unidade,
+      ic:IC_ORDEM.map(k=>o.f[k]==null?null:o.f[k]),   // 0-100, na ordem dos rótulos
+      pont:den>0?(num/den)*100:null};
+  });
+}
+async function carregarICs(){
+  try{
+    const r=await icsDoElite();
+    if(r.length) return r;
+    console.warn('elite_snapshot vazio — caindo para a aba Base RPM');
+  }catch(e){ console.error('elite_snapshot falhou — caindo para a aba Base RPM', e); }
+  return fetch(BASE_RPM_URL).then(r=>r.text()).then(t=>pivotRPM(parseCSV(t)));
+}
+
 function parseD(v){if(v==null)return null;const m=String(v).match(/Date\((\d+),(\d+),(\d+)/);return m?new Date(+m[1],+m[2],+m[3]):null;}
 function vigKeyN(d){return d?d.getFullYear()*100+d.getMonth():0;}
 function vigLbl(d){return d?MESES[d.getMonth()]+'/'+String(d.getFullYear()).slice(2):'';}
@@ -198,7 +240,7 @@ function compFCA(rows){const today=new Date();today.setHours(0,0,0,0);const recs
 function carregar(){
   const c=rd('data2');
   if(c){try{applyData(c);document.getElementById('status').textContent='Atualizando…';}catch(e){}}else document.getElementById('status').textContent='Carregando…';
-  Promise.all([fetch(BASE_RPM_URL).then(r=>r.text()).then(t=>pivotRPM(parseCSV(t))),gviz(SRC.dre).catch(()=>null),gviz(SRC.km).catch(()=>null),gviz(SRC.rsl).catch(()=>null),gviz(SRC.kmlEf).catch(()=>null),gviz(SRC.dpo).catch(()=>null),gviz(SRC.fca).catch(()=>null),gviz(SRC.demarco).catch(()=>null)]).then(a=>{
+  Promise.all([carregarICs(),gviz(SRC.dre).catch(()=>null),gviz(SRC.km).catch(()=>null),gviz(SRC.rsl).catch(()=>null),gviz(SRC.kmlEf).catch(()=>null),gviz(SRC.dpo).catch(()=>null),gviz(SRC.fca).catch(()=>null),gviz(SRC.demarco).catch(()=>null)]).then(a=>{
     const d={ics:a[0],dre:a[1],km:a[2],rsl:a[3],kmlEf:a[4],dpo:a[5],fca:a[6],demarco:a[7]};wr('data2',d);applyData(d);
     const now=new Date();document.getElementById('status').textContent=`${now.toLocaleDateString('pt-BR')} ${now.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})}`;
   }).catch(e=>{console.error(e);if(!c)document.getElementById('status').textContent='Erro ao carregar';});
@@ -333,6 +375,6 @@ carregar();
 <script>(function(){function go(){try{initPdfExport();}catch(e){console.error(e);}}if(document.readyState!=='loading')go();else document.addEventListener('DOMContentLoaded',go);})();</script>
 <script src="../assets/filters-toggle.js"></script>
 <script src="../assets/mobile.js"></script>
-<script src="../assets/build-check.js?v=202608180700"></script>
+<script src="../assets/build-check.js?v=202608180915"></script>
 </body>
 </html>

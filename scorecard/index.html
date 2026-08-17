@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
-<meta name="build" content="202608180700">
+<meta name="build" content="202608180915">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <title>Scorecard · Gestão em Movimento</title>
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -1004,11 +1004,16 @@ const IC_PESOS={disp:20,prev:15,comb:10,pneus:10,checkT:10,checkWH:10,conf:5,stV
 async function icsDoElite(){
   if(typeof GerotBase==='undefined') throw new Error('GerotBase ausente');
   const recs=await GerotBase.load();
+  // r.unit JÁ vem com o nome da unidade ('CDD CUIABA', 'CUIABA EMPURRADA'…) —
+  // o canonUnit do gerot-base resolve o código para nome antes de devolver.
+  // Passar por COD2UNIT de novo devolvia undefined em TODAS as linhas, o
+  // elite_snapshot vinha vazio e o painel caía na Base RPM (parada em junho).
   const COD2UNI=GerotBase.COD2UNIT||{};
+  const nomeDe=u=>UNI_SET.has(u)?u:COD2UNI[u];
   const por=new Map();
   recs.forEach(r=>{
     if(r.soGerot) return;                                  // adicionais do Gerot não pontuam aqui
-    const uni=COD2UNI[r.unit]; if(!uni||!UNI_SET.has(uni)) return;
+    const uni=nomeDe(r.unit); if(!uni||!UNI_SET.has(uni)) return;
     if(r.atg==null||!isFinite(r.atg)) return;
     const m=String(r.vig||'').match(/^(\d{4})-(\d{2})$/); if(!m) return;
     const k=r.vig+'|'+uni;
@@ -1159,6 +1164,6 @@ initPdfExport({
   isLight:()=>document.body.classList.contains('claro'), setTheme:aplicaTema
 });
 </script>
-<script src="../assets/build-check.js?v=202608180700"></script>
+<script src="../assets/build-check.js?v=202608180915"></script>
 </body>
 </html>
