@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="build" content="202608180700">
+<meta name="build" content="202608180800">
 <title>Conferência de Locação · Gestão em Movimento</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -359,6 +359,12 @@ table.dre td.cg-t,.cg-t{color:var(--verde)!important;font-weight:700;}
    Unidade, Etapa, Status, Desvio) tem de ter o título à esquerda. */
 #cols table.dre thead th:not(.num){text-align:left;}
 #cols table.dre td:not(.num){text-align:left;}
+/* farol de conferência: verde consta no FT, vermelho não consta */
+.farol{display:inline-flex;align-items:center;gap:6px;font-size:10px;font-weight:800;
+  padding:2px 9px;border-radius:99px;letter-spacing:.5px;}
+.farol i{width:7px;height:7px;border-radius:50%;background:currentColor;}
+.farol.ok {color:var(--verde);   background:color-mix(in srgb,var(--verde) 14%,transparent);}
+.farol.nok{color:var(--vermelho);background:color-mix(in srgb,var(--vermelho) 14%,transparent);}
 .mut{color:var(--txt3);}
 .vazio{flex:1;display:flex;align-items:center;justify-content:center;text-align:center;
   font-size:12.5px;color:var(--txt3);line-height:1.8;padding:24px;}
@@ -1206,19 +1212,27 @@ function colsDim(dim){
     ? [{rot:'Unidade',get:l=>esc(l.uni)},{rot:'Projeto',get:l=>esc(l.proj)}]
     : [{rot:'Ativo',get:l=>esc(l.k)},{rot:'Unidade',get:l=>esc(l.uni)},{rot:'Projeto',get:l=>esc(l.proj)}];
 }
+/* A Quantitativa responde UMA pergunta: o ativo que a Vamos cobra consta
+   no Freightech? OK (verde) = está lá e é remunerado; NOK (vermelho) =
+   não está. Sem valores — dinheiro é a Visão Financeira. */
 function pintaQtd(L){
-  const dim=DIM.qtd, rows=agrupa(L,dim).sort((a,b)=>Math.abs(b.dnR)-Math.abs(a.dnR)||b.nFt-a.nFt);
-  $('tit-qtd').textContent='Quantidade por '+(dim==='uni'?'unidade':'ativo');
-  $('tg-qtd').textContent=dim==='uni'?'Ver por Ativo':'Ver por Unidade';
-  $('sub-qtd').textContent=`${rows.length} ${dim==='uni'?'linha(s) unidade × projeto':'ativo(s)'} · quantidade em cada fonte`;
-  tabela($('tbl-qtd'), colsDim(dim).concat([
-    {rot:'# Rem.',num:1,get:l=>num(l.nFt),tot:r=>num(sm(r,'nFt'))},
-    {rot:'# Prévia',num:1,get:l=>num(l.nPv),tot:r=>num(sm(r,'nPv'))},
-    {rot:'# Faturado',num:1,get:l=>num(l.nFa),tot:r=>num(sm(r,'nFa'))},
-    {rot:'▲ Rem.',grp:'Fat × Rem',num:1,cls:l=>cor(l.dnR),get:l=>seta(l.dnR)+num(l.dnR),tot:r=>num(sm(r,'dnR'))},
-    {rot:'▲ Prévia',grp:'Prévia × Rem',num:1,cls:l=>cor(l.dnP),get:l=>seta(l.dnP)+num(l.dnP),tot:r=>num(sm(r,'dnP'))},
-    {rot:'▲ Fat. vs Prévia',num:1,cls:l=>cor(l.dnF),get:l=>seta(l.dnF)+num(l.dnF),tot:r=>num(sm(r,'dnF'))},
-  ]), rows, true);
+  const dim=DIM.qtd;
+  const rows=L.map(l=>({
+    ativo:l.placa||l.chassi||l.k, uni:l.uni||'—', proj:l.proj||'—',
+    ok:l.ft!=null,
+  })).sort((a,b)=> dim==='uni'
+      ? (a.uni.localeCompare(b.uni,'pt')||a.proj.localeCompare(b.proj,'pt')||a.ativo.localeCompare(b.ativo,'pt'))
+      : a.ativo.localeCompare(b.ativo,'pt'));
+  const nOk=rows.filter(r=>r.ok).length;
+  $('tit-qtd').textContent = 'Ativos '+(dim==='uni'?'por unidade':'em ordem de placa');
+  $('tg-qtd').textContent  = dim==='uni'?'Ver por Ativo':'Ver por Unidade';
+  $('sub-qtd').textContent = `${num(rows.length)} ativo(s) · ${num(nOk)} no Freightech · ${num(rows.length-nOk)} fora`;
+  tabela($('tbl-qtd'),[
+    {rot:'Ativo',get:l=>esc(l.ativo)},
+    {rot:'Unidade',get:l=>esc(l.uni)},
+    {rot:'Projeto',get:l=>esc(l.proj)},
+    {rot:'Consta no FT',get:l=>`<span class="farol ${l.ok?'ok':'nok'}"><i></i>${l.ok?'OK':'NOK'}</span>`},
+  ],rows,false);
 }
 function pintaFin(L){
   const dim=DIM.fin, rows=agrupa(L,dim).sort((a,b)=>Math.abs(b.dR)-Math.abs(a.dR));
@@ -1261,6 +1275,6 @@ initApp();
 <script src="../assets/mobile.js"></script>
 <script src="../assets/sortable-table.js"></script>
 <script src="../assets/excel-export.js"></script>
-<script src="../assets/build-check.js?v=202608180700"></script>
+<script src="../assets/build-check.js?v=202608180800"></script>
 </body>
 </html>
