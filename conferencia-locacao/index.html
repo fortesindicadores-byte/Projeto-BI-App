@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="build" content="202608180500">
+<meta name="build" content="202608180600">
 <title>Conferência de Locação · Gestão em Movimento</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -559,9 +559,22 @@ async function initApp(){
    A coluna de valor muda de nome entre os arquivos do FT, por isso é
    sempre procurada pelo NOME normalizado, nunca pela letra da coluna. */
 const COL_VALOR_FT={ wh:'custoAluguel Leasing', empurrada:'custoAluguel', as:'custoAluguel',
-                     rota:'Custo Aluguel', van:'Custo Aluguel' };
+                     rota:'Custo Aluguel', van:'Custo Aluguel', lata:'Custo Aluguel' };
 const SEGS=[['wh',/\bwh\b|armaz/i],['empurrada',/empurrad/i],['as',/\bas\b|auto ?servi/i],
-            ['rota',/\brota\b/i],['van',/\bvan\b/i]];
+            ['lata',/\blata\b|insumo/i],['rota',/\brota\b/i],['van',/\bvan\b/i]];
+/* PROJETO = de qual planilha (e aba) do Freightech o ativo veio.
+   Regra do Renan (17/08/2026): Rota e Van saem das respectivas abas do
+   arquivo ROTA; WH é tudo do arquivo WH; a Empurrada separa T1 - Cavalo e
+   T1 - Carreta pela aba; AS e Lata são o arquivo inteiro. */
+function projetoDe(seg,aba){
+  const a=chaveCol(aba);
+  if(seg==='wh') return 'WH';
+  if(seg==='as') return 'AS';
+  if(seg==='lata') return 'Lata';
+  if(seg==='empurrada') return a.includes('carreta') ? 'T1 - Carreta' : 'T1 - Cavalo';
+  if(seg==='rota'||seg==='van') return a.includes('van') ? 'Van' : 'Rota';
+  return String(aba||seg||'—');
+}
 let ARQ={};   // chave → {nome, tipo, seg, mes, ano, abas:[{nome,linhas,cols}]}
 
 function tipoDoNome(nome){
@@ -612,9 +625,11 @@ function pintaImportar(){
   const ks=Object.keys(ARQ);
   const meses=[...BASE.keys()].sort().reverse().map(v=>{
     const b=BASE.get(v), ok=b.salvo!==false;
-    return `<div class="arq ${ok?'ok':'erro'}"><span class="ic">${ok?'✓':'!'}</span>
+    const velho = ok && b.linhas.length && (b.linhas[0]._v||1)<VERSAO;
+    return `<div class="arq ${!ok?'erro':(velho?'erro':'ok')}"><span class="ic">${!ok?'!':(velho?'!':'✓')}</span>
       <div><b>${vigRot(v)}</b><i>${num(b.linhas.length)} ativos ·
-      ${ok?('no banco'+(b.updated_at?' · '+new Date(b.updated_at).toLocaleDateString('pt-BR'):'')) 
+      ${ok?('no banco'+(b.updated_at?' · '+new Date(b.updated_at).toLocaleDateString('pt-BR'):'')
+            +(velho?' · REIMPORTE: gravado por uma versão anterior do cálculo':''))
           :('NÃO gravado — '+esc(b.erro||'erro desconhecido'))}</i></div>
       ${ok?'':`<button class="x" title="Tentar gravar de novo" onclick="salvaMes('${v}')">↻</button>`}</div>`;}).join('');
   $('meses').innerHTML = (ERRO_BASE?`<div class="arq erro"><span class="ic">!</span><div><b>Banco</b><i>${esc(ERRO_BASE)}</i></div></div>`:'')
@@ -641,6 +656,9 @@ const AVISO_VAZIO=`<div class="vazio">Importe as planilhas do mês para ver a co
 /* PIS/COFINS: o FT remunera com imposto, a Vamos cobra sem. Para
    comparar banana com banana, o valor do FT entra líquido. */
 const FATOR_FT = 1 - 0.0925*0.70;      // 0,93525
+/* versão do cálculo gravado: mês salvo com versão anterior mostra o aviso
+   de reimportar, porque unidade/projeto ficam congelados no banco */
+const VERSAO = 2;
 const TOL = 0.01;                       // diferença de centavo não é desvio
 
 /* A unidade vem da planilha do Freightech, na coluna "Unidade - Nome", com
@@ -696,7 +714,7 @@ function linhasFT(){
           seg:a.seg, aba:ab.nome, vigN:+m[1], mes:+m[2], ano:+m[3],
           valor:n(col(o,COL_VALOR_FT[a.seg],'custoAluguelLeasing','custoAluguel','Custo Aluguel')),
           k: emp ? 'C:'+chassiCanon(chassi) : 'P:'+placaCanon(placa),
-          placa, chassi, uniFT: col(o,'Unidade - Nome'), proj: a.seg,
+          placa, chassi, uniFT: col(o,'Unidade - Nome'), proj: projetoDe(a.seg,ab.nome),
         });
       });
     });
@@ -797,6 +815,7 @@ function analisa(){
       div:(p&&p.div)||(b&&b.div)||(f&&f.ref&&f.ref.seg)||'',
       status:(p&&p.status)||(b&&b.status)||'',
       uni: (f&&f.ref&&f.ref.uniFT) ? String(f.ref.uniFT).trim() : '—',
+      proj:(f&&f.ref&&f.ref.proj) || '—',
       ft: f ? f.valor*FATOR_FT : null,
       ftBruto: f ? f.valor : null,
       vigsFT: f ? f.vigs : 0,
@@ -965,7 +984,7 @@ function pintaFiltros(){
 function marcaMs(id,on,v){ on?SEL[id].add(v):SEL[id].delete(v); pinta(); }
 function limpaMs(id){ SEL[id].clear(); pinta(); }
 /* texto que a busca varre: tudo que identifica a linha */
-const textoDe = l => [l.placa,l.chassi,l.uni,l.modelo,l.status,l.div,ETAPAS[l.etapa],vigRot(l.vig)]
+const textoDe = l => [l.placa,l.chassi,l.uni,l.proj,l.modelo,l.status,l.div,ETAPAS[l.etapa],vigRot(l.vig)]
   .concat(l.motivos||[]).join(' ').toLowerCase();
 function filtradas(){
   const an=SEL['ms-ano'], vg=SEL['ms-vig'], et=SEL['ms-etapa'], un=SEL['ms-uni'],
@@ -1016,7 +1035,7 @@ async function salvaMes(vig){
   const b=BASE.get(vig); if(!b) return;
   try{
     const {error}=await sb.from('locacao_conferencia').upsert({
-      vigencia:vig, linhas:b.linhas,
+      vigencia:vig, linhas:b.linhas.map(l=>({...l,_v:VERSAO})),
       resumo:{ft:soma(b.linhas,'ft'),prev:soma(b.linhas,'prev'),fat:soma(b.linhas,'fat'),n:b.linhas.length},
       arquivos:b.arquivos||[],
       updated_at:new Date().toISOString(),
@@ -1170,8 +1189,8 @@ function trocaDim(v){ DIM[v]=DIM[v]==='uni'?'ativo':'uni'; pinta(); }
 function agrupa(L,dim){
   const m={};
   L.forEach(l=>{
-    const k = dim==='uni' ? (l.uni||'—') : (l.placa||l.chassi||l.k);
-    const g = m[k] = m[k] || {k, sub:dim==='uni'?'':(l.uni||'—'),
+    const k = dim==='uni' ? (l.uni||'—')+' ¦ '+(l.proj||'—') : (l.placa||l.chassi||l.k);
+    const g = m[k] = m[k] || {k, uni:l.uni||'—', proj:l.proj||'—',
       nFt:0,nPv:0,nFa:0, ft:0,prev:0,fat:0};
     if(l.ft!=null)g.nFt++; if(l.prev!=null)g.nPv++; if(l.fat!=null)g.nFa++;
     g.ft+=l.ft||0; g.prev+=l.prev||0; g.fat+=l.fat||0;
@@ -1184,14 +1203,14 @@ const sm=(r,c)=>r.reduce((a,x)=>a+x[c],0);
 /* ordem que o Renan fechou: Rem · Prévia · Faturado · ▲ Rem · ▲ Prévia · ▲ Fat vs Prévia */
 function colsDim(dim){
   return dim==='uni'
-    ? [{rot:'Unidade',get:l=>esc(l.k)}]
-    : [{rot:'Ativo',get:l=>esc(l.k)},{rot:'Unidade',get:l=>esc(l.sub)}];
+    ? [{rot:'Unidade',get:l=>esc(l.uni)},{rot:'Projeto',get:l=>esc(l.proj)}]
+    : [{rot:'Ativo',get:l=>esc(l.k)},{rot:'Unidade',get:l=>esc(l.uni)},{rot:'Projeto',get:l=>esc(l.proj)}];
 }
 function pintaQtd(L){
   const dim=DIM.qtd, rows=agrupa(L,dim).sort((a,b)=>Math.abs(b.dnR)-Math.abs(a.dnR)||b.nFt-a.nFt);
   $('tit-qtd').textContent='Quantidade por '+(dim==='uni'?'unidade':'ativo');
   $('tg-qtd').textContent=dim==='uni'?'Ver por Ativo':'Ver por Unidade';
-  $('sub-qtd').textContent=`${rows.length} ${dim==='uni'?'unidade(s)':'ativo(s)'} · quantidade em cada fonte`;
+  $('sub-qtd').textContent=`${rows.length} ${dim==='uni'?'linha(s) unidade × projeto':'ativo(s)'} · quantidade em cada fonte`;
   tabela($('tbl-qtd'), colsDim(dim).concat([
     {rot:'# Rem.',num:1,get:l=>num(l.nFt),tot:r=>num(sm(r,'nFt'))},
     {rot:'# Prévia',num:1,get:l=>num(l.nPv),tot:r=>num(sm(r,'nPv'))},
@@ -1205,7 +1224,7 @@ function pintaFin(L){
   const dim=DIM.fin, rows=agrupa(L,dim).sort((a,b)=>Math.abs(b.dR)-Math.abs(a.dR));
   $('tit-fin').textContent='Valores por '+(dim==='uni'?'unidade':'ativo');
   $('tg-fin').textContent=dim==='uni'?'Ver por Ativo':'Ver por Unidade';
-  $('sub-fin').textContent=`${rows.length} ${dim==='uni'?'unidade(s)':'ativo(s)'} · do maior gap para o menor`;
+  $('sub-fin').textContent=`${rows.length} ${dim==='uni'?'linha(s) unidade × projeto':'ativo(s)'} · do maior gap para o menor`;
   tabela($('tbl-fin'), colsDim(dim).concat([
     {rot:'Rem.',num:1,get:l=>brl(l.ft),tot:r=>brl(sm(r,'ft'))},
     {rot:'Prévia',num:1,get:l=>brl(l.prev),tot:r=>brl(sm(r,'prev'))},
@@ -1225,6 +1244,7 @@ function pintaDiag(L){
   tabela($('tbl-diag'),[
     {rot:'Ativo',get:l=>esc(l.placa||l.chassi||l.k)},
     {rot:'Unidade',get:l=>esc(l.uni)},
+    {rot:'Projeto',get:l=>esc(l.proj)},
     {rot:'Mês',get:l=>vigRot(l.vig)},
     {rot:'Etapa',get:l=>ETAPAS[l.etapa]},
     {rot:'Desvio',get:l=>l.motivos.map(m=>esc(m)).join(' · ')},
@@ -1241,6 +1261,6 @@ initApp();
 <script src="../assets/mobile.js"></script>
 <script src="../assets/sortable-table.js"></script>
 <script src="../assets/excel-export.js"></script>
-<script src="../assets/build-check.js?v=202608180500"></script>
+<script src="../assets/build-check.js?v=202608180600"></script>
 </body>
 </html>
