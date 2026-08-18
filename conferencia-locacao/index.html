@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="build" content="202608190100">
+<meta name="build" content="202608190200">
 <title>Conferência de Locação · Gestão em Movimento</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -1129,6 +1129,7 @@ function montaTela(){
           <div><div class="ttit" id="tit-qtd">Quantidade por unidade</div>
             <div class="tsub" id="sub-qtd">—</div></div>
           <div class="tgs">
+            <button class="rt" onclick="exportaQtdUnidades()" title="Um Excel por unidade (Vamos → Freightech), para mandar para a conferência">⬇ Excel por unidade</button>
             <button class="rt" id="lado-qtd" onclick="trocaLado('qtd')">Ver Vamos → FT</button>
             <button class="rt" id="tg-qtd" onclick="trocaDim('qtd')">Ver por Ativo</button>
           </div>
@@ -1548,6 +1549,32 @@ function ativosDe(L,lado){
   });
   return [...m.values()];
 }
+/* Exporta a Visão Quantitativa (Vamos → Freightech) em UM EXCEL POR UNIDADE,
+   com o nome da unidade no arquivo — é o que vai para a conferência de cada
+   uma (Renan, 18/08/2026). Respeita os filtros ativos. */
+function exportaQtdUnidades(){
+  if(typeof XLSX==='undefined'||!XLSX.utils){ flash('Exportador ainda carregando — tente de novo', true); return; }
+  const L=filtradas();
+  const rows=ativosDe(L,'vamos');                     // o lado Vamos → FT, sempre
+  if(!rows.length){ flash('Nada para exportar com os filtros atuais', true); return; }
+  const g={};
+  rows.forEach(r=>{ const u=r.uni&&r.uni!=='—'?r.uni:'SEM UNIDADE'; (g[u]=g[u]||[]).push(r); });
+  const vs=[...new Set(L.map(l=>l.vig))].sort().map(vigRot).join(' ');
+  const unis=Object.keys(g).sort((a,b)=>a.localeCompare(b,'pt'));
+  unis.forEach((uni,i)=>setTimeout(()=>{
+    const dados=[['Ativo','Modelo','Unidade','Projeto','Consta no FT','Benner','Observações']];
+    g[uni].sort((a,b)=>a.ativo.localeCompare(b.ativo,'pt')).forEach(r=>dados.push([
+      r.ativo, r.modelo||'', r.uni, r.proj, r.ok?'OK':'NOK',
+      r.semBen?'SEM CADASTRO':'OK', OBS.get(r.ativo)||'' ]));
+    const wb=XLSX.utils.book_new(), ws=XLSX.utils.aoa_to_sheet(dados);
+    ws['!cols']=[{wch:14},{wch:34},{wch:22},{wch:16},{wch:13},{wch:14},{wch:44}];
+    XLSX.utils.book_append_sheet(wb, ws, 'Conferência');
+    const nome=('Conferência Locação - '+uni+(vs?' - '+vs.replace(/\//g,'-'):'')).replace(/[\\/:*?"<>|]/g,'-');
+    XLSX.writeFile(wb, nome+'.xlsx');
+  }, i*400));
+  flash(unis.length+' arquivo(s) — um por unidade. Se o navegador pedir, permita múltiplos downloads.');
+}
+
 function pintaQtd(L){
   const dim=DIM.qtd, lado=LADO.qtd;
   const rows=ativosDe(L,lado);
@@ -1669,6 +1696,6 @@ initPdfExport({
   isLight:()=>document.body.classList.contains('claro'), setTheme:aplicaTema
 });
 </script>
-<script src="../assets/build-check.js?v=202608190100"></script>
+<script src="../assets/build-check.js?v=202608190200"></script>
 </body>
 </html>
