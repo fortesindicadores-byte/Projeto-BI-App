@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="build" content="202608190000">
+<meta name="build" content="202608190100">
 <title>Conferência de Locação · Gestão em Movimento</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -596,6 +596,7 @@ async function initApp(){
   await carregaBase();
   await carregaObs();
   await carregaBenner();
+  await carregaModelos();
   aplicaBenner();
   montaTela();
 }
@@ -662,6 +663,8 @@ async function recebeArquivos(lista){
     const L=analisa();
     if(PERIODO) await guardaMes(vigTxt(PERIODO), L);
   }
+  // todo FT que passa por aqui alimenta o mapa persistente de modelos
+  try{ await salvaModelos(coletaModelosFT()); }catch(e){ console.error(e); }
   aplicaBenner();
   pinta();
 }
@@ -784,6 +787,44 @@ function benUni(projeto){
   return (m&&BEN_COD[m[1]])||null;
 }
 
+/* modelos do FT em memória: chave ('P:'/'C:') → modelo. Persistem em
+   locacao_modelos (scripts/locacao-modelos.sql): o FT só passa pelo
+   navegador na importação, e sem o mapa o mês salvo antes ficava sem o
+   modelo dos ativos que não estão na Vamos (Renan, 18/08/2026). Todo
+   arquivo do FT importado MESCLA o que achou no mapa. */
+let MODELOS=new Map(), ERRO_MOD=null;
+async function carregaModelos(){
+  try{
+    const {data,error}=await sb.from('locacao_modelos').select('*').eq('id',1).maybeSingle();
+    if(error) throw error;
+    MODELOS=new Map(Object.entries((data&&data.modelos)||{}));
+    ERRO_MOD=null;
+  }catch(e){
+    ERRO_MOD='Não consegui ler locacao_modelos: '+(e.message||e)+' — rode scripts/locacao-modelos.sql';
+    console.error(e);
+  }
+}
+function coletaModelosFT(){
+  const novos={};
+  linhasFT().forEach(r=>{ if(r.modelo&&!MODELOS.has(r.k)) novos[r.k]=r.modelo; });
+  return novos;
+}
+async function salvaModelos(novos){
+  const ks=Object.keys(novos); if(!ks.length) return;
+  ks.forEach(k=>MODELOS.set(k,novos[k]));
+  try{
+    const {error}=await sb.from('locacao_modelos').upsert({
+      id:1, modelos:Object.fromEntries(MODELOS),
+      updated_at:new Date().toISOString(),
+      updated_by:(SESSION&&SESSION.user&&SESSION.user.email)||null},{onConflict:'id'});
+    if(error) throw error;
+    ERRO_MOD=null;
+  }catch(e){
+    ERRO_MOD='Não consegui GRAVAR os modelos do FT: '+(e.message||e)+' — rode scripts/locacao-modelos.sql';
+    console.error(e); flash(ERRO_MOD,true);
+  }
+}
+
 /* base do Benner em memória: chave do painel ('P:'/'C:') → Nome do Projeto */
 let BENNER=new Map(), BEN_META=null, ERRO_BEN=null;
 async function carregaBenner(){
@@ -813,6 +854,14 @@ function benProj(projeto){
   return base.toLowerCase().replace(/(^|\s)\S/g,c=>c.toUpperCase());
 }
 function aplicaBenner(){
+  // modelo: Vamos primeiro (já vem na linha); o que faltou sai do mapa do FT
+  if(MODELOS.size) todasLinhas().forEach(l=>{
+    if(l.modelo) return;
+    const m=(l.placa&&MODELOS.get('P:'+placaCanon(l.placa)))
+          ||(l.chassi&&MODELOS.get('C:'+chassiCanon(l.chassi)))
+          ||MODELOS.get(l.k);
+    if(m) l.modelo=m;
+  });
   if(!BENNER.size) return;
   todasLinhas().forEach(l=>{
     const hit=benHit(l);
@@ -863,6 +912,28 @@ const ehEmpilhadeira = d => /EMPILHADEIRA/i.test(String(d||''));
 const chaveAtivo = (div,placa,chassi) => ehEmpilhadeira(div) ? 'C:'+chassiCanon(chassi) : 'P:'+placaCanon(placa);
 const locadora = o => String(col(o,'Empresa locadora')||'').replace(/^EmpresaLocadora:\s*/i,'').trim();
 
+/* modelo no FT, conferido coluna a coluna nos arquivos reais (18/08/2026):
+   · Rota/Van → 'Modelo do Cavalo' (17190, 2426, MASTER FUR L1H1…). A coluna
+     'Modelo' dessas abas é o TIPO DE CONTRATO (FIXO/VARIAVEL) — não usar.
+   · Cavalo (Empurrada) → 'modeloEmpurrada' ('Modelo: Meteor 28.460').
+   · Carreta → 'Modelo' (STANDART/NEXT).
+   · WH → 'modeloApoio' composto ('Modelo: CPD25 | Marca: HELI…'), vale o que
+     está em Modelo:. A 'descricaoEmpilhadeira' é o GARFO, não a máquina. */
+const limpaModelo = s => {
+  const m=String(s||'').replace(/^Modelo:\s*/i,'').split('|')[0].trim().replace(/\.0$/,'');
+  return /^(FIXO|VARIAVEL|VARIÁVEL)$/i.test(m) ? '' : m;
+};
+function modeloFT(o){
+  let m=limpaModelo(col(o,'Modelo do Cavalo','modeloCavalo'));
+  if(m) return m;
+  m=limpaModelo(col(o,'modeloEmpurrada'));
+  if(m) return m;
+  const ap=String(col(o,'modeloApoio')||'');
+  const mm=ap.match(/Modelo:\s*([^|]+)/i);
+  if(mm&&mm[1].trim()) return mm[1].trim();
+  return limpaModelo(col(o,'Modelo'));
+}
+
 /* ── Freightech ──
    Um arquivo por segmento, cada um com TODAS as vigências do período
    (ARMAZEM_1_7_2026, EMPURRADA_2_6_2026…): NOME_<vigência>_<mês>_<ano>.
@@ -882,9 +953,7 @@ function linhasFT(){
           valor:n(col(o,COL_VALOR_FT[a.seg],'custoAluguelLeasing','custoAluguel','Custo Aluguel')),
           k: emp ? 'C:'+chassiCanon(chassi) : 'P:'+placaCanon(placa),
           placa, chassi, uniFT: col(o,'Unidade - Nome'), proj: projetoDe(a.seg,ab.nome),
-          // modelo: 'Modelo' na Rota/Van/Carreta · 'modeloEmpurrada' no Cavalo ·
-          // 'descricaoEmpilhadeira'/'modeloApoio' no WH
-          modelo: String(col(o,'Modelo','modeloEmpurrada','descricaoEmpilhadeira','modeloApoio')||'').trim(),
+          modelo: modeloFT(o),
         });
       });
     });
@@ -1281,7 +1350,7 @@ async function salvaMes(vig){
   }
   pinta();
 }
-async function recarregaBase(){ await carregaBase(); await carregaObs(); await carregaBenner(); aplicaBenner(); pinta(); flash(BASE.size+' mês(es) no banco'); }
+async function recarregaBase(){ await carregaBase(); await carregaObs(); await carregaBenner(); await carregaModelos(); aplicaBenner(); pinta(); flash(BASE.size+' mês(es) no banco'); }
 function flash(txt,ruim){
   let e=$('flash');
   if(!e){ e=document.createElement('div'); e.id='flash'; document.body.appendChild(e); }
@@ -1600,6 +1669,6 @@ initPdfExport({
   isLight:()=>document.body.classList.contains('claro'), setTheme:aplicaTema
 });
 </script>
-<script src="../assets/build-check.js?v=202608190000"></script>
+<script src="../assets/build-check.js?v=202608190100"></script>
 </body>
 </html>

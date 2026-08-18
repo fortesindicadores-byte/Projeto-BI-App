@@ -1,0 +1,23 @@
+name: Locacao Modelos Backfill
+
+on:
+  workflow_dispatch:
+    inputs:
+      mapa:
+        description: 'JSON {"P:PLACA":"MODELO","C:CHASSI":"MODELO",...} — mescla sem sobrescrever'
+        required: true
+
+jobs:
+  backfill:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Mesclar modelos do FT em locacao_modelos
+        env:
+          GEM_SUPABASE_SERVICE_KEY: ${{ secrets.GEM_SUPABASE_SERVICE_KEY }}
+          MAPA_JSON: ${{ inputs.mapa }}
+        run: node scripts/locacao-modelos-backfill.mjs
