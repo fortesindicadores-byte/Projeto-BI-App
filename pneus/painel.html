@@ -84,6 +84,8 @@
   body.light-mode .adh-card-value { color: #111; }
   body.light-mode .adh-table tbody td { color: #111; }
   body.light-mode .farol-dot { color: #111; }
+  /* Desgaste no claro (Renan, 18/08/2026): vermelho puro e verde mais forte */
+  body.light-mode #page-desgaste { --green: #00B300; --red-soft: #FF0000; }
   body.light-mode .adh-table tbody tr { border-bottom-color: rgba(0,0,0,0.025); }
   body.light-mode .adh-table tbody tr:hover { background: rgba(0,0,0,0.03); }
   body.light-mode .adh-table thead tr { background: rgba(0,0,0,0.04); }
@@ -1346,6 +1348,16 @@
           <div id="opts-vida"></div>
         </div>
       </div>
+      <div class="ms-wrap" id="wrap-medida">
+        <button class="ms-btn" onclick="toggleMs('medida')">
+          MEDIDA <span class="ms-count" id="cnt-medida" style="display:none"></span><span class="ms-arrow">▾</span>
+        </button>
+        <div class="ms-panel" id="panel-medida">
+          <input class="ms-search" placeholder="Buscar..." oninput="filterMs(this,'panel-medida')">
+          <div class="ms-option select-all"><label><input type="checkbox" onchange="selectAll('panel-medida',this)"> Todos</label></div>
+          <div id="opts-medida"></div>
+        </div>
+      </div>
       <div class="ms-wrap" id="wrap-situacao">
         <button class="ms-btn" onclick="toggleMs('situacao')">
           SITUAÇÃO <span class="ms-count" id="cnt-situacao" style="display:none"></span><span class="ms-arrow">▾</span>
@@ -1907,9 +1919,9 @@
           <div class="adh-label">Desgaste Médio da Frota — mm por 1.000 km</div>
           <div class="adh-value" id="dsgHeroVal">—</div>
           <div class="adh-deltas">
-            <div class="adh-delta"><span id="dsgFxHG">Baixo</span><b id="dsgDeltaG" style="color:var(--green)">—</b></div>
-            <div class="adh-delta"><span id="dsgFxHY">Médio</span><b id="dsgDeltaY" style="color:var(--yellow)">—</b></div>
-            <div class="adh-delta"><span id="dsgFxHR">Alto</span><b id="dsgDeltaR" style="color:var(--red-soft)">—</b></div>
+            <div class="adh-delta">Baixo (≤ 0,15)<b id="dsgDeltaG" style="color:var(--green)">—</b></div>
+            <div class="adh-delta">Médio (0,15–0,25)<b id="dsgDeltaY" style="color:var(--yellow)">—</b></div>
+            <div class="adh-delta">Alto (&gt; 0,25)<b id="dsgDeltaR" style="color:var(--red-soft)">—</b></div>
           </div>
         </div>
       </div>
@@ -1947,9 +1959,9 @@
       <div class="card" style="margin-bottom:24px">
         <div class="card-title" style="margin-bottom:6px">Desgaste Médio Mensal (mm/1.000km)</div>
         <div class="chart-legend">
-          <span class="lg-item"><span class="lg-dot" style="background:var(--green)"></span> <span id="dsgFxCG">Baixo</span></span>
-          <span class="lg-item"><span class="lg-dot" style="background:var(--yellow)"></span> <span id="dsgFxCY">Médio</span></span>
-          <span class="lg-item"><span class="lg-dot" style="background:var(--red-soft)"></span> <span id="dsgFxCR">Alto</span></span>
+          <span class="lg-item"><span class="lg-dot" style="background:var(--green)"></span> Baixo ≤ 0,15</span>
+          <span class="lg-item"><span class="lg-dot" style="background:var(--yellow)"></span> Médio 0,15 a 0,25</span>
+          <span class="lg-item"><span class="lg-dot" style="background:var(--red-soft)"></span> Alto &gt; 0,25</span>
         </div>
         <div style="position:relative;height:280px">
           <canvas id="chartDsgMensal"></canvas>
@@ -1988,7 +2000,7 @@
         <div style="font-size:10px;color:var(--text-muted);margin:8px 18px 14px;line-height:1.6">
           Entram só pneus com taxa de desgaste PRÓPRIA confiável — os mesmos critérios da Previsão de Troca
           (≥3 leituras, ≥2.000 km no intervalo e ≤2,5 mm/1.000km); aqui não há estimativa por grupo.
-          <span id="dsgFxNota"></span>
+          Faixas de cor: Baixo ≤ 0,15 · Médio 0,15 a 0,25 · Alto &gt; 0,25 mm/1.000km.
         </div>
       </div>
     </div>
@@ -2112,7 +2124,7 @@ let DATA = { vehicles: [], tires: [], inspections: [] };
 // cai no km/dia do odômetro (comportamento atual) — nunca regride/zera.
 let KMDIA = { placa: {}, modelo: {}, cidade: {}, carregado: false };
 let charts = {};
-let FILTERS = { ano: [], vigencia: [], branch: [], unidade: [], placa: [], serial: [], marca: [], modelo: [], vida: [], situacao: [] };
+let FILTERS = { ano: [], vigencia: [], branch: [], unidade: [], placa: [], serial: [], marca: [], modelo: [], vida: [], medida: [], situacao: [] };
 
 // ============================================================
 // TEMA
@@ -2173,8 +2185,8 @@ function filterMs(input, panelId) {
 // Os filtros se conectam: as opções de um filtro vêm dos dados
 // já filtrados por TODOS os outros (ex.: marca restringe placa/vigência).
 // ============================================================
-const FILTER_KEYS = ['ano','vigencia','branch','unidade','placa','serial','marca','modelo','vida','situacao'];
-let SEL = { ano:'all', vigencia:'all', branch:'all', unidade:'all', placa:'all', serial:'all', marca:'all', modelo:'all', vida:'all', situacao:'all' };
+const FILTER_KEYS = ['ano','vigencia','branch','unidade','placa','serial','marca','modelo','vida','medida','situacao'];
+let SEL = { ano:'all', vigencia:'all', branch:'all', unidade:'all', placa:'all', serial:'all', marca:'all', modelo:'all', vida:'all', medida:'all', situacao:'all' };
 
 function labelVida(cv) { return (cv || 1) === 1 ? 'V1 (Novo)' : 'V' + cv + ' (recapado)'; }
 // Nome amigável do status do pneu (API é normalizada p/ 'status' antes de chegar aqui).
@@ -2238,6 +2250,7 @@ function optionsFor(key) {
     const cic = DATA.tires.filter(t => placasOk.has(t.placa)).map(t => t.cicloVida || 1);
     return distinctSorted(cic, 'vidaAsc').map(labelVida);
   }
+  if (key === 'medida') return distinctSorted(DATA.tires.filter(t => placasOk.has(t.placa)).map(t => t.medida));
   return [];
 }
 
@@ -2303,7 +2316,7 @@ function selectAll(panelId, cb) {
 
 function populateFilters() {
   // padrão: tudo "Todos", exceto VIGÊNCIA = mês mais recente com dado
-  SEL = { ano:'all', vigencia:'all', branch:'all', unidade:'all', placa:'all', serial:'all', marca:'all', modelo:'all', vida:'all', situacao:'all' };
+  SEL = { ano:'all', vigencia:'all', branch:'all', unidade:'all', placa:'all', serial:'all', marca:'all', modelo:'all', vida:'all', medida:'all', situacao:'all' };
   const vigs = optionsFor('vigencia');          // mais recente primeiro
   if (vigs.length) SEL.vigencia = new Set([vigs[0]]);
   const sits = optionsFor('situacao');          // padrão: só "Em uso"
@@ -2414,6 +2427,7 @@ function getFilteredTires() {
   if (FILTERS.vida.length) {
     t = t.filter(x => FILTERS.vida.includes(labelVida(x.cicloVida)));
   }
+  if (FILTERS.medida.length) t = t.filter(x => FILTERS.medida.includes(x.medida || ''));
   if (FILTERS.serial.length) t = t.filter(x => FILTERS.serial.includes(x.serial));
   return t;
 }
@@ -2454,6 +2468,7 @@ function tiresNoMes(ano, mes) {
   });
   let tm = reconstructTires(medidas);
   if (FILTERS.vida.length) tm = tm.filter(t => FILTERS.vida.includes(labelVida(t.cicloVida)));
+  if (FILTERS.medida.length) tm = tm.filter(t => FILTERS.medida.includes(t.medida || ''));
   tm = tm.filter(passaSituacao); // respeita o filtro Situação (padrão: só Em uso)
   return tm;
 }
@@ -3271,53 +3286,12 @@ function setDsgDrill(d, btn) {
   renderDsgTabela();
 }
 
-// Faixas de cor por QUARTIS do histórico da frota (Renan, 18/08/2026):
-// Baixo = o quarto que MENOS desgasta (≤ Q1) · Médio = a metade central ·
-// Alto = o quarto que MAIS desgasta (> Q3). Calculadas sobre TODOS os pneus
-// em uso da frota com taxa própria confiável, SEM filtros — a referência
-// não muda quando se filtra uma unidade. Fallback 0,50/1,00 sem dados.
-let DSG_FAIXAS = { q1: 0.5, q3: 1.0, n: 0, _src: null };
-function dsgCluster(v) { return v <= DSG_FAIXAS.q1 ? 'g' : v <= DSG_FAIXAS.q3 ? 'y' : 'r'; }
-function dsgCor(v) { return v <= DSG_FAIXAS.q1 ? 'var(--green)' : v <= DSG_FAIXAS.q3 ? 'var(--yellow)' : 'var(--red-soft)'; }
+// Faixas de cor (Renan, 18/08/2026): Baixo ≤ 0,15 · Médio 0,15 a 0,25 ·
+// Alto > 0,25 mm/1.000km — cortes fixos definidos por ele vendo o histórico.
+const DSG_FX = { g: 0.15, y: 0.25 };
+function dsgCluster(v) { return v <= DSG_FX.g ? 'g' : v <= DSG_FX.y ? 'y' : 'r'; }
+function dsgCor(v) { return v <= DSG_FX.g ? 'var(--green)' : v <= DSG_FX.y ? 'var(--yellow)' : 'var(--red-soft)'; }
 const fmtDsg = v => fmtBR(v, 2);
-
-// Quantil com interpolação linear (mesma conta do QUARTIL do Excel)
-function _quantil(arr, p) {
-  const a = arr.slice().sort((x, y) => x - y);
-  if (!a.length) return null;
-  const idx = (a.length - 1) * p, lo = Math.floor(idx);
-  return lo + 1 < a.length ? a[lo] + (a[lo + 1] - a[lo]) * (idx - lo) : a[lo];
-}
-
-function calcDsgFaixas() {
-  if (DSG_FAIXAS._src === DATA.inspections) return; // já calculado p/ esta carga
-  const todos = DATA.tires.filter(t => statusAmigavel(t.status) === 'Em uso' && t.menorMM > 0);
-  const hist = {};
-  DATA.inspections.forEach(i => {
-    if (!i.tireId || !(i.menorMM > 0) || !(i.odometro > 0)) return;
-    (hist[i.tireId] = hist[i.tireId] || []).push(i);
-  });
-  Object.values(hist).forEach(arr => arr.sort((a, b) => new Date(a.dataInspecao) - new Date(b.dataInspecao)));
-  const ws = [];
-  todos.forEach(t => { const w = _taxaPropria(hist[t.id]); if (w != null) ws.push(w); });
-  if (ws.length >= 8) DSG_FAIXAS = { q1: _quantil(ws, 0.25), q3: _quantil(ws, 0.75), n: ws.length, _src: DATA.inspections };
-  else DSG_FAIXAS = { q1: 0.5, q3: 1.0, n: ws.length, _src: DATA.inspections };
-}
-
-// Escreve as faixas calculadas na legenda do hero, do gráfico e na nota da tabela
-function pintaDsgLegenda() {
-  const g = `Baixo ≤ ${fmtDsg(DSG_FAIXAS.q1)}`;
-  const y = `Médio ${fmtDsg(DSG_FAIXAS.q1)} a ${fmtDsg(DSG_FAIXAS.q3)}`;
-  const r = `Alto > ${fmtDsg(DSG_FAIXAS.q3)}`;
-  [['dsgFxHG', g], ['dsgFxHY', y], ['dsgFxHR', r], ['dsgFxCG', g], ['dsgFxCY', y], ['dsgFxCR', r]]
-    .forEach(([id, tx]) => { const e = document.getElementById(id); if (e) e.textContent = tx; });
-  const nota = document.getElementById('dsgFxNota');
-  if (nota) nota.textContent = DSG_FAIXAS.n >= 8
-    ? `Faixas de cor por QUARTIS do histórico da frota inteira (sem filtros, ${DSG_FAIXAS.n} pneus medidos): ` +
-      `Baixo = quarto que menos desgasta (≤ Q1 = ${fmtDsg(DSG_FAIXAS.q1)}) · Médio = metade central · ` +
-      `Alto = quarto que mais desgasta (> Q3 = ${fmtDsg(DSG_FAIXAS.q3)} mm/1.000km). Recalculadas a cada carga de dados.`
-    : `Faixas de cor padrão (Baixo ≤ 0,50 · Médio até 1,00 · Alto > 1,00 mm/1.000km) — poucos pneus medidos (${DSG_FAIXAS.n}) para calcular quartis.`;
-}
 
 // Regressão linear mm × km — devolve a taxa própria (mm/1.000km) ou null se não confiável
 function _taxaPropria(h) {
@@ -3358,8 +3332,6 @@ function calcDesgaste() {
 
 function renderDesgaste() {
   if (!document.getElementById('dsgHeroVal')) return;
-  calcDsgFaixas();
-  pintaDsgLegenda();
   const { linhas, total } = calcDesgaste();
   window._dsgLinhas = linhas;
 
@@ -3422,10 +3394,14 @@ function renderDsgMensalChart() {
   const isFuturo = m => new Date(m.ano, m.mes, 1) > new Date(hoje.getFullYear(), hoje.getMonth(), 1);
 
   const idsFiltrados = new Set(getFilteredVehicles().map(v => v.id));
+  // filtro MEDIDA vale aqui também (pneu → medida pelo cadastro)
+  const medidaDe = {};
+  if (FILTERS.medida.length) DATA.tires.forEach(t => { medidaDe[t.id] = t.medida || ''; });
   const hist = {};
   DATA.inspections.forEach(i => {
     if (!i.tireId || !(i.menorMM > 0) || !(i.odometro > 0)) return;
     if (!idsFiltrados.has(i.veiculoId)) return;
+    if (FILTERS.medida.length && !FILTERS.medida.includes(medidaDe[i.tireId] || '')) return;
     (hist[i.tireId] = hist[i.tireId] || []).push(i);
   });
   Object.values(hist).forEach(arr => arr.sort((a, b) => new Date(a.dataInspecao) - new Date(b.dataInspecao)));
@@ -3449,7 +3425,8 @@ function renderDsgMensalChart() {
   const valores = meses.map((m, i) => isFuturo(m) ? null : media(porMes[i]));
 
   const isLight = document.body.classList.contains('light-mode');
-  const rgb = { g: '59,179,59', y: '243,156,18', r: '255,102,102' };
+  // claro: vermelho puro e verde mais forte (Renan, 18/08/2026)
+  const rgb = isLight ? { g: '0,179,0', y: '243,156,18', r: '255,0,0' } : { g: '59,179,59', y: '243,156,18', r: '255,102,102' };
   const hl = highlightFn(meses, valores);
   const cores  = meses.map((m, i) => valores[i] === null ? 'rgba(255,255,255,0.03)' : `rgba(${rgb[dsgCluster(valores[i])]},${hl(i) ? 0.7 : 0.15})`);
   const bordas = meses.map((m, i) => valores[i] === null ? 'transparent' : `rgba(${rgb[dsgCluster(valores[i])]},${hl(i) ? 1 : 0.22})`);
