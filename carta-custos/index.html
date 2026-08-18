@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-<meta name="build" content="202608180700">
+<meta name="build" content="202608181500">
 <title>Carta de Custos</title>
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -674,6 +674,9 @@ const PACS=['Manutenção'];
 function curRows(){const ps=curProjs();return ROWS.filter(r=>!ps||ps.includes(r.projeto));}
 // só entra no Realizado/DRE quem tem número de NF (e valor)
 const counts=r=>!!(r&&r.nf&&String(r.nf).trim())&&r.valor>0;
+// total da coluna Valor = o que está comprometido em RC (com ou sem NF ainda).
+// O REALIZADO (só com NF) continua no hero e é o que sobe para o DRE.
+const contaRC=r=>!!(r&&r.rc&&String(r.rc).trim())&&r.valor>0;
 function geralTotals(){
   const real=curRows().filter(counts).reduce((s,r)=>s+r.valor,0);
   let orc=0,rem=0,hasO=false;
@@ -699,7 +702,7 @@ function updateHero(){
 }
 function render(){const rows=curRows();renderAcomp();renderLanc(rows);renderCharts(rows);}
 // atualiza acomp/gráficos/total sem reconstruir a grade (preserva foco e linhas em edição)
-function renderStats(){const rows=curRows();renderAcomp();renderCharts(rows);const lt=$('lanc-total');if(lt)lt.textContent=fmt(rows.filter(counts).reduce((s,r)=>s+r.valor,0));}
+function renderStats(){const rows=curRows();renderAcomp();renderCharts(rows);const lt=$('lanc-total');if(lt)lt.textContent=fmt(rows.filter(contaRC).reduce((s,r)=>s+r.valor,0));}
 function aggBy(rows,key){const m=new Map();rows.forEach(r=>{const k=r[key]||'—';m.set(k,(m.get(k)||0)+r.valor);});return [...m.entries()].sort((a,b)=>b[1]-a[1]);}
 
 function atColor(p){ // custo: >=100 vermelho, >=90 amarelo
@@ -893,8 +896,11 @@ function renderLanc(rows){
     if(!rows.length){ h+=`<tr class="empty-row"><td colspan="13"><div class="empty">Nenhum custo lançado neste mês. Clique em “+ adicionar lançamento”.</div></td></tr>`; }
     h+=rows.map(lancRowHTML).join('');
   }
-  const tot=rows.filter(counts).reduce((s,r)=>s+r.valor,0);
-  h+=`</tbody><tfoot><tr class="total"><td class="conta">Total</td>${'<td></td>'.repeat(10)}<td class="num" id="lanc-total">${fmt(tot)}</td><td></td></tr></tfoot>`;
+  const tot=rows.filter(contaRC).reduce((s,r)=>s+r.valor,0);
+  // o total fica NA COLUNA VALOR (8ª de 13) — estava caindo lá no fim, embaixo
+  // de NF, e o número da soma das RCs aparecia longe da coluna que ele soma
+  h+=`</tbody><tfoot><tr class="total"><td class="conta">Total</td>${'<td></td>'.repeat(6)}`
+   + `<td class="num" id="lanc-total">${fmt(tot)}</td>${'<td></td>'.repeat(5)}</tr></tfoot>`;
   $('tbl-lanc').innerHTML=h;
 }
 
@@ -1002,6 +1008,6 @@ async function exportarPDF(){
 <script src="../assets/filters-toggle.js"></script>
 <script src="../assets/mobile.js"></script>
 <script src="../assets/sortable-table.js"></script>
-<script src="../assets/build-check.js?v=202608180700"></script>
+<script src="../assets/build-check.js?v=202608181500"></script>
 </body>
 </html>
