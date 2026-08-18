@@ -133,7 +133,9 @@
     const sb = global.supabase.createClient(GEM_URL, GEM_KEY);
     const [mes, ano] = await Promise.all([
       sb.from('elite_snapshot').select('indicador,vigencia,data').eq('escopo','mes'),
-      sb.from('elite_snapshot').select('indicador,vigencia,data').eq('escopo','ano').in('indicador', PCT_INDS.concat('conformidade-mar')),
+      // 'conformidade-mar' (acumulado mar→M das empurradas) saiu: março deixou de
+      // contar para elas em 18/08/2026, então aquela janela ficou contaminada.
+      sb.from('elite_snapshot').select('indicador,vigencia,data').eq('escopo','ano').in('indicador', PCT_INDS),
     ]);
     if(mes.error) throw mes.error;
     if(ano.error) throw ano.error;
@@ -152,11 +154,13 @@
   // jan a jun; as demais a Mensal. De julho/2026 em diante, TODAS a Bimestral.
   const CONF_BIM = new Set(['PIRAI EMPURRADA','MACACU EMPURRADA','CUIABA EMPURRADA','CDD RIO DE JANEIRO']);
   const confBimestral = (unit, vigFim) => vigFim >= '2026-07' || CONF_BIM.has(unit);
-  // Empurradas só contam Conformidade de mar/2026 em diante (Renan, 07/08/2026):
-  // jan e fev ficam sem valor (mensal e nos adicionais de conformidade); o acumulado jan→M (escopo 'ano'
-  // do Ginfo) segue valendo a partir das janelas que terminam em março.
+  // Empurradas só contam Conformidade de ABR/2026 em diante (Renan, 18/08/2026 —
+  // antes a regra era mar/2026): jan, fev e mar ficam SEM VALOR, no mensal, no
+  // acumulado e nos adicionais de conformidade. Sem valor ≠ zero: o peso do
+  // indicador é redistribuído entre os que a unidade tem.
   const CONF_EMP = new Set(['PIRAI EMPURRADA','MACACU EMPURRADA','CUIABA EMPURRADA']);
-  const confVale = (unit, vigFim) => vigFim >= '2026-03' || !CONF_EMP.has(unit);
+  const CONF_EMP_INI = '2026-04';
+  const confVale = (unit, vigFim) => vigFim >= CONF_EMP_INI || !CONF_EMP.has(unit);
 
   function direto(rows, vigFim, opts){
     // opts: {col:[nomes], proj?:string (tier default), conf?:true,
@@ -265,7 +269,7 @@
     if(kOk.some(k=>!k)) return g;
     rows.forEach(r=>{
       const unit=canonUnit(r[kFil],''); if(!unit) return;
-      if(!confVale(unit,vig)) return;              // empurradas só de mar/2026
+      if(!confVale(unit,vig)) return;              // empurradas só de abr/2026
       const ok  = kOk .reduce((a,k)=>a+(numVal(r[k])||0),0);
       const nok = kNok.reduce((a,k)=>a+(k?(numVal(r[k])||0):0),0);
       if(!(ok+nok)) return;
@@ -357,15 +361,6 @@
     for(let i=0;i<ms.length;i++) if(ms[i]!==i+1) return null;
     return ys[0]+'-'+String(ms[ms.length-1]).padStart(2,'0');   // 'YYYY-MM' do fim
   }
-  // janela contígua de 2026 que cobre março (início ≤ mar ≤ fim) → 'YYYY-MM' do fim.
-  // É a janela do 'conformidade-mar' (acumulado mar→M das empurradas).
-  function marPrefix(vigs){
-    if(vigs.some(v=>v.slice(0,4)!=='2026')) return null;
-    const ms=vigs.map(v=>+v.slice(5)).sort((a,b)=>a-b);
-    for(let i=1;i<ms.length;i++) if(ms[i]!==ms[i-1]+1) return null;
-    if(ms[0]>3 || ms[ms.length-1]<3) return null;
-    return '2026-'+String(ms[ms.length-1]).padStart(2,'0');
-  }
   // Conformidade acumulada de UMA metade (todas as vigências na mesma régua).
   function confMetade(vigs){
     const fim=vigs[vigs.length-1];
@@ -389,11 +384,12 @@
     if(pref){ const vs=valores('conf','ano',pref); if(vs.length) list=vs; }
     if(!list) list=mediaDe(null);
     if(fim.slice(0,4)==='2026'){
-      // Empurradas: o 'ano' do Ginfo é jan→M e inclui jan/fev, quando elas não
-      // contavam — o acumulado certo é a janela mar→M ('conformidade-mar').
-      const mp=marPrefix(vigs);
-      let emp = mp ? direto(E.ano['conformidade-mar']?.[mp]||[], mp, {conf:true}).filter(v=>CONF_EMP.has(v.unit)) : [];
-      if(!emp.length) emp=mediaDe(u=>CONF_EMP.has(u));
+      // Empurradas: o acumulado 'ano' do Ginfo é jan→M e inclui jan, fev e mar,
+      // quando elas NÃO contavam. O acumulado delas sai da média dos meses que
+      // valem — o confVale já tirou jan/fev/mar do mensal, então a média é de
+      // abr em diante. (Era a janela mar→M do 'conformidade-mar'; março saiu da
+      // regra em 18/08/2026 e aquele acumulado passou a estar contaminado.)
+      const emp=mediaDe(u=>CONF_EMP.has(u));
       list=list.filter(v=>!CONF_EMP.has(v.unit)).concat(emp);
     }
     return list;
