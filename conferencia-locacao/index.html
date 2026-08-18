@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="build" content="202608181100">
+<meta name="build" content="202608181330">
 <title>Conferência de Locação · Gestão em Movimento</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -11,6 +11,8 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <script src="https://cdn.sheetjs.com/xlsx-0.20.2/package/dist/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.2/dist/jspdf.umd.min.js"></script>
 <style>
 
 /* ============================================================
@@ -373,10 +375,30 @@ table.dre td.cg-t,.cg-t{color:var(--verde)!important;font-weight:700;}
 #vw-diag.on{overflow:hidden;}
 #vw-diag .kpis{flex:0 0 auto;min-height:clamp(104px,14vh,140px);}
 #vw-diag .kpi{display:flex;flex-direction:column;justify-content:center;}
-/* uma embaixo da outra: são 10 colunas cada — lado a lado só caberia com
-   barra de rolagem horizontal, que não existe no padrão */
-.duo{flex:1 1 auto;min-height:0;display:grid;grid-template-columns:minmax(0,1fr);
-  grid-template-rows:1fr 1fr;gap:12px;}
+/* lado a lado (Renan, 18/08/2026). Para caber sem barra de rolagem
+   horizontal, as duas tabelas ficam com as colunas que ele pediu (ativo,
+   unidade e os três valores com os três ▲) e a densidade um degrau menor. */
+.duo{flex:1 1 auto;min-height:0;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:12px;}
+.duo .tsec{padding:12px 12px 10px;}
+/* largura fixa: a tabela nunca estoura o card, então não nasce barra
+   horizontal em tela nenhuma — o que não couber vira reticências */
+.duo table.dre{font-size:11px;table-layout:fixed;}
+.duo table.dre th,.duo table.dre td{overflow:hidden;text-overflow:ellipsis;}
+.duo table.dre th:nth-child(1){width:15%;}
+.duo table.dre th:nth-child(2){width:19%;}
+.duo table.dre thead th{padding:8px 6px;font-size:8.5px;letter-spacing:.3px;white-space:normal;line-height:1.15;}
+.duo table.dre thead th .grp{font-size:7.5px;letter-spacing:.2px;}
+.duo table.dre td{padding:7px 6px;}
+@media(max-width:1500px){
+  .duo table.dre{font-size:10px;}
+  .duo table.dre thead th{padding:7px 3px;font-size:7.6px;letter-spacing:0;}
+  .duo table.dre td{padding:6px 4px;}
+}
+@media(max-width:1340px){
+  .duo table.dre{font-size:9px;}
+  .duo table.dre thead th{padding:6px 3px;font-size:7.5px;}
+  .duo table.dre td{padding:5px 3px;}
+}
 @media(max-width:860px){ .duo{display:block;} #vw-diag.on{display:block;overflow:visible;} }
 .vazio{flex:1;display:flex;align-items:center;justify-content:center;text-align:center;
   font-size:12.5px;color:var(--txt3);line-height:1.8;padding:24px;}
@@ -414,6 +436,7 @@ table.dre td.cg-t,.cg-t{color:var(--verde)!important;font-weight:700;}
     </button>
 
     <div class="s-sec">Atalhos</div>
+    <div id="pdf-slot"></div>
     <button class="s-item" data-vw="importar">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
       Importar planilhas
@@ -1246,14 +1269,16 @@ const rotLado  = lado => lado==='ft' ? 'Ver Vamos → FT' : 'Ver FT → Vamos';
    mostrar o −Prévia ali só confunde (Renan, 18/08/2026) */
 const temFat = L => L.some(l=>l.fat!=null);
 
-function agrupa(L,dim){
+function agrupa(L,dim,lado){
   const m={};
   L.forEach(l=>{
     const k = dim==='uni' ? (l.uni||'—')+' ¦ '+(l.proj||'—') : (l.placa||l.chassi||l.k);
     const g = m[k] = m[k] || {k, uni:l.uni||'—', proj:l.proj||'—',
-      nFt:0,nPv:0,nFa:0, ft:0,prev:0,fat:0};
+      nFt:0,nPv:0,nFa:0, ft:0,prev:0,fat:0, dentro:0,fora:0};
     if(l.ft!=null)g.nFt++; if(l.prev!=null)g.nPv++; if(l.fat!=null)g.nFa++;
     g.ft+=l.ft||0; g.prev+=l.prev||0; g.fat+=l.fat||0;
+    // conferência do lado escolhido: o ativo está no universo e consta no outro?
+    if(lado==='ft' ? noFt(l) : naVamos(l)){ (lado==='ft'?naVamos(l):noFt(l)) ? g.dentro++ : g.fora++; }
   });
   return Object.values(m).map(g=>({...g,
     dnR:g.nFa-g.nFt, dnP:g.nPv-g.nFt, dnF:g.nFa-g.nPv,     // ▲ das quantidades
@@ -1320,16 +1345,25 @@ function pintaQtd(L){
     ],rows,false);
   }
 }
+/* O ponto de vista NÃO tira dinheiro da tela (Renan, 18/08/2026): Remunerado
+   e Prévia aparecem SEMPRE inteiros, dos dois lados. O que ele troca é a
+   coluna de conferência — quantos daquele lado constam no outro. */
 function pintaFin(L){
   const dim=DIM.fin, lado=LADO.fin;
-  const U=universo(L,lado), rows=agrupa(U,dim).sort((a,b)=>Math.abs(b.dR)-Math.abs(a.dR));
-  const há=temFat(U);
+  const rows=agrupa(L,dim,lado).sort((a,b)=>Math.abs(b.dR)-Math.abs(a.dR));
+  const há=temFat(L);
   $('lado-fin').textContent=rotLado(lado);
   $('tit-fin').textContent=(lado==='ft'?'Freightech → Vamos':'Vamos → Freightech')+' · por '+(dim==='uni'?'unidade':'ativo');
   $('tg-fin').textContent=dim==='uni'?'Ver por Ativo':'Ver por Unidade';
+  const nU=universo(L,lado).length, nOk=universo(L,lado).filter(lado==='ft'?naVamos:noFt).length;
   $('sub-fin').textContent=`${rows.length} ${dim==='uni'?'linha(s) unidade × projeto':'ativo(s)'} · do maior gap para o menor`
+    +` · ${num(nOk)}/${num(nU)} ${lado==='ft'?'constam na Vamos':'constam no FT'}`
     +(há?'':' · sem faturamento no período');
   tabela($('tbl-fin'), colsDim(dim).concat([
+    {rot:lado==='ft'?'Consta na Vamos':'Consta no FT',num:1,cls:l=>l.fora?'cr':'',
+     get:l=>dim==='uni' ? num(l.dentro)+'/'+num(l.dentro+l.fora)
+                        : `<span class="farol ${l.fora?'nok':'ok'}"><i></i>${l.fora?'NOK':'OK'}</span>`,
+     tot:r=>num(sm(r,'dentro'))+'/'+num(sm(r,'dentro')+sm(r,'fora'))},
     {rot:'Rem.',num:1,get:l=>brl(l.ft),tot:r=>brl(sm(r,'ft'))},
     {rot:'Prévia',num:1,get:l=>brl(l.prev),tot:r=>brl(sm(r,'prev'))},
     {rot:'Faturado',num:1,get:l=>há?brl(l.fat):'—',tot:r=>há?brl(sm(r,'fat')):'—'},
@@ -1347,8 +1381,6 @@ function colsDiag(há){
   return [
     {rot:'Ativo',get:l=>esc(l.placa||l.chassi||l.k)},
     {rot:'Unidade',get:l=>esc(l.uni)},
-    {rot:'Projeto',get:l=>esc(l.proj)},
-    {rot:'Mês',get:l=>vigRot(l.vig)},
     {rot:'Rem.',num:1,get:l=>l.ft==null?'—':brl(l.ft),tot:r=>brl(r.reduce((a,l)=>a+(l.ft||0),0))},
     {rot:'Prévia',num:1,get:l=>l.prev==null?'—':brl(l.prev),tot:r=>brl(r.reduce((a,l)=>a+(l.prev||0),0))},
     {rot:'Faturado',num:1,get:l=>(!há||l.fat==null)?'—':brl(l.fat),
@@ -1380,6 +1412,18 @@ initApp();
 <script src="../assets/mobile.js"></script>
 <script src="../assets/sortable-table.js"></script>
 <script src="../assets/excel-export.js"></script>
-<script src="../assets/build-check.js?v=202608181100"></script>
+<script src="../assets/pdf-export.js"></script>
+<script>
+/* PDF: um slide por visão, com a lateral recolhida — padrão do portal */
+initPdfExport({
+  btnContainer:'#pdf-slot', btnClass:'s-item', btnAoFim:true,
+  title:'Conferência de Locação', subtitle:()=>document.getElementById('titSub').textContent,
+  fileBase:'conferencia-locacao', main:()=>document.querySelector('.vw.on'),
+  views:()=>['resumo','qtd','fin','diag'].map(k=>({label:TIT[k], ativar:()=>setVw(k)})),
+  viewAtual:()=>VW, irPara:setVw,
+  isLight:()=>document.body.classList.contains('claro'), setTheme:aplicaTema
+});
+</script>
+<script src="../assets/build-check.js?v=202608181330"></script>
 </body>
 </html>
