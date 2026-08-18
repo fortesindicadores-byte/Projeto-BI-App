@@ -1898,6 +1898,101 @@
       </div>
     </div>
 
+    <!-- ========== DESGASTE (mm/1.000km) ========== -->
+    <div class="page" id="page-desgaste">
+
+      <!-- HERO -->
+      <div class="adh-hero">
+        <div class="adh-hero-left">
+          <div class="adh-label">Desgaste Médio da Frota — mm por 1.000 km</div>
+          <div class="adh-value" id="dsgHeroVal">—</div>
+          <div class="adh-deltas">
+            <div class="adh-delta">Baixo (≤ 0,50)<b id="dsgDeltaG" style="color:var(--green)">—</b></div>
+            <div class="adh-delta">Médio (0,50–1,00)<b id="dsgDeltaY" style="color:var(--yellow)">—</b></div>
+            <div class="adh-delta">Alto (&gt; 1,00)<b id="dsgDeltaR" style="color:var(--red-soft)">—</b></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 5 CARDS -->
+      <div class="saude-cards">
+        <div class="saude-card">
+          <div class="sc-label">Pneus Medidos</div>
+          <div class="sc-value" id="dsgCardN">—</div>
+          <div class="sc-sub" id="dsgCardNSub">com taxa própria confiável</div>
+        </div>
+        <div class="saude-card">
+          <div class="sc-label">Desgaste Médio</div>
+          <div class="sc-value" id="dsgCardMed">—</div>
+          <div class="sc-sub">mm por 1.000 km</div>
+        </div>
+        <div class="saude-card">
+          <div class="sc-label">Desgaste Mediano</div>
+          <div class="sc-value" id="dsgCardMdn">—</div>
+          <div class="sc-sub">metade da frota desgasta menos</div>
+        </div>
+        <div class="saude-card">
+          <div class="sc-label">Menor Desgaste</div>
+          <div class="sc-value" id="dsgCardMelhor" style="font-size:18px">—</div>
+          <div class="sc-sub" id="dsgCardMelhorSub">unidade que mais preserva pneu</div>
+        </div>
+        <div class="saude-card">
+          <div class="sc-label">Maior Desgaste</div>
+          <div class="sc-value" id="dsgCardPior" style="font-size:18px">—</div>
+          <div class="sc-sub" id="dsgCardPiorSub">unidade que mais gasta pneu</div>
+        </div>
+      </div>
+
+      <!-- GRÁFICO: DESGASTE MÉDIO MÊS A MÊS -->
+      <div class="card" style="margin-bottom:24px">
+        <div class="card-title" style="margin-bottom:6px">Desgaste Médio Mensal (mm/1.000km)</div>
+        <div class="chart-legend">
+          <span class="lg-item"><span class="lg-dot" style="background:var(--green)"></span> Baixo ≤ 0,50</span>
+          <span class="lg-item"><span class="lg-dot" style="background:var(--yellow)"></span> Médio 0,50 a 1,00</span>
+          <span class="lg-item"><span class="lg-dot" style="background:var(--red-soft)"></span> Alto &gt; 1,00</span>
+        </div>
+        <div style="position:relative;height:280px">
+          <canvas id="chartDsgMensal"></canvas>
+        </div>
+      </div>
+
+      <!-- RANKING COM TOGGLE -->
+      <div class="adh-table-wrap">
+        <div class="adh-table-title" style="display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap">
+          <div>
+            <div>Ranking — Desgaste</div>
+            <div style="font-size:11px;color:var(--text-muted);font-weight:400;margin-top:2px">Amostra: mínimo de 3 pneus medidos por grupo. Maior desgaste primeiro.</div>
+          </div>
+          <div class="chart-chips">
+            <button class="chip active" data-dsgdrill="unidade" onclick="setDsgDrill('unidade',this)">Unidade</button>
+            <button class="chip" data-dsgdrill="marca" onclick="setDsgDrill('marca',this)">Marca</button>
+            <button class="chip" data-dsgdrill="modelo" onclick="setDsgDrill('modelo',this)">Modelo</button>
+            <button class="chip" data-dsgdrill="banda" onclick="setDsgDrill('banda',this)">Banda</button>
+            <button class="chip" data-dsgdrill="vida" onclick="setDsgDrill('vida',this)">Vida</button>
+            <button class="chip" data-dsgdrill="tipo" onclick="setDsgDrill('tipo',this)">Tipo de Pneu</button>
+          </div>
+        </div>
+        <div style="overflow-x:auto">
+        <table class="adh-table">
+          <thead><tr>
+            <th>#</th><th id="thDsgDrill">Unidade</th>
+            <th class="dcol">Pneus</th>
+            <th class="dcol">Participação</th>
+            <th class="dcol">MM Média</th>
+            <th class="dcol">Vida Média</th>
+            <th class="col-dias">Desgaste ↓</th>
+          </tr></thead>
+          <tbody id="tbodyDsg"></tbody>
+        </table>
+        </div>
+        <div style="font-size:10px;color:var(--text-muted);margin:8px 18px 14px;line-height:1.6">
+          Entram só pneus com taxa de desgaste PRÓPRIA confiável — os mesmos critérios da Previsão de Troca
+          (≥3 leituras, ≥2.000 km no intervalo e ≤2,5 mm/1.000km); aqui não há estimativa por grupo.
+          Faixas de cor: Baixo ≤ 0,50 · Médio 0,50 a 1,00 · Alto &gt; 1,00 mm/1.000km.
+        </div>
+      </div>
+    </div>
+
     <!-- ========== PREVISÃO ORÇAMENTÁRIA ========== -->
     <div class="page" id="page-orcamento">
 
@@ -2383,6 +2478,7 @@ const PAGE_RENDER = {
   pressao: () => renderPressao(),
   cpk: () => renderCPK(),
   previsao: () => renderPrevisao(),
+  desgaste: () => renderDesgaste(),
   orcamento: () => renderOrcamento(),
   eixos: () => { renderEixosFilters(); renderEixos(); }
 };
@@ -2411,6 +2507,7 @@ function navigate(page) {
     pressao: 'Pressão dos Pneus',
     cpk: 'CPK — Custo por Km',
     previsao: 'Previsão de Troca',
+    desgaste: 'Desgaste — mm/1.000km',
     orcamento: 'Previsão Orçamentária',
     eixos: 'Visão de Eixos'
   };
@@ -3158,6 +3255,264 @@ function renderPrevMensalChart(comBase) {
       scales: (function(){ const sc = monthlyScales(isLight, v => v); sc.y = Object.assign({}, sc.y, { display: false }); return sc; })()
     }
   });
+}
+
+// ============================================================
+// DESGASTE (mm/1.000km) — taxa de desgaste MEDIDA por pneu
+// ============================================================
+// Só taxa PRÓPRIA confiável (mesmos critérios da Previsão de Troca):
+// ≥3 leituras, ≥3 odômetros distintos, ≥2.000 km no intervalo,
+// inclinação negativa e ≤2,5 mm/1.000km. Sem estimativa por grupo.
+let DSG_DRILL = 'unidade';
+function setDsgDrill(d, btn) {
+  DSG_DRILL = d;
+  document.querySelectorAll('[data-dsgdrill]').forEach(c => c.classList.remove('active'));
+  btn.classList.add('active');
+  renderDsgTabela();
+}
+
+// Faixas de cor (clusters): Baixo ≤ 0,50 · Médio ≤ 1,00 · Alto acima
+function dsgCluster(v) { return v <= 0.5 ? 'g' : v <= 1.0 ? 'y' : 'r'; }
+function dsgCor(v) { return v <= 0.5 ? 'var(--green)' : v <= 1.0 ? 'var(--yellow)' : 'var(--red-soft)'; }
+const fmtDsg = v => fmtBR(v, 2);
+
+// Tipo do pneu pela posição/veículo: Direcional · Tração · Livre (reboque) · Empilhadeira · Estepe
+function tipoPneu(t) {
+  const nome = (t.nomePosicao || '').toUpperCase();
+  if (/ESTEPE|STEP|RESERV/.test(nome)) return 'Estepe';
+  if (t.direcional) return 'Direcional';
+  const veh = _getVehPorPlaca()[_norm(t.placa)];
+  const tv = _norm(veh && veh.tipo);
+  if (tv.includes('EMPILHADEIRA')) return 'Empilhadeira';
+  if (/REBOQUE|CARRETA|SIDER|DOLLY|RANDON SR/.test(tv)) return 'Livre (reboque)';
+  return 'Tração';
+}
+
+// Uma linha por pneu com taxa própria confiável: { t, wear1000 }
+function calcDesgaste() {
+  const tires = getFilteredTires().filter(t => passaSituacao(t) && t.menorMM > 0);
+
+  const hist = {};
+  DATA.inspections.forEach(i => {
+    if (!i.tireId || !(i.menorMM > 0) || !(i.odometro > 0)) return;
+    (hist[i.tireId] = hist[i.tireId] || []).push(i);
+  });
+  Object.values(hist).forEach(arr => arr.sort((a, b) => new Date(a.dataInspecao) - new Date(b.dataInspecao)));
+
+  const linhas = [];
+  tires.forEach(t => {
+    const h = hist[t.id];
+    if (!h || h.length < 3) return;
+    const pts = h.map(i => ({ km: i.odometro, mm: i.menorMM }));
+    if (new Set(pts.map(p => p.km)).size < 3) return;
+    const dKm = h[h.length - 1].odometro - h[0].odometro;
+    if (dKm < 2000) return;
+    const n = pts.length;
+    const sx = pts.reduce((s, p) => s + p.km, 0);
+    const sy = pts.reduce((s, p) => s + p.mm, 0);
+    const sxx = pts.reduce((s, p) => s + p.km * p.km, 0);
+    const sxy = pts.reduce((s, p) => s + p.km * p.mm, 0);
+    const den = n * sxx - sx * sx;
+    const slope = den !== 0 ? (n * sxy - sx * sy) / den : 0; // mm por km
+    if (!(slope < 0)) return;
+    const w = -slope * 1000; // mm/1.000km
+    if (w > 2.5) return;
+    linhas.push({ t, wear1000: w });
+  });
+  return { linhas, total: tires.length };
+}
+
+function renderDesgaste() {
+  if (!document.getElementById('dsgHeroVal')) return;
+  const { linhas, total } = calcDesgaste();
+  window._dsgLinhas = linhas;
+
+  const media = arr => arr.length ? arr.reduce((a, b) => a + b, 0) / arr.length : 0;
+  const wears = linhas.map(l => l.wear1000);
+  const med = media(wears);
+  const mdn = _mediana(wears);
+
+  // Hero + contagem por cluster
+  const hero = document.getElementById('dsgHeroVal');
+  hero.textContent = linhas.length ? fmtDsg(med) : '—';
+  hero.style.color = linhas.length ? dsgCor(med) : 'var(--text)';
+  document.getElementById('dsgDeltaG').textContent = wears.filter(w => dsgCluster(w) === 'g').length;
+  document.getElementById('dsgDeltaY').textContent = wears.filter(w => dsgCluster(w) === 'y').length;
+  document.getElementById('dsgDeltaR').textContent = wears.filter(w => dsgCluster(w) === 'r').length;
+
+  // Cards
+  document.getElementById('dsgCardN').textContent = linhas.length;
+  document.getElementById('dsgCardNSub').textContent = `de ${total} instalados · taxa própria confiável`;
+  const cMed = document.getElementById('dsgCardMed');
+  cMed.textContent = linhas.length ? fmtDsg(med) : '—';
+  cMed.style.color = linhas.length ? dsgCor(med) : 'var(--text)';
+  const cMdn = document.getElementById('dsgCardMdn');
+  cMdn.textContent = linhas.length ? fmtDsg(mdn) : '—';
+  cMdn.style.color = linhas.length ? dsgCor(mdn) : 'var(--text)';
+
+  // Melhor / pior unidade (≥3 pneus medidos)
+  const porUni = {};
+  linhas.forEach(l => { const k = l.t.unidade || '—'; (porUni[k] = porUni[k] || []).push(l.wear1000); });
+  const rankUni = Object.entries(porUni)
+    .map(([u, ws]) => ({ u, w: media(ws), n: ws.length }))
+    .filter(x => x.n >= 3)
+    .sort((a, b) => a.w - b.w);
+  if (rankUni.length) {
+    const mel = rankUni[0], pio = rankUni[rankUni.length - 1];
+    document.getElementById('dsgCardMelhor').textContent = mel.u;
+    document.getElementById('dsgCardMelhor').style.color = 'var(--green)';
+    document.getElementById('dsgCardMelhorSub').textContent = `${fmtDsg(mel.w)} mm/1.000km · ${mel.n} pneus`;
+    document.getElementById('dsgCardPior').textContent = pio.u;
+    document.getElementById('dsgCardPior').style.color = 'var(--red-soft)';
+    document.getElementById('dsgCardPiorSub').textContent = `${fmtDsg(pio.w)} mm/1.000km · ${pio.n} pneus`;
+  } else {
+    ['dsgCardMelhor', 'dsgCardPior'].forEach(id => { const e = document.getElementById(id); e.textContent = '—'; e.style.color = 'var(--text)'; });
+  }
+
+  renderDsgMensalChart();
+  renderDsgTabela();
+}
+
+// Gráfico mês a mês: taxa de cada INTERVALO entre duas leituras consecutivas
+// do mesmo pneu (piso 2.000 km e teto 2,5 mm/1.000km — os mesmos da taxa
+// própria) cai no mês da leitura mais recente; a barra é a média do mês.
+function renderDsgMensalChart() {
+  const anoAtivo = FILTERS.ano.length === 1 ? parseInt(FILTERS.ano[0]) : new Date().getFullYear();
+  const hoje = new Date();
+  const meses = Array.from({ length: 12 }, (_, i) => ({
+    ano: anoAtivo, mes: i,
+    label: new Date(anoAtivo, i, 1).toLocaleDateString('pt-BR', { month: 'short' }).replace('.', '')
+  }));
+  const isFuturo = m => new Date(m.ano, m.mes, 1) > new Date(hoje.getFullYear(), hoje.getMonth(), 1);
+
+  const idsFiltrados = new Set(getFilteredVehicles().map(v => v.id));
+  const hist = {};
+  DATA.inspections.forEach(i => {
+    if (!i.tireId || !(i.menorMM > 0) || !(i.odometro > 0)) return;
+    if (!idsFiltrados.has(i.veiculoId)) return;
+    (hist[i.tireId] = hist[i.tireId] || []).push(i);
+  });
+  Object.values(hist).forEach(arr => arr.sort((a, b) => new Date(a.dataInspecao) - new Date(b.dataInspecao)));
+
+  const porMes = meses.map(() => []);
+  Object.values(hist).forEach(arr => {
+    for (let k = 1; k < arr.length; k++) {
+      const a = arr[k - 1], b = arr[k];
+      const dKm = b.odometro - a.odometro;
+      if (dKm < 2000) continue;
+      const dMM = a.menorMM - b.menorMM;
+      if (dMM < 0) continue;                 // mm subiu = recape/troca no meio → descarta
+      const w = dMM / (dKm / 1000);
+      if (w > 2.5) continue;
+      const d = new Date(b.dataInspecao);
+      const idx = meses.findIndex(m => d.getFullYear() === m.ano && d.getMonth() === m.mes);
+      if (idx >= 0) porMes[idx].push(w);
+    }
+  });
+  const media = arr => arr.length ? arr.reduce((x, y) => x + y, 0) / arr.length : null;
+  const valores = meses.map((m, i) => isFuturo(m) ? null : media(porMes[i]));
+
+  const isLight = document.body.classList.contains('light-mode');
+  const rgb = { g: '59,179,59', y: '243,156,18', r: '255,102,102' };
+  const hl = highlightFn(meses, valores);
+  const cores  = meses.map((m, i) => valores[i] === null ? 'rgba(255,255,255,0.03)' : `rgba(${rgb[dsgCluster(valores[i])]},${hl(i) ? 0.7 : 0.15})`);
+  const bordas = meses.map((m, i) => valores[i] === null ? 'transparent' : `rgba(${rgb[dsgCluster(valores[i])]},${hl(i) ? 1 : 0.22})`);
+
+  destroyChart('chartDsgMensal');
+  charts['chartDsgMensal'] = new Chart(document.getElementById('chartDsgMensal'), {
+    data: {
+      labels: meses.map(m => m.label),
+      datasets: [{
+        type: 'bar', label: 'Desgaste', data: valores,
+        backgroundColor: cores, borderColor: bordas,
+        borderWidth: 1.5, borderRadius: 3,
+        datalabels: {
+          display: ctx => ctx.dataset.data[ctx.dataIndex] !== null && hl(ctx.dataIndex),
+          anchor: 'end', align: 'end', offset: 2,
+          color: isLight ? '#111' : '#fff',
+          font: { family: 'Montserrat', size: window.innerWidth < 480 ? 8 : 13, weight: '700' },
+          formatter: v => v === null ? '' : fmtDsg(v)
+        }
+      }]
+    },
+    plugins: [ChartDataLabels],
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      layout: { padding: { top: 18 } },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          backgroundColor: '#141B26', titleColor: '#F97316', bodyColor: '#F1F5F9',
+          borderColor: '#1E2D40', borderWidth: 1,
+          titleFont: { family: 'Montserrat' }, bodyFont: { family: 'Montserrat' },
+          callbacks: { label: ctx => ctx.parsed.y === null ? '—' : 'Desgaste: ' + fmtDsg(ctx.parsed.y) + ' mm/1.000km (' + porMes[ctx.dataIndex].length + ' intervalos)' }
+        }
+      },
+      scales: monthlyScales(isLight, v => v)
+    }
+  });
+}
+
+function renderDsgTabela() {
+  const linhas = window._dsgLinhas || [];
+  const drill = DSG_DRILL;
+  document.getElementById('thDsgDrill').textContent =
+    drill === 'marca' ? 'Marca' : drill === 'modelo' ? 'Modelo do Pneu' :
+    drill === 'banda' ? 'Modelo da Banda' : drill === 'vida' ? 'Vida' :
+    drill === 'tipo' ? 'Tipo de Pneu' : 'Unidade';
+
+  const chaveDe = t =>
+    drill === 'marca' ? (t.marca || '—') :
+    drill === 'modelo' ? (t.modelo || '—') :
+    drill === 'banda' ? (t.cicloVida > 1 ? (t.banda || '—') : 'Pneu Novo (V1)') :
+    drill === 'vida' ? (t.cicloVida <= 1 ? 'V1 (Novo)' : 'V' + t.cicloVida + (t.cicloVida === 2 ? ' (1ª recapa)' : ' (' + (t.cicloVida - 1) + 'ª recapa)')) :
+    drill === 'tipo' ? tipoPneu(t) :
+    (t.unidade || '—');
+
+  const media = arr => arr.length ? arr.reduce((a, b) => a + b, 0) / arr.length : 0;
+  const grupos = {};
+  linhas.forEach(l => { (grupos[chaveDe(l.t)] = grupos[chaveDe(l.t)] || []).push(l); });
+  const ranking = Object.entries(grupos)
+    .map(([chave, ls]) => {
+      const mms = ls.filter(l => l.t.menorMM > 0).map(l => l.t.menorMM);
+      return {
+        chave, n: ls.length,
+        pct: linhas.length ? ls.length / linhas.length * 100 : 0,
+        mmMed: mms.length ? media(mms) : null,
+        vidaMed: media(ls.map(l => l.t.cicloVida || 1)),
+        w: media(ls.map(l => l.wear1000)),
+        wMin: Math.min(...ls.map(l => l.wear1000)),
+        wMax: Math.max(...ls.map(l => l.wear1000))
+      };
+    })
+    .filter(r => r.n >= 3)
+    .sort((a, b) => b.w - a.w); // maior desgaste primeiro
+
+  const corMM = v => v === null ? 'var(--text)' : v > 6 ? 'var(--green)' : v > 3 ? 'var(--yellow)' : 'var(--red-soft)';
+
+  document.getElementById('tbodyDsg').innerHTML = ranking.length === 0
+    ? '<tr><td colspan="7" class="empty">Sem pneus com taxa de desgaste medida</td></tr>'
+    : ranking.map((r, i) => `
+        <tr>
+          <td style="color:var(--text-muted)">${i + 1}</td>
+          <td><strong>${r.chave}</strong></td>
+          <td class="dcol">${r.n}</td>
+          <td class="dcol">${fmtBR(r.pct, 1)}%</td>
+          <td class="dcol" style="color:${corMM(r.mmMed)}">${r.mmMed === null ? '—' : fmtBR(r.mmMed, 1) + ' mm'}</td>
+          <td class="dcol">V${fmtBR(r.vidaMed, 1)}</td>
+          <td style="text-align:right;white-space:nowrap">
+            <span class="td-dias" style="color:${dsgCor(r.w)}">${fmtDsg(r.w)}</span>
+            <button class="row-toggle" onclick="toggleDetail(this)">+</button>
+          </td>
+        </tr>
+        <tr class="detail-row"><td colspan="7"><div class="kv">
+          <span>Pneus medidos: <b>${r.n}</b> · ${fmtBR(r.pct, 1)}% dos medidos</span>
+          <span>Desgaste médio: <b style="color:${dsgCor(r.w)}">${fmtDsg(r.w)} mm/1.000km</b></span>
+          <span>Faixa: <b>${fmtDsg(r.wMin)} a ${fmtDsg(r.wMax)} mm/1.000km</b></span>
+          <span>MM Média: <b style="color:${corMM(r.mmMed)}">${r.mmMed === null ? '—' : fmtBR(r.mmMed, 1) + ' mm'}</b></span>
+          <span>Vida Média: <b>V${fmtBR(r.vidaMed, 1)}</b></span>
+        </div></td></tr>
+      `).join('');
 }
 
 // ============================================================
