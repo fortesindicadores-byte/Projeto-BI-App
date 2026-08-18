@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
-<meta name="build" content="202608180915">
+<meta name="build" content="202608180130">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <title>Scorecard · Gestão em Movimento</title>
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -10,7 +10,7 @@
 <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.2/dist/jspdf.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="../assets/gerot-base.js?v=202608161930"></script>
+<script src="../assets/gerot-base.js?v=202608180130"></script>
 <style>
 /* ============================================================
    SCORECARD — a nota da Frota, no layout padrão do portal.
@@ -294,7 +294,7 @@ table.dre td.cg-t,.cg-t{color:var(--verde)!important;font-weight:700;}
 #ch-ind:hover{color:var(--txt);}
 
 /* destaques do resumo: melhores e piores unidades */
-.dstq{display:flex;flex-direction:column;gap:10px;min-height:0;overflow:auto;}
+.dstq{display:flex;flex-direction:column;gap:10px;min-height:0;overflow:hidden;}
 .dstq-sec{font-size:9px;font-weight:800;color:var(--txt3);text-transform:uppercase;letter-spacing:1px;}
 .dstq-l{display:flex;align-items:center;gap:9px;padding:6px 0;border-bottom:1px solid var(--linha);}
 .dstq-l:last-child{border-bottom:0;}
@@ -899,16 +899,21 @@ function renderRanking(rk,periodo){
 }
 
 // ── Seletor de indicador do gráfico mensal ──
+// snap:1 = indicador SEM série mensal — o DPO é o último semestre da auditoria
+// e os três de pneus vêm da foto de hoje do Conlog (pneus instalados agora,
+// última aferição ≤30 dias). Repetir esse número em 12 meses desenhava uma
+// "evolução" que não existe (e ainda pintava ago→dez), então ele aparece só
+// no mês de referência.
 const CH_INDS=[
   {key:'pont',lbl:'Pontuação Geral'},
   {key:'custos',lbl:'Custos Frota',rr:1},
   {key:'disp',lbl:'Disponibilidade'},
-  {key:'dpo',lbl:'DPO/VPO Sustentável'},
+  {key:'dpo',lbl:'DPO/VPO Sustentável',snap:1},
   {key:'prev',lbl:'Preventivas',good:95},
   {key:'kml',lbl:'Consumo Km/L',rr:1},
-  {key:'saude',lbl:'Saúde dos Pneus'},
-  {key:'pressao',lbl:'Pressão dos Pneus'},
-  {key:'afer',lbl:'Aferições'},
+  {key:'saude',lbl:'Saúde dos Pneus',snap:1},
+  {key:'pressao',lbl:'Pressão dos Pneus',snap:1},
+  {key:'afer',lbl:'Aferições',snap:1},
   {key:'chkT',lbl:'Checklist T1/T2'},
   {key:'chkApoio',lbl:'Checklist Apoio'},
   {key:'conf',lbl:'Conformidade Frota'},
@@ -934,13 +939,21 @@ function chartTemporal(selD){
   const unisSel=selUni.length?selUni.filter(u=>UNI_LIST.includes(u)):UNI_LIST.slice();
   const ind=CH_INDS.find(c=>c.key===chInd)||CH_INDS[0];
   const yr=selD.getFullYear();
+  // mês sem apuração não vira barra: os indicadores acumulados (FCA) e os de
+  // foto (DPO/pneus) não sabem que ago→dez ainda não aconteceram.
+  const ultVk=VIGS.length?vigKeyN(VIGS[VIGS.length-1]):null;
+  const vksSel=VIGS.filter(d=>selVig.length===0||selVig.includes(vigLbl(d))).map(vigKeyN);
+  const refVk=ind.snap?(vksSel.length?Math.max(...vksSel):ultVk):null;
   const labels=[],data=[],on=[];
   for(let m=0;m<12;m++){
     const lbl=MESES[m]+'/'+String(yr).slice(2);labels.push(lbl);const vk=yr*100+m;
+    on.push(selVig.length===0||selVig.includes(lbl));
+    if(ultVk!=null&&vk>ultVk){data.push(null);continue;}              // mês que ainda não existe
+    if(ind.snap&&vk!==refVk){data.push(null);continue;}               // sem histórico: só o mês de referência
     let v;
     if(ind.key==='pont'){const rs=ICS.filter(o=>vigKeyN(o.vigD)===vk&&(selUni.length===0||selUni.includes(o.unidade)));const pv=rs.map(o=>o.pont).filter(x=>x!=null);v=pv.length?pv.reduce((a,b)=>a+b,0)/pv.length:null;}
     else{const cv=cardVals(new Set([vk]),yr,m,unisSel)[ind.key];v=(cv==null||!isFinite(cv))?null:cv;}
-    data.push(v);on.push(selVig.length===0||selVig.includes(lbl));
+    data.push(v);
   }
   const hasFocus=selVig.length>0;
   const clOf=v=>v==null?'':(ind.key==='pont'?band(v):(ind.rr?bandCost(v):bandG(v,ind.good||90)));
@@ -952,7 +965,9 @@ function chartTemporal(selD){
   const vals=data.filter(v=>v!=null);
   const dMin=vals.length?Math.min(...vals):0,dMax=vals.length?Math.max(...vals):100;
   const yMin=Math.max(0,Math.floor((dMin-6)/5)*5),yMax=Math.min(100,Math.max(yMin+15,Math.ceil((dMax+4)/5)*5));
-  const sub=document.getElementById('ch-sub');if(sub)sub.textContent=(ind.key==='pont'?'Pontuação média da frota':ind.lbl)+' · '+_lastPeriodo;
+  const sub=document.getElementById('ch-sub');
+  if(sub)sub.textContent=(ind.key==='pont'?'Pontuação média da frota':ind.lbl)+' · '+_lastPeriodo
+                        +(ind.snap?' · foto atual, sem histórico mensal':'');
   const unit=ind.key==='pont'?' pts':'%';
   if(chT)chT.destroy();
   chT=new Chart(document.getElementById('ch-temp'),{data:{labels,datasets:[
@@ -1084,18 +1099,28 @@ function renderCards(cards){
   }).join('')||'<div class="loading">Sem dados</div>';
 }
 // destaques do resumo: três melhores e três piores
+let _lastRk=[];
 function renderDestaques(rk){
   const box=document.getElementById('dstq'); if(!box)return;
+  _lastRk=rk;
   if(!rk.length){ box.innerHTML='<div class="loading">Sem dados</div>'; return; }
   const linha=(x,i)=>`<div class="dstq-l"><span class="dstq-p">${i}º</span>`+
     `<span class="dstq-u">${x.uni}</span>`+
     `<span class="dstq-s" style="color:${cellFg(band(x.score))}">${Math.round(x.score)}</span></div>`;
-  const n=rk.length>=10?5:3;
-  const top=rk.slice(0,n).map((x,i)=>linha(x,i+1));
-  const bot=rk.slice(-n).reverse().map(x=>linha(x,rk.indexOf(x)+1));
-  box.innerHTML='<div class="dstq-sec">Melhores</div>'+top.join('')+
-    (rk.length>n?'<div class="dstq-sec" style="margin-top:6px">A recuperar</div>'+bot.join(''):'');
+  const monta=n=>{
+    const top=rk.slice(0,n).map((x,i)=>linha(x,i+1));
+    const bot=rk.slice(-n).reverse().map(x=>linha(x,rk.indexOf(x)+1));
+    return '<div class="dstq-sec">Melhores</div>'+top.join('')+
+      (rk.length>n?'<div class="dstq-sec" style="margin-top:6px">A recuperar</div>'+bot.join(''):'');
+  };
+  // sem barra de rolagem: começa com 5 de cada lado e encolhe até caber na caixa
+  let n=rk.length>=10?5:3;
+  box.innerHTML=monta(n);
+  while(n>2&&box.clientHeight>0&&box.scrollHeight>box.clientHeight){ n--; box.innerHTML=monta(n); }
 }
+// a caixa muda de altura com a janela — refaz a conta de quantos cabem
+addEventListener('resize',()=>{ clearTimeout(renderDestaques._t);
+  renderDestaques._t=setTimeout(()=>{ if(_lastRk.length)renderDestaques(_lastRk); },160); });
 
 /* ── navegação entre as visões ────────────────────────────────────────────── */
 const TIT={resumo:'Resumo Gerencial',ranking:'Ranking por Unidade',metodologia:'Metodologia'};
@@ -1164,6 +1189,6 @@ initPdfExport({
   isLight:()=>document.body.classList.contains('claro'), setTheme:aplicaTema
 });
 </script>
-<script src="../assets/build-check.js?v=202608180915"></script>
+<script src="../assets/build-check.js?v=202608180130"></script>
 </body>
 </html>
