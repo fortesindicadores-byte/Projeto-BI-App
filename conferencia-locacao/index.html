@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="build" content="202608180800">
+<meta name="build" content="202608181100">
 <title>Conferência de Locação · Gestão em Movimento</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -366,6 +366,18 @@ table.dre td.cg-t,.cg-t{color:var(--verde)!important;font-weight:700;}
 .farol.ok {color:var(--verde);   background:color-mix(in srgb,var(--verde) 14%,transparent);}
 .farol.nok{color:var(--vermelho);background:color-mix(in srgb,var(--vermelho) 14%,transparent);}
 .mut{color:var(--txt3);}
+/* os dois toggles da mesma tabela (ponto de vista e nível) na mesma linha */
+.tgs{display:flex;align-items:center;gap:7px;flex-wrap:wrap;}
+/* Diagnóstico: cards em cima e as duas tabelas embaixo, dividindo a sobra.
+   (só quando a visão está ligada — .vw sem .on continua display:none) */
+#vw-diag.on{overflow:hidden;}
+#vw-diag .kpis{flex:0 0 auto;min-height:clamp(104px,14vh,140px);}
+#vw-diag .kpi{display:flex;flex-direction:column;justify-content:center;}
+/* uma embaixo da outra: são 10 colunas cada — lado a lado só caberia com
+   barra de rolagem horizontal, que não existe no padrão */
+.duo{flex:1 1 auto;min-height:0;display:grid;grid-template-columns:minmax(0,1fr);
+  grid-template-rows:1fr 1fr;gap:12px;}
+@media(max-width:860px){ .duo{display:block;} #vw-diag.on{display:block;overflow:visible;} }
 .vazio{flex:1;display:flex;align-items:center;justify-content:center;text-align:center;
   font-size:12.5px;color:var(--txt3);line-height:1.8;padding:24px;}
 
@@ -895,7 +907,10 @@ function montaTela(){
         <div class="thead-row">
           <div><div class="ttit" id="tit-qtd">Quantidade por unidade</div>
             <div class="tsub" id="sub-qtd">—</div></div>
-          <button class="rt" id="tg-qtd" onclick="trocaDim('qtd')">Ver por Ativo</button>
+          <div class="tgs">
+            <button class="rt" id="lado-qtd" onclick="trocaLado('qtd')">Ver Vamos → FT</button>
+            <button class="rt" id="tg-qtd" onclick="trocaDim('qtd')">Ver por Ativo</button>
+          </div>
         </div>
         <div class="twrap"><table class="dre" id="tbl-qtd"></table></div>
       </div>
@@ -906,17 +921,34 @@ function montaTela(){
         <div class="thead-row">
           <div><div class="ttit" id="tit-fin">Valores por unidade</div>
             <div class="tsub" id="sub-fin">—</div></div>
-          <button class="rt" id="tg-fin" onclick="trocaDim('fin')">Ver por Ativo</button>
+          <div class="tgs">
+            <button class="rt" id="lado-fin" onclick="trocaLado('fin')">Ver Vamos → FT</button>
+            <button class="rt" id="tg-fin" onclick="trocaDim('fin')">Ver por Ativo</button>
+          </div>
         </div>
         <div class="twrap"><table class="dre" id="tbl-fin"></table></div>
       </div>
     </section>
 
     <section class="vw" id="vw-diag">
-      <div class="card tsec">
-        <div class="thead-row"><div><div class="ttit">Diagnóstico</div>
-          <div class="tsub" id="sub-diag">—</div></div></div>
-        <div class="twrap"><table class="dre" id="tbl-diag"></table></div>
+      <div class="kpis k5">
+        <div class="kpi"><div class="kl">Ativos conferidos</div><div class="kv" id="dk-n">—</div><div class="km" id="dk-n-m">—</div></div>
+        <div class="kpi"><div class="kl">Cobrados sem remuneração</div><div class="kv" id="dk-sem">—</div><div class="km" id="dk-sem-m">—</div></div>
+        <div class="kpi"><div class="kl">Remunerados sem cobrança</div><div class="kv" id="dk-rem">—</div><div class="km" id="dk-rem-m">—</div></div>
+        <div class="kpi"><div class="kl"># Valores divergentes</div><div class="kv" id="dk-val">—</div><div class="km" id="dk-val-m">—</div></div>
+        <div class="kpi"><div class="kl">Reserva técnica</div><div class="kv" id="dk-rt">—</div><div class="km" id="dk-rt-m">—</div></div>
+      </div>
+      <div class="duo">
+        <div class="card tsec">
+          <div class="thead-row"><div><div class="ttit">Cobrados sem remuneração</div>
+            <div class="tsub" id="sub-d1">—</div></div></div>
+          <div class="twrap"><table class="dre" id="tbl-d1"></table></div>
+        </div>
+        <div class="card tsec">
+          <div class="thead-row"><div><div class="ttit">Remunerados sem cobrança</div>
+            <div class="tsub" id="sub-d2">—</div></div></div>
+          <div class="twrap"><table class="dre" id="tbl-d2"></table></div>
+        </div>
       </div>
     </section>
 
@@ -1093,18 +1125,26 @@ function pinta(){
 function pintaResumo(L){
   const ft=soma(L,'ft'), pv=soma(L,'prev'), fa=soma(L,'fat');
   const dPF=pv-ft, dFP=fa-pv;
-  $('h-fat').textContent=brl(fa);
+  const há=temFat(L), dFF=fa-ft;   // faturado contra a remuneração: o gap que sobra de fato
+  const põeD=(id,v)=>{ const e=$(id);
+    if(há){ e.textContent=seta(v)+brl(v); e.className=cor(v); } else { e.textContent='—'; e.className='mut'; } };
+  $('h-fat').textContent=há?brl(fa):'—';
   $('h-ft').textContent=brl(ft);
   $('h-prev').textContent=brl(pv);
   $('h-dpf').textContent=seta(dPF)+brl(dPF); $('h-dpf').className=cor(dPF);
-  $('h-dfp').textContent=seta(dFP)+brl(dFP); $('h-dfp').className=cor(dFP);
-  const dFF=fa-ft;   // faturado contra a remuneração: o gap que sobra de fato
-  $('h-dff').textContent=seta(dFF)+brl(dFF); $('h-dff').className=cor(dFF);
+  põeD('h-dfp',dFP);   // ▲ Fat. vs Prévia
+  põeD('h-dff',dFF);   // ▲ Rem. (Faturado × Remunerado)
+  pintaCards(L,'');
+  graficoMes(L);
+}
+/* os mesmos cards servem ao Resumo e ao Diagnóstico — só muda o prefixo do id */
+function pintaCards(L,pre){
+  if(!$(pre+'k-n')) return;
   const g=m=>L.filter(l=>l.motivos.includes(m));
   const semRem=g('Cobrado sem remuneração'),
         semCob=g('Remunerado sem cobrança').concat(g('Reserva técnica remunerada, sem cobrança')),
         valDif=g('Valor da prévia ≠ remuneração'), rt=L.filter(l=>/RESERVA/i.test(l.status));
-  const põe=(id,v,m)=>{ $(id).textContent=v; $(id+'-m').innerHTML=m; };
+  const põe=(id,v,m)=>{ $(pre+id).textContent=v; $(pre+id+'-m').innerHTML=m; };
   const ms=mesesDe(L);
   põe('k-n',   num(L.length), ms.length>1 ? ms.length+' meses' : (ms[0]?vigRot(ms[0]):'—'));
   põe('k-sem', num(semRem.length), brl(soma(semRem,'prev'))+' cobrados sem FT');
@@ -1112,7 +1152,6 @@ function pintaResumo(L){
   põe('k-val', num(valDif.length), '<b class="'+cor(soma(valDif,'prev')-soma(valDif,'ft'))+'">'
        +brl(soma(valDif,'prev')-soma(valDif,'ft'))+'</b> de diferença');
   põe('k-rt',  num(rt.length), brl(soma(rt,'ft'))+' remunerados · '+brl(soma(rt,'prev'))+' cobrados');
-  graficoMes(L);
 }
 
 const gGrid=()=>({display:false});
@@ -1188,9 +1227,24 @@ function tabela(el,cols,linhas,total){
     const v=c.tot?c.tot(linhas):''; return `<td class="${c.num?'num':''}">${v==null?'':v}</td>`;}).join('')+'</tr>':'';
   el.innerHTML=`<thead><tr>${th}</tr></thead><tbody>${tr}${tt}</tbody>`;
 }
-/* Unidade ou Ativo: a mesma tabela, trocando só o que agrupa */
+/* Unidade ou Ativo: a mesma tabela, trocando só o que agrupa.
+   Abre SEMPRE por unidade — a placa é o detalhe, não a entrada. */
 let DIM={qtd:'uni', fin:'uni'};
 function trocaDim(v){ DIM[v]=DIM[v]==='uni'?'ativo':'uni'; pinta(); }
+
+/* Os DOIS pontos de vista da conferência (Renan, 18/08/2026):
+     'ft'    → todo ativo que o Freightech remunera consta na Vamos?
+     'vamos' → todo ativo que a Vamos cobra consta no Freightech?
+   Valem nas duas visões de ativo, a quantitativa e a financeira. */
+let LADO={qtd:'ft', fin:'ft'};
+function trocaLado(v){ LADO[v]=LADO[v]==='ft'?'vamos':'ft'; pinta(); }
+const naVamos = l => l.prev!=null || l.fat!=null;
+const noFt    = l => l.ft!=null;
+const universo = (L,lado) => L.filter(lado==='ft' ? noFt : naVamos);
+const rotLado  = lado => lado==='ft' ? 'Ver Vamos → FT' : 'Ver FT → Vamos';
+/* enquanto o Faturamento do mês não sobe, o ▲ Fat. vs Prévia não existe —
+   mostrar o −Prévia ali só confunde (Renan, 18/08/2026) */
+const temFat = L => L.some(l=>l.fat!=null);
 
 function agrupa(L,dim){
   const m={};
@@ -1212,69 +1266,120 @@ function colsDim(dim){
     ? [{rot:'Unidade',get:l=>esc(l.uni)},{rot:'Projeto',get:l=>esc(l.proj)}]
     : [{rot:'Ativo',get:l=>esc(l.k)},{rot:'Unidade',get:l=>esc(l.uni)},{rot:'Projeto',get:l=>esc(l.proj)}];
 }
-/* A Quantitativa responde UMA pergunta: o ativo que a Vamos cobra consta
-   no Freightech? OK (verde) = está lá e é remunerado; NOK (vermelho) =
-   não está. Sem valores — dinheiro é a Visão Financeira. */
+/* A Quantitativa responde UMA pergunta — e ela tem DOIS lados:
+     FT → Vamos : o ativo remunerado no Freightech consta na Vamos?
+     Vamos → FT : o ativo cobrado pela Vamos consta no Freightech?
+   OK (verde) consta · NOK (vermelho) não consta. Sem valores — dinheiro é
+   a Visão Financeira. Uma linha por ATIVO: a placa não repete quando há
+   mais de um mês no filtro (basta faltar num mês para o ativo ser NOK). */
+function ativosDe(L,lado){
+  const m=new Map();
+  universo(L,lado).forEach(l=>{
+    const k=l.placa||l.chassi||l.k;
+    const o=m.get(k)||{ativo:k,uni:l.uni||'—',proj:l.proj||'—',ok:true,n:0};
+    o.n++;
+    if(!(lado==='ft'?naVamos(l):noFt(l))) o.ok=false;
+    if(o.uni==='—'&&l.uni&&l.uni!=='—') o.uni=l.uni;
+    if(o.proj==='—'&&l.proj&&l.proj!=='—') o.proj=l.proj;
+    m.set(k,o);
+  });
+  return [...m.values()];
+}
 function pintaQtd(L){
-  const dim=DIM.qtd;
-  const rows=L.map(l=>({
-    ativo:l.placa||l.chassi||l.k, uni:l.uni||'—', proj:l.proj||'—',
-    ok:l.ft!=null,
-  })).sort((a,b)=> dim==='uni'
-      ? (a.uni.localeCompare(b.uni,'pt')||a.proj.localeCompare(b.proj,'pt')||a.ativo.localeCompare(b.ativo,'pt'))
-      : a.ativo.localeCompare(b.ativo,'pt'));
-  const nOk=rows.filter(r=>r.ok).length;
-  $('tit-qtd').textContent = 'Ativos '+(dim==='uni'?'por unidade':'em ordem de placa');
-  $('tg-qtd').textContent  = dim==='uni'?'Ver por Ativo':'Ver por Unidade';
-  $('sub-qtd').textContent = `${num(rows.length)} ativo(s) · ${num(nOk)} no Freightech · ${num(rows.length-nOk)} fora`;
-  tabela($('tbl-qtd'),[
-    {rot:'Ativo',get:l=>esc(l.ativo)},
-    {rot:'Unidade',get:l=>esc(l.uni)},
-    {rot:'Projeto',get:l=>esc(l.proj)},
-    {rot:'Consta no FT',get:l=>`<span class="farol ${l.ok?'ok':'nok'}"><i></i>${l.ok?'OK':'NOK'}</span>`},
-  ],rows,false);
+  const dim=DIM.qtd, lado=LADO.qtd;
+  const rows=ativosDe(L,lado);
+  const nOk=rows.filter(r=>r.ok).length, nNok=rows.length-nOk;
+  const rotOk = lado==='ft' ? 'Consta na Vamos' : 'Consta no FT';
+  const base  = lado==='ft' ? 'remunerado(s) no Freightech' : 'cobrado(s) pela Vamos';
+  $('lado-qtd').textContent = rotLado(lado);
+  $('tg-qtd').textContent   = dim==='uni' ? 'Ver por Ativo' : 'Ver por Unidade';
+  $('sub-qtd').textContent  = `${num(rows.length)} ativo(s) ${base} · ${num(nOk)} conferem · ${num(nNok)} não`;
+  if(dim==='uni'){
+    const g={};
+    rows.forEach(r=>{ const k=r.uni+' ¦ '+r.proj;
+      const o=g[k]=g[k]||{uni:r.uni,proj:r.proj,n:0,ok:0}; o.n++; if(r.ok)o.ok++; });
+    const gs=Object.values(g).sort((a,b)=>(b.n-b.ok)-(a.n-a.ok)
+      ||a.uni.localeCompare(b.uni,'pt')||a.proj.localeCompare(b.proj,'pt'));
+    $('tit-qtd').textContent=(lado==='ft'?'Freightech → Vamos':'Vamos → Freightech')+' · por unidade';
+    tabela($('tbl-qtd'),[
+      {rot:'Unidade',get:r=>esc(r.uni)},
+      {rot:'Projeto',get:r=>esc(r.proj)},
+      {rot:'Ativos',num:1,get:r=>num(r.n),tot:rs=>num(sm(rs,'n'))},
+      {rot:rotOk,num:1,get:r=>num(r.ok),tot:rs=>num(sm(rs,'ok'))},
+      {rot:'Não consta',num:1,cls:r=>r.n-r.ok?'cr':'',get:r=>num(r.n-r.ok),
+       tot:rs=>num(sm(rs,'n')-sm(rs,'ok'))},
+    ],gs,true);
+  }else{
+    rows.sort((a,b)=>a.ativo.localeCompare(b.ativo,'pt'));
+    $('tit-qtd').textContent=(lado==='ft'?'Freightech → Vamos':'Vamos → Freightech')+' · em ordem de placa';
+    tabela($('tbl-qtd'),[
+      {rot:'Ativo',get:r=>esc(r.ativo)},
+      {rot:'Unidade',get:r=>esc(r.uni)},
+      {rot:'Projeto',get:r=>esc(r.proj)},
+      {rot:rotOk,get:r=>`<span class="farol ${r.ok?'ok':'nok'}"><i></i>${r.ok?'OK':'NOK'}</span>`},
+    ],rows,false);
+  }
 }
 function pintaFin(L){
-  const dim=DIM.fin, rows=agrupa(L,dim).sort((a,b)=>Math.abs(b.dR)-Math.abs(a.dR));
-  $('tit-fin').textContent='Valores por '+(dim==='uni'?'unidade':'ativo');
+  const dim=DIM.fin, lado=LADO.fin;
+  const U=universo(L,lado), rows=agrupa(U,dim).sort((a,b)=>Math.abs(b.dR)-Math.abs(a.dR));
+  const há=temFat(U);
+  $('lado-fin').textContent=rotLado(lado);
+  $('tit-fin').textContent=(lado==='ft'?'Freightech → Vamos':'Vamos → Freightech')+' · por '+(dim==='uni'?'unidade':'ativo');
   $('tg-fin').textContent=dim==='uni'?'Ver por Ativo':'Ver por Unidade';
-  $('sub-fin').textContent=`${rows.length} ${dim==='uni'?'linha(s) unidade × projeto':'ativo(s)'} · do maior gap para o menor`;
+  $('sub-fin').textContent=`${rows.length} ${dim==='uni'?'linha(s) unidade × projeto':'ativo(s)'} · do maior gap para o menor`
+    +(há?'':' · sem faturamento no período');
   tabela($('tbl-fin'), colsDim(dim).concat([
     {rot:'Rem.',num:1,get:l=>brl(l.ft),tot:r=>brl(sm(r,'ft'))},
     {rot:'Prévia',num:1,get:l=>brl(l.prev),tot:r=>brl(sm(r,'prev'))},
-    {rot:'Faturado',num:1,get:l=>brl(l.fat),tot:r=>brl(sm(r,'fat'))},
-    {rot:'▲ Rem.',grp:'Fat × Rem',num:1,cls:l=>cor(l.dR),get:l=>seta(l.dR)+brl(l.dR),tot:r=>brl(sm(r,'dR'))},
+    {rot:'Faturado',num:1,get:l=>há?brl(l.fat):'—',tot:r=>há?brl(sm(r,'fat')):'—'},
+    {rot:'▲ Rem.',grp:'Fat × Rem',num:1,cls:l=>há?cor(l.dR):'mut',
+     get:l=>há?seta(l.dR)+brl(l.dR):'—',tot:r=>há?brl(sm(r,'dR')):'—'},
     {rot:'▲ Prévia',grp:'Prévia × Rem',num:1,cls:l=>cor(l.dP),get:l=>seta(l.dP)+brl(l.dP),tot:r=>brl(sm(r,'dP'))},
-    {rot:'▲ Fat. vs Prévia',num:1,cls:l=>cor(l.dF),get:l=>seta(l.dF)+brl(l.dF),tot:r=>brl(sm(r,'dF'))},
+    {rot:'▲ Fat. vs Prévia',num:1,cls:l=>há?cor(l.dF):'mut',
+     get:l=>há?seta(l.dF)+brl(l.dF):'—',tot:r=>há?brl(sm(r,'dF')):'—'},
   ]), rows, true);
 }
-function pintaDiag(L){
-  const rows=L.filter(l=>l.motivos.length).sort((a,b)=>Math.abs(b.dPF)-Math.abs(a.dPF));
-  const porMot={}; rows.forEach(l=>l.motivos.forEach(m=>porMot[m]=(porMot[m]||0)+1));
-  $('sub-diag').textContent = rows.length
-    ? `${rows.length} ativo(s) com desvio · ${Object.entries(porMot).map(([m,n])=>m+' ('+n+')').join(' · ')}`
-    : 'Nenhum desvio com os filtros atuais';
+/* Diagnóstico: os cards do Resumo em cima e DUAS tabelas — cobrado sem
+   remuneração e remunerado sem cobrança (Renan, 18/08/2026). */
+function colsDiag(há){
   const dR=l=>(l.fat||0)-(l.ft||0);
-  tabela($('tbl-diag'),[
+  return [
     {rot:'Ativo',get:l=>esc(l.placa||l.chassi||l.k)},
     {rot:'Unidade',get:l=>esc(l.uni)},
     {rot:'Projeto',get:l=>esc(l.proj)},
     {rot:'Mês',get:l=>vigRot(l.vig)},
-    {rot:'Etapa',get:l=>ETAPAS[l.etapa]},
-    {rot:'Desvio',get:l=>l.motivos.map(m=>esc(m)).join(' · ')},
-    {rot:'Rem.',num:1,get:l=>l.ft==null?'—':brl(l.ft)},
-    {rot:'Prévia',num:1,get:l=>l.prev==null?'—':brl(l.prev)},
-    {rot:'Faturado',num:1,get:l=>l.fat==null?'—':brl(l.fat)},
-    {rot:'▲ Rem.',grp:'Fat × Rem',num:1,cls:l=>cor(dR(l)),get:l=>seta(dR(l))+brl(dR(l))},
-    {rot:'▲ Prévia',grp:'Prévia × Rem',num:1,cls:l=>cor(l.dPF),get:l=>seta(l.dPF)+brl(l.dPF)},
-    {rot:'▲ Fat. vs Prévia',num:1,cls:l=>cor(l.dFP),get:l=>l.fat==null?'—':seta(l.dFP)+brl(l.dFP)},
-  ],rows,false);
+    {rot:'Rem.',num:1,get:l=>l.ft==null?'—':brl(l.ft),tot:r=>brl(r.reduce((a,l)=>a+(l.ft||0),0))},
+    {rot:'Prévia',num:1,get:l=>l.prev==null?'—':brl(l.prev),tot:r=>brl(r.reduce((a,l)=>a+(l.prev||0),0))},
+    {rot:'Faturado',num:1,get:l=>(!há||l.fat==null)?'—':brl(l.fat),
+     tot:r=>há?brl(r.reduce((a,l)=>a+(l.fat||0),0)):'—'},
+    {rot:'▲ Rem.',grp:'Fat × Rem',num:1,cls:l=>há?cor(dR(l)):'mut',
+     get:l=>há?seta(dR(l))+brl(dR(l)):'—',tot:r=>há?brl(r.reduce((a,l)=>a+dR(l),0)):'—'},
+    {rot:'▲ Prévia',grp:'Prévia × Rem',num:1,cls:l=>cor(l.dPF),get:l=>seta(l.dPF)+brl(l.dPF),
+     tot:r=>brl(r.reduce((a,l)=>a+l.dPF,0))},
+    {rot:'▲ Fat. vs Prévia',num:1,cls:l=>(!há||l.fat==null)?'mut':cor(l.dFP),
+     get:l=>(!há||l.fat==null)?'—':seta(l.dFP)+brl(l.dFP),
+     tot:r=>há?brl(r.reduce((a,l)=>a+(l.fat==null?0:l.dFP),0)):'—'},
+  ];
+}
+function pintaDiag(L){
+  pintaCards(L,'d');
+  const há=temFat(L);
+  const tem=(l,...ms)=>ms.some(m=>l.motivos.includes(m));
+  const d1=L.filter(l=>tem(l,'Cobrado sem remuneração')).sort((a,b)=>b.dPF-a.dPF);
+  const d2=L.filter(l=>tem(l,'Remunerado sem cobrança','Reserva técnica remunerada, sem cobrança'))
+            .sort((a,b)=>(b.ft||0)-(a.ft||0));
+  const sub=(id,r,txt)=>$(id).textContent = r.length ? `${num(r.length)} ativo(s) · ${txt}` : 'Nenhum com os filtros atuais';
+  sub('sub-d1',d1,brl(soma(d1,'prev'))+' cobrados sem Freightech');
+  sub('sub-d2',d2,brl(soma(d2,'ft'))+' remunerados sem cobrança da Vamos');
+  tabela($('tbl-d1'),colsDiag(há),d1,d1.length>0);
+  tabela($('tbl-d2'),colsDiag(há),d2,d2.length>0);
 }
 initApp();
 </script>
 <script src="../assets/mobile.js"></script>
 <script src="../assets/sortable-table.js"></script>
 <script src="../assets/excel-export.js"></script>
-<script src="../assets/build-check.js?v=202608180800"></script>
+<script src="../assets/build-check.js?v=202608181100"></script>
 </body>
 </html>
