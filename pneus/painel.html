@@ -1907,9 +1907,9 @@
           <div class="adh-label">Desgaste Médio da Frota — mm por 1.000 km</div>
           <div class="adh-value" id="dsgHeroVal">—</div>
           <div class="adh-deltas">
-            <div class="adh-delta">Baixo (≤ 0,50)<b id="dsgDeltaG" style="color:var(--green)">—</b></div>
-            <div class="adh-delta">Médio (0,50–1,00)<b id="dsgDeltaY" style="color:var(--yellow)">—</b></div>
-            <div class="adh-delta">Alto (&gt; 1,00)<b id="dsgDeltaR" style="color:var(--red-soft)">—</b></div>
+            <div class="adh-delta"><span id="dsgFxHG">Baixo</span><b id="dsgDeltaG" style="color:var(--green)">—</b></div>
+            <div class="adh-delta"><span id="dsgFxHY">Médio</span><b id="dsgDeltaY" style="color:var(--yellow)">—</b></div>
+            <div class="adh-delta"><span id="dsgFxHR">Alto</span><b id="dsgDeltaR" style="color:var(--red-soft)">—</b></div>
           </div>
         </div>
       </div>
@@ -1947,9 +1947,9 @@
       <div class="card" style="margin-bottom:24px">
         <div class="card-title" style="margin-bottom:6px">Desgaste Médio Mensal (mm/1.000km)</div>
         <div class="chart-legend">
-          <span class="lg-item"><span class="lg-dot" style="background:var(--green)"></span> Baixo ≤ 0,50</span>
-          <span class="lg-item"><span class="lg-dot" style="background:var(--yellow)"></span> Médio 0,50 a 1,00</span>
-          <span class="lg-item"><span class="lg-dot" style="background:var(--red-soft)"></span> Alto &gt; 1,00</span>
+          <span class="lg-item"><span class="lg-dot" style="background:var(--green)"></span> <span id="dsgFxCG">Baixo</span></span>
+          <span class="lg-item"><span class="lg-dot" style="background:var(--yellow)"></span> <span id="dsgFxCY">Médio</span></span>
+          <span class="lg-item"><span class="lg-dot" style="background:var(--red-soft)"></span> <span id="dsgFxCR">Alto</span></span>
         </div>
         <div style="position:relative;height:280px">
           <canvas id="chartDsgMensal"></canvas>
@@ -1988,7 +1988,7 @@
         <div style="font-size:10px;color:var(--text-muted);margin:8px 18px 14px;line-height:1.6">
           Entram só pneus com taxa de desgaste PRÓPRIA confiável — os mesmos critérios da Previsão de Troca
           (≥3 leituras, ≥2.000 km no intervalo e ≤2,5 mm/1.000km); aqui não há estimativa por grupo.
-          Faixas de cor: Baixo ≤ 0,50 · Médio 0,50 a 1,00 · Alto &gt; 1,00 mm/1.000km.
+          <span id="dsgFxNota"></span>
         </div>
       </div>
     </div>
@@ -3271,21 +3271,70 @@ function setDsgDrill(d, btn) {
   renderDsgTabela();
 }
 
-// Faixas de cor (clusters): Baixo ≤ 0,50 · Médio ≤ 1,00 · Alto acima
-function dsgCluster(v) { return v <= 0.5 ? 'g' : v <= 1.0 ? 'y' : 'r'; }
-function dsgCor(v) { return v <= 0.5 ? 'var(--green)' : v <= 1.0 ? 'var(--yellow)' : 'var(--red-soft)'; }
+// Faixas de cor por QUARTIS do histórico da frota (Renan, 18/08/2026):
+// Baixo = o quarto que MENOS desgasta (≤ Q1) · Médio = a metade central ·
+// Alto = o quarto que MAIS desgasta (> Q3). Calculadas sobre TODOS os pneus
+// em uso da frota com taxa própria confiável, SEM filtros — a referência
+// não muda quando se filtra uma unidade. Fallback 0,50/1,00 sem dados.
+let DSG_FAIXAS = { q1: 0.5, q3: 1.0, n: 0, _src: null };
+function dsgCluster(v) { return v <= DSG_FAIXAS.q1 ? 'g' : v <= DSG_FAIXAS.q3 ? 'y' : 'r'; }
+function dsgCor(v) { return v <= DSG_FAIXAS.q1 ? 'var(--green)' : v <= DSG_FAIXAS.q3 ? 'var(--yellow)' : 'var(--red-soft)'; }
 const fmtDsg = v => fmtBR(v, 2);
 
-// Tipo do pneu pela posição/veículo: Direcional · Tração · Livre (reboque) · Empilhadeira · Estepe
-function tipoPneu(t) {
-  const nome = (t.nomePosicao || '').toUpperCase();
-  if (/ESTEPE|STEP|RESERV/.test(nome)) return 'Estepe';
-  if (t.direcional) return 'Direcional';
-  const veh = _getVehPorPlaca()[_norm(t.placa)];
-  const tv = _norm(veh && veh.tipo);
-  if (tv.includes('EMPILHADEIRA')) return 'Empilhadeira';
-  if (/REBOQUE|CARRETA|SIDER|DOLLY|RANDON SR/.test(tv)) return 'Livre (reboque)';
-  return 'Tração';
+// Quantil com interpolação linear (mesma conta do QUARTIL do Excel)
+function _quantil(arr, p) {
+  const a = arr.slice().sort((x, y) => x - y);
+  if (!a.length) return null;
+  const idx = (a.length - 1) * p, lo = Math.floor(idx);
+  return lo + 1 < a.length ? a[lo] + (a[lo + 1] - a[lo]) * (idx - lo) : a[lo];
+}
+
+function calcDsgFaixas() {
+  if (DSG_FAIXAS._src === DATA.inspections) return; // já calculado p/ esta carga
+  const todos = DATA.tires.filter(t => statusAmigavel(t.status) === 'Em uso' && t.menorMM > 0);
+  const hist = {};
+  DATA.inspections.forEach(i => {
+    if (!i.tireId || !(i.menorMM > 0) || !(i.odometro > 0)) return;
+    (hist[i.tireId] = hist[i.tireId] || []).push(i);
+  });
+  Object.values(hist).forEach(arr => arr.sort((a, b) => new Date(a.dataInspecao) - new Date(b.dataInspecao)));
+  const ws = [];
+  todos.forEach(t => { const w = _taxaPropria(hist[t.id]); if (w != null) ws.push(w); });
+  if (ws.length >= 8) DSG_FAIXAS = { q1: _quantil(ws, 0.25), q3: _quantil(ws, 0.75), n: ws.length, _src: DATA.inspections };
+  else DSG_FAIXAS = { q1: 0.5, q3: 1.0, n: ws.length, _src: DATA.inspections };
+}
+
+// Escreve as faixas calculadas na legenda do hero, do gráfico e na nota da tabela
+function pintaDsgLegenda() {
+  const g = `Baixo ≤ ${fmtDsg(DSG_FAIXAS.q1)}`;
+  const y = `Médio ${fmtDsg(DSG_FAIXAS.q1)} a ${fmtDsg(DSG_FAIXAS.q3)}`;
+  const r = `Alto > ${fmtDsg(DSG_FAIXAS.q3)}`;
+  [['dsgFxHG', g], ['dsgFxHY', y], ['dsgFxHR', r], ['dsgFxCG', g], ['dsgFxCY', y], ['dsgFxCR', r]]
+    .forEach(([id, tx]) => { const e = document.getElementById(id); if (e) e.textContent = tx; });
+  const nota = document.getElementById('dsgFxNota');
+  if (nota) nota.textContent = DSG_FAIXAS.n >= 8
+    ? `Faixas de cor por QUARTIS do histórico da frota inteira (sem filtros, ${DSG_FAIXAS.n} pneus medidos): ` +
+      `Baixo = quarto que menos desgasta (≤ Q1 = ${fmtDsg(DSG_FAIXAS.q1)}) · Médio = metade central · ` +
+      `Alto = quarto que mais desgasta (> Q3 = ${fmtDsg(DSG_FAIXAS.q3)} mm/1.000km). Recalculadas a cada carga de dados.`
+    : `Faixas de cor padrão (Baixo ≤ 0,50 · Médio até 1,00 · Alto > 1,00 mm/1.000km) — poucos pneus medidos (${DSG_FAIXAS.n}) para calcular quartis.`;
+}
+
+// Regressão linear mm × km — devolve a taxa própria (mm/1.000km) ou null se não confiável
+function _taxaPropria(h) {
+  if (!h || h.length < 3) return null;
+  const pts = h.map(i => ({ km: i.odometro, mm: i.menorMM }));
+  if (new Set(pts.map(p => p.km)).size < 3) return null;
+  if (h[h.length - 1].odometro - h[0].odometro < 2000) return null;
+  const n = pts.length;
+  const sx = pts.reduce((s, p) => s + p.km, 0);
+  const sy = pts.reduce((s, p) => s + p.mm, 0);
+  const sxx = pts.reduce((s, p) => s + p.km * p.km, 0);
+  const sxy = pts.reduce((s, p) => s + p.km * p.mm, 0);
+  const den = n * sxx - sx * sx;
+  const slope = den !== 0 ? (n * sxy - sx * sy) / den : 0; // mm por km
+  if (!(slope < 0)) return null;
+  const w = -slope * 1000; // mm/1.000km
+  return w > 2.5 ? null : w;
 }
 
 // Uma linha por pneu com taxa própria confiável: { t, wear1000 }
@@ -3301,29 +3350,16 @@ function calcDesgaste() {
 
   const linhas = [];
   tires.forEach(t => {
-    const h = hist[t.id];
-    if (!h || h.length < 3) return;
-    const pts = h.map(i => ({ km: i.odometro, mm: i.menorMM }));
-    if (new Set(pts.map(p => p.km)).size < 3) return;
-    const dKm = h[h.length - 1].odometro - h[0].odometro;
-    if (dKm < 2000) return;
-    const n = pts.length;
-    const sx = pts.reduce((s, p) => s + p.km, 0);
-    const sy = pts.reduce((s, p) => s + p.mm, 0);
-    const sxx = pts.reduce((s, p) => s + p.km * p.km, 0);
-    const sxy = pts.reduce((s, p) => s + p.km * p.mm, 0);
-    const den = n * sxx - sx * sx;
-    const slope = den !== 0 ? (n * sxy - sx * sy) / den : 0; // mm por km
-    if (!(slope < 0)) return;
-    const w = -slope * 1000; // mm/1.000km
-    if (w > 2.5) return;
-    linhas.push({ t, wear1000: w });
+    const w = _taxaPropria(hist[t.id]);
+    if (w != null) linhas.push({ t, wear1000: w });
   });
   return { linhas, total: tires.length };
 }
 
 function renderDesgaste() {
   if (!document.getElementById('dsgHeroVal')) return;
+  calcDsgFaixas();
+  pintaDsgLegenda();
   const { linhas, total } = calcDesgaste();
   window._dsgLinhas = linhas;
 
@@ -3459,14 +3495,14 @@ function renderDsgTabela() {
   document.getElementById('thDsgDrill').textContent =
     drill === 'marca' ? 'Marca' : drill === 'modelo' ? 'Modelo do Pneu' :
     drill === 'banda' ? 'Modelo da Banda' : drill === 'vida' ? 'Vida' :
-    drill === 'tipo' ? 'Tipo de Pneu' : 'Unidade';
+    drill === 'tipo' ? 'Tipo (medida)' : 'Unidade';
 
   const chaveDe = t =>
     drill === 'marca' ? (t.marca || '—') :
     drill === 'modelo' ? (t.modelo || '—') :
     drill === 'banda' ? (t.cicloVida > 1 ? (t.banda || '—') : 'Pneu Novo (V1)') :
     drill === 'vida' ? (t.cicloVida <= 1 ? 'V1 (Novo)' : 'V' + t.cicloVida + (t.cicloVida === 2 ? ' (1ª recapa)' : ' (' + (t.cicloVida - 1) + 'ª recapa)')) :
-    drill === 'tipo' ? tipoPneu(t) :
+    drill === 'tipo' ? (t.medida || '—') :  // tipo = TAMANHO do pneu (275/80 R22.5…) — Renan, 18/08/2026
     (t.unidade || '—');
 
   const media = arr => arr.length ? arr.reduce((a, b) => a + b, 0) / arr.length : 0;
