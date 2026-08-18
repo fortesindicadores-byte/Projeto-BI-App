@@ -595,6 +595,8 @@ async function initApp(){
   // lugar, sem reimportar
   await carregaBase();
   await carregaObs();
+  await carregaBenner();
+  aplicaBenner();
   montaTela();
 }
 
@@ -634,6 +636,7 @@ function tipoDoNome(nome){
   const per=mm?{mes:+mm[1],ano:+mm[2]}:{};
   if(/pr[ée]via/i.test(n)) return {...per, tipo:'previa', sub:/provis/i.test(n)?'provisao':'mensal'};
   if(/faturamento/i.test(n)) return {...per, tipo:'faturamento'};
+  if(/benner/i.test(n)) return {...per, tipo:'benner'};
   for(const [s,re] of SEGS) if(re.test(n)) return {...per, tipo:'ft', seg:s};
   return {...per, tipo:null};
 }
@@ -649,6 +652,7 @@ async function recebeArquivos(lista){
     const info=tipoDoNome(f.name);
     let abas=[], erro=null;
     try{ abas=lerPlanilha(await f.arrayBuffer()); }catch(e){ erro=String(e.message||e); }
+    if(info.tipo==='benner'){ await importaBenner(f.name,abas,erro); continue; }
     const chave=info.tipo==='previa' ? 'previa-'+info.sub
               : info.tipo==='ft' ? 'ft-'+info.seg+'-'+(info.mes||'?')
               : info.tipo || ('desconhecido-'+f.name);
@@ -658,7 +662,42 @@ async function recebeArquivos(lista){
     const L=analisa();
     if(PERIODO) await guardaMes(vigTxt(PERIODO), L);
   }
+  aplicaBenner();
   pinta();
+}
+/* Benner (ERP): Placa | Chassi | Nome do Projeto | Status. Linha ATIVA
+   manda; INATIVA só entra se a placa não tiver ATIVA. Vira o de-para
+   chave→projeto, gravado inteiro em locacao_benner (vale para todos os
+   meses até subir um Benner novo). */
+async function importaBenner(nome,abas,erro){
+  if(erro){ flash('Benner: '+erro, true); return; }
+  const dep={}, st={};
+  const põe=(k,pj,ativo)=>{ if(!k) return;
+    if(!(k in dep)||(ativo&&!st[k])){ dep[k]=pj; st[k]=ativo; } };
+  let n=0;
+  abas.forEach(ab=>objetos(ab.linhas).forEach(o=>{
+    const placa=col(o,'Placa'), chassi=col(o,'Chassi');
+    const pj=String(col(o,'Nome do Projeto')||'').trim();
+    if(!pj||(!placa&&!chassi)) return;
+    const ativo=/^ATIVO$/i.test(String(col(o,'Status')||'').trim());
+    n++;
+    if(placa)  põe('P:'+placaCanon(placa), pj, ativo);
+    if(chassi) põe('C:'+chassiCanon(chassi), pj, ativo);
+  }));
+  if(!n){ flash('Benner: não achei as colunas Placa / Nome do Projeto / Status', true); return; }
+  BENNER=new Map(Object.entries(dep));
+  try{
+    const {error}=await sb.from('locacao_benner').upsert({
+      id:1, depara:dep, arquivo:nome, n,
+      updated_at:new Date().toISOString(),
+      updated_by:(SESSION&&SESSION.user&&SESSION.user.email)||null},{onConflict:'id'});
+    if(error) throw error;
+    BEN_META={arquivo:nome,n,updated_at:new Date().toISOString()}; ERRO_BEN=null;
+    flash('Base Benner salva — '+num(n)+' veículos');
+  }catch(e){
+    ERRO_BEN='Não consegui GRAVAR o Benner: '+(e.message||e)+' — rode scripts/locacao-benner.sql';
+    console.error(e); flash(ERRO_BEN, true);
+  }
 }
 function tiraArquivo(k){ delete ARQ[k]; pinta(); }
 
@@ -668,6 +707,7 @@ function rotuloArq(a){
   if(a.tipo==='previa') return 'Prévia · '+(a.sub==='provisao'?'Provisão':'Mensal');
   if(a.tipo==='ft') return 'Freightech · '+a.seg.toUpperCase();
   if(a.tipo==='faturamento') return 'Faturamento';
+  if(a.tipo==='benner') return 'Base Benner (ERP)';
   return 'Não reconhecido';
 }
 function pintaImportar(){
@@ -681,7 +721,13 @@ function pintaImportar(){
             +(velho?' · REIMPORTE: gravado por uma versão anterior do cálculo':''))
           :('NÃO gravado — '+esc(b.erro||'erro desconhecido'))}</i></div>
       ${ok?'':`<button class="x" title="Tentar gravar de novo" onclick="salvaMes('${v}')">↻</button>`}</div>`;}).join('');
+  const benCard = ERRO_BEN
+    ? `<div class="arq erro"><span class="ic">!</span><div><b>Base Benner</b><i>${esc(ERRO_BEN)}</i></div></div>`
+    : (BEN_META
+      ? `<div class="arq ok"><span class="ic">✓</span><div><b>Base Benner</b><i>${num(BEN_META.n||BENNER.size)} veículos · ${esc(BEN_META.arquivo||'')}${BEN_META.updated_at?' · '+new Date(BEN_META.updated_at).toLocaleDateString('pt-BR'):''} — vale para todos os meses até subir um novo</i></div></div>`
+      : `<div class="arq erro"><span class="ic">!</span><div><b>Base Benner</b><i>Nenhum Benner importado — sem ele, ativo fora do Freightech fica sem unidade</i></div></div>`);
   $('meses').innerHTML = (ERRO_BASE?`<div class="arq erro"><span class="ic">!</span><div><b>Banco</b><i>${esc(ERRO_BASE)}</i></div></div>`:'')
+    + benCard
     + (meses || '<div class="vazio">Nenhum mês gravado ainda.</div>');
   $('arqs').innerHTML = ks.length ? ks.map(k=>{
     const a=ARQ[k], ok=!!a.tipo && !a.erro;
@@ -712,8 +758,67 @@ const TOL = 0.01;                       // diferença de centavo não é desvio
 
 /* A unidade vem da planilha do Freightech, na coluna "Unidade - Nome", com
    o NOME COMO ESTÁ LÁ (Renan, 17/08/2026) — sem de-para e sem a base de
-   ativos do Ginfo. Ativo que não aparece no FT fica sem unidade ("—"),
-   e isso por si só já é um achado do Diagnóstico. */
+   ativos do Ginfo. Ativo que não aparece no FT (Renan, 18/08/2026): a
+   unidade vem do BENNER (arquivo 'Benner - MM_AAAA', coluna Nome do
+   Projeto), traduzida para a nomenclatura do Freightech pelo de-para
+   abaixo — levantado cruzando os pares reais de julho/2026, sem conflito.
+   Ativo que não está nem no Benner ganha o aviso "Sem cadastro". */
+
+/* Nome do Projeto do Benner → "Unidade - Nome" do Freightech.
+   Pares observados nos arquivos reais; projeto fora da tabela cai no
+   código do sufixo (BEN_COD). */
+const BEN2FT={
+  'APOIO - CBA':'CUIABA','APOIO - NFR':'CDD NOVA FRIBURGO',
+  'EMPURRADA - MCC':'MACACU','EMPURRADA - PIR':'PIRAI',
+  'ROTA - BLC':'CDD CAMBORIU','ROTA - CBA':'CDD CUIABA','ROTA - CGR':'CDD RIO DE JANEIRO',
+  'ROTA - FLP':'CDD FLORIANOPOLIS','ROTA - GRL':'CDD GUARULHOS','ROTA - MCC':'MACACU',
+  'ROTA - NFR':'CDD NOVA FRIBURGO','ROTA - PLT':'CDD PELOTAS','ROTA - RON':'CDD RONDONOPOLIS',
+};
+const BEN_COD={BLC:'CDD CAMBORIU',CBA:'CDD CUIABA',CGR:'CDD RIO DE JANEIRO',FLP:'CDD FLORIANOPOLIS',
+  GRL:'CDD GUARULHOS',MCC:'MACACU',NFR:'CDD NOVA FRIBURGO',PLT:'CDD PELOTAS',RON:'CDD RONDONOPOLIS',
+  PIR:'PIRAI',ANG:'ANHANGUERA'};
+function benUni(projeto){
+  const pj=String(projeto||'').trim().toUpperCase();
+  if(BEN2FT[pj]) return BEN2FT[pj];
+  const m=pj.match(/-\s*([A-Z]{3})\s*$/);
+  return (m&&BEN_COD[m[1]])||null;
+}
+
+/* base do Benner em memória: chave do painel ('P:'/'C:') → Nome do Projeto */
+let BENNER=new Map(), BEN_META=null, ERRO_BEN=null;
+async function carregaBenner(){
+  try{
+    const {data,error}=await sb.from('locacao_benner').select('*').eq('id',1).maybeSingle();
+    if(error) throw error;
+    BENNER=new Map(Object.entries((data&&data.depara)||{}));
+    BEN_META=data||null; ERRO_BEN=null;
+  }catch(e){
+    ERRO_BEN='Não consegui ler locacao_benner: '+(e.message||e)+' — rode scripts/locacao-benner.sql';
+    console.error(e);
+  }
+}
+function benHit(l){
+  return (l.placa&&BENNER.get('P:'+placaCanon(l.placa)))
+      || (l.chassi&&BENNER.get('C:'+chassiCanon(l.chassi)))
+      || BENNER.get(l.k) || null;
+}
+/* overlay em MEMÓRIA sobre as linhas carregadas/importadas — o mês salvo no
+   banco continua com a unidade do FT, e o Benner novo vale na hora para
+   todos os meses, sem reimportar */
+function aplicaBenner(){
+  if(!BENNER.size) return;
+  todasLinhas().forEach(l=>{
+    const hit=benHit(l);
+    l.semBenner=!hit;
+    if(hit&&(!l.uni||l.uni==='—'||l.uniBen)){
+      const u=benUni(hit); if(u){ l.uni=u; l.uniBen=true; }
+    }
+    l.motivos=l.motivos||[];
+    const i=l.motivos.indexOf('Sem cadastro no Benner');
+    if(l.semBenner&&i<0) l.motivos.push('Sem cadastro no Benner');
+    if(!l.semBenner&&i>=0) l.motivos.splice(i,1);
+  });
+}
 
 /* ── leitura das planilhas ──
    Cada aba vira uma lista de objetos com o cabeçalho achado pela primeira
@@ -987,7 +1092,7 @@ function montaTela(){
       <div class="imp">
         <div class="drop" id="drop">
           <b>Arraste as planilhas aqui — ou clique para escolher</b>
-          <span>Prévia (Mensal e Provisão) · Faturamento · Freightech (WH, Empurrada, AS, Rota/Van)<br>
+          <span>Prévia (Mensal e Provisão) · Faturamento · Freightech (WH, Empurrada, AS, Rota/Van) · Benner (base de placas do ERP)<br>
                 O tipo sai do nome do arquivo; o mês, do <code>MM_AAAA</code> no fim.</span>
           <input type="file" id="fileInput" multiple accept=".xlsx,.xlsm,.xls,.csv" style="display:none">
         </div>
@@ -1160,7 +1265,7 @@ async function salvaMes(vig){
   }
   pinta();
 }
-async function recarregaBase(){ await carregaBase(); await carregaObs(); pinta(); flash(BASE.size+' mês(es) no banco'); }
+async function recarregaBase(){ await carregaBase(); await carregaObs(); await carregaBenner(); aplicaBenner(); pinta(); flash(BASE.size+' mês(es) no banco'); }
 function flash(txt,ruim){
   let e=$('flash');
   if(!e){ e=document.createElement('div'); e.id='flash'; document.body.appendChild(e); }
@@ -1346,9 +1451,11 @@ function ativosDe(L,lado){
   const m=new Map();
   universo(L,lado).forEach(l=>{
     const k=l.placa||l.chassi||l.k;
-    const o=m.get(k)||{ativo:k,uni:l.uni||'—',proj:l.proj||'—',ok:true,n:0};
+    const o=m.get(k)||{ativo:k,uni:l.uni||'—',proj:l.proj||'—',ok:true,n:0,semBen:false,uniBen:false};
     o.n++;
     if(!(lado==='ft'?naVamos(l):noFt(l))) o.ok=false;
+    if(l.semBenner) o.semBen=true;
+    if(l.uniBen) o.uniBen=true;
     if(o.uni==='—'&&l.uni&&l.uni!=='—') o.uni=l.uni;
     if(o.proj==='—'&&l.proj&&l.proj!=='—') o.proj=l.proj;
     m.set(k,o);
@@ -1387,6 +1494,9 @@ function pintaQtd(L){
       {rot:'Unidade',get:r=>esc(r.uni)},
       {rot:'Projeto',get:r=>esc(r.proj)},
       {rot:rotOk,get:r=>`<span class="farol ${r.ok?'ok':'nok'}"><i></i>${r.ok?'OK':'NOK'}</span>`},
+      {rot:'Benner',get:r=> r.semBen
+        ? `<span class="farol nok"><i></i>SEM CADASTRO</span>`
+        : `<span class="farol ok"><i></i>OK</span>`+(r.uniBen?' <span class="mut" title="A unidade veio do Benner (o ativo não está no Freightech)">unid.</span>':'')},
       {rot:'Observações',cls:()=>'obs',get:r=>
         `<input class="obs-inp" data-ativo="${esc(r.ativo)}" placeholder="Escreva aqui"`
         +` value="${esc(OBS.get(r.ativo)||'')}">`},
