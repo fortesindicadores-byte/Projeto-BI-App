@@ -90,10 +90,15 @@
   const FUSAO = {'CDI MACACU':'MACACU','MACACU EMPURRADA':'MACACU'};
   let FUNDIR = false;
   const fundido = u => (FUNDIR && u && FUSAO[u]) ? FUSAO[u] : u;
-  function canonUnit(filial, proj){
+  // nome da FILIAL de origem, sem fusão — as regras que dependem do tier
+  // (conformidade das empurradas: quando começa a contar e Mensal × Bimestral)
+  // têm de olhar a filial, senão a fusão renomeia a linha para 'MACACU' e a
+  // regra deixa de valer (bug real, 18/08/2026).
+  function unitCru(filial, proj){
     const cod = refineCodG(FIL2COD[NK(filial)]||null, proj);
-    return fundido(cod ? COD2UNIT[cod] : NK(filial));
+    return cod ? COD2UNIT[cod] : NK(filial);
   }
+  function canonUnit(filial, proj){ return fundido(unitCru(filial, proj)); }
 
   // ── parsers de valor do export (xlsx → JSON: número, "96,9%", "0,969"…) ──
   function numVal(v){
@@ -173,8 +178,9 @@
     if(!kFil||(!kVal&&!opts.conf)) return out;
     rows.forEach(r=>{
       const unit=canonUnit(r[kFil], opts.proj||'');
-      if(opts.conf && unit && !confVale(unit,vigFim)) return;
-      const v=opts.conf ? pctVal(r[confBimestral(unit,vigFim)?kBim:kMen]) : pctVal(r[kVal]);
+      const cru=opts.conf ? unitCru(r[kFil], opts.proj||'') : unit;   // regra é da FILIAL
+      if(opts.conf && cru && !confVale(cru,vigFim)) return;
+      const v=opts.conf ? pctVal(r[confBimestral(cru,vigFim)?kBim:kMen]) : pctVal(r[kVal]);
       if(unit&&v!=null) out.push({unit, real:v, peso:pesoDa(r,kPeso,v,opts)});
     });
     return fundeLinhas(out);
@@ -269,7 +275,7 @@
     if(kOk.some(k=>!k)) return g;
     rows.forEach(r=>{
       const unit=canonUnit(r[kFil],''); if(!unit) return;
-      if(!confVale(unit,vig)) return;              // empurradas só de abr/2026
+      if(!confVale(unitCru(r[kFil],''),vig)) return;   // empurradas só de abr/2026 (regra da FILIAL)
       const ok  = kOk .reduce((a,k)=>a+(numVal(r[k])||0),0);
       const nok = kNok.reduce((a,k)=>a+(k?(numVal(r[k])||0):0),0);
       if(!(ok+nok)) return;
@@ -389,8 +395,10 @@
       // valem — o confVale já tirou jan/fev/mar do mensal, então a média é de
       // abr em diante. (Era a janela mar→M do 'conformidade-mar'; março saiu da
       // regra em 18/08/2026 e aquele acumulado passou a estar contaminado.)
-      const emp=mediaDe(u=>CONF_EMP.has(u));
-      list=list.filter(v=>!CONF_EMP.has(v.unit)).concat(emp);
+      // Com fusão, quem carrega a empurrada é a unidade unida — daí o fundido().
+      const EMPF=new Set([...CONF_EMP].map(u=>fundido(u)));
+      const emp=mediaDe(u=>EMPF.has(u));
+      list=list.filter(v=>!EMPF.has(v.unit)).concat(emp);
     }
     return list;
   }
