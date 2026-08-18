@@ -525,7 +525,7 @@
     });
   }
 
-  let COMB=null;   // {unit:{vig:{km,lit,rem[]}}} — cache p/ o acumulado
+  let COMB=null;   // {filial:{vig:{km,lit,rems[]}}} — SEM fusão; cache p/ o acumulado
   async function loadComb(){
     let rows; try{ rows=await fetchTabFrom(KML_ID,KML_TAB); }catch(e){ console.error('Gerot base — falha Km/L (comb)', e); return []; }
     const nRaw = c => { if(!c||c.v==null) return 0; const n=Number(c.v); return isFinite(n)?n:0; };
@@ -533,43 +533,60 @@
       return {vig, proj:String(c[14]&&c[14].v!=null?c[14].v:''), km:nRaw(c[22]), lit:nRaw(c[23]), rem:nRaw(c[4])}; }).filter(Boolean);
     const vigsK=[...new Set(parsed.map(p=>p.vig))];
     COMB={};
-    // com FUSÃO as duas filiais caem na MESMA chave e os km/litros SOMAM —
-    // Σkm ÷ Σlitros é o Km/L exato da unidade unida (não média de médias).
+    // COMB é sempre por FILIAL de origem — a fusão acontece depois, em combFunde.
     for(const uni of UNI_LIST_COMB){
       if(UNI_SEM_KM.has(uni)) continue;
-      const key=fundido(uni);
       for(const vig of vigsK){
         let km=0,lit=0,rems=[];
         parsed.forEach(p=>{ if(p.vig!==vig||!projMatchUni(uni,p.proj))return; km+=p.km; lit+=p.lit; if(p.rem>0)rems.push(p.rem); });
         if(!lit||!rems.length) continue;
-        const alvo=((COMB[key]=COMB[key]||{})[vig]=COMB[key][vig]||{km:0,lit:0,rems:[]});
-        alvo.km+=km; alvo.lit+=lit; alvo.rems.push(...rems);
+        (COMB[uni]=COMB[uni]||{})[vig]={km,lit,rems};
       }
+    }
+    const porVig={};
+    for(const uni in COMB) for(const vig in COMB[uni]){
+      const r=combUm(uni,vig,COMB[uni][vig]); if(r) (porVig[vig]=porVig[vig]||[]).push(r);
     }
     const recs=[];
-    for(const uni in COMB){
-      for(const vig in COMB[uni]){
-        const {km,lit,rems}=COMB[uni][vig];
-        if(!lit||!rems.length) continue;
-        const rem=rems.reduce((s,x)=>s+x,0)/rems.length, real=km/lit, atg=rem?(real/rem*100):null;
-        if(atg==null) continue;
-        recs.push({field:'comb',label:'Combustível',unit:uni,vig,meta:rem,real,atg,atgMeta:atg});
-      }
-    }
+    for(const vig in porVig) recs.push(...combFunde(porVig[vig],vig));
     return recs;
+  }
+  // uma filial: Km/L realizado = Σkm ÷ Σlitros, alvo = média do remunerado.
+  function combUm(uni,vig,o){
+    if(!o||!o.lit||!o.rems.length) return null;
+    const rem=o.rems.reduce((s,x)=>s+x,0)/o.rems.length; if(!rem) return null;
+    const real=o.km/o.lit, atg=real/rem*100;
+    return {field:'comb',label:'Combustível',unit:uni,vig,meta:rem,real,atg,atgMeta:atg,_km:o.km,_lit:o.lit};
+  }
+  // FUSÃO do combustível — pool de LITROS, não Σkm ÷ Σlitros (bug real, 18/08/2026):
+  // empurrada (~2 km/L) e CDI/rota (~3,5 km/L) têm ALVOS diferentes. Somar os km e
+  // os litros dos dois e comparar contra a média das metas misturava frotas
+  // incomparáveis e jogava o atingimento do MACACU unido para BAIXO dos dois lados
+  // (jul/26: 94,6 e 103,1 separados → 73,4 unido). O certo é cobrar cada filial
+  // contra a PRÓPRIA meta e ponderar pelo que ela gastou:
+  //   Σ(litros esperados) ÷ Σ(litros gastos) = Σ(atg_i × lit_i) ÷ Σlit_i,
+  // que é exatamente o atingimento da unidade inteira e sempre cai entre os dois.
+  function combFunde(itens,vig){
+    const g={}; itens.forEach(r=>{ const k=fundido(r.unit); (g[k]=g[k]||[]).push(r); });
+    return Object.keys(g).map(k=>{
+      const ls=g[k];
+      if(ls.length===1) return Object.assign({},ls[0],{unit:k});
+      let km=0,lit=0,esp=0;
+      ls.forEach(r=>{ km+=r._km; lit+=r._lit; esp+=r.atg/100*r._lit; });
+      if(!lit||!esp) return null;
+      const atg=esp/lit*100, real=km/lit;
+      return {field:'comb',label:'Combustível',unit:k,vig,meta:real/(atg/100),real,atg,atgMeta:atg,_km:km,_lit:lit};
+    }).filter(Boolean);
   }
   function combAcum(vigs){
     if(!COMB) return [];
-    const fim=vigs[vigs.length-1], out=[];
+    const fim=vigs[vigs.length-1], itens=[];
     for(const uni in COMB){
       let km=0,lit=0,rems=[];
       vigs.forEach(v=>{ const o=COMB[uni][v]; if(!o)return; km+=o.km; lit+=o.lit; rems.push(...o.rems); });
-      if(!lit||!rems.length) continue;
-      const rem=rems.reduce((s,x)=>s+x,0)/rems.length, real=km/lit;
-      const atgC=rem?(real/rem*100):null;
-      out.push({field:'comb',label:'Combustível',unit:uni,vig:fim,meta:rem,real,atg:atgC,atgMeta:atgC});
+      const r=combUm(uni,fim,{km,lit,rems}); if(r) itens.push(r);
     }
-    return out;
+    return combFunde(itens,fim);
   }
 
   // ══════════ Indicadores a mais — SÓ no Gerot, para gerar ação ══════════
