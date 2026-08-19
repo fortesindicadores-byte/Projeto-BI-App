@@ -1904,6 +1904,7 @@
         </div>
         <div style="font-size:10px;color:var(--text-muted);margin:8px 18px 14px;line-height:1.6">
           Taxa de desgaste própria é usada quando confiável (≥3 leituras, ≥2.000 km no intervalo e ≤2,5 mm/1.000km).
+          Aferição sem odômetro utilizável (vazio, 9999999 ou congelado): o km entre as leituras vem do ABASTECIMENTO — km/dia da placa na planilha Km/L × dias entre as aferições.
           Quando não confiável, aplica-se cascata de fallback: placa·similar → placa·eixo → placa → frota·similar → frota·eixo → mediana da frota
           (cada nível exige ≥3 pneus confiáveis no grupo). <span style="color:var(--orange);font-weight:700">*</span> = taxa estimada (passe o mouse para ver o nível).
         </div>
@@ -2000,6 +2001,7 @@
         <div style="font-size:10px;color:var(--text-muted);margin:8px 18px 14px;line-height:1.6">
           Entram só pneus com taxa de desgaste PRÓPRIA confiável — os mesmos critérios da Previsão de Troca
           (≥3 leituras, ≥2.000 km no intervalo e ≤2,5 mm/1.000km); aqui não há estimativa por grupo.
+          Aferição sem odômetro utilizável: o km vem do ABASTECIMENTO (km/dia da placa na planilha Km/L × dias entre as leituras).
           Faixas de cor: Baixo ≤ 0,15 · Médio 0,15 a 0,25 · Alto &gt; 0,25 mm/1.000km.
         </div>
       </div>
@@ -2996,6 +2998,37 @@ function kmDiaVeiculo(tire) {
   return 0;
 }
 
+// ── KM ENTRE DUAS LEITURAS — odômetro quando confiável; senão, o KM DO
+// ABASTECIMENTO (km/dia da planilha Km/L × dias entre as aferições).
+// Combinado com o Renan: unidade que não digita o odômetro na aferição
+// (ex.: PIR — 9999999/999999 ou valor congelado o ano todo) não pode
+// ficar sem taxa de desgaste; o km dela vem do combustível.
+function odoValido(v) { return v > 0 && !/^9+$/.test(String(Math.round(v))); }
+function kmEntreLeituras(a, b, kmDiaAbast) {
+  const dias = (new Date(b.dataInspecao) - new Date(a.dataInspecao)) / 86400000;
+  if (dias <= 0) return 0;                       // mesma data (leitura duplicada)
+  if (odoValido(a.odometro) && odoValido(b.odometro)) {
+    const d = b.odometro - a.odometro;
+    if (d > 0 && d / dias <= 2000) return d;     // odômetro andando e plausível
+    if (d === 0 && !(kmDiaAbast > 0)) return 0;  // parado, sem abastecimento p/ dizer o contrário
+  }
+  return (kmDiaAbast > 0) ? kmDiaAbast * dias : null;   // km do abastecimento
+}
+// Eixo de km ACUMULADO da série de leituras de um pneu (null = sem como escalar:
+// odômetro inútil e placa sem km/dia no combustível).
+function ptsKm(h, t) {
+  const kd = kmDiaVeiculo(t);
+  let acum = 0;
+  const pts = [{ km: 0, mm: h[0].menorMM }];
+  for (let i = 1; i < h.length; i++) {
+    const d = kmEntreLeituras(h[i - 1], h[i], kd);
+    if (d == null) return null;
+    acum += d;
+    pts.push({ km: acum, mm: h[i].menorMM });
+  }
+  return pts;
+}
+
 // mediana de um array de números (>0 retornados pelo chamador)
 function _mediana(arr) {
   const a = arr.filter(v => isFinite(v)).slice().sort((x, y) => x - y);
@@ -3011,10 +3044,11 @@ function _mediana(arr) {
 function calcPrevisao() {
   const tires = getFilteredTires().filter(t => passaSituacao(t) && t.menorMM > 0);
 
-  // histórico de inspeções por tireId (mm e odômetro válidos), ordenado por data
+  // histórico de inspeções por tireId (mm válido; o km vem do odômetro OU do
+  // abastecimento — ver kmEntreLeituras), ordenado por data
   const hist = {};
   DATA.inspections.forEach(i => {
-    if (!i.tireId || !(i.menorMM > 0) || !(i.odometro > 0)) return;
+    if (!i.tireId || !(i.menorMM > 0)) return;
     (hist[i.tireId] = hist[i.tireId] || []).push(i);
   });
   Object.values(hist).forEach(arr => arr.sort((a, b) => new Date(a.dataInspecao) - new Date(b.dataInspecao)));
@@ -3034,27 +3068,33 @@ function calcPrevisao() {
     const h = hist[t.id];
     let wearProprio = 0, kmDiaOdo = 0, confiavel = false;
     if (h && h.length >= 3) {
-      const pts = h.map(i => ({ km: i.odometro, mm: i.menorMM }));
-      const kmDistintos = new Set(pts.map(p => p.km)).size;
+      // km acumulado: odômetro quando confiável, senão km do abastecimento
+      const pts = ptsKm(h, t);
       const a = h[0], b = h[h.length - 1];
-      const dKm = b.odometro - a.odometro;
       const dDia = (new Date(b.dataInspecao) - new Date(a.dataInspecao)) / 86400000;
-      kmDiaOdo = (dKm > 0 && dDia > 0) ? dKm / dDia : 0;
-      if (kmDistintos >= 3 && dKm >= 2000) {
-        const n = pts.length;
-        const sx = pts.reduce((s, p) => s + p.km, 0);
-        const sy = pts.reduce((s, p) => s + p.mm, 0);
-        const sxx = pts.reduce((s, p) => s + p.km * p.km, 0);
-        const sxy = pts.reduce((s, p) => s + p.km * p.mm, 0);
-        const den = n * sxx - sx * sx;
-        const slope = den !== 0 ? (n * sxy - sx * sy) / den : 0; // mm por km
-        if (slope < 0) {
-          const w = -slope * 1000; // mm/1.000km
-          // confiável: taxa ≤ 2,5 mm/1000km e km/dia plausível (>0 e ≤2000)
-          if (w <= 2.5) {
-            wearProprio = w;
-            const kd = kmDiaVeiculo(t) || kmDiaOdo;
-            if (kd > 0 && kd <= 2000) { confiavel = true; }
+      if (odoValido(a.odometro) && odoValido(b.odometro)) {
+        const dOdo = b.odometro - a.odometro;
+        kmDiaOdo = (dOdo > 0 && dDia > 0) ? dOdo / dDia : 0;
+      }
+      if (pts) {
+        const kmDistintos = new Set(pts.map(p => p.km)).size;
+        const dKm = pts[pts.length - 1].km - pts[0].km;
+        if (kmDistintos >= 3 && dKm >= 2000) {
+          const n = pts.length;
+          const sx = pts.reduce((s, p) => s + p.km, 0);
+          const sy = pts.reduce((s, p) => s + p.mm, 0);
+          const sxx = pts.reduce((s, p) => s + p.km * p.km, 0);
+          const sxy = pts.reduce((s, p) => s + p.km * p.mm, 0);
+          const den = n * sxx - sx * sx;
+          const slope = den !== 0 ? (n * sxy - sx * sy) / den : 0; // mm por km
+          if (slope < 0) {
+            const w = -slope * 1000; // mm/1.000km
+            // confiável: taxa ≤ 2,5 mm/1000km e km/dia plausível (>0 e ≤2000)
+            if (w <= 2.5) {
+              wearProprio = w;
+              const kd = kmDiaVeiculo(t) || kmDiaOdo;
+              if (kd > 0 && kd <= 2000) { confiavel = true; }
+            }
           }
         }
       }
@@ -3293,12 +3333,14 @@ function dsgCluster(v) { return v <= DSG_FX.g ? 'g' : v <= DSG_FX.y ? 'y' : 'r';
 function dsgCor(v) { return v <= DSG_FX.g ? 'var(--green)' : v <= DSG_FX.y ? 'var(--yellow)' : 'var(--red-soft)'; }
 const fmtDsg = v => fmtBR(v, 2);
 
-// Regressão linear mm × km — devolve a taxa própria (mm/1.000km) ou null se não confiável
-function _taxaPropria(h) {
+// Regressão linear mm × km — devolve a taxa própria (mm/1.000km) ou null se
+// não confiável. O km vem do odômetro OU do abastecimento (ptsKm).
+function _taxaPropria(h, t) {
   if (!h || h.length < 3) return null;
-  const pts = h.map(i => ({ km: i.odometro, mm: i.menorMM }));
+  const pts = ptsKm(h, t);
+  if (!pts) return null;
   if (new Set(pts.map(p => p.km)).size < 3) return null;
-  if (h[h.length - 1].odometro - h[0].odometro < 2000) return null;
+  if (pts[pts.length - 1].km - pts[0].km < 2000) return null;
   const n = pts.length;
   const sx = pts.reduce((s, p) => s + p.km, 0);
   const sy = pts.reduce((s, p) => s + p.mm, 0);
@@ -3317,14 +3359,14 @@ function calcDesgaste() {
 
   const hist = {};
   DATA.inspections.forEach(i => {
-    if (!i.tireId || !(i.menorMM > 0) || !(i.odometro > 0)) return;
+    if (!i.tireId || !(i.menorMM > 0)) return;
     (hist[i.tireId] = hist[i.tireId] || []).push(i);
   });
   Object.values(hist).forEach(arr => arr.sort((a, b) => new Date(a.dataInspecao) - new Date(b.dataInspecao)));
 
   const linhas = [];
   tires.forEach(t => {
-    const w = _taxaPropria(hist[t.id]);
+    const w = _taxaPropria(hist[t.id], t);
     if (w != null) linhas.push({ t, wear1000: w });
   });
   return { linhas, total: tires.length };
@@ -3394,24 +3436,26 @@ function renderDsgMensalChart() {
   const isFuturo = m => new Date(m.ano, m.mes, 1) > new Date(hoje.getFullYear(), hoje.getMonth(), 1);
 
   const idsFiltrados = new Set(getFilteredVehicles().map(v => v.id));
-  // filtro MEDIDA vale aqui também (pneu → medida pelo cadastro)
-  const medidaDe = {};
-  if (FILTERS.medida.length) DATA.tires.forEach(t => { medidaDe[t.id] = t.medida || ''; });
+  // filtro MEDIDA vale aqui também (pneu → medida pelo cadastro); o cadastro
+  // inteiro também serve p/ achar a placa do pneu (km do abastecimento)
+  const cadastro = {};
+  DATA.tires.forEach(t => { cadastro[t.id] = t; });
   const hist = {};
   DATA.inspections.forEach(i => {
-    if (!i.tireId || !(i.menorMM > 0) || !(i.odometro > 0)) return;
+    if (!i.tireId || !(i.menorMM > 0)) return;
     if (!idsFiltrados.has(i.veiculoId)) return;
-    if (FILTERS.medida.length && !FILTERS.medida.includes(medidaDe[i.tireId] || '')) return;
+    if (FILTERS.medida.length && !FILTERS.medida.includes((cadastro[i.tireId] && cadastro[i.tireId].medida) || '')) return;
     (hist[i.tireId] = hist[i.tireId] || []).push(i);
   });
   Object.values(hist).forEach(arr => arr.sort((a, b) => new Date(a.dataInspecao) - new Date(b.dataInspecao)));
 
   const porMes = meses.map(() => []);
-  Object.values(hist).forEach(arr => {
+  Object.entries(hist).forEach(([tid, arr]) => {
+    const kd = kmDiaVeiculo(cadastro[tid] || arr[0]);
     for (let k = 1; k < arr.length; k++) {
       const a = arr[k - 1], b = arr[k];
-      const dKm = b.odometro - a.odometro;
-      if (dKm < 2000) continue;
+      const dKm = kmEntreLeituras(a, b, kd);       // odômetro OU km do abastecimento
+      if (dKm == null || dKm < 2000) continue;
       const dMM = a.menorMM - b.menorMM;
       if (dMM < 0) continue;                 // mm subiu = recape/troca no meio → descarta
       const w = dMM / (dKm / 1000);
@@ -5630,7 +5674,7 @@ loadData();
 // chegar, re-renderiza a Previsão p/ aplicar o km/dia novo. Se falhar, fica no odômetro.
 loadKmDia().then(() => {
   if (KMDIA.carregado && DATA.vehicles && DATA.vehicles.length) {
-    try { if (typeof renderPrevisao === 'function') renderPrevisao(); } catch (e) {}
+    try { renderAll(); } catch (e) {}   // previsão E desgaste dependem do km/dia do combustível
   }
 });
 </script>
