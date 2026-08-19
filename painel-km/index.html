@@ -2,14 +2,12 @@
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
-<meta name="build" content="202608191600">
+<meta name="build" content="202608191900">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <title>Painel KM · Gestão em Movimento</title>
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0"></script>
-<script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.2/dist/jspdf.umd.min.js"></script>
 <style>
 /* ============================================================
    PAINEL KM — km realizado vs remunerado, no layout padrão do portal.
@@ -1312,14 +1310,19 @@ async function atualizar() {
 }
 
 function initData(){
+  // stale-while-revalidate: pinta o cache NA HORA (mesmo vencido) e, se
+  // estiver velho, atualiza em segundo plano — a tela nunca fica em branco
+  // esperando o gviz (Renan, 19/08/2026: demora no carregamento).
   try{
     const c=JSON.parse(localStorage.getItem(CACHE_KEY));
-    if(c&&c.rows&&Date.now()-c.t<CACHE_TTL){
+    if(c&&c.rows&&c.rows.length){
       ALL=c.rows;
       populateFilters();
       render();
       const d=new Date(c.t);
       setStatus(`Atualizado ${d.toLocaleDateString('pt-BR')} ${d.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})} (cache)`);
+      if(Date.now()-c.t<CACHE_TTL) return;   // fresco: nem bate na rede
+      atualizar();                            // velho: atualiza por cima, sem travar
       return;
     }
   }catch(e){ localStorage.removeItem(CACHE_KEY); }
@@ -1427,6 +1430,6 @@ initPdfExport({
   isLight:()=>document.body.classList.contains('claro'), setTheme:aplicaTema
 });
 </script>
-<script src="../assets/build-check.js?v=202608191600"></script>
+<script src="../assets/build-check.js?v=202608191900"></script>
 </body>
 </html>

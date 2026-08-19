@@ -150,9 +150,31 @@ body.exporting .pdf-wrap,body.exporting .dica{display:none!important;}
 
   const espera=ms=>new Promise(r=>setTimeout(r,ms));
 
+  // As bibliotecas (html2canvas + jsPDF) são carregadas AQUI, no clique —
+  // não entram mais no <head> dos painéis bloqueando o primeiro render
+  // (eram ~350KB de JS antes de qualquer pixel, em 39 páginas).
+  const H2C_SRC='https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js';
+  const JSPDF_SRC='https://cdn.jsdelivr.net/npm/jspdf@2.5.2/dist/jspdf.umd.min.js';
+  function carregaLib(id,src,pronto){
+    return new Promise((res,rej)=>{
+      if(pronto()) return res();
+      let s=document.getElementById(id);
+      if(!s){ s=document.createElement('script'); s.id=id; s.src=src; document.head.appendChild(s); }
+      s.addEventListener('load',()=>res());
+      s.addEventListener('error',()=>rej(new Error(src)));
+    });
+  }
+  function ensureLibs(){
+    return Promise.all([
+      carregaLib('h2c-cdn',H2C_SRC,()=>typeof html2canvas!=='undefined'),
+      carregaLib('jspdf-cdn',JSPDF_SRC,()=>!!window.jspdf)
+    ]);
+  }
+
   async function exportar(mode){
     const mn=document.getElementById('pdfMenu'); if(mn)mn.classList.remove('open');
-    if(typeof html2canvas==='undefined' || !window.jspdf){ alert('Biblioteca de PDF ainda carregando — tente de novo em instantes.'); return; }
+    try{ await ensureLibs(); }
+    catch(e){ alert('Não foi possível carregar o componente de PDF. Verifique a conexão.'); return; }
     const claro = mode!=='dark';
     const btn=document.getElementById('pdfBtn');
     if(!getMain()){ alert('Não encontrei o conteúdo para exportar.'); return; }
