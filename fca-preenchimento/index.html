@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-<meta name="build" content="202608181300">
+<meta name="build" content="202608191600">
 <title>FCA</title>
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -634,6 +634,13 @@ body.light-mode .fato-block,body.light-mode .uhub-card{
 
 /* filtros antigos (.ms-*) no desenho dos menus novos */
 .hfilter{position:relative;}
+/* filtro Responsável — digitável por enquanto (Renan, 19/08/2026: depois
+   vira seletor de usuários, como no Planner) */
+.f-resp{background:transparent;border:0;border-radius:7px;padding:6px 10px;color:var(--txt);
+  font-family:inherit;font-size:12.5px;font-weight:500;outline:none;width:118px;}
+.f-resp::placeholder{color:var(--txt2);}
+.f-resp:hover,.f-resp:focus{background:var(--hover);color:var(--txt);}
+
 /* só a legenda do filtro some (o botão já diz o nome) — as opções do
    dropdown também são <label> e precisam continuar aparecendo */
 .hfilter>label{display:none;}
@@ -773,6 +780,7 @@ body.light-mode .kcard-fato{color:#000000!important;}
       <div class="hfilter"><label>Indicador/Conta</label><div class="ms-wrap" id="ms-conta"><button class="ms-btn" onclick="toggleMs('ms-conta')"><span class="ms-lbl">Indicador/Conta</span><span class="ms-cnt"></span><svg width="10" height="6" viewBox="0 0 10 6"><path d="M0 0l5 6 5-6z" fill="#F97316"/></svg></button><div class="ms-panel"><div class="ms-search"><input type="text" placeholder="Pesquisar…"></div><div class="ms-list"></div></div></div></div>
       <div class="hfilter"><label>Status</label><div class="ms-wrap" id="ms-st"><button class="ms-btn" onclick="toggleMs('ms-st')"><span class="ms-lbl">Status</span><span class="ms-cnt"></span><svg width="10" height="6" viewBox="0 0 10 6"><path d="M0 0l5 6 5-6z" fill="#F97316"/></svg></button><div class="ms-panel"><div class="ms-search"><input type="text" placeholder="Pesquisar…"></div><div class="ms-list"></div></div></div></div>
       <div class="hfilter"><label>Status Prazo</label><div class="ms-wrap" id="ms-prazo"><button class="ms-btn" onclick="toggleMs('ms-prazo')"><span class="ms-lbl">Status Prazo</span><span class="ms-cnt"></span><svg width="10" height="6" viewBox="0 0 10 6"><path d="M0 0l5 6 5-6z" fill="#F97316"/></svg></button><div class="ms-panel"><div class="ms-search"><input type="text" placeholder="Pesquisar…"></div><div class="ms-list"></div></div></div></div>
+      <div class="hfilter"><label>Responsável</label><input type="text" id="f-resp" class="f-resp" placeholder="Responsável" autocomplete="off" oninput="aplicar()"></div>
       <button class="tool ico" id="themeBtn" title="Modo claro/escuro">☀</button>
       <button class="tool" id="adminBtn" title="Modo admin">Admin</button>
       <span class="saved-msg" id="savedMsg">Salvo ✓</span>
@@ -1441,6 +1449,8 @@ function toggleMs(id){
   }
 }
 function getMsValues(id){const w=document.getElementById(id);return w&&w._sel?[...w._sel]:[];}
+function respFiltro(){const e=document.getElementById('f-resp');return e?e.value.trim().toLowerCase():'';}
+function respOk(v,fr){return !fr||String(v||'').toLowerCase().includes(fr);}
 function popFiltros(){
   VIG_OPTS=[...new Set(_FATOS.map(f=>f.vig).filter(Boolean))].sort((a,b)=>vigNum(b)-vigNum(a));
   ORG_OPTS=[...new Set(_FATOS.map(f=>f.origem).filter(Boolean))].sort();
@@ -1489,16 +1499,16 @@ function aplicar(){
            mn.classList.toggle('kan', VIEW==='kanban'); }
   setTimeout(function(){alinhaCabecalhos();focaQuadro();},0);
   if(!_FATOS.length){list.innerHTML='<div class="empty">✓ Nenhum desvio encontrado para esta unidade na vigência mais recente — sem fatos a tratar.</div>';return;}
-  const fv=getMsValues('ms-vig'), fo=getMsValues('ms-org'), fp=getMsValues('ms-proj'), fi=getMsValues('ms-ind'), fct=getMsValues('ms-conta'), fs=getMsValues('ms-st'), fpz=getMsValues('ms-prazo');
-  const acMatch=r=>(!fs.length||fs.includes(r.status||DEFAULT_STATUS))&&(!fpz.length||fpz.includes(prazoState(r)));
+  const fv=getMsValues('ms-vig'), fo=getMsValues('ms-org'), fp=getMsValues('ms-proj'), fi=getMsValues('ms-ind'), fct=getMsValues('ms-conta'), fs=getMsValues('ms-st'), fpz=getMsValues('ms-prazo'), fr=respFiltro();
+  const acMatch=r=>(!fs.length||fs.includes(r.status||DEFAULT_STATUS))&&(!fpz.length||fpz.includes(prazoState(r)))&&respOk(r.resp,fr);
   const vis=_FATOS.filter(f=>(!fv.length||fv.includes(f.vig))&&(!fo.length||fo.includes(f.origem))&&(!fp.length||fp.includes(projLabel(f.proj)))&&(!fi.length||fi.includes(f.fato))&&(!fct.length||contasDeF(f).some(c=>fct.includes(c)))
-    &&(!(fs.length||fpz.length) || (_DBROWS[keyOf(f)]||[]).some(acMatch)));
+    &&(!(fs.length||fpz.length||fr) || (_DBROWS[keyOf(f)]||[]).some(acMatch)));
   if(!vis.length){list.innerHTML='<div class="empty">Nenhum fato para o filtro selecionado.</div>';return;}
   if(VIEW==='resumo'){
     // a série mensal ignora o filtro de VIGÊNCIA: os outros meses continuam
     // no gráfico, apagados, como no Painel KM e na Visão Financeira
     const visSemVig=_FATOS.filter(f=>(!fo.length||fo.includes(f.origem))&&(!fp.length||fp.includes(projLabel(f.proj)))&&(!fi.length||fi.includes(f.fato))&&(!fct.length||contasDeF(f).some(c=>fct.includes(c)))
-      &&(!(fs.length||fpz.length) || (_DBROWS[keyOf(f)]||[]).some(acMatch)));
+      &&(!(fs.length||fpz.length||fr) || (_DBROWS[keyOf(f)]||[]).some(acMatch)));
     list.innerHTML=AderenciaView.html({dims:DIMS_ADER}); pintaResumoFCA(vis,visSemVig,fv); return; }
   if(VIEW==='kanban'){ list.innerHTML=kanbanHTMLpre(vis); return; }
   if(VIEW==='gantt'){ list.innerHTML=ganttHTMLpre(vis); return; }
@@ -1587,8 +1597,8 @@ function showGantt(){VIEW=VIEW==='gantt'?'kanban':'gantt';updateViewBtnsPre();ap
 // verde no prazo, vermelha vencida (com rastro do prazo até hoje), tracejada sem prazo.
 // Mesmo desenho do Planner — o texto da ação quebra em vez de ser cortado.
 function ganttHTMLpre(vis){
-  const fs=getMsValues('ms-st'), fpz=getMsValues('ms-prazo');
-  const acMatch=r=>(!fs.length||fs.includes(r.status||DEFAULT_STATUS))&&(!fpz.length||fpz.includes(prazoState(r)));
+  const fs=getMsValues('ms-st'), fpz=getMsValues('ms-prazo'), fr=respFiltro();
+  const acMatch=r=>(!fs.length||fs.includes(r.status||DEFAULT_STATUS))&&(!fpz.length||fpz.includes(prazoState(r)))&&respOk(r.resp,fr);
   const itens=[]; vis.forEach(f=>{const key=keyOf(f);(_DBROWS[key]||[]).forEach(r=>{
     if(acMatch(r)&&r.id) itens.push({r,f});});});
   if(!itens.length) return '<div class="cvazia">Nenhuma ação com os filtros atuais</div>';
@@ -1669,8 +1679,8 @@ function kcardHTMLpre(x){const r=x.r,f=x.f,org=String(f.origem||'').toUpperCase(
 // A unidade enxerga a aderência dela por Conta/Indicador — que é o "fato".
 const DIMS_ADER=[{k:'conta',rot:'Conta / Indicador'}];
 function linhasAderenciaFCA(vis){
-  const fs=getMsValues('ms-st'), fpz=getMsValues('ms-prazo');
-  const acMatch=r=>(!fs.length||fs.includes(r.status||DEFAULT_STATUS))&&(!fpz.length||fpz.includes(prazoState(r)));
+  const fs=getMsValues('ms-st'), fpz=getMsValues('ms-prazo'), fr=respFiltro();
+  const acMatch=r=>(!fs.length||fs.includes(r.status||DEFAULT_STATUS))&&(!fpz.length||fpz.includes(prazoState(r)))&&respOk(r.resp,fr);
   const out=[];
   vis.forEach(f=>{const key=keyOf(f);(_DBROWS[key]||[]).forEach(r=>{
     if(!acMatch(r))return;
@@ -1693,8 +1703,8 @@ function pintaResumoFCA(vis,visSemVig,vigsSel){
   });
 }
 function kanbanHTMLpre(vis){
-  const fs=getMsValues('ms-st'), fpz=getMsValues('ms-prazo');
-  const acMatch=r=>(!fs.length||fs.includes(r.status||DEFAULT_STATUS))&&(!fpz.length||fpz.includes(prazoState(r)));
+  const fs=getMsValues('ms-st'), fpz=getMsValues('ms-prazo'), fr=respFiltro();
+  const acMatch=r=>(!fs.length||fs.includes(r.status||DEFAULT_STATUS))&&(!fpz.length||fpz.includes(prazoState(r)))&&respOk(r.resp,fr);
   const cards=[]; vis.forEach(f=>{const key=keyOf(f);(_DBROWS[key]||[]).forEach(r=>{if(acMatch(r))cards.push({r,f});});});
   const COLS=[{k:'Não iniciada',cls:'nao'},{k:'Em andamento',cls:'and'},{k:'Concluída',cls:'con'}];
   // Os títulos ficam numa faixa FORA da área que rola — o quadro continua com
@@ -1720,8 +1730,8 @@ function chipStatusRel(st){
   return `<span class="chip" style="background:rgba(148,163,184,.25);color:var(--text)">${esc(st)}</span>`;
 }
 function relatorioHTMLpre(vis){
-  const fs=getMsValues('ms-st'), fpz=getMsValues('ms-prazo');
-  const acMatch=r=>(!fs.length||fs.includes(r.status||DEFAULT_STATUS))&&(!fpz.length||fpz.includes(prazoState(r)));
+  const fs=getMsValues('ms-st'), fpz=getMsValues('ms-prazo'), fr=respFiltro();
+  const acMatch=r=>(!fs.length||fs.includes(r.status||DEFAULT_STATUS))&&(!fpz.length||fpz.includes(prazoState(r)))&&respOk(r.resp,fr);
   const rows=[]; vis.forEach(f=>{const key=keyOf(f);loadAcoes(key,f.causaAuto).forEach(a=>{if(acMatch(a))rows.push({f,a});});});
   if(!rows.length)return '<div class="empty">Nenhuma ação com os filtros selecionados.</div>';
   // A situação manda primeiro: as vencidas encabeçam a tabela, da mais
@@ -2125,8 +2135,9 @@ function setupUniSel(){
 initApp();
 </script>
 <script src="../assets/mobile.js"></script>
+<script src="../assets/ctrlk.js"></script>
 <script src="../assets/excel-export.js"></script>
 <script src="../assets/sortable-table.js"></script>
-<script src="../assets/build-check.js?v=202608181300"></script>
+<script src="../assets/build-check.js?v=202608191600"></script>
 </body>
 </html>
