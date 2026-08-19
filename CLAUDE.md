@@ -849,6 +849,16 @@ Situação atual do código: a Árvore lê a aba `Árvore Comb.` (`GV_ID=1wCoRGs
 
 O CSS controla o **modo escuro**: `--gem-foto` (a imagem) + `--gem-scrim` (o escurecedor por cima). Quem quiser o fundo inclui `<link rel="stylesheet" href="assets/fundo.css">`. Os painéis ficam sem imagem de propósito (Renan, 08/2026), porque tela de número pede fundo liso. A URL da imagem é **relativa ao CSS** (`url('img/…')`), por isso serve igual em `/gerot/` e em `/combustivel/seara/arvore/`. Só mexe no escuro — `body.light-mode` fica intacto. Usa `!important` porque cada painel declara o próprio `body{background}` inline. Cards NÃO são tocados de propósito (cada painel tem o seu). A imagem é `assets/img/fundo-conlog.jpg` (caminhão de neon da CONLOG na estrada). **Imagem colada no chat não vira arquivo em disco** — o diretório de uploads só recebe anexos; quando precisar dos bytes de uma imagem colada, extraia do transcript da sessão (`/root/.claude/projects/<projeto>/<sessao>.jsonl`, blocos `{"type":"image","source":{"type":"base64"}}` nas mensagens do usuário).
 
+## Snapshot do gviz (abertura rápida de TODOS os painéis) — 19/08/2026
+
+Renan aprovou ("pode fazer todos"): a abertura dos painéis não espera mais o gviz do Google (1–4s/aba). Três peças:
+
+- **`gviz_snapshot`** (scripts/gviz-snapshot.sql): tabela com o TEXTO CRU da resposta gviz por chave `"<sheet_id>|s=<aba>|g=<gid>|q=<tq>|h=<headers>"`. Leitura aberta (anon+auth — é o mesmo dado que o gviz já serve público); escrita só service_role.
+- **Robô** (`scripts/gviz-robot.mjs` + workflow **Gviz Robot**, cron de hora em hora): baixa a lista `ALVOS` (~30 abas: DRE Frota/EBITDA, Dispersão de km, Árvore Comb., Km/L, R$/L, DPO/Demarco/FCA Total, Base RPM/ICs, tiers do Termômetro ×2, Seara ×3, Pneus do Elite, Manutenção, Base da Tendência) e faz upsert. Falha parcial não derruba o job (o shim cai p/ o Google).
+- **`assets/gviz-cache.js`** (incluído no `<head>` de todas as páginas, como o mobile.js): intercepta fetch **e JSONP** (`responseHandler`) do docs.google.com e responde do snapshot em ~200ms. Regras: só age nos **primeiros 15s** da página (o botão "Atualizar dados" e os setInterval vão DIRETO ao Google — dado colado agora aparece no refresh manual); snapshot >3h, Supabase lento (>1,2s), chave fora da lista ou qualquer erro → o pedido segue ao Google como sempre. `window.GvizCache.{hits,misses}` p/ conferir no console.
+
+**Como adicionar um alvo novo:** entrada em `ALVOS` do gviz-robot.mjs com os MESMOS parâmetros que o painel manda (sheet/gid/tq/headers têm de casar byte a byte — a chave é exata). **financeiro-pessoal fica FORA de propósito** (dados pessoais não entram no snapshot compartilhado — a página nem inclui o shim). Validado com Playwright: painel-km renderiza 100% do snapshot com o Google bloqueado (fetch e JSONP), números conferidos na mão.
+
 ## Robô Ginfo (Power BI → Farol) — em construção (ago/2026)
 
 Automatiza a coleta dos dados que hoje são copiados manualmente do BI do Ginfo (`bi.ginfo.app.br`, Power BI homologado pela Ambev) para as abas que alimentam o Farol.
