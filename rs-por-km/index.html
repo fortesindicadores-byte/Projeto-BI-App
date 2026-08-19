@@ -3,12 +3,10 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-<meta name="build" content="202608191600">
+<meta name="build" content="202608191900">
 <title>R$/KM — Frota</title>
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.2/dist/jspdf.umd.min.js"></script>
 <script src="../assets/pdf-export.js"></script>
 <script src="../assets/excel-export.js"></script>
 <style>
@@ -934,10 +932,13 @@ async function recarregar(){
 async function init(){
   try{
     const c=JSON.parse(localStorage.getItem(CACHE_KEY));
-    if(c&&c.cost&&c.km&&Date.now()-c.t<CACHE_TTL){
+    // stale-while-revalidate: pinta o cache na hora (mesmo vencido) e, se
+    // estiver velho, atualiza em segundo plano — sem tela em branco
+    if(c&&c.cost&&c.km){
       useData(c.cost,c.km);
       const d=new Date(c.t);
       set('status-badge',`Atualizado ${d.toLocaleDateString('pt-BR')} ${d.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})} (cache)`);
+      if(Date.now()-c.t>=CACHE_TTL) recarregar();
       setInterval(recarregar,CACHE_TTL);
       return;
     }
@@ -966,6 +967,6 @@ function applyTheme(t){document.body.classList.toggle('light-mode',t==='light');
 <script src="../assets/mobile.js"></script>
 <script src="../assets/ctrlk.js"></script>
 <script src="../assets/sortable-table.js"></script>
-<script src="../assets/build-check.js?v=202608191600"></script>
+<script src="../assets/build-check.js?v=202608191900"></script>
 </body>
 </html>
