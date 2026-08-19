@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-<meta name="build" content="202608181300">
+<meta name="build" content="202608191600">
 <title>FCA · Admin</title>
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -21,6 +21,13 @@ body{background:radial-gradient(ellipse at 10% 25%,rgba(249,115,22,.06) 0%,trans
 .header-filters{flex-basis:100%;order:3;margin-top:10px;display:flex;gap:10px;flex-wrap:wrap;align-items:flex-start;}
 .hfilter{display:flex;flex-direction:column;gap:3px;}
 .hfilter>label{display:none;}
+/* filtro Responsável — digitável por enquanto (Renan, 19/08/2026: depois
+   vira seletor de usuários, como no Planner) */
+.f-resp{background:transparent;border:0;border-radius:7px;padding:6px 10px;color:var(--txt);
+  font-family:inherit;font-size:12.5px;font-weight:500;outline:none;width:118px;}
+.f-resp::placeholder{color:var(--txt2);}
+.f-resp:hover,.f-resp:focus{background:var(--hover);color:var(--txt);}
+
 .ms-wrap{position:relative;}
 .ms-btn{display:flex;align-items:center;gap:7px;background:transparent;border:0;border-radius:7px;
   color:var(--txt2);font-family:'Montserrat',sans-serif;font-size:12px;font-weight:500;
@@ -880,6 +887,7 @@ table.cons{min-width:1560px!important;}
       <div class="hfilter"><label>Indicador/Conta</label><div class="ms-wrap" id="ms-conta"><button class="ms-btn" onclick="toggleMs('ms-conta')"><span class="ms-lbl">Indicador/Conta</span><span class="ms-cnt"></span><svg width="10" height="6" viewBox="0 0 10 6"><path d="M0 0l5 6 5-6z" fill="#F97316"/></svg></button><div class="ms-panel"><div class="ms-search"><input type="text" placeholder="Pesquisar…"></div><div class="ms-list"></div></div></div></div>
       <div class="hfilter"><label>Causa</label><div class="ms-wrap" id="ms-causa"><button class="ms-btn" onclick="toggleMs('ms-causa')"><span class="ms-lbl">Causa</span><span class="ms-cnt"></span><svg width="10" height="6" viewBox="0 0 10 6"><path d="M0 0l5 6 5-6z" fill="#F97316"/></svg></button><div class="ms-panel"><div class="ms-search"><input type="text" placeholder="Pesquisar…"></div><div class="ms-list"></div></div></div></div>
       <div class="hfilter"><label>Ação</label><div class="ms-wrap" id="ms-acao"><button class="ms-btn" onclick="toggleMs('ms-acao')"><span class="ms-lbl">Ação</span><span class="ms-cnt"></span><svg width="10" height="6" viewBox="0 0 10 6"><path d="M0 0l5 6 5-6z" fill="#F97316"/></svg></button><div class="ms-panel"><div class="ms-search"><input type="text" placeholder="Pesquisar…"></div><div class="ms-list"></div></div></div></div>
+      <div class="hfilter"><label>Responsável</label><input type="text" id="f-resp" class="f-resp" placeholder="Responsável" autocomplete="off" oninput="render()"></div>
       <button class="tool ico" id="themeBtn" title="Claro / escuro"></button>
       <span class="saved-msg" id="savedMsg">Salvo ✓</span>
       <span style="display:none"><button id="viewBtn"></button><button id="ganttBtn"></button></span>
@@ -951,6 +959,8 @@ function toggleMs(id){
   }
 }
 function getMsValues(id){const w=document.getElementById(id);return w&&w._sel?[...w._sel]:[];}
+function respFiltro(){const e=document.getElementById('f-resp');return e?e.value.trim().toLowerCase():'';}
+function respOk(v,fr){return !fr||String(v||'').toLowerCase().includes(fr);}
 
 let UNI_OPTS=[],VIG_OPTS=[],ORG_OPTS=[],ST_OPTS=[],FATO_OPTS=[],CONTA_OPTS=[],_vigInit=false;
 // nome limpo do fato: 1ª linha, sem o "Desvio de R$ …" dos fatos antigos e
@@ -1126,9 +1136,9 @@ function focaQuadro(){
 function render(){
   const c=document.getElementById('content');
   if(!_ROWS.length){c.innerHTML='<div class="tbl-section"><div class="empty">Nenhuma ação cadastrada ainda. Assim que as unidades preencherem o FCA, os registros aparecem aqui.</div></div>';return;}
-  const fu=getMsValues('ms-uni'),fv=getMsValues('ms-vig'),fo=getMsValues('ms-org'),fs=getMsValues('ms-st'),fp=getMsValues('ms-proj'),fc=getMsValues('ms-causa'),fa=getMsValues('ms-acao'),ff=getMsValues('ms-fato'),fct=getMsValues('ms-conta'),fpz=getMsValues('ms-prazo');
+  const fu=getMsValues('ms-uni'),fv=getMsValues('ms-vig'),fo=getMsValues('ms-org'),fs=getMsValues('ms-st'),fp=getMsValues('ms-proj'),fc=getMsValues('ms-causa'),fa=getMsValues('ms-acao'),ff=getMsValues('ms-fato'),fct=getMsValues('ms-conta'),fpz=getMsValues('ms-prazo'),fr=respFiltro();
   const fillState=v=>String(v||'').trim()?'Preenchida':'Em branco';
-  const vis=_ROWS.filter(r=>(!fu.length||fu.includes(r.unidade))&&(!fv.length||fv.includes(r.vigencia))&&(!fo.length||fo.includes(r.origem))&&(!fs.length||fs.includes(r.status||DEFAULT_STATUS))&&(!fp.length||fp.includes(projLabel(r.projeto)))&&(!fc.length||fc.includes(fillState(r.causa)))&&(!fa.length||fa.includes(fillState(r.acao)))&&(!ff.length||ff.includes(r.fato))&&(!fct.length||contasDe(r).some(c=>fct.includes(c)))&&(!fpz.length||fpz.includes(prazoState(r))));
+  const vis=_ROWS.filter(r=>(!fu.length||fu.includes(r.unidade))&&(!fv.length||fv.includes(r.vigencia))&&(!fo.length||fo.includes(r.origem))&&(!fs.length||fs.includes(r.status||DEFAULT_STATUS))&&(!fp.length||fp.includes(projLabel(r.projeto)))&&(!fc.length||fc.includes(fillState(r.causa)))&&(!fa.length||fa.includes(fillState(r.acao)))&&(!ff.length||ff.includes(r.fato))&&(!fct.length||contasDe(r).some(c=>fct.includes(c)))&&(!fpz.length||fpz.includes(prazoState(r)))&&respOk(r.responsavel,fr));
   vis.sort((a,b)=>String(a.unidade||'').localeCompare(String(b.unidade||''))||(vigNum(b.vigencia)-vigNum(a.vigencia))||String(a.projeto||'').localeCompare(String(b.projeto||''))||String(a.fato||'').localeCompare(String(b.fato||'')));  // unidade A→Z, vigência recente, projeto, fato
   let body;
   if(!vis.length){body='<div class="tbl-section"><div class="empty">Nenhuma ação para os filtros selecionados.</div></div>';}
@@ -1144,7 +1154,7 @@ function render(){
   c.innerHTML=body;
   if(VIEW==='resumo'||VIEW==='ranking'){
     // idem: a série mensal enxerga todas as vigências, e o filtro só acende as escolhidas
-    const visSemVig=_ROWS.filter(r=>(!fu.length||fu.includes(r.unidade))&&(!fo.length||fo.includes(r.origem))&&(!fs.length||fs.includes(r.status||DEFAULT_STATUS))&&(!fp.length||fp.includes(projLabel(r.projeto)))&&(!fc.length||fc.includes(fillState(r.causa)))&&(!fa.length||fa.includes(fillState(r.acao)))&&(!ff.length||ff.includes(r.fato))&&(!fct.length||contasDe(r).some(c=>fct.includes(c)))&&(!fpz.length||fpz.includes(prazoState(r))));
+    const visSemVig=_ROWS.filter(r=>(!fu.length||fu.includes(r.unidade))&&(!fo.length||fo.includes(r.origem))&&(!fs.length||fs.includes(r.status||DEFAULT_STATUS))&&(!fp.length||fp.includes(projLabel(r.projeto)))&&(!fc.length||fc.includes(fillState(r.causa)))&&(!fa.length||fa.includes(fillState(r.acao)))&&(!ff.length||ff.includes(r.fato))&&(!fct.length||contasDe(r).some(c=>fct.includes(c)))&&(!fpz.length||fpz.includes(prazoState(r)))&&respOk(r.responsavel,fr));
     pintaResumoAdmin(vis,visSemVig,fv);
   }
 }
@@ -1594,8 +1604,9 @@ async function initApp(){
 initApp();
 </script>
 <script src="../assets/mobile.js"></script>
+<script src="../assets/ctrlk.js"></script>
 <script src="../assets/excel-export.js"></script>
 <script src="../assets/sortable-table.js"></script>
-<script src="../assets/build-check.js?v=202608181300"></script>
+<script src="../assets/build-check.js?v=202608191600"></script>
 </body>
 </html>
