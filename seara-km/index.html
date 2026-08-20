@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
-<meta name="build" content="202608192100">
+<meta name="build" content="202608201100">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <title>Painel KM · Seara · Gestão em Movimento</title>
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -420,7 +420,7 @@ table.dre td.cg-t,.cg-t{color:var(--verde)!important;font-weight:700;}
           </div>
         </div>
         <div class="kpis k4">
-          <div class="kpi"><div class="kl">Km remunerado</div><div class="kv" id="hero-kmrem">—</div><div class="km">total do período filtrado</div></div>
+          <div class="kpi"><div class="kl">Km remunerado</div><div class="kv" id="hero-kmrem">—</div><div class="km" id="k-rem-m">total do período filtrado</div></div>
           <div class="kpi"><div class="kl">Placas no recorte</div><div class="kv" id="k-placas">—</div><div class="km" id="k-placas-m">—</div></div>
           <div class="kpi"><div class="kl">Tipos de veículo</div><div class="kv" id="k-tipos">—</div><div class="km">no período filtrado</div></div>
           <div class="kpi"><div class="kl">Vigências</div><div class="kv" id="k-vigs">—</div><div class="km" id="k-vigs-m">—</div></div>
@@ -617,7 +617,7 @@ async function fetchData() {
   // VEZ POR VIAGEM. A mesma viagem gera vários CTEs (normal, complementar,
   // descarga, pernoite…) e todos repetem o km da viagem: somar linha a linha
   // multiplicava o km. A chave é o CD_VIAGEM_TRANSPORTE (col B).
-  const remMap = {}, vistas = new Set();
+  const remMap = {}, vistas = new Set(), mesesCTE = new Set();
   ctes.forEach(r => {
     const viagem = r[0];
     if (viagem == null || viagem === '') return;
@@ -626,9 +626,30 @@ async function fetchData() {
     vistas.add(vk);
     const placa = _placaKey(r[1]), vig = _vigDeData(r[2]), km = +r[3] || 0;
     if (!placa || !vig) return;
+    mesesCTE.add(vig);
     const k = placa + '|' + vig;
     remMap[k] = (remMap[k] || 0) + km;
   });
+  // REMUNERADO do mês ainda NÃO COLADO cai no mês anterior (Renan, 20/08/2026):
+  // o Combustível chega primeiro e a Base CTEs depois — enquanto a vigência não
+  // tiver NENHUM CTE, cada placa usa o remunerado da última vigência anterior
+  // dela. Quando o Planejamento enviar e a aba for colada, o valor real
+  // substitui sozinho (a vigência passa a existir em mesesCTE).
+  const remHist = {};
+  Object.entries(remMap).forEach(([k, km]) => {
+    const [placa, vig] = k.split('|');
+    (remHist[placa] || (remHist[placa] = [])).push({ ord: vig.slice(-4) + vig.slice(0, 2), km });
+  });
+  Object.values(remHist).forEach(a => a.sort((x, y) => x.ord.localeCompare(y.ord)));
+  function remDe(placa, vig) {
+    if (mesesCTE.has(vig)) return remMap[placa + '|' + vig] || 0;   // mês colado: vale o que está
+    const h = remHist[placa];
+    if (!h || !h.length) return 0;
+    const alvo = vig.slice(-4) + vig.slice(0, 2);
+    let melhor = null;
+    for (const x of h) { if (x.ord < alvo) melhor = x; }
+    return melhor ? melhor.km : 0;
+  }
   let _semRsKm = 0;
 
   // realizado por placa/mês (Combustível) — só linhas com km rodado > 0 — cruza com o remunerado
@@ -639,7 +660,7 @@ async function fetchData() {
     const yr = +r[6], real = +r[10] || 0;
     if (!placa || mi < 0 || !yr || real <= 0) return;
     const vig = String(mi + 1).padStart(2,'0') + '/' + yr;
-    const rem = remMap[placa + '|' + vig] || 0;
+    const rem = remDe(placa, vig);
     const rsKm = rsKmDe(placa, vig);
     if (!rsKmMap[placa + '|' + vig] && rem > 0) _semRsKm++;
     ALL.push({
@@ -649,7 +670,8 @@ async function fetchData() {
       und:   String(r[9] || '').trim() || '—',      // TIPO VEÍCULO  → filtro "Tipo Veíc."
       rem,
       real:  real,
-      imp:   (real - rem) * rsKm
+      imp:   (real - rem) * rsKm,
+      remFb: !mesesCTE.has(vig) && rem > 0          // remunerado veio do mês anterior
     });
   });
   if (_semRsKm) console.warn(`Impacto: ${_semRsKm} placa(s)/vigência(s) sem linha na Base Remunerado — usada a tabela anterior da própria placa.`);
@@ -1205,7 +1227,7 @@ function renderCharts(F) {
     mkVertBar(projByPct, 'pct',   v => Math.round(Math.abs(v)) + '%'));
 }
 
-const CACHE_KEY='bi_cache_kmseara_v2';  // v2: Impacto usa o R$/km da Base Remunerado
+const CACHE_KEY='bi_cache_kmseara_v3';  // v3: remunerado de mês não colado cai no mês anterior
 const CACHE_TTL=60*60*1000; // 1 hora
 
 async function atualizar() {
@@ -1269,6 +1291,11 @@ render=function(){
   const vigs=[...new Set(F.map(r=>r.vig).filter(Boolean))].sort(sortVig);
   set('k-placas', placas.length||'—');
   set('k-placas-m', [...new Set(F.map(r=>r.proj).filter(Boolean))].length+' modelo(s)');
+  // remunerado emprestado do mês anterior (Base CTEs da vigência ainda não colada)
+  const fbVigs=[...new Set(F.filter(r=>r.remFb).map(r=>r.vig))].sort(sortVig);
+  set('k-rem-m', fbVigs.length
+    ? '⚠ '+fbVigs.map(vigLabelShort).join(', ')+' sem Base CTEs — usando o mês anterior'
+    : 'total do período filtrado');
   set('k-tipos', tipos.length||'—');
   set('k-vigs', vigs.length||'—');
   set('k-vigs-m', vigs.length?vigLabelShort(vigs[0])+(vigs.length>1?' → '+vigLabelShort(vigs[vigs.length-1]):''):'—');
@@ -1343,6 +1370,6 @@ initPdfExport({
   isLight:()=>document.body.classList.contains('claro'), setTheme:aplicaTema
 });
 </script>
-<script src="../assets/build-check.js?v=202608192100"></script>
+<script src="../assets/build-check.js?v=202608201100"></script>
 </body>
 </html>
