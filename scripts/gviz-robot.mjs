@@ -12,9 +12,12 @@
 // para o Google, como sempre. financeiro-pessoal fica FORA de propósito
 // (dados pessoais não entram no snapshot compartilhado).
 // ============================================================
+import { createHash } from 'node:crypto';
+
 const SUPA = 'https://lozwipoeacpvplgkrxkq.supabase.co';
 const SERVICE_KEY = process.env.GEM_SUPABASE_SERVICE_KEY;
 if (!SERVICE_KEY) { console.error('GEM_SUPABASE_SERVICE_KEY ausente'); process.exit(1); }
+const HDRS = { apikey: SERVICE_KEY, Authorization: 'Bearer ' + SERVICE_KEY };
 
 const DRE  = '1qcTy2ppLCGBKKqZCxCYWCTL9kTAuWfHBMyBfWJOyih8';   // DRE (Visão Financeira e cia.)
 const DISP = '1wCoRGsvOgmIvfLW4F9Sxr-5AX9Go-aFlRVjrQ_B2ilM';   // Base Dispersão de km
@@ -72,7 +75,16 @@ function urlDe(a) {
   return `https://docs.google.com/spreadsheets/d/${a.id}/gviz/tq?${p.join('&')}`;
 }
 
-let ok = 0, falhas = 0;
+// A coluna hash pode ainda não existir (SQL não rodado): detectar uma vez
+// e, sem ela, cair no comportamento antigo (upsert sempre).
+let temHash = false;
+try {
+  const r = await fetch(`${SUPA}/rest/v1/gviz_snapshot?select=key,hash&limit=1`, { headers: HDRS });
+  temHash = r.ok;
+  if (!temHash) console.log('coluna hash ausente (rodar o ALTER TABLE) — gravando sempre');
+} catch (e) { console.log('não deu para checar a coluna hash: ' + e.message); }
+
+let ok = 0, iguais = 0, falhas = 0;
 for (const alvo of ALVOS) {
   const key = chaveDe(alvo);
   try {
@@ -84,13 +96,32 @@ for (const alvo of ALVOS) {
       else await new Promise(res => setTimeout(res, 1500));
     }
     if (body == null) throw new Error('resposta gviz inválida');
+    const hash = createHash('md5').update(body).digest('hex');
+
+    // Conteúdo igual ao gravado? Só renova o updated_at (gravação minúscula:
+    // não reescreve o corpo de MBs — poupa o Disk IO Budget do Supabase).
+    if (temHash) {
+      const q = await fetch(`${SUPA}/rest/v1/gviz_snapshot?key=eq.${encodeURIComponent(key)}&select=hash`, { headers: HDRS });
+      const row = q.ok ? (await q.json())[0] : null;
+      if (row && row.hash === hash) {
+        const tk = await fetch(`${SUPA}/rest/v1/gviz_snapshot?key=eq.${encodeURIComponent(key)}`, {
+          method: 'PATCH',
+          headers: { ...HDRS, 'Content-Type': 'application/json', Prefer: 'return=minimal' },
+          body: JSON.stringify({ updated_at: new Date().toISOString() })
+        });
+        if (!tk.ok) throw new Error('touch HTTP ' + tk.status + ' ' + (await tk.text()).slice(0, 120));
+        ok++; iguais++;
+        console.log(`=   ${key}  sem mudança (${(body.length / 1024).toFixed(0)}KB poupados)`);
+        continue;
+      }
+    }
+
+    const reg = { key, body, bytes: body.length, updated_at: new Date().toISOString() };
+    if (temHash) reg.hash = hash;
     const up = await fetch(`${SUPA}/rest/v1/gviz_snapshot?on_conflict=key`, {
       method: 'POST',
-      headers: {
-        apikey: SERVICE_KEY, Authorization: 'Bearer ' + SERVICE_KEY,
-        'Content-Type': 'application/json', Prefer: 'resolution=merge-duplicates'
-      },
-      body: JSON.stringify([{ key, body, bytes: body.length, updated_at: new Date().toISOString() }])
+      headers: { ...HDRS, 'Content-Type': 'application/json', Prefer: 'resolution=merge-duplicates' },
+      body: JSON.stringify([reg])
     });
     if (!up.ok) throw new Error('upsert HTTP ' + up.status + ' ' + (await up.text()).slice(0, 120));
     ok++;
@@ -100,5 +131,5 @@ for (const alvo of ALVOS) {
     console.log(`FALHOU  ${key}  ${e.message}`);
   }
 }
-console.log(`\n${ok} gravados · ${falhas} falha(s) de ${ALVOS.length} alvos`);
+console.log(`\n${ok} ok (${iguais} sem mudança) · ${falhas} falha(s) de ${ALVOS.length} alvos`);
 if (ok === 0) process.exit(1);   // nada gravado = erro de verdade; falha parcial não derruba (o shim cai p/ o Google)
