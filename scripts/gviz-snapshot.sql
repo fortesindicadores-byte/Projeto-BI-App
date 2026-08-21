@@ -16,8 +16,12 @@ create table if not exists public.gviz_snapshot (
   key         text primary key,
   body        text not null,          -- resposta gviz crua (setResponse(...))
   bytes       integer,
+  hash        text,                   -- md5 do body: o robô só regrava quando mudou
   updated_at  timestamptz not null default now()
 );
+
+-- (21/08/2026) tabela criada antes da coluna hash: acrescentar sem recriar.
+alter table public.gviz_snapshot add column if not exists hash text;
 
 alter table public.gviz_snapshot enable row level security;
 
