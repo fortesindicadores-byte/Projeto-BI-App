@@ -2,13 +2,14 @@
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
-<meta name="build" content="202608211500">
+<meta name="build" content="202608212040">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <title>Scorecard · Gestão em Movimento</title>
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="../assets/gerot-base.js?v=202608211500"></script>
+<script src="../assets/swr-cache.js"></script>
 <style>
 /* ============================================================
    SCORECARD — a nota da Frota, no layout padrão do portal.
@@ -1053,14 +1054,19 @@ async function carregarICs(){
 }
 
 async function carregar(){
-  const cached=rd('data2');
+  // "pinta na hora": o cache antigo (localStorage) falhava em silêncio porque o
+  // pacote passa de 5MB — por isso o painel abria frio toda vez. Agora é
+  // IndexedDB (SwrCache), sem esse teto. (21/08/2026)
+  let cached=null;
+  try{ const h=(typeof SwrCache!=='undefined')&&await SwrCache.get('sc_data2'); cached=h&&h.v; }catch(e){}
+  try{ localStorage.removeItem('sc_data2'); }catch(e){}   // libera o espaço do cache antigo
   if(cached){try{applyData(cached);STATUS.textContent='Atualizando…';}catch(e){}}
   else STATUS.textContent='Carregando…';
   try{
     const icRows=await carregarICs();
     const [dreR,kmR,dpoR,fcaR,rslR,kmlEfR,conlogR]=await Promise.all([gviz(SRC.dre).catch(()=>null),gviz(SRC.km).catch(()=>null),gviz(SRC.dpo).catch(()=>null),gviz(SRC.fca).catch(()=>null),gviz(SRC.rsl).catch(()=>null),gviz(SRC.kmlEf).catch(()=>null),fetchConlog().catch(()=>null)]);
     const d={ics:icRows,dre:dreR,km:kmR,dpo:dpoR,fca:fcaR,rsl:rslR,kmlEf:kmlEfR,conlog:conlogR};
-    wr('data2',d);
+    try{ if(typeof SwrCache!=='undefined') SwrCache.put('sc_data2',d); }catch(e){}
     applyData(d);
     const now=new Date();STATUS.textContent=`${now.toLocaleDateString('pt-BR')} ${now.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})}`;
   }catch(e){console.error(e);if(!cached)STATUS.textContent='Erro ao carregar';}
@@ -1189,6 +1195,6 @@ initPdfExport({
   isLight:()=>document.body.classList.contains('claro'), setTheme:aplicaTema
 });
 </script>
-<script src="../assets/build-check.js?v=202608211500"></script>
+<script src="../assets/build-check.js?v=202608212040"></script>
 </body>
 </html>
