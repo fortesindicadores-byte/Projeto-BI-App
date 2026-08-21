@@ -10,8 +10,8 @@ const FAROL_SHEET_ID='1xOv7OJzErGV3vNCMOY_5O6px7vFvC990CW-1vGul5sY';
 const DISP_SHEET_ID='1oW3mss0pXVI6gaDU2z5cDAKvW40LWHCQXpanqSvb12o';
 const DISP_META=93, DISP_SONHO=97;   // <93 vermelho · 93–97 amarelo · ≥97 verde
 // Pneus — mesmo Supabase (Conlog) do painel /pneus/
-const PNEUS_SB_URL='https://ewbzeqsneeylwkxtcpme.supabase.co';
-const PNEUS_SB_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImV3YnplcXNuZWV5bHdreHRjcG1lIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE4NzY2MTcsImV4cCI6MjA5NzQ1MjYxN30.W8W6Yunt6Z8NB73qpOD8eqYlrsgMRgEG-siYsJFwDwE';
+const PNEUS_SB_URL='https://lozwipoeacpvplgkrxkq.supabase.co';
+const PNEUS_SB_KEY='sb_publishable_ggKEEebc5zjgQDVsF92Upw_6uoLmKe9';
 // branch_id (Prolog) → código Farol (2550 ANG fora do escopo Farol)
 const PNEUS_BRANCH={1676:'MCC T1',1677:'MCC T2',37:'CGR',1906:'CBA T1 WH',1907:'CBA T1',1878:'CBA T2',20:'FLP',30:'GRL',24:'BLC',2517:'NFR',26:'PLT',38:'PIR',2277:'RON'};
 
