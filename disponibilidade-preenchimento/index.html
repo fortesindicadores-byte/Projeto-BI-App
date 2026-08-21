@@ -388,6 +388,10 @@ input[type=date]::-webkit-calendar-picker-indicator{cursor:pointer;}
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
       Veículo
     </button>
+    <button class="s-item" id="itRefoto" onclick="refazerFoto()" style="display:none" title="Regrava a foto de HOJE com os eventos atuais — use quando as unidades lançarem depois das 09h (ex.: sistema fora do ar de manhã)">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+      Refazer foto de hoje
+    </button>
 
     <div class="s-sec"><b>Atalhos</b></div>
     <button class="s-item" data-vis="previsao">
@@ -1255,6 +1259,7 @@ function pintaLateral(){
   document.querySelectorAll('.s-item[data-ver]').forEach(b=>b.classList.toggle('on',VER===b.dataset.ver));
   const itV=$('itVeic'); if(itV) itV.style.display=(UNIT==='ANG')?'':'none';   // cadastro de veículo: só ANG
   const itA=$('itAder'); if(itA) itA.style.display=ADMIN?'':'none';            // aderência: só admin
+  const itR=$('itRefoto'); if(itR) itR.style.display=ADMIN?'':'none';          // refazer foto: só admin
   $('btProj').classList.toggle('on',FPROJ.size>0);
   $('btGrupo').classList.toggle('on',FGRUPO.size>0);
   $('btTipo').classList.toggle('on',FTIPO.size>0);
@@ -1607,6 +1612,26 @@ function trocaTema(){aplicaTema(document.body.classList.contains('claro')?'dark'
 aplicaTema(localStorage.getItem('bi_theme')||'dark');
 
 /* ── início ── */
+// Botão do admin p/ "liberar mais tempo" quando o sistema cai de manhã (Renan,
+// 21/08/2026, depois do incidente do Supabase): as unidades lançam atrasado e a
+// foto automática das 09h fica velha — refazer regrava SÓ o dia de hoje
+// (fonte='app'; dias anteriores intocados) com os eventos que estão na tela.
+async function refazerFoto(){
+  if(!ADMIN) return;
+  if(!confirm('Refazer a foto de disponibilidade de HOJE?\n\nUse quando as unidades lançarem depois das 09h (ex.: sistema fora do ar de manhã). A foto do dia é regravada com os eventos atuais; os dias anteriores não são tocados.')) return;
+  const bt=$('itRefoto'); bt.disabled=true;
+  try{
+    const {data,error}=await sb.rpc('disp_refoto_hoje');
+    if(error) throw error;
+    RES=null;                       // Resumo relê o disp_snapshot
+    await loadDias();
+    contaAbertas(); render();
+    alert(data||'Foto de hoje refeita.');
+  }catch(e){
+    alert('Erro ao refazer a foto: '+(e.message||e)+'\n\nSe aparecer "function ... does not exist", o SQL do disp_refoto_hoje ainda não foi rodado no Supabase.');
+  }
+  bt.disabled=false;
+}
 function semAcesso(msg){
   $('cols').innerHTML=`<div class="tab-wrap" style="max-width:520px;margin:40px auto;padding:24px;text-align:center">
     <div style="color:var(--vermelho);font-weight:800;font-size:12px;text-transform:uppercase;letter-spacing:1px">Acesso restrito</div>

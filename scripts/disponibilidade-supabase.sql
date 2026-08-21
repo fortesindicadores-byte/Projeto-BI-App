@@ -204,6 +204,23 @@ end $$;
 -- só o cron/admin roda — não expor via PostgREST
 revoke execute on function public.disp_snapshot_diario() from public, anon, authenticated;
 
+-- (21/08/2026) botão "Refazer foto de hoje" do app: quando o sistema cai de
+-- manhã (ex.: incidente do Supabase) as unidades lançam depois das 09h e a
+-- foto automática fica velha. O ADMIN refaz a foto do dia pela tela — o
+-- wrapper checa o perfil e chama o snapshot (que regrava só hoje, fonte='app').
+create or replace function public.disp_refoto_hoje()
+returns text language plpgsql security definer set search_path = public as $$
+begin
+  if not public.fca_is_admin() then
+    raise exception 'Somente administradores podem refazer a foto do dia.';
+  end if;
+  perform public.disp_snapshot_diario();
+  return 'Foto de ' || to_char((now() at time zone 'America/Sao_Paulo')::date, 'DD/MM/YYYY')
+         || ' refeita com os eventos atuais.';
+end $$;
+revoke execute on function public.disp_refoto_hoje() from public, anon;
+grant execute on function public.disp_refoto_hoje() to authenticated;
+
 -- ---------- RLS --------------------------------------------------------------
 alter table public.unidade_depara    enable row level security;
 alter table public.indisponibilidade enable row level security;
