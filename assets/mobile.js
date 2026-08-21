@@ -93,6 +93,33 @@
     keep[0]=1;
     if((hs[0]===''||hs[0]==='#')&&n>1)keep[1]=1;
     function find(re,not){for(var i=0;i<n;i++){if(keep[i])continue;var h=hs[i];if(re.test(h)&&(!not||!not.test(h)))return i;}return -1;}
+
+    /* RANKING (Renan, 21/08/2026): tabela larga com um indicador por coluna
+       mostra no celular só QUEM é a linha + a PONTUAÇÃO; os indicadores
+       aparecem no "+ Detalhar". O bloco de identidade são as colunas de
+       TEXTO do começo (ex.: # · Unidade · Tier) — sem elas duas linhas da
+       mesma unidade em tiers diferentes ficariam iguais. */
+    if(n>=6){
+      var score=-1,ordem=[/PONTUA|SCORE|\bNOTA\b/,/M[EÉ]DIA/,/ADER[EÊ]NCIA TOTAL|\bTOTAL\b/];
+      for(var o=0;o<ordem.length&&score<0;o++)score=find(ordem[o]);
+      if(score>=0){
+        var linha=t.tBodies[0]&&t.tBodies[0].rows[0];
+        var ident=2;                                   /* sem corpo: rótulo (+#) */
+        if(linha){
+          ident=0;
+          for(var c=0;c<Math.min(n,4);c++){
+            var txt=NORM((linha.cells[c]||{}).textContent||'');
+            if(hs[c]===''||hs[c]==='#'){ ident=c+1; continue; }   /* a coluna do ranking (#) é identidade */
+            if(txt==='')  { ident=c+1; continue; }      /* célula vazia ainda é identidade */
+            if(/[A-Z]/.test(txt)&&!/^[-+]?[\d.,]+\s*(%|PP|R\$)?$/.test(txt)){ ident=c+1; continue; }
+            break;                                     /* achou número: acabou a identidade */
+          }
+          if(!ident)ident=1;
+        }
+        keep={}; for(var k=0;k<ident&&k<score;k++)keep[k]=1; keep[score]=1;
+        return keep;
+      }
+    }
     var NOT_D=/Δ|DELTA|DESV|VAR|%/;
     var real=find(/REALIZAD|\bREAL\b/,NOT_D);
     if(real>=0){
