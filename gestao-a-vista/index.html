@@ -1,0 +1,732 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="build" content="202608212300">
+<title>Gestão à Vista</title>
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="../assets/gviz-cache.js"></script>
+<script src="../assets/swr-cache.js"></script>
+<!-- classes das seções (tbl-section, quads, mini-hero, rk-leg…) que o
+     farol-core.js emite; o <style> abaixo repinta tudo com os tokens do
+     layout padrão, então o farol.css entra só pela estrutura -->
+<link rel="stylesheet" href="../farol-frota/farol.css?v=202608061659">
+<style>
+
+/* ============================================================
+   VISÃO FINANCEIRA — a DRE da Frota,
+   no shell do app de Disponibilidade (painel de vidro + lateral).
+   Cinco visões na lateral: Resumo · Abertura Nominal · Abertura AV ·
+   YTG + TGT · FCT.  Dados, filtros e contas: idênticos ao original.
+   ============================================================ */
+:root{
+  /* fundo UNIFORME (mesma regra do hub): o degradê diagonal clareava para o
+     canto superior direito e deixava metade da tela mais clara que a outra */
+  --fundo:
+    radial-gradient(80% 60% at 90% 0%, rgba(255,244,232,.035) 0%, transparent 60%),
+    linear-gradient(45deg, #121214 0%, #121214 100%);
+  --luz:      inset 0 1px 0 rgba(255,255,255,.09);
+  --luz-card: inset 0 1px 0 rgba(255,255,255,.08);
+  --app:      rgba(255,255,255,.030);
+  --side:     rgba(30,30,30,.50);
+  --linha:    rgba(255,255,255,.06);
+  --card:     rgba(44,44,46,.78);
+  --brilho:   linear-gradient(180deg, rgba(255,255,255,.022) 0%, rgba(255,255,255,0) 46%);
+  --card-brd: rgba(255,255,255,.07);
+  --txt:      #EEF2FA;
+  --txt2:     #B2BCD2;
+  --txt3:     #676F83;
+  --txt4:     #4C505C;
+  --hover:    rgba(255,255,255,.06);
+  --azul:     #2E90E8;
+  --verde:    #3BB33B;
+  --vermelho: #FF5252;
+  --laranja:  #F97316;
+  --ambar:    #F4A100;
+  --cinza:    #5B657C;
+  --cabec:    #2B2B30;
+  --pop:      #26262B;   /* menus suspensos: OPACOS, nunca translúcidos */
+}
+body.claro{
+  --fundo:
+    radial-gradient(80% 60% at 90% 0%, rgba(255,255,255,.35) 0%, transparent 60%),
+    linear-gradient(45deg, #E1E2E5 0%, #E1E2E5 100%);
+  --luz:      inset 0 1px 0 rgba(255,255,255,.9);
+  --luz-card: inset 0 1px 0 rgba(255,255,255,1);
+  --app:      rgba(255,255,255,.34);
+  --side:     rgba(255,255,255,.50);
+  --linha:    rgba(15,23,42,.10);
+  --card:     rgba(255,255,255,.74);
+  --brilho:   linear-gradient(180deg, rgba(255,255,255,.6) 0%, rgba(255,255,255,0) 46%);
+  --card-brd: rgba(15,23,42,.10);
+  --txt:      #161D2B;
+  --txt2:     #4A5568;
+  --txt3:     #737D91;
+  --txt4:     #8B94A6;
+  --hover:    rgba(15,23,42,.05);
+  --azul:     #1B6FC4;
+  --verde:    #00B300;
+  --vermelho: #FF0000;
+  --ambar:    #E9A400;
+  --cinza:    #939CAF;
+  --cabec:    #DCDFE6;
+  --pop:      #FFFFFF;
+}
+*{margin:0;padding:0;box-sizing:border-box;}
+@supports not selector(::-webkit-scrollbar){
+  *{scrollbar-width:thin;scrollbar-color:color-mix(in srgb,var(--txt3) 42%,transparent) transparent;}
+}
+::-webkit-scrollbar{width:11px;height:11px;}
+::-webkit-scrollbar-track{background:transparent;}
+::-webkit-scrollbar-thumb{background:color-mix(in srgb,var(--txt3) 42%,transparent);
+  border:3px solid transparent;background-clip:content-box;border-radius:9px;}
+::-webkit-scrollbar-thumb:hover{background:color-mix(in srgb,var(--txt3) 72%,transparent);background-clip:content-box;}
+::-webkit-scrollbar-corner{background:transparent;}
+::-webkit-scrollbar-button{display:none;width:0;height:0;}
+body::after{content:'';position:fixed;inset:0;z-index:0;pointer-events:none;opacity:.5;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='3'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)' opacity='.05'/%3E%3C/svg%3E");}
+.app{z-index:1;}
+html,body{height:100%;overflow:hidden;}
+body{font-family:'Montserrat',-apple-system,BlinkMacSystemFont,sans-serif;font-size:13px;color:var(--txt);
+  background:var(--fundo);overflow:hidden;}
+
+.app{position:absolute;inset:34px;display:flex;border-radius:22px;overflow:hidden;
+  border:1px solid rgba(255,255,255,.10);box-shadow:0 28px 70px rgba(0,0,0,.55), var(--luz);}
+.app::before{content:'';position:absolute;inset:0;background:var(--app);
+  backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);z-index:0;}
+.side,.board{position:relative;z-index:1;}
+
+/* ── barra lateral ── */
+.side{width:264px;flex:0 0 264px;display:flex;flex-direction:column;
+  background:var(--side);border-right:1px solid var(--linha);padding:16px 10px 12px;
+  backdrop-filter:blur(13px);-webkit-backdrop-filter:blur(13px);
+  box-shadow:var(--luz), 8px 0 28px rgba(0,0,0,.25);overflow:auto;}
+.s-top{display:flex;align-items:center;gap:9px;padding:2px 8px 14px;}
+.s-top b{flex:1;font-size:13.5px;font-weight:600;}
+.s-mini{display:flex;align-items:center;justify-content:center;width:24px;height:24px;flex:0 0 24px;
+  background:transparent;border:0;border-radius:6px;color:var(--txt3);cursor:pointer;}
+.s-mini:hover{background:var(--hover);color:var(--txt);}
+.side.mini{width:64px;flex:0 0 64px;padding:16px 8px 12px;}
+.side.mini .s-top{justify-content:center;padding-bottom:12px;}
+.side.mini .s-top b,.side.mini .s-top>svg{display:none;}
+.side.mini .s-sec,.side.mini .s-item .n,.side.mini .s-user div{display:none;}
+.side.mini .s-item{font-size:0;justify-content:center;padding:9px 0;gap:0;}
+.side.mini .s-user{flex-wrap:wrap;gap:6px;justify-content:center;padding:12px 0 2px;}
+.side.mini .s-sair{margin:0;}
+.s-sec{display:flex;align-items:center;gap:6px;padding:14px 8px 8px;
+  font-size:10px;font-weight:600;color:var(--txt3);text-transform:uppercase;letter-spacing:1.1px;}
+.s-item{display:flex;align-items:center;gap:9px;width:100%;padding:7px 8px;border:0;border-radius:7px;
+  background:transparent;color:var(--txt2);font-family:inherit;font-size:12.5px;font-weight:500;text-align:left;cursor:pointer;}
+.s-item:hover{background:var(--hover);color:var(--txt);}
+.s-item.on{background:var(--hover);color:var(--txt);font-weight:600;}
+.s-item .n{margin-left:auto;font-size:11px;color:var(--txt3);font-weight:600;}
+.s-user{margin-top:auto;display:flex;align-items:center;gap:9px;padding:12px 8px 2px;border-top:1px solid var(--linha);}
+.s-user div{flex:1;min-width:0;}
+.s-user b{display:block;font-size:12px;font-weight:600;line-height:1.2;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.s-user i{display:block;font-size:9.5px;font-style:normal;color:var(--txt3);text-transform:uppercase;letter-spacing:.8px;margin-top:2px;}
+.s-user .av{flex:0 0 24px;}
+.av{width:24px;height:24px;border-radius:50%;display:flex;align-items:center;justify-content:center;
+  font-size:9px;font-weight:800;letter-spacing:.2px;color:#2A1405;background:#F97316;flex:0 0 24px;
+  box-shadow:0 1px 4px rgba(0,0,0,.25);}
+.s-sair{display:flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:7px;
+  color:var(--txt3);text-decoration:none;flex:0 0 26px;}
+.s-sair:hover{background:var(--hover);color:var(--txt);}
+.dica{position:fixed;z-index:9000;transform:translateY(-50%);pointer-events:none;opacity:0;
+  background:var(--pop);color:var(--txt);border:1px solid var(--card-brd);border-radius:7px;
+  padding:5px 9px;font-size:11.5px;font-weight:600;white-space:nowrap;
+  box-shadow:0 8px 22px rgba(0,0,0,.45);transition:opacity .12s;}
+.dica.on{opacity:1;}
+
+/* ── quadro ── */
+.board{flex:1;min-width:0;display:flex;flex-direction:column;}
+.top{display:flex;align-items:center;gap:6px;padding:20px 24px 12px;flex-wrap:wrap;}
+.tit-wrap{flex:1;min-width:0;}
+.top h1{font-size:21px;font-weight:600;letter-spacing:-.3px;}
+.tit-sub{font-size:11px;color:var(--txt3);font-weight:600;margin-top:2px;letter-spacing:.2px;}
+.tool{display:flex;align-items:center;gap:7px;background:transparent;border:0;border-radius:7px;
+  padding:6px 10px;color:var(--txt2);font-family:inherit;font-size:12.5px;font-weight:500;cursor:pointer;}
+.tool:hover{background:var(--hover);color:var(--txt);}
+.tool.ico{padding:7px 9px;}
+.filtros{display:flex;align-items:center;gap:4px;min-width:0;}
+
+/* ── filtros multi-select (mesma mecânica do painel original, visual do app) ── */
+.ms-wrap{position:relative;}
+.ms-btn{display:flex;align-items:center;gap:7px;background:transparent;border:0;border-radius:7px;
+  padding:6px 10px;color:var(--txt2);font-family:inherit;font-size:12.5px;font-weight:500;cursor:pointer;white-space:nowrap;}
+.ms-btn:hover{background:var(--hover);color:var(--txt);}
+.ms-wrap.ativo .ms-btn{background:var(--hover);color:var(--txt);}
+.ms-cnt{display:none;min-width:16px;height:16px;padding:0 5px;border-radius:9px;background:var(--laranja);
+  color:#2A1405;font-size:9.5px;font-weight:800;line-height:16px;text-align:center;}
+.ms-panel{display:none;position:absolute;top:calc(100% + 6px);right:0;z-index:60;min-width:236px;
+  background:var(--pop);border:1px solid var(--card-brd);border-radius:10px;padding:6px;
+  box-shadow:0 18px 44px rgba(0,0,0,.55), 0 3px 10px rgba(0,0,0,.35);}
+body.claro .ms-panel{box-shadow:0 18px 44px rgba(15,23,42,.20), 0 3px 10px rgba(15,23,42,.10);}
+.ms-panel.open{display:block;}
+.ms-search{display:flex;align-items:center;gap:7px;padding:6px 8px;margin-bottom:4px;border-bottom:1px solid var(--linha);}
+.ms-search input{flex:1;min-width:0;background:transparent;border:0;outline:0;font-family:inherit;font-size:12px;color:var(--txt);}
+.ms-list{max-height:262px;overflow:auto;}
+.ms-opt{display:flex;align-items:center;gap:9px;min-height:31px;padding:7px 9px;border-radius:7px;
+  color:var(--txt);font-size:12.5px;cursor:pointer;white-space:nowrap;}
+.ms-opt:hover{background:var(--hover);}
+.ms-opt input[type=checkbox]{accent-color:var(--azul);width:14px;height:14px;flex:0 0 14px;cursor:pointer;}
+.ms-opt.all-opt{font-weight:700;border-bottom:1px solid var(--linha);margin-bottom:4px;border-radius:0;}
+.ms-only{margin-left:auto;font-size:9px;font-weight:700;color:var(--laranja);padding:1px 7px;border-radius:4px;opacity:0;flex:0 0 auto;}
+.ms-opt:hover .ms-only{opacity:1;}
+.ms-only:hover{background:rgba(249,115,22,.2);}
+
+/* ── área de conteúdo ── */
+.cols{flex:1;min-height:0;display:flex;flex-direction:column;overflow:hidden;padding:0 24px 24px;}
+.vw{display:none;flex:1;min-height:0;flex-direction:column;gap:12px;}
+.vw.on{display:flex;overflow:auto;}
+.vw.rola{overflow:auto;padding-bottom:6px;}
+.card{border:1px solid var(--card-brd);border-radius:12px;background:var(--side);
+  backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);box-shadow:var(--luz-card);}
+
+/* hero + KPIs */
+/* igual ao painel original: Receita na ponta esquerda, EBITDA na ponta direita
+   com o conteúdo alinhado à direita (.hero-ebitda{margin-left:auto;text-align:right}) */
+.fin-hero{display:flex;align-items:flex-end;gap:20px;flex:0 0 auto;}
+.heb{margin-left:auto;text-align:right;}
+.heb .hdel{justify-content:flex-end;}
+.hlbl{font-size:9.5px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:.9px;}
+.hval{font-size:clamp(26px,3.6vh,40px);font-weight:800;line-height:1;margin:4px 0 7px;color:var(--txt);}
+.hdel{display:flex;gap:18px;flex-wrap:wrap;}
+.hdel div{font-size:9px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:.7px;}
+.hdel b{display:block;font-size:13px;font-weight:800;color:var(--txt);margin-top:2px;letter-spacing:0;text-transform:none;}
+.kpis{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;flex:0 0 auto;}
+.kpi{padding:19px 16px;border:1px solid var(--card-brd);border-radius:11px;background:var(--side);
+  backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);}
+.kpi .kl{font-size:9.5px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:.8px;}
+.kpi .kv{font-size:25px;font-weight:800;color:var(--txt);margin-top:7px;line-height:1.1;}
+.kpi .km{font-size:10.5px;color:var(--txt3);margin-top:8px;font-weight:600;}
+.kpi .km b{font-weight:800;}
+
+/* gráficos */
+.gr2{flex:1 1 auto;min-height:190px;max-height:44vh;display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+.gcard{min-height:0;display:flex;flex-direction:column;padding:12px 16px 10px;position:relative;}
+.gtit{font-size:12px;font-weight:800;}
+.gsub{font-size:10px;color:var(--txt3);margin:2px 0 6px;}
+.gcv{flex:1;min-height:0;position:relative;}
+.gleg{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:4px;}
+.gleg span{display:flex;align-items:center;gap:5px;font-size:9.5px;font-weight:700;color:var(--txt3);letter-spacing:.5px;}
+.gleg i{width:14px;height:0;border-top:2px dashed currentColor;display:inline-block;}
+.gleg i.sq{width:9px;height:9px;border:0;border-radius:2px;background:currentColor;}
+
+/* botões de referência / dimensão */
+.rt{background:transparent;border:1px solid var(--card-brd);border-radius:20px;padding:3px 10px;cursor:pointer;
+  font-family:inherit;font-size:9.5px;font-weight:800;color:var(--txt2);letter-spacing:.6px;white-space:nowrap;}
+.rt:hover{background:var(--hover);color:var(--txt);}
+.rt .l{color:var(--txt3);font-weight:600;}
+.rt.abs{position:absolute;top:10px;right:12px;z-index:3;}
+.dims{display:flex;gap:4px;flex-wrap:wrap;}
+.dimb{background:transparent;border:1px solid var(--card-brd);border-radius:7px;padding:4px 10px;cursor:pointer;
+  font-family:inherit;font-size:10.5px;font-weight:700;color:var(--txt2);}
+.dimb:hover{background:var(--hover);color:var(--txt);}
+.dimb.on{background:var(--azul);border-color:transparent;color:#fff;}
+
+/* tabelas DRE */
+.tsec{flex:1;min-height:0;display:flex;flex-direction:column;padding:14px 16px 12px;}
+.thead-row{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:2px;}
+.ttit{font-size:14px;font-weight:800;}
+.tsub{font-size:10px;color:var(--txt3);margin-bottom:8px;}
+.twrap{flex:1;min-height:0;overflow:auto;border:1px solid var(--card-brd);border-radius:10px;background:var(--side);}
+table.dre{width:100%;border-collapse:collapse;font-size:12px;}
+table.dre thead th{position:sticky;top:0;z-index:2;background:var(--cabec);text-align:right;
+  padding:10px 12px;font-size:9.5px;font-weight:700;color:var(--txt2);text-transform:uppercase;
+  letter-spacing:.7px;border-bottom:1px solid var(--card-brd);white-space:nowrap;}
+table.dre thead th:first-child{text-align:left;}
+table.dre thead th .grp{display:block;font-size:8.5px;color:var(--txt3);letter-spacing:.6px;margin-bottom:1px;}
+table.dre td{padding:9px 12px;border-bottom:1px solid var(--linha);color:var(--txt2);white-space:nowrap;}
+table.dre td.conta{color:var(--txt);font-weight:600;text-align:left;}
+table.dre td.num{text-align:right;}
+table.dre tbody tr:hover{background:var(--hover);}
+/* totalizadores no tom do cabeçalho — vale para todas as tabelas do painel */
+table.dre tr.total td{font-weight:800;color:var(--txt);border-top:1px solid var(--card-brd);background:var(--cabec);}
+table.dre tr.ref-row td{color:var(--txt);background:color-mix(in srgb,var(--azul) 8%,transparent);}
+table.dre tr.ebitda-row td{color:var(--txt);font-weight:700;background:var(--cabec);}
+table.dre .sep-l{border-left:1px solid var(--card-brd);}
+/* precisa vencer o "table.dre td{color:...}", que tem especificidade maior */
+table.dre td.cr,.cr{color:var(--vermelho)!important;font-weight:700;}
+table.dre td.cg,.cg{color:var(--verde)!important;font-weight:700;}
+table.dre td.cr-t,.cr-t{color:var(--vermelho)!important;font-weight:700;}
+table.dre td.cg-t,.cg-t{color:var(--verde)!important;font-weight:700;}
+
+@media(max-width:860px){
+  body{overflow:auto;}
+  .app{position:static;inset:auto;min-height:100%;border-radius:0;flex-direction:column;box-shadow:none;border:0;}
+  .app::before{position:fixed;inset:0;}
+  .side{width:auto;flex:none;border-right:0;border-bottom:1px solid var(--linha);padding:8px 10px;overflow:visible;}
+  .side.mini{width:auto;flex:none;padding:8px 10px;}
+  .s-user,.s-top,.s-sec{display:none;}
+  /* as visões viram uma fileira que rola de lado */
+  .side{display:flex;flex-direction:row;gap:6px;overflow-x:auto;scrollbar-width:none;}
+  .side::-webkit-scrollbar{display:none;}
+  .side .s-item{width:auto;flex:0 0 auto;white-space:nowrap;font-size:12px;padding:7px 11px;
+    border:1px solid var(--card-brd);border-radius:20px;}
+  .side.mini .s-item{font-size:12px;padding:7px 11px;gap:9px;}
+  .side .s-item.on{background:var(--laranja);border-color:transparent;color:#2A1405;}
+  .top{padding:12px 14px 8px;gap:4px;}
+  .tit-wrap{flex:1 1 auto;min-width:0;}
+  .top h1{font-size:17px;}
+  /* filtros numa faixa própria que rola de lado, em vez de quebrar em 3 linhas */
+  .filtros{order:3;flex:1 1 100%;overflow-x:auto;scrollbar-width:none;padding-bottom:2px;}
+  .filtros::-webkit-scrollbar{display:none;}
+  .filtros .ms-wrap{flex:0 0 auto;}
+  .ms-btn{font-size:12px;padding:6px 9px;}
+  .ms-panel{right:auto;left:0;min-width:210px;}
+  .cols{overflow:visible;padding:0 14px 22px;}
+  .vw{display:none;}
+  .vw.on{display:block;}                      /* sem flex: cada bloco cresce sozinho */
+  .vw>*{margin-bottom:12px;}
+  .fin-hero{gap:14px;flex-direction:column;align-items:flex-start;}
+  .heb{margin-left:0;text-align:left;}
+  .heb .hdel{justify-content:flex-start;}
+  .kpis{grid-template-columns:repeat(2,1fr);}
+  .gr2,.wf-grid{display:block;height:auto;}
+  .wf-grid .gcard{height:280px;margin-bottom:12px;}
+  .gcard{height:300px;margin-bottom:12px;}
+  .tsec{display:block;padding:12px 12px 10px;}
+  .thead-row{margin-bottom:6px;}
+  .twrap{max-height:none;overflow-x:auto;}
+  .emb{height:76vh;}
+}
+/* ═══ ponte: as classes que o farol-core emite, repintadas com os tokens
+   do layout padrão (o farol.css continua valendo só pela estrutura) ═══ */
+body{background:var(--fundo);}
+.tbl-section{background:var(--side);border:1px solid var(--card-brd);border-radius:14px;
+  padding:16px 18px 14px;margin-bottom:14px;backdrop-filter:blur(20px);
+  box-shadow:0 10px 26px rgba(0,0,0,.20),var(--luz-card);}
+.tbl-title{font-size:15px;font-weight:800;color:var(--txt);margin-bottom:2px;}
+.tbl-sub{font-size:10.5px;color:var(--txt2);margin-bottom:12px;}
+table{width:100%;border-collapse:collapse;font-size:11.5px;}
+thead th{background:var(--cabec);color:var(--txt);font-size:9.5px;font-weight:800;padding:8px;
+  border-bottom:1px solid var(--linha);text-transform:uppercase;letter-spacing:.4px;white-space:nowrap;
+  position:sticky;top:0;z-index:2;}
+td{padding:9px 8px;border:none;color:var(--txt);white-space:nowrap;border-bottom:1px solid var(--linha);}
+tbody tr:hover{background:var(--hover);}
+tr.tot-row td{background:var(--cabec);font-weight:800;}
+.cg{color:var(--verde)!important;font-weight:700;} .cr{color:var(--vermelho)!important;font-weight:700;}
+.cy{color:var(--ambar)!important;font-weight:700;}  .mut{color:var(--txt3)!important;}
+.dot.g{background:var(--verde);} .dot.y{background:var(--ambar);} .dot.r{background:var(--vermelho);}
+.loading{color:var(--txt3);padding:26px;text-align:center;font-size:11.5px;}
+.quad,.mini-card,.mini-hero,.custos-hero{background:var(--card)!important;border:1px solid var(--card-brd)!important;
+  border-radius:11px;box-shadow:none!important;}
+.quad-t{color:var(--txt);} .quad li{color:var(--txt2);}
+.blk-t{color:var(--txt);font-weight:800;}
+.mh-label,.rk-leg,.rk-leg-nota,.rk-leg-cortes{color:var(--txt2);}
+.mh-val{color:var(--txt);} .mh-meta{color:var(--txt3);}
+.pill{color:#141416;}
+.gate{color:var(--txt2);text-align:center;padding:48px 20px;}
+.gate h2{color:var(--txt);font-size:15px;margin-bottom:6px;}
+
+/* faixa de chips do topo — fica visível em TODAS as visões (pedido do Renan) */
+.chips{display:flex;align-items:flex-end;gap:18px;flex-wrap:wrap;
+  background:var(--side);border:1px solid var(--card-brd);border-radius:14px;
+  padding:12px 18px 11px;margin-bottom:12px;backdrop-filter:blur(20px);
+  box-shadow:0 10px 26px rgba(0,0,0,.20),var(--luz-card);flex:0 0 auto;}
+.chips .ch-hero{display:flex;flex-direction:column;gap:2px;padding-right:16px;border-right:1px solid var(--linha);}
+.chips .ch-hero span{font-size:8.5px;font-weight:800;color:var(--txt3);text-transform:uppercase;letter-spacing:.8px;}
+.chips .ch-hero b{font-size:26px;font-weight:800;line-height:1;}
+.chips .hero-deltas{display:flex;gap:15px;flex-wrap:wrap;margin:0;}
+.chips .hero-delta{font-size:8.5px;color:var(--txt3);text-transform:uppercase;letter-spacing:.5px;font-weight:700;}
+.chips .hero-delta b{font-size:12.5px;font-weight:800;display:block;margin-top:2px;text-transform:none;letter-spacing:0;}
+.vw{flex:1 1 auto;min-height:0;overflow:auto;padding-right:2px;}
+.vw::-webkit-scrollbar{width:7px;} .vw::-webkit-scrollbar-thumb{background:var(--linha);border-radius:4px;}
+.board{display:flex;flex-direction:column;min-height:0;}
+</style>
+</head>
+<body>
+
+<div class="app">
+  <!-- ══════════ lateral ══════════ -->
+  <aside class="side">
+    <div class="s-top">
+      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="var(--laranja)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="2" width="8" height="20" rx="4"/><circle cx="12" cy="7" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="12" cy="17" r="1.6"/></svg>
+      <b>Gestão à Vista</b>
+      <button class="s-mini" id="btMini" onclick="trocaMini()" title="Recolher menu">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16"/></svg>
+      </button>
+    </div>
+
+    <div class="s-sec">Visões</div>
+    <div id="navVis"></div>
+    <div class="s-sec">Indicadores</div>
+    <div id="navInd"></div>
+    <div class="s-sec">Atalhos</div>
+    <div id="pdf-slot"></div>
+    <a class="s-item" href="../" style="text-decoration:none">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/></svg>
+      Hub
+    </a>
+
+    <div class="s-user">
+      <span class="av" id="euAv">—</span>
+      <div><b id="euNome">—</b><i id="euUni">—</i></div>
+      <a class="s-sair" href="../" title="Voltar ao hub">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M14 4h5v16h-5M11 8l-4 4 4 4M7 12h10"/></svg>
+      </a>
+    </div>
+  </aside>
+
+  <!-- ══════════ conteúdo ══════════ -->
+  <main class="board">
+    <div class="top">
+      <div class="tit-wrap"><h1 id="tit">Resumo Gerencial</h1><div class="tit-sub" id="titSub">Carregando…</div></div>
+      <div class="filtros">
+        <div class="ms-wrap" id="ms-uni" style="display:none"><button class="ms-btn" onclick="toggleMs('ms-uni')">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M3 21h18M5 21V7l7-4 7 4v14"/><path d="M10 21v-6h4v6"/></svg>
+          Unidade<span class="ms-cnt"></span></button>
+          <div class="ms-panel"><div class="ms-search"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M16.5 16.5 21 21"/></svg><input type="text" placeholder="Pesquisar…" data-ctrlk></div><div class="ms-list"></div></div>
+        </div>
+        <button class="ms-btn" id="btTema" onclick="trocaTema()" title="Modo claro/escuro" style="min-width:0"></button>
+      </div>
+    </div>
+
+    <div class="chips" id="chips"><div class="loading">Carregando o farol…</div></div>
+    <div id="views"></div>
+  </main>
+</div>
+
+<div class="dica" id="dica"></div>
+
+<script src="../farol-frota/farol-core.js?v=202608212300"></script>
+<script>
+/* ══════════════════════════════════════════════════════════════════════
+   Gestão à Vista — o Farol no layout padrão do portal (Renan, 21/08/2026).
+   · uma VISÃO por indicador (lateral), chips no topo em todas elas
+   · Conformidade (detalhe das 5 contagens) e FCA (prazo/conclusão/total)
+   · acesso igual ao do FCA: admin vê tudo; unidade vê a(s) sua(s)
+   A camada de dados e os renderizadores continuam no farol-core.js —
+   aqui é só a casca, a navegação e as duas visões novas.
+   ══════════════════════════════════════════════════════════════════════ */
+let ADMIN=false, MINHAS=[], EU='', VW='resumo', SB=null;
+let CONF=null, CONF_VIG=null, CONF_ATT=null, FCAR=null;
+const $=id=>document.getElementById(id);
+const setTxt=(id,v)=>{const e=$(id);if(e)e.textContent=v;};
+
+/* ── ícones da lateral ── */
+const ICO={
+  resumo:'<path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/>',
+  ranking:'<path d="M8 21h8M12 17v4"/><path d="M17 4h3v4a5 5 0 0 1-5 5H9a5 5 0 0 1-5-5V4h3"/><path d="M7 4h10v5a5 5 0 0 1-10 0z"/>',
+  custos:'<line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>',
+  veic:'<rect x="1" y="3" width="15" height="13" rx="2"/><path d="M16 8h4l3 3v5h-7V8z"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/>',
+  emp:'<path d="M4 4v11h7"/><path d="M11 15V7h4l4 5v3"/><circle cx="6" cy="18" r="2"/><circle cx="17" cy="18" r="2"/>',
+  prev:'<path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>',
+  cifv:'<path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/>',
+  alinh:'<circle cx="12" cy="12" r="9"/><path d="M12 3v18M3 12h18"/>',
+  os:'<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><path d="M9 15l2 2 4-4"/>',
+  chk:'<path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>',
+  disp:'<rect x="1" y="3" width="15" height="13" rx="1"/><path d="M16 8h4l3 3v5h-7z"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/>',
+  conf:'<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="M9 12l2 2 4-4"/>',
+  fca:'<path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4z"/>',
+  pneu:'<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3.5"/>'
+};
+const svg=p=>`<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${p}</svg>`;
+
+/* ── as visões: 'v' = Visões · 'i' = Indicadores ────────────────────────
+   Cada indicador do farol vira uma visão (pedido do Renan). O que renderiza
+   é o MESMO código de sempre (farol-core.js) — nada de número novo aqui.  */
+const VIEWS=[
+  {id:'resumo', g:'v', ic:ICO.resumo, t:'Resumo Gerencial', s:'Leitura automática do farol da semana', r:(el)=>renderResumo(el)},
+  {id:'ranking',g:'v', ic:ICO.ranking,t:'Ranking das Unidades', s:'Aderências por indicador — melhor → pior', adm:true, r:(el)=>renderRanking(el)},
+  {id:'custos', g:'i', ic:ICO.custos, t:'Custos', s:()=>'Realizado × Remunerado × Orçado — '+(codAtual()?'por projeto':'por unidade'), r:(el,cod)=>renderCustos(el,cod)},
+  {id:'stressv',g:'i', ic:ICO.veic,   t:'Stress Test — Veículos', s:()=>'Aderência (sem desconto) vs meta 100% · descontos por placa'+fx('stressV'), r:(el,cod)=>renderStressV(el,cod)},
+  {id:'stresse',g:'i', ic:ICO.emp,    t:'Stress Test — Empilhadeiras', s:()=>'Aderência 1ª/2ª quinzena · descontos por equipamento'+fx('stressE'), r:(el,cod)=>renderStressE(el,cod), temDado:()=>byCod(DATA.stressE,codAtual()).filter(r=>r.contratada).length>0},
+  {id:'prev',   g:'i', ic:ICO.prev,   t:'Preventivas', s:()=>'Aderência vs 100% · placas por status, dias e km'+fx('prev'), r:(el,cod)=>renderPrev(el,cod)},
+  {id:'cifv',   g:'i', ic:ICO.cifv,   t:'CIFV', s:()=>'Aderência das fotos da frota vs 100% · descontos por veículo'+fx('cifv'), r:(el,cod)=>renderCIFV(el,cod)},
+  {id:'alinh',  g:'i', ic:ICO.alinh,  t:'Alinhamento', s:()=>'No prazo vs vencidos · placas por próximo evento'+fx('alinh'), r:(el,cod)=>renderAlinh(el,cod)},
+  {id:'os',     g:'i', ic:ICO.os,     t:'Gestão de OS', s:()=>'% no prazo (≤8 dias) · OSs em aberto'+fx('os'), r:(el,cod)=>renderOS(el,cod)},
+  {id:'chk',    g:'i', ic:ICO.chk,    t:'Checklist', s:'Saída com OS Crítica — norma 031120', r:(el,cod)=>renderChk(el,cod)},
+  {id:'disp',   g:'i', ic:ICO.disp,   t:'Disponibilidade', s:'Foto da última vigência — veículos disponíveis da frota', r:(el,cod)=>renderDisp(el,cod)},
+  {id:'conf',   g:'i', ic:ICO.conf,   t:'Conformidade', s:()=>'Aderência do mês — atualizada até hoje'+(CONF_VIG?' · vigência '+vigLbl(CONF_VIG):''), r:(el,cod)=>renderConf(el,cod)},
+  {id:'fca',    g:'i', ic:ICO.fca,    t:'FCA', s:()=>'Aderência ao prazo, à conclusão e total'+(FCAR?' · '+FCAR.length+' ação(ões)':''), r:(el,cod)=>renderFCAv(el,cod)},
+  {id:'pneus-afer',g:'i', ic:ICO.pneu, t:'Pneus · Aferições', s:'Placas aferidas no período', r:(el,cod)=>renderPneusAfer(el,cod)},
+  {id:'pneus-mm',  g:'i', ic:ICO.pneu, t:'Pneus · Milimetragem', s:'Sulco médio e pneus abaixo do ponto de troca', r:(el,cod)=>renderPneusMM(el,cod)},
+  {id:'pneus-cal', g:'i', ic:ICO.pneu, t:'Pneus · Calibragem', s:'Pressão dentro da faixa ideal', r:(el,cod)=>renderPneusCal(el,cod)}
+];
+const vistas=()=>VIEWS.filter(v=>(!v.adm||ADMIN)&&(!v.temDado||v.temDado()));
+const vDe=id=>VIEWS.find(v=>v.id===id);
+const txtDe=x=>typeof x==='function'?x():x;
+// "última exportação do Ginfo" na legenda — mesma regra do farol antigo
+function fx(k){
+  const f=DATA.fonte&&DATA.fonte[k]; if(!f) return '';
+  if(f.src==='ginfo') return f.att?` · <b>última exportação do Ginfo: ${f.att.toLocaleDateString('pt-BR')} ${f.att.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})}</b>`:' · fonte: robô Ginfo';
+  return ' · fonte: planilha Farol Semanal (fallback)';
+}
+const MESES_L=['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
+function vigLbl(v){const m=String(v||'').match(/^(\d{4})-(\d{2})$/);return m?MESES_L[+m[2]-1]+'/'+m[1].slice(2):String(v||'');}
+// unidade em foco: unidade única (usuário de unidade ou filtro com 1 marcada) → recorte da unidade
+function codAtual(){
+  if(!ADMIN&&MINHAS.length===1) return MINHAS[0];
+  const sel=getMsValues('ms-uni');
+  return sel.length===1?sel[0]:null;
+}
+
+/* ══════════ CONFORMIDADE — elite_snapshot, régua nova (contagens) ══════════
+   (Dentro do Prazo + No Prazo) ÷ soma das cinco contagens, por filial.
+   Mesma conta do gerot-base; aqui mostramos também as 5 colunas cruas.     */
+const CONF_OK=['Realizado Dentro Prazo','No Prazo'];
+const CONF_NOK=['Nunca Realizado','Não Realizado','Realizado Fora Prazo'];
+const _k=s=>String(s==null?'':s).normalize('NFD').replace(/[̀-ͯ]/g,'').toUpperCase().replace(/\s+/g,' ').trim();
+function kOf(obj,nome){const alvo=_k(nome);return Object.keys(obj||{}).find(k=>_k(k)===alvo);}
+function nConf(o,nome){const k=kOf(o,nome);const v=k?o[k]:null;const n=typeof v==='number'?v:parseFloat(String(v==null?'':v).replace(/\./g,'').replace(',','.'));return isFinite(n)?n:0;}
+async function loadConf(){
+  try{
+    const {data}=await SB.from('elite_snapshot').select('vigencia,data,updated_at')
+      .eq('indicador','conformidade').eq('escopo','mes').order('vigencia',{ascending:false}).limit(1);
+    const row=data&&data[0]; if(!row||!Array.isArray(row.data)){CONF=null;return;}
+    CONF_VIG=row.vigencia; CONF_ATT=row.updated_at?new Date(row.updated_at):null;
+    const porCod={};
+    row.data.forEach(o=>{
+      const kf=kOf(o,'Filial'); if(!kf) return;
+      const cod=codDe(o[kf]); if(!cod||!UNIDADES[cod]) return;
+      const a=porCod[cod]||(porCod[cod]={cod,fil:String(o[kf]).trim(),nunca:0,nao:0,fora:0,dentro:0,noPrazo:0});
+      a.nunca+=nConf(o,'Nunca Realizado'); a.nao+=nConf(o,'Não Realizado');
+      a.fora+=nConf(o,'Realizado Fora Prazo'); a.dentro+=nConf(o,'Realizado Dentro Prazo');
+      a.noPrazo+=nConf(o,'No Prazo');
+    });
+    CONF=Object.values(porCod).map(a=>{
+      const ok=a.dentro+a.noPrazo, tot=ok+a.nunca+a.nao+a.fora;
+      return {...a,ok,tot,pct:tot?ok/tot*100:null};
+    });
+  }catch(e){ console.error('conformidade',e); CONF=null; }
+}
+function confDoEscopo(cod){
+  if(!CONF) return null;
+  const rs=CONF.filter(r=>(cod?r.cod===cod:passU(r.cod)));
+  const ok=rs.reduce((s,r)=>s+r.ok,0), tot=rs.reduce((s,r)=>s+r.tot,0);
+  return tot?ok/tot*100:null;
+}
+function renderConf(el,cod){
+  if(!CONF||!CONF.length){el.innerHTML='<div class="loading">Sem conformidade coletada para a vigência.</div>';return;}
+  const rs=CONF.filter(r=>(cod?r.cod===cod:passU(r.cod))).sort((a,b)=>(b.pct??-1)-(a.pct??-1));
+  if(!rs.length){el.innerHTML='<div class="loading">Sem conformidade para o recorte atual.</div>';return;}
+  const tot={nunca:0,nao:0,fora:0,dentro:0,noPrazo:0,ok:0,tot:0};
+  rs.forEach(r=>{['nunca','nao','fora','dentro','noPrazo','ok','tot'].forEach(k=>tot[k]+=r[k]);});
+  const pctT=tot.tot?tot.ok/tot.tot*100:null;
+  const linha=r=>`<tr><td>${escF(r.cod)}</td><td class="mut">${escF(r.fil)}</td>`+
+    `<td class="num">${r.nunca.toLocaleString('pt-BR')}</td><td class="num">${r.nao.toLocaleString('pt-BR')}</td>`+
+    `<td class="num">${r.fora.toLocaleString('pt-BR')}</td><td class="num">${r.dentro.toLocaleString('pt-BR')}</td>`+
+    `<td class="num">${r.noPrazo.toLocaleString('pt-BR')}</td><td class="num">${r.tot.toLocaleString('pt-BR')}</td>`+
+    `<td class="num ${clsPctMeta(r.pct,100,90)}">${pct1(r.pct)}</td></tr>`;
+  el.innerHTML=wrapT('<table>'+
+    th('Unidade','Filial (Ginfo)','Nunca Realizado','Não Realizado','Realizado Fora Prazo','Realizado Dentro Prazo','No Prazo','Total','Aderência')+
+    '<tbody>'+rs.map(linha).join('')+
+    `<tr class="tot-row"><td>Total</td><td></td><td class="num">${tot.nunca.toLocaleString('pt-BR')}</td><td class="num">${tot.nao.toLocaleString('pt-BR')}</td><td class="num">${tot.fora.toLocaleString('pt-BR')}</td><td class="num">${tot.dentro.toLocaleString('pt-BR')}</td><td class="num">${tot.noPrazo.toLocaleString('pt-BR')}</td><td class="num">${tot.tot.toLocaleString('pt-BR')}</td><td class="num ${clsPctMeta(pctT,100,90)}">${pct1(pctT)}</td></tr>`+
+    '</tbody></table>')+
+    `<div class="tbl-sub" style="margin:10px 0 0">Aderência = (Realizado Dentro Prazo + No Prazo) ÷ total das cinco contagens — régua do Ginfo desde ago/2026.${CONF_ATT?' Coleta de '+CONF_ATT.toLocaleDateString('pt-BR')+' '+CONF_ATT.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})+'.':''}</div>`;
+}
+
+/* ══════════ FCA — mesma conta do painel Aderência ao FCA ══════════
+   Prazo = não vencidas · Conclusão = concluídas · Total = concl*100 + andam*50. */
+function isDriverCombust(fato){const s=String(fato||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'');if(/km\s*\/?\s*l/.test(s))return true;if(/r\$\s*\/?\s*l/.test(s))return true;if(/preco/.test(s)&&/(litro|\/\s*l|r\$)/.test(s))return true;return false;}
+function categConcl(s){s=(s||'').toLowerCase();if(/conclu/.test(s))return 'Concluída';if(/andamento/.test(s))return 'Andamento';return 'Não Iniciada';}
+function dateOnly(s){const m=String(s||'').match(/^(\d{4})-(\d{2})-(\d{2})/);return m?new Date(+m[1],+m[2]-1,+m[3]):null;}
+function statusPrazo(o){if(o.concl==='Concluída')return 'No prazo';if(o.prazoD){const h=new Date();h.setHours(0,0,0,0);if(o.prazoD<h)return 'Vencida';}return 'No prazo';}
+function fcaMetrics(rows){
+  const tt=rows.length; let noP=0,venc=0,concl=0,andam=0,nini=0;
+  rows.forEach(o=>{ if(o.sprazo==='Vencida')venc++; else noP++;
+    if(o.concl==='Concluída')concl++; else if(o.concl==='Andamento')andam++; else nini++; });
+  return {tt,noP,venc,concl,andam,nini,
+    pPrazo:tt?noP/tt*100:null, pConcl:tt?concl/tt*100:null,
+    total:tt?(concl*100+andam*50)/tt:null};
+}
+async function loadFCA(){
+  try{
+    const {data}=await SB.from('fca').select('unidade,vigencia,origem,fato,prazo,status');
+    FCAR=(data||[]).filter(r=>!isDriverCombust(r.fato)).map(r=>{
+      const o={cod:String(r.unidade||'').trim().toUpperCase(), vig:r.vigencia||'', origem:String(r.origem||'').trim(),
+        fato:String(r.fato||'').split('\n')[0].trim(), prazoD:dateOnly(r.prazo), status:String(r.status||'').trim()};
+      o.concl=categConcl(o.status); o.sprazo=statusPrazo(o); return o;
+    });
+  }catch(e){ console.error('fca',e); FCAR=null; }
+}
+function fcaDoEscopo(cod){
+  if(!FCAR) return null;
+  return fcaMetrics(FCAR.filter(r=>(cod?r.cod===cod:passU(r.cod)))).total;
+}
+function renderFCAv(el,cod){
+  if(!FCAR){el.innerHTML='<div class="loading">Não consegui ler os FCAs.</div>';return;}
+  const rs=FCAR.filter(r=>(cod?r.cod===cod:passU(r.cod)));
+  if(!rs.length){el.innerHTML='<div class="loading">Nenhum FCA no recorte atual.</div>';return;}
+  // admin/visão geral: por UNIDADE · dentro da unidade: por INDICADOR/CONTA (pedido do Renan)
+  const porChave={};
+  rs.forEach(r=>{const k=cod?(r.fato||'—'):r.cod;(porChave[k]||(porChave[k]=[])).push(r);});
+  const linhas=Object.keys(porChave).map(k=>({k,m:fcaMetrics(porChave[k])}))
+    .sort((a,b)=>(a.m.total??999)-(b.m.total??999));
+  const g=fcaMetrics(rs);
+  const cl=v=>v==null?'mut':v>=90?'cg':v>=70?'cy':'cr';
+  const linha=o=>`<tr><td>${escF(o.k)}</td><td class="num">${o.m.tt}</td>`+
+    `<td class="num">${o.m.concl}</td><td class="num">${o.m.andam}</td><td class="num">${o.m.nini}</td>`+
+    `<td class="num ${o.m.venc?'cr':'mut'}">${o.m.venc}</td>`+
+    `<td class="num ${cl(o.m.pPrazo)}">${pct1(o.m.pPrazo)}</td>`+
+    `<td class="num ${cl(o.m.pConcl)}">${pct1(o.m.pConcl)}</td>`+
+    `<td class="num ${cl(o.m.total)}">${pct1(o.m.total)}</td></tr>`;
+  el.innerHTML=wrapT('<table>'+
+    th(cod?'Indicador / Conta':'Unidade','Ações','Concluídas','Em andamento','Não iniciadas','Vencidas','Aderência Prazo','Aderência Conclusão','Aderência Total')+
+    '<tbody>'+linhas.map(linha).join('')+
+    `<tr class="tot-row"><td>Total</td><td class="num">${g.tt}</td><td class="num">${g.concl}</td><td class="num">${g.andam}</td><td class="num">${g.nini}</td><td class="num ${g.venc?'cr':'mut'}">${g.venc}</td><td class="num ${cl(g.pPrazo)}">${pct1(g.pPrazo)}</td><td class="num ${cl(g.pConcl)}">${pct1(g.pConcl)}</td><td class="num ${cl(g.total)}">${pct1(g.total)}</td></tr>`+
+    '</tbody></table>')+
+    '<div class="tbl-sub" style="margin:10px 0 0">Prazo = ações não vencidas · Conclusão = ações concluídas · Total = concluída 100% e em andamento 50% — a mesma conta do painel Aderência ao FCA.</div>';
+}
+
+/* ══════════ chips do topo (todas as visões) ══════════ */
+function renderChips(){
+  const cod=codAtual(), box=$('chips');
+  const stats=cod?unitStats(cod):(()=>{const all=codsFiltrados().map(unitStats);const m=k=>avgA(all.map(a=>a[k]));
+    return {sv:m('sv'),se:m('se'),cf:m('cf'),pv:m('pv'),al:m('al'),os:m('os'),cu:m('cu'),dp:m('dp'),ck:m('ck'),af:m('af'),mm:m('mm'),ca:m('ca')};})();
+  const score=avgA([stats.sv,stats.se,stats.cf,stats.pv,stats.al,stats.os,stats.dp]);
+  const dots=document.createElement('div');
+  box.innerHTML=`<div class="ch-hero"><span>Farol da frota — média das aderências</span>`+
+    `<b class="${clsPctMeta(score,97,90)}">${pct1(score)}</b></div>`;
+  dots.className='hero-deltas'; box.appendChild(dots);
+  renderHeroDots(dots,cod);
+  // Conformidade e FCA (novos) entram na mesma fileira
+  const pC=confDoEscopo(cod), pF=fcaDoEscopo(cod);
+  const item=(lb,v,cls)=>`<div class="hero-delta"><span>${lb}</span><b class="${cls}"><span class="dot ${cls==='cg'?'g':cls==='cy'?'y':cls==='cr'?'r':''}" ${cls==='mut'?'style="background:#475569"':''}></span> ${pct1(v)}</b></div>`;
+  dots.insertAdjacentHTML('beforeend', item('Conformidade',pC,clsPctMeta(pC,100,90))+item('FCA',pF,pF==null?'mut':pF>=90?'cg':pF>=70?'cy':'cr'));
+}
+
+/* ══════════ navegação ══════════ */
+function montaNav(){
+  const item=v=>`<button class="s-item${v.id===VW?' on':''}" data-vw="${v.id}">${svg(v.ic)} ${v.t}</button>`;
+  $('navVis').innerHTML=vistas().filter(v=>v.g==='v').map(item).join('');
+  $('navInd').innerHTML=vistas().filter(v=>v.g==='i').map(item).join('');
+  document.querySelectorAll('.s-item[data-vw]').forEach(b=>{
+    b.addEventListener('click',()=>setVw(b.dataset.vw));
+    b.addEventListener('mouseenter',e=>dicaOn(e.currentTarget));
+    b.addEventListener('mouseleave',dicaOff);
+  });
+  // as seções: uma por visão, com o mesmo esqueleto do farol (tbl-section)
+  $('views').innerHTML=vistas().map(v=>
+    `<section class="vw${v.id===VW?' on':''}" id="vw-${v.id}">
+       <div class="tbl-section"><div class="tbl-title">${v.t}</div><div class="tbl-sub" id="sub-${v.id}"></div>
+       <div class="sec-body" id="body-${v.id}"><div class="loading">Carregando…</div></div></div>
+     </section>`).join('');
+}
+let PINTADA={};
+function pinta(id){
+  const v=vDe(id); if(!v) return;
+  const el=$('body-'+id), sub=$('sub-'+id); if(!el) return;
+  const cod=codAtual();
+  if(sub) sub.innerHTML=txtDe(v.s);
+  try{
+    const r=v.r(el,cod);
+    if(r&&typeof r.catch==='function') r.catch(e=>{console.error(id,e);el.innerHTML='<div class="loading">Erro ao montar esta seção.</div>';});
+  }catch(e){ console.error(id,e); el.innerHTML='<div class="loading">Erro ao montar esta seção.</div>'; }
+  PINTADA[id]=true;
+}
+function setVw(v){
+  if(!vDe(v)||!vistas().some(x=>x.id===v)) v=vistas()[0].id;
+  VW=v;
+  document.querySelectorAll('.vw').forEach(s=>s.classList.toggle('on',s.id==='vw-'+v));
+  document.querySelectorAll('.s-item[data-vw]').forEach(b=>b.classList.toggle('on',b.dataset.vw===v));
+  setTxt('tit',vDe(v).t);
+  if(!PINTADA[v]) pinta(v);            // pinta sob demanda (abre mais rápido)
+}
+function repinta(){                     // filtro mudou: chips + visão aberta agora, resto depois
+  PINTADA={}; renderChips(); pinta(VW);
+}
+_farolRepaint=()=>{const s=getMsValues('ms-uni');FILT.uni=s.length?new Set(s):new Set(MINHAS);repinta();};
+
+/* ══════════ tema / menu recolhido / dica ══════════ */
+const _sun='<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4.5"/><path d="M12 1v3M12 20v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M1 12h3M20 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1"/></svg>';
+const _moon='<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>';
+function aplicaTema(t){
+  document.body.classList.toggle('claro',t==='claro');
+  localStorage.setItem('bi_theme',t==='claro'?'light':'dark');
+  const b=$('btTema'); if(b) b.innerHTML=t==='claro'?_moon:_sun;
+  if(PINTADA[VW]){ PINTADA={}; pinta(VW); }      // gráficos redesenham no tema novo
+}
+function trocaTema(){ aplicaTema(document.body.classList.contains('claro')?'escuro':'claro'); }
+function trocaMini(){
+  const s=document.querySelector('.side'), mini=!s.classList.contains('mini');
+  s.classList.toggle('mini',mini); localStorage.setItem('gav_mini',mini?'1':'0');
+}
+function dicaOn(el){
+  if(!document.querySelector('.side').classList.contains('mini')) return;
+  const d=$('dica'), r=el.getBoundingClientRect();
+  d.textContent=el.textContent.trim(); d.style.top=(r.top+r.height/2-13)+'px'; d.style.left=(r.right+8)+'px';
+  d.classList.add('on');
+}
+function dicaOff(){ $('dica').classList.remove('on'); }
+
+/* ══════════ carga ══════════ */
+function semAcesso(msg){
+  $('chips').style.display='none';
+  $('views').innerHTML=`<div class="tbl-section"><div class="gate"><h2>Acesso restrito</h2><p>${msg}</p></div></div>`;
+  document.querySelector('.side').style.visibility='hidden';
+  setTxt('tit','Gestão à Vista'); setTxt('titSub','—');
+}
+function pintaTudo(quando,doCache){
+  renderChips(); PINTADA={}; pinta(VW);
+  setTxt('titSub','Atualizado '+quando.toLocaleDateString('pt-BR')+' '+quando.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})+(doCache?' (cache)':''));
+}
+async function boot(){
+  let pintou=false;
+  try{
+    const h=(typeof SwrCache!=='undefined')&&await SwrCache.get('gav_data');
+    if(h&&h.v&&h.v.DATA){
+      Object.keys(h.v.DATA).forEach(k=>{DATA[k]=h.v.DATA[k];});
+      CONF=h.v.CONF; CONF_VIG=h.v.CONF_VIG; CONF_ATT=h.v.CONF_ATT?new Date(h.v.CONF_ATT):null; FCAR=h.v.FCAR;
+      pintou=true; montaNav(); pintaTudo(new Date(h.t),true);
+    }
+  }catch(e){}
+  try{
+    await Promise.all([farolLoad(), loadConf(), loadFCA()]);
+    try{ if(typeof SwrCache!=='undefined') SwrCache.put('gav_data',{DATA:Object.assign({},DATA),CONF,CONF_VIG,CONF_ATT,FCAR}); }catch(e){}
+    montaNav(); pintaTudo(new Date(),false);
+  }catch(e){
+    console.error(e);
+    if(!pintou) semAcesso('Não consegui ler as bases do farol. Recarregue a página em instantes.');
+  }
+}
+(async function(){
+  aplicaTema((localStorage.getItem('bi_theme')||'dark')==='light'?'claro':'escuro');
+  if(localStorage.getItem('gav_mini')==='1') document.querySelector('.side').classList.add('mini');
+  SB=supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
+  const {data:{session}}=await SB.auth.getSession();
+  if(!session){ location.replace('../'); return; }
+  let prof=null;
+  try{ const r=await SB.from('fca_profiles').select('nome,unidade,is_admin').eq('user_id',session.user.id).maybeSingle(); prof=r.data; }catch(e){}
+  ADMIN=!!(prof&&prof.is_admin);
+  // acesso igual ao do FCA/Indisponibilidade: unidade (ou lista separada por vírgula)
+  MINHAS=ADMIN?Object.keys(UNIDADES)
+              :String((prof&&prof.unidade)||'').toUpperCase().split(',').map(s=>s.trim()).filter(c=>UNIDADES[c]);
+  if(!MINHAS.length){ semAcesso('Seu perfil não tem unidade vinculada. Peça o acesso no Gerenciar Acessos do hub.'); return; }
+  EU=((prof&&prof.nome)||'').trim()||(session.user.user_metadata&&session.user.user_metadata.name)||(session.user.email||'').split('@')[0];
+  setTxt('euNome',EU);
+  setTxt('euAv',String(EU||'?').trim().split(/\s+/).slice(0,2).map(p=>p[0]).join('').toUpperCase());
+  setTxt('euUni',ADMIN?'TODAS':MINHAS.join(', '));
+  FILT.uni=new Set(MINHAS);            // unidade só enxerga a(s) sua(s); admin abre com todas
+  if(ADMIN){
+    $('ms-uni').style.display='';
+    buildMsFilter('ms-uni',Object.keys(UNIDADES).sort());
+    FILT.uni=null;
+  }
+  VW='resumo'; montaNav();
+  await boot();
+})();
+</script>
+<script src="../assets/sortable-table.js"></script>
+<script src="../assets/mobile.js"></script>
+<script src="../assets/ctrlk.js"></script>
+<!-- exportação padrão: botão direito na tabela/card → Excel · PNG · PNG transparente -->
+<script src="../assets/excel-export.js"></script>
+<script src="../assets/pdf-export.js"></script>
+<script>
+initPdfExport({
+  btnContainer:'#pdf-slot', btnClass:'s-item', btnAoFim:true,
+  title:'Gestão à Vista', subtitle:()=>document.getElementById('titSub').textContent, fileBase:'gestao-a-vista',
+  main:()=>document.querySelector('.board'),
+  views:()=>vistas().map(v=>({label:v.t, ativar:()=>setVw(v.id)})),
+  viewAtual:()=>VW, irPara:setVw,
+  isLight:()=>document.body.classList.contains('claro'), setTheme:t=>aplicaTema(t==='light'||t==='claro'?'claro':'escuro')
+});
+</script>
+<script src="../assets/build-check.js?v=202608212300"></script>
+</body>
+</html>
