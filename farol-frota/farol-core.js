@@ -228,6 +228,33 @@ async function farolLoad(){
   try{ await loadChecklist(); }catch(e){ console.error('checklist load',e); }
   return DATA;
 }
+
+// ── "Pinta na hora" (Renan, 21/08/2026: "os faróis ainda demoram um pouco") ──
+// O Farol baixa MBs a cada abertura (ginfo_snapshot inteiro + abas gviz).
+// farolBoot pinta o último DATA guardado no IndexedDB (SwrCache preserva as
+// datas via structured clone) e roda o farolLoad de sempre por trás,
+// chamando render() de novo com o dado fresco. Sem SwrCache na página ou sem
+// cache ainda, comporta-se exatamente como o fluxo antigo.
+// render(quando, doCache): quando = Date do dado; doCache = true na pintura do cache.
+async function farolBoot(render){
+  let pintou=false;
+  try{
+    const h=(typeof SwrCache!=='undefined')&&await SwrCache.get('farol_data');
+    if(h&&h.v){
+      Object.keys(h.v).forEach(k=>{DATA[k]=h.v[k];});
+      pintou=true;
+      try{ render(new Date(h.t),true); }catch(e){ console.error('farol cache render',e); }
+    }
+  }catch(e){}
+  try{
+    await farolLoad();
+    try{ if(typeof SwrCache!=='undefined') SwrCache.put('farol_data',Object.assign({},DATA)); }catch(e){}
+    render(new Date(),false);
+  }catch(e){
+    if(!pintou) throw e;               // sem cache na tela: o erro segue p/ o tratamento da página
+    console.error('farol refresh',e);  // com cache na tela: fica o último dado
+  }
+}
 // ── CHECKLIST (norma FROTA-031120) — 1ª base lida do SUPABASE (robô Ginfo) ──
 // ginfo_snapshot.chave='checklist-031120': export do relatório 1.3 - ADERÊNCIA
 // FROTA - 031120 do Ginfo (Mapa | Data do mapa | Data OS | Início/Fim técnico |

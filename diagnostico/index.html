@@ -3,13 +3,14 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-<meta name="build" content="202608192100">
+<meta name="build" content="202608212040">
 <title>Diagnóstico</title>
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="../assets/pdf-export.js"></script>
 <script src="../assets/excel-export.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="../assets/gerot-base.js?v=202608211500"></script>
+<script src="../assets/swr-cache.js"></script>
 <style>
 :root{--bg:#0C1017;--card:#141B26;--border:#1E2D40;--orange:#F97316;--blue:#38BDF8;--text:#F1F5F9;--text2:#94A3B8;--text3:#475569;--green:#3BB33B;--red:#FF6666;--amber:#F4A100;}
 *{margin:0;padding:0;box-sizing:border-box;}
@@ -267,21 +268,37 @@ function compDPO(rows){const hdr=rows[0]||[];let li=-1;for(let i=hdr.length-1;i>
 // FCA: registros por código+vigência
 function compFCA(rows){const today=new Date();today.setHours(0,0,0,0);const recs=[];rows.forEach(r=>{const d=parseD(r[1]);if(!d)return;const code=String(r[2]||'').trim().replace(/\s*\([^)]*\)\s*$/,'').split(' ')[0];const st=String(r[8]||'');const prazo=parseD(r[7]);const concl=/conclu/i.test(st)?'C':/andamento/i.test(st)?'A':'N';const venc=concl==='C'?false:(prazo&&prazo<today);recs.push({k:vigKeyN(d),code,concl,venc});});return recs;}
 
+// aplica um pacote {ic, dp, fc} na tela (usado pelo dado fresco E pelo cache)
+function aplicaPacote(ic,dp,fc){
+  ICS=(ic||[]).filter(o=>o&&o.vigD).map(o=>{const vigD=new Date(o.vigD);return{vigD,vk:vigKeyN(vigD),unidade:o.unidade,ic:o.ic,pont:o.pont};});
+  DPO=dp?compDPO(dp):{};FCAREC=fc?compFCA(fc):[];
+  const vm=new Map();ICS.forEach(o=>vm.set(o.vk,o.vigD));VIGS=[...vm.values()].sort((a,b)=>vigKeyN(a)-vigKeyN(b));
+  const vigItems=VIGS.map(d=>vigLbl(d));
+  const comDados=vigItems.filter(v=>ICS.some(o=>vigLbl(o.vigD)===v&&o.pont!=null));
+  const base=comDados.length?comDados:vigItems;
+  const vw=document.getElementById('ms-vig');if(base.length)vw._sel=new Set([base[base.length-1]]);
+  buildMsFilter('ms-vig',vigItems);
+  buildMsFilter('ms-uni',[...new Set(ICS.map(o=>o.unidade))].sort());
+  atualizar();
+}
+let _diagFresco=false,_diagPintou=false;
 function carregar(){
   document.getElementById('status').textContent='Carregando…';
+  // "pinta na hora" (21/08/2026): mostra o último pacote guardado (IndexedDB)
+  // enquanto o dado fresco chega por trás e re-renderiza.
+  try{ (typeof SwrCache!=='undefined')&&SwrCache.get('diag_data').then(h=>{
+    if(h&&h.v&&!_diagFresco){
+      _diagPintou=true; aplicaPacote(h.v.ic,h.v.dp,h.v.fc);
+      const d=new Date(h.t);
+      document.getElementById('status').textContent=`${d.toLocaleDateString('pt-BR')} ${d.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})} (cache)`;
+    }
+  }); }catch(e){}
   Promise.all([carregarICs(),gviz(SRC.dpo).catch(()=>null),gviz(SRC.fca).catch(()=>null)]).then(([ic,dp,fc])=>{
-    ICS=(ic||[]).filter(o=>o&&o.vigD).map(o=>{const vigD=new Date(o.vigD);return{vigD,vk:vigKeyN(vigD),unidade:o.unidade,ic:o.ic,pont:o.pont};});
-    DPO=dp?compDPO(dp):{};FCAREC=fc?compFCA(fc):[];
-    const vm=new Map();ICS.forEach(o=>vm.set(o.vk,o.vigD));VIGS=[...vm.values()].sort((a,b)=>vigKeyN(a)-vigKeyN(b));
-    const vigItems=VIGS.map(d=>vigLbl(d));
-    const comDados=vigItems.filter(v=>ICS.some(o=>vigLbl(o.vigD)===v&&o.pont!=null));
-    const base=comDados.length?comDados:vigItems;
-    const vw=document.getElementById('ms-vig');if(base.length)vw._sel=new Set([base[base.length-1]]);
-    buildMsFilter('ms-vig',vigItems);
-    buildMsFilter('ms-uni',[...new Set(ICS.map(o=>o.unidade))].sort());
-    atualizar();
+    _diagFresco=true;
+    try{ (typeof SwrCache!=='undefined')&&SwrCache.put('diag_data',{ic,dp,fc}); }catch(e){}
+    aplicaPacote(ic,dp,fc);
     const now=new Date();document.getElementById('status').textContent=`${now.toLocaleDateString('pt-BR')} ${now.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})}`;
-  }).catch(e=>{console.error(e);document.getElementById('status').textContent='Erro ao carregar';});
+  }).catch(e=>{console.error(e);document.getElementById('status').textContent=_diagPintou?'Sem conexão — mostrando o último dado':'Erro ao carregar';});
 }
 
 // streak de queda: nº de meses consecutivos caindo até a vigência selecionada
@@ -370,6 +387,6 @@ carregar();
 <script src="../assets/filters-toggle.js"></script>
 <script src="../assets/mobile.js"></script>
 <script src="../assets/ctrlk.js"></script>
-<script src="../assets/build-check.js?v=202608192100"></script>
+<script src="../assets/build-check.js?v=202608212040"></script>
 </body>
 </html>
