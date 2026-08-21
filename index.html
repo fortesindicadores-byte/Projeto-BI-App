@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-<meta name="build" content="202608211010">
+<meta name="build" content="202608211940">
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
@@ -441,10 +441,6 @@ body.claro .farol-panel{box-shadow:0 18px 44px rgba(15,23,42,.20), 0 3px 10px rg
       <div class="field"><label>Senha</label><div class="pass-wrap"><input type="password" id="login-pass" placeholder="••••••••" autocomplete="current-password"><button type="button" class="eye-btn" onclick="togglePass('login-pass',this)" tabindex="-1"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button></div></div>
       <div class="forgot-wrap"><button type="button" class="forgot-link" onclick="showForgot()">Esqueceu sua senha?</button></div>
       <button class="auth-btn" id="btn-login" onclick="doLogin()">Entrar</button>
-      <div id="emergencia" style="display:none;margin-top:16px;padding-top:14px;border-top:1px solid var(--card-brd)">
-        <p class="form-hint" style="color:var(--ambar)">⚠ O sistema de login está fora do ar neste momento.</p>
-        <button type="button" class="auth-btn" onclick="entrarEmergencia()">Entrar sem login (emergência)</button>
-      </div>
     </div>
     <div id="form-forgot" style="display:none;">
       <p class="form-hint">Informe seu e-mail e enviaremos um link para redefinir sua senha.</p>
@@ -791,38 +787,6 @@ function showAuth() {
   stopPolling();
   hideAll();
   document.getElementById('auth-screen').style.display = 'flex';
-  checaEmergencia();                      // login fora do ar? oferece o modo emergência
-}
-
-// ── Modo emergência (Renan, 21/08/2026, queda do Supabase): quando o LOGIN está
-// inacessível (projeto fora do ar), "liberar para a galera" entrar sem login e
-// ver os painéis de planilha. O botão SÓ aparece quando o health do auth falha —
-// com o Supabase de pé ele não existe. O que depende do banco (FCA, Farol,
-// Disponibilidade…) continua indisponível de qualquer jeito, com ou sem login.
-async function authForaDoAr() {
-  try {
-    const ctl = new AbortController();
-    const t = setTimeout(() => ctl.abort(), 4000);
-    const r = await fetch(SUPABASE_URL + '/auth/v1/health', { signal: ctl.signal });
-    clearTimeout(t);
-    return !r.ok;
-  } catch (e) { return true; }
-}
-function mostraEmergencia() {
-  const el = document.getElementById('emergencia');
-  if (el) el.style.display = '';
-}
-async function checaEmergencia() {
-  if (await authForaDoAr()) mostraEmergencia();
-}
-function entrarEmergencia() {
-  sessionStorage.setItem('gem_hub', '1');   // libera o gate dos painéis nesta sessão
-  isApproved = true;
-  stopPolling();
-  hideAll();
-  document.getElementById('hub-screen').style.display = 'flex';
-  setQuem('hub', 'Emergência (sem login)');
-  renderBoard(false);                       // sem admin: sem perfil para conferir
 }
 
 function showPending(user) {
@@ -944,7 +908,6 @@ async function doLogin() {
     if (error) setMsg(traduzirErro(error.message), 'error');
   } catch(e) {
     setMsg(e.message === 'timeout' ? 'Tempo esgotado. Tente novamente.' : traduzirErro(e.message), 'error');
-    if (e.message === 'timeout') mostraEmergencia();   // login não respondeu: oferece entrar sem login
   } finally {
     btn.disabled = false; btn.textContent = 'Entrar';
   }
@@ -1345,6 +1308,6 @@ init();
 </script>
 <script src="assets/mobile.js"></script>
 <script src="assets/ctrlk.js"></script>
-<script src="assets/build-check.js?v=202608211010"></script>
+<script src="assets/build-check.js?v=202608211940"></script>
 </body>
 </html>
