@@ -7,8 +7,8 @@
 //
 // Uso: BRANCH=38 node scripts/pneus-desgaste-inspect.mjs
 // ============================================================
-const SUPABASE_URL = 'https://ewbzeqsneeylwkxtcpme.supabase.co';
-const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImV3YnplcXNuZWV5bHdreHRjcG1lIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE4NzY2MTcsImV4cCI6MjA5NzQ1MjYxN30.W8W6Yunt6Z8NB73qpOD8eqYlrsgMRgEG-siYsJFwDwE';
+const SUPABASE_URL = 'https://lozwipoeacpvplgkrxkq.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_ggKEEebc5zjgQDVsF92Upw_6uoLmKe9';
 const BRANCH = process.env.BRANCH || '38'; // PIR
 
 async function fetchBranch(bid) {

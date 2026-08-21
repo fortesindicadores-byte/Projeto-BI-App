@@ -996,8 +996,8 @@ async function diagnostico(page, tag) {
 //   dentro de 30 dias.
 // Como o snapshot traz o histórico de inspeções, dá para calcular qualquer
 // vigência sem depender da tela do Ginfo.
-const PN_URL = 'https://ewbzeqsneeylwkxtcpme.supabase.co';
-const PN_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImV3YnplcXNuZWV5bHdreHRjcG1lIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE4NzY2MTcsImV4cCI6MjA5NzQ1MjYxN30.W8W6Yunt6Z8NB73qpOD8eqYlrsgMRgEG-siYsJFwDwE';
+const PN_URL = 'https://lozwipoeacpvplgkrxkq.supabase.co';
+const PN_KEY = 'sb_publishable_ggKEEebc5zjgQDVsF92Upw_6uoLmKe9';
 // branch do Prolog → nome da Filial como vem do Ginfo (mesmo de-para do Gerot),
 // para o elite_snapshot ficar consistente entre os indicadores
 const BRANCH2FILIAL = {
