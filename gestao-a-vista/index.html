@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-<meta name="build" content="202608222037">
+<meta name="build" content="202608222045">
 <title>Gestão à Vista</title>
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -332,6 +332,8 @@ table.dre td.cg-t,.cg-t{color:var(--verde)!important;font-weight:700;}
 .vw td.mut,.mut{color:var(--txt3)!important;}
 .pill{display:inline-block;min-width:40px;text-align:center;padding:2px 8px;border-radius:20px;
   font-weight:800;font-size:11px;color:#141416;}
+/* célula pintada da Aderência Total — mesma do painel Aderência ao FCA */
+.pctcell{font-weight:800;color:#0C1017;border-radius:4px;padding:3px 8px;display:inline-block;min-width:48px;text-align:center;}
 .dot{display:inline-block;width:8px;height:8px;border-radius:50%;vertical-align:middle;background:var(--txt4);}
 .dot.g{background:var(--verde);} .dot.y{background:var(--ambar);} .dot.r{background:var(--vermelho);}
 
@@ -482,7 +484,7 @@ body.prehub .s-sec,body.prehub .s-item,body.prehub #pdf-slot,body.prehub .ms-wra
 
 <div class="dica" id="dica"></div>
 
-<script src="../farol-frota/farol-core.js?v=202608222037"></script>
+<script src="../farol-frota/farol-core.js?v=202608222045"></script>
 <script>
 /* ══════════════════════════════════════════════════════════════════════
    Gestão à Vista — o Farol no layout padrão do portal (Renan, 21/08/2026).
@@ -567,8 +569,8 @@ function rankExtras(){
   return [
     {lb:'Conformidade',corte:'100% verde · 90–99,9% amarelo · < 90% vermelho',
      of:cod=>{const v=confDoEscopo(cod);return {v:fmt(v),cls:clsPctMeta(v,100,90)};}},
-    {lb:'FCA',corte:'≥ 90% verde · 70–89,9% amarelo · < 70% vermelho',
-     of:cod=>{const v=fcaDoEscopo(cod);return {v:fmt(v),cls:v==null?'mut':v>=90?'cg':v>=70?'cy':'cr'};}}
+    {lb:'FCA',corte:'≥ 85% verde · 70–84,9% amarelo · < 70% vermelho (faixas do painel Aderência ao FCA)',
+     of:cod=>{const v=fcaDoEscopo(cod);return {v:fmt(v),cls:v==null?'mut':v<70?'cr':v<85?'cy':'cg'};}}
   ];
 }
 
@@ -753,17 +755,23 @@ function renderFCAv(el,cod){
   const linhas=Object.keys(porChave).map(k=>({k,m:fcaMetrics(porChave[k])}))
     .sort((a,b)=>(a.m.total??999)-(b.m.total??999));
   const g=fcaMetrics(rs);
-  const cl=v=>v==null?'mut':v>=90?'cg':v>=70?'cy':'cr';
+  // faixas e pintura IGUAIS ao painel Aderência ao FCA: <70 vermelho ·
+  // 70–84,9 âmbar · ≥85 verde; % inteiro; Total = célula com FUNDO pintado
+  const css=getComputedStyle(document.body);
+  const band=v=>v==null?css.getPropertyValue('--txt4').trim():v<70?css.getPropertyValue('--vermelho').trim():v<85?css.getPropertyValue('--ambar').trim():css.getPropertyValue('--verde').trim();
+  const cl=v=>v==null?'mut':v<70?'cr':v<85?'cy':'cg';
+  const pctF=v=>v==null?'—':Math.round(v)+'%';
+  const tot=v=>`<span class="pctcell" style="background:${band(v)}">${pctF(v)}</span>`;
   const linha=o=>`<tr><td>${escF(o.k)}</td><td class="num">${o.m.tt}</td>`+
     `<td class="num">${o.m.concl}</td><td class="num">${o.m.andam}</td><td class="num">${o.m.nini}</td>`+
     `<td class="num ${o.m.venc?'cr':'mut'}">${o.m.venc}</td>`+
-    `<td class="num ${cl(o.m.pPrazo)}">${pct1(o.m.pPrazo)}</td>`+
-    `<td class="num ${cl(o.m.pConcl)}">${pct1(o.m.pConcl)}</td>`+
-    `<td class="num ${cl(o.m.total)}">${pct1(o.m.total)}</td></tr>`;
+    `<td class="num ${cl(o.m.pPrazo)}">${pctF(o.m.pPrazo)}</td>`+
+    `<td class="num ${cl(o.m.pConcl)}">${pctF(o.m.pConcl)}</td>`+
+    `<td class="num">${tot(o.m.total)}</td></tr>`;
   el.innerHTML=wrapT('<table>'+
     th(cod?'Indicador / Conta':'Unidade','Ações','Concluídas','Em andamento','Não iniciadas','Vencidas','Aderência Prazo','Aderência Conclusão','Aderência Total')+
     '<tbody>'+linhas.map(linha).join('')+
-    `<tr class="tot-row"><td>Total</td><td class="num">${g.tt}</td><td class="num">${g.concl}</td><td class="num">${g.andam}</td><td class="num">${g.nini}</td><td class="num ${g.venc?'cr':'mut'}">${g.venc}</td><td class="num ${cl(g.pPrazo)}">${pct1(g.pPrazo)}</td><td class="num ${cl(g.pConcl)}">${pct1(g.pConcl)}</td><td class="num ${cl(g.total)}">${pct1(g.total)}</td></tr>`+
+    `<tr class="tot-row"><td>Total</td><td class="num">${g.tt}</td><td class="num">${g.concl}</td><td class="num">${g.andam}</td><td class="num">${g.nini}</td><td class="num ${g.venc?'cr':'mut'}">${g.venc}</td><td class="num ${cl(g.pPrazo)}">${pctF(g.pPrazo)}</td><td class="num ${cl(g.pConcl)}">${pctF(g.pConcl)}</td><td class="num">${tot(g.total)}</td></tr>`+
     '</tbody></table>')+
     '<div class="tbl-sub" style="margin:10px 0 0">Prazo = ações não vencidas · Conclusão = ações concluídas · Total = concluída 100% e em andamento 50% — a mesma conta do painel Aderência ao FCA.</div>';
 }
@@ -809,9 +817,9 @@ function renderChips(){
     kpi('Calibragem',stats.ca,clsPctMeta(stats.ca,90,75),'Meta: 90%')+
     `<div class="kpi"><div class="kl">Custos Δ Orç</div>`+
       `<div class="kv ${stats.cu==null?'mut':stats.cu<=0?'cg':stats.cu<=5?'cy':'cr'}">`+
-      `${stats.cu==null?'—':(stats.cu>0?'+':'')+pct1(stats.cu)}</div><div class="km">Meta: ≤ 0%</div></div>`+
+      `${stats.cu==null?'—':(stats.cu>0?'+':'')+pct0(stats.cu)}</div><div class="km">Meta: ≤ 0%</div></div>`+
     kpi('Conformidade',pC,clsPctMeta(pC,100,90),'Meta: 100%')+
-    kpi('FCA',pF,pF==null?'mut':pF>=90?'cg':pF>=70?'cy':'cr','Prazo + conclusão');
+    kpi('FCA',pF,pF==null?'mut':pF<70?'cr':pF<85?'cy':'cg','Prazo + conclusão');
 }
 
 /* ══════════ navegação ══════════ */
@@ -1037,6 +1045,6 @@ initPdfExport({
   isLight:()=>document.body.classList.contains('claro'), setTheme:t=>aplicaTema(t==='light'?'light':'dark')
 });
 </script>
-<script src="../assets/build-check.js?v=202608222037"></script>
+<script src="../assets/build-check.js?v=202608222045"></script>
 </body>
 </html>

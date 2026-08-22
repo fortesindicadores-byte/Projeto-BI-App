@@ -86,6 +86,8 @@ const num=v=>{if(v==null||v==='')return null;if(typeof v==='number')return v;con
 const brl=v=>{if(v==null||!isFinite(v))return '—';const a=Math.abs(v),s=v<0?'-':'';if(a>=1e6)return s+'R$ '+(a/1e6).toFixed(2).replace('.',',')+' mi';if(a>=1e3)return s+'R$ '+Math.round(a/1e3).toLocaleString('pt-BR')+'k';return s+'R$ '+Math.round(a).toLocaleString('pt-BR');};
 const brlFull=v=>v==null||!isFinite(v)?'—':(v<0?'-':'')+Math.round(Math.abs(v)).toLocaleString('pt-BR');
 const pct1=v=>v==null||!isFinite(v)?'—':(Math.round(v*10)/10).toLocaleString('pt-BR')+'%';
+// variações (▲ %) sem casa decimal (Renan, 22/08/2026) — aderências seguem no pct1
+const pct0=v=>v==null||!isFinite(v)?'—':Math.round(v).toLocaleString('pt-BR')+'%';
 const clsPctMeta=(p,g=99.95,y=95)=>p==null?'mut':p>=g?'cg':p>=y?'cy':'cr';
 const avgA=a=>{const v=a.filter(x=>x!=null&&isFinite(x));return v.length?v.reduce((s,x)=>s+x,0)/v.length:null;};
 const sumA=a=>a.reduce((s,x)=>s+(isFinite(x)?x:0),0);
@@ -553,8 +555,8 @@ function renderCustos(el,cod){
     <div class="hero-deltas">
       <div class="hero-delta"><span>Remunerado</span><b>${brl(tot.rem)}</b></div>
       <div class="hero-delta"><span>Orçado</span><b>${brl(tot.orc)}</b></div>
-      <div class="hero-delta"><span>▲ vs Orç.</span><b class="${dcls(dOrc)}">${brlFull(dOrc)} <small style="font-weight:600">(${pct1(pOrc)})</small></b></div>
-      <div class="hero-delta"><span>▲ vs Rem.</span><b class="${dcls(dRem)}">${brlFull(dRem)} <small style="font-weight:600">(${pct1(pRem)})</small></b></div>
+      <div class="hero-delta"><span>▲ vs Orç.</span><b class="${dcls(dOrc)}">${brlFull(dOrc)} <small style="font-weight:600">(${pct0(pOrc)})</small></b></div>
+      <div class="hero-delta"><span>▲ vs Rem.</span><b class="${dcls(dRem)}">${brlFull(dRem)} <small style="font-weight:600">(${pct0(pRem)})</small></b></div>
     </div>
   </div></div>`;
   // tabela agrupada: geral → por UNIDADE; unidade → por NÍVEL 3 (projeto)
@@ -571,13 +573,13 @@ function renderCustos(el,cod){
       h+=`<tr>${i===0?`<td rowspan="${rows.length}" style="font-weight:800;vertical-align:top">${escF(g)}</td>`:''}
         <td>${escF(r.conta)}</td><td class="num">${brlFull(r.orc)}</td><td class="num">${brlFull(r.rem)}</td><td class="num">${brlFull(r.rea)}</td>
         <td class="num ${dcls(dO)}">${brlFull(dO)}</td><td class="num ${dcls(dR)}">${brlFull(dR)}</td>
-        <td class="num ${dcls(dO)}">${pct1(pO)}</td><td class="num ${dcls(dR)}">${pct1(pR)}</td></tr>`;
+        <td class="num ${dcls(dO)}">${pct0(pO)}</td><td class="num ${dcls(dR)}">${pct0(pR)}</td></tr>`;
     });
     const t={orc:sumA(rows.map(r=>r.orc)),rem:sumA(rows.map(r=>r.rem)),rea:sumA(rows.map(r=>r.rea))};
     const dO=Math.abs(t.rea)-Math.abs(t.orc), dR=Math.abs(t.rea)-Math.abs(t.rem);
     h+=`<tr class="tot-row"><td></td><td>Total</td><td class="num">${brlFull(t.orc)}</td><td class="num">${brlFull(t.rem)}</td><td class="num">${brlFull(t.rea)}</td>
       <td class="num ${dcls(dO)}">${brlFull(dO)}</td><td class="num ${dcls(dR)}">${brlFull(dR)}</td>
-      <td class="num ${dcls(dO)}">${pct1(Math.abs(t.orc)>0?dO/Math.abs(t.orc)*100:null)}</td><td class="num ${dcls(dR)}">${pct1(Math.abs(t.rem)>0?dR/Math.abs(t.rem)*100:null)}</td></tr>`;
+      <td class="num ${dcls(dO)}">${pct0(Math.abs(t.orc)>0?dO/Math.abs(t.orc)*100:null)}</td><td class="num ${dcls(dR)}">${pct0(Math.abs(t.rem)>0?dR/Math.abs(t.rem)*100:null)}</td></tr>`;
   });
   h+='</tbody></table>';
   el.innerHTML=wrapT(h);
@@ -826,7 +828,7 @@ function renderRanking(el,extras){
       <td class="num">${u.score==null?'—':`<span class="pill" style="background:${sc}">${pct1(u.score)}</span>`}</td>
       ${cell(u.sv,clsPctMeta(u.sv))}${cell(u.se,clsPctMeta(u.se))}${cell(u.cf,clsPctMeta(u.cf))}${cell(u.pv,clsPctMeta(u.pv))}
       ${cell(u.al,u.al==null?'mut':u.al>=80?'cg':'cr')}${cell(u.os,u.os==null?'mut':u.os>=90?'cg':u.os>=70?'cy':'cr')}${cell(u.ck,u.ck==null?'mut':u.ck>=100?'cg':'cr')}${cell(u.dp,dispCls(u.dp))}${cell(u.af,clsPctMeta(u.af,95,85))}${cell(u.mm,clsPctMeta(u.mm,90,75))}${cell(u.ca,clsPctMeta(u.ca,90,75))}
-      <td class="num ${cCu(u.cu)}">${u.cu==null?'—':(u.cu>0?'+':'')+pct1(u.cu)}</td>${extras.map(x=>{const r=x.of(u.cod);return `<td class="num ${r.cls}">${r.v}</td>`;}).join('')}</tr>`;}).join('')+'</tbody></table>')+legenda+
+      <td class="num ${cCu(u.cu)}">${u.cu==null?'—':(u.cu>0?'+':'')+pct0(u.cu)}</td>${extras.map(x=>{const r=x.of(u.cod);return `<td class="num ${r.cls}">${r.v}</td>`;}).join('')}</tr>`;}).join('')+'</tbody></table>')+legenda+
     '<div class="tbl-sub" style="margin-top:8px">Média = aderências (Stress V/E, CIFV, Preventivas, Alinhamento, OS no prazo, Disponibilidade, Aferições, Milimetragem e Calibragem). Saída OS Crít. é binária (Checklist do mês de referência: 100% sem saída crítica, 0% com) e Custos é informativo (Δ Real vs Orç do mês) — os dois fora da média. Aferições/Milimetragem/Calibragem vêm da API (foto Prolog); detalhe na seção Pneus abaixo.</div>';
 }
 
@@ -963,20 +965,22 @@ async function renderPneusCal(el,cod){
   const comP=tires.filter(t=>t.pIdeal>0&&t.desv!=null);
   const calOk=comP.length?comP.filter(t=>Math.abs(t.desv)<=10).length/comP.length*100:null;
   let h=`<div class="custos-hero">${_pnCard('Calibragem OK',pct1(calOk),clsPctMeta(calOk,98,85),'±10% da ideal')}</div>`;
-  h+=`<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px">
+  // legenda do % Calibragem OK — bloco de hero, FORA do card da tabela
+  h+=`<div class="hero-deltas" style="gap:10px;flex-wrap:wrap;margin-bottom:12px">
     <span class="pill" style="background:#3BB33B">≥ 98%</span>
     <span class="pill" style="background:#EAB308;color:#111">85% a 98%</span>
     <span class="pill" style="background:#FF6666">&lt; 85%</span></div>`;
   const lista=comP.slice().sort((a,b)=>Math.abs(b.desv)-Math.abs(a.desv)).slice(0,80);
   h+=wrapT('<table>'+_pnTh(['#','Nº de Fogo',cod?'Placa':'Unidade · Placa',['Posição'],['Marca'],['Vida'],['Pressão Ideal'],['Pressão Atual'],['Desvio'],['Status']])+'<tbody>'+
     lista.map((t,i)=>{const st=t.desv>10?'Alta Pressão':t.desv<-10?'Baixa Pressão':'OK';
-      const cor=st==='Alta Pressão'?'#FF6666':st==='Baixa Pressão'?'#EAB308':'#3BB33B';
+      // pneu a pneu: dentro de ±10% verde, fora vermelho (Renan, 22/08/2026)
+      const cor=st==='OK'?'#3BB33B':'#FF6666';
       return `<tr><td class="mut">${i+1}</td><td><b>${escF(t.serial||'—')}</b></td><td>${_pnPl(t,cod)}</td><td class="ctr">${_pnPos(t)}</td>
       <td class="ctr">${escF(t.marca||'—')}</td><td class="ctr">${t.vida?('V'+t.vida):'—'}</td>
       <td class="ctr">${_pnF1(t.pIdeal)} PSI</td><td class="ctr">${_pnF1(t.pAtual)} PSI</td>
-      <td class="ctr" style="color:${cor};font-weight:700">${(t.desv>0?'+':'')+_pnF1(t.desv)}%</td>
+      <td class="ctr" style="color:${cor};font-weight:700">${(t.desv>0?'+':'')+pct0(t.desv)}</td>
       <td class="ctr" style="white-space:nowrap">${_pnDot(cor)}${st}</td></tr>`;}).join('')+'</tbody></table>');
-  el.innerHTML=h+_pnFoot(P,' Calibragem OK = ±10% da pressão ideal. Meta: ≥98% verde · 85–98% amarelo · &lt;85% vermelho.');
+  el.innerHTML=h+_pnFoot(P,' Calibragem OK = ±10% da pressão ideal (pneu a pneu: dentro verde, fora vermelho). Meta do %: ≥98% verde · 85–98% amarelo · &lt;85% vermelho.');
 }
 
 // ═══════════════ MONTAGEM DAS PÁGINAS ═══════════════
