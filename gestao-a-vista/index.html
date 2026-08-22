@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-<meta name="build" content="202608220438">
+<meta name="build" content="202608221214">
 <title>Gestão à Vista</title>
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -337,10 +337,13 @@ table.dre td.cg-t,.cg-t{color:var(--verde)!important;font-weight:700;}
 
 /* blocos internos das seções (mini-hero, custos, quadrantes, legenda) */
 .blk-t{font-size:9.5px;font-weight:800;color:var(--txt3);text-transform:uppercase;letter-spacing:.8px;margin:12px 0 6px;}
-.mini-hero,.custos-hero{display:flex;align-items:flex-end;gap:22px;flex-wrap:wrap;margin-bottom:10px;}
+/* mini-hero EMPILHADO, como o hero do padrão: rótulo em cima, número grande
+   embaixo, meta na linha de baixo — nada lado a lado */
+.mini-hero{display:block;margin-bottom:12px;}
+.custos-hero{display:flex;align-items:flex-end;gap:22px;flex-wrap:wrap;margin-bottom:10px;}
 .mh-label{font-size:9.5px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:.9px;}
-.mh-val{font-size:clamp(22px,3vh,32px);font-weight:800;line-height:1;color:var(--txt);margin-top:3px;}
-.mh-meta{font-size:10px;color:var(--txt3);margin-top:4px;font-weight:600;}
+.mh-val{font-size:clamp(26px,3.6vh,40px);font-weight:800;line-height:1;color:var(--txt);margin:4px 0 7px;}
+.mh-meta{font-size:10px;color:var(--txt3);font-weight:600;}
 .mh-big{font-size:clamp(22px,3vh,32px);font-weight:800;}
 .ch-min{display:flex;flex-direction:column;gap:2px;}
 .ch-min span{font-size:9px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:.7px;}
@@ -467,7 +470,7 @@ body.prehub .s-sec,body.prehub .s-item,body.prehub #pdf-slot,body.prehub .ms-wra
 
 <div class="dica" id="dica"></div>
 
-<script src="../farol-frota/farol-core.js?v=202608220438"></script>
+<script src="../farol-frota/farol-core.js?v=202608221214"></script>
 <script>
 /* ══════════════════════════════════════════════════════════════════════
    Gestão à Vista — o Farol no layout padrão do portal (Renan, 21/08/2026).
@@ -509,7 +512,7 @@ const svg=p=>`<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke
    é o MESMO código de sempre (farol-core.js) — nada de número novo aqui.  */
 const VIEWS=[
   {id:'resumo', g:'v', ic:ICO.resumo, t:'Resumo Gerencial', s:'Leitura automática do farol da semana', r:(el)=>renderResumo(el)},
-  {id:'ranking',g:'v', ic:ICO.ranking,t:'Ranking das Unidades', s:'Aderências por indicador — melhor → pior', adm:true, r:(el)=>renderRanking(el)},
+  {id:'ranking',g:'v', ic:ICO.ranking,t:'Ranking', s:'Aderências por indicador — melhor → pior', adm:true, r:(el)=>renderRanking(el,rankExtras())},
   {id:'custos', g:'i', ic:ICO.custos, t:'Custos', s:()=>'Realizado × Remunerado × Orçado — '+(codAtual()?'por projeto':'por unidade'), r:(el,cod)=>renderCustos(el,cod)},
   {id:'stressv',g:'i', ic:ICO.veic,   t:'Stress Test — Veículos', s:()=>'Aderência (sem desconto) vs meta 100% · descontos por placa'+fx('stressV'), r:(el,cod)=>renderStressV(el,cod)},
   {id:'stresse',g:'i', ic:ICO.emp,    t:'Stress Test — Empilhadeiras', s:()=>'Aderência 1ª/2ª quinzena · descontos por equipamento'+fx('stressE'), r:(el,cod)=>renderStressE(el,cod), temDado:()=>byCod(DATA.stressE,codAtual()).filter(r=>r.contratada).length>0},
@@ -518,7 +521,7 @@ const VIEWS=[
   {id:'alinh',  g:'i', ic:ICO.alinh,  t:'Alinhamento', s:()=>'No prazo vs vencidos · placas por próximo evento'+fx('alinh'), r:(el,cod)=>renderAlinh(el,cod)},
   {id:'os',     g:'i', ic:ICO.os,     t:'Gestão de OS', s:()=>'% no prazo (≤8 dias) · OSs em aberto'+fx('os'), r:(el,cod)=>renderOS(el,cod)},
   {id:'chk',    g:'i', ic:ICO.chk,    t:'Checklist', s:'Saída com OS Crítica — norma 031120', r:(el,cod)=>renderChk(el,cod)},
-  {id:'disp',   g:'i', ic:ICO.disp,   t:'Disponibilidade', s:'Foto da última vigência — veículos disponíveis da frota', r:(el,cod)=>renderDisp(el,cod)},
+  {id:'disp',   g:'i', ic:ICO.disp,   t:'Disponibilidade', s:'Placas indisponíveis agora — o comparativo por unidade está no Ranking', r:(el,cod)=>renderDisp(el,cod,true)},
   {id:'conf',   g:'i', ic:ICO.conf,   t:'Conformidade', s:()=>'Aderência do mês — atualizada até hoje'+(CONF_VIG?' · vigência '+vigLbl(CONF_VIG):''), r:(el,cod)=>renderConf(el,cod)},
   {id:'fca',    g:'i', ic:ICO.fca,    t:'FCA', s:()=>'Aderência ao prazo, à conclusão e total'+(FCAR?' · '+FCAR.length+' ação(ões)':''), r:(el,cod)=>renderFCAv(el,cod)},
   {id:'pneus-afer',g:'i', ic:ICO.pneu, t:'Pneus · Aferições', s:'Placas aferidas no período', r:(el,cod)=>renderPneusAfer(el,cod)},
@@ -543,6 +546,18 @@ function codAtual(){
   if(UNI) return UNI;
   const sel=getMsValues('ms-uni');
   return sel.length===1?sel[0]:null;
+}
+
+// Conformidade e FCA entram no Ranking como colunas informativas (mesmas
+// regras de cor dos cards do Resumo) — a média do farol não muda.
+function rankExtras(){
+  const fmt=v=>v==null?'—':pct1(v);
+  return [
+    {lb:'Conformidade',corte:'100% verde · 90–99,9% amarelo · < 90% vermelho',
+     of:cod=>{const v=confDoEscopo(cod);return {v:fmt(v),cls:clsPctMeta(v,100,90)};}},
+    {lb:'FCA',corte:'≥ 90% verde · 70–89,9% amarelo · < 70% vermelho',
+     of:cod=>{const v=fcaDoEscopo(cod);return {v:fmt(v),cls:v==null?'mut':v>=90?'cg':v>=70?'cy':'cr'};}}
+  ];
 }
 
 /* ══════════ CONFORMIDADE — elite_snapshot, régua nova (contagens) ══════════
@@ -580,24 +595,31 @@ function confDoEscopo(cod){
   const ok=rs.reduce((s,r)=>s+r.ok,0), tot=rs.reduce((s,r)=>s+r.tot,0);
   return tot?ok/tot*100:null;
 }
+// Como a Disponibilidade: a visão mostra o AGORA do recorte (aderência + as
+// cinco contagens); o comparativo por unidade vive na visão Ranking. O detalhe
+// por equipamento/placa ainda NÃO existe na base — a tela do Ginfo só entrega
+// contagens por filial (o drill de detalhe não abre por automação).
 function renderConf(el,cod){
   if(!CONF||!CONF.length){el.innerHTML='<div class="loading">Sem conformidade coletada para a vigência.</div>';return;}
-  const rs=CONF.filter(r=>(cod?r.cod===cod:passU(r.cod))).sort((a,b)=>(b.pct??-1)-(a.pct??-1));
+  const rs=CONF.filter(r=>(cod?r.cod===cod:passU(r.cod)));
   if(!rs.length){el.innerHTML='<div class="loading">Sem conformidade para o recorte atual.</div>';return;}
   const tot={nunca:0,nao:0,fora:0,dentro:0,noPrazo:0,ok:0,tot:0};
   rs.forEach(r=>{['nunca','nao','fora','dentro','noPrazo','ok','tot'].forEach(k=>tot[k]+=r[k]);});
   const pctT=tot.tot?tot.ok/tot.tot*100:null;
-  const linha=r=>`<tr><td>${escF(r.cod)}</td><td class="mut">${escF(r.fil)}</td>`+
-    `<td class="num">${r.nunca.toLocaleString('pt-BR')}</td><td class="num">${r.nao.toLocaleString('pt-BR')}</td>`+
-    `<td class="num">${r.fora.toLocaleString('pt-BR')}</td><td class="num">${r.dentro.toLocaleString('pt-BR')}</td>`+
-    `<td class="num">${r.noPrazo.toLocaleString('pt-BR')}</td><td class="num">${r.tot.toLocaleString('pt-BR')}</td>`+
-    `<td class="num ${clsPctMeta(r.pct,100,90)}">${pct1(r.pct)}</td></tr>`;
-  el.innerHTML=wrapT('<table>'+
-    th('Unidade','Filial (Ginfo)','Nunca Realizado','Não Realizado','Realizado Fora Prazo','Realizado Dentro Prazo','No Prazo','Total','Aderência')+
-    '<tbody>'+rs.map(linha).join('')+
-    `<tr class="tot-row"><td>Total</td><td></td><td class="num">${tot.nunca.toLocaleString('pt-BR')}</td><td class="num">${tot.nao.toLocaleString('pt-BR')}</td><td class="num">${tot.fora.toLocaleString('pt-BR')}</td><td class="num">${tot.dentro.toLocaleString('pt-BR')}</td><td class="num">${tot.noPrazo.toLocaleString('pt-BR')}</td><td class="num">${tot.tot.toLocaleString('pt-BR')}</td><td class="num ${clsPctMeta(pctT,100,90)}">${pct1(pctT)}</td></tr>`+
-    '</tbody></table>')+
-    `<div class="tbl-sub" style="margin:10px 0 0">Aderência = (Realizado Dentro Prazo + No Prazo) ÷ total das cinco contagens — régua do Ginfo desde ago/2026.${CONF_ATT?' Coleta de '+CONF_ATT.toLocaleDateString('pt-BR')+' '+CONF_ATT.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})+'.':''}</div>`;
+  const cls=clsPctMeta(pctT,100,90);
+  const n=v=>v.toLocaleString('pt-BR');
+  const card=(lb,v,c)=>`<div class="ch-min"><span>${lb}</span><b class="${c||''}">${n(v)}</b></div>`;
+  el.innerHTML=
+    `<div class="mini-hero"><div class="mh-label">ADERÊNCIA</div><div class="mh-val ${cls}">${pct1(pctT)}</div>`+
+    `<div class="mh-meta">Meta: 100% · <b>${n(tot.tot)}</b> cobranças na vigência</div></div>`+
+    `<div class="custos-hero">`+
+      card('Nunca Realizado',tot.nunca,tot.nunca?'cr':'mut')+
+      card('Não Realizado',tot.nao,tot.nao?'cr':'mut')+
+      card('Realizado Fora Prazo',tot.fora,tot.fora?'cy':'mut')+
+      card('Realizado Dentro Prazo',tot.dentro,'cg')+
+      card('No Prazo',tot.noPrazo,'cg')+
+    `</div>`+
+    `<div class="tbl-sub" style="margin:10px 0 0">Aderência = (Realizado Dentro Prazo + No Prazo) ÷ total das cinco contagens — régua do Ginfo desde ago/2026.${CONF_ATT?' Coleta de '+CONF_ATT.toLocaleDateString('pt-BR')+' '+CONF_ATT.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})+'.':''} O detalhe por equipamento ainda não vem do Ginfo.</div>`;
 }
 
 /* ══════════ FCA — mesma conta do painel Aderência ao FCA ══════════
@@ -709,10 +731,10 @@ function montaNav(){
     b.addEventListener('mouseenter',e=>dicaOn(e.currentTarget));
     b.addEventListener('mouseleave',dicaOff);
   });
-  // as seções: uma por visão. As de tabela ficam num card (.tbl-section);
-  // o Resumo Gerencial é SOLTO: o farol (hero + fileira de cards) vive AQUI —
-  // as outras visões mostram só o seu indicador — e os quatro quadrantes são
-  // os próprios cards, ocupando o resto do espaço.
+  // as seções: uma por visão. O título/subtítulo da visão ficam no TOPO da
+  // página (h1 + titSub) — o card não repete nada. O Resumo Gerencial é
+  // SOLTO: o farol (hero + fileira de cards) vive aqui e os quatro
+  // quadrantes são os próprios cards, ocupando o resto do espaço.
   $('views').innerHTML=vistas().map(v=>
     v.id==='resumo'
     ? `<section class="vw${v.id===VW?' on':''}" id="vw-${v.id}">
@@ -721,8 +743,7 @@ function montaNav(){
          <div class="sec-body solto" id="body-${v.id}"><div class="loading">Carregando…</div></div>
        </section>`
     : `<section class="vw${v.id===VW?' on':''}" id="vw-${v.id}">
-       <div class="tbl-section"><div class="tbl-title">${v.t}</div><div class="tbl-sub" id="sub-${v.id}"></div>
-       <div class="sec-body" id="body-${v.id}"><div class="loading">Carregando…</div></div></div>
+       <div class="tbl-section"><div class="sec-body" id="body-${v.id}"><div class="loading">Carregando…</div></div></div>
      </section>`).join('');
 }
 let PINTADA={};
@@ -733,16 +754,22 @@ function garantePneus(){
   if(!PNEUS_CARREGANDO) PNEUS_CARREGANDO=loadPneus().then(()=>{PNEUS_OK=true;}).catch(e=>{console.error('pneus',e);PNEUS_OK=true;});
   return PNEUS_CARREGANDO;
 }
+// subtítulo do topo = o texto da visão + "Atualizado …" (nada repetido no card)
+let ATT='';
+function pintaSub(v){
+  const s=txtDe(v.s)||'';
+  const e=$('titSub'); if(e) e.innerHTML=(s?s+(ATT?' · ':''):'')+ATT;
+}
 function pinta(id){
   const v=vDe(id); if(!v) return;
-  const el=$('body-'+id), sub=$('sub-'+id); if(!el) return;
+  const el=$('body-'+id); if(!el) return;
   const cod=codAtual();
+  if(id===VW) pintaSub(v);
   if(id.indexOf('pneus')===0){
     const p=garantePneus();
-    if(p){ el.innerHTML='<div class="loading">Carregando os pneus…</div>'; if(sub) sub.innerHTML=txtDe(v.s);
+    if(p){ el.innerHTML='<div class="loading">Carregando os pneus…</div>';
            p.then(()=>{ PINTADA[id]=false; pinta(id); renderChips(); }); return; }
   }
-  if(sub) sub.innerHTML=txtDe(v.s);
   try{
     const r=v.r(el,cod);
     if(r&&typeof r.catch==='function') r.catch(e=>{console.error(id,e);el.innerHTML='<div class="loading">Erro ao montar esta seção.</div>';});
@@ -766,7 +793,7 @@ function setVw(v){
   VW=v;
   document.querySelectorAll('.vw').forEach(s=>s.classList.toggle('on',s.id==='vw-'+v));
   document.querySelectorAll('.s-item[data-vw]').forEach(b=>b.classList.toggle('on',b.dataset.vw===v));
-  setTxt('tit',vDe(v).t);
+  setTxt('tit',vDe(v).t); pintaSub(vDe(v));
   if(!PINTADA[v]) pinta(v);            // pinta sob demanda (abre mais rápido)
 }
 function repinta(){                     // filtro mudou: chips + visão aberta agora, resto depois
@@ -804,8 +831,8 @@ function semAcesso(msg){
   setTxt('tit','Gestão à Vista'); setTxt('titSub','—');
 }
 function pintaTudo(quando,doCache){
+  ATT='Atualizado '+quando.toLocaleDateString('pt-BR')+' '+quando.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})+(doCache?' (cache)':'');
   renderChips(); PINTADA={}; pinta(VW);
-  setTxt('titSub','Atualizado '+quando.toLocaleDateString('pt-BR')+' '+quando.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})+(doCache?' (cache)':''));
 }
 async function boot(){
   let pintou=false;
@@ -896,6 +923,6 @@ initPdfExport({
   isLight:()=>document.body.classList.contains('claro'), setTheme:t=>aplicaTema(t==='light'?'light':'dark')
 });
 </script>
-<script src="../assets/build-check.js?v=202608220438"></script>
+<script src="../assets/build-check.js?v=202608221214"></script>
 </body>
 </html>
