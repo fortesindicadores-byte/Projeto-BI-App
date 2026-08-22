@@ -3,17 +3,13 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-<meta name="build" content="202608212300">
+<meta name="build" content="202608220315">
 <title>Gestão à Vista</title>
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <script src="../assets/gviz-cache.js"></script>
 <script src="../assets/swr-cache.js"></script>
-<!-- classes das seções (tbl-section, quads, mini-hero, rk-leg…) que o
-     farol-core.js emite; o <style> abaixo repinta tudo com os tokens do
-     layout padrão, então o farol.css entra só pela estrutura -->
-<link rel="stylesheet" href="../farol-frota/farol.css?v=202608061659">
 <style>
 
 /* ============================================================
@@ -281,6 +277,9 @@ table.dre td.cg-t,.cg-t{color:var(--verde)!important;font-weight:700;}
   .vw{display:none;}
   .vw.on{display:block;}                      /* sem flex: cada bloco cresce sozinho */
   .vw>*{margin-bottom:12px;}
+  #views{display:block;}
+  #views .vw.on>.tbl-section{min-height:0;}
+  .sec-body{overflow:visible;}
   .fin-hero{gap:14px;flex-direction:column;align-items:flex-start;}
   .heb{margin-left:0;text-align:left;}
   .heb .hdel{justify-content:flex-start;}
@@ -293,49 +292,99 @@ table.dre td.cg-t,.cg-t{color:var(--verde)!important;font-weight:700;}
   .twrap{max-height:none;overflow-x:auto;}
   .emb{height:76vh;}
 }
-/* ═══ ponte: as classes que o farol-core emite, repintadas com os tokens
-   do layout padrão (o farol.css continua valendo só pela estrutura) ═══ */
-body{background:var(--fundo);}
-.tbl-section{background:var(--side);border:1px solid var(--card-brd);border-radius:14px;
-  padding:16px 18px 14px;margin-bottom:14px;backdrop-filter:blur(20px);
-  box-shadow:0 10px 26px rgba(0,0,0,.20),var(--luz-card);}
-.tbl-title{font-size:15px;font-weight:800;color:var(--txt);margin-bottom:2px;}
-.tbl-sub{font-size:10.5px;color:var(--txt2);margin-bottom:12px;}
-table{width:100%;border-collapse:collapse;font-size:11.5px;}
-thead th{background:var(--cabec);color:var(--txt);font-size:9.5px;font-weight:800;padding:8px;
-  border-bottom:1px solid var(--linha);text-transform:uppercase;letter-spacing:.4px;white-space:nowrap;
-  position:sticky;top:0;z-index:2;}
-td{padding:9px 8px;border:none;color:var(--txt);white-space:nowrap;border-bottom:1px solid var(--linha);}
-tbody tr:hover{background:var(--hover);}
-tr.tot-row td{background:var(--cabec);font-weight:800;}
-.cg{color:var(--verde)!important;font-weight:700;} .cr{color:var(--vermelho)!important;font-weight:700;}
-.cy{color:var(--ambar)!important;font-weight:700;}  .mut{color:var(--txt3)!important;}
-.dot.g{background:var(--verde);} .dot.y{background:var(--ambar);} .dot.r{background:var(--vermelho);}
-.loading{color:var(--txt3);padding:26px;text-align:center;font-size:11.5px;}
-.quad,.mini-card,.mini-hero,.custos-hero{background:var(--card)!important;border:1px solid var(--card-brd)!important;
-  border-radius:11px;box-shadow:none!important;}
-.quad-t{color:var(--txt);} .quad li{color:var(--txt2);}
-.blk-t{color:var(--txt);font-weight:800;}
-.mh-label,.rk-leg,.rk-leg-nota,.rk-leg-cortes{color:var(--txt2);}
-.mh-val{color:var(--txt);} .mh-meta{color:var(--txt3);}
-.pill{color:#141416;}
-.gate{color:var(--txt2);text-align:center;padding:48px 20px;}
-.gate h2{color:var(--txt);font-size:15px;margin-bottom:6px;}
+/* ═══════════════════════════════════════════════════════════════════════
+   As classes que o farol-core.js emite, escritas NO PADRÃO (tokens do
+   portal). O farol.css antigo NÃO entra aqui — ele trazia a paleta velha
+   e regras de light-mode que venciam no tema claro.
+   ═══════════════════════════════════════════════════════════════════════ */
 
-/* faixa de chips do topo — fica visível em TODAS as visões (pedido do Renan) */
-.chips{display:flex;align-items:flex-end;gap:18px;flex-wrap:wrap;
-  background:var(--side);border:1px solid var(--card-brd);border-radius:14px;
-  padding:12px 18px 11px;margin-bottom:12px;backdrop-filter:blur(20px);
-  box-shadow:0 10px 26px rgba(0,0,0,.20),var(--luz-card);flex:0 0 auto;}
-.chips .ch-hero{display:flex;flex-direction:column;gap:2px;padding-right:16px;border-right:1px solid var(--linha);}
-.chips .ch-hero span{font-size:8.5px;font-weight:800;color:var(--txt3);text-transform:uppercase;letter-spacing:.8px;}
-.chips .ch-hero b{font-size:26px;font-weight:800;line-height:1;}
-.chips .hero-deltas{display:flex;gap:15px;flex-wrap:wrap;margin:0;}
-.chips .hero-delta{font-size:8.5px;color:var(--txt3);text-transform:uppercase;letter-spacing:.5px;font-weight:700;}
-.chips .hero-delta b{font-size:12.5px;font-weight:800;display:block;margin-top:2px;text-transform:none;letter-spacing:0;}
-.vw{flex:1 1 auto;min-height:0;overflow:auto;padding-right:2px;}
-.vw::-webkit-scrollbar{width:7px;} .vw::-webkit-scrollbar-thumb{background:var(--linha);border-radius:4px;}
+/* card = o mesmo .card do padrão */
+.tbl-section{border:1px solid var(--card-brd);border-radius:12px;background:var(--side);
+  backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);box-shadow:var(--luz-card);
+  padding:12px 16px 10px;display:flex;flex-direction:column;min-height:0;}
+.tbl-title{font-size:12px;font-weight:800;color:var(--txt);}
+.tbl-sub{font-size:10px;color:var(--txt3);margin:2px 0 8px;}
+.sec-body{min-height:0;overflow:auto;}
+.sec-body::-webkit-scrollbar{width:7px;height:7px;}
+.sec-body::-webkit-scrollbar-thumb{background:var(--linha);border-radius:4px;}
+
+/* tabelas = table.dre do padrão (o farol-core emite <table> sem classe) */
+.vw table{width:100%;border-collapse:collapse;font-size:12px;}
+.vw thead th{position:sticky;top:0;z-index:2;background:var(--cabec);text-align:right;
+  padding:10px 12px;font-size:9.5px;font-weight:700;color:var(--txt2);text-transform:uppercase;
+  letter-spacing:.7px;border-bottom:1px solid var(--card-brd);white-space:nowrap;}
+.vw thead th:first-child{text-align:left;}
+.vw td{padding:9px 12px;border-bottom:1px solid var(--linha);color:var(--txt2);white-space:nowrap;}
+.vw td:first-child{color:var(--txt);font-weight:600;}
+.vw td.num,.vw th.num{text-align:right;}
+/* "nunca barra de rolagem horizontal" (regra do Renan): tabela larga aperta
+   sozinha até caber — dois níveis, aplicados pelo ajusteTabelas() */
+.vw .cmp1 td,.vw .cmp1 thead th{padding:7px 8px;font-size:11px;}
+.vw .cmp2 td,.vw .cmp2 thead th{padding:6px 5px;font-size:10px;letter-spacing:.3px;}
+.vw .cmp2 thead th{font-size:8.5px;}
+.vw td.ctr,.vw th.ctr{text-align:center;}
+.vw tbody tr:hover{background:var(--hover);}
+.vw tr.tot-row td{font-weight:800;color:var(--txt);border-top:1px solid var(--card-brd);background:var(--cabec);}
+.vw td.cr,.cr{color:var(--vermelho)!important;font-weight:700;}
+.vw td.cg,.cg{color:var(--verde)!important;font-weight:700;}
+.vw td.cy,.cy{color:var(--ambar)!important;font-weight:700;}
+.vw td.mut,.mut{color:var(--txt3)!important;}
+.pill{display:inline-block;min-width:40px;text-align:center;padding:2px 8px;border-radius:20px;
+  font-weight:800;font-size:11px;color:#141416;}
+.dot{display:inline-block;width:8px;height:8px;border-radius:50%;vertical-align:middle;background:var(--txt4);}
+.dot.g{background:var(--verde);} .dot.y{background:var(--ambar);} .dot.r{background:var(--vermelho);}
+
+/* blocos internos das seções (mini-hero, custos, quadrantes, legenda) */
+.blk-t{font-size:9.5px;font-weight:800;color:var(--txt3);text-transform:uppercase;letter-spacing:.8px;margin:12px 0 6px;}
+.mini-hero,.custos-hero{display:flex;align-items:flex-end;gap:22px;flex-wrap:wrap;margin-bottom:10px;}
+.mh-label{font-size:9.5px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:.9px;}
+.mh-val{font-size:clamp(22px,3vh,32px);font-weight:800;line-height:1;color:var(--txt);margin-top:3px;}
+.mh-meta{font-size:10px;color:var(--txt3);margin-top:4px;font-weight:600;}
+.mh-big{font-size:clamp(22px,3vh,32px);font-weight:800;}
+.ch-min{display:flex;flex-direction:column;gap:2px;}
+.ch-min span{font-size:9px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:.7px;}
+.ch-min b{font-size:15px;font-weight:800;color:var(--txt);}
+.ch-min small{font-size:9.5px;color:var(--txt3);font-weight:600;}
+.split{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:14px;}
+.quads{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:10px;}
+.quad{border:1px solid var(--card-brd);border-radius:11px;background:var(--card);padding:12px 14px;}
+.quad-t{font-size:11px;font-weight:800;color:var(--txt);margin-bottom:6px;display:flex;align-items:center;gap:6px;}
+.quad ul{margin:0;padding-left:16px;}
+.quad li{font-size:11px;color:var(--txt2);line-height:1.55;}
+.quad li b{color:var(--txt);}
+.tri{font-size:9px;}
+.rk-leg{display:flex;gap:14px;flex-wrap:wrap;align-items:center;margin-top:10px;
+  font-size:9px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:.6px;}
+.rk-leg-cores{display:flex;gap:12px;flex-wrap:wrap;align-items:center;}
+.rk-leg-cores span{display:flex;align-items:center;gap:5px;}
+.rk-leg-nota{font-style:italic;font-weight:600;text-transform:none;letter-spacing:0;}
+.rk-leg-cortes{display:flex;gap:12px;flex-wrap:wrap;font-weight:600;text-transform:none;letter-spacing:0;
+  font-size:9px;color:var(--txt4);margin-top:6px;line-height:1.6;}
+.chart-wrap{position:relative;height:clamp(150px,26vh,230px);}
+.mini-card{border:1px solid var(--card-brd);border-radius:11px;background:var(--card);
+  padding:10px 12px;margin-bottom:10px;max-width:520px;}
+.mini-card .chart-wrap{height:140px;}
+.loading{color:var(--txt3);padding:22px;text-align:center;font-size:11px;}
+.gate{color:var(--txt2);text-align:center;padding:44px 20px;font-size:12px;}
+.gate h2{color:var(--txt);font-size:14px;margin-bottom:6px;}
+.hero-deltas{display:flex;gap:18px;flex-wrap:wrap;}
+.hero-delta{font-size:9px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:.7px;}
+.hero-delta b{display:block;font-size:13px;font-weight:800;color:var(--txt);margin-top:2px;letter-spacing:0;text-transform:none;}
+
+/* faixa de chips do topo — visível em TODAS as visões (pedido do Renan) */
+.chips{display:flex;align-items:flex-end;gap:18px;flex-wrap:wrap;flex:0 0 auto;
+  border:1px solid var(--card-brd);border-radius:12px;background:var(--side);
+  backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);box-shadow:var(--luz-card);
+  padding:11px 16px 10px;margin-bottom:12px;}
+.chips .ch-hero{display:flex;flex-direction:column;gap:2px;padding-right:18px;border-right:1px solid var(--linha);}
+.chips .ch-hero span{font-size:9.5px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:.9px;}
+.chips .ch-hero b{font-size:clamp(22px,3vh,30px);font-weight:800;line-height:1;}
+
 .board{display:flex;flex-direction:column;min-height:0;}
+.vw.on{display:flex;}
+/* o card da visão ocupa a sobra de altura (padrão: nada de buraco no rodapé) */
+#views{flex:1;min-height:0;display:flex;flex-direction:column;}
+#views .vw.on>.tbl-section{flex:1;min-height:0;}
 </style>
 </head>
 <body>
@@ -381,7 +430,7 @@ tr.tot-row td{background:var(--cabec);font-weight:800;}
           Unidade<span class="ms-cnt"></span></button>
           <div class="ms-panel"><div class="ms-search"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M16.5 16.5 21 21"/></svg><input type="text" placeholder="Pesquisar…" data-ctrlk></div><div class="ms-list"></div></div>
         </div>
-        <button class="ms-btn" id="btTema" onclick="trocaTema()" title="Modo claro/escuro" style="min-width:0"></button>
+        <button class="tool ico" id="btTema" onclick="trocaTema()" title="Modo claro/escuro"></button>
       </div>
     </div>
 
@@ -392,7 +441,7 @@ tr.tot-row td{background:var(--cabec);font-weight:800;}
 
 <div class="dica" id="dica"></div>
 
-<script src="../farol-frota/farol-core.js?v=202608212300"></script>
+<script src="../farol-frota/farol-core.js?v=202608220315"></script>
 <script>
 /* ══════════════════════════════════════════════════════════════════════
    Gestão à Vista — o Farol no layout padrão do portal (Renan, 21/08/2026).
@@ -608,16 +657,40 @@ function montaNav(){
      </section>`).join('');
 }
 let PINTADA={};
+let PNEUS_OK=false, PNEUS_CARREGANDO=null;
+// os três indicadores de pneus só baixam a base quando alguém abre a visão
+function garantePneus(){
+  if(PNEUS_OK) return null;
+  if(!PNEUS_CARREGANDO) PNEUS_CARREGANDO=loadPneus().then(()=>{PNEUS_OK=true;}).catch(e=>{console.error('pneus',e);PNEUS_OK=true;});
+  return PNEUS_CARREGANDO;
+}
 function pinta(id){
   const v=vDe(id); if(!v) return;
   const el=$('body-'+id), sub=$('sub-'+id); if(!el) return;
   const cod=codAtual();
+  if(id.indexOf('pneus')===0){
+    const p=garantePneus();
+    if(p){ el.innerHTML='<div class="loading">Carregando os pneus…</div>'; if(sub) sub.innerHTML=txtDe(v.s);
+           p.then(()=>{ PINTADA[id]=false; pinta(id); renderChips(); }); return; }
+  }
   if(sub) sub.innerHTML=txtDe(v.s);
   try{
     const r=v.r(el,cod);
     if(r&&typeof r.catch==='function') r.catch(e=>{console.error(id,e);el.innerHTML='<div class="loading">Erro ao montar esta seção.</div>';});
   }catch(e){ console.error(id,e); el.innerHTML='<div class="loading">Erro ao montar esta seção.</div>'; }
   PINTADA[id]=true;
+  requestAnimationFrame(()=>ajusteTabelas(el));
+}
+// aperta as tabelas da visão até caberem (sem rolagem lateral)
+function ajusteTabelas(el){
+  if(!el) return;
+  el.querySelectorAll('table').forEach(t=>{
+    t.classList.remove('cmp1','cmp2');
+    const cabe=()=>t.scrollWidth<=t.parentElement.clientWidth+1;
+    if(cabe()) return;
+    t.classList.add('cmp1');
+    if(!cabe()){ t.classList.remove('cmp1'); t.classList.add('cmp2'); }
+  });
 }
 function setVw(v){
   if(!vDe(v)||!vistas().some(x=>x.id===v)) v=vistas()[0].id;
@@ -633,15 +706,16 @@ function repinta(){                     // filtro mudou: chips + visão aberta a
 _farolRepaint=()=>{const s=getMsValues('ms-uni');FILT.uni=s.length?new Set(s):new Set(MINHAS);repinta();};
 
 /* ══════════ tema / menu recolhido / dica ══════════ */
-const _sun='<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4.5"/><path d="M12 1v3M12 20v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M1 12h3M20 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1"/></svg>';
-const _moon='<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>';
+/* tema: MESMA convenção dos painéis do padrão (classe .claro, chave bi_theme) */
+const _SOL='<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4.5"/><path d="M12 1.5v2M12 20.5v2M4.2 4.2l1.4 1.4M18.4 18.4l1.4 1.4M1.5 12h2M20.5 12h2M4.2 19.8l1.4-1.4M18.4 5.6l1.4-1.4"/></svg>';
+const _LUA='<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>';
 function aplicaTema(t){
-  document.body.classList.toggle('claro',t==='claro');
-  localStorage.setItem('bi_theme',t==='claro'?'light':'dark');
-  const b=$('btTema'); if(b) b.innerHTML=t==='claro'?_moon:_sun;
+  document.body.classList.toggle('claro', t==='light');
+  localStorage.setItem('bi_theme', t);
+  const b=$('btTema'); if(b) b.innerHTML = t==='light'?_LUA:_SOL;
   if(PINTADA[VW]){ PINTADA={}; pinta(VW); }      // gráficos redesenham no tema novo
 }
-function trocaTema(){ aplicaTema(document.body.classList.contains('claro')?'escuro':'claro'); }
+function trocaTema(){ aplicaTema(document.body.classList.contains('claro')?'dark':'light'); }
 function trocaMini(){
   const s=document.querySelector('.side'), mini=!s.classList.contains('mini');
   s.classList.toggle('mini',mini); localStorage.setItem('gav_mini',mini?'1':'0');
@@ -676,16 +750,23 @@ async function boot(){
     }
   }catch(e){}
   try{
-    await Promise.all([farolLoad(), loadConf(), loadFCA()]);
+    // pneus fica de fora da abertura: são 13 filiais em 5 rodadas sequenciais,
+    // a parte mais lenta do farol. Entra logo depois, sem segurar a primeira pintura.
+    await Promise.all([farolLoad({semPneus:true}), loadConf(), loadFCA()]);
     try{ if(typeof SwrCache!=='undefined') SwrCache.put('gav_data',{DATA:Object.assign({},DATA),CONF,CONF_VIG,CONF_ATT,FCAR}); }catch(e){}
     montaNav(); pintaTudo(new Date(),false);
+    const emBreve=window.requestIdleCallback||(f=>setTimeout(f,300));
+    emBreve(()=>{ const p=garantePneus(); if(p) p.then(()=>{
+      PINTADA={}; renderChips(); pinta(VW);
+      try{ if(typeof SwrCache!=='undefined') SwrCache.put('gav_data',{DATA:Object.assign({},DATA),CONF,CONF_VIG,CONF_ATT,FCAR}); }catch(e){}
+    }); });
   }catch(e){
     console.error(e);
     if(!pintou) semAcesso('Não consegui ler as bases do farol. Recarregue a página em instantes.');
   }
 }
 (async function(){
-  aplicaTema((localStorage.getItem('bi_theme')||'dark')==='light'?'claro':'escuro');
+  aplicaTema(localStorage.getItem('bi_theme')||'dark');
   if(localStorage.getItem('gav_mini')==='1') document.querySelector('.side').classList.add('mini');
   SB=supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
   const {data:{session}}=await SB.auth.getSession();
@@ -724,9 +805,9 @@ initPdfExport({
   main:()=>document.querySelector('.board'),
   views:()=>vistas().map(v=>({label:v.t, ativar:()=>setVw(v.id)})),
   viewAtual:()=>VW, irPara:setVw,
-  isLight:()=>document.body.classList.contains('claro'), setTheme:t=>aplicaTema(t==='light'||t==='claro'?'claro':'escuro')
+  isLight:()=>document.body.classList.contains('claro'), setTheme:t=>aplicaTema(t==='light'?'light':'dark')
 });
 </script>
-<script src="../assets/build-check.js?v=202608212300"></script>
+<script src="../assets/build-check.js?v=202608220315"></script>
 </body>
 </html>
