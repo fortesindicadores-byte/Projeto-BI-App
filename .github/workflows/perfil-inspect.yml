@@ -1,0 +1,34 @@
+name: Perfil Inspect (fca_profiles)
+
+# Sonda de acesso: mostra o que está gravado no fca_profiles de um usuário
+# (unidade crua, tokens que o RLS aceita, farol_unidades) e, opcionalmente,
+# normaliza tokens legados (CBA→3 tiers, MCC→MCC T1,MCC T2). O log mascara o
+# nome — o repositório é público.
+on:
+  workflow_dispatch:
+    inputs:
+      nome:
+        description: "trecho do nome (ilike) — ex.: ssica"
+        required: false
+        type: string
+      consertar:
+        description: "normaliza tokens legados do recorte (CBA/MCC → tiers)"
+        required: false
+        default: false
+        type: boolean
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Rodar sonda
+        run: node scripts/perfil-inspect.mjs
+        env:
+          GEM_SUPABASE_SERVICE_KEY: ${{ secrets.GEM_SUPABASE_SERVICE_KEY }}
+          PERFIL_NOME:              ${{ github.event.inputs.nome }}
+          PERFIL_CONSERTAR:         ${{ github.event.inputs.consertar == 'true' && '1' || '' }}
