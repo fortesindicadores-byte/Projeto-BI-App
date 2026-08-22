@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-<meta name="build" content="202608220315">
+<meta name="build" content="202608220356">
 <title>Gestão à Vista</title>
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -371,14 +371,14 @@ table.dre td.cg-t,.cg-t{color:var(--verde)!important;font-weight:700;}
 .hero-delta{font-size:9px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:.7px;}
 .hero-delta b{display:block;font-size:13px;font-weight:800;color:var(--txt);margin-top:2px;letter-spacing:0;text-transform:none;}
 
-/* faixa de chips do topo — visível em TODAS as visões (pedido do Renan) */
-.chips{display:flex;align-items:flex-end;gap:18px;flex-wrap:wrap;flex:0 0 auto;
-  border:1px solid var(--card-brd);border-radius:12px;background:var(--side);
-  backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);box-shadow:var(--luz-card);
-  padding:11px 16px 10px;margin-bottom:12px;}
-.chips .ch-hero{display:flex;flex-direction:column;gap:2px;padding-right:18px;border-right:1px solid var(--linha);}
-.chips .ch-hero span{font-size:9.5px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:.9px;}
-.chips .ch-hero b{font-size:clamp(22px,3vh,30px);font-weight:800;line-height:1;}
+/* O farol do topo aparece em TODAS as visões (pedido do Renan): é o .fin-hero
+   + a fileira de .kpi do padrão. São 14 indicadores, então a grade abre em 7
+   colunas × 2 fileiras em vez das 5 da Visão Financeira. */
+.kpis-farol{grid-template-columns:repeat(7,1fr);margin:12px 0;}
+.kpis-farol .kpi{padding:12px 14px;display:flex;flex-direction:column;justify-content:center;}
+.kpis-farol .kv{font-size:clamp(17px,2.4vh,22px);margin-top:5px;display:flex;align-items:center;gap:6px;}
+.kpis-farol .km{margin-top:5px;}
+@media(max-width:1400px){ .kpis-farol{grid-template-columns:repeat(5,1fr);} }
 
 .board{display:flex;flex-direction:column;min-height:0;}
 .vw.on{display:flex;}
@@ -434,14 +434,20 @@ table.dre td.cg-t,.cg-t{color:var(--verde)!important;font-weight:700;}
       </div>
     </div>
 
-    <div class="chips" id="chips"><div class="loading">Carregando o farol…</div></div>
-    <div id="views"></div>
+    <!-- .cols é a área de conteúdo do padrão: é ela que dá o respiro das
+         laterais e do rodapé. O hero e a fileira de KPIs ficam aqui, fora das
+         .vw, porque o farol precisa aparecer no topo de TODAS as visões. -->
+    <div class="cols">
+      <div class="fin-hero" id="hero"></div>
+      <div class="kpis kpis-farol" id="chips"></div>
+      <div id="views"></div>
+    </div>
   </main>
 </div>
 
 <div class="dica" id="dica"></div>
 
-<script src="../farol-frota/farol-core.js?v=202608220315"></script>
+<script src="../farol-frota/farol-core.js?v=202608220356"></script>
 <script>
 /* ══════════════════════════════════════════════════════════════════════
    Gestão à Vista — o Farol no layout padrão do portal (Renan, 21/08/2026).
@@ -623,20 +629,41 @@ function renderFCAv(el,cod){
 }
 
 /* ══════════ chips do topo (todas as visões) ══════════ */
+// O topo do farol na língua do padrão: .fin-hero com a média das aderências e
+// uma fileira de .kpi, um por indicador. Métricas, metas e regras de cor são as
+// mesmas do farol antigo (unitStats / renderHeroDots) — só a apresentação muda.
 function renderChips(){
-  const cod=codAtual(), box=$('chips');
+  const cod=codAtual();
   const stats=cod?unitStats(cod):(()=>{const all=codsFiltrados().map(unitStats);const m=k=>avgA(all.map(a=>a[k]));
     return {sv:m('sv'),se:m('se'),cf:m('cf'),pv:m('pv'),al:m('al'),os:m('os'),cu:m('cu'),dp:m('dp'),ck:m('ck'),af:m('af'),mm:m('mm'),ca:m('ca')};})();
   const score=avgA([stats.sv,stats.se,stats.cf,stats.pv,stats.al,stats.os,stats.dp]);
-  const dots=document.createElement('div');
-  box.innerHTML=`<div class="ch-hero"><span>Farol da frota — média das aderências</span>`+
-    `<b class="${clsPctMeta(score,97,90)}">${pct1(score)}</b></div>`;
-  dots.className='hero-deltas'; box.appendChild(dots);
-  renderHeroDots(dots,cod);
-  // Conformidade e FCA (novos) entram na mesma fileira
+  $('hero').innerHTML=
+    `<div><div class="hlbl">Farol da frota — média das aderências</div>`+
+    `<div class="hval ${clsPctMeta(score,97,90)}">${pct1(score)}</div></div>`;
+
+  const temEmp=!cod||byCod(DATA.stressE,cod).filter(r=>r.contratada).length>0;
   const pC=confDoEscopo(cod), pF=fcaDoEscopo(cod);
-  const item=(lb,v,cls)=>`<div class="hero-delta"><span>${lb}</span><b class="${cls}"><span class="dot ${cls==='cg'?'g':cls==='cy'?'y':cls==='cr'?'r':''}" ${cls==='mut'?'style="background:#475569"':''}></span> ${pct1(v)}</b></div>`;
-  dots.insertAdjacentHTML('beforeend', item('Conformidade',pC,clsPctMeta(pC,100,90))+item('FCA',pF,pF==null?'mut':pF>=90?'cg':pF>=70?'cy':'cr'));
+  const cor=c=>c==='cg'?'g':c==='cy'?'y':c==='cr'?'r':'';
+  const kpi=(lb,v,cls,meta)=>`<div class="kpi"><div class="kl">${lb}</div>`+
+    `<div class="kv ${cls}"><span class="dot ${cor(cls)}"${cls==='mut'?' style="background:var(--txt4)"':''}></span>${pct1(v)}</div>`+
+    `<div class="km">${meta}</div></div>`;
+  $('chips').innerHTML=
+    kpi('Stress Veíc.',stats.sv,clsPctMeta(stats.sv),'Meta: 100%')+
+    (temEmp?kpi('Stress Emp.',stats.se,clsPctMeta(stats.se),'Meta: 100%'):'')+
+    kpi('CIFV',stats.cf,clsPctMeta(stats.cf),'Meta: 100%')+
+    kpi('Preventivas',stats.pv,clsPctMeta(stats.pv),'Meta: 100%')+
+    kpi('Alinhamento',stats.al,stats.al==null?'mut':stats.al>=80?'cg':'cr','Meta: 80%')+
+    kpi('OS no prazo',stats.os,stats.os==null?'mut':stats.os>=90?'cg':stats.os>=70?'cy':'cr','Meta: 90%')+
+    kpi('Saída OS Crítica',stats.ck,stats.ck==null?'mut':stats.ck>=100?'cg':'cr','Meta: 100%')+
+    kpi('Disponib.',stats.dp,dispCls(stats.dp),'Meta: 95%')+
+    kpi('Aferições',stats.af,clsPctMeta(stats.af,95,85),'Meta: 95%')+
+    kpi('Milimetragem',stats.mm,clsPctMeta(stats.mm,90,75),'Meta: 90%')+
+    kpi('Calibragem',stats.ca,clsPctMeta(stats.ca,90,75),'Meta: 90%')+
+    `<div class="kpi"><div class="kl">Custos Δ Orç</div>`+
+      `<div class="kv ${stats.cu==null?'mut':stats.cu<=0?'cg':stats.cu<=5?'cy':'cr'}">`+
+      `${stats.cu==null?'—':(stats.cu>0?'+':'')+pct1(stats.cu)}</div><div class="km">Meta: ≤ 0%</div></div>`+
+    kpi('Conformidade',pC,clsPctMeta(pC,100,90),'Meta: 100%')+
+    kpi('FCA',pF,pF==null?'mut':pF>=90?'cg':pF>=70?'cy':'cr','Prazo + conclusão');
 }
 
 /* ══════════ navegação ══════════ */
@@ -730,7 +757,7 @@ function dicaOff(){ $('dica').classList.remove('on'); }
 
 /* ══════════ carga ══════════ */
 function semAcesso(msg){
-  $('chips').style.display='none';
+  $('chips').style.display='none'; $('hero').style.display='none';
   $('views').innerHTML=`<div class="tbl-section"><div class="gate"><h2>Acesso restrito</h2><p>${msg}</p></div></div>`;
   document.querySelector('.side').style.visibility='hidden';
   setTxt('tit','Gestão à Vista'); setTxt('titSub','—');
@@ -808,6 +835,6 @@ initPdfExport({
   isLight:()=>document.body.classList.contains('claro'), setTheme:t=>aplicaTema(t==='light'?'light':'dark')
 });
 </script>
-<script src="../assets/build-check.js?v=202608220315"></script>
+<script src="../assets/build-check.js?v=202608220356"></script>
 </body>
 </html>
