@@ -1268,14 +1268,23 @@ async function drillDetalheDaFilial(page, alvo, filial) {
   const esc = t => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   const cel = alvo.v.locator('[role="gridcell"]').filter({ hasText: new RegExp('^\\s*' + esc(filial) + '\\s*$') }).first();
   if (!(await cel.count())) throw new Error(`célula da filial "${filial}" não encontrada`);
-  const box = await cel.boundingBox();
-  if (!box) throw new Error(`célula da filial "${filial}" sem posição`);
-  await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2, { button: 'right' });
-  await page.waitForTimeout(2000);
-  const drill = await emFrames(page, async fr => {
-    const d = fr.locator('[role="menuitem"]').filter({ visible: true }).filter({ hasText: /drill/i }).first();
-    return (await d.count()) ? d : null;
-  });
+  try { await cel.scrollIntoViewIfNeeded(); } catch (e) {}
+  await page.waitForTimeout(600);
+  // o menu de contexto às vezes não vem de primeira: foca a célula com um
+  // clique normal e tenta o botão direito até 3 vezes
+  let drill = null;
+  for (let t = 0; t < 3 && !drill; t++) {
+    const box = await cel.boundingBox();
+    if (!box) throw new Error(`célula da filial "${filial}" sem posição`);
+    if (t) { await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2); await page.waitForTimeout(800); }
+    await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2, { button: 'right' });
+    await page.waitForTimeout(2000);
+    drill = await emFrames(page, async fr => {
+      const d = fr.locator('[role="menuitem"]').filter({ visible: true }).filter({ hasText: /drill/i }).first();
+      return (await d.count()) ? d : null;
+    });
+    if (!drill) { await page.keyboard.press('Escape'); await page.waitForTimeout(1000); }
+  }
   if (!drill) throw new Error('menu Drill-through não abriu');
   await drill.hover(); await page.waitForTimeout(1500);
   const item = await emFrames(page, async fr => {
@@ -1321,7 +1330,7 @@ async function coletarConfDetalhe(page) {
   let falhas = 0;
   for (const f of filiais) {
     let ok = false;
-    for (let tent = 1; tent <= 2 && !ok; tent++) {
+    for (let tent = 1; tent <= 3 && !ok; tent++) {
       try {
         if (todas.length || tent > 1) alvo = await abreConformidade(page);   // volta p/ a página principal
         const linhas = await drillDetalheDaFilial(page, alvo, f);
@@ -1337,7 +1346,10 @@ async function coletarConfDetalhe(page) {
     if (!ok) falhas++;
   }
   if (!todas.length) throw new Error('nenhuma linha coletada');
-  // agrupa por competência (serial do Excel → MM/AAAA) e grava por vigência
+  // agrupa por competência (serial do Excel → MM/AAAA) e grava por vigência.
+  // MERGE por filial: uma rodada parcial (Ginfo instável) substitui só as
+  // filiais que ela coletou — as demais ficam com o valor da rodada anterior.
+  const coletadas = new Set(todas.map(r => String(r['Filial'] || '').trim()).filter(Boolean));
   const porVig = {};
   todas.forEach(r => {
     const d = serialParaData(r['Competência']);
@@ -1345,10 +1357,22 @@ async function coletarConfDetalhe(page) {
     const vig = String(d.getUTCMonth() + 1).padStart(2, '0') + '/' + d.getUTCFullYear();
     (porVig[vig] = porVig[vig] || []).push(r);
   });
+  const H = { apikey: SB_KEY, Authorization: 'Bearer ' + SB_KEY };
   for (const vig of Object.keys(porVig).sort()) {
-    await gravarSupabase('conformidade-detalhe', vig, 'mes', porVig[vig]);
+    let linhas = porVig[vig];
+    if (falhas && SB_KEY) {
+      try {
+        const res = await fetch(`${SB_URL}/rest/v1/elite_snapshot?indicador=eq.conformidade-detalhe&vigencia=eq.${encodeURIComponent(vig)}&escopo=eq.mes&select=data`, { headers: H });
+        const ant = res.ok ? ((await res.json())[0] || {}).data : null;
+        if (Array.isArray(ant)) {
+          const mantidas = ant.filter(r => !coletadas.has(String(r['Filial'] || '').trim()));
+          if (mantidas.length) { log(`${vig}: mantendo ${mantidas.length} linha(s) de filiais não coletadas nesta rodada`); linhas = linhas.concat(mantidas); }
+        }
+      } catch (e) { log('merge com a rodada anterior falhou:', e.message); }
+    }
+    await gravarSupabase('conformidade-detalhe', vig, 'mes', linhas);
   }
-  if (falhas) { console.error(`${falhas} filial(is) sem coleta`); process.exit(1); }
+  if (falhas) { console.error(`${falhas} filial(is) sem coleta (as gravadas foram preservadas)`); process.exit(1); }
 }
 
 // despeja o xlsx cru: nome/tamanho de cada aba + primeiras linhas como vieram
