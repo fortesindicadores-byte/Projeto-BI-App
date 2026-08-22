@@ -841,7 +841,7 @@ async function exportarTabela(page, alvo, nomeArq, eopts = {}) {
   // (foi o que aconteceu nas Preventivas, que trouxeram a tabela detalhada por
   // placa). Escolhe o "..." mais próximo do canto superior direito da tabela.
   const cx = await alvo.v.boundingBox().catch(() => null);
-  let opts = null;
+  let opts = eopts.botao || null;   // botão "..." já resolvido por quem chamou
   for (let t = 0; t < 10 && !opts; t++) {
     try { await alvo.v.hover(); } catch (e) {}
     await page.waitForTimeout(1200);
@@ -1199,9 +1199,10 @@ function vigenciasEntre(de, ate) {
 // menus que aparecem, fotografa cada passo e, se a página de detalhe abrir,
 // exporta a tabela e imprime as colunas + primeiras linhas nos logs.
 async function sondaConfDrill(page) {
-  // v4: a tabela do "Detalhes Aderência Mensal" está mapeada (15 colunas, com
-  // Vencimento Vigente/Status por placa). O export da v3 pegou o card vizinho;
-  // agora o alvo é a tabela grande (>=8 colunas) com minY travado nela.
+  // v5: mesmo com minY o export pegou o card "No Prazo". Agora o botão "..."
+  // é achado NO DOM, subindo do próprio grid: o primeiro ancestral que contém
+  // um botão de opções é o container do visual da tabela (os cards são irmãos,
+  // não ancestrais) — impossível exportar o visual errado.
   await irPara(page, 'https://bi.ginfo.app.br/bi/inicio');
   if (!(await menuMontado(page)) && !(await garantirPortal(page))) throw new Error('portal sem menu');
   await clicarMenu(page, 'FROTA', '1.2 - ADERÊNCIA CONFORMIDADE');
@@ -1226,11 +1227,32 @@ async function sondaConfDrill(page) {
   await page.waitForTimeout(25000);
   const tabs = await tabelasVisiveis(page);
   const det = tabs.find(t => t.cols >= 8);
-  if (!det) { await shot(page, 'cd4-sem-tabela'); throw new Error('tabela de detalhe (8+ colunas) não apareceu'); }
-  const bb = await det.v.boundingBox();
-  log('tabela de detalhe em', Math.round(bb.x), Math.round(bb.y), '·', det.cols, 'colunas');
-  const arq = await exportarTabela(page, det, 'cd4-detalhe', { minY: bb.y - 60 });
+  if (!det) { await shot(page, 'cd5-sem-tabela'); throw new Error('tabela de detalhe (8+ colunas) não apareceu'); }
+  const arq = await exportarTabela(page, det, 'cd5-detalhe', { botao: await botaoDoVisual(page, det) });
   await dumpXlsx(arq, 'Detalhes Aderência Mensal');
+}
+// acha o "..." do PRÓPRIO visual da tabela, subindo do grid no DOM
+async function botaoDoVisual(page, alvo) {
+  const SEL = '[aria-label*="Mais opções" i],[aria-label*="More options" i],[data-testid="visual-more-options-btn"],[title*="Mais opções" i],.vcMenuBtn';
+  for (let t = 0; t < 10; t++) {
+    try { await alvo.v.hover(); } catch (e) {}
+    await page.waitForTimeout(1200);
+    const gh = await alvo.v.elementHandle();
+    const bh = await alvo.fr.evaluateHandle(({ g, sel }) => {
+      let el = g;
+      while (el && el !== document.body) {
+        const b = el.querySelector(sel);
+        if (b) return b;
+        el = el.parentElement;
+      }
+      return null;
+    }, { g: gh, sel: SEL }).catch(() => null);
+    const el = bh && bh.asElement && bh.asElement();
+    if (el) { log('botão "..." achado no container do visual'); return el; }
+    await page.waitForTimeout(1500);
+  }
+  log('botão "..." não achado subindo do grid — caindo na busca geométrica');
+  return null;
 }
 
 // despeja o xlsx cru: nome/tamanho de cada aba + primeiras linhas como vieram
