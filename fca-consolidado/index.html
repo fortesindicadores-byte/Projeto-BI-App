@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-<meta name="build" content="202608222230">
+<meta name="build" content="202608222300">
 <title>FCA · Admin</title>
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -1241,8 +1241,14 @@ function ganttHTML(vis){
   const dia=v=>{if(!v)return null;const d=new Date(String(v).slice(0,10)+'T00:00:00');return isNaN(d)?null:d;};
   const h=new Date(); h.setHours(0,0,0,0);
   let min=h,max=h;
+  // prazo digitado com o ano errado (2025, 0226, 2062…) esticava a escala e
+  // amontoava todas as barras (bug real, 22/08/2026): prazo antes da criação
+  // não conta (a barra já vira ponto na criação) e o teto é hoje + 6 meses —
+  // prazo além disso encosta na borda direita, com o rótulo da data.
+  const teto=new Date(h); teto.setMonth(teto.getMonth()+6);
   itens.forEach(r=>{const a=dia(r.created_at)||h,b=dia(r.prazo)||h;
-    if(a<min)min=a; if(b<min)min=b; if(a>max)max=a; if(b>max)max=b;});
+    if(a<min)min=a; if(a>max)max=a;
+    const bb=b<a?a:(b>teto?teto:b); if(bb>max)max=bb;});
   const m0=new Date(min.getFullYear(),min.getMonth(),1);
   const m1=new Date(max.getFullYear(),max.getMonth()+1,1);
   const tot=m1-m0, pos=d=>Math.max(0,Math.min(100,(d-m0)/tot*100));
@@ -1603,6 +1609,6 @@ initApp();
 <script src="../assets/ctrlk.js"></script>
 <script src="../assets/excel-export.js"></script>
 <script src="../assets/sortable-table.js"></script>
-<script src="../assets/build-check.js?v=202608222230"></script>
+<script src="../assets/build-check.js?v=202608222300"></script>
 </body>
 </html>
