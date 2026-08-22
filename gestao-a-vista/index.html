@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-<meta name="build" content="202608221214">
+<meta name="build" content="202608221238">
 <title>Gestão à Vista</title>
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -340,6 +340,15 @@ table.dre td.cg-t,.cg-t{color:var(--verde)!important;font-weight:700;}
 /* mini-hero EMPILHADO, como o hero do padrão: rótulo em cima, número grande
    embaixo, meta na linha de baixo — nada lado a lado */
 .mini-hero{display:block;margin-bottom:12px;}
+/* hero da visão FORA do card (o soltaHero move os blocos para cá) */
+.vw-hero{flex:0 0 auto;}
+.vw-hero>:last-child{margin-bottom:0;}
+/* o hero de Custos (farol-core emite .hero/.hero-label/.hero-value) no mesmo
+   formato do hero do padrão */
+.hero{margin-bottom:12px;}
+.hero-main{padding:0!important;}
+.hero-label{font-size:9.5px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:.9px;}
+.hero-value{font-size:clamp(26px,3.6vh,40px);font-weight:800;line-height:1;color:var(--txt);margin:4px 0 7px;}
 .custos-hero{display:flex;align-items:flex-end;gap:22px;flex-wrap:wrap;margin-bottom:10px;}
 .mh-label{font-size:9.5px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:.9px;}
 .mh-val{font-size:clamp(26px,3.6vh,40px);font-weight:800;line-height:1;color:var(--txt);margin:4px 0 7px;}
@@ -470,7 +479,7 @@ body.prehub .s-sec,body.prehub .s-item,body.prehub #pdf-slot,body.prehub .ms-wra
 
 <div class="dica" id="dica"></div>
 
-<script src="../farol-frota/farol-core.js?v=202608221214"></script>
+<script src="../farol-frota/farol-core.js?v=202608221238"></script>
 <script>
 /* ══════════════════════════════════════════════════════════════════════
    Gestão à Vista — o Farol no layout padrão do portal (Renan, 21/08/2026).
@@ -743,6 +752,7 @@ function montaNav(){
          <div class="sec-body solto" id="body-${v.id}"><div class="loading">Carregando…</div></div>
        </section>`
     : `<section class="vw${v.id===VW?' on':''}" id="vw-${v.id}">
+       <div class="vw-hero" id="hero-${v.id}" style="display:none"></div>
        <div class="tbl-section"><div class="sec-body" id="body-${v.id}"><div class="loading">Carregando…</div></div></div>
      </section>`).join('');
 }
@@ -767,15 +777,28 @@ function pinta(id){
   if(id===VW) pintaSub(v);
   if(id.indexOf('pneus')===0){
     const p=garantePneus();
-    if(p){ el.innerHTML='<div class="loading">Carregando os pneus…</div>';
+    if(p){ el.innerHTML='<div class="loading">Carregando os pneus…</div>'; soltaHero(id);
            p.then(()=>{ PINTADA[id]=false; pinta(id); renderChips(); }); return; }
   }
+  const fim=()=>{ soltaHero(id); requestAnimationFrame(()=>ajusteTabelas(el)); };
   try{
     const r=v.r(el,cod);
-    if(r&&typeof r.catch==='function') r.catch(e=>{console.error(id,e);el.innerHTML='<div class="loading">Erro ao montar esta seção.</div>';});
-  }catch(e){ console.error(id,e); el.innerHTML='<div class="loading">Erro ao montar esta seção.</div>'; }
+    if(r&&typeof r.then==='function')
+      r.then(fim,e=>{console.error(id,e);el.innerHTML='<div class="loading">Erro ao montar esta seção.</div>';soltaHero(id);});
+    else fim();
+  }catch(e){ console.error(id,e); el.innerHTML='<div class="loading">Erro ao montar esta seção.</div>'; soltaHero(id); }
   PINTADA[id]=true;
-  requestAnimationFrame(()=>ajusteTabelas(el));
+}
+// O hero da visão (número grande + deltas) sai do card e fica solto no fundo,
+// como no padrão — o card guarda só a tabela/conteúdo. Move os blocos que o
+// farol-core emite no TOPO da seção (mini-hero, custos-hero, aderência por
+// projeto); o que vem depois (títulos de bloco, tabelas, pílulas) fica no card.
+function soltaHero(id){
+  const el=$('body-'+id), hx=$('hero-'+id); if(!el||!hx) return;
+  hx.innerHTML='';
+  while(el.firstElementChild&&/(^|\s)(hero|mini-hero|custos-hero|hero-deltas)(\s|$)/.test(el.firstElementChild.className||''))
+    hx.appendChild(el.firstElementChild);
+  hx.style.display=hx.children.length?'':'none';
 }
 // aperta as tabelas da visão até caberem (sem rolagem lateral)
 function ajusteTabelas(el){
@@ -923,6 +946,6 @@ initPdfExport({
   isLight:()=>document.body.classList.contains('claro'), setTheme:t=>aplicaTema(t==='light'?'light':'dark')
 });
 </script>
-<script src="../assets/build-check.js?v=202608221214"></script>
+<script src="../assets/build-check.js?v=202608221238"></script>
 </body>
 </html>
