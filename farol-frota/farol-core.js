@@ -776,7 +776,10 @@ function unitStats(cod){
   const _ps=pneusStats(cod);
   return {sv,se,cf,pv,al,os,cu,dp,ck,af:_ps.af,mm:_ps.mm,ca:_ps.ca};
 }
-function renderRanking(el){
+// extras (opcional, usado pelo Gestão à Vista): colunas a mais no fim da
+// tabela — cada uma {lb, corte, of(cod)→{v,cls}}. Informativas, fora da média.
+function renderRanking(el,extras){
+  extras=extras||[];
   const list=codsFiltrados().map(cod=>{
     const s=unitStats(cod);
     const score=avgA([s.sv,s.se,s.cf,s.pv,s.al,s.os,s.dp,s.af,s.mm,s.ca]);
@@ -801,7 +804,8 @@ function renderRanking(el){
     'Calibr.':'≥ 90% verde · 75–89,9% amarelo · < 75% vermelho',
     'Custos Δ Orç %':'≤ 0% verde (dentro do orçado) · até +5% amarelo · > +5% vermelho',
   };
-  const rkHead='<thead><tr>'+['#','Unidade','Média','Stress Veíc.','Stress Emp.','CIFV','Preventivas','Alinhamento','OS no prazo','Saída OS Crít.','Disponib.','Aferições','Milimetr.','Calibr.','Custos Δ Orç %'].map((h,i)=>{
+  extras.forEach(x=>{if(x.corte)RK_CORTES[x.lb]=x.corte;});
+  const rkHead='<thead><tr>'+['#','Unidade','Média','Stress Veíc.','Stress Emp.','CIFV','Preventivas','Alinhamento','OS no prazo','Saída OS Crít.','Disponib.','Aferições','Milimetr.','Calibr.','Custos Δ Orç %'].concat(extras.map(x=>x.lb)).map((h,i)=>{
     const t=RK_CORTES[h];
     return `<th${i>=2?' class="num"':''}${t?` title="${escF(h)}: ${escF(t)}"`:''}>${h}</th>`;
   }).join('')+'</tr></thead>';
@@ -822,7 +826,7 @@ function renderRanking(el){
       <td class="num">${u.score==null?'—':`<span class="pill" style="background:${sc}">${pct1(u.score)}</span>`}</td>
       ${cell(u.sv,clsPctMeta(u.sv))}${cell(u.se,clsPctMeta(u.se))}${cell(u.cf,clsPctMeta(u.cf))}${cell(u.pv,clsPctMeta(u.pv))}
       ${cell(u.al,u.al==null?'mut':u.al>=80?'cg':'cr')}${cell(u.os,u.os==null?'mut':u.os>=90?'cg':u.os>=70?'cy':'cr')}${cell(u.ck,u.ck==null?'mut':u.ck>=100?'cg':'cr')}${cell(u.dp,dispCls(u.dp))}${cell(u.af,clsPctMeta(u.af,95,85))}${cell(u.mm,clsPctMeta(u.mm,90,75))}${cell(u.ca,clsPctMeta(u.ca,90,75))}
-      <td class="num ${cCu(u.cu)}">${u.cu==null?'—':(u.cu>0?'+':'')+pct1(u.cu)}</td></tr>`;}).join('')+'</tbody></table>')+legenda+
+      <td class="num ${cCu(u.cu)}">${u.cu==null?'—':(u.cu>0?'+':'')+pct1(u.cu)}</td>${extras.map(x=>{const r=x.of(u.cod);return `<td class="num ${r.cls}">${r.v}</td>`;}).join('')}</tr>`;}).join('')+'</tbody></table>')+legenda+
     '<div class="tbl-sub" style="margin-top:8px">Média = aderências (Stress V/E, CIFV, Preventivas, Alinhamento, OS no prazo, Disponibilidade, Aferições, Milimetragem e Calibragem). Saída OS Crít. é binária (Checklist do mês de referência: 100% sem saída crítica, 0% com) e Custos é informativo (Δ Real vs Orç do mês) — os dois fora da média. Aferições/Milimetragem/Calibragem vêm da API (foto Prolog); detalhe na seção Pneus abaixo.</div>';
 }
 
@@ -852,21 +856,23 @@ function renderResumo(el){
 }
 
 // ── DISPONIBILIDADE (foto da última vigência) ──
-function renderDisp(el,cod){
+function renderDisp(el,cod,soPlacas){
   const rs=(DATA.disp||[]).filter(r=>cod?r.cod===cod:passU(r.cod));
   if(!rs.length){el.innerHTML='<div class="loading">Sem dados de disponibilidade para o recorte.</div>';return;}
   const at=sumA(rs.map(r=>r.ativos)),ind=sumA(rs.map(r=>r.indisp));
   const p=at>0?(at-ind)/at*100:null;
   let h=`<div class="mini-hero"><div class="mh-label">DISPONIBILIDADE</div><div class="mh-val ${dispCls(p)}">${pct1(p)}</div>
     <div class="mh-meta">Meta ${DISP_META}% · Sonho ${DISP_SONHO}% · <b>${Math.round(at)}</b> ativos · <b class="${ind?'cr':'mut'}">${Math.round(ind)}</b> indisponíveis</div></div>`;
-  // tabela por unidade (geral) ou por tier (unidade)
-  const key=cod?'tier':'cod';
+  // tabela por unidade (geral) ou por tier (unidade) — no Gestão à Vista essa
+  // comparação vive na visão Ranking (soPlacas=true pula direto para as placas)
+  if(!soPlacas){
   const g={};rs.forEach(r=>{const k=(cod?(r.tier||'—'):r.cod);(g[k]=g[k]||{ativos:0,indisp:0}).ativos+=r.ativos;g[k].indisp+=r.indisp;});
   h+=wrapT('<table>'+th(cod?'Tier':'Unidade','Ativos','Indisponíveis','Disponib. %')+'<tbody>'+
     Object.keys(g).sort().map(k=>{const o=g[k];const pc=o.ativos>0?(o.ativos-o.indisp)/o.ativos*100:null;
       return `<tr><td><b>${cod?escF(k):escF(k)+' <span class="mut">'+escF(UNIDADES[k]||'')+'</span>'}</b></td>
         <td class="num">${Math.round(o.ativos)}</td><td class="num ${o.indisp?'cr':'mut'}">${Math.round(o.indisp)}</td>
         <td class="num ${dispCls(pc)}">${pct1(pc)}</td></tr>`;}).join('')+'</tbody></table>');
+  }
   // placas indisponíveis
   const indL=(DATA.dispInd||[]).filter(r=>cod?r.cod===cod:passU(r.cod)).sort((a,b)=>(b.dias??0)-(a.dias??0));
   if(indL.length){
