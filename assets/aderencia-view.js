@@ -265,7 +265,7 @@
           <td class="num">${it.noP}</td>
           <td class="num" style="color:${band(it.pConcl)};font-weight:800">${pct(it.pConcl)}</td>
           <td class="num" style="color:${band(it.pPrazo)};font-weight:800">${pct(it.pPrazo)}</td>
-          <td class="num"><b class="adv-tot" style="color:${band(it.total)}">${pct1(it.total)}</b></td>
+          <td class="num"><span class="adv-pct" style="background:${band(it.total)}${it.total!=null&&it.total<70?';color:#fff':''}">${pct(it.total)}</span></td>
         </tr>`).join('')
       : '<tr><td colspan="7" class="adv-vazio">Nenhuma ação com os filtros atuais.</td></tr>';
 
