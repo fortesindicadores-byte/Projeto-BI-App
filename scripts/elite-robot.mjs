@@ -1199,10 +1199,10 @@ function vigenciasEntre(de, ate) {
 // menus que aparecem, fotografa cada passo e, se a página de detalhe abrir,
 // exporta a tabela e imprime as colunas + primeiras linhas nos logs.
 async function sondaConfDrill(page) {
-  // v5: mesmo com minY o export pegou o card "No Prazo". Agora o botão "..."
-  // é achado NO DOM, subindo do próprio grid: o primeiro ancestral que contém
-  // um botão de opções é o container do visual da tabela (os cards são irmãos,
-  // não ancestrais) — impossível exportar o visual errado.
+  // v6: o botão achado no DOM era um placeholder não clicável (interceptado
+  // pelo visualWrapper). Caminho determinístico: ESCONDE os visuais pequenos
+  // (os cards) antes do export — sobra só o "..." da tabela para a busca
+  // geométrica de sempre encontrar.
   await irPara(page, 'https://bi.ginfo.app.br/bi/inicio');
   if (!(await menuMontado(page)) && !(await garantirPortal(page))) throw new Error('portal sem menu');
   await clicarMenu(page, 'FROTA', '1.2 - ADERÊNCIA CONFORMIDADE');
@@ -1227,32 +1227,24 @@ async function sondaConfDrill(page) {
   await page.waitForTimeout(25000);
   const tabs = await tabelasVisiveis(page);
   const det = tabs.find(t => t.cols >= 8);
-  if (!det) { await shot(page, 'cd5-sem-tabela'); throw new Error('tabela de detalhe (8+ colunas) não apareceu'); }
-  const arq = await exportarTabela(page, det, 'cd5-detalhe', { botao: await botaoDoVisual(page, det) });
-  await dumpXlsx(arq, 'Detalhes Aderência Mensal');
-}
-// acha o "..." do PRÓPRIO visual da tabela, subindo do grid no DOM
-async function botaoDoVisual(page, alvo) {
-  const SEL = '[aria-label*="Mais opções" i],[aria-label*="More options" i],[data-testid="visual-more-options-btn"],[title*="Mais opções" i],.vcMenuBtn';
-  for (let t = 0; t < 10; t++) {
-    try { await alvo.v.hover(); } catch (e) {}
-    await page.waitForTimeout(1200);
-    const gh = await alvo.v.elementHandle();
-    const bh = await alvo.fr.evaluateHandle(({ g, sel }) => {
-      let el = g;
-      while (el && el !== document.body) {
-        const b = el.querySelector(sel);
-        if (b) return b;
-        el = el.parentElement;
+  if (!det) { await shot(page, 'cd6-sem-tabela'); throw new Error('tabela de detalhe (8+ colunas) não apareceu'); }
+  // esconde todo visual baixinho (os cards) — só a tabela fica com "..."
+  const escondidos = await det.fr.evaluate(() => {
+    let n = 0;
+    document.querySelectorAll('[role="grid"],[role="table"]').forEach(g => {
+      const r = g.getBoundingClientRect();
+      if (r.height && r.height < 100) {
+        const vc = g.closest('visual-container') || g.closest('[class*="visualContainer"]');
+        if (vc && vc.style.display !== 'none') { vc.style.display = 'none'; n++; }
       }
-      return null;
-    }, { g: gh, sel: SEL }).catch(() => null);
-    const el = bh && bh.asElement && bh.asElement();
-    if (el) { log('botão "..." achado no container do visual'); return el; }
-    await page.waitForTimeout(1500);
-  }
-  log('botão "..." não achado subindo do grid — caindo na busca geométrica');
-  return null;
+    });
+    return n;
+  }).catch(() => 0);
+  log(`cards escondidos: ${escondidos}`);
+  await page.waitForTimeout(1000);
+  await shot(page, 'cd6-so-tabela');
+  const arq = await exportarTabela(page, det, 'cd6-detalhe');
+  await dumpXlsx(arq, 'Detalhes Aderência Mensal');
 }
 
 // despeja o xlsx cru: nome/tamanho de cada aba + primeiras linhas como vieram
