@@ -1247,6 +1247,110 @@ async function sondaConfDrill(page) {
   await dumpXlsx(arq, 'Detalhes Aderência Mensal');
 }
 
+// ── COLETOR: detalhe da Conformidade (cobrança por placa, drill por filial) ──
+// O drill herda a filial da linha clicada, então a coleta é filial a filial:
+// botão direito na célula → Drill-through → "Detalhes Aderência Mensal" →
+// esconde os cards → exporta. O ano inteiro vem de uma vez (filtro "Ano é
+// <ano atual>"); as linhas são agrupadas por Competência e gravadas por
+// vigência em conformidade-detalhe (sempre sobrescrevendo — é foto do dia).
+const serialParaData = v => (typeof v === 'number' && v > 20000 && v < 80000)
+  ? new Date(Date.UTC(1899, 11, 30) + Math.round(v) * 864e5) : null;
+async function abreConformidade(page) {
+  await irPara(page, 'https://bi.ginfo.app.br/bi/inicio');
+  if (/\/login/i.test(page.url())) { log('sessão caiu — refazendo o login'); await login(page); await irPara(page, 'https://bi.ginfo.app.br/bi/inicio'); }
+  if (!(await menuMontado(page)) && !(await garantirPortal(page))) throw new Error('portal sem menu');
+  await clicarMenu(page, 'FROTA', '1.2 - ADERÊNCIA CONFORMIDADE');
+  const alvo = await acharAlvo(page, { header: 'Filial' });
+  if (!alvo) throw new Error('tabela por Filial não apareceu');
+  return alvo;
+}
+async function drillDetalheDaFilial(page, alvo, filial) {
+  const esc = t => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const cel = alvo.v.locator('[role="gridcell"]').filter({ hasText: new RegExp('^\\s*' + esc(filial) + '\\s*$') }).first();
+  if (!(await cel.count())) throw new Error(`célula da filial "${filial}" não encontrada`);
+  const box = await cel.boundingBox();
+  if (!box) throw new Error(`célula da filial "${filial}" sem posição`);
+  await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2, { button: 'right' });
+  await page.waitForTimeout(2000);
+  const drill = await emFrames(page, async fr => {
+    const d = fr.locator('[role="menuitem"]').filter({ visible: true }).filter({ hasText: /drill/i }).first();
+    return (await d.count()) ? d : null;
+  });
+  if (!drill) throw new Error('menu Drill-through não abriu');
+  await drill.hover(); await page.waitForTimeout(1500);
+  const item = await emFrames(page, async fr => {
+    const i = fr.locator('[role="menuitem"]:has-text("Detalhes Aderência Mensal")').filter({ visible: true }).first();
+    return (await i.count()) ? i : null;
+  });
+  if (!item) throw new Error('item "Detalhes Aderência Mensal" não apareceu');
+  await item.click();
+  await page.waitForTimeout(20000);
+  const tabs = await tabelasVisiveis(page);
+  const det = tabs.find(t => t.cols >= 8);
+  if (!det) throw new Error('tabela de detalhe (8+ colunas) não apareceu');
+  // esconde os cards: só a tabela fica com o "..." (bug real: o export pegava
+  // o card "No Prazo" porque o botão dele era o mais perto do canto)
+  await det.fr.evaluate(() => {
+    document.querySelectorAll('[role="grid"],[role="table"]').forEach(g => {
+      const r = g.getBoundingClientRect();
+      if (r.height && r.height < 100) {
+        const vc = g.closest('visual-container') || g.closest('[class*="visualContainer"]');
+        if (vc) vc.style.display = 'none';
+      }
+    });
+  }).catch(() => {});
+  await page.waitForTimeout(800);
+  const slug = filial.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+  const arq = await exportarTabela(page, det, `confdet-${slug}`);
+  const { linhas } = await xlsxParaLinhas(arq);
+  return linhas;
+}
+async function coletarConfDetalhe(page) {
+  let alvo = await abreConformidade(page);
+  // lista as filiais da própria tabela (célula de texto de cada linha)
+  const filiais = [];
+  const cels = alvo.v.locator('[role="gridcell"]');
+  const n = await cels.count();
+  for (let i = 0; i < n; i++) {
+    const t = (await cels.nth(i).innerText().catch(() => '')).trim();
+    if (t && /[A-ZÀ-Ú]{3,}/.test(t) && !/^\d/.test(t) && !filiais.includes(t) && !/selecionar/i.test(t)) filiais.push(t);
+  }
+  if (!filiais.length) throw new Error('nenhuma filial na tabela');
+  log(`filiais na tabela (${filiais.length}):`, JSON.stringify(filiais));
+  const todas = [];
+  let falhas = 0;
+  for (const f of filiais) {
+    let ok = false;
+    for (let tent = 1; tent <= 2 && !ok; tent++) {
+      try {
+        if (todas.length || tent > 1) alvo = await abreConformidade(page);   // volta p/ a página principal
+        const linhas = await drillDetalheDaFilial(page, alvo, f);
+        log(`— ${f}: ${linhas.length} linha(s)`);
+        todas.push(...linhas);
+        ok = true;
+      } catch (e) {
+        log(`ERRO na filial ${f} (tentativa ${tent}):`, e.message);
+        await shot(page, `confdet-erro-${f.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-t${tent}`);
+        await garantirPortal(page);
+      }
+    }
+    if (!ok) falhas++;
+  }
+  if (!todas.length) throw new Error('nenhuma linha coletada');
+  // agrupa por competência (serial do Excel → MM/AAAA) e grava por vigência
+  const porVig = {};
+  todas.forEach(r => {
+    const d = serialParaData(r['Competência']);
+    if (!d) return;
+    const vig = String(d.getUTCMonth() + 1).padStart(2, '0') + '/' + d.getUTCFullYear();
+    (porVig[vig] = porVig[vig] || []).push(r);
+  });
+  for (const vig of Object.keys(porVig).sort()) {
+    await gravarSupabase('conformidade-detalhe', vig, 'mes', porVig[vig]);
+  }
+  if (falhas) { console.error(`${falhas} filial(is) sem coleta`); process.exit(1); }
+}
+
 // despeja o xlsx cru: nome/tamanho de cada aba + primeiras linhas como vieram
 async function dumpXlsx(arq, rotulo) {
   const XLSX = (await import('xlsx')).default;
@@ -1290,6 +1394,7 @@ async function main() {
     await login(page);
     if (MODE === 'login') { log('modo login: só o teste de acesso. Veja os screenshots nos artifacts.'); return; }
     if (MODE === 'conf-drill') { await sondaConfDrill(page); return; }
+    if (MODE === 'conf-detalhe') { await coletarConfDetalhe(page); return; }
 
     log(`plano: ${inds.length} indicador(es) × ${vigencias.length} vigência(s) × ${escopos.length} escopo(s)`);
     await carregarJaGravados();

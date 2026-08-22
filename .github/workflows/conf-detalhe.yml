@@ -1,0 +1,48 @@
+name: Conf Detalhe (cobrança por placa -> Supabase)
+
+# Coleta o DETALHE da Conformidade no BI do Ginfo (drill "Detalhes Aderência
+# Mensal", filial a filial) e grava em elite_snapshot como
+# conformidade-detalhe, por vigência — é a base da tabela de "placas mais
+# vencidas" da visão Conformidade do Gestão à Vista. Foto do dia: sempre
+# sobrescreve. Reusa o scripts/elite-robot.mjs (ELITE_MODE=conf-detalhe).
+on:
+  workflow_dispatch:
+  # todo dia às 8:00 BRT (11:00 UTC) — depois do robô Ginfo (7h) e do Elite (7:30)
+  schedule:
+    - cron: '0 11 * * *'
+
+concurrency:
+  group: conf-detalhe
+  cancel-in-progress: false
+
+jobs:
+  robo:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Instalar Playwright + xlsx
+        run: |
+          npm init -y >/dev/null 2>&1
+          npm i --no-audit --no-fund playwright xlsx
+          npx playwright install --with-deps chromium
+      - name: Rodar robô
+        run: node scripts/elite-robot.mjs
+        env:
+          ELITE_MODE:               conf-detalhe
+          GINFO_USER:               ${{ secrets.GINFO_USER }}
+          GINFO_PASS:               ${{ secrets.GINFO_PASS }}
+          GINFO_URL:                ${{ secrets.GINFO_URL }}
+          GINFO_EMPRESA:            ${{ secrets.GINFO_EMPRESA }}
+          GEM_SUPABASE_SERVICE_KEY: ${{ secrets.GEM_SUPABASE_SERVICE_KEY }}
+      - name: Publicar screenshots/downloads (debug)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: conf-detalhe-artifacts
+          path: elite-artifacts/
+          if-no-files-found: ignore
+          retention-days: 7
