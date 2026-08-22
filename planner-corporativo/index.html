@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-<meta name="build" content="202608192100">
+<meta name="build" content="202608222300">
 <title>Planner Corporativo</title>
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -840,8 +840,13 @@ function htmlGantt(rows){
   if(!itens.length) return '<div class="cvazia">Nenhuma ação com prazo nos filtros atuais</div>';
   const h=hoje();
   let min=h, max=h;
+  // prazo digitado com o ano errado não estica a escala (mesma regra do
+  // fca-consolidado, bug real 22/08/2026): antes da criação não conta e o
+  // teto é hoje + 6 meses.
+  const teto=new Date(h); teto.setMonth(teto.getMonth()+6);
   itens.forEach(r=>{ const a=dia(r.criado)||h, b=dia(r.prazo)||h;
-    if(a<min)min=a; if(b<min)min=b; if(a>max)max=a; if(b>max)max=b; });
+    if(a<min)min=a; if(a>max)max=a;
+    const bb=b<a?a:(b>teto?teto:b); if(bb>max)max=bb; });
   const m0=new Date(min.getFullYear(),min.getMonth(),1);
   const m1=new Date(max.getFullYear(),max.getMonth()+1,1);
   const tot=m1-m0, pos=d=>Math.max(0,Math.min(100,(d-m0)/tot*100));
@@ -1180,6 +1185,6 @@ iniciar();
 <script src="../assets/mobile.js?v=202608220020"></script>
 <script src="../assets/ctrlk.js"></script>
 <script src="../assets/excel-export.js"></script>
-<script src="../assets/build-check.js?v=202608192100"></script>
+<script src="../assets/build-check.js?v=202608222300"></script>
 </body>
 </html>
