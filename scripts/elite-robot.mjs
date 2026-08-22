@@ -1189,6 +1189,113 @@ function vigenciasEntre(de, ate) {
   return out;
 }
 
+// ── SONDA: drill de detalhe da Conformidade (modo conf-drill) ────────────────
+// A tentativa antiga era botão direito no CARD (5 offsets, sem menu). Aqui o
+// alvo é a TABELA por Filial: no Power BI o drill-through responde no PONTO DE
+// DADO, então clicamos com o direito nas células. Não grava nada — só loga os
+// menus que aparecem, fotografa cada passo e, se a página de detalhe abrir,
+// exporta a tabela e imprime as colunas + primeiras linhas nos logs.
+async function sondaConfDrill(page) {
+  await irPara(page, 'https://bi.ginfo.app.br/bi/inicio');
+  if (!(await menuMontado(page)) && !(await garantirPortal(page))) throw new Error('portal sem menu');
+  await clicarMenu(page, 'FROTA', '1.2 - ADERÊNCIA CONFORMIDADE');
+  await shot(page, 'cd-01-pagina');
+  log('url da página:', page.url());
+  for (const fr of page.frames()) { const u = fr.url() || ''; if (u && u !== 'about:blank') log('frame:', u.slice(0, 160)); }
+  // abas internas do relatório (se o navegador de páginas estiver exposto)
+  const abas = [];
+  for (const fr of page.frames()) {
+    try {
+      const ts = fr.locator('[role="tab"], .pageNavigation button, [data-testid*="page-navigation"] button').filter({ visible: true });
+      const n = Math.min(await ts.count(), 20);
+      for (let i = 0; i < n; i++) abas.push((await ts.nth(i).innerText().catch(() => '')).trim());
+    } catch (e) {}
+  }
+  log('abas internas visíveis:', JSON.stringify(abas.filter(Boolean)));
+
+  const alvo = await acharAlvo(page, { header: 'Filial' });
+  if (!alvo) throw new Error('tabela por Filial não apareceu');
+  // três pontos de dado diferentes: célula de texto (Filial), célula numérica
+  // e a 2ª linha — o drill costuma responder em qualquer ponto de DADO da linha
+  const celulas = alvo.v.locator('[role="gridcell"]');
+  const nCel = await celulas.count();
+  log('células na tabela:', nCel);
+  const alvosCel = [0, 2, Math.min(8, Math.max(0, nCel - 1))];
+  let detalheAberto = false;
+  for (const idx of alvosCel) {
+    if (detalheAberto) break;
+    const cel = celulas.nth(idx);
+    const box = await cel.boundingBox().catch(() => null);
+    if (!box) { log(`célula ${idx}: sem posição`); continue; }
+    const txt = (await cel.innerText().catch(() => '')).trim();
+    log(`botão direito na célula ${idx} ("${txt}")`);
+    await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2, { button: 'right' });
+    await page.waitForTimeout(2000);
+    await shot(page, `cd-02-menu-cel${idx}`);
+    const itens = [];
+    for (const fr of page.frames()) {
+      try {
+        const ms = fr.locator('[role="menuitem"]').filter({ visible: true });
+        const n = Math.min(await ms.count(), 20);
+        for (let i = 0; i < n; i++) itens.push((await ms.nth(i).innerText().catch(() => '')).trim().replace(/\s+/g, ' '));
+      } catch (e) {}
+    }
+    log('menu:', JSON.stringify(itens.filter(Boolean)));
+    // procura o caminho de drill: "Drill through"/"Detalhamento" → submenu
+    const drill = await emFrames(page, async fr => {
+      const d = fr.locator('[role="menuitem"]').filter({ visible: true })
+        .filter({ hasText: /drill|detalhamento|detalhes/i }).first();
+      return (await d.count()) ? d : null;
+    });
+    if (!drill) { await page.keyboard.press('Escape'); await page.waitForTimeout(800); continue; }
+    try { await drill.hover(); } catch (e) {}
+    await page.waitForTimeout(1500);
+    await shot(page, `cd-03-submenu-cel${idx}`);
+    const sub = [];
+    for (const fr of page.frames()) {
+      try {
+        const ms = fr.locator('[role="menuitem"]').filter({ visible: true });
+        const n = Math.min(await ms.count(), 25);
+        for (let i = 0; i < n; i++) sub.push((await ms.nth(i).innerText().catch(() => '')).trim().replace(/\s+/g, ' '));
+      } catch (e) {}
+    }
+    log('submenu:', JSON.stringify(sub.filter(Boolean)));
+    const item = await emFrames(page, async fr => {
+      const i = fr.locator('[role="menuitem"]').filter({ visible: true })
+        .filter({ hasText: /aderên|detalhes/i }).filter({ hasNotText: /drill through|detalhamento$/i }).first();
+      return (await i.count()) ? i : null;
+    }) || drill;
+    try { await item.click({ timeout: 8000 }); } catch (e) { log('clique no item falhou:', e.message); continue; }
+    await page.waitForTimeout(15000);
+    await shot(page, `cd-04-depois-cel${idx}`);
+    log('url após o clique:', page.url());
+    // a página mudou? procura tabelas novas e lista os cabeçalhos
+    const tabs = await tabelasVisiveis(page);
+    log(`tabelas visíveis agora: ${tabs.length}`);
+    for (const t of tabs.slice(0, 4)) {
+      const hs = [];
+      const ch = t.v.locator('[role="columnheader"]');
+      const n = Math.min(await ch.count(), 20);
+      for (let i = 0; i < n; i++) hs.push((await ch.nth(i).innerText().catch(() => '')).trim());
+      log('  tabela:', JSON.stringify(hs.filter(Boolean)));
+    }
+    // se apareceu uma tabela com cara de detalhe (mais colunas que a de contagens), exporta
+    const detalhe = tabs.find(t => t.cols >= 5);
+    if (detalhe && tabs.length) {
+      try {
+        const arq = await exportarTabela(page, detalhe, 'cd-detalhe');
+        const { linhas, filtros } = await xlsxParaLinhas(arq);
+        log('EXPORT OK · filtros:', filtros || '(sem)');
+        log('colunas:', JSON.stringify(linhas.length ? Object.keys(linhas[0]) : []));
+        linhas.slice(0, 3).forEach((l, i) => log(`linha ${i + 1}:`, JSON.stringify(l)));
+        detalheAberto = true;
+      } catch (e) { log('export do detalhe falhou:', e.message); }
+    }
+  }
+  if (!detalheAberto) log('SONDA: o drill de detalhe NÃO abriu por nenhuma célula — ver screenshots cd-*.');
+  else log('SONDA: detalhe aberto e exportado — ver colunas acima.');
+}
+
 async function main() {
   if (!USER || !PASS) { console.error('Faltam Secrets: GINFO_USER / GINFO_PASS'); process.exit(1); }
 
@@ -1219,6 +1326,7 @@ async function main() {
   try {
     await login(page);
     if (MODE === 'login') { log('modo login: só o teste de acesso. Veja os screenshots nos artifacts.'); return; }
+    if (MODE === 'conf-drill') { await sondaConfDrill(page); return; }
 
     log(`plano: ${inds.length} indicador(es) × ${vigencias.length} vigência(s) × ${escopos.length} escopo(s)`);
     await carregarJaGravados();
