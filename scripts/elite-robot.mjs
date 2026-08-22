@@ -1196,104 +1196,64 @@ function vigenciasEntre(de, ate) {
 // menus que aparecem, fotografa cada passo e, se a página de detalhe abrir,
 // exporta a tabela e imprime as colunas + primeiras linhas nos logs.
 async function sondaConfDrill(page) {
-  await irPara(page, 'https://bi.ginfo.app.br/bi/inicio');
-  if (!(await menuMontado(page)) && !(await garantirPortal(page))) throw new Error('portal sem menu');
-  await clicarMenu(page, 'FROTA', '1.2 - ADERÊNCIA CONFORMIDADE');
-  await shot(page, 'cd-01-pagina');
-  log('url da página:', page.url());
-  for (const fr of page.frames()) { const u = fr.url() || ''; if (u && u !== 'about:blank') log('frame:', u.slice(0, 160)); }
-  // abas internas do relatório (se o navegador de páginas estiver exposto)
-  const abas = [];
-  for (const fr of page.frames()) {
-    try {
-      const ts = fr.locator('[role="tab"], .pageNavigation button, [data-testid*="page-navigation"] button').filter({ visible: true });
-      const n = Math.min(await ts.count(), 20);
-      for (let i = 0; i < n; i++) abas.push((await ts.nth(i).innerText().catch(() => '')).trim());
-    } catch (e) {}
-  }
-  log('abas internas visíveis:', JSON.stringify(abas.filter(Boolean)));
-
-  const alvo = await acharAlvo(page, { header: 'Filial' });
-  if (!alvo) throw new Error('tabela por Filial não apareceu');
-  // três pontos de dado diferentes: célula de texto (Filial), célula numérica
-  // e a 2ª linha — o drill costuma responder em qualquer ponto de DADO da linha
-  const celulas = alvo.v.locator('[role="gridcell"]');
-  const nCel = await celulas.count();
-  log('células na tabela:', nCel);
-  const alvosCel = [0, 2, Math.min(8, Math.max(0, nCel - 1))];
-  let detalheAberto = false;
-  for (const idx of alvosCel) {
-    if (detalheAberto) break;
-    const cel = celulas.nth(idx);
+  // v2: o drill ABRIU pela célula da tabela (run 32578273017) — o submenu tem
+  // "Detalhes Aderência Mensal" e "Detalhes NOK". Agora prova os DOIS, e
+  // despeja o xlsx CRU no log (o parser padrão não achou o cabeçalho).
+  for (const alvoDrill of ['Detalhes Aderência Mensal', 'Detalhes NOK']) {
+    const tag = alvoDrill.includes('NOK') ? 'nok' : 'mensal';
+    await irPara(page, 'https://bi.ginfo.app.br/bi/inicio');
+    if (!(await menuMontado(page)) && !(await garantirPortal(page))) throw new Error('portal sem menu');
+    await clicarMenu(page, 'FROTA', '1.2 - ADERÊNCIA CONFORMIDADE');
+    const alvo = await acharAlvo(page, { header: 'Filial' });
+    if (!alvo) throw new Error('tabela por Filial não apareceu');
+    const cel = alvo.v.locator('[role="gridcell"]').first();
     const box = await cel.boundingBox().catch(() => null);
-    if (!box) { log(`célula ${idx}: sem posição`); continue; }
-    const txt = (await cel.innerText().catch(() => '')).trim();
-    log(`botão direito na célula ${idx} ("${txt}")`);
+    if (!box) throw new Error('célula sem posição');
     await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2, { button: 'right' });
     await page.waitForTimeout(2000);
-    await shot(page, `cd-02-menu-cel${idx}`);
-    const itens = [];
-    for (const fr of page.frames()) {
-      try {
-        const ms = fr.locator('[role="menuitem"]').filter({ visible: true });
-        const n = Math.min(await ms.count(), 20);
-        for (let i = 0; i < n; i++) itens.push((await ms.nth(i).innerText().catch(() => '')).trim().replace(/\s+/g, ' '));
-      } catch (e) {}
-    }
-    log('menu:', JSON.stringify(itens.filter(Boolean)));
-    // procura o caminho de drill: "Drill through"/"Detalhamento" → submenu
     const drill = await emFrames(page, async fr => {
-      const d = fr.locator('[role="menuitem"]').filter({ visible: true })
-        .filter({ hasText: /drill|detalhamento|detalhes/i }).first();
+      const d = fr.locator('[role="menuitem"]').filter({ visible: true }).filter({ hasText: /drill/i }).first();
       return (await d.count()) ? d : null;
     });
-    if (!drill) { await page.keyboard.press('Escape'); await page.waitForTimeout(800); continue; }
-    try { await drill.hover(); } catch (e) {}
-    await page.waitForTimeout(1500);
-    await shot(page, `cd-03-submenu-cel${idx}`);
-    const sub = [];
-    for (const fr of page.frames()) {
-      try {
-        const ms = fr.locator('[role="menuitem"]').filter({ visible: true });
-        const n = Math.min(await ms.count(), 25);
-        for (let i = 0; i < n; i++) sub.push((await ms.nth(i).innerText().catch(() => '')).trim().replace(/\s+/g, ' '));
-      } catch (e) {}
-    }
-    log('submenu:', JSON.stringify(sub.filter(Boolean)));
+    if (!drill) { await shot(page, `cd-${tag}-sem-menu`); throw new Error('menu Drill-through não abriu'); }
+    await drill.hover(); await page.waitForTimeout(1500);
     const item = await emFrames(page, async fr => {
-      const i = fr.locator('[role="menuitem"]').filter({ visible: true })
-        .filter({ hasText: /aderên|detalhes/i }).filter({ hasNotText: /drill through|detalhamento$/i }).first();
+      const i = fr.locator(`[role="menuitem"]:has-text("${alvoDrill}")`).filter({ visible: true }).first();
       return (await i.count()) ? i : null;
-    }) || drill;
-    try { await item.click({ timeout: 8000 }); } catch (e) { log('clique no item falhou:', e.message); continue; }
+    });
+    if (!item) { await shot(page, `cd-${tag}-sem-item`); log(`item "${alvoDrill}" não apareceu no submenu`); continue; }
+    await item.click();
     await page.waitForTimeout(15000);
-    await shot(page, `cd-04-depois-cel${idx}`);
-    log('url após o clique:', page.url());
-    // a página mudou? procura tabelas novas e lista os cabeçalhos
+    await shot(page, `cd-${tag}-pagina`);
+    // fotografa as tabelas da página de detalhe (cabeçalhos + tamanho)
     const tabs = await tabelasVisiveis(page);
-    log(`tabelas visíveis agora: ${tabs.length}`);
-    for (const t of tabs.slice(0, 4)) {
+    log(`[${alvoDrill}] tabelas na página: ${tabs.length}`);
+    for (const t of tabs.slice(0, 6)) {
       const hs = [];
       const ch = t.v.locator('[role="columnheader"]');
-      const n = Math.min(await ch.count(), 20);
+      const n = Math.min(await ch.count(), 25);
       for (let i = 0; i < n; i++) hs.push((await ch.nth(i).innerText().catch(() => '')).trim());
-      log('  tabela:', JSON.stringify(hs.filter(Boolean)));
+      const rows = await t.v.locator('[role="row"]').count().catch(() => 0);
+      log(`  tabela ${Math.round(t.x)},${Math.round(t.y)} · ${rows} row(s):`, JSON.stringify(hs.filter(Boolean)));
     }
-    // se apareceu uma tabela com cara de detalhe (mais colunas que a de contagens), exporta
-    const detalhe = tabs.find(t => t.cols >= 5);
-    if (detalhe && tabs.length) {
-      try {
-        const arq = await exportarTabela(page, detalhe, 'cd-detalhe');
-        const { linhas, filtros } = await xlsxParaLinhas(arq);
-        log('EXPORT OK · filtros:', filtros || '(sem)');
-        log('colunas:', JSON.stringify(linhas.length ? Object.keys(linhas[0]) : []));
-        linhas.slice(0, 3).forEach((l, i) => log(`linha ${i + 1}:`, JSON.stringify(l)));
-        detalheAberto = true;
-      } catch (e) { log('export do detalhe falhou:', e.message); }
-    }
+    const detalhe = tabs.reduce((a, b) => (!a || b.cols > a.cols ? b : a), null);
+    if (!detalhe) { log(`[${alvoDrill}] nenhuma tabela para exportar`); continue; }
+    try {
+      const arq = await exportarTabela(page, detalhe, `cd-${tag}`);
+      await dumpXlsx(arq, alvoDrill);
+    } catch (e) { log(`[${alvoDrill}] export falhou:`, e.message); }
   }
-  if (!detalheAberto) log('SONDA: o drill de detalhe NÃO abriu por nenhuma célula — ver screenshots cd-*.');
-  else log('SONDA: detalhe aberto e exportado — ver colunas acima.');
+}
+// despeja o xlsx cru: nome/tamanho de cada aba + primeiras linhas como vieram
+async function dumpXlsx(arq, rotulo) {
+  const XLSX = (await import('xlsx')).default;
+  const wb = XLSX.readFile(arq);
+  log(`[${rotulo}] abas do xlsx:`, JSON.stringify(wb.SheetNames));
+  for (const nome of wb.SheetNames) {
+    const mat = XLSX.utils.sheet_to_json(wb.Sheets[nome], { header: 1, defval: null, blankrows: false });
+    log(`[${rotulo}] aba "${nome}": ${mat.length} linha(s)`);
+    mat.slice(0, 12).forEach((r, i) => log(`  r${i}:`, JSON.stringify(r).slice(0, 400)));
+  }
 }
 
 async function main() {
