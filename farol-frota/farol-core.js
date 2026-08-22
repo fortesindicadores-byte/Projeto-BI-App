@@ -121,7 +121,7 @@ async function farolGate(){
 
 // ═══════════════ CARGA E NORMALIZAÇÃO ═══════════════
 const DATA={};
-async function farolLoad(){
+async function farolLoad(opts){
   // ── 1) bases do robô Ginfo (Supabase ginfo_snapshot) — fonte primária ──
   // O robô coleta todo dia 7h; a planilha Farol Semanal fica como FALLBACK
   // (se uma base estiver vazia/ausente, a aba correspondente vem do Sheets).
@@ -224,7 +224,10 @@ async function farolLoad(){
     DATA.os=T.os.rows.map(r=>({dias:num(r[i.dias]),os:String(r[i.os]||'').trim(),cod:codDe(r[i.fil]),fil:String(r[i.fil]||'').trim(),ori:String(r[i.ori]||'').trim(),tipo:String(r[i.tip]||'').trim(),crit:String(r[i.cri]||'').trim(),seg:_seg(r[i.seg]),forn:String(r[i.forn]||'').trim(),mec:String(r[i.mec]||'').trim(),placa:String(r[i.pla]||'').trim(),obs:String(r[i.obs]||'').trim()})).filter(r=>r.os);
   }
   await loadDisp();
-  try{ await loadPneus(); }catch(e){ console.error('pneus load',e); }
+  // A carga de pneus (snapshot do Prolog + Km/L) é a mais pesada da abertura.
+  // Quem passa {semPneus:true} (Gestão à Vista) busca sob demanda, ao abrir a
+  // visão de Pneus — as páginas antigas chamam sem opção e nada muda.
+  if(!(opts&&opts.semPneus)){ try{ await loadPneus(); }catch(e){ console.error('pneus load',e); } }
   try{ await loadChecklist(); }catch(e){ console.error('checklist load',e); }
   return DATA;
 }
