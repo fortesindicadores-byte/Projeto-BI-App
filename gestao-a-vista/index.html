@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-<meta name="build" content="202608221512">
+<meta name="build" content="202608222032">
 <title>Gestão à Vista</title>
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -479,7 +479,7 @@ body.prehub .s-sec,body.prehub .s-item,body.prehub #pdf-slot,body.prehub .ms-wra
 
 <div class="dica" id="dica"></div>
 
-<script src="../farol-frota/farol-core.js?v=202608221512"></script>
+<script src="../farol-frota/farol-core.js?v=202608222032"></script>
 <script>
 /* ══════════════════════════════════════════════════════════════════════
    Gestão à Vista — o Farol no layout padrão do portal (Renan, 21/08/2026).
@@ -600,7 +600,7 @@ async function loadConfDet(){
         proj:String(g('Projeto')||'').trim(),tipoV:String(g('Tipo Veículo')||'').trim(),
         regra:String(g('Tipo Aderência')||'').trim(),prazo:g('Prazo'),
         venc:dSerial(g('Vencimento Vigente')),real:dSerial(g('Checklist Realizado em')),
-        status:String(g('Status')||'').trim()};
+        prox:dSerial(g('Próximo Vencimento')),status:String(g('Status')||'').trim()};
     }).filter(Boolean);
   }catch(e){ console.error('conformidade-detalhe',e); CONFD=null; }
 }
@@ -639,9 +639,11 @@ function confDoEscopo(cod){
 // por equipamento/placa ainda NÃO existe na base — a tela do Ginfo só entrega
 // contagens por filial (o drill de detalhe não abre por automação).
 function renderConf(el,cod){
-  if(!CONF||!CONF.length){el.innerHTML='<div class="loading">Sem conformidade coletada para a vigência.</div>';return;}
+  // contagens (vigência fechada) podem não ter o recorte — a tabela de placas
+  // (vigência corrente, do drill) aparece mesmo assim
+  if(!CONF||!CONF.length){el.innerHTML='<div class="loading">Sem conformidade coletada para a vigência.</div>'+confPlacas(cod);return;}
   const rs=CONF.filter(r=>(cod?r.cod===cod:passU(r.cod)));
-  if(!rs.length){el.innerHTML='<div class="loading">Sem conformidade para o recorte atual.</div>';return;}
+  if(!rs.length){el.innerHTML='<div class="loading">Sem contagens de conformidade para o recorte.</div>'+confPlacas(cod);return;}
   const tot={nunca:0,nao:0,fora:0,dentro:0,noPrazo:0,ok:0,tot:0};
   rs.forEach(r=>{['nunca','nao','fora','dentro','noPrazo','ok','tot'].forEach(k=>tot[k]+=r[k]);});
   const pctT=tot.tot?tot.ok/tot.tot*100:null;
@@ -661,30 +663,40 @@ function renderConf(el,cod){
     confPlacas(cod)+
     `<div class="tbl-sub" style="margin:10px 0 0">Aderência = (Realizado Dentro Prazo + No Prazo) ÷ total das cinco contagens — régua do Ginfo desde ago/2026.${CONF_ATT?' Coleta de '+CONF_ATT.toLocaleDateString('pt-BR')+' '+CONF_ATT.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})+'.':''}</div>`;
 }
-// as placas pendentes do recorte, da mais vencida para a menos (drill do Ginfo)
+// TODAS as placas do recorte, ranqueadas pelos dias para vencer (a mais
+// vencida primeiro) — vencimento = Próximo Vencimento (ou o Vigente), e a
+// coluna principal é DIAS, na direita (pedido do Renan, 22/08/2026)
 function confPlacas(cod){
   if(!CONFD||!CONFD.length)
     return `<div class="tbl-sub" style="margin:12px 0 0">O detalhe por placa (robô Conf Detalhe) ainda não tem coleta — a primeira roda hoje.</div>`;
   const hoje=new Date(); hoje.setHours(0,0,0,0);
   const rs=CONFD.filter(r=>(cod?r.cod===cod:passU(r.cod)));
-  const pend=rs.filter(r=>/nunca|n[aã]o realizado/i.test(r.status)).sort((a,b)=>(a.venc?a.venc.getTime():9e15)-(b.venc?b.venc.getTime():9e15));
   const att=CONFD_ATT?` · coleta de ${CONFD_ATT.toLocaleDateString('pt-BR')} ${CONFD_ATT.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})}`:'';
-  if(!pend.length)
-    return `<div class="blk-t" style="margin-top:14px">Placas pendentes — vigência ${CONFD_VIG||''}${att}</div>`+
-           `<div class="tbl-sub">Nenhuma placa com checklist pendente no recorte. ✓</div>`;
-  const dias=r=>r.venc?Math.floor((hoje-r.venc)/864e5):null;
-  const dCls=d=>d==null?'mut':d>0?'cr':'cg';
+  if(!rs.length)
+    return `<div class="blk-t" style="margin-top:14px">Placas por vencimento — vigência ${CONFD_VIG||''}${att}</div>`+
+           `<div class="tbl-sub">Sem placas do recorte na vigência. </div>`;
+  const ref=r=>r.prox||r.venc;
+  const ord=rs.slice().sort((a,b)=>{
+    const va=ref(a),vb=ref(b);
+    return (va?va.getTime():9e15)-(vb?vb.getTime():9e15);
+  });
   const fd=d=>d?d.toLocaleDateString('pt-BR',{timeZone:'UTC'}):'—';
-  return `<div class="blk-t" style="margin-top:14px">Placas pendentes — da mais vencida para a menos <span class="cr">· ${pend.length}</span><span class="mut" style="font-weight:600;text-transform:none;letter-spacing:0"> — vigência ${CONFD_VIG||''}${att}</span></div>`+
+  const stCls=s=>/nunca|n[aã]o realizado/i.test(s)?'cr':/fora/i.test(s)?'cy':'cg';
+  const nVenc=ord.filter(r=>{const d=ref(r);return d&&d<hoje;}).length;
+  return `<div class="blk-t" style="margin-top:14px">Placas por vencimento — da mais vencida para a menos `+
+    `${nVenc?`<span class="cr">· ${nVenc} vencida(s)</span>`:''}<span class="mut" style="font-weight:600;text-transform:none;letter-spacing:0"> — ${ord.length} placas · vigência ${CONFD_VIG||''}${att}</span></div>`+
     wrapT('<table>'+
-    th.apply(null,(cod?[]:['Unidade']).concat(['Placa','Projeto','Tipo Veículo','Regra','Vencimento','Dias vencida','Status']))+
-    '<tbody>'+pend.slice(0,80).map(r=>{
-      const d=dias(r);
+    th.apply(null,(cod?[]:['Unidade']).concat(['Placa','Projeto','Tipo Veículo','Regra','Status','Vencimento','Dias']))+
+    '<tbody>'+ord.map(r=>{
+      const d=ref(r), dias=d?Math.floor((d-hoje)/864e5):null;
+      const dCls=dias==null?'mut':dias<0?'cr':dias<=7?'cy':'cg';
+      const dTxt=dias==null?'—':dias<0?`vencida há ${-dias}d`:dias===0?'vence hoje':`${dias}d`;
       return `<tr>${cod?'':`<td><b>${escF(r.cod)}</b></td>`}<td>${cod?`<b>${escF(r.placa)}</b>`:escF(r.placa)}</td>`+
         `<td>${escF(r.proj||'—')}</td><td>${escF(r.tipoV||'—')}</td>`+
         `<td>${escF(r.regra||'—')}${r.prazo?` <span class="mut">· ${r.prazo}d</span>`:''}</td>`+
-        `<td class="ctr">${fd(r.venc)}</td><td class="num ${dCls(d)}">${d==null?'—':d>0?d:'no prazo'}</td>`+
-        `<td class="${/nunca/i.test(r.status)?'cr':'cy'}">${escF(r.status)}</td></tr>`;
+        `<td class="${stCls(r.status)}">${escF(r.status)}</td>`+
+        `<td class="ctr">${fd(d)}</td>`+
+        `<td class="num ${dCls}" style="font-weight:800">${dTxt}</td></tr>`;
     }).join('')+'</tbody></table>');
 }
 
@@ -853,8 +865,13 @@ function pinta(id){
 function soltaHero(id){
   const el=$('body-'+id), hx=$('hero-'+id); if(!el||!hx) return;
   hx.innerHTML='';
-  while(el.firstElementChild&&/(^|\s)(hero|mini-hero|custos-hero|hero-deltas)(\s|$)/.test(el.firstElementChild.className||''))
-    hx.appendChild(el.firstElementChild);
+  const isHero=n=>!!n&&/(^|\s)(hero|mini-hero|custos-hero|hero-deltas)(\s|$)/.test(n.className||'');
+  // o renderCustos embrulha TUDO no wrapT (<div overflow-x> sem classe) — se o
+  // hero estiver um nível abaixo, opera dentro do wrapper
+  let host=el;
+  if(el.firstElementChild&&!isHero(el.firstElementChild)&&isHero(el.firstElementChild.firstElementChild))
+    host=el.firstElementChild;
+  while(isHero(host.firstElementChild)) hx.appendChild(host.firstElementChild);
   hx.style.display=hx.children.length?'':'none';
 }
 // aperta as tabelas da visão até caberem (sem rolagem lateral)
@@ -1005,6 +1022,6 @@ initPdfExport({
   isLight:()=>document.body.classList.contains('claro'), setTheme:t=>aplicaTema(t==='light'?'light':'dark')
 });
 </script>
-<script src="../assets/build-check.js?v=202608221512"></script>
+<script src="../assets/build-check.js?v=202608222032"></script>
 </body>
 </html>
