@@ -509,7 +509,7 @@ function mkBar(holder,labels,values,meta,fmt){
       scales:{x:{grid,ticks:{...tick,autoSkip:false,maxRotation:0}},y:{grid,ticks:tick,beginAtZero:true}}}
   });
 }
-const th=(...hs)=>'<thead><tr>'+hs.map(h=>`<th${/R\$|Dias|Km|Viagens|%|Desc|1Q|2Q|Total|Orç|Rem|Real|Ativos|Indispon|Sulco|Desvio|Média/i.test(h)?' class="num"':''}>${h}</th>`).join('')+'</tr></thead>';
+const th=(...hs)=>'<thead><tr>'+hs.map(h=>`<th${/R\$|Dias|Km|Viagens|%|Desc|1Q|2Q|Total|Orç|Rem|Real|Ativos|Indispon|Sulco|Desvio|Média|Ações|Conclu|Andamento|Iniciad|Vencidas|Aderência/i.test(h)?' class="num"':''}>${h}</th>`).join('')+'</tr></thead>';
 function wrapT(html){return `<div style="overflow-x:auto">${html}</div>`;}
 
 // ═══════════════ SEÇÕES ═══════════════
