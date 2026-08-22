@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-<meta name="build" content="202608222055">
+<meta name="build" content="202608222059">
 <title>Gestão à Vista</title>
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -101,13 +101,17 @@ body{font-family:'Montserrat',-apple-system,BlinkMacSystemFont,sans-serif;font-s
   backdrop-filter:blur(13px);-webkit-backdrop-filter:blur(13px);
   box-shadow:var(--luz), 8px 0 28px rgba(0,0,0,.25);overflow:auto;}
 .s-top{display:flex;align-items:center;gap:9px;padding:2px 8px 14px;}
-.s-top b{flex:1;font-size:13.5px;font-weight:600;}
+.s-top b{font-size:13.5px;font-weight:600;}
+.s-marca-wrap{flex:1;min-width:0;display:flex;flex-direction:column;gap:1px;}
+/* a unidade em foco, abaixo do nome (modo unidade, ou filtro do admin) */
+.s-marca{font-size:9px;font-weight:800;color:var(--laranja);text-transform:uppercase;
+  letter-spacing:.7px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .s-mini{display:flex;align-items:center;justify-content:center;width:24px;height:24px;flex:0 0 24px;
   background:transparent;border:0;border-radius:6px;color:var(--txt3);cursor:pointer;}
 .s-mini:hover{background:var(--hover);color:var(--txt);}
 .side.mini{width:64px;flex:0 0 64px;padding:16px 8px 12px;}
 .side.mini .s-top{justify-content:center;padding-bottom:12px;}
-.side.mini .s-top b,.side.mini .s-top>svg{display:none;}
+.side.mini .s-top b,.side.mini .s-top>svg,.side.mini .s-marca-wrap{display:none;}
 .side.mini .s-sec,.side.mini .s-item .n,.side.mini .s-user div{display:none;}
 .side.mini .s-item{font-size:0;justify-content:center;padding:9px 0;gap:0;}
 .side.mini .s-user{flex-wrap:wrap;gap:6px;justify-content:center;padding:12px 0 2px;}
@@ -431,7 +435,7 @@ body.prehub .s-sec,body.prehub .s-item,body.prehub #pdf-slot,body.prehub .ms-wra
   <aside class="side">
     <div class="s-top">
       <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="var(--laranja)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="2" width="8" height="20" rx="4"/><circle cx="12" cy="7" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="12" cy="17" r="1.6"/></svg>
-      <b>Gestão à Vista</b>
+      <div class="s-marca-wrap"><b>Gestão à Vista</b><span class="s-marca" id="marcaUni" style="display:none"></span></div>
       <button class="s-mini" id="btMini" onclick="trocaMini()" title="Recolher menu">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16"/></svg>
       </button>
@@ -486,7 +490,7 @@ body.prehub .s-sec,body.prehub .s-item,body.prehub #pdf-slot,body.prehub .ms-wra
 
 <div class="dica" id="dica"></div>
 
-<script src="../farol-frota/farol-core.js?v=202608222055"></script>
+<script src="../farol-frota/farol-core.js?v=202608222059"></script>
 <script>
 /* ══════════════════════════════════════════════════════════════════════
    Gestão à Vista — o Farol no layout padrão do portal (Renan, 21/08/2026).
@@ -804,7 +808,7 @@ function renderFCAv(el,cod){
   el.innerHTML=wrapT('<table>'+
     th(cod?'Assunto':'Unidade','Ações','Concluídas','Em andamento','Não iniciadas','Vencidas','Aderência Prazo','Aderência Conclusão','Aderência Total')+
     '<tbody>'+linhas.map(linha).join('')+
-    `<tr class="tot-row"><td>Total</td><td class="num">${g.tt}</td><td class="num">${g.concl}</td><td class="num">${g.andam}</td><td class="num">${g.nini}</td><td class="num ${g.venc?'cr':'mut'}">${g.venc}</td><td class="num ${cl(g.pPrazo)}">${pctF(g.pPrazo)}</td><td class="num ${cl(g.pConcl)}">${pctF(g.pConcl)}</td><td class="num">${tot(g.total)}</td></tr>`+
+    `<tr class="tot-row"><td>Total</td><td class="num">${g.tt}</td><td class="num">${g.concl}</td><td class="num">${g.andam}</td><td class="num">${g.nini}</td><td class="num ${g.venc?'cr':'mut'}">${g.venc}</td><td class="num ${cl(g.pPrazo)}">${pctF(g.pPrazo)}</td><td class="num ${cl(g.pConcl)}">${pctF(g.pConcl)}</td><td class="num ${cl(g.total)}">${pctF(g.total)}</td></tr>`+
     '</tbody></table>')+
     '<div class="tbl-sub" style="margin:10px 0 0">Prazo = ações não vencidas · Conclusão = ações concluídas · Total = concluída 100% e em andamento 50% — a mesma conta do painel Aderência ao FCA. Na unidade, as ações são agrupadas por ASSUNTO: contas nos pacotes de custos e indicadores da RPM em grupos macro.</div>';
 }
@@ -952,7 +956,7 @@ function setVw(v){
 function repinta(){                     // filtro mudou: chips + visão aberta agora, resto depois
   PINTADA={}; renderChips(); pinta(VW);
 }
-_farolRepaint=()=>{const s=getMsValues('ms-uni');FILT.uni=s.length?new Set(s):new Set(MINHAS);repinta();};
+_farolRepaint=()=>{const s=getMsValues('ms-uni');FILT.uni=s.length?new Set(s):new Set(MINHAS);marcaUnidade();repinta();};
 
 /* ══════════ tema / menu recolhido / dica ══════════ */
 /* tema: MESMA convenção dos painéis do padrão (classe .claro, chave bi_theme) */
@@ -1017,6 +1021,20 @@ async function boot(){
 }
 // Pré-hub (mesma lógica do FCA): um card por unidade liberada + card Admin.
 // Nada é carregado aqui — a página só baixa as bases quando entra num recorte.
+// unidade em foco embaixo de "Gestão à Vista" na lateral (Renan, 22/08/2026):
+// no modo unidade é fixa; no admin acompanha o filtro (some sem seleção)
+function marcaUnidade(){
+  const el=$('marcaUni'); if(!el) return;
+  let txt='';
+  if(UNI) txt=UNI;
+  else if(MODO==='admin'){
+    const sel=(typeof getMsValues==='function')?getMsValues('ms-uni'):[];
+    if(sel.length) txt=sel.length<=3?sel.join(' · '):sel.length+' unidades';
+  }
+  el.textContent=txt;
+  el.style.display=txt?'':'none';
+  el.title=txt;
+}
 function renderPreHub(){
   document.body.classList.add('prehub');
   setTxt('tit','Unidades');
@@ -1058,7 +1076,7 @@ function renderPreHub(){
     MODO='uni'; UNI=c; FILT.uni=new Set([c]);
     setTxt('euUni',c);
   }
-  VW='resumo'; montaNav();
+  VW='resumo'; montaNav(); marcaUnidade();
   await boot();
 })();
 </script>
@@ -1078,6 +1096,6 @@ initPdfExport({
   isLight:()=>document.body.classList.contains('claro'), setTheme:t=>aplicaTema(t==='light'?'light':'dark')
 });
 </script>
-<script src="../assets/build-check.js?v=202608222055"></script>
+<script src="../assets/build-check.js?v=202608222059"></script>
 </body>
 </html>
