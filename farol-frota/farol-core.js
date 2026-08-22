@@ -85,7 +85,9 @@ const fmtD=d=>d?d.toLocaleDateString('pt-BR'):'—';
 const num=v=>{if(v==null||v==='')return null;if(typeof v==='number')return v;const f=parseFloat(String(v).replace(/\./g,'').replace(',','.'));return isNaN(f)?null:f;};
 const brl=v=>{if(v==null||!isFinite(v))return '—';const a=Math.abs(v),s=v<0?'-':'';if(a>=1e6)return s+'R$ '+(a/1e6).toFixed(2).replace('.',',')+' mi';if(a>=1e3)return s+'R$ '+Math.round(a/1e3).toLocaleString('pt-BR')+'k';return s+'R$ '+Math.round(a).toLocaleString('pt-BR');};
 const brlFull=v=>v==null||!isFinite(v)?'—':(v<0?'-':'')+Math.round(Math.abs(v)).toLocaleString('pt-BR');
-const pct1=v=>v==null||!isFinite(v)?'—':(Math.round(v*10)/10).toLocaleString('pt-BR')+'%';
+// ATINGIMENTOS SEM CASA DECIMAL (Renan, 22/08/2026): o pct1 arredonda para
+// inteiro — o nome ficou pelo histórico de chamadas; pct0 é o mesmo formato.
+const pct1=v=>v==null||!isFinite(v)?'—':Math.round(v).toLocaleString('pt-BR')+'%';
 // variações (▲ %) sem casa decimal (Renan, 22/08/2026) — aderências seguem no pct1
 const pct0=v=>v==null||!isFinite(v)?'—':Math.round(v).toLocaleString('pt-BR')+'%';
 const clsPctMeta=(p,g=99.95,y=95)=>p==null?'mut':p>=g?'cg':p>=y?'cy':'cr';

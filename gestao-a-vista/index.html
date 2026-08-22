@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-<meta name="build" content="202608222049">
+<meta name="build" content="202608222055">
 <title>Gestão à Vista</title>
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -486,7 +486,7 @@ body.prehub .s-sec,body.prehub .s-item,body.prehub #pdf-slot,body.prehub .ms-wra
 
 <div class="dica" id="dica"></div>
 
-<script src="../farol-frota/farol-core.js?v=202608222049"></script>
+<script src="../farol-frota/farol-core.js?v=202608222055"></script>
 <script>
 /* ══════════════════════════════════════════════════════════════════════
    Gestão à Vista — o Farol no layout padrão do portal (Renan, 21/08/2026).
@@ -747,13 +747,43 @@ function fcaDoEscopo(cod){
   if(!FCAR) return null;
   return fcaMetrics(FCAR.filter(r=>(cod?r.cod===cod:passU(r.cod)))).total;
 }
+// ── De-Para de ASSUNTO do FCA (Renan, 22/08/2026) ──────────────────────────
+// Os fatos mudaram de nome no meio do ano (era "IC:/IV: …" e conta a conta;
+// virou indicador/pacote). O agrupamento junta tudo:
+// · Custos → o PACOTE da conta (FAROL_PACOTES, o mesmo mapa da Visão
+//   Financeira); fato que já é nome de pacote fica nele.
+// · RPM → grupos macro de indicadores, casando por palavra-chave.
+function fcaAssunto(r){
+  const f=String(r.fato||'').trim();
+  if(!f) return '—';
+  const s=f.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
+  if(/^rpm/i.test(String(r.origem||''))){
+    if(/combust|km\s*\/?\s*l|r\$\s*\/?\s*l/.test(s)) return 'Combustível';
+    if(/stress/.test(s))                                return 'Stress Test';
+    if(/conformid/.test(s))                             return 'Conformidade';
+    if(/civf/.test(s))                                  return 'CIVF';
+    if(/pneu|calibr|milimetr|amplitude|alinham/.test(s))return 'Pneus e Alinhamento';
+    if(/checklist|check|saida.*critica/.test(s))        return 'Checklists';
+    if(/disponib/.test(s))                              return 'Disponibilidade';
+    if(/manuten|mttr|mtbf|sla|os venc|prevent/.test(s)) return 'Manutenção';
+    if(/blitz|seguranc/.test(s))                        return 'Segurança';
+    return 'Outros indicadores';
+  }
+  const semPrefixo=f.replace(/^pacote\s+/i,'').trim();
+  const pac=(typeof getPacF==='function')?getPacF(semPrefixo):'Outros';
+  if(pac!=='Outros') return pac;
+  if(/^(combustiveis|manutencoes|pneus|seguros e licencas|icms)$/.test(semPrefixo.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase())) return semPrefixo;
+  return semPrefixo;
+}
 function renderFCAv(el,cod){
   if(!FCAR){el.innerHTML='<div class="loading">Não consegui ler os FCAs.</div>';return;}
   const rs=FCAR.filter(r=>(cod?r.cod===cod:passU(r.cod)));
   if(!rs.length){el.innerHTML='<div class="loading">Nenhum FCA no recorte atual.</div>';return;}
-  // admin/visão geral: por UNIDADE · dentro da unidade: por INDICADOR/CONTA (pedido do Renan)
+  // admin/visão geral: por UNIDADE · dentro da unidade: por ASSUNTO — o
+  // De-Para agrupa contas em PACOTES (custos) e indicadores em grupos macro
+  // (RPM), porque os nomes mudaram no meio do ano (Renan, 22/08/2026)
   const porChave={};
-  rs.forEach(r=>{const k=cod?(r.fato||'—'):r.cod;(porChave[k]||(porChave[k]=[])).push(r);});
+  rs.forEach(r=>{const k=cod?fcaAssunto(r):r.cod;(porChave[k]||(porChave[k]=[])).push(r);});
   const linhas=Object.keys(porChave).map(k=>({k,m:fcaMetrics(porChave[k])}))
     .sort((a,b)=>(a.m.total??999)-(b.m.total??999));
   const g=fcaMetrics(rs);
@@ -763,7 +793,8 @@ function renderFCAv(el,cod){
   const band=v=>v==null?css.getPropertyValue('--txt4').trim():v<70?css.getPropertyValue('--vermelho').trim():v<85?css.getPropertyValue('--ambar').trim():css.getPropertyValue('--verde').trim();
   const cl=v=>v==null?'mut':v<70?'cr':v<85?'cy':'cg';
   const pctF=v=>v==null?'—':Math.round(v)+'%';
-  const tot=v=>`<span class="pctcell" style="background:${band(v)}">${pctF(v)}</span>`;
+  // fundo vermelho → texto branco (Renan, 22/08/2026)
+  const tot=v=>`<span class="pctcell" style="background:${band(v)}${v!=null&&v<70?';color:#fff':''}">${pctF(v)}</span>`;
   const linha=o=>`<tr><td>${escF(o.k)}</td><td class="num">${o.m.tt}</td>`+
     `<td class="num">${o.m.concl}</td><td class="num">${o.m.andam}</td><td class="num">${o.m.nini}</td>`+
     `<td class="num ${o.m.venc?'cr':'mut'}">${o.m.venc}</td>`+
@@ -771,11 +802,11 @@ function renderFCAv(el,cod){
     `<td class="num ${cl(o.m.pConcl)}">${pctF(o.m.pConcl)}</td>`+
     `<td class="num">${tot(o.m.total)}</td></tr>`;
   el.innerHTML=wrapT('<table>'+
-    th(cod?'Indicador / Conta':'Unidade','Ações','Concluídas','Em andamento','Não iniciadas','Vencidas','Aderência Prazo','Aderência Conclusão','Aderência Total')+
+    th(cod?'Assunto':'Unidade','Ações','Concluídas','Em andamento','Não iniciadas','Vencidas','Aderência Prazo','Aderência Conclusão','Aderência Total')+
     '<tbody>'+linhas.map(linha).join('')+
     `<tr class="tot-row"><td>Total</td><td class="num">${g.tt}</td><td class="num">${g.concl}</td><td class="num">${g.andam}</td><td class="num">${g.nini}</td><td class="num ${g.venc?'cr':'mut'}">${g.venc}</td><td class="num ${cl(g.pPrazo)}">${pctF(g.pPrazo)}</td><td class="num ${cl(g.pConcl)}">${pctF(g.pConcl)}</td><td class="num">${tot(g.total)}</td></tr>`+
     '</tbody></table>')+
-    '<div class="tbl-sub" style="margin:10px 0 0">Prazo = ações não vencidas · Conclusão = ações concluídas · Total = concluída 100% e em andamento 50% — a mesma conta do painel Aderência ao FCA.</div>';
+    '<div class="tbl-sub" style="margin:10px 0 0">Prazo = ações não vencidas · Conclusão = ações concluídas · Total = concluída 100% e em andamento 50% — a mesma conta do painel Aderência ao FCA. Na unidade, as ações são agrupadas por ASSUNTO: contas nos pacotes de custos e indicadores da RPM em grupos macro.</div>';
 }
 
 /* ══════════ chips do topo (todas as visões) ══════════ */
@@ -1047,6 +1078,6 @@ initPdfExport({
   isLight:()=>document.body.classList.contains('claro'), setTheme:t=>aplicaTema(t==='light'?'light':'dark')
 });
 </script>
-<script src="../assets/build-check.js?v=202608222049"></script>
+<script src="../assets/build-check.js?v=202608222055"></script>
 </body>
 </html>
