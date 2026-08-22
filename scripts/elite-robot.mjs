@@ -1196,52 +1196,77 @@ function vigenciasEntre(de, ate) {
 // menus que aparecem, fotografa cada passo e, se a página de detalhe abrir,
 // exporta a tabela e imprime as colunas + primeiras linhas nos logs.
 async function sondaConfDrill(page) {
-  // v2: o drill ABRIU pela célula da tabela (run 32578273017) — o submenu tem
-  // "Detalhes Aderência Mensal" e "Detalhes NOK". Agora prova os DOIS, e
-  // despeja o xlsx CRU no log (o parser padrão não achou o cabeçalho).
-  for (const alvoDrill of ['Detalhes Aderência Mensal', 'Detalhes NOK']) {
-    const tag = alvoDrill.includes('NOK') ? 'nok' : 'mensal';
-    await irPara(page, 'https://bi.ginfo.app.br/bi/inicio');
-    if (!(await menuMontado(page)) && !(await garantirPortal(page))) throw new Error('portal sem menu');
-    await clicarMenu(page, 'FROTA', '1.2 - ADERÊNCIA CONFORMIDADE');
-    const alvo = await acharAlvo(page, { header: 'Filial' });
-    if (!alvo) throw new Error('tabela por Filial não apareceu');
-    const cel = alvo.v.locator('[role="gridcell"]').first();
-    const box = await cel.boundingBox().catch(() => null);
-    if (!box) throw new Error('célula sem posição');
-    await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2, { button: 'right' });
-    await page.waitForTimeout(2000);
-    const drill = await emFrames(page, async fr => {
-      const d = fr.locator('[role="menuitem"]').filter({ visible: true }).filter({ hasText: /drill/i }).first();
-      return (await d.count()) ? d : null;
-    });
-    if (!drill) { await shot(page, `cd-${tag}-sem-menu`); throw new Error('menu Drill-through não abriu'); }
-    await drill.hover(); await page.waitForTimeout(1500);
-    const item = await emFrames(page, async fr => {
-      const i = fr.locator(`[role="menuitem"]:has-text("${alvoDrill}")`).filter({ visible: true }).first();
-      return (await i.count()) ? i : null;
-    });
-    if (!item) { await shot(page, `cd-${tag}-sem-item`); log(`item "${alvoDrill}" não apareceu no submenu`); continue; }
-    await item.click();
-    await page.waitForTimeout(15000);
-    await shot(page, `cd-${tag}-pagina`);
-    // fotografa as tabelas da página de detalhe (cabeçalhos + tamanho)
+  // v3: NOK já está mapeado (item a item por placa, filtrado pela filial da
+  // linha clicada). Agora o foco é a página "Detalhes Aderência Mensal": na v2
+  // os 7 visuais pareciam ter 1 linha e o export pegou um card ("No Prazo/341").
+  // Espera mais, rola o relatório e exporta todo visual com 3+ linhas.
+  await irPara(page, 'https://bi.ginfo.app.br/bi/inicio');
+  if (!(await menuMontado(page)) && !(await garantirPortal(page))) throw new Error('portal sem menu');
+  await clicarMenu(page, 'FROTA', '1.2 - ADERÊNCIA CONFORMIDADE');
+  const alvo = await acharAlvo(page, { header: 'Filial' });
+  if (!alvo) throw new Error('tabela por Filial não apareceu');
+  const cel = alvo.v.locator('[role="gridcell"]').first();
+  const box = await cel.boundingBox();
+  await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2, { button: 'right' });
+  await page.waitForTimeout(2000);
+  const drill = await emFrames(page, async fr => {
+    const d = fr.locator('[role="menuitem"]').filter({ visible: true }).filter({ hasText: /drill/i }).first();
+    return (await d.count()) ? d : null;
+  });
+  if (!drill) throw new Error('menu Drill-through não abriu');
+  await drill.hover(); await page.waitForTimeout(1500);
+  const item = await emFrames(page, async fr => {
+    const i = fr.locator('[role="menuitem"]:has-text("Detalhes Aderência Mensal")').filter({ visible: true }).first();
+    return (await i.count()) ? i : null;
+  });
+  if (!item) throw new Error('item "Detalhes Aderência Mensal" não apareceu');
+  await item.click();
+  await page.waitForTimeout(25000);           // a página da v2 pode ter sido fotografada cedo demais
+  await shot(page, 'cd3-01-mensal');
+
+  const listar = async rotulo => {
     const tabs = await tabelasVisiveis(page);
-    log(`[${alvoDrill}] tabelas na página: ${tabs.length}`);
-    for (const t of tabs.slice(0, 6)) {
+    log(`${rotulo}: ${tabs.length} visual(is)`);
+    for (const t of tabs) {
+      const rows = await t.v.locator('[role="row"]').count().catch(() => 0);
       const hs = [];
       const ch = t.v.locator('[role="columnheader"]');
       const n = Math.min(await ch.count(), 25);
       for (let i = 0; i < n; i++) hs.push((await ch.nth(i).innerText().catch(() => '')).trim());
-      const rows = await t.v.locator('[role="row"]').count().catch(() => 0);
-      log(`  tabela ${Math.round(t.x)},${Math.round(t.y)} · ${rows} row(s):`, JSON.stringify(hs.filter(Boolean)));
+      const bb = await t.v.boundingBox().catch(() => null);
+      log(`  ${Math.round(t.x)},${Math.round(t.y)} · ${bb ? Math.round(bb.width) + 'x' + Math.round(bb.height) : '?'} · ${rows} row(s) · cols:`, JSON.stringify(hs.filter(Boolean)));
+      t.rows = rows;
     }
-    const detalhe = tabs.reduce((a, b) => (!a || b.cols > a.cols ? b : a), null);
-    if (!detalhe) { log(`[${alvoDrill}] nenhuma tabela para exportar`); continue; }
+    return tabs;
+  };
+  let tabs = await listar('antes de rolar');
+  // rola o miolo do relatório (os visuais de baixo só montam quando aparecem)
+  const fr = page.frames().find(f => /powerbi|reportEmbed/i.test(f.url()));
+  if (fr) {
+    const corpo = fr.locator('.displayArea, .canvasFlexBox, body').first();
+    const cb = await corpo.boundingBox().catch(() => null);
+    if (cb) {
+      await page.mouse.move(cb.x + cb.width / 2, cb.y + cb.height / 2);
+      for (let i = 0; i < 6; i++) { await page.mouse.wheel(0, 500); await page.waitForTimeout(1500); }
+      await shot(page, 'cd3-02-rolado');
+      tabs = await listar('depois de rolar');
+    }
+  }
+  // exporta todo visual com 3+ linhas (até 3), despejando o xlsx cru
+  let exportados = 0;
+  for (const t of tabs) {
+    if ((t.rows || 0) < 3 || exportados >= 3) continue;
     try {
-      const arq = await exportarTabela(page, detalhe, `cd-${tag}`);
-      await dumpXlsx(arq, alvoDrill);
-    } catch (e) { log(`[${alvoDrill}] export falhou:`, e.message); }
+      const arq = await exportarTabela(page, t, `cd3-visual-${Math.round(t.y)}`);
+      await dumpXlsx(arq, `visual y=${Math.round(t.y)}`);
+      exportados++;
+    } catch (e) { log(`export do visual y=${Math.round(t.y)} falhou:`, e.message); }
+  }
+  if (!exportados) {
+    // nada com 3+ linhas: exporta o MAIOR em área, seja o que for
+    const maior = tabs.reduce((a, b) => {
+      const ar = x => (x && x.v ? 1 : 0); return !a ? b : a; }, null);
+    if (maior) { try { const arq = await exportarTabela(page, maior, 'cd3-maior'); await dumpXlsx(arq, 'maior'); } catch (e) { log('export do maior falhou:', e.message); } }
   }
 }
 // despeja o xlsx cru: nome/tamanho de cada aba + primeiras linhas como vieram
