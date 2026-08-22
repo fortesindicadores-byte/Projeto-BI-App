@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-<meta name="build" content="202608221238">
+<meta name="build" content="202608221512">
 <title>Gestão à Vista</title>
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -479,7 +479,7 @@ body.prehub .s-sec,body.prehub .s-item,body.prehub #pdf-slot,body.prehub .ms-wra
 
 <div class="dica" id="dica"></div>
 
-<script src="../farol-frota/farol-core.js?v=202608221238"></script>
+<script src="../farol-frota/farol-core.js?v=202608221512"></script>
 <script>
 /* ══════════════════════════════════════════════════════════════════════
    Gestão à Vista — o Farol no layout padrão do portal (Renan, 21/08/2026).
@@ -574,6 +574,36 @@ function rankExtras(){
    Mesma conta do gerot-base; aqui mostramos também as 5 colunas cruas.     */
 const CONF_OK=['Realizado Dentro Prazo','No Prazo'];
 const CONF_NOK=['Nunca Realizado','Não Realizado','Realizado Fora Prazo'];
+
+/* ── detalhe por placa (conformidade-detalhe, drill do Ginfo por filial) ──
+   Uma linha por placa × competência, com Vencimento Vigente e Status — é
+   daqui que sai a tabela "Placas mais vencidas". Datas vêm como serial. */
+let CONFD=null, CONFD_VIG=null, CONFD_ATT=null;
+const dSerial=v=>(typeof v==='number'&&v>20000&&v<80000)?new Date(Date.UTC(1899,11,30)+Math.round(v)*864e5):null;
+async function loadConfDet(){
+  try{
+    // vigência mais nova por (ano,mês) — ordenar a string 'MM/AAAA' erraria na virada do ano
+    const {data:vs}=await SB.from('elite_snapshot').select('vigencia')
+      .eq('indicador','conformidade-detalhe').eq('escopo','mes');
+    const ord=v=>{const m=String(v).match(/(\d{2})\/(\d{4})/);return m?m[2]+m[1]:'';};
+    const vig=(vs||[]).map(r=>r.vigencia).sort((a,b)=>ord(b).localeCompare(ord(a)))[0];
+    if(!vig){CONFD=null;return;}
+    const {data}=await SB.from('elite_snapshot').select('vigencia,data,updated_at')
+      .eq('indicador','conformidade-detalhe').eq('escopo','mes').eq('vigencia',vig).limit(1);
+    const row=data&&data[0]; if(!row||!Array.isArray(row.data)){CONFD=null;return;}
+    CONFD_VIG=row.vigencia; CONFD_ATT=row.updated_at?new Date(row.updated_at):null;
+    CONFD=row.data.map(o=>{
+      const g=n=>{const k=kOf(o,n);return k?o[k]:null;};
+      const cod=codDe(g('Filial'));
+      if(!cod||!UNIDADES[cod]) return null;
+      return {cod,fil:String(g('Filial')||'').trim(),placa:String(g('Placa')||'').trim(),
+        proj:String(g('Projeto')||'').trim(),tipoV:String(g('Tipo Veículo')||'').trim(),
+        regra:String(g('Tipo Aderência')||'').trim(),prazo:g('Prazo'),
+        venc:dSerial(g('Vencimento Vigente')),real:dSerial(g('Checklist Realizado em')),
+        status:String(g('Status')||'').trim()};
+    }).filter(Boolean);
+  }catch(e){ console.error('conformidade-detalhe',e); CONFD=null; }
+}
 const _k=s=>String(s==null?'':s).normalize('NFD').replace(/[̀-ͯ]/g,'').toUpperCase().replace(/\s+/g,' ').trim();
 function kOf(obj,nome){const alvo=_k(nome);return Object.keys(obj||{}).find(k=>_k(k)===alvo);}
 function nConf(o,nome){const k=kOf(o,nome);const v=k?o[k]:null;const n=typeof v==='number'?v:parseFloat(String(v==null?'':v).replace(/\./g,'').replace(',','.'));return isFinite(n)?n:0;}
@@ -628,7 +658,34 @@ function renderConf(el,cod){
       card('Realizado Dentro Prazo',tot.dentro,'cg')+
       card('No Prazo',tot.noPrazo,'cg')+
     `</div>`+
-    `<div class="tbl-sub" style="margin:10px 0 0">Aderência = (Realizado Dentro Prazo + No Prazo) ÷ total das cinco contagens — régua do Ginfo desde ago/2026.${CONF_ATT?' Coleta de '+CONF_ATT.toLocaleDateString('pt-BR')+' '+CONF_ATT.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})+'.':''} O detalhe por equipamento ainda não vem do Ginfo.</div>`;
+    confPlacas(cod)+
+    `<div class="tbl-sub" style="margin:10px 0 0">Aderência = (Realizado Dentro Prazo + No Prazo) ÷ total das cinco contagens — régua do Ginfo desde ago/2026.${CONF_ATT?' Coleta de '+CONF_ATT.toLocaleDateString('pt-BR')+' '+CONF_ATT.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})+'.':''}</div>`;
+}
+// as placas pendentes do recorte, da mais vencida para a menos (drill do Ginfo)
+function confPlacas(cod){
+  if(!CONFD||!CONFD.length)
+    return `<div class="tbl-sub" style="margin:12px 0 0">O detalhe por placa (robô Conf Detalhe) ainda não tem coleta — a primeira roda hoje.</div>`;
+  const hoje=new Date(); hoje.setHours(0,0,0,0);
+  const rs=CONFD.filter(r=>(cod?r.cod===cod:passU(r.cod)));
+  const pend=rs.filter(r=>/nunca|n[aã]o realizado/i.test(r.status)).sort((a,b)=>(a.venc?a.venc.getTime():9e15)-(b.venc?b.venc.getTime():9e15));
+  const att=CONFD_ATT?` · coleta de ${CONFD_ATT.toLocaleDateString('pt-BR')} ${CONFD_ATT.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})}`:'';
+  if(!pend.length)
+    return `<div class="blk-t" style="margin-top:14px">Placas pendentes — vigência ${CONFD_VIG||''}${att}</div>`+
+           `<div class="tbl-sub">Nenhuma placa com checklist pendente no recorte. ✓</div>`;
+  const dias=r=>r.venc?Math.floor((hoje-r.venc)/864e5):null;
+  const dCls=d=>d==null?'mut':d>0?'cr':'cg';
+  const fd=d=>d?d.toLocaleDateString('pt-BR',{timeZone:'UTC'}):'—';
+  return `<div class="blk-t" style="margin-top:14px">Placas pendentes — da mais vencida para a menos <span class="cr">· ${pend.length}</span><span class="mut" style="font-weight:600;text-transform:none;letter-spacing:0"> — vigência ${CONFD_VIG||''}${att}</span></div>`+
+    wrapT('<table>'+
+    th.apply(null,(cod?[]:['Unidade']).concat(['Placa','Projeto','Tipo Veículo','Regra','Vencimento','Dias vencida','Status']))+
+    '<tbody>'+pend.slice(0,80).map(r=>{
+      const d=dias(r);
+      return `<tr>${cod?'':`<td><b>${escF(r.cod)}</b></td>`}<td>${cod?`<b>${escF(r.placa)}</b>`:escF(r.placa)}</td>`+
+        `<td>${escF(r.proj||'—')}</td><td>${escF(r.tipoV||'—')}</td>`+
+        `<td>${escF(r.regra||'—')}${r.prazo?` <span class="mut">· ${r.prazo}d</span>`:''}</td>`+
+        `<td class="ctr">${fd(r.venc)}</td><td class="num ${dCls(d)}">${d==null?'—':d>0?d:'no prazo'}</td>`+
+        `<td class="${/nunca/i.test(r.status)?'cr':'cy'}">${escF(r.status)}</td></tr>`;
+    }).join('')+'</tbody></table>');
 }
 
 /* ══════════ FCA — mesma conta do painel Aderência ao FCA ══════════
@@ -864,19 +921,21 @@ async function boot(){
     if(h&&h.v&&h.v.DATA){
       Object.keys(h.v.DATA).forEach(k=>{DATA[k]=h.v.DATA[k];});
       CONF=h.v.CONF; CONF_VIG=h.v.CONF_VIG; CONF_ATT=h.v.CONF_ATT?new Date(h.v.CONF_ATT):null; FCAR=h.v.FCAR;
+      CONFD=(h.v.CONFD||[]).map(r=>({...r,venc:r.venc?new Date(r.venc):null,real:r.real?new Date(r.real):null}));
+      if(!CONFD.length)CONFD=null; CONFD_VIG=h.v.CONFD_VIG; CONFD_ATT=h.v.CONFD_ATT?new Date(h.v.CONFD_ATT):null;
       pintou=true; montaNav(); pintaTudo(new Date(h.t),true);
     }
   }catch(e){}
   try{
     // pneus fica de fora da abertura: são 13 filiais em 5 rodadas sequenciais,
     // a parte mais lenta do farol. Entra logo depois, sem segurar a primeira pintura.
-    await Promise.all([farolLoad({semPneus:true}), loadConf(), loadFCA()]);
-    try{ if(typeof SwrCache!=='undefined') SwrCache.put('gav_data',{DATA:Object.assign({},DATA),CONF,CONF_VIG,CONF_ATT,FCAR}); }catch(e){}
+    await Promise.all([farolLoad({semPneus:true}), loadConf(), loadConfDet(), loadFCA()]);
+    try{ if(typeof SwrCache!=='undefined') SwrCache.put('gav_data',{DATA:Object.assign({},DATA),CONF,CONF_VIG,CONF_ATT,FCAR,CONFD,CONFD_VIG,CONFD_ATT}); }catch(e){}
     montaNav(); pintaTudo(new Date(),false);
     const emBreve=window.requestIdleCallback||(f=>setTimeout(f,300));
     emBreve(()=>{ const p=garantePneus(); if(p) p.then(()=>{
       PINTADA={}; renderChips(); pinta(VW);
-      try{ if(typeof SwrCache!=='undefined') SwrCache.put('gav_data',{DATA:Object.assign({},DATA),CONF,CONF_VIG,CONF_ATT,FCAR}); }catch(e){}
+      try{ if(typeof SwrCache!=='undefined') SwrCache.put('gav_data',{DATA:Object.assign({},DATA),CONF,CONF_VIG,CONF_ATT,FCAR,CONFD,CONFD_VIG,CONFD_ATT}); }catch(e){}
     }); });
   }catch(e){
     console.error(e);
@@ -946,6 +1005,6 @@ initPdfExport({
   isLight:()=>document.body.classList.contains('claro'), setTheme:t=>aplicaTema(t==='light'?'light':'dark')
 });
 </script>
-<script src="../assets/build-check.js?v=202608221238"></script>
+<script src="../assets/build-check.js?v=202608221512"></script>
 </body>
 </html>
