@@ -1314,6 +1314,20 @@ async function drillDetalheDaFilial(page, alvo, filial) {
   const { linhas } = await xlsxParaLinhas(arq);
   return linhas;
 }
+// ── CONTAGENS DIÁRIAS da Conformidade (Renan, 22/08/2026) ────────────────────
+// O Gestão à Vista precisa da conformidade do MÊS CORRENTE atualizada todo
+// dia, como os demais faróis. Exporta a mesma tabela por Filial da tela 1.2
+// com Mês = mês atual e grava como conformidade-dia (sobrescreve diário).
+// A chave oficial `conformidade` (mês fechado, dia 01–15) fica intacta —
+// é ela que o Frota de Elite pontua.
+async function coletarConfDia(page) {
+  const hoje = new Date();
+  const vig = String(hoje.getMonth() + 1).padStart(2, '0') + '/' + hoje.getFullYear();
+  const base = INDICADORES.find(i => i.chave === 'conformidade');
+  if (!base) throw new Error('indicador conformidade não está em INDICADORES');
+  await coletar(page, { ...base, chave: 'conformidade-dia' }, vig, 'mes');
+}
+
 async function coletarConfDetalhe(page) {
   let alvo = await abreConformidade(page);
   // lista as filiais da própria tabela (célula de texto de cada linha)
@@ -1418,7 +1432,16 @@ async function main() {
     await login(page);
     if (MODE === 'login') { log('modo login: só o teste de acesso. Veja os screenshots nos artifacts.'); return; }
     if (MODE === 'conf-drill') { await sondaConfDrill(page); return; }
-    if (MODE === 'conf-detalhe') { await coletarConfDetalhe(page); return; }
+    if (MODE === 'conf-detalhe') {
+      // primeiro as contagens do mês corrente (conformidade-dia); depois o
+      // detalhe por placa. A falha de uma não derruba a outra.
+      let erroDia = null;
+      try { await coletarConfDia(page); }
+      catch (e) { erroDia = e; log('conformidade-dia FALHOU:', e.message); await shot(page, 'confdia-erro'); }
+      await coletarConfDetalhe(page);
+      if (erroDia) { console.error('conformidade-dia falhou:', erroDia.message); process.exit(1); }
+      return;
+    }
 
     log(`plano: ${inds.length} indicador(es) × ${vigencias.length} vigência(s) × ${escopos.length} escopo(s)`);
     await carregarJaGravados();
