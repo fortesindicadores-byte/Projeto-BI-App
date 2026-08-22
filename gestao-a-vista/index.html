@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-<meta name="build" content="202608222032">
+<meta name="build" content="202608222037">
 <title>Gestão à Vista</title>
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -406,14 +406,17 @@ table.dre td.cg-t,.cg-t{color:var(--verde)!important;font-weight:700;}
 
 /* ── pré-hub de unidades (mesma lógica do FCA, nos tokens do padrão) ── */
 body.prehub .s-sec,body.prehub .s-item,body.prehub #pdf-slot,body.prehub .ms-wrap{display:none;}
-.uhub-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:14px;align-content:start;}
+/* respiro no topo: sem ele o hover (borda laranja + translateY) era cortado
+   pelo overflow do container na primeira fileira */
+.uhub-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));grid-auto-rows:1fr;
+  gap:14px;align-content:start;padding:8px 2px 4px;}
 .uhub-card{display:flex;flex-direction:column;gap:5px;background:var(--side);border:1px solid var(--card-brd);
-  border-radius:12px;padding:18px;text-decoration:none;color:var(--txt);box-shadow:var(--luz-card);
+  border-radius:12px;padding:18px;min-height:128px;text-decoration:none;color:var(--txt);box-shadow:var(--luz-card);
   backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);transition:border-color .15s,transform .1s;}
 .uhub-card:hover{border-color:var(--laranja);transform:translateY(-2px);}
 .uhub-cod{font-size:20px;font-weight:800;color:var(--laranja);}
 .uhub-name{font-size:11px;color:var(--txt2);text-transform:uppercase;letter-spacing:.5px;}
-.uhub-go{font-size:11px;font-weight:700;color:var(--txt3);margin-top:6px;}
+.uhub-go{font-size:11px;font-weight:700;color:var(--txt3);margin-top:auto;padding-top:10px;}
 .uhub-card.admin{border-color:rgba(249,115,22,.45);background:rgba(249,115,22,.10);}
 </style>
 </head>
@@ -479,7 +482,7 @@ body.prehub .s-sec,body.prehub .s-item,body.prehub #pdf-slot,body.prehub .ms-wra
 
 <div class="dica" id="dica"></div>
 
-<script src="../farol-frota/farol-core.js?v=202608222032"></script>
+<script src="../farol-frota/farol-core.js?v=202608222037"></script>
 <script>
 /* ══════════════════════════════════════════════════════════════════════
    Gestão à Vista — o Farol no layout padrão do portal (Renan, 21/08/2026).
@@ -609,9 +612,21 @@ function kOf(obj,nome){const alvo=_k(nome);return Object.keys(obj||{}).find(k=>_
 function nConf(o,nome){const k=kOf(o,nome);const v=k?o[k]:null;const n=typeof v==='number'?v:parseFloat(String(v==null?'':v).replace(/\./g,'').replace(',','.'));return isFinite(n)?n:0;}
 async function loadConf(){
   try{
-    const {data}=await SB.from('elite_snapshot').select('vigencia,data,updated_at')
-      .eq('indicador','conformidade').eq('escopo','mes').order('vigencia',{ascending:false}).limit(1);
-    const row=data&&data[0]; if(!row||!Array.isArray(row.data)){CONF=null;return;}
+    // preferência: conformidade-dia (mês CORRENTE, robô diário das 8h);
+    // sem ela, cai na conformidade oficial (mês fechado, dia 01–15)
+    const ordV=v=>{const m=String(v).match(/(\d{2})\/(\d{4})/);return m?m[2]+m[1]:String(v||'');};
+    let row=null;
+    for(const ind of ['conformidade-dia','conformidade']){
+      const {data:vs}=await SB.from('elite_snapshot').select('vigencia').eq('indicador',ind).eq('escopo','mes');
+      const vig=(vs||[]).map(r=>r.vigencia).sort((a,b)=>ordV(b).localeCompare(ordV(a)))[0];
+      if(!vig) continue;
+      const {data}=await SB.from('elite_snapshot').select('vigencia,data,updated_at')
+        .eq('indicador',ind).eq('escopo','mes').eq('vigencia',vig).limit(1);
+      row=data&&data[0];
+      if(row&&Array.isArray(row.data)&&row.data.length) break;
+      row=null;
+    }
+    if(!row){CONF=null;return;}
     CONF_VIG=row.vigencia; CONF_ATT=row.updated_at?new Date(row.updated_at):null;
     const porCod={};
     row.data.forEach(o=>{
@@ -1022,6 +1037,6 @@ initPdfExport({
   isLight:()=>document.body.classList.contains('claro'), setTheme:t=>aplicaTema(t==='light'?'light':'dark')
 });
 </script>
-<script src="../assets/build-check.js?v=202608222032"></script>
+<script src="../assets/build-check.js?v=202608222037"></script>
 </body>
 </html>
