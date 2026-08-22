@@ -833,7 +833,7 @@ async function acharAlvo(page, cfg = {}) {
 }
 
 // ── EXPORTAR o visual (hover → "..." → Exportar dados → confirma → xlsx) ────
-async function exportarTabela(page, alvo, nomeArq) {
+async function exportarTabela(page, alvo, nomeArq, eopts = {}) {
   await fecharPopupSlicer(page);   // qualquer popup aberto bloqueia o clique no "..."
   const SEL_OPTS ='[aria-label*="Mais opções" i], [aria-label*="More options" i], [data-testid="visual-more-options-btn"], [title*="Mais opções" i], .vcMenuBtn';
   // O "..." fica FORA do grid (no cabeçalho do visual), então a busca acaba
@@ -856,6 +856,9 @@ async function exportarTabela(page, alvo, nomeArq) {
           if (!cx) { best = b; break; }
           const bb = await b.boundingBox().catch(() => null);
           if (!bb) continue;
+          // opts.minY: ignora botões ACIMA do visual (o "..." de um card
+          // vizinho ganhava por distância — foi o que exportou "No Prazo/341")
+          if (eopts.minY != null && bb.y < eopts.minY) continue;
           const d = Math.hypot(bb.x - (cx.x + cx.width), bb.y - cx.y);
           if (d < bd) { bd = d; best = b; }
         }
@@ -1196,10 +1199,9 @@ function vigenciasEntre(de, ate) {
 // menus que aparecem, fotografa cada passo e, se a página de detalhe abrir,
 // exporta a tabela e imprime as colunas + primeiras linhas nos logs.
 async function sondaConfDrill(page) {
-  // v3: NOK já está mapeado (item a item por placa, filtrado pela filial da
-  // linha clicada). Agora o foco é a página "Detalhes Aderência Mensal": na v2
-  // os 7 visuais pareciam ter 1 linha e o export pegou um card ("No Prazo/341").
-  // Espera mais, rola o relatório e exporta todo visual com 3+ linhas.
+  // v4: a tabela do "Detalhes Aderência Mensal" está mapeada (15 colunas, com
+  // Vencimento Vigente/Status por placa). O export da v3 pegou o card vizinho;
+  // agora o alvo é a tabela grande (>=8 colunas) com minY travado nela.
   await irPara(page, 'https://bi.ginfo.app.br/bi/inicio');
   if (!(await menuMontado(page)) && !(await garantirPortal(page))) throw new Error('portal sem menu');
   await clicarMenu(page, 'FROTA', '1.2 - ADERÊNCIA CONFORMIDADE');
@@ -1221,54 +1223,16 @@ async function sondaConfDrill(page) {
   });
   if (!item) throw new Error('item "Detalhes Aderência Mensal" não apareceu');
   await item.click();
-  await page.waitForTimeout(25000);           // a página da v2 pode ter sido fotografada cedo demais
-  await shot(page, 'cd3-01-mensal');
-
-  const listar = async rotulo => {
-    const tabs = await tabelasVisiveis(page);
-    log(`${rotulo}: ${tabs.length} visual(is)`);
-    for (const t of tabs) {
-      const rows = await t.v.locator('[role="row"]').count().catch(() => 0);
-      const hs = [];
-      const ch = t.v.locator('[role="columnheader"]');
-      const n = Math.min(await ch.count(), 25);
-      for (let i = 0; i < n; i++) hs.push((await ch.nth(i).innerText().catch(() => '')).trim());
-      const bb = await t.v.boundingBox().catch(() => null);
-      log(`  ${Math.round(t.x)},${Math.round(t.y)} · ${bb ? Math.round(bb.width) + 'x' + Math.round(bb.height) : '?'} · ${rows} row(s) · cols:`, JSON.stringify(hs.filter(Boolean)));
-      t.rows = rows;
-    }
-    return tabs;
-  };
-  let tabs = await listar('antes de rolar');
-  // rola o miolo do relatório (os visuais de baixo só montam quando aparecem)
-  const fr = page.frames().find(f => /powerbi|reportEmbed/i.test(f.url()));
-  if (fr) {
-    const corpo = fr.locator('.displayArea, .canvasFlexBox, body').first();
-    const cb = await corpo.boundingBox().catch(() => null);
-    if (cb) {
-      await page.mouse.move(cb.x + cb.width / 2, cb.y + cb.height / 2);
-      for (let i = 0; i < 6; i++) { await page.mouse.wheel(0, 500); await page.waitForTimeout(1500); }
-      await shot(page, 'cd3-02-rolado');
-      tabs = await listar('depois de rolar');
-    }
-  }
-  // exporta todo visual com 3+ linhas (até 3), despejando o xlsx cru
-  let exportados = 0;
-  for (const t of tabs) {
-    if ((t.rows || 0) < 3 || exportados >= 3) continue;
-    try {
-      const arq = await exportarTabela(page, t, `cd3-visual-${Math.round(t.y)}`);
-      await dumpXlsx(arq, `visual y=${Math.round(t.y)}`);
-      exportados++;
-    } catch (e) { log(`export do visual y=${Math.round(t.y)} falhou:`, e.message); }
-  }
-  if (!exportados) {
-    // nada com 3+ linhas: exporta o MAIOR em área, seja o que for
-    const maior = tabs.reduce((a, b) => {
-      const ar = x => (x && x.v ? 1 : 0); return !a ? b : a; }, null);
-    if (maior) { try { const arq = await exportarTabela(page, maior, 'cd3-maior'); await dumpXlsx(arq, 'maior'); } catch (e) { log('export do maior falhou:', e.message); } }
-  }
+  await page.waitForTimeout(25000);
+  const tabs = await tabelasVisiveis(page);
+  const det = tabs.find(t => t.cols >= 8);
+  if (!det) { await shot(page, 'cd4-sem-tabela'); throw new Error('tabela de detalhe (8+ colunas) não apareceu'); }
+  const bb = await det.v.boundingBox();
+  log('tabela de detalhe em', Math.round(bb.x), Math.round(bb.y), '·', det.cols, 'colunas');
+  const arq = await exportarTabela(page, det, 'cd4-detalhe', { minY: bb.y - 60 });
+  await dumpXlsx(arq, 'Detalhes Aderência Mensal');
 }
+
 // despeja o xlsx cru: nome/tamanho de cada aba + primeiras linhas como vieram
 async function dumpXlsx(arq, rotulo) {
   const XLSX = (await import('xlsx')).default;
