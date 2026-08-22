@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-<meta name="build" content="202608192100">
+<meta name="build" content="202608222230">
 <title>FCA · Admin</title>
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -21,13 +21,6 @@ body{background:radial-gradient(ellipse at 10% 25%,rgba(249,115,22,.06) 0%,trans
 .header-filters{flex-basis:100%;order:3;margin-top:10px;display:flex;gap:10px;flex-wrap:wrap;align-items:flex-start;}
 .hfilter{display:flex;flex-direction:column;gap:3px;}
 .hfilter>label{display:none;}
-/* filtro Responsável — digitável por enquanto (Renan, 19/08/2026: depois
-   vira seletor de usuários, como no Planner) */
-.f-resp{background:transparent;border:0;border-radius:7px;padding:6px 10px;color:var(--txt);
-  font-family:inherit;font-size:12.5px;font-weight:500;outline:none;width:118px;}
-.f-resp::placeholder{color:var(--txt2);}
-.f-resp:hover,.f-resp:focus{background:var(--hover);color:var(--txt);}
-
 .ms-wrap{position:relative;}
 .ms-btn{display:flex;align-items:center;gap:7px;background:transparent;border:0;border-radius:7px;
   color:var(--txt2);font-family:'Montserrat',sans-serif;font-size:12px;font-weight:500;
@@ -869,9 +862,6 @@ table.cons{min-width:1560px!important;}
       <a class="s-sair" href="../index.html" title="Voltar ao hub">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M14 4h5v16h-5M11 8l-4 4 4 4M7 12h10"/></svg>
       </a>
-      <button class="s-sair" id="logoutBtn" title="Sair">
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M10 4H5v16h5M17 8l4 4-4 4M21 12H9"/></svg>
-      </button>
     </div>
   </aside>
 
@@ -888,7 +878,7 @@ table.cons{min-width:1560px!important;}
       <div class="hfilter"><label>Indicador/Conta</label><div class="ms-wrap" id="ms-conta"><button class="ms-btn" onclick="toggleMs('ms-conta')"><span class="ms-lbl">Indicador/Conta</span><span class="ms-cnt"></span><svg width="10" height="6" viewBox="0 0 10 6"><path d="M0 0l5 6 5-6z" fill="#F97316"/></svg></button><div class="ms-panel"><div class="ms-search"><input type="text" placeholder="Pesquisar…"></div><div class="ms-list"></div></div></div></div>
       <div class="hfilter"><label>Causa</label><div class="ms-wrap" id="ms-causa"><button class="ms-btn" onclick="toggleMs('ms-causa')"><span class="ms-lbl">Causa</span><span class="ms-cnt"></span><svg width="10" height="6" viewBox="0 0 10 6"><path d="M0 0l5 6 5-6z" fill="#F97316"/></svg></button><div class="ms-panel"><div class="ms-search"><input type="text" placeholder="Pesquisar…"></div><div class="ms-list"></div></div></div></div>
       <div class="hfilter"><label>Ação</label><div class="ms-wrap" id="ms-acao"><button class="ms-btn" onclick="toggleMs('ms-acao')"><span class="ms-lbl">Ação</span><span class="ms-cnt"></span><svg width="10" height="6" viewBox="0 0 10 6"><path d="M0 0l5 6 5-6z" fill="#F97316"/></svg></button><div class="ms-panel"><div class="ms-search"><input type="text" placeholder="Pesquisar…"></div><div class="ms-list"></div></div></div></div>
-      <div class="hfilter"><label>Responsável</label><input type="text" id="f-resp" class="f-resp" placeholder="Responsável" autocomplete="off" oninput="render()"></div>
+      <div class="hfilter"><label>Responsável</label><div class="ms-wrap" id="ms-resp"><button class="ms-btn" onclick="toggleMs('ms-resp')"><span class="ms-lbl">Responsável</span><span class="ms-cnt"></span><svg width="10" height="6" viewBox="0 0 10 6"><path d="M0 0l5 6 5-6z" fill="#F97316"/></svg></button><div class="ms-panel"><div class="ms-search"><input type="text" placeholder="Pesquisar…"></div><div class="ms-list"></div></div></div></div>
       <button class="tool ico" id="themeBtn" title="Claro / escuro"></button>
       <span class="saved-msg" id="savedMsg">Salvo ✓</span>
       <span style="display:none"><button id="viewBtn"></button><button id="ganttBtn"></button></span>
@@ -960,10 +950,13 @@ function toggleMs(id){
   }
 }
 function getMsValues(id){const w=document.getElementById(id);return w&&w._sel?[...w._sel]:[];}
-function respFiltro(){const e=document.getElementById('f-resp');return e?e.value.trim().toLowerCase():'';}
-function respOk(v,fr){return !fr||String(v||'').toLowerCase().includes(fr);}
+// Responsável agora é dropdown como os demais (Renan, 22/08/2026) — o rótulo
+// vazio vira "(Em branco)" para dar para achar ação sem responsável.
+const respLabel=v=>{const t=String(v==null?'':v).trim();return t||'(Em branco)';};
+function respFiltro(){return getMsValues('ms-resp');}
+function respOk(v,fr){return !fr.length||fr.includes(respLabel(v));}
 
-let UNI_OPTS=[],VIG_OPTS=[],ORG_OPTS=[],ST_OPTS=[],FATO_OPTS=[],CONTA_OPTS=[],_vigInit=false;
+let UNI_OPTS=[],VIG_OPTS=[],ORG_OPTS=[],ST_OPTS=[],FATO_OPTS=[],CONTA_OPTS=[],RESP_OPTS=[],_vigInit=false;
 // nome limpo do fato: 1ª linha, sem o "Desvio de R$ …" dos fatos antigos e
 // sem o prefixo "Pacote " (formato anterior) — o filtro lista indicador/conta,
 // nunca o valor do desvio.
@@ -1008,10 +1001,12 @@ function popFiltros(){
   ST_OPTS=[...new Set(_ROWS.map(r=>r.status||DEFAULT_STATUS))].sort();
   FATO_OPTS=[...new Set(_ROWS.map(r=>r.fato).filter(Boolean))].sort();
   CONTA_OPTS=[...new Set(_ROWS.flatMap(contasDe).filter(Boolean))].sort();
+  RESP_OPTS=[...new Set(_ROWS.map(r=>respLabel(r.responsavel)))]
+    .sort((a,b)=>(a==='(Em branco)')-(b==='(Em branco)')||a.localeCompare(b,'pt'));
   // 1ª carga: abre já na vigência mais recente (menos linhas = mais rápido); admin pode trocar
   const wv=document.getElementById('ms-vig');
   if(wv && wv._sel && !_vigInit && VIG_OPTS.length){ wv._sel.clear(); wv._sel.add(VIG_OPTS[0]); _vigInit=true; }  // muta o Set (não substitui) p/ o dropdown refletir
-  ['ms-uni','ms-vig','ms-org','ms-st','ms-proj','ms-fato','ms-conta','ms-prazo'].forEach(id=>{const w=document.getElementById(id);if(w&&w._render)w._render('');});
+  ['ms-uni','ms-vig','ms-org','ms-st','ms-proj','ms-fato','ms-conta','ms-prazo','ms-resp'].forEach(id=>{const w=document.getElementById(id);if(w&&w._render)w._render('');});
 }
 
 function autoResize(ta){ta.style.height='auto';ta.style.height=ta.scrollHeight+'px';}
@@ -1553,7 +1548,6 @@ function applyTheme(t){document.body.classList.toggle('claro',t==='light');local
   if(typeof _ROWS!=='undefined' && _ROWS.length) render();}
 document.getElementById('themeBtn').addEventListener('click',()=>applyTheme(document.body.classList.contains('claro')?'dark':'light'));
 applyTheme(localStorage.getItem('bi_theme')||'dark');
-document.getElementById('logoutBtn').addEventListener('click',async()=>{try{if(sb)await sb.auth.signOut();}catch(e){}location.href='../index.html';});
 
 wireDelegation();
 // Ao mudar a Unidade, o filtro de Projeto reseta e recarrega só os projetos daquela(s) unidade(s) (cascata)
@@ -1569,6 +1563,7 @@ _buildMs(document.getElementById('ms-proj'),projItems);
 const FILL_OPTS=['Preenchida','Em branco'];
 _buildMs(document.getElementById('ms-causa'),()=>FILL_OPTS);
 _buildMs(document.getElementById('ms-acao'),()=>FILL_OPTS);
+_buildMs(document.getElementById('ms-resp'),()=>RESP_OPTS);
 document.addEventListener('click',e=>{if(!e.target.closest('.ms-wrap'))document.querySelectorAll('.ms-panel.open').forEach(p=>p.classList.remove('open'));});
 // (o cabeçalho fixo não depende mais da altura do header: a tabela rola
 // dentro do próprio quadro, então basta `top:0` no thead)
@@ -1608,6 +1603,6 @@ initApp();
 <script src="../assets/ctrlk.js"></script>
 <script src="../assets/excel-export.js"></script>
 <script src="../assets/sortable-table.js"></script>
-<script src="../assets/build-check.js?v=202608192100"></script>
+<script src="../assets/build-check.js?v=202608222230"></script>
 </body>
 </html>
