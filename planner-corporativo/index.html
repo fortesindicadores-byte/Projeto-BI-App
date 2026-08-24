@@ -3,13 +3,13 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-<meta name="build" content="202608230010">
+<meta name="build" content="202608240500">
 <title>Planner Corporativo</title>
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
-<link rel="stylesheet" href="../assets/aderencia-view.css?v=202608230010">
-<script src="../assets/aderencia-view.js?v=202608230010"></script>
+<link rel="stylesheet" href="../assets/aderencia-view.css?v=202608240500">
+<script src="../assets/aderencia-view.js?v=202608240500"></script>
 <style>
 /* ============================================================
    PLANNER CORPORATIVO — layout do Painel de Gestão. Layout do "Task Board"
@@ -698,10 +698,45 @@ const doBanco=d=>({id:d.id,assunto:d.assunto||'',acao:d.acao||'',resp:nomeFmt(d.
   prazo:d.prazo||'',status:STATUS.includes(d.status)?d.status:PADRAO,
   obs:d.acompanhamento||'',criado:d.created_at||''});
 
+/* ── uma pessoa, um nome (Renan, 24/08/2026: "porque aparece Renan e Renan
+   Fortes?") ────────────────────────────────────────────────────────────────
+   O responsável é TEXTO: o seletor oferece o `nome` do perfil e o próprio
+   usuário logado entra pelo nome do login. Quando as duas fontes divergem
+   ("Renan" no perfil × "Renan Fortes" no login), a mesma pessoa vira duas
+   opções e as ações se dividem. O `nomeFmt` já resolve caixa e acento
+   ("RENAN FORTES" → "Renan Fortes"); falta juntar o primeiro nome solto com a
+   versão que tem sobrenome — e isso só é seguro quando existe UMA versão
+   completa com aquele primeiro nome (há dois Pedros no time, não dá para
+   adivinhar de quem é um "Pedro" solto). */
+const _pn=s=>String(s||'').trim().split(/\s+/)[0].toLocaleLowerCase('pt-BR')
+  .normalize('NFD').replace(/[̀-ͯ]/g,'');
+let CANON=new Map();                       // nome como veio → nome de exibição
+function montaCanon(nomes){
+  const m=new Map();                        // primeiro nome → Set de grafias
+  nomes.map(nomeFmt).filter(Boolean).forEach(n=>{
+    const k=_pn(n); if(!m.has(k)) m.set(k,new Set()); m.get(k).add(n);
+  });
+  CANON=new Map();
+  m.forEach((set,k)=>{
+    const todas=[...set];
+    const comSobrenome=todas.filter(n=>n.trim().split(/\s+/).length>1);
+    if(comSobrenome.length!==1) return;     // 0 ou 2+ → ambíguo, não mexe
+    todas.forEach(n=>{ if(n!==comSobrenome[0]) CANON.set(n,comSobrenome[0]); });
+  });
+}
+const canonNome=n=>{const f=nomeFmt(n);return CANON.get(f)||f;};
+
 async function carregar(){
   const {data,error}=await sb.from('planner').select('*').order('created_at',{ascending:true});
   if(error){ $('cols').innerHTML=`<div class="cvazia">Erro ao carregar: ${esc(error.message)}</div>`; return; }
   LINHAS=(data||[]).map(doBanco);
+  montaCanon([...NOMES, ...LINHAS.map(r=>r.resp), EU]);
+  LINHAS.forEach(r=>{ r.resp=canonNome(r.resp); });
+  NOMES=[...new Set(NOMES.map(canonNome))].sort((a,b)=>a.localeCompare(b,'pt'));
+  EU=canonNome(EU);
+  const en=$('euNome'), ea=$('euAv');
+  if(en) en.textContent=EU||'—';
+  if(ea) ea.textContent=iniciais(EU);
   montaMenus(); render();
 }
 
@@ -1097,7 +1132,8 @@ function novoCard(etapa){
 function fechaModal(){ $('mbg').classList.remove('open'); ID=null; }
 $('mbg').addEventListener('click',e=>{ if(e.target===$('mbg')) fechaModal(); });
 async function salvar(){
-  const dados={assunto:$('mAssunto').value,acao:$('mAcao').value.trim(),responsavel:$('mResp').value,
+  // grava sempre o nome canônico — nada de nascer variante nova no banco
+  const dados={assunto:$('mAssunto').value,acao:$('mAcao').value.trim(),responsavel:canonNome($('mResp').value),
     prazo:$('mPrazo').value||null,status:$('mStatus').value,acompanhamento:$('mObs').value.trim()};
   if(!dados.acao && !dados.responsavel && !dados.assunto){ fechaModal(); return; }
   if(ID){
@@ -1185,6 +1221,6 @@ iniciar();
 <script src="../assets/mobile.js?v=202608220020"></script>
 <script src="../assets/ctrlk.js"></script>
 <script src="../assets/excel-export.js"></script>
-<script src="../assets/build-check.js?v=202608230010"></script>
+<script src="../assets/build-check.js?v=202608240500"></script>
 </body>
 </html>
