@@ -376,11 +376,25 @@ async function loadPneus(){
   });
   const inUse=lista.filter(t=>statusAmigavel(t.status)==='Em uso');
   if(inUse.length) lista=inUse;                 // guarda: se o cadastro não trouxe status, não zera o painel
+  // PLACA INATIVA NÃO APARECE (Renan, 24/08/2026): o /vehicles do Prolog já vem
+  // com includeInactive:false, mas as telas são montadas a partir dos PNEUS —
+  // então veículo que saiu da operação continuava listado pelos pneus dele
+  // (ex.: placas de PIRAI com aferição de janeiro). Vale para as três telas de
+  // pneus e para a aderência. Guarda: se a base de veículos não veio, não filtra.
+  const _vAtivo=new Set(merged.vehicles.map(v=>v.id).filter(x=>x!=null));
+  const _plAtiva=new Set(merged.vehicles.map(v=>_normP(v.placa)).filter(Boolean));
+  const ativo=(id,placa)=>id!=null ? _vAtivo.has(id) : _plAtiva.has(_normP(placa));
+  if(_vAtivo.size){
+    const so=lista.filter(t=>ativo(t.veiculoId,t.placa));
+    if(so.length) lista=so;
+  }
   // deduplica por veículo+posição (aferição mais recente) — descarta pneu trocado/removido
   const porPos={};lista.forEach(t=>{const k=(t.veiculoId==null||t.posicao==null)?('sem|'+(t.serial||t.dt)):(t.veiculoId+'|'+t.posicao);const cur=porPos[k];if(!cur||new Date(t.dt)>new Date(cur.dt))porPos[k]=t;});
   const tires=Object.values(porPos);
   // aferição por veículo (última data) p/ aderência
-  const veic={};merged.inspections.forEach(i=>{if(i.veiculoId==null)return;const d=new Date(i.dataInspecao);const cur=veic[i.veiculoId];if(!cur||d>cur.dt)veic[i.veiculoId]={cod:i._cod,tier:i._tier||'',dt:d};});
+  const veic={};merged.inspections.forEach(i=>{if(i.veiculoId==null)return;
+    if(_vAtivo.size&&!_vAtivo.has(i.veiculoId))return;      // veículo fora da operação não conta na aderência
+    const d=new Date(i.dataInspecao);const cur=veic[i.veiculoId];if(!cur||d>cur.dt)veic[i.veiculoId]={cod:i._cod,tier:i._tier||'',dt:d};});
   // PREVISÃO DE TROCA — motor idêntico ao painel /pneus/ (km/dia da Km/L + cascata de taxa de desgaste)
   let KMDIA={placa:{},modelo:{},cidade:{}};
   try{ KMDIA=await loadKmDiaFarol(); }catch(e){ console.warn('Km/L não carregou — previsão usa km/dia do odômetro.',e); }
