@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-<meta name="build" content="202608250100">
+<meta name="build" content="202608250200">
 <title>Gestão à Vista</title>
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -261,8 +261,13 @@ table.dre td.cg-t,.cg-t{color:var(--verde)!important;font-weight:700;}
   .side{width:auto;flex:none;border-right:0;border-bottom:1px solid var(--linha);padding:8px 10px;overflow:visible;}
   .side.mini{width:auto;flex:none;padding:8px 10px;}
   .s-user,.s-top,.s-sec{display:none;}
-  /* as visões viram uma fileira que rola de lado */
-  .side{display:flex;flex-direction:row;gap:6px;overflow-x:auto;scrollbar-width:none;}
+  /* as visões viram uma fileira que rola de lado. Os itens moram dentro de
+     #navVis e #navInd: sem o display:contents, o flex row alinha os DOIS
+     CONTÊINERES lado a lado e cada um empilha os seus itens — o menu virava
+     duas colunas ocupando meia tela do celular (24/08/2026). */
+  .side{display:flex;flex-direction:row;gap:6px;overflow-x:auto;scrollbar-width:none;
+    flex-wrap:nowrap;align-items:center;}
+  #navVis,#navInd,#pdf-slot{display:contents;}
   .side::-webkit-scrollbar{display:none;}
   .side .s-item{width:auto;flex:0 0 auto;white-space:nowrap;font-size:12px;padding:7px 11px;
     border:1px solid var(--card-brd);border-radius:20px;}
@@ -428,6 +433,22 @@ body.prehub .s-uni{display:none;}   /* já está nas unidades — a seta de volt
 .uhub-name{font-size:11px;color:var(--txt2);text-transform:uppercase;letter-spacing:.5px;}
 .uhub-go{font-size:11px;font-weight:700;color:var(--txt3);margin-top:auto;padding-top:10px;}
 .uhub-card.admin{border-color:rgba(249,115,22,.45);background:rgba(249,115,22,.10);}
+
+/* ── CELULAR: ajustes que precisam vir DEPOIS ────────────────────────────────
+   As grades do farol (.kpis-farol) e dos quadrantes (.sec-body.solto .quads)
+   são declaradas depois do @media lá de cima, então venciam por ordem e o
+   celular ficava com 4 colunas de card cortando texto e dois quadrantes
+   espremidos (24/08/2026). */
+@media(max-width:860px){
+  .kpis,.kpis-farol{grid-template-columns:repeat(2,1fr)!important;gap:8px;}
+  .kpis-farol .kpi{padding:10px 12px;}
+  .kpis-farol .kl{font-size:9px;letter-spacing:.4px;}
+  .kpis-farol .kv{font-size:20px;}
+  .sec-body.solto .quads{grid-template-columns:1fr!important;height:auto;grid-auto-rows:auto;}
+  .sec-body.solto{height:auto;}
+  .quad{min-height:0;}
+  .uhub-grid{grid-template-columns:repeat(auto-fill,minmax(150px,1fr));}
+}
 </style>
 </head>
 <body>
@@ -495,7 +516,7 @@ body.prehub .s-uni{display:none;}   /* já está nas unidades — a seta de volt
 
 <div class="dica" id="dica"></div>
 
-<script src="../farol-frota/farol-core.js?v=202608250100"></script>
+<script src="../farol-frota/farol-core.js?v=202608250200"></script>
 <script>
 /* ══════════════════════════════════════════════════════════════════════
    Gestão à Vista — o Farol no layout padrão do portal (Renan, 21/08/2026).
@@ -1101,6 +1122,6 @@ initPdfExport({
   isLight:()=>document.body.classList.contains('claro'), setTheme:t=>aplicaTema(t==='light'?'light':'dark')
 });
 </script>
-<script src="../assets/build-check.js?v=202608250100"></script>
+<script src="../assets/build-check.js?v=202608250200"></script>
 </body>
 </html>
