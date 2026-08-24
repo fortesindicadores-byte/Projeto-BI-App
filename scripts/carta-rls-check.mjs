@@ -28,6 +28,21 @@ async function get(path) {
   return r.json();
 }
 
+// Tenta ler as policies reais (algumas instalações expõem o pg-meta do Studio).
+// Se nenhuma rota responder, seguimos pelo diagnóstico indireto abaixo.
+for (const p of ['/pg/policies', '/platform/pg-meta/default/policies']) {
+  try {
+    const r = await fetch(URL_BASE + p, { headers: H });
+    if (!r.ok) { console.log(`policies via ${p}: HTTP ${r.status}`); continue; }
+    const js = await r.json();
+    const carta = (Array.isArray(js) ? js : []).filter(x => x.table === 'carta_custos');
+    console.log(`\n── Policies REAIS da carta_custos (via ${p}) ──`);
+    carta.forEach(x => console.log(`  ${x.name} [${x.command}] using=${x.definition} check=${x.check}`));
+    console.log('');
+    break;
+  } catch (e) { console.log(`policies via ${p}: ${e.message}`); }
+}
+
 const perfis = await get('fca_profiles?select=user_id,nome,unidade,is_admin&order=unidade');
 const multi = perfis.filter(p => String(p.unidade || '').includes(','));
 console.log(`Perfis: ${perfis.length} · com MAIS DE UMA unidade: ${multi.length}\n`);
