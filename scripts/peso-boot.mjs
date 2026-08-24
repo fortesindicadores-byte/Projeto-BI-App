@@ -64,7 +64,20 @@ try {
     .forEach(([k, o]) => console.log(`    ${k.padEnd(28)} ${kb(o.b).padStart(9)}  ${o.n} registro(s)`));
 } catch (e) { console.log('  (não deu para quebrar o elite:', e.message, ')'); }
 
-const totalGAV = gin.bytes + conf.bytes + confDet.bytes + fca.bytes;
-console.log('\n─'.repeat(84));
-console.log(`Gestão à Vista baixa no boot: ${mb(totalGAV)}`);
-console.log(`GerotBase (Scorecard e cia)  : ${mb(elite.bytes)}`);
+// mesma consulta, mas só com os indicadores que o leitor usa (sem o
+// conformidade-detalhe, que é do Gestão à Vista)
+const MES_INDS = ['disponibilidade','preventivas','pneus','checklist-t1','checklist-t2','checklist-wh',
+                  'conformidade','conformidade-mar','stress-test-frota','stress-test-empilhadeira',
+                  'civf','sla-manutencao'];
+const eliteF = await medir('elite_snapshot (só os indicadores usados)',
+  `elite_snapshot?select=indicador,vigencia,escopo,data,updated_at&indicador=in.(${MES_INDS.join(',')})`);
+
+// o GAV baixa só a vigência mais nova do detalhe, não as 8
+const confDet1 = await medir('conformidade-detalhe (1 vigência — o que o GAV lê)',
+  'elite_snapshot?select=vigencia,data,updated_at&indicador=eq.conformidade-detalhe&order=vigencia.desc&limit=1');
+
+const totalGAV = gin.bytes + conf.bytes + confDet1.bytes + fca.bytes;
+console.log('\n' + '─'.repeat(84));
+console.log(`Gestão à Vista baixa no boot : ${mb(totalGAV)}`);
+console.log(`GerotBase — como era         : ${mb(elite.bytes)} em ${elite.ms} ms`);
+console.log(`GerotBase — com o filtro     : ${mb(eliteF.bytes)} em ${eliteF.ms} ms`);
