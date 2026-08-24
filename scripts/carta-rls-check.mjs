@@ -33,9 +33,17 @@ const multi = perfis.filter(p => String(p.unidade || '').includes(','));
 console.log(`Perfis: ${perfis.length} · com MAIS DE UMA unidade: ${multi.length}\n`);
 
 // A tabela existe? Quais unidades já têm lançamento?
-let linhas = [];
-try { linhas = await get('carta_custos?select=id,unidade,vigencia,created_by&limit=10000'); }
-catch (e) { console.log('carta_custos:', e.message); }
+// colunas variam entre ambientes: descobre pela primeira linha e só então pede o resto
+let linhas = [], COLS = [];
+try {
+  const amostra = await get('carta_custos?select=*&limit=1');
+  COLS = amostra.length ? Object.keys(amostra[0]) : [];
+  const quem = ['created_by', 'user_id', 'autor', 'criado_por'].find(c => COLS.includes(c)) || null;
+  console.log('Colunas da carta_custos:', COLS.join(', ') || '(tabela vazia)');
+  console.log('Coluna de autor:', quem || '(nenhuma — não dá para saber quem lançou)\n');
+  linhas = await get(`carta_custos?select=id,unidade,vigencia${quem ? ',' + quem : ''}&limit=10000`);
+  if (quem && quem !== 'created_by') linhas.forEach(l => { l.created_by = l[quem]; });
+} catch (e) { console.log('carta_custos:', e.message); }
 const porUni = new Map();
 linhas.forEach(l => porUni.set(l.unidade, (porUni.get(l.unidade) || 0) + 1));
 console.log(`carta_custos: ${linhas.length} linha(s)`);
