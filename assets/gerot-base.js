@@ -133,11 +133,19 @@
   // ── elite_snapshot em cache: E[escopo][indicador][vig 'YYYY-MM'] = rows ──
   let E=null;
   const PCT_INDS=['disponibilidade','preventivas','checklist-t2','checklist-t1','checklist-wh','conformidade','sla-manutencao'];
+  // Indicadores que ESTE leitor consome. Sem a lista, o select de escopo 'mes'
+  // trazia a tabela inteira — inclusive o `conformidade-detalhe` (3,1 MB de
+  // cobrança por placa, que é do Gestão à Vista e nunca é lido aqui). Medido em
+  // 24/08/2026: 15,55 MB e 5,3 s na abertura do Scorecard; com o filtro, ~12 MB.
+  // Indicador novo só aparece no painel se entrar NESTA lista.
+  const MES_INDS=['disponibilidade','preventivas','pneus','checklist-t1','checklist-t2','checklist-wh',
+                  'conformidade','conformidade-mar','stress-test-frota','stress-test-empilhadeira',
+                  'civf','sla-manutencao'];
   async function fetchElite(){
     if(E) return E;
     const sb = global.supabase.createClient(GEM_URL, GEM_KEY);
     const [mes, ano] = await Promise.all([
-      sb.from('elite_snapshot').select('indicador,vigencia,data').eq('escopo','mes'),
+      sb.from('elite_snapshot').select('indicador,vigencia,data').eq('escopo','mes').in('indicador', MES_INDS),
       // 'conformidade-mar' (acumulado mar→M das empurradas) saiu: março deixou de
       // contar para elas em 18/08/2026, então aquela janela ficou contaminada.
       sb.from('elite_snapshot').select('indicador,vigencia,data').eq('escopo','ano').in('indicador', PCT_INDS),
