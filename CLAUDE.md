@@ -662,7 +662,7 @@ A página **não rola** — o app ocupa a tela e cada área resolve o próprio e
             linear-gradient(45deg,#202022 0%,#202022 100%);   /* UNIFORME, ver nota abaixo */
   --luz:      inset 0 1px 0 rgba(255,255,255,.09);
   --luz-card: inset 0 1px 0 rgba(255,255,255,.08);
-  --app:      rgba(18,18,18,.30);   --side:  rgba(30,30,30,.50);
+  --app:      rgba(30,40,60,.34);   --side:  rgba(30,30,30,.50);
   --card:     rgba(44,44,46,.78);   --linha: rgba(255,255,255,.06);
   --card-brd: rgba(255,255,255,.07);
   --brilho:   linear-gradient(180deg,rgba(255,255,255,.022) 0%,rgba(255,255,255,0) 46%);
