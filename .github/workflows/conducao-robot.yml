@@ -7,11 +7,11 @@ on:
   workflow_dispatch:
     inputs:
       modo:
-        description: 'sonda (não grava) · run · recalc · reproc'
+        description: 'sonda (não grava) · ano (01/jan→ontem) · run · recalc · reproc'
         required: true
         default: sonda
         type: choice
-        options: [sonda, run, recalc, reproc]
+        options: [sonda, ano, run, recalc, reproc]
       de:
         description: 'Data inicial YYYY-MM-DD (vazio = ontem)'
         required: false
@@ -19,7 +19,10 @@ on:
         description: 'Data final YYYY-MM-DD (vazio = igual à inicial)'
         required: false
   schedule:
-    - cron: '20 10 * * *'   # 07:20 BRT — coleta o dia anterior
+    # O painel mostra 01/jan → hoje, então o cron roda no modo `ano`: ele pula
+    # os dias já gravados e coleta só o que falta. No dia a dia isso é um dia
+    # só (~5 min); depois de um buraco, ele mesmo se recompõe.
+    - cron: '20 10 * * *'   # 07:20 BRT
 
 jobs:
   coletar:
@@ -28,10 +31,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
-        with: { node-version: '20' }
+        with: { node-version: '22' }
       - name: Coletar
         env:
-          CE_MODE: ${{ github.event.inputs.modo || 'run' }}
+          CE_MODE: ${{ github.event.inputs.modo || 'ano' }}
           CE_DE:   ${{ github.event.inputs.de }}
           CE_ATE:  ${{ github.event.inputs.ate }}
           GEM_SUPABASE_SERVICE_KEY: ${{ secrets.GEM_SUPABASE_SERVICE_KEY }}
