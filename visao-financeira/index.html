@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
-<meta name="build" content="202608251720">
+<meta name="build" content="202608252000">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <title>Visão Financeira · DRE Frota</title>
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -186,6 +186,8 @@ body.claro .ms-panel{box-shadow:0 18px 44px rgba(15,23,42,.20), 0 3px 10px rgba(
 .hlbl{font-size:9.5px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:.9px;}
 .hval{font-size:clamp(26px,3.6vh,40px);font-weight:800;line-height:1;margin:4px 0 7px;color:var(--txt);}
 .hdel{display:flex;gap:18px;flex-wrap:wrap;}
+/* margem líquida ao lado do EBITDA — mesma linha, menor e apagada */
+.hmg{font-size:.46em;font-weight:700;color:var(--txt3);letter-spacing:0;margin-left:7px;}
 .hdel div{font-size:9px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:.7px;}
 .hdel b{display:block;font-size:13px;font-weight:800;color:var(--txt);margin-top:2px;letter-spacing:0;text-transform:none;}
 .kpis{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;flex:0 0 auto;}
@@ -470,6 +472,8 @@ table.dre tr.rec-row td.conta{font-weight:800;}
             <div class="hlbl">Receita Líquida</div>
             <div class="hval" id="h-real">—</div>
             <div class="hdel">
+              <div>Orçado<b id="h-orc">—</b></div>
+              <div>Rem.<b id="h-rem">—</b></div>
               <div>Δ Orç. %<b id="h-dorc">—</b></div>
               <div>Δ Rem. %<b id="h-drem">—</b></div>
               <div>YoY %<b id="h-yoy">—</b></div>
@@ -477,8 +481,10 @@ table.dre tr.rec-row td.conta{font-weight:800;}
           </div>
           <div class="heb">
             <div class="hlbl">EBITDA</div>
-            <div class="hval" id="h-ebitda">—</div>
+            <div class="hval"><span id="h-ebitda">—</span><span class="hmg" id="h-ebmg"></span></div>
             <div class="hdel">
+              <div>Orçado<b id="he-orc">—</b></div>
+              <div>Rem.<b id="he-rem">—</b></div>
               <div>Δ Orç. %<b id="he-dorc">—</b></div>
               <div>Δ Orç. pp<b id="he-porc">—</b></div>
               <div>Δ Rem. %<b id="he-drem">—</b></div>
@@ -1049,6 +1055,7 @@ function aggByKey(rows, getDimKey){
 function renderHeroCards(mes, prev){
   const r=rl(mes), rp=rl(prev);
   set('h-real', fmt(r.real));
+  set('h-orc', fmt(r.orc)); set('h-rem', fmt(r.rem));
   const dOrc = r.orc  ? (r.real-r.orc) /Math.abs(r.orc) *100 : null;
   const dRem = r.rem  ? (r.real-r.rem) /Math.abs(r.rem) *100 : null;
   const yoy  = rp.real? (r.real-rp.real)/Math.abs(rp.real)*100: null;
@@ -1073,9 +1080,10 @@ function renderHeroCards(mes, prev){
   setArr($('c-drem-p'), pct(dCRemP), dCRemP);
 }
 function renderEbitdaHero(cur, prev, rec){
-  const ALL=['he-dorc','he-porc','he-drem','he-prem','he-yoy'];
-  if(!cur){ set('h-ebitda','—'); ALL.forEach(id=>{const e=$(id);if(e){e.textContent='—';e.style.color='';}}); return; }
+  const ALL=['he-orc','he-rem','he-dorc','he-porc','he-drem','he-prem','he-yoy'];
+  if(!cur){ set('h-ebitda','—'); set('h-ebmg',''); ALL.forEach(id=>{const e=$(id);if(e){e.textContent='—';e.style.color='';}}); return; }
   set('h-ebitda', fmt(cur.real));
+  set('he-orc', fmt(cur.orc)); set('he-rem', fmt(cur.rem));
   const dOrc = cur.orc ? (cur.real-cur.orc)/Math.abs(cur.orc)*100 : null;
   const dRem = cur.rem ? (cur.real-cur.rem)/Math.abs(cur.rem)*100 : null;
   const yoy  = (prev&&prev.real) ? (cur.real-prev.real)/Math.abs(prev.real)*100 : null;
@@ -1089,6 +1097,8 @@ function renderEbitdaHero(cur, prev, rec){
   setArr($('he-drem'), pct(dRem), dRem, dRem<0);
   setArr($('he-prem'), pp(ppR),   ppR,  ppR<0);
   setArr($('he-yoy'),  pct(yoy),  yoy,  yoy<0);
+  // margem líquida ao lado do realizado: EBITDA ÷ Receita Líquida (o avR acima)
+  set('h-ebmg', avR==null||!isFinite(avR) ? '' : '('+avR.toFixed(1).replace('.',',')+'%)');
 }
 function renderAVCards(mes, prev){
   const r=rl(mes), rp=rl(prev);
@@ -2072,6 +2082,6 @@ initPdfExport({
   isLight:()=>document.body.classList.contains('claro'), setTheme:aplicaTema
 });
 </script>
-<script src="../assets/build-check.js?v=202608251720"></script>
+<script src="../assets/build-check.js?v=202608252000"></script>
 </body>
 </html>
