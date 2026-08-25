@@ -287,15 +287,30 @@ async function garanteMotoristas(linhas) {
   if (!r.ok) console.log('ce_motoristas:', r.status, (await r.text()).slice(0, 200));
 }
 
+// PostgREST devolve no máximo 1.000 linhas por chamada. Com o ano inteiro em
+// ce_diario (237 dias × N motoristas) isso corta o mensal em silêncio — daí a
+// paginação por Range.
+async function sbTodos(caminho) {
+  const out = []; const PASSO = 1000;
+  for (let de = 0; ; de += PASSO) {
+    const r = await fetch(`${SB_URL}/rest/v1/${caminho}`, {
+      headers: { ...H_SB, Range: `${de}-${de + PASSO - 1}` } });
+    if (!r.ok) throw new Error(`${caminho}: ${r.status} ${(await r.text()).slice(0, 200)}`);
+    const lote = await r.json();
+    out.push(...lote);
+    if (lote.length < PASSO) return out;
+  }
+}
+// dias que JÁ estão gravados no intervalo — é o que permite retomar um backfill
+async function diasGravados(de, ate) {
+  const linhas = await sbTodos(`ce_diario?select=dia&dia=gte.${de}&dia=lte.${ate}`);
+  return new Set(linhas.map(l => String(l.dia).slice(0, 10)));
+}
+
 // mensal = média dos dias ponderada por km (quem rodou mais pesa mais)
 async function recalculaMes(de, ate) {
-  const q = `${SB_URL}/rest/v1/ce_diario?select=*&dia=gte.${de}&dia=lte.${ate}`;
-  const r = await fetch(q, { headers: H_SB });
-  if (!r.ok) throw new Error(`ce_diario select: ${r.status}`);
-  const dias = await r.json();
-
-  const rm = await fetch(`${SB_URL}/rest/v1/ce_motoristas?select=chave,nome,unidade,fonte`, { headers: H_SB });
-  const cad = new Map((await rm.json() || []).map(m => [m.chave, m]));
+  const dias = await sbTodos(`ce_diario?select=*&dia=gte.${de}&dia=lte.${ate}`);
+  const cad = new Map((await sbTodos('ce_motoristas?select=chave,nome,unidade,fonte')).map(m => [m.chave, m]));
 
   const grupos = new Map();
   dias.forEach(d => {
@@ -349,8 +364,16 @@ async function recalculaMes(de, ate) {
 // ── main ────────────────────────────────────────────────────────────────────
 const hoje = new Date();
 const ontem = new Date(hoje.getTime() - 864e5);
-const DE  = process.env.CE_DE  || iso(ontem);
-const ATE = process.env.CE_ATE || DE;
+// modo `ano`: 1º de janeiro do ano corrente até ontem — é o recorte que o
+// painel usa (Renan, 25/08/2026: "janeiro até hoje sempre").
+const ANO = MODE === 'ano';
+const DE  = process.env.CE_DE  || (ANO ? iso(ontem).slice(0, 4) + '-01-01' : iso(ontem));
+const ATE = process.env.CE_ATE || iso(ontem);
+// teto de execução: o job do Actions morre em 6h. O robô para antes, avisa
+// quantos dias faltam e o próximo disparo continua de onde parou (os dias já
+// gravados são pulados). 237 dias × 5 min = ~20h, então o ano leva 4 rodadas.
+const LIMITE_MS = (+process.env.CE_LIMITE_MIN || 300) * 60 * 1000;
+const T0 = Date.now();
 
 console.log(`modo=${MODE} · período ${DE} → ${ATE}`);
 console.log(`fontes: vFleets=${VF_TOKEN ? 'com token' : 'SEM TOKEN'} · Geotab=${GT_USER ? 'com usuário' : 'SEM CREDENCIAL'}`);
@@ -395,10 +418,26 @@ if (MODE === 'reproc') {
   await new Promise(r => setTimeout(r, PAUSA));   // a consulta acima já gastou a janela
 } else {
   for (let d = new Date(DE + 'T12:00:00Z'); iso(d) <= ATE; d.setDate(d.getDate() + 1)) AGENDA.push(iso(d));
+  // retomada: dia que já está no ce_diario não é recoletado. Sem isto, o
+  // backfill do ano recomeçaria do zero a cada disparo e nunca terminaria.
+  // CE_REFAZER=1 ignora e recoleta tudo.
+  if (AGENDA.length > 1 && process.env.CE_REFAZER !== '1') {
+    const jaTem = await diasGravados(DE, ATE);
+    const antes = AGENDA.length;
+    AGENDA = AGENDA.filter(d => !jaTem.has(d));
+    if (antes !== AGENDA.length) console.log(`${antes - AGENDA.length} dia(s) já gravado(s) — pulando`);
+  }
 }
+if (!AGENDA.length) {
+  const n = await recalculaMes(DE.slice(0, 8) + '01', ATE);
+  console.log(`nada a coletar — período completo. mensal: ${n} linha(s)`);
+  process.exit(0);
+}
+console.log(`${AGENDA.length} dia(s) a coletar · ~${Math.round(AGENDA.length * PAUSA / 6e4)} min a 1 chamada/5 min`);
 
-let total = 0, falhas = 0, semUnidade = new Set();
+let total = 0, falhas = 0, semUnidade = new Set(), parou = 0;
 for (let i = 0; i < AGENDA.length; i++) {
+  if (Date.now() - T0 > LIMITE_MS) { parou = AGENDA.length - i; break; }
   const dia = AGENDA[i];
   try {
     const { lista, erro } = await vfleetsDia(dia);
@@ -417,5 +456,7 @@ for (let i = 0; i < AGENDA.length; i++) {
 }
 const n = await recalculaMes(DE.slice(0, 8) + '01', ATE);
 console.log(`\ngravado: ${total} linha(s) diárias · mensal: ${n} linha(s)` + (falhas ? ` · ${falhas} dia(s) com falha` : ''));
+if (parou) console.log(`\n⏱  teto de ${LIMITE_MS / 6e4} min atingido — faltam ${parou} dia(s).`
+  + `\n   Redispare o MESMO período: os dias já gravados são pulados e a coleta continua de onde parou.`);
 if (semUnidade.size) console.log(`UOs vistas na vFleets (falta o de-para p/ unidade do portal): ${[...semUnidade].join(' · ')}`);
 if (falhas && !total) process.exit(1);
