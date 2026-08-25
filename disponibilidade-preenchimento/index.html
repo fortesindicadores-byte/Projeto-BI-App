@@ -2,6 +2,7 @@
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
+<meta name="build" content="202608251900">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <title>Disponibilidade · Frota do Dia</title>
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -384,6 +385,10 @@ input[type=date]::-webkit-calendar-picker-indicator{cursor:pointer;}
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
       Nova indisponibilidade
     </button>
+    <button class="s-item" id="itCheck" onclick="confirmarSemAlteracao()" title="Use quando a frota do dia continua igual — nenhuma parada nova e nenhum retorno. O dia passa a contar na Aderência, em vez de aparecer como não preenchido.">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M8.5 12.2l2.4 2.4 4.6-4.9"/></svg>
+      <span id="itCheckTxt">Sem alterações hoje</span>
+    </button>
     <button class="s-item" id="itVeic" onclick="novoVeiculo()" style="display:none">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
       Veículo
@@ -660,6 +665,40 @@ async function loadEvents(){
   if(error)throw error;
   EVENTS=data||[];
 }
+/* ── "Sem alterações hoje" ────────────────────────────────────────────────────
+   Dia em que a frota não mudou (nenhuma parada nova, nenhum retorno) não gera
+   evento nenhum — e a Aderência, que conta create/update de evento, marcava a
+   unidade como não preenchida. O check-in é o registro explícito de "olhei e
+   está tudo igual": vale como preenchimento do dia, com quem confirmou e quando.
+   A tabela disp_checkins é APPEND-ONLY (ninguém apaga) — é a auditoria.        */
+let CHECKS={};                 // unidade → { 'YYYY-MM-DD': [{nome,created_at}] }
+async function loadChecks(){
+  CHECKS={};
+  try{
+    const {data,error}=await sb.from('disp_checkins').select('unidade,data,nome,created_at')
+      .in('unidade',MY_UNITS).gte('data',ADER_INICIO).limit(4000);
+    if(error)throw error;
+    (data||[]).forEach(c=>{
+      const d=String(c.data).slice(0,10);
+      ((CHECKS[c.unidade]=CHECKS[c.unidade]||{})[d]=CHECKS[c.unidade][d]||[]).push(c);
+    });
+  }catch(e){ CHECKS={}; }      // tabela ausente: a tela segue como antes
+}
+const checouEm=(u,d)=>!!(CHECKS[u]&&CHECKS[u][d]);
+// unidades que já "preencheram" HOJE: mexeram em evento OU confirmaram sem
+// alterações. O pré-filtro por prefixo da data evita rodar o toLocaleDateString
+// (caro) nos milhares de eventos antigos — só os de ontem/hoje em UTC podem
+// cair no dia de hoje em BRT.
+function tocaramHoje(){
+  const hj=hojeBRT(), out=new Set();
+  const ont=new Date(new Date(hj+'T12:00').getTime()-864e5).toISOString().slice(0,10);
+  const ehHoje=t=>{ if(!t)return false; const p=String(t).slice(0,10);
+    return (p===hj||p===ont) && new Date(t).toLocaleDateString('en-CA',{timeZone:'America/Sao_Paulo'})===hj; };
+  EVENTS.forEach(e=>{ if(e.unidade&&!out.has(e.unidade)&&(ehHoje(e.created_at)||ehHoje(e.updated_at))) out.add(e.unidade); });
+  Object.keys(CHECKS).forEach(u=>{ if(CHECKS[u][hj]) out.add(u); });
+  return out;
+}
+
 /* ── o filtro DATA é o dia do HISTÓRICO (a foto daquele dia), não a data de
       parada do evento (Renan, 15/08/2026). A lista de dias vem da view
       disp_dias — uma linha por dia, em vez das ~30 mil das duas fotos.       */
@@ -1190,19 +1229,33 @@ async function renderAderencia(){
       if(!ultimo[u]||t>ultimo[u].t) ultimo[u]={t,quem};
     });
   });
+  // "Sem alterações hoje" conta como preenchimento do dia: dia em que a frota
+  // não muda não gera evento, e sem isso a unidade caía como não aderente.
+  Object.entries(CHECKS).forEach(([u,dd])=>{
+    Object.entries(dd).forEach(([d,cs])=>{
+      if(d<ADER_INICIO)return;
+      const set=((toques[u]=toques[u]||{})[d]=toques[u][d]||new Set());
+      cs.forEach(c=>{ set.add(c.nome||'—');
+        if(!ultimo[u]||c.created_at>ultimo[u].t) ultimo[u]={t:c.created_at,quem:null,nome:c.nome}; });
+    });
+  });
   const nome=id=>(perfis[id]&&perfis[id].nome)||(id?'—':'—');
   const linhas=unisSel().map(u=>{
     const dd=toques[u]||{};
     const feitos=dias.filter(d=>dd[d]).length;
     const pct=dias.length?feitos/dias.length*100:null;
     const ult=ultimo[u];
-    const pessoas=[...new Set(Object.values(dd).flatMap(s=>[...s]))].map(nome).filter(n=>n&&n!=='—');
-    const hj=!!dd[hoje];
-    return {u,feitos,total:dias.length,pct,ult,pessoas,hj};
+    // o check-in já guarda o NOME de quem confirmou; o evento guarda o user_id
+    const pessoas=[...new Set(Object.values(dd).flatMap(s=>[...s]))]
+      .map(v=>(perfis[v]&&perfis[v].nome)||v).filter(n=>n&&n!=='—');
+    const hj=!!dd[hoje], soCheck=checouEm(u,hoje)&&!EVENTS.some(e=>e.unidade===u&&
+      [e.created_at,e.updated_at].some(t=>t&&diaDe(t)===hoje));
+    return {u,feitos,total:dias.length,pct,ult,pessoas,hj,soCheck};
   }).sort((a,b)=>(a.pct??-1)-(b.pct??-1));
   const qdo=t=>{ if(!t)return '—';
     const d=new Date(t), dia=diaDe(t)===hoje?'hoje':d.toLocaleDateString('pt-BR',{timeZone:'America/Sao_Paulo'});
     return dia+' '+d.toLocaleTimeString('pt-BR',{timeZone:'America/Sao_Paulo',hour:'2-digit',minute:'2-digit'}); };
+  const quemUlt=x=>x.ult?(x.ult.nome||nome(x.ult.quem)):'';
   const corP=v=>v==null?'var(--txt3)':v>=90?'var(--verde)':v>=60?'var(--ambar)':'var(--vermelho)';
   const okHoje=linhas.filter(x=>x.hj).length;
   $('cols').innerHTML=`
@@ -1213,7 +1266,7 @@ async function renderAderencia(){
       <div style="padding-bottom:8px">
         <div class="rlbl">Janela</div>
         <b class="rval">${dataBR(ADER_INICIO)} → ${dataBR(hoje)}</b>
-        <div style="font-size:10px;color:var(--txt3);margin-top:2px">${dias.length} dia(s) útil(eis) · conta quem criou ou mexeu em evento no dia</div>
+        <div style="font-size:10px;color:var(--txt3);margin-top:2px">${dias.length} dia(s) útil(eis) · conta quem criou ou mexeu em evento no dia, ou confirmou que não houve alteração</div>
       </div>
     </div>
     <div class="tab-wrap">
@@ -1224,8 +1277,8 @@ async function renderAderencia(){
         <td class="forte">${esc(x.u)}</td>
         <td class="num">${x.feitos}<span style="color:var(--txt3)">/${x.total}</span></td>
         <td class="num"><b style="color:${corP(x.pct)}">${x.pct==null?'—':x.pct.toFixed(0)+'%'}</b></td>
-        <td>${x.hj?'<span class="tag" style="--c:var(--verde)">sim</span>':'<span class="tag" style="--c:var(--vermelho)">não</span>'}</td>
-        <td>${qdo(x.ult&&x.ult.t)}${x.ult&&x.ult.quem?` · <span style="color:var(--txt2)">${esc(nome(x.ult.quem))}</span>`:''}</td>
+        <td>${x.hj?`<span class="tag" style="--c:var(--verde)"${x.soCheck?' title="confirmado sem alterações"':''}>sim</span>`:'<span class="tag" style="--c:var(--vermelho)">não</span>'}</td>
+        <td>${qdo(x.ult&&x.ult.t)}${quemUlt(x)?` · <span style="color:var(--txt2)">${esc(quemUlt(x))}</span>`:''}</td>
         <td class="livre">${x.pessoas.length?esc(x.pessoas.join(', ')):'<span style="color:var(--txt3)">—</span>'}</td></tr>`).join('')}</tbody></table>
     </div>
   </div>`;
@@ -1255,6 +1308,14 @@ function pintaLateral(){
            semprev:ab2.filter(e=>daVisao(e,'semprev')).length,
            semrcoc:ab2.filter(e=>daVisao(e,'semrcoc')).length};
   document.querySelectorAll('.n[data-n]').forEach(el=>{el.textContent=N[el.dataset.n]||'';});
+  // "Sem alterações hoje": vira "Hoje já confirmado" quando o recorte inteiro
+  // já preencheu — assim ninguém clica achando que faltou fazer.
+  const btC=$('itCheck'), txC=$('itCheckTxt');
+  if(btC&&txC){
+    const ok=tocaramHoje(), falta=unisSel().filter(u=>!ok.has(u));
+    txC.textContent=falta.length?'Sem alterações hoje':'Hoje já confirmado';
+    btC.classList.toggle('on',!falta.length);
+  }
   document.querySelectorAll('.s-item[data-vis]').forEach(b=>b.classList.toggle('on',VISAO===b.dataset.vis));
   document.querySelectorAll('.s-item[data-ver]').forEach(b=>b.classList.toggle('on',VER===b.dataset.ver));
   const itV=$('itVeic'); if(itV) itV.style.display=(UNIT==='ANG')?'':'none';   // cadastro de veículo: só ANG
@@ -1632,6 +1693,37 @@ async function refazerFoto(){
   }
   bt.disabled=false;
 }
+// Confirma o dia para as unidades do recorte atual. Quem já preencheu (por
+// evento ou por check anterior) é PULADO — o botão não serve para carimbar por
+// cima de quem trabalhou, só para fechar o dia de quem não teve o que lançar.
+async function confirmarSemAlteracao(){
+  const hoje=hojeBRT(), ok=tocaramHoje();
+  const alvo=unisSel().filter(u=>!ok.has(u));
+  const jaOk=unisSel().filter(u=>ok.has(u));
+  if(!alvo.length){
+    alert('Nada a confirmar: '+(jaOk.length===1?'a unidade '+jaOk[0]+' já consta como preenchida hoje.'
+      :'as unidades do recorte atual ('+jaOk.join(', ')+') já constam como preenchidas hoje.'));
+    return;
+  }
+  const ab=abertos().length;
+  if(!confirm('Confirmar que HOJE não houve alteração na indisponibilidade de:\n\n  '
+    +alvo.join('\n  ')+'\n\n'+ab+' veículo(s) seguem indisponíveis, sem parada nova e sem retorno.\n'
+    +'O dia passa a contar na Aderência, com o seu nome.'
+    +(jaOk.length?'\n\n(Já preenchidas hoje, fora desta confirmação: '+jaOk.join(', ')+')':''))) return;
+  const bt=$('itCheck'); bt.disabled=true;
+  try{
+    const linhas=alvo.map(u=>({unidade:u,data:hoje,user_id:USER.id,nome:EU,
+      n_indisponiveis:abertos().filter(e=>e.unidade===u).length}));
+    const {error}=await sb.from('disp_checkins').insert(linhas);
+    if(error)throw error;
+    await loadChecks();
+    render();
+    alert('Dia confirmado para: '+alvo.join(', ')+'.');
+  }catch(e){
+    alert('Não foi possível confirmar: '+(e.message||e));
+  }
+  bt.disabled=false;
+}
 function semAcesso(msg){
   $('cols').innerHTML=`<div class="tab-wrap" style="max-width:520px;margin:40px auto;padding:24px;text-align:center">
     <div style="color:var(--vermelho);font-weight:800;font-size:12px;text-transform:uppercase;letter-spacing:1px">Acesso restrito</div>
@@ -1656,6 +1748,7 @@ async function iniciar(){
   // uma unidade só: já entra filtrada nela (não faz sentido escolher)
   if(MY_UNITS.length===1) FUNI.add(MY_UNITS[0]);
   try{ await loadEvents(); }catch(e){ semAcesso('Erro ao carregar os eventos: '+(e.message||e)); return; }
+  await loadChecks();
   // a tela abre com o MÊS ATUAL marcado na Vigência; o dia quem escolhe é o
   // usuário, e sem escolha a lista mostra o último dia com dados (Renan)
   await loadDias();
@@ -1670,5 +1763,6 @@ iniciar();
 <!-- exportação padrão do Gestão em Movimento: botão direito na tabela, no
      gráfico ou no card → Excel · PNG · PNG com fundo transparente -->
 <script src="../assets/excel-export.js"></script>
+<script src="../assets/build-check.js?v=202608251900"></script>
 </body>
 </html>
