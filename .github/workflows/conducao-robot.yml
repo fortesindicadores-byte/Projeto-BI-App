@@ -1,0 +1,43 @@
+name: Conducao Robot
+
+# Coletor de telemetria da Condução Econômica (vFleets · Geotab).
+# A API DaaS aceita 1 requisição a cada 5 minutos, então cada dia coletado
+# custa ~5 min de execução — um mês inteiro leva ~2h30.
+on:
+  workflow_dispatch:
+    inputs:
+      modo:
+        description: 'sonda (não grava) · run · recalc · reproc'
+        required: true
+        default: sonda
+        type: choice
+        options: [sonda, run, recalc, reproc]
+      de:
+        description: 'Data inicial YYYY-MM-DD (vazio = ontem)'
+        required: false
+      ate:
+        description: 'Data final YYYY-MM-DD (vazio = igual à inicial)'
+        required: false
+  schedule:
+    - cron: '20 10 * * *'   # 07:20 BRT — coleta o dia anterior
+
+jobs:
+  coletar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 350
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '20' }
+      - name: Coletar
+        env:
+          CE_MODE: ${{ github.event.inputs.modo || 'run' }}
+          CE_DE:   ${{ github.event.inputs.de }}
+          CE_ATE:  ${{ github.event.inputs.ate }}
+          GEM_SUPABASE_SERVICE_KEY: ${{ secrets.GEM_SUPABASE_SERVICE_KEY }}
+          VFLEETS_TOKEN: ${{ secrets.VFLEETS_TOKEN }}
+          GEOTAB_USER:   ${{ secrets.GEOTAB_USER }}
+          GEOTAB_PASS:   ${{ secrets.GEOTAB_PASS }}
+          GEOTAB_DB:     ${{ secrets.GEOTAB_DB }}
+          GEOTAB_SERVER: ${{ secrets.GEOTAB_SERVER }}
+        run: node scripts/conducao-robot.mjs

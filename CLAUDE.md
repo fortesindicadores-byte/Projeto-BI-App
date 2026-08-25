@@ -1094,6 +1094,19 @@ Painel em `/combustivel/conducao-economica/` (dentro do hub Combustível). **Clo
 
 **Arquitetura combinada:** HTML público não pode ter segredo → **coletor** roda em **GitHub Actions (cron diário)** ou **Supabase Edge Function**, grava normalizado no **Supabase**; o painel troca `generateRawRows()` por leitura da tabela. De-para motorista ↔ unidade ↔ fonte (casar CPF/CNH do vFleets com Driver do Geotab).
 
+**MANUAL DaaS v1.8 LIDO (25/08/2026) — a API NÃO entrega percentual nenhum.** Ela entrega **contadores e tempos em segundos** por *registro de condução* (um registro por identificação de motorista; o mesmo motorista tem VÁRIOS no dia). Todo pilar do painel é derivado no coletor (`scripts/conducao-robot.mjs`, mapa `CAMPOS` + `derivaVF`), somando os contadores do dia **antes** de dividir — média de médias daria o mesmo peso a um trecho de 5 min e a um turno inteiro. Derivações:
+
+| Pilar | Conta |
+|---|---|
+| Faixa Verde de RPM | `(rpmVerdeEconomicaTempo+rpmVerdePotenciaTempo) ÷ (rpmAbaixoVerde+rpmVerdeEconomica+rpmVerdePotencia+rpmAmarelo+rpmVermelho)` — **marcha lenta fica FORA do denominador**, porque ela é o pilar seguinte |
+| Marcha Lenta | `motorOciosoTempo ÷ tempoDirecao` (sem `motorOcioso`, cai em `rpmMarchaLentaTempo`) |
+| Aceleração / Freada | `aceleracoesQtd` e `frenagensQtd` por 100 km |
+| Velocidade | `(via1 + 2×via2 + 3×via3) ÷ tempoMovimento` — faixa 1 = até 20% acima, 2 = 20–30%, 3 = >30%. Usa `velocidadeViaFaixa*` (limite **da via**); `velocidadeFaixa*` (limite configurado) é o fallback |
+| Freio Motor & Banguela | `freioMotorTempo ÷ tempoMovimento`, **menos** `banguelaTempo ÷ tempoMovimento` (desconto 1:1, a calibrar) |
+| Câmbio | `batendoTransmissaoTempo ÷ tempoMovimento` |
+
+Outras regras do manual que viram código: **`kmCalculado=true` é obrigatório na chamada** — sem ele o registro "sem motorista" do dia repete km e a soma infla (seção *KM Inicial/Final e diferença entre KMs diários*); km vem em **metros**, como `kmInicial`/`kmFinal`. **`inicio`/`fim` nulos = período SEM motorista identificado** → a linha é descartada (não é de ninguém). **1 requisição a cada 5 minutos por token**, senão 429 — o `run` pausa 305 s entre dias (um mês ≈ 2h30, por isso `timeout-minutes: 350` no workflow). `GET /processamentos?inicio=&fim=` lista `{diaConducao, diaReprocessamento, veiculoId, veiculoUoId}` filtrando pela **data do reprocessamento** → modo `reproc` recoleta só os dias que mudaram. Chave do motorista = `cpf` → `cnh` → `documentoIdentificador`; a `uo` do motorista vem no JSON mas o **de-para UO → unidade do portal é do Renan** — o robô não inventa unidade, só lista as UOs vistas no fim do log.
+
 **Roteiro em fases (definido pelo usuário):**
 1. **Fase 1** — este painel de BI (ranking/score de condução econômica). ← em andamento
 2. **Fase 2** — app do motorista: ele se cadastra e acompanha como está.
