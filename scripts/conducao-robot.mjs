@@ -39,7 +39,10 @@ const VF_BASE   = process.env.VFLEETS_URL || 'https://api.vfleets.com.br/integra
 const VF_URL    = `${VF_BASE}/conducoes/detalhada`;
 const VF_PROC   = `${VF_BASE}/processamentos`;
 const PAUSA     = (+process.env.CE_PAUSA || 305) * 1000;   // 1 req / 5 min (manual DaaS)
-const GT_USER   = process.env.GEOTAB_USER, GT_PASS = process.env.GEOTAB_PASS, GT_DB = process.env.GEOTAB_DB;
+const GT_USER   = process.env.GEOTAB_USER, GT_PASS = process.env.GEOTAB_PASS;
+// database do MyGeotab. O acesso é pela conta Argus/Ambev (Renan, 26/08/2026):
+// a credencial é o próprio login do MyGeotab, sem token à parte.
+const GT_DB     = process.env.GEOTAB_DB || 'ambev';
 const GT_SERVER = process.env.GEOTAB_SERVER || 'my.geotab.com';
 
 // ── régua de pontos: a MESMA que o painel já usa (o `fmt` de cada pilar é o
@@ -161,6 +164,123 @@ async function geotabLogin() {
   if (!GT_USER || !GT_PASS || !GT_DB) return null;
   const res = await geotabRpc('Authenticate', { userName: GT_USER, password: GT_PASS, database: GT_DB });
   return { ...res.credentials, path: res.path };
+}
+
+/* ── Geotab: o que dá para extrair ──────────────────────────────────────────
+   `Trip` já vem agregado por viagem e traz quase tudo de que precisamos:
+     distance (km) · drivingDuration · idlingDuration · speedRange1/2/3Duration
+   Aceleração e freada bruscas NÃO são propriedade da viagem: são regras, e
+   chegam como `ExceptionEvent`. Isso significa que **se a regra estiver
+   desligada na conta, o evento não existe** — e o pilar fica vazio sem erro
+   nenhum. A sonda lista as regras da conta justamente para conferir isso.
+   RPM em faixa verde não existe pronto no Geotab (precisaria varrer StatusData
+   do diagnóstico de rotação, amostra a amostra); fica nulo, e o painel
+   redistribui o peso do pilar ausente — mesmo caminho de freio motor e câmbio,
+   que também não existem lá.                                                */
+
+// timespan do Geotab: "HH:MM:SS.fff" ou "d.HH:MM:SS" → segundos
+function gtSeg(v) {
+  if (v == null) return 0;
+  if (typeof v === 'number') return v;
+  const t = String(v); let dias = 0, resto = t;
+  const p = t.split('.');
+  if (p.length > 1 && p[0].indexOf(':') < 0) { dias = +p[0] || 0; resto = p.slice(1).join('.'); }
+  const [h = 0, m = 0, s = 0] = resto.split(':').map(Number);
+  return dias * 86400 + (+h || 0) * 3600 + (+m || 0) * 60 + Math.floor(+s || 0);
+}
+// as regras de aceleração/freada/velocidade: id de sistema ou nome da regra
+const GT_REGRA = {
+  acel: { ids: ['RuleHarshAccelerationId'], nome: /harsh.?accel|acelera/i },
+  frea: { ids: ['RuleHarshBrakingId'],      nome: /harsh.?brak|frena|freada/i },
+  vel:  { ids: ['RuleSpeedingId'],          nome: /speeding|velocidade/i },
+};
+const gtQualRegra = (ruleId, ruleNome) => {
+  for (const [k, r] of Object.entries(GT_REGRA)) {
+    if (r.ids.includes(ruleId)) return k;
+    if (ruleNome && r.nome.test(ruleNome)) return k;
+  }
+  return null;
+};
+// chave do motorista: o CPF/CNH do cadastro, quando houver — é o que permite
+// casar a mesma pessoa entre Geotab e vFleets. Sem isso, o id do Geotab.
+function gtChave(u) {
+  const doc = String(u?.licenseNumber || u?.employeeNo || '').replace(/\D/g, '');
+  return doc.length >= 9 ? doc : 'gt:' + (u?.id || '');
+}
+
+async function geotabDia(dia, cred, cacheUsuarios, regras) {
+  // a janela é o dia em BRT (UTC-3), não em UTC
+  const de = `${dia}T03:00:00.000Z`;
+  const ate = new Date(new Date(de).getTime() + 864e5 - 1).toISOString();
+  const [trips, excs] = await Promise.all([
+    geotabRpc('Get', { typeName: 'Trip', search: { fromDate: de, toDate: ate } }, cred),
+    geotabRpc('Get', { typeName: 'ExceptionEvent', search: { fromDate: de, toDate: ate } }, cred),
+  ]);
+
+  // eventos por motorista; quando o evento não traz motorista, cai no device
+  const nomeRegra = id => (regras.get(id) || '');
+  const porDrv = new Map(), porDev = [];
+  for (const e of excs) {
+    const qual = gtQualRegra(e.rule?.id, nomeRegra(e.rule?.id));
+    if (!qual) continue;
+    const d = e.driver?.id;
+    if (d && d !== 'NoDriverId' && d !== 'UnknownDriverId') {
+      const m = porDrv.get(d) || { acel: 0, frea: 0, vel: 0 };
+      m[qual]++; porDrv.set(d, m);
+    } else if (e.device?.id) {
+      porDev.push({ dev: e.device.id, t: new Date(e.activeFrom).getTime(), qual });
+    }
+  }
+
+  const porMot = new Map();
+  for (const t of trips) {
+    const d = t.driver?.id;
+    if (!d || d === 'NoDriverId' || d === 'UnknownDriverId') continue;   // sem motorista: não é de ninguém
+    const g = porMot.get(d) || { km: 0, dir: 0, idle: 0, v1: 0, v2: 0, v3: 0, acel: 0, frea: 0, vel: 0, n: 0 };
+    g.km   += +t.distance || 0;
+    g.dir  += gtSeg(t.drivingDuration);
+    g.idle += gtSeg(t.idlingDuration);
+    g.v1   += gtSeg(t.speedRange1Duration);
+    g.v2   += gtSeg(t.speedRange2Duration);
+    g.v3   += gtSeg(t.speedRange3Duration);
+    g.n++;
+    // eventos órfãos do mesmo veículo dentro da janela da viagem
+    const ini = new Date(t.start).getTime(), fim = new Date(t.stop).getTime();
+    porDev.forEach(x => { if (x.dev === t.device?.id && x.t >= ini && x.t <= fim && !x.usado) { g[x.qual]++; x.usado = true; } });
+    porMot.set(d, g);
+  }
+  for (const [d, m] of porDrv) {
+    const g = porMot.get(d); if (!g) continue;
+    g.acel += m.acel; g.frea += m.frea; g.vel += m.vel;
+  }
+
+  // nome e chave dos motoristas que apareceram
+  const faltam = [...porMot.keys()].filter(id => !cacheUsuarios.has(id));
+  if (faltam.length) {
+    const us = await geotabRpc('Get', { typeName: 'User', search: { isDriver: true } }, cred);
+    us.forEach(u => cacheUsuarios.set(u.id, u));
+  }
+
+  return [...porMot.entries()].map(([id, g]) => {
+    const u = cacheUsuarios.get(id) || { id };
+    const tMov = g.dir || null;
+    return {
+      dia, chave: gtChave(u), fonte: 'Geotab',
+      km: g.km || null,
+      h_motor: (g.dir + g.idle) ? (g.dir + g.idle) / 3600 : null,
+      rpm_verde_pct: null,                                  // o Geotab não entrega faixa de RPM pronta
+      idle_pct: (g.dir + g.idle) ? g.idle / (g.dir + g.idle) * 100 : null,
+      acel_100km: g.km > 0 ? g.acel / g.km * 100 : null,
+      frea_100km: g.km > 0 ? g.frea / g.km * 100 : null,
+      vel_excesso_pct: tMov ? (g.v1 + 2 * g.v2 + 3 * g.v3) / tMov * 100 : null,
+      freio_motor_pct: null, banguela_pct: null, cambio_ruim_pct: null,   // não existem no Geotab
+      registros: g.n,
+      bruto: { viagens: g.n, seg: { dir: g.dir, idle: g.idle, v1: g.v1, v2: g.v2, v3: g.v3 },
+               eventos: { acel: g.acel, frea: g.frea, vel: g.vel } },
+      _nome: (u.firstName || u.lastName) ? `${u.firstName || ''} ${u.lastName || ''}`.trim() : (u.name || id),
+      _uo: null,
+    };
+  });
 }
 
 // ── sonda: mostra o que cada API entrega, sem gravar nada ───────────────────
@@ -301,10 +421,18 @@ async function sbTodos(caminho) {
     if (lote.length < PASSO) return out;
   }
 }
-// dias que JÁ estão gravados no intervalo — é o que permite retomar um backfill
-async function diasGravados(de, ate) {
-  const linhas = await sbTodos(`ce_diario?select=dia&dia=gte.${de}&dia=lte.${ate}`);
-  return new Set(linhas.map(l => String(l.dia).slice(0, 10)));
+// dias JÁ gravados no intervalo — é o que permite retomar um backfill.
+// O dia só conta como pronto quando TODAS as fontes ligadas já gravaram nele:
+// senão, ligar o Geotab depois de um backfill de vFleets nunca coletaria nada,
+// porque os dias "já existiriam".
+async function diasGravados(de, ate, fontes) {
+  const linhas = await sbTodos(`ce_diario?select=dia,fonte&dia=gte.${de}&dia=lte.${ate}`);
+  const por = new Map();
+  linhas.forEach(l => {
+    const d = String(l.dia).slice(0, 10);
+    (por.get(d) || por.set(d, new Set()).get(d)).add(l.fonte);
+  });
+  return new Set([...por].filter(([, fs]) => fontes.every(f => fs.has(f))).map(([d]) => d));
 }
 
 // mensal = média dos dias ponderada por km (quem rodou mais pesa mais)
@@ -385,14 +513,28 @@ if (MODE === 'sonda') {
 
   try {
     const cred = await geotabLogin();
-    if (!cred) console.log('\nGeotab: sem credencial (GEOTAB_USER/PASS/DB)');
+    if (!cred) console.log(`\nGeotab: sem credencial (GEOTAB_USER/PASS — database=${GT_DB})`);
     else {
-      const drv = await geotabRpc('Get', { typeName: 'User', search: { isDriver: true }, resultsLimit: 5 }, cred);
-      console.log(`\n── Geotab: login OK · ${drv.length} motorista(s) na amostra ──`);
-      const ex = await geotabRpc('Get', { typeName: 'ExceptionEvent',
-        search: { fromDate: `${DE}T00:00:00Z`, toDate: `${DE}T23:59:59Z` }, resultsLimit: 3 }, cred);
-      console.log(`ExceptionEvent no dia: ${ex.length} (amostra)`);
-      if (ex[0]) console.log('campos:', Object.keys(ex[0]).join(', '));
+      const drv = await geotabRpc('Get', { typeName: 'User', search: { isDriver: true } }, cred);
+      console.log(`\n── Geotab (db=${GT_DB}): login OK · ${drv.length} motorista(s) cadastrado(s) ──`);
+      const comDoc = drv.filter(u => !gtChave(u).startsWith('gt:')).length;
+      console.log(`com CPF/CNH no cadastro (dá para casar com a vFleets): ${comDoc}/${drv.length}`);
+
+      // as regras da conta decidem se aceleração/freada existem
+      const regras = await geotabRpc('Get', { typeName: 'Rule' }, cred);
+      const achadas = { acel: [], frea: [], vel: [] };
+      regras.forEach(r => { const q = gtQualRegra(r.id, r.name); if (q) achadas[q].push(`${r.name}${r.activeFrom ? '' : ''}`); });
+      console.log(`regras na conta: ${regras.length}`);
+      for (const [k, v] of Object.entries(achadas))
+        console.log(`   ${k.padEnd(5)} ${v.length ? '✓ ' + v.join(' · ') : '· NENHUMA regra casou — o pilar ficará vazio'}`);
+
+      const mapa = new Map(regras.map(r => [r.id, r.name]));
+      const linhas = await geotabDia(DE, cred, new Map(drv.map(u => [u.id, u])), mapa);
+      console.log(`\n${DE}: ${linhas.length} motorista(s) com viagem`);
+      linhas.slice(0, 3).forEach(l => console.log('   ' + JSON.stringify({
+        chave: mask(l.chave), km: Math.round(l.km || 0), idle: l.idle_pct?.toFixed(1),
+        acel: l.acel_100km?.toFixed(1), frea: l.frea_100km?.toFixed(1),
+        vel: l.vel_excesso_pct?.toFixed(1), viagens: l.registros })));
     }
   } catch (e) { console.log('\nGeotab:', e.message); }
   console.log('\nSonda encerrada — nada foi gravado.');
@@ -406,6 +548,25 @@ if (MODE === 'recalc') {
   console.log(`recalculado: ${n} linha(s) em ce_scores_mensais`);
   process.exit(0);
 }
+
+// Geotab: login uma vez só (a sessão vale ~2 semanas) e caches reaproveitados
+let GT = null, GT_USERS = new Map(), GT_RULES = new Map();
+try {
+  GT = await geotabLogin();
+  if (GT) {
+    const [us, rs] = await Promise.all([
+      geotabRpc('Get', { typeName: 'User', search: { isDriver: true } }, GT),
+      geotabRpc('Get', { typeName: 'Rule' }, GT),
+    ]);
+    GT_USERS = new Map(us.map(u => [u.id, u]));
+    GT_RULES = new Map(rs.map(r => [r.id, r.name]));
+    const faltando = Object.entries(GT_REGRA)
+      .filter(([, r]) => ![...GT_RULES].some(([id, n]) => r.ids.includes(id) || r.nome.test(n || '')))
+      .map(([k]) => k);
+    console.log(`Geotab (db=${GT_DB}): ${GT_USERS.size} motorista(s), ${GT_RULES.size} regra(s)`
+      + (faltando.length ? ` · SEM regra para: ${faltando.join(', ')} (esse(s) pilar(es) ficam vazios)` : ''));
+  }
+} catch (e) { console.log('Geotab: login falhou —', e.message); GT = null; }
 
 // que dias coletar
 let AGENDA = [];
@@ -422,7 +583,8 @@ if (MODE === 'reproc') {
   // backfill do ano recomeçaria do zero a cada disparo e nunca terminaria.
   // CE_REFAZER=1 ignora e recoleta tudo.
   if (AGENDA.length > 1 && process.env.CE_REFAZER !== '1') {
-    const jaTem = await diasGravados(DE, ATE);
+    const FONTES = [VF_TOKEN && 'vFleets', GT && 'Geotab'].filter(Boolean);
+    const jaTem = await diasGravados(DE, ATE, FONTES);
     const antes = AGENDA.length;
     AGENDA = AGENDA.filter(d => !jaTem.has(d));
     if (antes !== AGENDA.length) console.log(`${antes - AGENDA.length} dia(s) já gravado(s) — pulando`);
@@ -452,6 +614,15 @@ for (let i = 0; i < AGENDA.length; i++) {
       linhas.forEach(l => { if (l._uo) semUnidade.add(l._uo); });
     }
   } catch (e) { console.log(`${dia}: ${e.message}`); falhas++; }
+  // Geotab no mesmo dia — a pausa de 5 min é limite da vFleets, não dele
+  if (GT) {
+    try {
+      const lg = await geotabDia(dia, GT, GT_USERS, GT_RULES);
+      await garanteMotoristas(lg);
+      total += await gravaDiario(lg);
+      console.log(`${dia}: Geotab → ${lg.length} motorista(s) · ${Math.round(lg.reduce((s, l) => s + (+l.km || 0), 0))} km`);
+    } catch (e) { console.log(`${dia} Geotab: ${e.message}`); falhas++; }
+  }
   if (i < AGENDA.length - 1) await new Promise(r => setTimeout(r, PAUSA));   // 1 req / 5 min
 }
 const n = await recalculaMes(DE.slice(0, 8) + '01', ATE);
