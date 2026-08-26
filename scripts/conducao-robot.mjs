@@ -570,9 +570,15 @@ try {
   }
 } catch (e) { console.log('Geotab: login falhou —', e.message); GT = null; }
 
+if (!VF_TOKEN && !GT) {
+  console.error('Nenhuma fonte disponível: sem VFLEETS_TOKEN e sem login no Geotab. Nada a fazer.');
+  process.exit(1);
+}
+
 // que dias coletar
 let AGENDA = [];
 if (MODE === 'reproc') {
+  if (!VF_TOKEN) { console.error('reproc é da vFleets — sem VFLEETS_TOKEN não há o que reprocessar.'); process.exit(1); }
   const { dias, erro } = await vfleetsReprocessados(DE, ATE);
   if (erro) { console.error('processamentos:', erro); process.exit(1); }
   AGENDA = dias;
@@ -597,13 +603,15 @@ if (!AGENDA.length) {
   console.log(`nada a coletar — período completo. mensal: ${n} linha(s)`);
   process.exit(0);
 }
-console.log(`${AGENDA.length} dia(s) a coletar · ~${Math.round(AGENDA.length * PAUSA / 6e4)} min a 1 chamada/5 min`);
+const RITMO = VF_TOKEN ? PAUSA : 400;
+console.log(`${AGENDA.length} dia(s) a coletar · ~${Math.max(1, Math.round(AGENDA.length * RITMO / 6e4))} min`
+  + (VF_TOKEN ? ' (1 chamada/5 min — limite da vFleets)' : ' (só Geotab: sem o limite de 5 min da vFleets)'));
 
 let total = 0, falhas = 0, semUnidade = new Set(), parou = 0;
 for (let i = 0; i < AGENDA.length; i++) {
   if (Date.now() - T0 > LIMITE_MS) { parou = AGENDA.length - i; break; }
   const dia = AGENDA[i];
-  try {
+  if (VF_TOKEN) try {
     const { lista, erro } = await vfleetsDia(dia);
     if (erro) { console.log(`${dia} vFleets: ${erro}`); falhas++; }
     else {
@@ -625,7 +633,8 @@ for (let i = 0; i < AGENDA.length; i++) {
       console.log(`${dia}: Geotab → ${lg.length} motorista(s) · ${Math.round(lg.reduce((s, l) => s + (+l.km || 0), 0))} km`);
     } catch (e) { console.log(`${dia} Geotab: ${e.message}`); falhas++; }
   }
-  if (i < AGENDA.length - 1) await new Promise(r => setTimeout(r, PAUSA));   // 1 req / 5 min
+  // a pausa longa é o limite da vFleets (1 req/5 min); o Geotab não tem isso
+  if (i < AGENDA.length - 1) await new Promise(r => setTimeout(r, VF_TOKEN ? PAUSA : 400));
 }
 const n = await recalculaMes(DE.slice(0, 8) + '01', ATE);
 console.log(`\ngravado: ${total} linha(s) diárias · mensal: ${n} linha(s)` + (falhas ? ` · ${falhas} dia(s) com falha` : ''));
