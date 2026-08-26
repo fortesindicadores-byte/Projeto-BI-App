@@ -53,11 +53,14 @@ const REGUA = {
   freio:  { direto: true },                    // % de uso de freio motor idem
   idle:   { zeraEm: 25 },                      // 25% do tempo em marcha lenta → 0
   acel:   { zeraEm: 100 / 6 },                 // ~16,7 acelerações bruscas/100km → 0
-  frea:   { zeraEm: 100 / 6 },
   vel:    { zeraEm: 20 },                      // 20% do tempo acima do limite → 0
   cambio: { zeraEm: 100 / 6 },                 // ~16,7% do tempo com marcha ruim → 0
 };
-const PESOS = { rpm: 25, idle: 20, acel: 15, frea: 10, vel: 15, freio: 10, cambio: 5 };
+// Freada brusca NÃO pontua (Renan, 26/08/2026): mede condução SEGURA, não
+// econômica — fica para a Fase 4. `frea_100km` continua sendo calculado e
+// gravado no ce_diario, para o dado não se perder; ele só não entra no score.
+// Os pesos somam 90 e o score normaliza pela soma dos presentes (escala 0-100).
+const PESOS = { rpm: 25, idle: 20, acel: 15, vel: 15, freio: 10, cambio: 5 };
 
 const nota = (pilar, valor) => {
   if (valor == null || !isFinite(valor)) return null;
@@ -461,7 +464,6 @@ async function recalculaMes(de, ate) {
       rpm:    nota('rpm',    pond('rpm_verde_pct')),
       idle:   nota('idle',   pond('idle_pct')),
       acel:   nota('acel',   pond('acel_100km')),
-      frea:   nota('frea',   pond('frea_100km')),
       vel:    nota('vel',    pond('vel_excesso_pct')),
       // o painel descreve este pilar como "% de uso de freio motor nas
       // desacelerações, PENALIZADO por tempo de banguela" — desconto 1:1,
@@ -475,7 +477,7 @@ async function recalculaMes(de, ate) {
     linhas.push({
       competencia, chave, motorista: m.nome || chave, unidade: m.unidade || null,
       fonte: m.fonte || ds[0].fonte, km: ds.reduce((s, d) => s + (+d.km || 0), 0), dias: ds.length,
-      rpm_pontos: notas.rpm, idle_pontos: notas.idle, acel_pontos: notas.acel, frea_pontos: notas.frea,
+      rpm_pontos: notas.rpm, idle_pontos: notas.idle, acel_pontos: notas.acel, frea_pontos: null,
       vel_pontos: notas.vel, freio_pontos: notas.freio, cambio_pontos: notas.cambio,
       pontuacao: score(notas), atualizado_em: new Date().toISOString(),
     });
