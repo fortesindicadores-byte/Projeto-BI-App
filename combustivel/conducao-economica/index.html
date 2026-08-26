@@ -3,9 +3,10 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-<meta name="build" content="202608261700">
+<meta name="build" content="202608261800">
 <title>Condução Econômica · Gestão em Movimento</title>
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <script src="../../assets/pdf-export.js"></script>
 <script src="../../assets/excel-export.js"></script>
@@ -506,6 +507,39 @@ let sortKey = 'pont', sortDir = 'desc';   // ordenação do ranking (clique no c
 const CACHE_KEY='bi_cache_reconhecimento_v6';
 const CACHE_TTL=60*60*1000; // 1 hora
 
+/* ── Leitura do Supabase (ce_scores_mensais) ────────────────────────────────
+   O painel lê a tabela que o robô (scripts/conducao-robot.mjs) alimenta. Só
+   que enquanto NÃO houver coleta — token da vFleets, credencial do Geotab —
+   a tabela volta vazia; nesse caso a tela cai nos dados de exemplo e o selo do
+   topo diz isso com todas as letras. Nada de maquete se passando por real.  */
+const SB_URL = 'https://lozwipoeacpvplgkrxkq.supabase.co';
+const SB_KEY = 'sb_publishable_ggKEEebc5zjgQDVsF92Upw_6uoLmKe9';   // publishable: só leitura via RLS
+let _sb = null, ORIGEM = 'exemplo', ULT_COLETA = null;
+function sbClient(){ return _sb || (_sb = supabase.createClient(SB_URL, SB_KEY)); }
+
+async function fetchFromSupabase() {
+  const { data, error } = await sbClient()
+    .from('ce_scores_mensais')
+    .select('competencia,motorista,unidade,fonte,km,dias,rpm_pontos,idle_pontos,acel_pontos,vel_pontos,freio_pontos,cambio_pontos,pontuacao,atualizado_em')
+    .order('competencia', { ascending: true });
+  if (error) { console.warn('ce_scores_mensais:', error.message); return []; }
+  if (!data || !data.length) return [];
+
+  // o de-para vem das próprias linhas: os DRIVERS de exemplo saem de cena
+  Object.keys(UNI_OF).forEach(k => { delete UNI_OF[k]; delete SRC_OF[k]; delete NOMES[k]; });
+  data.forEach(r => { UNI_OF[r.motorista] = r.unidade || '—'; SRC_OF[r.motorista] = r.fonte; NOMES[r.motorista] = r.motorista; });
+  ULT_COLETA = data.reduce((m, r) => (r.atualizado_em > m ? r.atualizado_em : m), '');
+
+  return data.map(r => ({
+    vig:  String(r.competencia).slice(0,10).replace(/-/g, '/'),   // '2026-07-01' -> '2026/07/01'
+    unit: r.motorista,
+    rpm: r.rpm_pontos, idle: r.idle_pontos, acel: r.acel_pontos, vel: r.vel_pontos,
+    freio: r.freio_pontos,    // nulo nos motoristas Geotab (peso redistribuído no score)
+    cambio: r.cambio_pontos,  // idem
+    pont: r.pontuacao,
+  }));
+}
+
 /* ── PROTÓTIPO: gera RAW (1 linha por motorista+vigência) determinístico.
    Trocar generateRawRows() por leitura do Supabase quando o coletor existir. ── */
 function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return ((t^t>>>14)>>>0)/4294967296;};}
@@ -529,47 +563,13 @@ function generateRawRows(){
   return out;
 }
 async function fetchData() {
-  RAW = generateRawRows();
+  let linhas = [];
+  try { linhas = await fetchFromSupabase(); } catch(e) { console.warn('Supabase indisponível:', e.message); }
+  if (linhas.length) { RAW = linhas; ORIGEM = 'banco'; }
+  else               { RAW = generateRawRows(); ORIGEM = 'exemplo'; }
   populateFilters();
   renderAll();
 }
-
-/* ══════════════════════════════════════════════════════════════════════════
-   HÍBRIDO — ler do Supabase (ce_scores_mensais) no lugar de generateRawRows().
-   RASCUNHO INATIVO: só ativar quando o coletor (etl/conducao-economica/) estiver
-   populando a tabela. Para ativar:
-     1) carregar o supabase-js no <head> (CDN), via tag script src=:
-        https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2
-     2) trocar o corpo de fetchData() por:  RAW = await fetchFromSupabase();
-   ────────────────────────────────────────────────────────────────────────── */
-// const SB_URL = 'https://lozwipoeacpvplgkrxkq.supabase.co';
-// const SB_KEY = 'sb_publishable_ggKEEebc5zjgQDVsF92Upw_6uoLmKe9';   // chave publishable (só leitura via RLS)
-// let _sb = null;
-// function sbClient(){ return _sb || (_sb = supabase.createClient(SB_URL, SB_KEY)); }
-//
-// async function fetchFromSupabase() {
-//   const { data, error } = await sbClient()
-//     .from('ce_scores_mensais')
-//     .select('competencia,motorista,unidade,fonte,rpm_pontos,idle_pontos,acel_pontos,vel_pontos,freio_pontos,cambio_pontos,pontuacao')
-//     .order('competencia', { ascending: true });
-//   if (error) { console.error('Supabase:', error); return []; }
-//
-//   // reconstrói o de-para unidade/fonte a partir das próprias linhas (dispensa DRIVERS)
-//   data.forEach(r => { UNI_OF[r.motorista] = r.unidade; SRC_OF[r.motorista] = r.fonte; NOMES[r.motorista] = r.motorista; });
-//
-//   // mapeia 1:1 para o formato que o painel já usa (mesmo shape do generateRawRows)
-//   return data.map(r => ({
-//     vig:  String(r.competencia).replace(/-/g, '/'),   // '2026-07-01' -> '2026/07/01'
-//     unit: r.motorista,
-//     rpm:    r.rpm_pontos,
-//     idle:   r.idle_pontos,
-//     acel:   r.acel_pontos,
-//     vel:    r.vel_pontos,
-//     freio:  r.freio_pontos,   // null p/ motoristas Geotab (peso redistribuído no score)
-//     cambio: r.cambio_pontos,  // null p/ motoristas Geotab
-//     pont:   r.pontuacao,
-//   }));
-// }
 
 function initData(){ atualizar(); }   // protótipo: regenera sempre (sem cache do Frota de Elite)
 
@@ -1042,7 +1042,13 @@ async function atualizar() {
   set('status-badge','Carregando…');
   try {
     await fetchData();
-    set('status-badge','Prévia · dados de exemplo');
+    if (ORIGEM === 'banco') {
+      const n = new Set(RAW.map(r => r.unit)).size;
+      const q = ULT_COLETA ? new Date(ULT_COLETA).toLocaleDateString('pt-BR') : '';
+      set('status-badge', `${n} motorista(s)` + (q ? ` · coleta ${q}` : ''));
+    } else {
+      set('status-badge','Prévia · dados de exemplo');
+    }
   } catch(e) {
     set('status-badge','Erro ao carregar dados');
   }
@@ -1091,6 +1097,6 @@ document.addEventListener('DOMContentLoaded',()=>{ initAccessLog(); initData(); 
 <script src="../../assets/mobile.js?v=202608220020"></script>
 <script src="../../assets/ctrlk.js"></script>
 <script src="../../assets/sortable-table.js"></script>
-<script src="../../assets/build-check.js?v=202608261700"></script>
+<script src="../../assets/build-check.js?v=202608261800"></script>
 </body>
 </html>
