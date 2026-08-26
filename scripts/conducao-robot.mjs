@@ -566,6 +566,30 @@ if (MODE === 'sonda') {
       const todos = await geotabRpc('Get', { typeName: 'User' }, cred);
       const devs  = await geotabRpc('Get', { typeName: 'Device' }, cred);
       console.log(`usuários no total: ${todos.length} · veículos: ${devs.length}`);
+
+      // Escopo de dados OK mas Device vazio aponta para CLEARANCE (permissão de
+      // funcionalidade), não para grupo. Aqui separamos uma coisa da outra.
+      try {
+        const [eu2] = await geotabRpc('Get', { typeName: 'User', search: { name: GT_USER } }, cred);
+        for (const sg of (eu2?.securityGroups || [])) {
+          const [g] = await geotabRpc('Get', { typeName: 'Group', search: { id: sg.id } }, cred).catch(() => []);
+          console.log(`clearance: ${sg.id}${g ? ' — ' + (g.name || g.comments || '') : ''}`);
+        }
+        // buscar Device DENTRO de cada grupo de dados, um a um
+        for (const g of (eu2?.companyGroups || []).slice(0, 4)) {
+          const d = await geotabRpc('Get', { typeName: 'Device', search: { groups: [{ id: g.id }] } }, cred).catch(e => ({ erro: e.message }));
+          console.log(`   Device no grupo ${g.id}: ${Array.isArray(d) ? d.length : d.erro}`);
+        }
+      } catch (e) { console.log('clearance:', e.message.slice(0, 200)); }
+
+      // o dado bruto pode estar acessível mesmo com Device vazio
+      for (const tipo of ['LogRecord', 'StatusData', 'FaultData', 'Trip', 'ExceptionEvent', 'DriverChange']) {
+        const de2 = `${DE}T03:00:00.000Z`, ate2 = new Date(new Date(de2).getTime() + 864e5 - 1).toISOString();
+        try {
+          const r = await geotabRpc('Get', { typeName: tipo, search: { fromDate: de2, toDate: ate2 }, resultsLimit: 5 }, cred);
+          console.log(`   ${tipo.padEnd(15)} ${r.length} registro(s) na amostra`);
+        } catch (e) { console.log(`   ${tipo.padEnd(15)} ERRO: ${e.message.slice(0, 90)}`); }
+      }
       // um veículo pode existir sem viagem; DeviceStatusInfo mostra os que reportam
       try {
         const st = await geotabRpc('Get', { typeName: 'DeviceStatusInfo' }, cred);
