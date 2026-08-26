@@ -530,6 +530,26 @@ if (MODE === 'sonda') {
       for (const [k, v] of Object.entries(achadas))
         console.log(`   ${k.padEnd(5)} ${v.length ? '✓ ' + v.join(' · ') : '· NENHUMA regra casou — o pilar ficará vazio'}`);
 
+      // ── diagnóstico: de onde vem (ou não vem) o dado ──────────────────
+      // Só CONTAGENS — o repositório é público, nada de nome de pessoa.
+      const todos = await geotabRpc('Get', { typeName: 'User' }, cred);
+      const devs  = await geotabRpc('Get', { typeName: 'Device' }, cred);
+      console.log(`usuários no total: ${todos.length} · veículos: ${devs.length}`);
+      const comChave = todos.filter(u => !gtChave(u).startsWith('gt:')).length;
+      console.log(`usuários com CPF/CNH preenchido: ${comChave}`);
+
+      for (const d of [DE, iso(new Date(Date.now() - 3 * 864e5)), iso(new Date(Date.now() - 8 * 864e5))]) {
+        const de = `${d}T03:00:00.000Z`, ate = new Date(new Date(de).getTime() + 864e5 - 1).toISOString();
+        const [tr, ex] = await Promise.all([
+          geotabRpc('Get', { typeName: 'Trip', search: { fromDate: de, toDate: ate }, resultsLimit: 5000 }, cred),
+          geotabRpc('Get', { typeName: 'ExceptionEvent', search: { fromDate: de, toDate: ate }, resultsLimit: 5000 }, cred),
+        ]);
+        const semDrv = tr.filter(t => !t.driver?.id || /NoDriver|UnknownDriver/.test(t.driver.id)).length;
+        const km = Math.round(tr.reduce((a, t) => a + (+t.distance || 0), 0));
+        console.log(`   ${d}: ${tr.length} viagem(ns) (${semDrv} sem motorista) · ${km} km · ${ex.length} evento(s)`);
+        if (tr[0] && d === DE) console.log('   campos da Trip:', Object.keys(tr[0]).join(', ').slice(0, 300));
+      }
+
       const mapa = new Map(regras.map(r => [r.id, r.name]));
       const linhas = await geotabDia(DE, cred, new Map(drv.map(u => [u.id, u])), mapa);
       console.log(`\n${DE}: ${linhas.length} motorista(s) com viagem`);
