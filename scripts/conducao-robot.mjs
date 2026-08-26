@@ -531,10 +531,46 @@ if (MODE === 'sonda') {
         console.log(`   ${k.padEnd(5)} ${v.length ? '✓ ' + v.join(' · ') : '· NENHUMA regra casou — o pilar ficará vazio'}`);
 
       // ── diagnóstico: de onde vem (ou não vem) o dado ──────────────────
-      // Só CONTAGENS — o repositório é público, nada de nome de pessoa.
+      // Só CONTAGENS e nomes de GRUPO — o repositório é público, nada de
+      // nome de pessoa.
+      console.log('servidor em uso:', cred.path || GT_SERVER);
+      try {
+        const v = await geotabRpc('GetVersion', {}, cred);
+        console.log('versão do MyGeotab:', v);
+      } catch (e) { console.log('GetVersion:', e.message); }
+
+      // o usuário tem acesso a mais de um database? Authenticate SEM database
+      // devolve a lista na mensagem de erro — é a forma de descobrir.
+      try {
+        const r = await geotabRpc('Authenticate', { userName: GT_USER, password: GT_PASS });
+        console.log('databases disponíveis:', JSON.stringify(r).slice(0, 300));
+      } catch (e) { console.log('databases (via erro do Authenticate):', e.message.slice(0, 300)); }
+
+      // escopo do próprio usuário: é ele que filtra veículo, viagem e evento
+      try {
+        const [eu] = await geotabRpc('Get', { typeName: 'User', search: { name: GT_USER } }, cred);
+        if (eu) {
+          const nomes = async ids => {
+            if (!ids || !ids.length) return '(nenhum)';
+            const gs = await geotabRpc('Get', { typeName: 'Group', search: { id: ids[0].id } }, cred).catch(() => []);
+            return ids.map(g => g.id).join(', ') + (gs[0] ? ` [${gs[0].name}]` : '');
+          };
+          console.log('grupos de DADOS do usuário:', await nomes(eu.companyGroups));
+          console.log('grupos de segurança:', (eu.securityGroups || []).map(g => g.id).join(', ') || '(nenhum)');
+        }
+      } catch (e) { console.log('escopo do usuário:', e.message.slice(0, 200)); }
+
+      const grupos = await geotabRpc('Get', { typeName: 'Group' }, cred).catch(() => []);
+      console.log(`grupos visíveis: ${grupos.length}` + (grupos.length ? ' · ex.: ' + grupos.slice(0,8).map(g=>g.name).filter(Boolean).join(' · ') : ''));
+
       const todos = await geotabRpc('Get', { typeName: 'User' }, cred);
       const devs  = await geotabRpc('Get', { typeName: 'Device' }, cred);
       console.log(`usuários no total: ${todos.length} · veículos: ${devs.length}`);
+      // um veículo pode existir sem viagem; DeviceStatusInfo mostra os que reportam
+      try {
+        const st = await geotabRpc('Get', { typeName: 'DeviceStatusInfo' }, cred);
+        console.log(`veículos reportando posição agora: ${st.length}`);
+      } catch (e) { console.log('DeviceStatusInfo:', e.message.slice(0, 160)); }
       const comChave = todos.filter(u => !gtChave(u).startsWith('gt:')).length;
       console.log(`usuários com CPF/CNH preenchido: ${comChave}`);
 
