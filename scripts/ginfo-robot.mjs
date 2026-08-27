@@ -47,12 +47,12 @@ function ateTerceiroDiaUtil(d) {
 const ABAS = [
   // 1.1 DOCUMENTOS → drill-through "Detalhes Veículos" → tabela = base ATIVOS
   // (Filial | Projeto | Placa | Marca | Modelo | Tipo Veículo | Estado | Ano Fabricação)
-  { chave: 'ativos', url: 'https://bi.ginfo.app.br/bi/99029b42-f690-451b-95b1-9fad2c9b670d?autoAuth=true&ctid=c16300de-7070-4b58-80c8-af99af1e1f65',
+  { chave: 'ativos', reportId: '99029b42-f690-451b-95b1-9fad2c9b670d',
     menu: ['FROTA', '1.1 - DOCUMENTOS'], drill: { card: 'VEÍCULOS', item: 'Detalhes Veículos' } },
   // STRESS TEST FROTA → tabela detalhada por placa (a de mais colunas da página).
   // Regra de período: até o dia 10, Mês = mês anterior e Quinzena = Segunda.
   // (Do dia 11 em diante: regra a confirmar com o Renan — por ora fica o padrão da página.)
-  { chave: 'stress-test-frota', url: 'https://bi.ginfo.app.br/bi/ce4f37f8-1c4c-499f-a80c-3a3ce80594cb?autoAuth=true&ctid=c16300de-7070-4b58-80c8-af99af1e1f65',
+  { chave: 'stress-test-frota', reportId: 'ce4f37f8-1c4c-499f-a80c-3a3ce80594cb',
     menu: ['STRESS TEST', 'STRESS TEST FROTA'],
     slicers: () => {
       const h = new Date();
@@ -64,7 +64,7 @@ const ABAS = [
   // pela coluna "Chassis" (única dela na página — as tabelas por Transportador/
   // Filial não têm; mirar pelo TÍTULO não funciona: o container tem caixa 0x0).
   // Regra de período: até o dia 10, só Mês = mês anterior (não tem slicer de Quinzena).
-  { chave: 'stress-test-empilhadeira', url: 'https://bi.ginfo.app.br/bi/d1cead3d-e28a-487b-a1bd-8b72cdd6da55?autoAuth=true&ctid=c16300de-7070-4b58-80c8-af99af1e1f65',
+  { chave: 'stress-test-empilhadeira', reportId: 'd1cead3d-e28a-487b-a1bd-8b72cdd6da55',
     menu: ['STRESS TEST', 'STRESS TEST EMPILHADEIRA'],
     header: 'Chassis',
     slicers: () => {
@@ -77,7 +77,7 @@ const ABAS = [
   // Freightech | Veículo | Projeto | Data CIVF | Status | Manutenção | Lavação |
   // Desconto Manutenção | Desconto Lavagem | Desconto Total) = aba CIFV do Farol.
   // Regra de período: até o dia 10, só Mês = mês anterior.
-  { chave: 'civf', url: 'https://bi.ginfo.app.br/bi/5bd5e3ac-7ebc-4c7b-963e-1c3d20ba4acd?autoAuth=true&ctid=c16300de-7070-4b58-80c8-af99af1e1f65',
+  { chave: 'civf', reportId: '5bd5e3ac-7ebc-4c7b-963e-1c3d20ba4acd',
     menu: ['CIVF', 'CIVF'], ultima: true,
     slicers: () => {
       const h = new Date();
@@ -92,14 +92,14 @@ const ABAS = [
   { chave: 'preventivas', menu: ['FROTA', '2.2 - PREVENTIVAS'], indice: 3 },
   // 3.4 PNEUS → tabela de Alinhamentos (Filial | Placa | Próx. Even. | Status |
   // Dias | Documento) — achada pela coluna "Documento" = aba Alinhamentos do Farol.
-  { chave: 'alinhamentos', url: 'https://bi.ginfo.app.br/bi/3ab8927b-b1c5-4f10-8f36-dad6bb8a8a22?autoAuth=true&ctid=c16300de-7070-4b58-80c8-af99af1e1f65',
+  { chave: 'alinhamentos', reportId: '3ab8927b-b1c5-4f10-8f36-dad6bb8a8a22',
     menu: ['FROTA', '3.4 - PNEUS'], header: 'Documento' },
   // 2.4 ORDEM SERVIÇO → botão direito no card "NÃO EXECUTADAS" → Drill-through →
   // "Detalhes Ordem Serviço" → tabela (Nº OS | Data | Status | Filial | Origem |
   // Tipo | Criticidade | SLAs | Segmento | Fornecedor | Mecânico | Motorista |
   // Placa) = aba OS em Aberto do Farol. "Dias em Aberto" (col. A da planilha) é
   // fórmula = AGORA() − Data, mínimo 0 — o leitor recalcula na hora de exibir.
-  { chave: 'os-em-aberto', url: 'https://bi.ginfo.app.br/bi/81e8f48c-09f2-4bc7-a84e-0718378732c9?autoAuth=true&ctid=c16300de-7070-4b58-80c8-af99af1e1f65',
+  { chave: 'os-em-aberto', reportId: '81e8f48c-09f2-4bc7-a84e-0718378732c9',
     menu: ['FROTA', '2.4 - ORDEM SERVIÇO'], drill: { card: 'NÃO EXECUTADAS', item: 'Detalhes Ordem Serviço' } },
   // 1.3 ADERÊNCIA FROTA - 031120 → única tabela da página, com o ano todo
   // (Mapa | Data do mapa | Data OS | Início/Fim técnico | Problema | Nº OS |
@@ -112,7 +112,7 @@ const ABAS = [
   // Nº OS | Tipo Checklist | Status | Filial | Motorista | Placa | Tipo
   // Veículo | Projeto). Regra de período (Renan, 03/08/2026): até o 3º DIA
   // ÚTIL do mês ainda exporta o mês ANTERIOR; depois começa o mês atual.
-  { chave: 'checklist-031120', url: 'https://bi.ginfo.app.br/bi/76e82774-d5d4-4cda-bb13-65a1a64387ef?autoAuth=true&ctid=c16300de-7070-4b58-80c8-af99af1e1f65',
+  { chave: 'checklist-031120', reportId: '76e82774-d5d4-4cda-bb13-65a1a64387ef',
     menu: ['FROTA', '1.3 - ADERÊNCIA FROTA - 031120'],
     drill: { card: 'SAÍDAS COM OS CRÍTICA', item: 'Detalhes Saídas Com OS Crítica' },
     slicers: () => {
@@ -130,9 +130,25 @@ async function shot(page, nome) {
   catch (e) { log('screenshot falhou:', nome, e.message); }
 }
 
-// procura um locator em TODOS os frames (o Power BI roda dentro de iframe)
-async function emFrames(page, fazer) {
-  for (const fr of page.frames()) {
+/* O portal novo (GINFO Analytics, 08/2026) abre cada relatório numa ABA e
+   MANTÉM as anteriores vivas no DOM: com duas abertas, os dois iframes do
+   Power BI coexistem, cada um com suas tabelas. Varrer todos os frames faria
+   o robô exportar a tabela da ABA ERRADA — sem erro nenhum, gravando dado
+   trocado no Supabase. Por isso toda busca é restrita ao relatório da aba:
+   pelo reportId quando conhecido (é o mesmo GUID dos antigos deep-links),
+   senão o último iframe aberto, que é a aba recém-clicada.               */
+function framesDaAba(page, aba) {
+  const pbi = page.frames().filter(f => /app\.powerbi\.com\/reportEmbed/.test(f.url()));
+  let alvo = null;
+  if (aba && aba.reportId) alvo = pbi.find(f => f.url().includes(aba.reportId)) || null;
+  if (!alvo) alvo = pbi[pbi.length - 1] || null;
+  // o mainFrame entra porque menus e flyouts do portal renderizam fora do embed
+  return alvo ? [alvo, page.mainFrame()] : page.frames();
+}
+
+// procura um locator nos frames da aba atual (o Power BI roda dentro de iframe)
+async function emFrames(page, fazer, aba) {
+  for (const fr of framesDaAba(page, aba)) {
     try { const r = await fazer(fr); if (r) return r; } catch (e) {}
   }
   return null;
@@ -202,7 +218,7 @@ async function acharAlvo(page, aba) {
   // divs internas — então NÃO servem p/ medir posição/visibilidade.)
   const tabelasVisiveis = async () => {
     const tabs = [];
-    for (const fr of page.frames()) {
+    for (const fr of framesDaAba(page, aba)) {
       try {
         const grids = fr.locator('[role="grid"], [role="table"]');
         const n = await grids.count();
@@ -227,7 +243,7 @@ async function acharAlvo(page, aba) {
         let v = fr.locator(`visual-container:has([role="grid"]):has-text("${aba.visual}"), visual-container:has([role="table"]):has-text("${aba.visual}")`).filter({ visible: true }).first();
         if (!(await v.count())) v = fr.locator(`visual-container:has-text("${aba.visual}"), [aria-label*="${aba.visual}"], .visualTitle:has-text("${aba.visual}")`).filter({ visible: true }).first();
         return (await v.count()) ? { fr, v } : null;
-      });
+      }, aba);
       if (alvo) return alvo;
     } else if (aba.ultima) {
       // "última tabela da página" (a detalhada fica embaixo) — espera pelo menos
@@ -245,7 +261,7 @@ async function acharAlvo(page, aba) {
             .filter({ has: fr.locator(`[role="columnheader"]:has-text("${hd}")`) })
             .filter({ visible: true }).first();
           return (await g.count()) ? { fr, v: g } : null;
-        });
+        }, aba);
         if (alvo) { log(`tabela com a coluna "${hd}" encontrada`); return alvo; }
       }
     } else if (aba.indice) {
@@ -408,22 +424,24 @@ async function drillThrough(page, cardTexto, itemMenu) {
 
 // exporta os dados de UM visual: hover → menu "Mais opções (...)" → Exportar dados
 async function exportarVisual(page, aba) {
-  const urlAba = aba.url || 'https://bi.ginfo.app.br/bi/inicio';   // sem deep-link conhecido → começa do início
-  log('abrindo aba', aba.chave, urlAba);
-  await page.goto(urlAba, { waitUntil: 'domcontentloaded', timeout: 90000 });
-  await page.waitForTimeout(10000);
+  // O portal virou uma SPA: a URL é sempre /bi/inicio e o relatório abre numa
+  // ABA. Os deep-links /bi/<guid> não existem mais (davam ERR_CONNECTION_
+  // TIMED_OUT desde 20/08) — a navegação é SEMPRE pelo menu.
+  const INICIO = 'https://bi.ginfo.app.br/bi/inicio';
+  log('abrindo aba', aba.chave, '(menu:', (aba.menu || []).join(' → ') + ')');
+  if (!/\/bi\/inicio/.test(page.url())) {
+    await page.goto(INICIO, { waitUntil: 'domcontentloaded', timeout: 90000 });
+    await page.waitForTimeout(8000);
+  }
   if (/\/login/i.test(page.url())) {   // sessão derrubada (ex.: outro login no portal)
     log('sessão caiu — refazendo o login');
     await login(page);
-    await page.goto(urlAba, { waitUntil: 'domcontentloaded', timeout: 90000 });
-    await page.waitForTimeout(10000);
+    await page.goto(INICIO, { waitUntil: 'domcontentloaded', timeout: 90000 });
+    await page.waitForTimeout(8000);
   }
-  if (aba.menu && (!aba.url || /\/bi\/inicio/.test(page.url()))) {   // app devolveu p/ o início → vai pelo menu
-    log('navegando pelo menu:', aba.menu.join(' → '));
-    await clicarMenu(page, aba.menu[0], aba.menu[1]);
-  } else {
-    await page.waitForTimeout(5000);
-  }
+  if (!aba.menu) throw new Error(`${aba.chave} sem caminho de menu — o portal novo não aceita deep-link`);
+  log('navegando pelo menu:', aba.menu.join(' → '));
+  await clicarMenu(page, aba.menu[0], aba.menu[1]);
   await shot(page, '10-' + aba.chave);
   if (aba.drill) { await drillThrough(page, aba.drill.card, aba.drill.item); await shot(page, '10b-' + aba.chave); }
 
