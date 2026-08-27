@@ -2,7 +2,7 @@
 // Robô Ginfo (Power BI) — coleta automática para o Farol
 // Roda no GitHub Actions (.github/workflows/ginfo-robot.yml), com Playwright.
 //
-// Modos (env GINFO_MODE):
+// Modos (env GINFO_MODE): login · mapa (reconhecimento do portal) · run
 //   login  (padrão) → só valida o login e salva screenshots em ./ginfo-artifacts/
 //   run             → login + exporta os visuais de ABAS e grava no Supabase
 //
@@ -523,6 +523,76 @@ async function gravarSupabase(chave, linhas) {
   log(`gravado no Supabase: ${chave} (${linhas.length} linhas)`);
 }
 
+/* ── modo `mapa`: reconhecimento do portal ──────────────────────────────────
+   Em 08/2026 o Ginfo trocou o layout do MENU (virou "GINFO Analytics", com
+   busca Ctrl+K, abas no topo e a seção FROTA já expandida). Os PAINÉIS
+   continuam iguais — só a navegação quebrou. Este modo não exporta nada:
+   fotografa e DESCREVE a interface nova, para a navegação ser reescrita com
+   base no que está na tela e não no que a gente imagina.                    */
+async function mapa(page) {
+  await shot(page, '00-home-nova');
+  log('url após login:', page.url());
+
+  // 1) tudo que parece item de menu na lateral
+  const itens = await page.evaluate(() => {
+    const vis = e => { const r = e.getBoundingClientRect(); return r.width > 0 && r.height > 0; };
+    const out = [];
+    document.querySelectorAll('a,button,li,div[role=button],[class*=menu] *,[class*=nav] *').forEach(e => {
+      if (!vis(e)) return;
+      const t = (e.textContent || '').trim();
+      if (!t || t.length > 60) return;
+      if (e.children.length > 2) return;                 // só folhas
+      const r = e.getBoundingClientRect();
+      if (r.left > 420) return;                          // lateral esquerda
+      out.push({ t, tag: e.tagName.toLowerCase(), x: Math.round(r.left), y: Math.round(r.top),
+                 href: e.getAttribute('href') || '' });
+    });
+    // dedupe por texto
+    const visto = new Set();
+    return out.filter(o => { const k = o.t + '|' + o.y; if (visto.has(k)) return false; visto.add(k); return true; })
+              .sort((a, b) => a.y - b.y);
+  });
+  log(`itens na lateral (${itens.length}):`);
+  itens.forEach(i => log(`   [${i.tag}] y=${i.y} ${i.href ? 'href=' + i.href + ' ' : ''}"${i.t}"`));
+
+  // 2) a busca de relatório (Ctrl+K) seria a navegação mais robusta — existe?
+  const temBusca = await page.getByPlaceholder(/buscar relat/i).count().catch(() => 0);
+  log('campo "Buscar relatório" encontrado:', temBusca > 0);
+
+  // 3) abrir um relatório conhecido e ver ONDE o Power BI renderiza agora
+  for (const alvo of ['2.4 - ORDEM SERVIÇO', '1.3 - ADERÊNCIA FROTA - 031120']) {
+    try {
+      log(`--- abrindo "${alvo}" pelo menu ---`);
+      await page.getByText(alvo, { exact: false }).first().click({ timeout: 15000 });
+      await page.waitForTimeout(20000);
+      log('   url:', page.url());
+      await shot(page, '01-aberto-' + alvo.slice(0, 12).replace(/[^A-Za-z0-9]/g, ''));
+      const frames = page.frames().length;
+      log('   frames:', frames);
+      // o portal novo abre cada relatório numa ABA no topo (com X para fechar):
+      // o robô vai precisar saber trocar/fechar aba, senão elas acumulam
+      const abasTopo = await page.evaluate(() => {
+        const out = [];
+        document.querySelectorAll('*').forEach(e => {
+          const r = e.getBoundingClientRect();
+          if (r.top > 60 || r.height < 18 || r.height > 60 || r.width < 40) return;
+          const t = (e.textContent || '').trim();
+          if (t && t.length < 50 && e.children.length <= 2) out.push({ t, x: Math.round(r.left) });
+        });
+        const visto = new Set();
+        return out.filter(o => { if (visto.has(o.t)) return false; visto.add(o.t); return true; })
+                  .sort((a, b) => a.x - b.x);
+      });
+      log('   abas no topo:', abasTopo.map(a => `"${a.t}"`).join(' · ') || '(nenhuma)');
+      for (const fr of page.frames()) {
+        const n = await fr.locator('[role=grid],[role=table]').count().catch(() => 0);
+        const v = await fr.locator('visual-container,.visualContainer').count().catch(() => 0);
+        if (n || v || fr !== page.mainFrame()) log(`   frame ${fr.url().slice(0, 70)} → grids:${n} visuais:${v}`);
+      }
+    } catch (e) { log('   falhou:', e.message.slice(0, 120)); }
+  }
+}
+
 async function main() {
   if (!USER || !PASS) { console.error('Faltam Secrets: GINFO_USER / GINFO_PASS'); process.exit(1); }
   const browser = await chromium.launch({ headless: true });
@@ -531,6 +601,7 @@ async function main() {
   try {
     await login(page);
     if (MODE === 'login') { log('modo login: só o teste de acesso. Veja os screenshots nos artifacts.'); return; }
+    if (MODE === 'mapa')  { await mapa(page); return; }
     if (!ABAS.length) { log('nenhuma aba configurada ainda em ABAS — mapeie as abas no scripts/ginfo-robot.mjs.'); return; }
     let erros = 0;
     for (const aba of ABAS) {
