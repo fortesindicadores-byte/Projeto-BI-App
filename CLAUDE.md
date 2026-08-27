@@ -878,6 +878,15 @@ Automatiza a coleta dos dados que hoje são copiados manualmente do BI do Ginfo 
 
 **Fluxo real hoje:** Ginfo (Power BI) → Renan copia manualmente → planilha **"Farol Semanal"** (Sheets, `FAROL_SHEET_ID`) → Farol lê as abas. O robô substitui o passo manual, aba a aba. Abas no rodapé da planilha: `De-para · Custos · Indisponibilidade · Disponibilidade · Ativos · Stress Test Veículos · Stress Test Empilhadeiras · CIFV · Preventivas · Alinhamentos · OS em Aberto`.
 
+**PORTAL NOVO — "GINFO Analytics" (27/08/2026):** o Ginfo trocou a casca em 20/08 e o robô ficou **7 dias sem coletar** (20 a 26/08), com o Farol e o Gestão à Vista parados em "última exportação: 19/08". Três coisas mudaram, e só a navegação: **os painéis continuam idênticos** (mesmos cards, tabelas, slicers e colunas de export — confirmado no run de 27/08).
+1. **A URL é SEMPRE `/bi/inicio`** — virou SPA. Os deep-links `bi.ginfo.app.br/bi/<guid>?autoAuth=true&ctid=…` **não existem mais** e davam `ERR_CONNECTION_TIMED_OUT`. A navegação é sempre pelo MENU (que funciona).
+2. **Cada relatório abre numa ABA** no topo (com X para fechar), e o Power BI carrega em `app.powerbi.com/reportEmbed?reportId=<guid>` — **o guid é o MESMO dos antigos deep-links**, então virou o campo `reportId` de cada aba em `ABAS`.
+3. **As abas anteriores FICAM VIVAS no DOM** — com duas abertas, os dois iframes coexistem, cada um com suas tabelas. Varrer `page.frames()` faria o robô exportar **a tabela da ABA ERRADA**, sem erro nenhum, gravando dado trocado por cima do bom. Por isso `framesDaAba()` restringe toda busca ao relatório da aba (pelo `reportId`, ou o último iframe aberto).
+
+Quando o portal mudar de novo, rodar o workflow em **modo `mapa`**: ele não exporta nada — fotografa a home, lista os itens da lateral, diz onde o Power BI renderiza, quais abas ficaram abertas e qual `reportId` cada uma tem. Foi ele que resolveu este caso em uma rodada.
+
+**O AVISO DE FALHA FALHAVA EM SILÊNCIO (27/08/2026):** os 7 dias passaram despercebidos porque o e-mail de alerta era recusado pela Resend todo dia (403, sem domínio verificado, `vars.MAIL_TO` vazia) e o `curl` devolvia 0 — o passo passava como se tivesse enviado. Agora a resposta é impressa e o passo emite `::error::` quando a Resend recusa. **Falta configurar `vars.MAIL_TO`** com o e-mail dono da conta Resend (ou verificar um domínio), senão o alarme continua sem tocar.
+
 **Navegação no portal do Ginfo:** após o login cai em `/bi/inicio`; menu lateral esquerdo com seções expansíveis: **FROTA** (`1.1 - DOCUMENTOS · 1.2 - ADERÊNCIA CONFORMIDADE · 1.3 - ADERÊNCIA FROTA-031120 / FROTA-2ART / ARMAZÉM / APOIO / EMPURRADA · 1.4 - RESÍDUOS · 2.1 - INDISP. MANUT. VEÍCULOS · 2.1 - DISP. EMPILHADEIRA · 2.2 - PREVENTIVAS · …`), **STRESS TEST** (→ **STRESS TEST FROTA** e **STRESS TEST EMPILHADEIRA**, os dois relatórios usados no Farol), **CIVF** e **SEGURANÇA**. Os relatórios são Power BI embutidos com URL própria (`/bi/<guid>?autoAuth=true&ctid=…` — deep-link funciona); alguns dados exigem **drill-through** (botão direito num card → Drill-through → página de detalhe) antes de exportar.
 
 **Receitas de coleta no Ginfo (conforme o Renan mostra):**
