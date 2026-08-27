@@ -582,6 +582,18 @@ if (MODE === 'sonda') {
         }
       } catch (e) { console.log('clearance:', e.message.slice(0, 200)); }
 
+      // A conta RECEBE por e-mail o relatório diário "Speeding Violations"
+      // (my.geotab.com/ambev/#myReports) — ou seja, o dado existe e chega até
+      // ela. Se os relatórios respondem pela API, há caminho mesmo sem o
+      // clearance de leitura de Device/Trip.
+      for (const tipo of ['ReportTemplate', 'Report']) {
+        try {
+          const r = await geotabRpc('Get', { typeName: tipo }, cred);
+          console.log(`   ${tipo.padEnd(15)} ${r.length}` +
+            (r.length ? ' · ex.: ' + r.slice(0, 6).map(x => x.name || x.id).join(' · ').slice(0, 200) : ''));
+        } catch (e) { console.log(`   ${tipo.padEnd(15)} ERRO: ${e.message.slice(0, 110)}`); }
+      }
+
       // o dado bruto pode estar acessível mesmo com Device vazio
       for (const tipo of ['LogRecord', 'StatusData', 'FaultData', 'Trip', 'ExceptionEvent', 'DriverChange']) {
         const de2 = `${DE}T03:00:00.000Z`, ate2 = new Date(new Date(de2).getTime() + 864e5 - 1).toISOString();
