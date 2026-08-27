@@ -58,11 +58,20 @@ jobs:
           # conta — por isso o destino é uma variável (vars.MAIL_TO).
           TO="${MAIL_TO:-renan.fortes@conlogsa.com.br}"
           URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
-          curl -sS -X POST https://api.resend.com/emails \
+          RESP=$(curl -sS -X POST https://api.resend.com/emails \
             -H "Authorization: Bearer $RESEND_API_KEY" \
             -H "Content-Type: application/json" \
             -d "$(printf '{"from":"%s","to":["%s"],"subject":"⚠ %s falhou (%s)","html":"O robô <b>%s</b> falhou no run de %s.<br><br>Log: <a href=\\"%s\\">%s</a><br><br>Um dia isolado se cura sozinho (o cron do dia seguinte completa o que faltou). Se este e-mail repetir por 3 dias, algo mudou no Ginfo."}' \
-              "$FROM" "$TO" "${{ github.workflow }}" "$(date -u -d '-3 hours' +%d/%m/%Y)" "${{ github.workflow }}" "$(date -u -d '-3 hours' '+%d/%m/%Y %H:%M') BRT" "$URL" "$URL")"
+              "$FROM" "$TO" "${{ github.workflow }}" "$(date -u -d '-3 hours' +%d/%m/%Y)" "${{ github.workflow }}" "$(date -u -d '-3 hours' '+%d/%m/%Y %H:%M') BRT" "$URL" "$URL")")
+          echo "$RESP"
+          # O curl devolve 0 mesmo quando a Resend recusa (403 de domínio não
+          # verificado, destinatário fora da conta…). Sem esta checagem o robô
+          # falhava em silêncio: em 08/2026 foram 7 dias sem coleta e sem aviso,
+          # porque o e-mail era recusado todo dia e ninguém via.
+          if echo "$RESP" | grep -q '"statusCode"'; then
+            echo "::error::O AVISO POR E-MAIL NÃO FOI ENTREGUE — a Resend recusou (resposta acima)."
+            echo "::error::Configure a variável MAIL_TO com o e-mail dono da conta Resend, ou verifique um domínio em resend.com/domains."
+          fi
 
       - name: Publicar screenshots/downloads (debug)
         if: always()
