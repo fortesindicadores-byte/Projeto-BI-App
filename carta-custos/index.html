@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-<meta name="build" content="202608272130">
+<meta name="build" content="202608272200">
 <title>Carta de Custos</title>
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -19,13 +19,6 @@ body{background:radial-gradient(ellipse at 10% 25%,rgba(249,115,22,.06) 0%,trans
 .header{background:rgba(12,16,23,.75);border-bottom:1px solid rgba(255,255,255,.07);padding:10px 24px 12px;display:flex;flex-wrap:wrap;align-items:center;gap:10px;position:sticky;top:0;z-index:100;backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);box-shadow:0 2px 12px rgba(0,0,0,.3);}
 /* ══ visão Tabela: linha clicável + caixa de lançamento ══ */
 .lanc-actions{display:flex;align-items:center;gap:10px;flex-wrap:wrap;}
-.vtoggle{display:flex;border:1px solid rgba(255,255,255,.14);border-radius:7px;overflow:hidden;}
-.vtoggle button{background:transparent;border:0;color:var(--text3);font-family:'Montserrat',sans-serif;font-size:10px;
-  font-weight:700;text-transform:uppercase;letter-spacing:.6px;padding:6px 13px;cursor:pointer;white-space:nowrap;}
-.vtoggle button:hover{color:var(--text);background:rgba(255,255,255,.06);}
-.vtoggle button.on{background:var(--orange);color:#1a0d02;}
-body.light-mode .vtoggle{border-color:rgba(0,0,0,.16);}
-body.light-mode .vtoggle button:hover{background:rgba(0,0,0,.05);}
 
 table.dre tr.clicavel{cursor:pointer;}
 table.dre tr.clicavel:hover{background:rgba(249,115,22,.08);}
@@ -203,9 +196,13 @@ select.lanc-edit option{background:#0f1824;color:#fff;}
 .lanc-edit[data-f="valor"]{min-width:96px;}
 /* o "Total" do rodapé não pode esticar a coluna Data (o min-width é do DRE) */
 #tbl-lanc tfoot td.conta{min-width:0;}
-/* "sem RC": custo que nasce direto na OC (Renan, 27/08/2026) */
-.semrc{float:right;font-weight:600;text-transform:none;letter-spacing:0;opacity:.85;cursor:pointer;}
-.semrc input{vertical-align:-1px;margin-right:3px;cursor:pointer;}
+/* "sem RC": custo que nasce direto na OC (Renan, 27/08/2026) —
+   caixinha AO LADO do campo, na mesma linha */
+.rc-row{display:flex;align-items:center;gap:8px;}
+.rc-row input#f-rc{flex:1;min-width:0;}
+.semrc{display:flex;align-items:center;gap:4px;font-size:10px;font-weight:600;
+  color:var(--text2);white-space:nowrap;cursor:pointer;text-transform:none;letter-spacing:0;}
+.semrc input{margin:0;cursor:pointer;accent-color:var(--orange);}
 /* visão Tabela (só leitura): data compacta, sobra vai para RC/OC/NF */
 table.dre.box th:nth-child(1),table.dre.box td:nth-child(1){width:88px;}
 table.dre.box th:nth-child(9),table.dre.box td:nth-child(9),
@@ -276,11 +273,7 @@ body.light-mode .lf input,body.light-mode .lf select{background:#fff;border-colo
     <div class="tbl-head">
       <div><div class="tbl-title">Custos lançados</div><div class="tbl-sub" id="lanc-sub">—</div></div>
       <div class="lanc-actions">
-        <div class="vtoggle" id="vtoggle">
-          <button data-v="linha" onclick="setVistaLanc('linha')">Edição na linha</button>
-          <button data-v="caixa" onclick="setVistaLanc('caixa')">Tabela</button>
-        </div>
-        <button class="add-lanc" id="add-lanc-btn" onclick="addLancRow()">+ adicionar lançamento</button>
+        <button class="add-lanc" id="add-lanc-btn" onclick="abrirLanc('')">+ lançar custo</button>
       </div>
     </div>
     <div class="tbl-wrap"><table class="dre" id="tbl-lanc"></table></div>
@@ -312,7 +305,12 @@ body.light-mode .lf input,body.light-mode .lf select{background:#fff;border-colo
       <label class="mf mf-wide"><span>Descrição</span><input id="f-descricao" placeholder="descrição do serviço"></label>
       <div class="mgrid mgrid-4">
         <label class="mf"><span>Valor</span><input type="text" inputmode="decimal" id="f-valor" placeholder="0,00" oninput="fmtValorInput(this)"></label>
-        <label class="mf"><span>RC <span class="semrc"><input type="checkbox" id="f-semrc" onchange="aplicaSemRC()"> sem RC</span></span><input id="f-rc" placeholder="nº" oninput="rcDot(this)"></label>
+        <label class="mf"><span>RC</span>
+          <div class="rc-row">
+            <input id="f-rc" placeholder="nº" oninput="rcDot(this)">
+            <label class="semrc" title="Custo que nasce direto na OC"><input type="checkbox" id="f-semrc" onchange="aplicaSemRC()"> sem RC</label>
+          </div>
+        </label>
         <label class="mf"><span>OC</span><input id="f-oc" placeholder="nº"></label>
         <label class="mf"><span>NF</span><input id="f-nf" placeholder="nº"></label>
       </div>
@@ -587,9 +585,8 @@ async function toggleAprv(el){
   // que ela está: redesenhar sempre com lancRowHTML transformava a linha da
   // visão Tabela em linha editável ao clicar no farol.
   if(!r) return;
-  const naCaixa = !singleCtx() || VISTA_LANC==='caixa';
   const tmp=document.createElement('tbody');
-  tmp.innerHTML = naCaixa ? lancRowBox(r) : lancRowHTML(r);
+  tmp.innerHTML = lancRowBox(r);
   tr.replaceWith(tmp.firstElementChild);
 }
 let _loadSeq=0;   // resposta atrasada de um filtro antigo não pode sobrescrever o atual
@@ -793,14 +790,11 @@ function brDate(iso){if(!iso)return '—';const [y,m,d]=iso.split('-');return `$
 // A gravação reaproveita a mesma tabela e o mesmo payload da visão
 // de edição na linha; nada de segunda regra de negócio.
 // ══════════════════════════════════════════════════════════════
-let VISTA_LANC = localStorage.getItem('cc_vista_lanc') || 'caixa';
+// A visão "Edição na linha" foi aposentada (Renan, 27/08/2026): a Tabela é a
+// única — clicar na linha abre a caixa, que diz unidade/vigência e cabe no
+// celular. VISTA_LANC fica fixa por causa dos pontos que ainda a consultam.
+const VISTA_LANC = 'caixa';
 let LANC_ABERTO = null;                       // id em edição, ou null = novo
-
-function setVistaLanc(v){
-  VISTA_LANC = v;
-  try{ localStorage.setItem('cc_vista_lanc', v); }catch(e){}
-  render();
-}
 // linha só de leitura, clicável — mesmas colunas da visão de edição
 function lancRowBox(r){
   const pend=!counts(r);
@@ -948,13 +942,7 @@ function renderLanc(rows){
   // Editar na LINHA exige contexto único: os campos da linha não dizem unidade
   // nem vigência. A CAIXA diz — por isso a visão agregada agora também edita,
   // e é ela que fica quando há várias unidades/meses no filtro.
-  const caixa = !single || VISTA_LANC==='caixa';
-  const vt=$('vtoggle'); if(vt){ vt.style.display=single?'':'none';
-    vt.querySelectorAll('button').forEach(b=>b.classList.toggle('on', b.dataset.v===VISTA_LANC)); }
-  const addBtn=$('add-lanc-btn');
-  if(addBtn){ addBtn.style.display='';
-    addBtn.textContent = caixa ? '+ lançar custo' : '+ adicionar lançamento';
-    addBtn.onclick = caixa ? ()=>abrirLanc('') : addLancRow; }
+  const caixa = true;   // única visão: Tabela (clicar na linha abre a caixa)
   $('tbl-lanc').classList.toggle('box', caixa);
   const th=`<thead><tr><th class="lft">Data</th><th class="lft">Projeto</th><th class="lft">Equipamento</th><th class="lft">Fornecedor</th><th class="lft">Conta</th><th class="lft">Grupo</th><th class="lft">Descrição</th><th>Valor</th><th class="lft">RC</th><th title="Aprovação da RC — libera a OC">OK</th><th class="lft">OC</th><th title="Aprovação da OC — libera a NF">OK</th><th class="lft">NF</th><th></th></tr></thead><tbody>`;
   let h=th;
@@ -966,7 +954,7 @@ function renderLanc(rows){
     if(!rows.length) h+=`<tr class="empty-row"><td colspan="14"><div class="empty">${single?'Nenhum custo lançado neste mês.':'Nenhum custo lançado no filtro atual.'} Clique em “+ lançar custo”.</div></td></tr>`;
     h+=rows.map(lancRowBox).join('');
   }else{
-    $('lanc-sub').textContent=rows.length+' lançamento(s) · edite direto na linha · RC salva e libera a 1ª aprovação · farol verde libera a OC · OC aprovada libera a NF · sobe ao DRE com NF + Valor · botão direito → exportar Excel';
+    $('lanc-sub').textContent=rows.length+' lançamento(s) · clique na linha para abrir o custo · RC salva e libera a 1ª aprovação · farol verde libera a OC · OC aprovada libera a NF · sobe ao DRE com NF + Valor · botão direito → exportar Excel';
     if(!rows.length){ h+=`<tr class="empty-row"><td colspan="14"><div class="empty">Nenhum custo lançado neste mês. Clique em “+ adicionar lançamento”.</div></td></tr>`; }
     h+=rows.map(lancRowHTML).join('');
   }
@@ -1083,6 +1071,6 @@ async function exportarPDF(){
 <script src="../assets/mobile.js?v=202608220020"></script>
 <script src="../assets/ctrlk.js"></script>
 <script src="../assets/sortable-table.js"></script>
-<script src="../assets/build-check.js?v=202608272130"></script>
+<script src="../assets/build-check.js?v=202608272200"></script>
 </body>
 </html>
