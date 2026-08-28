@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
-<meta name="build" content="202608272300">
+<meta name="build" content="202608281030">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <title>Disponibilidade · Frota do Dia</title>
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -311,6 +311,7 @@ body.claro .tag{background:color-mix(in srgb,var(--c) 34%,transparent);color:#14
 body.claro .f input,body.claro .f select,body.claro .f textarea{background:#fff;border-color:#d7dce4;}
 .f input:focus,.f select:focus,.f textarea:focus{border-color:var(--azul);}
 .f textarea{resize:vertical;min-height:64px;line-height:1.45;}
+#mObs{min-height:96px;}
 .f select option{background:#141d2b;color:#fff;}
 body.claro .f select option{background:#fff;color:#0f172a;}
 input[type=date]::-webkit-calendar-picker-indicator{cursor:pointer;}
@@ -1207,16 +1208,26 @@ async function renderAderencia(){
   const perfis=await loadPerfis();
   if(VER!=='aderencia')return;
   const hoje=hojeBRT();
-  const dias=diasUteis(ADER_INICIO,hoje);
+  // a janela obedece aos filtros de Data e Vigência do topo (Data manda, como
+  // no resto do painel); sem filtro, é tudo de ADER_INICIO até hoje
+  const todos=diasUteis(ADER_INICIO,hoje);
+  const dias=FDATA.size ? todos.filter(d=>FDATA.has(d))
+           : FVIG.size  ? todos.filter(d=>FVIG.has(d.slice(0,7)))
+           : todos;
   if(!dias.length){
+    const filtrado=FDATA.size||FVIG.size;
     $('cols').innerHTML=`<div class="tab-wrap" style="max-width:560px;margin:40px auto;padding:26px;text-align:center">
       <div class="rlbl">Aderência do preenchimento</div>
-      <div style="font-size:15px;font-weight:700;margin:8px 0 6px">A contagem começa em ${dataBR(ADER_INICIO)}</div>
-      <p style="font-size:12.5px;color:var(--txt2);line-height:1.55;margin:0">
-        A partir dessa terça-feira, cada unidade aparece aqui com os dias úteis em que
-        criou ou mexeu em algum evento, quem preencheu e quando foi o último toque.</p></div>`;
+      <div style="font-size:15px;font-weight:700;margin:8px 0 6px">${filtrado
+        ?'Nenhum dia útil no filtro'
+        :'A contagem começa em '+dataBR(ADER_INICIO)}</div>
+      <p style="font-size:12.5px;color:var(--txt2);line-height:1.55;margin:0">${filtrado
+        ?'A contagem começa em '+dataBR(ADER_INICIO)+' e só vale para dias úteis (seg–sex). Escolha outra data ou vigência.'
+        :'A partir dessa terça-feira, cada unidade aparece aqui com os dias úteis em que criou ou mexeu em algum evento, quem preencheu e quando foi o último toque.'}</p></div>`;
     return;
   }
+  // dia de referência das colunas "Hoje"/"Atualizaram": o último da janela
+  const ref=dias[dias.length-1], refHoje=ref===hoje;
   const diaDe=t=>t?new Date(t).toLocaleDateString('en-CA',{timeZone:'America/Sao_Paulo'}):null;
   // toques por unidade: cada create/update de evento conta como preenchimento do dia
   const toques={};   // unidade → {dia → Set(quem)}
@@ -1247,10 +1258,10 @@ async function renderAderencia(){
     const pct=dias.length?feitos/dias.length*100:null;
     const ult=ultimo[u];
     // o check-in já guarda o NOME de quem confirmou; o evento guarda o user_id
-    const pessoas=[...new Set(Object.values(dd).flatMap(s=>[...s]))]
+    const pessoas=[...new Set(dias.flatMap(d=>dd[d]?[...dd[d]]:[]))]
       .map(v=>(perfis[v]&&perfis[v].nome)||v).filter(n=>n&&n!=='—');
-    const hj=!!dd[hoje], soCheck=checouEm(u,hoje)&&!EVENTS.some(e=>e.unidade===u&&
-      [e.created_at,e.updated_at].some(t=>t&&diaDe(t)===hoje));
+    const hj=!!dd[ref], soCheck=checouEm(u,ref)&&!EVENTS.some(e=>e.unidade===u&&
+      [e.created_at,e.updated_at].some(t=>t&&diaDe(t)===ref));
     return {u,feitos,total:dias.length,pct,ult,pessoas,hj,soCheck};
   }).sort((a,b)=>(a.pct??-1)-(b.pct??-1));
   const qdo=t=>{ if(!t)return '—';
@@ -1262,18 +1273,18 @@ async function renderAderencia(){
   $('cols').innerHTML=`
   <div style="overflow:auto;min-height:0;flex:1">
     <div style="display:flex;gap:30px;align-items:flex-end;flex-wrap:wrap;margin-bottom:16px">
-      <div><div class="rlbl">Atualizaram hoje</div>
+      <div><div class="rlbl">${refHoje?'Atualizaram hoje':'Atualizaram em '+dataBR(ref)}</div>
         <div style="font-size:46px;font-weight:800;letter-spacing:-1.6px;line-height:1.04;color:${okHoje===linhas.length?'var(--verde)':okHoje?'var(--ambar)':'var(--vermelho)'}">${okHoje}<span style="font-size:20px;color:var(--txt3)">/${linhas.length}</span></div></div>
       <div style="padding-bottom:8px">
         <div class="rlbl">Janela</div>
-        <b class="rval">${dataBR(ADER_INICIO)} → ${dataBR(hoje)}</b>
+        <b class="rval">${dias.length===1?dataBR(dias[0]):dataBR(dias[0])+' → '+dataBR(ref)}</b>
         <div style="font-size:10px;color:var(--txt3);margin-top:2px">${dias.length} dia(s) útil(eis) · conta quem criou ou mexeu em evento no dia, ou confirmou que não houve alteração</div>
       </div>
     </div>
     <div class="tab-wrap">
       <table class="tab"><thead><tr>
         <th>Unidade</th><th class="num">Dias preenchidos</th><th class="num">Aderência</th>
-        <th>Hoje</th><th>Último preenchimento</th><th>Quem preencheu</th></tr></thead>
+        <th>${refHoje?'Hoje':dataBR(ref)}</th><th>Último preenchimento</th><th>Quem preencheu</th></tr></thead>
       <tbody>${linhas.map(x=>`<tr>
         <td class="forte">${esc(x.u)}</td>
         <td class="num">${x.feitos}<span style="color:var(--txt3)">/${x.total}</span></td>
@@ -1778,6 +1789,6 @@ iniciar();
 <!-- exportação padrão do Gestão em Movimento: botão direito na tabela, no
      gráfico ou no card → Excel · PNG · PNG com fundo transparente -->
 <script src="../assets/excel-export.js"></script>
-<script src="../assets/build-check.js?v=202608272300"></script>
+<script src="../assets/build-check.js?v=202608281030"></script>
 </body>
 </html>
