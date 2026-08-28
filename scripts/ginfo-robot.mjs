@@ -28,6 +28,18 @@ const EMPRESA = (process.env.GINFO_EMPRESA || 'CONLOG').trim();   // o login exi
 const SB_URL = 'https://lozwipoeacpvplgkrxkq.supabase.co';
 const SB_KEY = (process.env.GEM_SUPABASE_SERVICE_KEY || '').trim();
 
+/* ── conferência (não muda o run diário) ──────────────────────────────────
+   GINFO_ABA  roda só uma chave (ex.: checklist-031120)
+   GINFO_MES  força o mês do slicer (ex.: julho) — para usar um mês conhecido
+              como CONTROLE: se o mês de controle traz o número esperado pelo
+              mesmo caminho, a mecânica está boa e o mês magro é real.
+   GINFO_DRY  não grava no Supabase; só imprime o resumo do que veio.
+   O resumo NUNCA imprime coluna de pessoa (o repositório é público).        */
+const SO_ABA    = (process.env.GINFO_ABA || '').trim();
+const MES_FORCA = (process.env.GINFO_MES || '').trim();
+const DRY       = process.env.GINFO_DRY === '1';
+const COL_PESSOA = /motorista|mecânico|mecanico|avaliador|placa|chassis|condutor|nome/i;
+
 // ── ABAS DO GINFO (preencher conforme o mapeamento aba a aba) ──
 // chave = linha em ginfo_snapshot · url = deep-link do relatório · visual = título do
 // visual (opcional; sem título, o robô exporta a PRIMEIRA tabela da página).
@@ -447,7 +459,11 @@ async function exportarVisual(page, aba) {
 
   // filtros/slicers da aba (ex.: Mês anterior + Quinzena Segunda até o dia 10)
   if (typeof aba.slicers === 'function') {
-    for (const s of aba.slicers()) {
+    for (let s of aba.slicers()) {
+      if (MES_FORCA && /^m[eê]s$/i.test(s.campo)) {
+        log(`mês forçado por GINFO_MES: "${s.valor}" → "${MES_FORCA}"`);
+        s = { ...s, valor: MES_FORCA };
+      }
       const ok = await aplicarSlicer(page, s.campo, s.valor);
       await shot(page, '11-' + aba.chave + '-' + s.campo.toLowerCase().replace(/[^a-z0-9]+/gi, '-'));
       // slicer não aplicado = a tela ficou no filtro errado (ou sem filtro nenhum);
@@ -531,6 +547,7 @@ async function xlsxParaLinhas(arq) {
 }
 
 async function gravarSupabase(chave, linhas) {
+  if (DRY) { log(`[GINFO_DRY] ${chave}: ${linhas.length} linhas — NÃO gravado no Supabase`); return; }
   if (!SB_KEY) { log(`[dry-run] ${chave}: ${linhas.length} linhas (sem GEM_SUPABASE_SERVICE_KEY)`); return; }
   const res = await fetch(`${SB_URL}/rest/v1/ginfo_snapshot?on_conflict=chave`, {
     method: 'POST',
@@ -611,6 +628,23 @@ async function mapa(page) {
   }
 }
 
+/* resumo de conferência: quantas linhas e como se distribuem. Só colunas que
+   não identificam pessoa nem veículo — o log do Actions é público. */
+function resumo(chave, linhas) {
+  log(`[GINFO_DRY] resumo de ${chave}: ${linhas.length} linha(s)`);
+  if (!linhas.length) return;
+  for (const col of Object.keys(linhas[0])) {
+    if (COL_PESSOA.test(col)) continue;
+    const vals = linhas.map(l => String(l[col] ?? '').trim()).filter(Boolean);
+    const dist = [...new Set(vals)];
+    if (!dist.length || dist.length > 25) continue;   // texto livre / alta cardinalidade
+    const cnt = {};
+    vals.forEach(v => { cnt[v] = (cnt[v] || 0) + 1; });
+    const top = Object.entries(cnt).sort((a, b) => b[1] - a[1]).map(([v, n]) => `${v}=${n}`);
+    log(`   ${col}: ${top.join(' · ')}`);
+  }
+}
+
 async function main() {
   if (!USER || !PASS) { console.error('Faltam Secrets: GINFO_USER / GINFO_PASS'); process.exit(1); }
   const browser = await chromium.launch({ headless: true });
@@ -622,7 +656,10 @@ async function main() {
     if (MODE === 'mapa')  { await mapa(page); return; }
     if (!ABAS.length) { log('nenhuma aba configurada ainda em ABAS — mapeie as abas no scripts/ginfo-robot.mjs.'); return; }
     let erros = 0;
-    for (const aba of ABAS) {
+    const alvos = SO_ABA ? ABAS.filter(a => a.chave === SO_ABA) : ABAS;
+    if (SO_ABA && !alvos.length) { console.error(`GINFO_ABA="${SO_ABA}" não existe em ABAS`); process.exit(1); }
+    if (SO_ABA) log(`rodando só a aba ${SO_ABA}`);
+    for (const aba of alvos) {
       // 2 tentativas por aba — a sessão do Ginfo pode cair no meio (outro
       // login no portal derruba a anterior); a 2ª tentativa refaz o login.
       for (let tent = 1; tent <= 2; tent++) {
@@ -631,6 +668,7 @@ async function main() {
           const arq = await exportarVisual(page, aba);
           const linhas = await xlsxParaLinhas(arq);
           log('colunas de', aba.chave + ':', JSON.stringify(Object.keys(linhas[0] || {})));
+          if (DRY) resumo(aba.chave, linhas);
           await gravarSupabase(aba.chave, linhas);
           // o dado fica SÓ no banco: apaga o arquivo baixado (sem service key,
           // é dry-run e o xlsx fica nos artifacts p/ conferência)

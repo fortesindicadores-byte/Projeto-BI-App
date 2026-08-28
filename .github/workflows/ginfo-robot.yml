@@ -12,6 +12,19 @@ on:
         default: "login"
         type: choice
         options: [login, mapa, run]
+      aba:
+        description: "conferência: rodar só esta chave (ex.: checklist-031120)"
+        required: false
+        default: ""
+      mes:
+        description: "conferência: forçar o mês do slicer (ex.: julho)"
+        required: false
+        default: ""
+      dry:
+        description: "conferência: não gravar no Supabase, só imprimir o resumo"
+        required: false
+        default: false
+        type: boolean
   # todo dia às 7:00 BRT (10:00 UTC) — baixa as 7 abas e atualiza o Supabase.
   # (só roda a partir da branch main — agendamento do GitHub é sempre na default)
   schedule:
@@ -45,6 +58,10 @@ jobs:
           GINFO_URL:                ${{ secrets.GINFO_URL }}
           GINFO_EMPRESA:            ${{ secrets.GINFO_EMPRESA }}
           GEM_SUPABASE_SERVICE_KEY: ${{ secrets.GEM_SUPABASE_SERVICE_KEY }}
+          # conferência (vazios no cron diário — não mudam o run normal)
+          GINFO_ABA:                ${{ github.event.inputs.aba }}
+          GINFO_MES:                ${{ github.event.inputs.mes }}
+          GINFO_DRY:                ${{ github.event.inputs.dry == 'true' && '1' || '' }}
       - name: Avisar por e-mail se falhar
         if: failure()
         env:
