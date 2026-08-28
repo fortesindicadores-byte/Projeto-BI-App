@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-<meta name="build" content="202608240300">
+<meta name="build" content="202608281200">
 <title>Frota de Elite · BI Frota</title>
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
@@ -48,6 +48,38 @@ body{
 .theme-btn:hover{background:rgba(249,115,22,.25);}
 .back-btn{background:rgba(249,115,22,.15);border:1px solid rgba(249,115,22,.3);border-radius:4px;padding:4px 8px;display:flex;align-items:center;color:var(--orange);text-decoration:none;}
 .back-btn:hover{background:rgba(249,115,22,.32);}
+/* ── Cortina da apuração (Renan, 28/08/2026) ──
+   Enquanto o resultado não é divulgado, o painel fica fechado para todo mundo
+   e mostra o aviso; o admin continua vendo os números e é ele quem abre e
+   fecha, pelo botão aqui do topo. */
+.cortina-btn{background:rgba(249,115,22,.15);border:1px solid rgba(249,115,22,.3);border-radius:4px;
+  padding:4px 9px;cursor:pointer;color:var(--orange);display:none;align-items:center;gap:6px;
+  font-family:'Montserrat',sans-serif;font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:.5px;}
+.cortina-btn:hover{background:rgba(249,115,22,.32);}
+.cortina-btn.on{display:flex;}
+.cortina-btn.fechado{background:rgba(250,204,21,.16);border-color:rgba(250,204,21,.4);color:var(--yellow);}
+.cortina-btn.fechado:hover{background:rgba(250,204,21,.3);}
+.cortina-aviso{display:none;margin:0 24px 16px;padding:10px 14px;border-radius:8px;
+  background:rgba(250,204,21,.10);border:1px solid rgba(250,204,21,.35);
+  font-size:11.5px;color:var(--text2);line-height:1.5;}
+.cortina-aviso b{color:var(--yellow);}
+.cortina-aviso.on{display:block;}
+.cortina{display:none;padding:70px 24px 90px;}
+.cortina.on{display:block;}
+.cortina-card{max-width:620px;margin:0 auto;text-align:center;
+  background:var(--card);border:1px solid var(--border);border-radius:14px;padding:44px 40px 40px;
+  box-shadow:0 20px 50px rgba(0,0,0,.45);}
+.cortina-ico{width:58px;height:58px;margin:0 auto 20px;border-radius:50%;display:flex;align-items:center;
+  justify-content:center;background:rgba(249,115,22,.14);border:1px solid rgba(249,115,22,.32);color:var(--orange);}
+.cortina-card h2{font-size:21px;font-weight:800;letter-spacing:-.3px;margin-bottom:10px;}
+.cortina-card p{font-size:13px;color:var(--text2);line-height:1.65;}
+.cortina-tag{display:inline-block;margin-bottom:16px;font-size:9px;font-weight:800;letter-spacing:1.4px;
+  text-transform:uppercase;color:var(--orange);background:rgba(249,115,22,.12);
+  border:1px solid rgba(249,115,22,.3);border-radius:20px;padding:4px 12px;}
+/* com o resultado fechado não há o que filtrar, atualizar nem exportar */
+body.oculto .main,body.oculto .header-filters,
+body.oculto .refresh-btn,body.oculto .pdf-wrap,body.oculto .pdf-btn,
+body.oculto #filt-toggle-btn{display:none!important;}
 
 /* ── Filters ── */
 .header-filters{flex-basis:100%;order:3;margin-top:10px;display:flex;gap:10px;flex-wrap:wrap;align-items:flex-start;}
@@ -349,6 +381,7 @@ body.light-mode .podio-slot.primeiro .pedestal{box-shadow:0 -4px 24px rgba(196,1
     <a href="../" class="back-btn" title="Voltar ao Hub">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
     </a>
+    <button class="cortina-btn" id="cortinaBtn" onclick="trocaCortina()"></button>
     <button class="theme-btn" id="themeBtn" title="Modo claro/escuro"></button>
     <button class="refresh-btn" onclick="atualizar()" title="Atualizar dados">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><polyline points="23 20 23 14 17 14"/><path d="M20.49 9A9 9 0 0 0 5.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 0 1 3.51 15"/></svg>
@@ -372,6 +405,23 @@ body.light-mode .podio-slot.primeiro .pedestal{box-shadow:0 -4px 24px rgba(196,1
     </div>
   </div>
 </header>
+
+<!-- aviso só para o admin: o painel está fechado para as unidades -->
+<div class="cortina-aviso" id="cortinaAviso"></div>
+
+<!-- o que as unidades veem enquanto a apuração não fecha -->
+<section class="cortina" id="cortina">
+  <div class="cortina-card">
+    <div class="cortina-ico">
+      <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+    </div>
+    <span class="cortina-tag">Frota de Elite</span>
+    <h2 id="cortinaTit">Estamos em período de apuração</h2>
+    <p id="cortinaMsg">Os resultados deste ciclo estão fechados enquanto a apuração é concluída.
+      Assim que a divulgação acontecer, o ranking, o pódio e a pontuação de cada unidade
+      voltam a aparecer aqui mesmo.</p>
+  </div>
+</section>
 
 <main class="main">
 
@@ -1227,6 +1277,84 @@ async function atualizar() {
 
 function set(id,v){ const el=document.getElementById(id); if(el) el.textContent=v; }
 
+/* ── Cortina da apuração (Renan, 28/08/2026) ──────────────────────────────
+   O suspense antes da divulgação: com a chave 'frota_elite_visivel' desligada,
+   quem abre o painel vê o aviso de período de apuração em vez dos números.
+   Vale para TODO MUNDO, por isso a chave mora no Supabase (portal_flags) e não
+   no navegador de quem clicou. O admin (fca_profiles.is_admin) continua vendo
+   os números e é ele quem abre e fecha, pelo botão do topo. */
+const FLAG_ELITE='frota_elite_visivel';
+const CORTINA_ECO='bi_elite_cortina';          // último estado conhecido
+const SBF_URL='https://lozwipoeacpvplgkrxkq.supabase.co';
+const SBF_KEY='sb_publishable_ggKEEebc5zjgQDVsF92Upw_6uoLmKe9';
+let _sbf=null, EH_ADMIN=false, VISIVEL=true, MSG_CORTINA='';
+const sbFlag=()=>_sbf||(_sbf=supabase.createClient(SBF_URL,SBF_KEY));
+const _olho=`<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/></svg>`;
+const _olhoX=`<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>`;
+
+async function cortinaInit(){
+  // fica o último estado conhecido enquanto o Supabase não responde: erro de
+  // rede não pode nem estragar o suspense nem trancar o painel de todo mundo
+  try{ const e=JSON.parse(localStorage.getItem(CORTINA_ECO)||'null');
+       if(e){ VISIVEL=e.v!==false; MSG_CORTINA=e.m||''; } }catch(e){}
+  try{
+    const sb=sbFlag();
+    const [ses, flag] = await Promise.all([
+      sb.auth.getUser().catch(()=>({data:{}})),
+      sb.from('portal_flags').select('ligado,mensagem').eq('chave',FLAG_ELITE).maybeSingle(),
+    ]);
+    if(!flag.error && flag.data){
+      VISIVEL = flag.data.ligado !== false;
+      MSG_CORTINA = flag.data.mensagem || '';
+      try{ localStorage.setItem(CORTINA_ECO,JSON.stringify({v:VISIVEL,m:MSG_CORTINA})); }catch(e){}
+    }
+    const user = ses && ses.data && ses.data.user;
+    if(user){
+      const {data:p}=await sb.from('fca_profiles').select('is_admin').eq('user_id',user.id).maybeSingle();
+      EH_ADMIN=!!(p&&p.is_admin);
+    }
+  }catch(e){ console.warn('cortina:',e); }
+  pintaCortina();
+  if(VISIVEL||EH_ADMIN){ initData(); setInterval(atualizar,CACHE_TTL); }
+  else set('status-badge','Em apuração');
+}
+
+function pintaCortina(){
+  const fechado=!VISIVEL;
+  document.body.classList.toggle('oculto', fechado && !EH_ADMIN);
+  document.getElementById('cortina').classList.toggle('on', fechado && !EH_ADMIN);
+  if(MSG_CORTINA) set('cortinaMsg', MSG_CORTINA);
+  const b=document.getElementById('cortinaBtn');
+  b.classList.toggle('on', EH_ADMIN);
+  b.classList.toggle('fechado', fechado);
+  b.innerHTML = (fechado?_olhoX:_olho)+`<span>${fechado?'Liberar resultado':'Ocultar resultado'}</span>`;
+  b.title = fechado ? 'Hoje as unidades veem o aviso de apuração. Clique para divulgar.'
+                    : 'Hoje as unidades veem os números. Clique para fechar até a divulgação.';
+  const av=document.getElementById('cortinaAviso');
+  av.classList.toggle('on', fechado && EH_ADMIN);
+  av.innerHTML = `<b>Resultado oculto.</b> As unidades estão vendo o aviso de período de apuração —
+    você continua enxergando os números normalmente. Clique em <b>Liberar resultado</b> quando for divulgar.`;
+}
+
+async function trocaCortina(){
+  if(!EH_ADMIN) return;
+  const b=document.getElementById('cortinaBtn'), alvo=!VISIVEL;
+  b.disabled=true;
+  try{
+    const sb=sbFlag();
+    const {data:{user}={}}=await sb.auth.getUser();
+    const {error}=await sb.from('portal_flags')
+      .update({ligado:alvo, updated_at:new Date().toISOString(), updated_by:user?user.id:null})
+      .eq('chave',FLAG_ELITE);
+    if(error) throw error;
+    VISIVEL=alvo;
+    try{ localStorage.setItem(CORTINA_ECO,JSON.stringify({v:VISIVEL,m:MSG_CORTINA})); }catch(e){}
+    pintaCortina();
+    if(VISIVEL && !RAW.length) initData();
+  }catch(e){ alert('Não deu para mudar agora: '+(e.message||e)); }
+  b.disabled=false;
+}
+
 /* ── Último acesso ── */
 function initAccessLog() {
   let name = localStorage.getItem('bi_user_name');
@@ -1261,13 +1389,14 @@ function applyTheme(t){
 
 buildIndSelector();
 renderPesos();
-document.addEventListener('DOMContentLoaded',()=>{ initAccessLog(); initData(); setInterval(atualizar,CACHE_TTL); });
+// a cortina decide se o painel carrega os dados ou mostra o aviso de apuração
+document.addEventListener('DOMContentLoaded',()=>{ initAccessLog(); cortinaInit(); });
 </script>
 <script>(function(){function go(){try{initPdfExport();}catch(e){console.error(e);}}if(document.readyState!=='loading')go();else document.addEventListener('DOMContentLoaded',go);})();</script>
 <script src="../assets/filters-toggle.js"></script>
 <script src="../assets/mobile.js?v=202608220020"></script>
 <script src="../assets/ctrlk.js"></script>
 <script src="../assets/sortable-table.js"></script>
-<script src="../assets/build-check.js?v=202608240300"></script>
+<script src="../assets/build-check.js?v=202608281200"></script>
 </body>
 </html>
