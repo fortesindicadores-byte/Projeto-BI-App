@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-<meta name="build" content="202608272100">
+<meta name="build" content="202608272130">
 <title>Carta de Custos</title>
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -583,9 +583,13 @@ async function toggleAprv(el){
     alert('Erro ao aprovar: '+error.message);
     if(r) Object.assign(r,antes);
   }
-  // redesenha a linha: o 2º farol depende do estado do 1º
-  const nova=lancRowHTML(r||{id});
-  const tmp=document.createElement('tbody'); tmp.innerHTML=nova;
+  // Redesenha a linha (o 2º farol depende do estado do 1º) NA MESMA VISÃO em
+  // que ela está: redesenhar sempre com lancRowHTML transformava a linha da
+  // visão Tabela em linha editável ao clicar no farol.
+  if(!r) return;
+  const naCaixa = !singleCtx() || VISTA_LANC==='caixa';
+  const tmp=document.createElement('tbody');
+  tmp.innerHTML = naCaixa ? lancRowBox(r) : lancRowHTML(r);
   tr.replaceWith(tmp.firstElementChild);
 }
 let _loadSeq=0;   // resposta atrasada de um filtro antigo não pode sobrescrever o atual
@@ -1079,6 +1083,6 @@ async function exportarPDF(){
 <script src="../assets/mobile.js?v=202608220020"></script>
 <script src="../assets/ctrlk.js"></script>
 <script src="../assets/sortable-table.js"></script>
-<script src="../assets/build-check.js?v=202608272100"></script>
+<script src="../assets/build-check.js?v=202608272130"></script>
 </body>
 </html>
