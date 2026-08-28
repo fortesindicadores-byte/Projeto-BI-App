@@ -543,7 +543,28 @@ async function xlsxParaLinhas(arq) {
   const XLSX = (await import('xlsx')).default;
   const wb = XLSX.readFile(arq);
   const ws = wb.Sheets[wb.SheetNames[0]];
-  return XLSX.utils.sheet_to_json(ws, { defval: null });
+  const linhas = XLSX.utils.sheet_to_json(ws, { defval: null });
+  // O Power BI fecha o export com uma linha de RODAPÉ ("Filtros aplicados:" +
+  // a lista de filtros do visual, tudo na 1ª coluna). Ela não é dado: gravada
+  // no ginfo_snapshot, virava um registro fantasma que o Farol contava como
+  // evento — no checklist de agosto era a ÚNICA linha, e o painel mostrava 1
+  // saída com OS crítica onde não havia nenhuma.
+  const ehRodape = l => {
+    // só a linha do rodapé: tem conteúdo E todo esse conteúdo é o texto dos
+    // filtros. Linha vazia não conta (every de lista vazia é true), e uma
+    // linha de dado que por acaso comece com esse texto tem outras colunas.
+    const vals = Object.values(l).filter(v => v != null && String(v).trim() !== '');
+    return vals.length > 0 && vals.every(v => /^\s*filtros aplicados\s*:/i.test(String(v)));
+  };
+  const limpas = linhas.filter(l => !ehRodape(l));
+  const cortadas = linhas.length - limpas.length;
+  if (cortadas) {
+    log(`rodapé "Filtros aplicados" descartado (${cortadas} linha)`);
+    const rod = linhas.find(ehRodape);
+    const txt = Object.values(rod).find(v => v != null && String(v).trim() !== '');
+    log('   filtros que o visual estava usando:', String(txt).replace(/\s*\n\s*/g, ' | '));
+  }
+  return limpas;
 }
 
 async function gravarSupabase(chave, linhas) {
