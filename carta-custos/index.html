@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-<meta name="build" content="202608272030">
+<meta name="build" content="202608272100">
 <title>Carta de Custos</title>
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -203,6 +203,9 @@ select.lanc-edit option{background:#0f1824;color:#fff;}
 .lanc-edit[data-f="valor"]{min-width:96px;}
 /* o "Total" do rodapé não pode esticar a coluna Data (o min-width é do DRE) */
 #tbl-lanc tfoot td.conta{min-width:0;}
+/* "sem RC": custo que nasce direto na OC (Renan, 27/08/2026) */
+.semrc{float:right;font-weight:600;text-transform:none;letter-spacing:0;opacity:.85;cursor:pointer;}
+.semrc input{vertical-align:-1px;margin-right:3px;cursor:pointer;}
 /* visão Tabela (só leitura): data compacta, sobra vai para RC/OC/NF */
 table.dre.box th:nth-child(1),table.dre.box td:nth-child(1){width:88px;}
 table.dre.box th:nth-child(9),table.dre.box td:nth-child(9),
@@ -309,7 +312,7 @@ body.light-mode .lf input,body.light-mode .lf select{background:#fff;border-colo
       <label class="mf mf-wide"><span>Descrição</span><input id="f-descricao" placeholder="descrição do serviço"></label>
       <div class="mgrid mgrid-4">
         <label class="mf"><span>Valor</span><input type="text" inputmode="decimal" id="f-valor" placeholder="0,00" oninput="fmtValorInput(this)"></label>
-        <label class="mf"><span>RC</span><input id="f-rc" placeholder="nº" oninput="rcDot(this)"></label>
+        <label class="mf"><span>RC <span class="semrc"><input type="checkbox" id="f-semrc" onchange="aplicaSemRC()"> sem RC</span></span><input id="f-rc" placeholder="nº" oninput="rcDot(this)"></label>
         <label class="mf"><span>OC</span><input id="f-oc" placeholder="nº"></label>
         <label class="mf"><span>NF</span><input id="f-nf" placeholder="nº"></label>
       </div>
@@ -849,17 +852,38 @@ function abrirLanc(id){
   $('f-rc').value          = d.rc||'';
   $('f-oc').value          = d.oc||'';
   $('f-nf').value          = d.nf||'';
-  // OC e NF seguem a mesma trava da linha: só depois da aprovação
-  const trava = !(r && r.aprovado);
-  ['f-oc','f-nf'].forEach(k=>{ const e=$(k); e.disabled=trava;
-    e.title = trava ? 'Aguardando aprovação (farol verde) para preencher' : ''; });
+  // "sem RC": custo que nasce direto na OC. Marca N/A, trava o campo e já
+  // entra com a 1ª aprovação dada — a etapa da OC continua exigindo o
+  // coordenador, então o controle não some, só muda de lugar.
+  $('f-semrc').checked = String(d.rc||'').trim().toUpperCase()==='N/A';
+  aplicaSemRC();
   $('m-del').style.display = r ? '' : 'none';
   $('m-hint').textContent = r
-    ? (r.aprovado ? 'Aprovado. Sobe ao DRE quando tiver NF e Valor.'
-                  : 'Aguardando aprovação do coordenador — o farol na tabela libera OC e NF.')
-    : 'A RC é obrigatória: o lançamento só passa a existir a partir dela.';
+    ? (r.aprovado_oc ? 'OC aprovada. Sobe ao DRE quando tiver NF e Valor.'
+       : r.aprovado  ? 'RC aprovada — preencha a OC; a NF abre quando a OC for aprovada.'
+                     : 'Aguardando aprovação do coordenador — o farol na tabela libera a OC.')
+    : 'Informe a RC, ou marque "sem RC" quando o custo nascer direto na OC.';
   $('mbg').classList.add('open');
   setTimeout(()=>{ const f=$('f-equipamento'); if(f && !f.disabled) f.focus(); }, 30);
+}
+/* Alguns custos nascem direto na OC, sem RC (Renan, 27/08/2026). Marcar
+   "sem RC" grava N/A, trava o campo e dá a 1ª aprovação, liberando a OC na
+   hora. A 2ª aprovação (a da OC) continua valendo, então o coordenador segue
+   no circuito antes da NF.                                                 */
+function aplicaSemRC(){
+  const sem=$('f-semrc').checked, rc=$('f-rc');
+  if(sem){ rc.value='N/A'; rc.disabled=true;  rc.title='Custo sem RC — nasce direto na OC'; }
+  else   { if(String(rc.value).trim().toUpperCase()==='N/A') rc.value=''; rc.disabled=false; rc.title=''; }
+  travaCaixa();
+}
+// OC abre com a 1ª aprovação (ou com "sem RC"); NF só com a 2ª
+function travaCaixa(){
+  const r = LANC_ABERTO ? ROWS.find(x=>x.id===LANC_ABERTO) : null;
+  const okRc = $('f-semrc').checked || !!(r && r.aprovado);
+  const okOc = !!(r && r.aprovado_oc);
+  const set=(k,ok,msg)=>{ const e=$(k); if(!e) return; e.disabled=!ok; e.title=ok?'':msg; };
+  set('f-oc', okRc, 'Aguardando aprovação da RC (farol verde) para preencher');
+  set('f-nf', okOc, 'Aguardando aprovação da OC (farol verde) para preencher');
 }
 // trocar a unidade na caixa troca a lista de projetos (cada unidade tem os seus)
 function ctxUnidadeMudou(){
@@ -884,13 +908,22 @@ async function salvarLancModal(){
     equipamento:v('f-equipamento').trim().toUpperCase(), fornecedor:v('f-fornecedor').trim().toUpperCase(),
     rc:v('f-rc').trim(), oc:v('f-oc').trim(), nf:v('f-nf').trim(),
     conta:v('f-conta'), grupo:v('f-grupo'), descricao:v('f-descricao').trim(), valor:valor};
+  const semRC=$('f-semrc').checked;
+  if(semRC) payload.rc='N/A';
   if(LANC_ABERTO){
-    const r=ROWS.find(x=>x.id===LANC_ABERTO); if(r) Object.assign(r,payload);
+    const r=ROWS.find(x=>x.id===LANC_ABERTO);
+    // marcar "sem RC" dá a 1ª aprovação na hora; DESmarcar num lançamento que
+    // era N/A devolve as duas etapas para pendente — voltou a exigir RC de
+    // verdade, então a OC não pode seguir aprovada em cima da anterior.
+    if(semRC) payload.aprovado=true;
+    else if(r && String(r.rc||'').trim().toUpperCase()==='N/A'){ payload.aprovado=false; payload.aprovado_oc=false; }
+    if(r) Object.assign(r,payload);
     const {error}=await sb.from('carta_custos').update(payload).eq('id',LANC_ABERTO);
     if(error){ alert('Erro ao salvar: '+error.message); return; }
   }else{
-    if(!payload.rc){ alert('Informe a RC — o lançamento só existe a partir dela.'); $('f-rc').focus(); return; }
-    payload.aprovado=false;
+    if(!payload.rc){ alert('Informe a RC, ou marque "sem RC" se o custo nasce direto na OC.'); $('f-rc').focus(); return; }
+    payload.aprovado=semRC;          // sem RC já entra com a 1ª etapa vencida
+    payload.aprovado_oc=false;
     const {data,error}=await sb.from('carta_custos').insert(payload).select('*').single();
     if(error){ alert('Erro ao lançar: '+error.message); return; }
     ROWS.unshift(fromDB(data));
@@ -1046,6 +1079,6 @@ async function exportarPDF(){
 <script src="../assets/mobile.js?v=202608220020"></script>
 <script src="../assets/ctrlk.js"></script>
 <script src="../assets/sortable-table.js"></script>
-<script src="../assets/build-check.js?v=202608272030"></script>
+<script src="../assets/build-check.js?v=202608272100"></script>
 </body>
 </html>
