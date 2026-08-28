@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
-<meta name="build" content="202608251900">
+<meta name="build" content="202608272000">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <title>Disponibilidade · Frota do Dia</title>
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -510,8 +510,11 @@ input[type=date]::-webkit-calendar-picker-indicator{cursor:pointer;}
     </div>
     <div class="f" style="margin-top:13px"><label>Descrição do problema</label><textarea id="mDesc" placeholder="ex.: Em execução mecânica — embreagem"></textarea></div>
     <div class="f3">
+      <div class="f"><label>Fornecedor</label><input id="mForn" placeholder="oficina / fornecedor"></div>
       <div class="f"><label>RC/OC</label><input id="mRcoc" placeholder="nº RC/OC"></div>
       <div class="f"><label>Previsão de retorno</label><input type="date" id="mPrev"></div>
+    </div>
+    <div class="f2">
       <div class="f"><label>Retornou em</label><input type="date" id="mRetorno"></div>
     </div>
     <div class="f" style="margin-top:13px"><label>Observação</label><textarea id="mObs"></textarea></div>
@@ -838,7 +841,7 @@ async function renderListaDia(d){
     return t.toLocaleDateString('pt-BR');};
   $('cols').innerHTML=aviso+`<div class="tab-wrap"><table class="tab">
     <thead><tr><th>Placa</th><th class="c-proj wrap">Projeto</th><th class="c-tipo wrap">Modelo</th>
-      <th class="c-grupo wrap">Grupo</th><th>Problema</th><th>Local</th><th>RC/OC</th><th>Parada</th>
+      <th class="c-grupo wrap">Grupo</th><th>Problema</th><th>Local</th><th>Fornecedor</th><th>RC/OC</th><th>Parada</th>
       <th>Previsão</th><th class="c-sit">Situação</th><th class="num c-dias">Dias</th></tr></thead>
     <tbody>${rows.map(r=>{
       const dp=r.dias_parado||0;
@@ -847,7 +850,7 @@ async function renderListaDia(d){
         <td class="forte">${esc(r.placa)}</td><td class="c-proj wrap">${esc(projLbl(projDe(r)))}</td>
         <td class="c-tipo wrap">${esc(modeloDe(r)||'—')}</td>
         <td class="c-grupo wrap">${esc(r.grupo||'—')}</td><td class="livre">${esc(r.descricao_problema||'—')}</td>
-        <td>${esc(r.local_manutencao||'—')}</td><td>${esc(r.rc_oc||'—')}</td>
+        <td>${esc(r.local_manutencao||'—')}</td><td>${esc(r.fornecedor||'—')}</td><td>${esc(r.rc_oc||'—')}</td>
         <td>${parada(r)}</td>
         <td>${r.previsao_retorno?`<span class="farol ${late?'late':'ok'}"></span>${dataBR(r.previsao_retorno)}`:'—'}</td>
         <td class="c-sit">${chip(r.status)}</td>
@@ -859,7 +862,7 @@ function htmlLista(){
   if(!rows.length) return '<div class="cvazia">Nenhum veículo indisponível com os filtros atuais 🎉</div>';
   return `<div class="tab-wrap"><table class="tab">
     <thead><tr><th>Placa</th><th class="c-proj wrap">Projeto</th><th class="c-tipo wrap">Tipo</th>
-      <th class="c-grupo wrap">Grupo</th><th>Problema</th><th>Local</th><th>RC/OC</th><th>Parada</th>
+      <th class="c-grupo wrap">Grupo</th><th>Problema</th><th>Local</th><th>Fornecedor</th><th>RC/OC</th><th>Parada</th>
       <th>Previsão</th><th class="c-sit">Situação</th><th class="num c-dias">Dias</th></tr></thead>
     <tbody>${rows.map(e=>{
       const dp=diasParado(e);
@@ -868,7 +871,7 @@ function htmlLista(){
         <td class="forte">${esc(e.placa)}</td><td class="c-proj wrap">${esc(projLbl(projDe(e)))}</td>
         <td class="c-tipo wrap">${esc(tipoDe(e)||'—')}</td>
         <td class="c-grupo wrap">${esc(e.grupo||'—')}</td><td class="livre">${esc(e.descricao_problema||'—')}</td>
-        <td>${esc(e.local_manutencao||'—')}</td><td>${esc(e.rc_oc||'—')}</td>
+        <td>${esc(e.local_manutencao||'—')}</td><td>${esc(e.fornecedor||'—')}</td><td>${esc(e.rc_oc||'—')}</td>
         <td>${dataBR(e.data_parada)}</td>
         <td>${prevCel(e)}</td>
         <td class="c-sit">${chip(e.status)}</td>
@@ -1573,6 +1576,16 @@ function subDe(placa){
   const a=ATIVOS.find(x=>x.placa===normP(placa));
   return a?[a.filial,a.projeto,a.tipo,a.modelo].filter(Boolean).join(' · '):'';
 }
+/* Fornecedor só existe quando a manutenção é EXTERNA (Renan, 27/08/2026):
+   INTERNO é a própria oficina, então o campo trava em N/A e não é digitável.
+   Ao voltar para EXTERNO o campo abre limpo — o N/A do interno não fica
+   grudado como se fosse nome de fornecedor.                              */
+function aplicaForn(){
+  const interno = $('mLocal').value === 'INTERNO';
+  const f = $('mForn');
+  if(interno){ f.value='N/A'; f.disabled=true;  f.title='Manutenção interna — sem fornecedor'; }
+  else       { if(f.value==='N/A') f.value=''; f.disabled=false; f.title=''; }
+}
 function preenche(e){
   $('mPlaca').value=e.placa||'';
   $('mParada').value=e.data_parada||hojeBRT();
@@ -1580,13 +1593,16 @@ function preenche(e){
   $('mLocal').value=e.local_manutencao||'EXTERNO';
   $('mStatus').value=e.status||'Em execução';
   $('mDesc').value=e.descricao_problema||'';
+  $('mForn').value=e.fornecedor||'';
   $('mRcoc').value=e.rc_oc||'';
+  aplicaForn();
   $('mPrev').value=e.previsao_retorno||'';
   $('mRetorno').value=e.data_retorno||'';
   $('mObs').value=e.observacao||'';
   $('mSub').textContent=subDe(e.placa||'');
 }
 $('mPlaca').addEventListener('input',()=>{$('mSub').textContent=subDe($('mPlaca').value);});
+$('mLocal').addEventListener('change',aplicaForn);
 function abreModal(id){
   const e=EVENTS.find(x=>x.id===id); if(!e)return;
   ID=id; $('mTit').textContent='Editar indisponibilidade';
@@ -1618,6 +1634,7 @@ async function salvar(){
     modelo:a?a.modelo:null, tipo_veiculo:a?a.tipo:null,
     grupo:$('mGrupo2').value, local_manutencao:$('mLocal').value,
     descricao_problema:$('mDesc').value.trim()||null,
+    fornecedor:($('mLocal').value==='INTERNO' ? 'N/A' : ($('mForn').value.trim()||null)),
     rc_oc:$('mRcoc').value.trim()||null,
     data_parada:parada,
     previsao_retorno:$('mPrev').value||null,
@@ -1763,6 +1780,6 @@ iniciar();
 <!-- exportação padrão do Gestão em Movimento: botão direito na tabela, no
      gráfico ou no card → Excel · PNG · PNG com fundo transparente -->
 <script src="../assets/excel-export.js"></script>
-<script src="../assets/build-check.js?v=202608251900"></script>
+<script src="../assets/build-check.js?v=202608272000"></script>
 </body>
 </html>
