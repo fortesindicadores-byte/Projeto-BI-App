@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="build" content="202608311900">
+<meta name="build" content="202608312130">
 <title>Conferência de Locação · Gestão em Movimento</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -864,6 +864,8 @@ function benHit(l){
 function benProj(projeto){
   const pj=String(projeto||'').trim();
   const base=pj.replace(/\s*-\s*[A-Z]{3}\s*$/,'').trim()||pj;
+  // Apoio e WH são o MESMO projeto: vale WH (Renan, 31/08/2026)
+  if(/^(APOIO|WH)$/i.test(base)) return 'WH';
   return base.toLowerCase().replace(/(^|\s)\S/g,c=>c.toUpperCase());
 }
 function aplicaBenner(){
@@ -995,9 +997,28 @@ function ftDoMes(rows,mes,ano){
 /* ── prévias e faturamento (planilhas da Vamos) ── */
 function linhasVamos(a){
   if(!a||a.erro) return [];
-  return objetos(a.abas[0].linhas).map(o=>{
+  const linhas=a.abas[0].linhas;
+  if(!linhas||!linhas.length) return [];
+  // mesma detecção de cabeçalho do objetos(), mas mantendo a linha CRUA por
+  // perto: o desconto do FATURAMENTO é a soma da COLUNA W da planilha
+  // (Renan, 31/08/2026) — vem pela POSIÇÃO, porque o rótulo dela não segue
+  // os apelidos usuais. Nos demais arquivos vale a busca pelo nome.
+  let hi=linhas.findIndex(l=>l.filter(c=>c!=null&&String(c).trim()!=='').length>5);
+  if(hi<0) hi=0;
+  const H=linhas[hi].map(c=>String(c==null?'':c).trim());
+  const COL_W=22;                       // W = 23ª coluna
+  const usaW=a.tipo==='faturamento'&&H.length>COL_W;
+  return linhas.slice(hi+1)
+    .filter(l=>l.some(c=>c!=null&&String(c).trim()!==''))
+    .map(raw=>{
+    const o={}; H.forEach((h,i)=>{ if(h) o[h]=raw[i]; });
     const div=col(o,'DIVISÃO','Divisão','Divisao');
     const placa=col(o,'PLACA','Placa'), chassi=col(o,'CHASSI','Chassi');
+    // fallback pelo nome, para planilha que não alcança a coluna W —
+    // `temDesc` diz se a coluna existia, para o painel não confundir
+    // "coluna ausente" com "desconto zero".
+    const descNome=col(o,'DESCONTO','Desconto','DESCONTOS','Descontos','VALOR DESCONTO',
+                       'Valor Desconto','VLR DESCONTO','Vlr Desconto','DESC.','Desc.');
     return {
       k:chaveAtivo(div,placa,chassi), div, placa, chassi,
       status:String(col(o,'STATUS DO ATIVO','Status do Ativo')||'').trim(),
@@ -1005,14 +1026,8 @@ function linhasVamos(a){
       dias:n(col(o,'QTD. DE DIAS','Qtd. de Dias')),
       total:n(col(o,'TOTAL','Total')),
       contrato:n(col(o,'VALOR CONTRATO','Valor Locação','Valor Contrato')),
-      // desconto vem da PLANILHA quando existe (Renan, 31/08/2026). O nome da
-      // coluna varia entre os arquivos, por isso a busca por vários rótulos —
-      // e `temDesc` diz se a coluna existia, para o painel não confundir
-      // "coluna ausente" com "desconto zero".
-      desc:n(col(o,'DESCONTO','Desconto','DESCONTOS','Descontos','VALOR DESCONTO',
-                   'Valor Desconto','VLR DESCONTO','Vlr Desconto','DESC.','Desc.')),
-      temDesc:col(o,'DESCONTO','Desconto','DESCONTOS','Descontos','VALOR DESCONTO',
-                    'Valor Desconto','VLR DESCONTO','Vlr Desconto','DESC.','Desc.')!==undefined,
+      desc: usaW ? n(raw[COL_W]) : n(descNome),
+      temDesc: usaW ? true : descNome!==undefined,
     };
   }).filter(r=>r.k&&r.k!=='P:'&&r.k!=='C:');
 }
@@ -1831,6 +1846,6 @@ initPdfExport({
   isLight:()=>document.body.classList.contains('claro'), setTheme:aplicaTema
 });
 </script>
-<script src="../assets/build-check.js?v=202608311900"></script>
+<script src="../assets/build-check.js?v=202608312130"></script>
 </body>
 </html>
