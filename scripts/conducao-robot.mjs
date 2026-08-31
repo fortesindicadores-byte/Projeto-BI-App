@@ -422,7 +422,10 @@ function normalizaVF(lista, dia) {
 async function gravaDiario(linhas) {
   if (!linhas.length) return 0;
   for (let i = 0; i < linhas.length; i += 500) {
-    const lote = linhas.slice(i, i + 500).map(({ _nome, _uo, ...l }) => l);
+    // os campos _* são metadados do robô (nome, uo, unidade do Sem Login) e
+    // NÃO são colunas — uma chave a mais num lote misto derruba o upsert
+    // inteiro com PGRST102 "All object keys must match" (bug real, 31/08/2026)
+    const lote = linhas.slice(i, i + 500).map(({ _nome, _uo, _uni, ...l }) => l);
     const r = await fetch(`${SB_URL}/rest/v1/ce_diario?on_conflict=dia,chave`, {
       method: 'POST', headers: { ...H_SB, Prefer: 'resolution=merge-duplicates' }, body: JSON.stringify(lote),
     });
