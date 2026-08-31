@@ -3,11 +3,12 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-<meta name="build" content="202609010130">
+<meta name="build" content="202609010230">
 <title>Preventivas Seara · BI Frota</title>
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0"></script>
 <script src="../assets/gviz-cache.js"></script>
 <style>
 /* ============================================================
@@ -418,18 +419,23 @@ table.tab th.gapL,table.tab td.gapL{padding-left:34px;}
           <div class="rlbl">Aderência ao prazo — frota inteira</div>
           <div class="res-big" id="gAder" style="margin:3px 0 2px">—</div>
           <div class="rsub" id="gAderM" style="margin:0 0 14px">—</div>
-          <div class="res-hero">
-            <div><div class="rlbl">Montadora</div><b class="rval" id="gMont">—</b></div>
-            <div><div class="rlbl">Frio</div><b class="rval" id="gFrio">—</b></div>
-            <div><div class="rlbl">Vencidas</div><b class="rval red" id="gVen">—</b></div>
-            <div><div class="rlbl">Em atenção</div><b class="rval" id="gAte" style="color:var(--ambar)">—</b></div>
-            <div><div class="rlbl">No prazo</div><b class="rval grn" id="gOk">—</b></div>
-            <div><div class="rlbl">Sem km na API</div><b class="rval" id="gSem">—</b></div>
+          <div class="kpis" style="grid-template-columns:repeat(6,1fr)">
+            <div class="kpi"><div class="kl">Montadora</div><div class="kv" id="gMont">—</div><div class="km" id="gMontM">—</div></div>
+            <div class="kpi"><div class="kl">Frio</div><div class="kv" id="gFrio">—</div><div class="km" id="gFrioM">—</div></div>
+            <div class="kpi"><div class="kl">Vencidas</div><div class="kv" id="gVen" style="color:var(--vermelho)">—</div><div class="km">nas duas visões</div></div>
+            <div class="kpi"><div class="kl">Em atenção</div><div class="kv" id="gAte" style="color:var(--ambar)">—</div><div class="km">perto de vencer</div></div>
+            <div class="kpi"><div class="kl">No prazo</div><div class="kv" id="gOk" style="color:var(--verde)">—</div><div class="km">nas duas visões</div></div>
+            <div class="kpi"><div class="kl">Sem km na API</div><div class="kv" id="gSem">—</div><div class="km">montadora sem hodômetro</div></div>
           </div>
         </div>
         <div class="tab-wrap" style="flex:1;min-height:0;overflow:hidden;padding:14px 16px 10px;display:flex;flex-direction:column">
-          <div style="font-size:12px;font-weight:800;color:var(--txt)">Aderência mensal — últimos 12 meses</div>
-          <div class="rsub" style="margin:1px 0 10px">% da frota dentro do prazo no fim de cada mês (reconstruída pelos lançamentos)</div>
+          <div style="display:flex;align-items:baseline;gap:14px">
+            <div style="font-size:12px;font-weight:800;color:var(--txt)">Aderência mensal</div>
+            <div style="flex:1"></div>
+            <span style="font-size:10px;color:var(--txt2)"><i style="display:inline-block;width:10px;height:10px;border-radius:2px;background:#F97316;margin-right:5px;vertical-align:-1px"></i>Montadora</span>
+            <span style="font-size:10px;color:var(--txt2)"><i style="display:inline-block;width:10px;height:10px;border-radius:2px;background:#2E90E8;margin-right:5px;vertical-align:-1px"></i>Frio</span>
+          </div>
+          <div class="rsub" style="margin:1px 0 10px">% da frota dentro do prazo no fim de cada mês, medida pelos lançamentos — de ago/26 em diante</div>
           <div style="flex:1;min-height:0;position:relative"><canvas id="gGraf"></canvas></div>
         </div>
       </div>
@@ -676,10 +682,12 @@ function aderNoDia(escopo,ref){
     if(u&&difDias(String(u.data).slice(0,10),ref)<=prazo)ok++;});
   return VEICS.length?ok/VEICS.length*100:null;
 }
-function meses12(){
+/* a medição começa em ago/2026 (quando o painel entrou no ar) e vai
+   crescendo mês a mês conforme os lançamentos — sem reconstrução p/ trás */
+const GRAF_INI={y:2026,m:8};
+function mesesGraf(){
   const hoje=hojeBRT(),[hy,hm]=hoje.split('-').map(Number),out=[];
-  for(let i=11;i>=0;i--){
-    let y=hy,m=hm-i; while(m<1){m+=12;y--;}
+  for(let y=GRAF_INI.y,m=GRAF_INI.m; y<hy||(y===hy&&m<=hm); m===12?(m=1,y++):m++){
     const fim=new Date(Date.UTC(y,m,0)).toISOString().slice(0,10);   // último dia do mês
     out.push({rot:['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'][m-1]+'/'+String(y).slice(-2),
               ref:fim<hoje?fim:hoje});
@@ -695,28 +703,36 @@ function renderResumo(){
   $('gAder').textContent=pc(aT); $('gAder').style.color=cor(aT);
   $('gAderM').textContent=`${T.filter(l=>l.noPrazo).length} de ${T.length} dentro do prazo · ${VEICS.length} veículos na frota`;
   $('gMont').textContent=pc(aM); $('gMont').style.color=cor(aM);
+  $('gMontM').textContent=`${M.filter(l=>l.noPrazo).length} de ${M.length} no prazo`;
   $('gFrio').textContent=pc(aF); $('gFrio').style.color=cor(aF);
+  $('gFrioM').textContent=`${F.filter(l=>l.noPrazo).length} de ${F.length} no prazo`;
   $('gVen').textContent=T.filter(l=>l.status==='vencida').length;
   $('gAte').textContent=T.filter(l=>l.status==='atencao').length;
   $('gOk').textContent=T.filter(l=>l.status==='prazo').length;
   $('gSem').textContent=M.filter(l=>l.semKm).length;
-  const ms=meses12();
+  const ms=mesesGraf();
   const claro=document.body.classList.contains('claro');
   const tick={color:claro?'#4A5568':'#B2BCD2',font:{family:'Montserrat',size:10}};
+  const dM=ms.map(m=>aderNoDia('montadora',m.ref)),dF=ms.map(m=>aderNoDia('frio',m.ref));
+  const pico=Math.max(1,...dM.filter(v=>v!=null),...dF.filter(v=>v!=null));
+  if(window.ChartDataLabels&&!window.__dlOk){Chart.register(ChartDataLabels);window.__dlOk=1;}
   if(CHART){CHART.destroy();CHART=null;}
-  CHART=new Chart($('gGraf'),{type:'line',data:{labels:ms.map(m=>m.rot),datasets:[
-    {label:'MONTADORA',data:ms.map(m=>aderNoDia('montadora',m.ref)),borderColor:'#F97316',
-     backgroundColor:'#F97316',borderWidth:3,tension:.3,fill:false,pointRadius:3},
-    {label:'FRIO',data:ms.map(m=>aderNoDia('frio',m.ref)),borderColor:'#2E90E8',
-     backgroundColor:'#2E90E8',borderWidth:2,tension:.3,fill:false,pointRadius:3},
+  // padrão do portal: barras, SEM grade, eixo Y escondido e justo ao pico,
+  // rótulo de dados no topo (inteiro, sem casa da vírgula)
+  CHART=new Chart($('gGraf'),{type:'bar',data:{labels:ms.map(m=>m.rot),datasets:[
+    {label:'MONTADORA',data:dM,backgroundColor:'#F97316',borderRadius:{topLeft:4,topRight:4},maxBarThickness:64},
+    {label:'FRIO',data:dF,backgroundColor:'#2E90E8',borderRadius:{topLeft:4,topRight:4},maxBarThickness:64},
   ]},options:{responsive:true,maintainAspectRatio:false,
-    scales:{y:{min:0,max:100,ticks:{...tick,callback:v=>v+'%'},
-               grid:{color:claro?'rgba(15,23,42,.08)':'rgba(255,255,255,.06)'}},
-            x:{ticks:tick,grid:{display:false}}},
-    plugins:{legend:{labels:{color:claro?'#161D2B':'#EEF2FA',font:{family:'Montserrat',size:10},boxWidth:14}},
+    layout:{padding:{top:16}},
+    scales:{y:{display:false,min:0,suggestedMax:Math.min(100,pico*1.15)},
+            x:{ticks:tick,grid:{display:false},border:{display:false}}},
+    plugins:{legend:{display:false},
+      datalabels:{anchor:'end',align:'end',offset:0,clip:false,
+        color:claro?'#4A5568':'#B2BCD2',font:{family:'Montserrat',size:10,weight:700},
+        formatter:v=>v==null?'':Math.round(v)+'%'},
       tooltip:{backgroundColor:'#141B26',titleColor:'#F97316',bodyColor:'#F1F5F9',
         borderColor:'#1E2D40',borderWidth:1,titleFont:{family:'Montserrat'},bodyFont:{family:'Montserrat'},
-        callbacks:{label:c=>' '+c.dataset.label+': '+(c.parsed.y==null?'—':c.parsed.y.toFixed(1).replace('.',',')+'%')}}}}});
+        callbacks:{label:c=>' '+c.dataset.label+': '+(c.parsed.y==null?'—':Math.round(c.parsed.y)+'%')}}}}});
 }
 const filtradas=()=>LINHAS.filter(l=>
   (!FMOD.size||FMOD.has(l.modelo))&&
@@ -876,6 +892,6 @@ iniciar();
 <script src="../assets/mobile.js?v=202608220020"></script>
 <script src="../assets/ctrlk.js"></script>
 <script src="../assets/excel-export.js"></script>
-<script src="../assets/build-check.js?v=202609010130"></script>
+<script src="../assets/build-check.js?v=202609010230"></script>
 </body>
 </html>
