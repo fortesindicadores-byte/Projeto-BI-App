@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-<meta name="build" content="202609010230">
+<meta name="build" content="202609010300">
 <title>Preventivas Seara · BI Frota</title>
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -435,7 +435,7 @@ table.tab th.gapL,table.tab td.gapL{padding-left:34px;}
             <span style="font-size:10px;color:var(--txt2)"><i style="display:inline-block;width:10px;height:10px;border-radius:2px;background:#F97316;margin-right:5px;vertical-align:-1px"></i>Montadora</span>
             <span style="font-size:10px;color:var(--txt2)"><i style="display:inline-block;width:10px;height:10px;border-radius:2px;background:#2E90E8;margin-right:5px;vertical-align:-1px"></i>Frio</span>
           </div>
-          <div class="rsub" style="margin:1px 0 10px">% da frota dentro do prazo no fim de cada mês, medida pelos lançamentos — de ago/26 em diante</div>
+          <div class="rsub" style="margin:1px 0 10px">% da frota dentro do prazo no fim de cada mês, medida pelos lançamentos (começou em ago/26)</div>
           <div style="flex:1;min-height:0;position:relative"><canvas id="gGraf"></canvas></div>
         </div>
       </div>
@@ -685,12 +685,15 @@ function aderNoDia(escopo,ref){
 /* a medição começa em ago/2026 (quando o painel entrou no ar) e vai
    crescendo mês a mês conforme os lançamentos — sem reconstrução p/ trás */
 const GRAF_INI={y:2026,m:8};
+/* eixo sempre jan→dez do ano corrente; mês fora da medição (antes de ago/26
+   ou ainda por vir) fica sem barra */
 function mesesGraf(){
   const hoje=hojeBRT(),[hy,hm]=hoje.split('-').map(Number),out=[];
-  for(let y=GRAF_INI.y,m=GRAF_INI.m; y<hy||(y===hy&&m<=hm); m===12?(m=1,y++):m++){
-    const fim=new Date(Date.UTC(y,m,0)).toISOString().slice(0,10);   // último dia do mês
-    out.push({rot:['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'][m-1]+'/'+String(y).slice(-2),
-              ref:fim<hoje?fim:hoje});
+  for(let m=1;m<=12;m++){
+    const fim=new Date(Date.UTC(hy,m,0)).toISOString().slice(0,10);   // último dia do mês
+    const mede=(hy>GRAF_INI.y||(hy===GRAF_INI.y&&m>=GRAF_INI.m))&&m<=hm;
+    out.push({rot:['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'][m-1]+'/'+String(hy).slice(-2),
+              ref:mede?(fim<hoje?fim:hoje):null});
   }
   return out;
 }
@@ -713,25 +716,32 @@ function renderResumo(){
   const ms=mesesGraf();
   const claro=document.body.classList.contains('claro');
   const tick={color:claro?'#4A5568':'#B2BCD2',font:{family:'Montserrat',size:10}};
-  const dM=ms.map(m=>aderNoDia('montadora',m.ref)),dF=ms.map(m=>aderNoDia('frio',m.ref));
+  const dM=ms.map(m=>m.ref?aderNoDia('montadora',m.ref):null),
+        dF=ms.map(m=>m.ref?aderNoDia('frio',m.ref):null);
   const pico=Math.max(1,...dM.filter(v=>v!=null),...dF.filter(v=>v!=null));
   if(window.ChartDataLabels&&!window.__dlOk){Chart.register(ChartDataLabels);window.__dlOk=1;}
   if(CHART){CHART.destroy();CHART=null;}
-  // padrão do portal: barras, SEM grade, eixo Y escondido e justo ao pico,
-  // rótulo de dados no topo (inteiro, sem casa da vírgula)
+  // padrão dos gráficos de barra do portal (copiado da visao-financeira):
+  // barras coladas (.97/.94), sem borda arredondada, sem grade nenhuma,
+  // eixo Y justo ao pico com poucos ticks, rótulo 700 11px no topo
   CHART=new Chart($('gGraf'),{type:'bar',data:{labels:ms.map(m=>m.rot),datasets:[
-    {label:'MONTADORA',data:dM,backgroundColor:'#F97316',borderRadius:{topLeft:4,topRight:4},maxBarThickness:64},
-    {label:'FRIO',data:dF,backgroundColor:'#2E90E8',borderRadius:{topLeft:4,topRight:4},maxBarThickness:64},
+    {label:'MONTADORA',data:dM,backgroundColor:'#F97316',borderColor:'#F97316',
+     borderWidth:1,borderRadius:0,barPercentage:.97,categoryPercentage:.94},
+    {label:'FRIO',data:dF,backgroundColor:'#2E90E8',borderColor:'#2E90E8',
+     borderWidth:1,borderRadius:0,barPercentage:.97,categoryPercentage:.94},
   ]},options:{responsive:true,maintainAspectRatio:false,
-    layout:{padding:{top:16}},
-    scales:{y:{display:false,min:0,suggestedMax:Math.min(100,pico*1.15)},
+    layout:{padding:{top:22}},
+    scales:{y:{beginAtZero:true,suggestedMax:Math.min(100,Math.ceil(pico*1.12)),
+               ticks:{...tick,maxTicksLimit:6,callback:v=>v+'%'},
+               grid:{display:false},border:{display:false}},
             x:{ticks:tick,grid:{display:false},border:{display:false}}},
     plugins:{legend:{display:false},
       datalabels:{anchor:'end',align:'end',offset:0,clip:false,
-        color:claro?'#4A5568':'#B2BCD2',font:{family:'Montserrat',size:10,weight:700},
+        color:claro?'#161D2B':'#EEF2FA',font:{family:'Montserrat',size:11,weight:700},
         formatter:v=>v==null?'':Math.round(v)+'%'},
-      tooltip:{backgroundColor:'#141B26',titleColor:'#F97316',bodyColor:'#F1F5F9',
-        borderColor:'#1E2D40',borderWidth:1,titleFont:{family:'Montserrat'},bodyFont:{family:'Montserrat'},
+      tooltip:{backgroundColor:claro?'#FFFFFF':'#1B1B1E',titleColor:'#F97316',
+        bodyColor:claro?'#161D2B':'#EEF2FA',borderColor:claro?'#d7dce4':'#33343A',borderWidth:1,
+        titleFont:{family:'Montserrat'},bodyFont:{family:'Montserrat'},
         callbacks:{label:c=>' '+c.dataset.label+': '+(c.parsed.y==null?'—':Math.round(c.parsed.y)+'%')}}}}});
 }
 const filtradas=()=>LINHAS.filter(l=>
@@ -892,6 +902,6 @@ iniciar();
 <script src="../assets/mobile.js?v=202608220020"></script>
 <script src="../assets/ctrlk.js"></script>
 <script src="../assets/excel-export.js"></script>
-<script src="../assets/build-check.js?v=202609010230"></script>
+<script src="../assets/build-check.js?v=202609010300"></script>
 </body>
 </html>
