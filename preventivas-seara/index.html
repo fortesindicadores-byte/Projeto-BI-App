@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-<meta name="build" content="202608311500">
+<meta name="build" content="202608312100">
 <title>Preventivas Seara · BI Frota</title>
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -263,7 +263,7 @@ body.claro .menu{box-shadow:0 18px 40px rgba(15,23,42,.16);}
 .cvazia{padding:14px 4px;font-size:12px;color:var(--txt3);}
 .tab-wrap{overflow:auto;border:1px solid var(--card-brd);border-radius:10px;background:var(--side);
   backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);}
-table.tab{width:100%;border-collapse:collapse;font-size:11px;}
+table.tab{width:100%;border-collapse:collapse;font-size:12px;}
 table.tab thead th{position:sticky;top:0;z-index:2;background:var(--cabec);text-align:left;
   padding:11px 12px;font-size:10px;font-weight:700;color:var(--txt2);text-transform:uppercase;
   letter-spacing:.8px;border-bottom:1px solid var(--card-brd);white-space:nowrap;}
@@ -355,6 +355,7 @@ table.tab{font-size:11px;}
    especificidade (armadilha já registrada no CLAUDE.md) */
 .s-user .av{width:24px;height:24px;flex:0 0 24px;}
 table.tab td.vazio{color:var(--txt4);}
+.farol.at{background:var(--ambar);}
 
 </style>
 </head>
@@ -407,18 +408,16 @@ table.tab td.vazio{color:var(--txt4);}
     </div>
 
     <div class="cols" id="cols">
-      <div class="res-hero" style="margin-bottom:12px">
-        <div>
-          <div class="rlbl">Aderência ao prazo</div>
-          <div class="res-big" id="kAder">—</div>
-          <div class="rsub" id="kAderM" style="margin:0">—</div>
+      <div style="flex:0 0 auto;margin-bottom:12px">
+        <div class="rlbl">Aderência ao prazo</div>
+        <div class="res-big" id="kAder" style="margin:3px 0 2px">—</div>
+        <div class="rsub" id="kAderM" style="margin:0 0 12px">—</div>
+        <div class="res-hero">
+          <div><div class="rlbl">Total de veículos</div><b class="rval" id="kTot">—</b></div>
+          <div><div class="rlbl">Vencidas</div><b class="rval red" id="kVen">—</b></div>
+          <div><div class="rlbl">Em atenção</div><b class="rval" id="kAte" style="color:var(--ambar)">—</b></div>
+          <div><div class="rlbl">No prazo</div><b class="rval grn" id="kOk">—</b></div>
         </div>
-        <div><div class="rlbl">Total de veículos</div><b class="rval" id="kTot">—</b></div>
-        <div><div class="rlbl">Vencidas</div><b class="rval red" id="kVen">—</b>
-          <div class="rsub" id="mVen" style="margin:2px 0 0">—</div></div>
-        <div><div class="rlbl">Em atenção</div><b class="rval" id="kAte" style="color:var(--ambar)">—</b>
-          <div class="rsub" id="mAte" style="margin:2px 0 0">—</div></div>
-        <div><div class="rlbl">No prazo</div><b class="rval grn" id="kOk">—</b></div>
       </div>
       <div class="tab-wrap">
         <table class="tab"><thead><tr id="th"></tr></thead><tbody id="tb"></tbody></table>
@@ -527,7 +526,9 @@ function linhaVW(veic, lancs, leituras, hoje) {
   const atencao = !vencida && (kmFalta < ATENCAO_KM || (diasFalta != null && diasFalta < ATENCAO_DIAS));
   return {
     placa: veic.placa, modelo: veic.modelo || '',
-    tipoUlt: ult ? (ult.tipo || '') : '', dataUlt: ult ? ult.data : null,
+    // "M1" não existe na montadora (é a Básica do FRIO); se veio da carga, esconde
+    tipoUlt: ult ? ((/^M1$/i.test(ult.tipo || '') ? '' : ult.tipo) || '') : '',
+    dataUlt: ult ? ult.data : null,
     kmUlt, dataProx, kmProx, tipoProx, diasFalta, kmFalta, kmAtual, semKm,
     status: vencida ? 'vencida' : atencao ? 'atencao' : 'prazo',
     // a aderência é PELO PRAZO: sem data da última também não está em dia
@@ -580,9 +581,13 @@ const normP=p=>{const s=String(p||'').toUpperCase().replace(/[^A-Z0-9]/g,'');
   return /^[A-Z]{3}\d{4}$/.test(s)?s.slice(0,4)+MERCOSUL[+s[4]]+s.slice(5):s;};
 
 const COLS={
-  montadora:['Placa','Modelo','Tipo Últ.','Data Últ.','Km Últ.','Data Próx.','Km Próx.','Tipo Próx.','Dias','Km'],
-  frio:['Placa','Modelo','Tipo Últ.','Data Últ.','Tipo Próx.','Data Próx.','Dias'],
+  montadora:['Placa','Modelo','Tipo Últ.','Data Últ.','Km Últ.','Data Próx.','Km Próx.','Tipo Próx.','Dias','Status','Km'],
+  frio:['Placa','Modelo','Tipo Últ.','Data Últ.','Tipo Próx.','Data Próx.','Dias','Status'],
 };
+// coluna Status: farol redondo + texto na cor normal do texto (Renan, 31/08/2026)
+const ROT_ST={vencida:'Vencida',atencao:'Em Atenção',prazo:'OK'};
+const CLS_ST={vencida:'late',atencao:'at',prazo:'ok'};
+const stHTML=st=>`<td style="white-space:nowrap"><span class="farol ${CLS_ST[st]}"></span>${ROT_ST[st]}</td>`;
 const NUMS=new Set(['Km Últ.','Km Próx.','Dias','Km']);
 const SUB={montadora:'VW — 30.000 km ou 1 ano',frio:'Baús fechados — 90 em 90 dias'};
 const TIPOS={montadora:['L','MP1','MP2'],frio:['Básica','Completa']};
@@ -643,17 +648,15 @@ function render(){
   $('kVen').textContent=ls.filter(l=>l.status==='vencida').length;
   $('kAte').textContent=ls.filter(l=>l.status==='atencao').length;
   $('kOk').textContent=ls.filter(l=>l.status==='prazo').length;
-  $('mVen').textContent=mont?'km negativo ou sem km':'dias negativos';
-  $('mAte').textContent=mont?'faltando menos de 3.000 km':'faltando menos de 15 dias';
   $('tb').innerHTML=ls.length?ls.map(l=>{
     const dias=`<td class="num" style="color:${l.diasFalta==null?'var(--txt4)':l.diasFalta<0?'var(--vermelho)':''}">${l.diasFalta==null?'—':l.diasFalta}</td>`;
     return `<tr data-placa="${esc(l.placa)}" onclick="abrirModal('${esc(l.placa)}')">
       <td class="forte">${esc(l.placa)}</td><td class="wrap">${esc(l.modelo)||'<span class="vazio">—</span>'}</td>
       <td>${esc(l.tipoUlt)||'<span class="vazio">—</span>'}</td><td>${dataBR(l.dataUlt)}</td>
       ${mont?`<td class="num">${num(l.kmUlt)}</td><td>${dataBR(l.dataProx)}</td>
-        <td class="num">${num(l.kmProx)}</td><td>${esc(l.tipoProx)}</td>${dias}
+        <td class="num">${num(l.kmProx)}</td><td>${esc(l.tipoProx)}</td>${dias}${stHTML(l.status)}
         <td class="num" style="color:${l.kmFalta==null?'var(--txt4)':l.kmFalta<0?'var(--vermelho)':''}">${l.kmFalta==null?'—':num(l.kmFalta)}</td>`
-        :`<td>${esc(l.tipoProx)}</td><td>${dataBR(l.dataProx)}</td>${dias}`}
+        :`<td>${esc(l.tipoProx)}</td><td>${dataBR(l.dataProx)}</td>${dias}${stHTML(l.status)}`}
     </tr>`;}).join('')
     :`<tr><td colspan="${COLS[VISAO].length}" class="cvazia">Nenhum veículo no filtro atual.</td></tr>`;
   // a lateral mostra quantas estão vencidas em CADA visão, não só na aberta
@@ -781,6 +784,6 @@ iniciar();
 <script src="../assets/mobile.js?v=202608220020"></script>
 <script src="../assets/ctrlk.js"></script>
 <script src="../assets/excel-export.js"></script>
-<script src="../assets/build-check.js?v=202608311500"></script>
+<script src="../assets/build-check.js?v=202608312100"></script>
 </body>
 </html>
