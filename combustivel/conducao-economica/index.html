@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-<meta name="build" content="202608261800">
+<meta name="build" content="202609010430">
 <title>Condução Econômica · Gestão em Movimento</title>
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -518,12 +518,24 @@ let _sb = null, ORIGEM = 'exemplo', ULT_COLETA = null;
 function sbClient(){ return _sb || (_sb = supabase.createClient(SB_URL, SB_KEY)); }
 
 async function fetchFromSupabase() {
-  const { data, error } = await sbClient()
-    .from('ce_scores_mensais')
-    .select('competencia,motorista,unidade,fonte,km,dias,rpm_pontos,idle_pontos,acel_pontos,vel_pontos,freio_pontos,cambio_pontos,pontuacao,atualizado_em')
-    .order('competencia', { ascending: true });
-  if (error) { console.warn('ce_scores_mensais:', error.message); return []; }
-  if (!data || !data.length) return [];
+  // a RLS das tabelas ce_* libera leitura só para LOGADO. O client daqui nasce
+  // sem sessão e a consulta sairia como anon — voltaria vazia e a tela cairia
+  // no exemplo mesmo com o banco cheio. Restaurar a sessão do hub resolve.
+  try { await sbClient().auth.getSession(); } catch (e) {}
+  // paginado: o PostgREST devolve no máximo 1.000 linhas por chamada e o ano
+  // inteiro já passa disso — sem o range o painel perderia meses em silêncio
+  const data = []; const PASSO = 1000;
+  for (let de = 0; ; de += PASSO) {
+    const { data: lote, error } = await sbClient()
+      .from('ce_scores_mensais')
+      .select('competencia,motorista,unidade,fonte,km,dias,rpm_pontos,idle_pontos,acel_pontos,vel_pontos,freio_pontos,cambio_pontos,pontuacao,atualizado_em')
+      .order('competencia', { ascending: true }).order('chave', { ascending: true })
+      .range(de, de + PASSO - 1);
+    if (error) { console.warn('ce_scores_mensais:', error.message); return []; }
+    data.push(...(lote || []));
+    if (!lote || lote.length < PASSO) break;
+  }
+  if (!data.length) return [];
 
   // o de-para vem das próprias linhas: os DRIVERS de exemplo saem de cena
   Object.keys(UNI_OF).forEach(k => { delete UNI_OF[k]; delete SRC_OF[k]; delete NOMES[k]; });
@@ -1097,6 +1109,6 @@ document.addEventListener('DOMContentLoaded',()=>{ initAccessLog(); initData(); 
 <script src="../../assets/mobile.js?v=202608220020"></script>
 <script src="../../assets/ctrlk.js"></script>
 <script src="../../assets/sortable-table.js"></script>
-<script src="../../assets/build-check.js?v=202608261800"></script>
+<script src="../../assets/build-check.js?v=202609010430"></script>
 </body>
 </html>
