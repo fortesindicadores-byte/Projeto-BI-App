@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="build" content="202608311800">
+<meta name="build" content="202608311900">
 <title>Conferência de Locação · Gestão em Movimento</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -1005,6 +1005,14 @@ function linhasVamos(a){
       dias:n(col(o,'QTD. DE DIAS','Qtd. de Dias')),
       total:n(col(o,'TOTAL','Total')),
       contrato:n(col(o,'VALOR CONTRATO','Valor Locação','Valor Contrato')),
+      // desconto vem da PLANILHA quando existe (Renan, 31/08/2026). O nome da
+      // coluna varia entre os arquivos, por isso a busca por vários rótulos —
+      // e `temDesc` diz se a coluna existia, para o painel não confundir
+      // "coluna ausente" com "desconto zero".
+      desc:n(col(o,'DESCONTO','Desconto','DESCONTOS','Descontos','VALOR DESCONTO',
+                   'Valor Desconto','VLR DESCONTO','Vlr Desconto','DESC.','Desc.')),
+      temDesc:col(o,'DESCONTO','Desconto','DESCONTOS','Descontos','VALOR DESCONTO',
+                    'Valor Desconto','VLR DESCONTO','Vlr Desconto','DESC.','Desc.')!==undefined,
     };
   }).filter(r=>r.k&&r.k!=='P:'&&r.k!=='C:');
 }
@@ -1041,8 +1049,8 @@ function analisa(){
   const fat={mensal:new Map(), provisao:new Map()};
   linhasVamos(aF).forEach(r=>{
     const e=etapaFat(r.div,r.k,kM,kP); if(!e) return;
-    const m=fat[e]; const p=m.get(r.k)||{total:0,linhas:0,status:r.status,div:r.div,placa:r.placa,chassi:r.chassi,modelo:r.modelo};
-    p.total+=r.total; p.linhas++; m.set(r.k,p);
+    const m=fat[e]; const p=m.get(r.k)||{total:0,desc:0,temDesc:false,linhas:0,status:r.status,div:r.div,placa:r.placa,chassi:r.chassi,modelo:r.modelo};
+    p.total+=r.total; p.desc+=r.desc||0; p.temDesc=p.temDesc||!!r.temDesc; p.linhas++; m.set(r.k,p);
   });
   const ftMes={ mensal: PERIODO?ftDoMes(ft,PERIODO.ant.mes,PERIODO.ant.ano):new Map(),
                 provisao: PERIODO?ftDoMes(ft,PERIODO.mes,PERIODO.ano):new Map() };
@@ -1074,6 +1082,7 @@ function analisa(){
       prev: p ? p.total : null,
       fat: b ? b.total : null,
       linhasFat: b ? b.linhas : 0,
+      descFat: (b&&b.temDesc) ? b.desc : null,   // null = a planilha não trouxe a coluna
     });
   });
   const vg=vigTxt(PERIODO);
@@ -1353,26 +1362,27 @@ async function mesclaFaturamento(){
     flash('O mês '+vigRot(vig)+' ainda não existe: importe a prévia antes do faturamento', true);
     return;
   }
-  const linhas=b.linhas.map(l=>({...l, fat:null, linhasFat:0}));
+  const linhas=b.linhas.map(l=>({...l, fat:null, linhasFat:0, descFat:null}));
   const kM=new Set(linhas.filter(l=>l.etapa==='mensal'  &&l.prev!=null).map(l=>l.k));
   const kP=new Set(linhas.filter(l=>l.etapa==='provisao'&&l.prev!=null).map(l=>l.k));
   const fat={mensal:new Map(), provisao:new Map()};
   linhasVamos(aF).forEach(r=>{
     const e=etapaFat(r.div,r.k,kM,kP); if(!e) return;
-    const m=fat[e], p=m.get(r.k)||{total:0,linhas:0,status:r.status,div:r.div,
+    const m=fat[e], p=m.get(r.k)||{total:0,desc:0,temDesc:false,linhas:0,status:r.status,div:r.div,
                                    placa:r.placa,chassi:r.chassi,modelo:r.modelo};
-    p.total+=r.total; p.linhas++; m.set(r.k,p);
+    p.total+=r.total; p.desc+=r.desc||0; p.temDesc=p.temDesc||!!r.temDesc; p.linhas++; m.set(r.k,p);
   });
   const idx=new Map(linhas.map((l,i)=>[l.etapa+'|'+l.k,i]));
   let novas=0;
   ['mensal','provisao'].forEach(e=>fat[e].forEach((v,k)=>{
     const i=idx.get(e+'|'+k);
-    if(i!=null){ linhas[i].fat=v.total; linhas[i].linhasFat=v.linhas; return; }
+    if(i!=null){ linhas[i].fat=v.total; linhas[i].linhasFat=v.linhas;
+                 linhas[i].descFat=v.temDesc?v.desc:null; return; }
     // faturado que não estava no mês: entra como linha nova, sem prévia
     linhas.push({etapa:e, k, placa:v.placa||'', chassi:v.chassi||'', semPrevia:true,
       modelo:String(v.modelo||'').trim(), div:v.div||'', status:v.status||'',
       uni:'—', proj:'—', ft:null, ftBruto:null, vigsFT:0, prev:null,
-      fat:v.total, linhasFat:v.linhas, vig});
+      fat:v.total, linhasFat:v.linhas, descFat:v.temDesc?v.desc:null, vig});
     novas++;
   }));
   linhas.forEach(l=>{
@@ -1481,20 +1491,35 @@ function pintaCards(L,pre){
   põe('k-rt',  num(rt.length), brl(soma(rt,'ft'))+' remunerados · '+brl(soma(rt,'prev'))+' cobrados');
   const d=descontos(L);
   põe('k-desc', num(d.length), d.length
-    ? '<b class="cr">'+brl(d.reduce((a,l)=>a+l.desconto,0))+'</b> a menos que a prévia · clique para exportar'
+    ? '<b class="cr">'+brl(d.reduce((a,l)=>a+l.desconto,0))+'</b> · '+fonteDesc(d)+' · clique para exportar'
     : 'nenhum desconto no filtro');
 }
 
 /* ══════════ Descontos Vamos ══════════
-   Desconto = o que a Vamos deixou de faturar em relação à prévia, ou seja,
-   a crítica aceita: linhas em que o FATURADO ficou abaixo da PRÉVIA.
-   Só entra quem tem os dois lados — sem faturamento não há desconto, há
-   prévia sem faturar, que é outro motivo. */
+   O desconto vem da COLUNA da planilha quando ela existe (Renan, 31/08/2026).
+   Só quando o arquivo não traz a coluna é que ele é deduzido do que a Vamos
+   deixou de faturar em relação à prévia — a crítica aceita. Nesse caso é
+   preciso ter os dois lados: prévia sem faturamento não é desconto, é
+   "Prévia sem faturamento", que é outro motivo. */
 function descontos(L){
-  return (L||[]).filter(l=>l.prev!=null&&l.fat!=null&&(l.prev-l.fat)>TOL)
-    .map(l=>({...l, desconto:l.prev-l.fat}))
-    .sort((a,b)=>b.desconto-a.desconto);
+  const out=[];
+  (L||[]).forEach(l=>{
+    if(l.descFat!=null){
+      if(Math.abs(l.descFat)>TOL) out.push({...l, desconto:Math.abs(l.descFat), fonte:'planilha'});
+      return;
+    }
+    if(l.prev!=null&&l.fat!=null&&(l.prev-l.fat)>TOL)
+      out.push({...l, desconto:l.prev-l.fat, fonte:'diferença'});
+  });
+  return out.sort((a,b)=>b.desconto-a.desconto);
 }
+// de onde saiu o número, para a tela dizer sem que ninguém precise adivinhar
+const fonteDesc = d => {
+  const p=d.filter(x=>x.fonte==='planilha').length;
+  return !d.length ? '' : p===d.length ? 'coluna da planilha'
+       : p ? 'coluna da planilha em '+p+', diferença no resto'
+       : 'diferença entre prévia e faturado';
+};
 function exportaDescontos(){
   const L=filtradas();
   const d=descontos(L);
@@ -1503,11 +1528,13 @@ function exportaDescontos(){
     'Vigência': vigRot(l.vig), 'Etapa': l.etapa==='mensal'?'Mensal':'Provisão',
     'Placa': l.placa||'', 'Unidade': l.uni||'', 'Projeto': l.proj||'',
     'Modelo': l.modelo||'', 'Prévia': l.prev, 'Faturado': l.fat, 'Desconto': l.desconto,
+    'Origem do desconto': l.fonte==='planilha'?'Coluna da planilha':'Prévia − Faturado',
   }));
   const total=d.reduce((a,l)=>a+l.desconto,0);
   linhas.push({'Vigência':'', 'Etapa':'', 'Placa':'TOTAL', 'Unidade':'', 'Projeto':'',
-               'Modelo':'', 'Prévia':d.reduce((a,l)=>a+l.prev,0),
-               'Faturado':d.reduce((a,l)=>a+l.fat,0), 'Desconto':total});
+               'Modelo':'', 'Prévia':d.reduce((a,l)=>a+(l.prev||0),0),
+               'Faturado':d.reduce((a,l)=>a+(l.fat||0),0), 'Desconto':total,
+               'Origem do desconto':''});
   const gerar=()=>{
     const ws=XLSX.utils.json_to_sheet(linhas);
     const wb=XLSX.utils.book_new();
@@ -1804,6 +1831,6 @@ initPdfExport({
   isLight:()=>document.body.classList.contains('claro'), setTheme:aplicaTema
 });
 </script>
-<script src="../assets/build-check.js?v=202608311800"></script>
+<script src="../assets/build-check.js?v=202608311900"></script>
 </body>
 </html>
