@@ -25,16 +25,24 @@
 
 const MODE    = (process.env.PROFROTAS_MODE || 'run').trim();
 const DIAS    = Number(process.env.PROFROTAS_DIAS || 90);
+const PASSO   = Number(process.env.PROFROTAS_PASSO || 15);   // dias por fatia
 const SO_UNI  = (process.env.PROFROTAS_UNIDADE || '').trim().toUpperCase();
 const DRY     = process.env.PROFROTAS_DRY === '1';
 // lista de placas a procurar (CSV). Serve para descobrir SOB QUAL CNPJ uma
 // frota abastece: a Anhanguera não tem chave própria na aba Base CNPJ, e os
 // veículos dela podem estar saindo pelo CNPJ de outra unidade.
-const PLACAS_ALVO = new Set((process.env.PROFROTAS_PLACAS || '')
-  .split(/[,;\s]+/).map(p => p.trim().toUpperCase().replace(/[^A-Z0-9]/g, '')).filter(Boolean));
+const PLACAS_ALVO_CRU = (process.env.PROFROTAS_PLACAS || '').split(/[,;\s]+/).filter(Boolean);
 
 const SHEET_ID = '1GKJM516l_Z-wM_KTgjAPzNVa4DEn8dmB66zW1UPuBL8';
 const ABA_BASE = 'Base CNPJ';
+
+// De-para do nome na aba Base CNPJ para o código da unidade no portal.
+// "Seara - SP" É a Anhanguera (Renan, 31/08/2026) — ela não aparece na aba com
+// esse nome, e é por isso que o hodômetro dela parecia não existir. Bate com o
+// que já está no banco: os veículos da ANG em ativos_manual estão sob a filial
+// SEARA·ROTA. Unidade sem entrada aqui fica com o nome da planilha mesmo.
+const UNI_PORTAL = { 'SEARA - SP': 'ANG', 'SEARA': 'ANG' };
+const codUnidade = nome => UNI_PORTAL[String(nome || '').trim().toUpperCase()] || nome;
 
 const BASE_URL   = 'https://api-portal.profrotas.com.br';
 const EP_AUTH    = '/api/frotista/autorizacao';
@@ -91,6 +99,27 @@ const primeiro = (obj, cams) => {
   return null;
 };
 
+// A API devolveu HTTP 500 em TODAS as unidades com uma janela de 120 dias, e
+// 200 no teste de autorização — não é chave, é o tamanho do pedido. Por isso a
+// coleta é fatiada (padrão 15 dias) e uma fatia que falha não derruba as
+// outras: o robô conta quantas falharam e segue.
+async function porFatias(u, dias, passo) {
+  const out = [];
+  let falhas = 0, fatias = 0;
+  for (let fim = 0; fim < dias; fim += passo) {
+    const ate = new Date(Date.now() - fim * 864e5);
+    const de  = new Date(Date.now() - Math.min(fim + passo, dias) * 864e5);
+    const d = x => x.toISOString().slice(0, 10);
+    const per = { dataInicial: d(de) + 'T00:00:00.000-03:00', dataFinal: d(ate) + 'T23:59:59.999-03:00' };
+    fatias++;
+    try { out.push(...await abastecimentos(u, per)); }
+    catch (e) { falhas++; if (falhas === 1) log(`   ${u.unidade}: fatia ${d(de)}→${d(ate)} falhou (${e.message})`); }
+  }
+  if (falhas) log(`   ${u.unidade}: ${falhas}/${fatias} fatia(s) falharam`);
+  if (falhas === fatias) throw new Error(`todas as ${fatias} fatias falharam`);
+  return out;
+}
+
 async function abastecimentos(u, per) {
   const linhas = [];
   for (let pagina = 1; pagina <= LIM_PAGINAS; pagina++) {
@@ -112,7 +141,16 @@ async function abastecimentos(u, per) {
 }
 
 /* ── registro da API → leitura de hodômetro ──────────────────────────────── */
-const normPlaca = p => String(p || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+// Placa CANÔNICA (Renan, 31/08/2026): o formato antigo LLLNNNN vira Mercosul
+// LLLNLNN trocando o 5º caractere pelo dígito → letra (0=A … 9=J). Quem já é
+// Mercosul fica igual. É a mesma regra que a Seara usa para cruzar as abas —
+// serve para o dia em que a API e o cadastro da unidade estiverem em formatos
+// diferentes. Na TELA aparece a placa como está na origem.
+const MERCOSUL = 'ABCDEFGHIJ';
+const normPlaca = p => {
+  const s = String(p || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+  return /^[A-Z]{3}\d{4}$/.test(s) ? s.slice(0, 4) + MERCOSUL[+s[4]] + s.slice(5) : s;
+};
 
 function leiturasDe(regs, unidade) {
   const out = [];
@@ -148,6 +186,8 @@ async function gravar(linhas) {
 }
 
 /* ── main ────────────────────────────────────────────────────────────────── */
+const PLACAS_ALVO = new Set(PLACAS_ALVO_CRU.map(normPlaca));
+
 async function main() {
   const unidades = await lerBaseCnpj();
   log(`aba "${ABA_BASE}": ${unidades.length} unidade(s) com chave`);
@@ -166,13 +206,13 @@ async function main() {
   }
 
   const per = periodo(DIAS);
-  log(`janela: ${per.dataInicial.slice(0, 10)} → ${per.dataFinal.slice(0, 10)} (${DIAS} dias)`);
+  log(`janela: ${per.dataInicial.slice(0, 10)} → ${per.dataFinal.slice(0, 10)} (${DIAS} dias, em fatias de ${PASSO})`);
 
   let todas = [], erros = 0;
   for (const u of alvos) {
     try {
-      const regs = await abastecimentos(u, per);
-      const lts = leiturasDe(regs, u.unidade);
+      const regs = await porFatias(u, DIAS, PASSO);
+      const lts = leiturasDe(regs, codUnidade(u.unidade));
       const placas = new Set(lts.map(l => l.placa));
       log(`${u.unidade}: ${regs.length} abastecimento(s) → ${lts.length} leitura(s) de hodômetro em ${placas.size} placa(s)`);
       if (PLACAS_ALVO.size) {
