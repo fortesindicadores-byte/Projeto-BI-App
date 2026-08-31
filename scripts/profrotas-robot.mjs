@@ -27,6 +27,11 @@ const MODE    = (process.env.PROFROTAS_MODE || 'run').trim();
 const DIAS    = Number(process.env.PROFROTAS_DIAS || 90);
 const SO_UNI  = (process.env.PROFROTAS_UNIDADE || '').trim().toUpperCase();
 const DRY     = process.env.PROFROTAS_DRY === '1';
+// lista de placas a procurar (CSV). Serve para descobrir SOB QUAL CNPJ uma
+// frota abastece: a Anhanguera não tem chave própria na aba Base CNPJ, e os
+// veículos dela podem estar saindo pelo CNPJ de outra unidade.
+const PLACAS_ALVO = new Set((process.env.PROFROTAS_PLACAS || '')
+  .split(/[,;\s]+/).map(p => p.trim().toUpperCase().replace(/[^A-Z0-9]/g, '')).filter(Boolean));
 
 const SHEET_ID = '1GKJM516l_Z-wM_KTgjAPzNVa4DEn8dmB66zW1UPuBL8';
 const ABA_BASE = 'Base CNPJ';
@@ -170,6 +175,10 @@ async function main() {
       const lts = leiturasDe(regs, u.unidade);
       const placas = new Set(lts.map(l => l.placa));
       log(`${u.unidade}: ${regs.length} abastecimento(s) → ${lts.length} leitura(s) de hodômetro em ${placas.size} placa(s)`);
+      if (PLACAS_ALVO.size) {
+        const achadas = [...placas].filter(p => PLACAS_ALVO.has(p)).sort();
+        if (achadas.length) log(`   ${achadas.length} placa(s) da lista procurada aqui: ${achadas.join(' ')}`);
+      }
       todas.push(...lts);
     } catch (e) {
       log(`ERRO em ${u.unidade}: ${e.message}`);
@@ -191,6 +200,12 @@ async function main() {
     if (!a || l.data > a.data) porPlaca.set(l.placa, l);
   }
   log(`total: ${limpas.length} leitura(s) · ${porPlaca.size} placa(s) com hodômetro`);
+  if (PLACAS_ALVO.size) {
+    const achadas = [...porPlaca.keys()].filter(p => PLACAS_ALVO.has(p));
+    const faltam  = [...PLACAS_ALVO].filter(p => !porPlaca.has(p)).sort();
+    log(`lista procurada: ${achadas.length}/${PLACAS_ALVO.size} placa(s) encontradas`);
+    if (faltam.length) log(`   sem abastecimento na janela: ${faltam.join(' ')}`);
+  }
 
   await gravar(limpas);
   if (erros) { console.error(`${erros} unidade(s) com erro`); process.exit(1); }
