@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-<meta name="build" content="202609010300">
+<meta name="build" content="202609010330">
 <title>Preventivas Seara · BI Frota</title>
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -449,6 +449,10 @@ table.tab th.gapL,table.tab td.gapL{padding-left:34px;}
 <div class="mbg" id="mbg"><div class="modal">
   <h3 id="mTit">Lançar preventiva</h3>
   <div class="msub" id="mSub">—</div>
+  <div style="display:flex;gap:6px;margin:4px 0 12px">
+    <button class="b pri" id="mBtNova" onclick="modoModal('nova')">Lançar nova</button>
+    <button class="b gho" id="mBtEdit" onclick="modoModal('edit')">Corrigir última</button>
+  </div>
   <div class="f2">
     <div class="f"><label>Data da realização</label><input type="date" id="mData"></div>
     <div class="f"><label>Tipo</label><select id="mTipo"></select></div>
@@ -812,39 +816,71 @@ document.addEventListener('change',e=>{
   if(s!=null){e.target.checked?FSIT.add(s):FSIT.delete(s);render();}
 });
 
-/* ── modal: a unidade preenche a DATA (e o km, se quiser) ── */
+/* ── modal: lançar nova OU corrigir a última — todos os campos editáveis ── */
+let MODO='nova', ULT=null;
 function abrirModal(placa){
   PLACA=placa;
   const l=LINHAS.find(x=>x.placa===placa); if(!l)return;
   const mont=MONT();
+  ULT=LANCS.filter(x=>x.placa===placa&&x.escopo===VISAO).slice(-1)[0]||null;
   $('mTit').textContent=(mont?'Preventiva Montadora · ':'Preventiva Frio · ')+placa;
   $('mSub').textContent=(l.modelo||'')+' · próxima sugerida: '+l.tipoProx;
-  $('mData').value=hojeBRT();
-  $('mTipo').innerHTML=TIPOS[VISAO].map(t=>`<option${l.tipoProx.startsWith(t)?' selected':''}>${t}</option>`).join('');
+  $('mBtEdit').style.display=ULT?'':'none';   // sem lançamento não há o que corrigir
   $('fKm').style.display=mont?'':'none';
-  if(mont){
-    const km=kmNaData(LEITURAS[placa]||[],hojeBRT());
-    $('mKm').value=km==null?'':km;
-    $('mKmDica').textContent=km==null
-      ? 'Sem hodômetro para esta placa — digite o km, senão a preventiva fica sem km faltante.'
-      : 'Veio do hodômetro do último abastecimento. Pode editar.';
-  }
-  $('mObs').value='';
   const hist=LANCS.filter(x=>x.placa===placa&&x.escopo===VISAO).slice(-3).reverse()
     .map(x=>`${dataBR(x.data)} · ${esc(x.tipo||'—')}${x.km?' · '+num(x.km)+' km':''}`).join(' | ');
   $('mHist').textContent=hist?('Últimas: '+hist):'Sem preventiva lançada nesta placa.';
+  modoModal('nova');
   $('mbg').classList.add('open');
+}
+function modoModal(m){
+  MODO=m;
+  const mont=MONT(), l=LINHAS.find(x=>x.placa===PLACA)||{tipoProx:''};
+  $('mBtNova').className='b '+(m==='nova'?'pri':'gho');
+  $('mBtEdit').className='b '+(m==='edit'?'pri':'gho');
+  if(m==='nova'){
+    $('mData').value=hojeBRT();
+    $('mTipo').innerHTML=TIPOS[VISAO].map(t=>`<option${String(l.tipoProx).startsWith(t)?' selected':''}>${t}</option>`).join('');
+    if(mont){
+      const km=kmNaData(LEITURAS[PLACA]||[],hojeBRT());
+      $('mKm').value=km==null?'':km;
+      $('mKmDica').textContent=km==null
+        ? 'Sem hodômetro para esta placa — digite o km, senão a preventiva fica sem km faltante.'
+        : 'Veio do hodômetro do último abastecimento. Pode editar.';
+    }
+    $('mObs').value='';
+  }else{
+    // corrige a ÚLTIMA: tudo pré-preenchido com o que está no banco
+    $('mData').value=String(ULT.data).slice(0,10);
+    const tipos=TIPOS[VISAO].slice();
+    if(ULT.tipo&&!tipos.includes(ULT.tipo))tipos.unshift(ULT.tipo);
+    $('mTipo').innerHTML=['<option value="">—</option>']
+      .concat(tipos.map(t=>`<option${t===ULT.tipo?' selected':''}>${t}</option>`)).join('');
+    if(mont){
+      $('mKm').value=ULT.km==null?'':ULT.km;
+      $('mKmDica').textContent='Corrigindo o lançamento de '+dataBR(ULT.data)+'. Vazio = derivar do hodômetro.';
+    }
+    $('mObs').value=ULT.obs||'';
+  }
 }
 function fecharModal(){$('mbg').classList.remove('open');PLACA=null;}
 async function salvar(){
   if(!PLACA)return;
   const data=$('mData').value;
   if(!data){alert('Informe a data da realização.');return;}
-  const v=VEICS.find(x=>x.placa===PLACA);
-  const reg={unidade:(v&&v.unidade)||MY_UNITS[0],placa:PLACA,escopo:VISAO,
-    tipo:$('mTipo').value,data,obs:$('mObs').value.trim()||null};
-  if(MONT()){const km=parseInt($('mKm').value,10);reg.km=isNaN(km)?null:km;}
-  const {error}=await sb.from('preventiva_lanc').insert(reg);
+  const tipo=$('mTipo').value||null, obs=$('mObs').value.trim()||null;
+  let km=null;
+  if(MONT()){const k=parseInt($('mKm').value,10);km=isNaN(k)?null:k;}
+  let error;
+  if(MODO==='edit'&&ULT){
+    ({error}=await sb.from('preventiva_lanc')
+      .update({tipo,data,km:MONT()?km:ULT.km,obs,updated_at:new Date().toISOString()})
+      .eq('id',ULT.id));
+  }else{
+    const v=VEICS.find(x=>x.placa===PLACA);
+    ({error}=await sb.from('preventiva_lanc').insert({
+      unidade:(v&&v.unidade)||MY_UNITS[0],placa:PLACA,escopo:VISAO,tipo,data,km,obs}));
+  }
   if(error){alert('Não deu para salvar: '+error.message);return;}
   fecharModal();
   await loadLancs(); calcular(); render();
@@ -902,6 +938,6 @@ iniciar();
 <script src="../assets/mobile.js?v=202608220020"></script>
 <script src="../assets/ctrlk.js"></script>
 <script src="../assets/excel-export.js"></script>
-<script src="../assets/build-check.js?v=202609010300"></script>
+<script src="../assets/build-check.js?v=202609010330"></script>
 </body>
 </html>
