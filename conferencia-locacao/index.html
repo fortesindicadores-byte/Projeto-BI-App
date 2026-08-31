@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="build" content="202608311500">
+<meta name="build" content="202608311700">
 <title>Conferência de Locação · Gestão em Movimento</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -666,6 +666,12 @@ async function recebeArquivos(lista){
   if(ARQ['previa-mensal']||ARQ['previa-provisao']){
     const L=analisa();
     if(PERIODO) await guardaMes(vigTxt(PERIODO), L);
+  }else if(ARQ['faturamento']){
+    // Faturamento SOZINHO (Renan, 31/08/2026): antes o arquivo era lido, o
+    // cartão ficava verde e NADA era gravado — a gravação só acontecia se
+    // houvesse prévia na mesma leva. O faturamento chega depois da prévia no
+    // fluxo real, então ele agora é MESCLADO no mês que já está no banco.
+    await mesclaFaturamento();
   }
   // todo FT que passa por aqui alimenta o mapa persistente de modelos
   try{ await salvaModelos(coletaModelosFT()); }catch(e){ console.error(e); }
@@ -1325,6 +1331,59 @@ async function carregaBase(){
     console.error(e);
   }
 }
+/* Mescla o faturamento no mês JÁ gravado, sem prévia na leva.
+   A etapa de cada linha do faturamento sai da própria coluna Divisão
+   (MENSAL/PROV); só o que não traz o rótulo é classificado pelas chaves que
+   já estão no banco. As linhas gravadas mantêm prévia e FT — só o `fat` é
+   recalculado, e some o que não veio no arquivo novo (reimportar um
+   faturamento corrigido não deixa resíduo do anterior). */
+async function mesclaFaturamento(){
+  const aF=ARQ['faturamento'];
+  if(!aF) return;
+  if(aF.erro){ flash('Faturamento: '+aF.erro, true); return; }
+  if(!aF.mes||!aF.ano){ flash('Faturamento sem MM_AAAA no nome — não sei de que mês é', true); return; }
+  const vig=vigTxt({mes:aF.mes,ano:aF.ano});
+  const b=BASE.get(vig);
+  if(!b||!b.linhas||!b.linhas.length){
+    flash('O mês '+vigRot(vig)+' ainda não existe: importe a prévia antes do faturamento', true);
+    return;
+  }
+  const linhas=b.linhas.map(l=>({...l, fat:null, linhasFat:0}));
+  const kM=new Set(linhas.filter(l=>l.etapa==='mensal'  &&l.prev!=null).map(l=>l.k));
+  const kP=new Set(linhas.filter(l=>l.etapa==='provisao'&&l.prev!=null).map(l=>l.k));
+  const fat={mensal:new Map(), provisao:new Map()};
+  linhasVamos(aF).forEach(r=>{
+    const e=etapaFat(r.div,r.k,kM,kP); if(!e) return;
+    const m=fat[e], p=m.get(r.k)||{total:0,linhas:0,status:r.status,div:r.div,
+                                   placa:r.placa,chassi:r.chassi,modelo:r.modelo};
+    p.total+=r.total; p.linhas++; m.set(r.k,p);
+  });
+  const idx=new Map(linhas.map((l,i)=>[l.etapa+'|'+l.k,i]));
+  let novas=0;
+  ['mensal','provisao'].forEach(e=>fat[e].forEach((v,k)=>{
+    const i=idx.get(e+'|'+k);
+    if(i!=null){ linhas[i].fat=v.total; linhas[i].linhasFat=v.linhas; return; }
+    // faturado que não estava no mês: entra como linha nova, sem prévia
+    linhas.push({etapa:e, k, placa:v.placa||'', chassi:v.chassi||'', semPrevia:true,
+      modelo:String(v.modelo||'').trim(), div:v.div||'', status:v.status||'',
+      uni:'—', proj:'—', ft:null, ftBruto:null, vigsFT:0, prev:null,
+      fat:v.total, linhasFat:v.linhas, vig});
+    novas++;
+  }));
+  linhas.forEach(l=>{
+    l.dPF=(l.prev||0)-(l.ft||0);
+    l.dFP=(l.fat||0)-(l.prev||0);
+    l.motivos=motivosDe(l);
+  });
+  LINHAS=linhas;
+  BASE.set(vig,{...b, linhas, arquivos:[...new Set([...(b.arquivos||[]), aF.nome])],
+                updated_at:new Date().toISOString(), salvo:false});
+  await salvaMes(vig);
+  const comFat=linhas.filter(l=>l.fat!=null).length;
+  flash('Faturamento de '+vigRot(vig)+' gravado: '+comFat+' ativo(s)'
+        +(novas?' · '+novas+' sem prévia':''));
+}
+
 async function guardaMes(vig,linhas){
   BASE.set(vig,{linhas, arquivos:Object.values(ARQ).map(a=>a.nome),
                 updated_at:new Date().toISOString(), salvo:false});
@@ -1701,6 +1760,6 @@ initPdfExport({
   isLight:()=>document.body.classList.contains('claro'), setTheme:aplicaTema
 });
 </script>
-<script src="../assets/build-check.js?v=202608311500"></script>
+<script src="../assets/build-check.js?v=202608311700"></script>
 </body>
 </html>
