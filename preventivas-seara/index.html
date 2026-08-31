@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-<meta name="build" content="202608312330">
+<meta name="build" content="202609010010">
 <title>Preventivas Seara · BI Frota</title>
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -356,6 +356,7 @@ table.tab{font-size:11px;}
 .s-user .av{width:24px;height:24px;flex:0 0 24px;}
 table.tab td.vazio{color:var(--txt4);}
 .farol.at{background:var(--ambar);}
+table.tab th.gapL,table.tab td.gapL{padding-left:34px;}
 
 </style>
 </head>
@@ -599,8 +600,11 @@ const COLS={
 // coluna Status: farol redondo + texto na cor normal do texto (Renan, 31/08/2026)
 const ROT_ST={vencida:'Vencida',atencao:'Em Atenção',prazo:'OK'};
 const CLS_ST={vencida:'late',atencao:'at',prazo:'ok'};
-const stHTML=st=>`<td style="white-space:nowrap"><span class="farol ${CLS_ST[st]}"></span>${ROT_ST[st]}</td>`;
-const NUMS=new Set(['Km Últ.','Km Próx.','Dias','Km']);
+const stHTML=st=>`<td class="gapL" style="white-space:nowrap"><span class="farol ${CLS_ST[st]}"></span>${ROT_ST[st]}</td>`;
+const NUMS=new Set(['Data Últ.','Km Últ.','Data Próx.','Km Próx.','Dias','Km']);
+// coluna de texto que vem logo depois de uma de número precisa de respiro
+// próprio, senão o conteúdo das duas gruda (número termina onde o texto começa)
+const PADL=new Set(['Tipo Próx.','Status']);
 const SUB={montadora:'VW — 30.000 km ou 1 ano',frio:'Baús fechados — 90 em 90 dias'};
 const TIPOS={montadora:['L','MP1','MP2'],frio:['Básica','Completa']};
 
@@ -652,7 +656,7 @@ const filtradas=()=>LINHAS.filter(l=>
 /* ── tela ── */
 function render(){
   const mont=MONT(), ls=filtradas(), ader=aderencia(ls);
-  $('th').innerHTML=COLS[VISAO].map(([c,w])=>`<th class="${NUMS.has(c)?'num':''}" style="width:${w}%">${c}</th>`).join('');
+  $('th').innerHTML=COLS[VISAO].map(([c,w])=>`<th class="${NUMS.has(c)?'num':''}${PADL.has(c)?' gapL':''}" style="width:${w}%">${c}</th>`).join('');
   $('kAder').textContent=ader==null?'—':ader.toFixed(1).replace('.',',')+'%';
   $('kAder').style.color=ader==null?'var(--txt3)':ader>=90?'var(--verde)':ader>=60?'var(--ambar)':'var(--vermelho)';
   $('kAderM').textContent=ls.length?`${ls.filter(l=>l.noPrazo).length} de ${ls.length} dentro do prazo`:'—';
@@ -664,11 +668,11 @@ function render(){
     const dias=`<td class="num" style="color:${l.diasFalta==null?'var(--txt4)':l.diasFalta<0?'var(--vermelho)':''}">${l.diasFalta==null?'—':l.diasFalta}</td>`;
     return `<tr data-placa="${esc(l.placa)}" onclick="abrirModal('${esc(l.placa)}')">
       <td class="forte">${esc(l.placa)}</td><td class="wrap">${esc(l.modelo)||'<span class="vazio">—</span>'}</td>
-      <td>${esc(l.tipoUlt)||'<span class="vazio">—</span>'}</td><td>${dataBR(l.dataUlt)}</td>
-      ${mont?`<td class="num">${num(l.kmUlt)}</td><td>${dataBR(l.dataProx)}</td>
-        <td class="num">${num(l.kmProx)}</td><td>${esc(l.tipoProx)}</td>${dias}${stHTML(l.status)}
+      <td>${esc(l.tipoUlt)||'<span class="vazio">—</span>'}</td><td class="num">${dataBR(l.dataUlt)}</td>
+      ${mont?`<td class="num">${num(l.kmUlt)}</td><td class="num">${dataBR(l.dataProx)}</td>
+        <td class="num">${num(l.kmProx)}</td><td class="gapL">${esc(l.tipoProx)}</td>${dias}${stHTML(l.status)}
         <td class="num" style="color:${l.kmFalta==null?'var(--txt4)':l.kmFalta<0?'var(--vermelho)':''}">${l.kmFalta==null?'—':num(l.kmFalta)}</td>`
-        :`<td>${esc(l.tipoProx)}</td><td>${dataBR(l.dataProx)}</td>${dias}${stHTML(l.status)}`}
+        :`<td class="gapL">${esc(l.tipoProx)}</td><td class="num">${dataBR(l.dataProx)}</td>${dias}${stHTML(l.status)}`}
     </tr>`;}).join('')
     :`<tr><td colspan="${COLS[VISAO].length}" class="cvazia">Nenhum veículo no filtro atual.</td></tr>`;
   // a lateral mostra quantas estão vencidas em CADA visão, não só na aberta
@@ -796,6 +800,6 @@ iniciar();
 <script src="../assets/mobile.js?v=202608220020"></script>
 <script src="../assets/ctrlk.js"></script>
 <script src="../assets/excel-export.js"></script>
-<script src="../assets/build-check.js?v=202608312330"></script>
+<script src="../assets/build-check.js?v=202609010010"></script>
 </body>
 </html>
