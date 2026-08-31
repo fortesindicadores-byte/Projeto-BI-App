@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-<meta name="build" content="202608312300">
+<meta name="build" content="202608312330">
 <title>Preventivas Seara · BI Frota</title>
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -587,9 +587,14 @@ const MERCOSUL='ABCDEFGHIJ';
 const normP=p=>{const s=String(p||'').toUpperCase().replace(/[^A-Z0-9]/g,'');
   return /^[A-Z]{3}\d{4}$/.test(s)?s.slice(0,4)+MERCOSUL[+s[4]]+s.slice(5):s;};
 
+/* cada coluna com a própria largura (%): sem isso o navegador distribui a
+   sobra de espaço do jeito dele e umas colunas grudam enquanto outras
+   ficam com um vão (Renan, 31/08/2026) */
 const COLS={
-  montadora:['Placa','Modelo','Tipo Últ.','Data Últ.','Km Últ.','Data Próx.','Km Próx.','Tipo Próx.','Dias','Status','Km'],
-  frio:['Placa','Modelo','Tipo Últ.','Data Últ.','Tipo Próx.','Data Próx.','Dias','Status'],
+  montadora:[['Placa',8],['Modelo',15],['Tipo Últ.',8],['Data Últ.',9],['Km Últ.',8],
+             ['Data Próx.',9],['Km Próx.',8],['Tipo Próx.',10],['Dias',6],['Status',11],['Km',8]],
+  frio:[['Placa',11],['Modelo',20],['Tipo Últ.',12],['Data Últ.',12],
+        ['Tipo Próx.',12],['Data Próx.',12],['Dias',8],['Status',13]],
 };
 // coluna Status: farol redondo + texto na cor normal do texto (Renan, 31/08/2026)
 const ROT_ST={vencida:'Vencida',atencao:'Em Atenção',prazo:'OK'};
@@ -647,7 +652,7 @@ const filtradas=()=>LINHAS.filter(l=>
 /* ── tela ── */
 function render(){
   const mont=MONT(), ls=filtradas(), ader=aderencia(ls);
-  $('th').innerHTML=COLS[VISAO].map(c=>`<th class="${NUMS.has(c)?'num':''}">${c}</th>`).join('');
+  $('th').innerHTML=COLS[VISAO].map(([c,w])=>`<th class="${NUMS.has(c)?'num':''}" style="width:${w}%">${c}</th>`).join('');
   $('kAder').textContent=ader==null?'—':ader.toFixed(1).replace('.',',')+'%';
   $('kAder').style.color=ader==null?'var(--txt3)':ader>=90?'var(--verde)':ader>=60?'var(--ambar)':'var(--vermelho)';
   $('kAderM').textContent=ls.length?`${ls.filter(l=>l.noPrazo).length} de ${ls.length} dentro do prazo`:'—';
@@ -791,6 +796,6 @@ iniciar();
 <script src="../assets/mobile.js?v=202608220020"></script>
 <script src="../assets/ctrlk.js"></script>
 <script src="../assets/excel-export.js"></script>
-<script src="../assets/build-check.js?v=202608312300"></script>
+<script src="../assets/build-check.js?v=202608312330"></script>
 </body>
 </html>
