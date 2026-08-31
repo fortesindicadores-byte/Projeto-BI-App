@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-<meta name="build" content="202608312230">
+<meta name="build" content="202608312300">
 <title>Preventivas Seara · BI Frota</title>
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -492,9 +492,13 @@ function kmNaData(leituras, data) {
 /* próximo tipo da montadora. A posição na sequência sai da CONTAGEM de
    preventivas; o tipo da última só corrige quando é inequívoco — "L" aparece
    duas vezes na sequência e por isso não diz sozinho onde o veículo está. */
+/* M1 na montadora É a MP1 ("todos que fizeram M1, fizeram MP1" — Renan,
+   31/08/2026): a planilha da unidade usa M1, a tela e a sequência usam MP1. */
+const tipoVW = t => /^M1\b/i.test(String(t || '').trim()) ? 'MP1' : String(t || '');
+
 function proxTipoVW(lancs) {
   if (!lancs.length) return SEQ_VW[0];
-  const ult = String(lancs[lancs.length - 1].tipo || '').toUpperCase();
+  const ult = tipoVW(lancs[lancs.length - 1].tipo).toUpperCase();
   let pos = (lancs.length - 1) % 4;
   if (ult.startsWith('MP1')) pos = 1;
   else if (ult.startsWith('MP2')) pos = 3;
@@ -528,8 +532,7 @@ function linhaVW(veic, lancs, leituras, hoje) {
   const atencao = !vencida && kmFalta < ATENCAO_KM;
   return {
     placa: veic.placa, modelo: veic.modelo || '',
-    // "M1" não existe na montadora (é a Básica do FRIO); se veio da carga, esconde
-    tipoUlt: ult ? ((/^M1$/i.test(ult.tipo || '') ? '' : ult.tipo) || '') : '',
+    tipoUlt: ult ? tipoVW(ult.tipo) : '',
     dataUlt: ult ? ult.data : null,
     kmUlt, dataProx, kmProx, tipoProx, diasFalta, kmFalta, kmAtual, semKm,
     status: vencida ? 'vencida' : atencao ? 'atencao' : 'prazo',
@@ -788,6 +791,6 @@ iniciar();
 <script src="../assets/mobile.js?v=202608220020"></script>
 <script src="../assets/ctrlk.js"></script>
 <script src="../assets/excel-export.js"></script>
-<script src="../assets/build-check.js?v=202608312230"></script>
+<script src="../assets/build-check.js?v=202608312300"></script>
 </body>
 </html>
