@@ -3,8 +3,8 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-<meta name="build" content="202608311300">
-<title>Preventiva Frio · BI Frota</title>
+<meta name="build" content="202608311500">
+<title>Preventivas Seara · BI Frota</title>
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="../assets/gviz-cache.js"></script>
@@ -263,7 +263,7 @@ body.claro .menu{box-shadow:0 18px 40px rgba(15,23,42,.16);}
 .cvazia{padding:14px 4px;font-size:12px;color:var(--txt3);}
 .tab-wrap{overflow:auto;border:1px solid var(--card-brd);border-radius:10px;background:var(--side);
   backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);}
-table.tab{width:100%;border-collapse:collapse;font-size:12px;}
+table.tab{width:100%;border-collapse:collapse;font-size:11px;}
 table.tab thead th{position:sticky;top:0;z-index:2;background:var(--cabec);text-align:left;
   padding:11px 12px;font-size:10px;font-weight:700;color:var(--txt2);text-transform:uppercase;
   letter-spacing:.8px;border-bottom:1px solid var(--card-brd);white-space:nowrap;}
@@ -345,11 +345,12 @@ input[type=date]::-webkit-calendar-picker-indicator{cursor:pointer;}
 .kpi .km b{font-weight:800;}
 
 /* ── específico das preventivas ───────────────────────────────────────────
-   Só grades: o card, a tabela e o modal são os do padrão, sem componente novo. */
-.kpis.k1{grid-template-columns:1fr;margin-bottom:10px;}
-.kpis.k4{grid-template-columns:repeat(4,1fr);margin-bottom:12px;}
-.kpi.hero .kv{font-size:clamp(30px,4.4vh,44px);letter-spacing:-1px;}
-.kpi .kv.ok{color:var(--verde);} .kpi .kv.at{color:var(--ambar);} .kpi .kv.ve{color:var(--vermelho);}
+   Só grades: card, tabela, filtros e modal são os do padrão. */
+/* o resumo fica em números SOLTOS (o .res-hero da casca), não em caixas: o
+   foco da tela é a tabela (Renan, 31/08/2026) */
+.res-hero .rsub{font-size:10px;}
+/* tabela 1px menor, como nos demais painéis do layout novo */
+table.tab{font-size:11px;}
 /* sem este seletor o avatar vira elipse: .s-user div{flex:1} vence pela
    especificidade (armadilha já registrada no CLAUDE.md) */
 .s-user .av{width:24px;height:24px;flex:0 0 24px;}
@@ -364,15 +365,18 @@ table.tab td.vazio{color:var(--txt4);}
   <aside class="side" id="side">
     <div class="s-top">
       <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="var(--laranja)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>
-      <b>Preventiva Frio</b>
+      <b>Preventivas Seara</b>
       <button class="s-mini" onclick="trocaMini()" title="Recolher"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M15 18l-6-6 6-6"/></svg></button>
     </div>
     <label class="s-search"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--txt3)" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4-4"/></svg>
       <input id="busca" placeholder="Buscar placa…" oninput="BUSCA=this.value;render()"></label>
     <div class="s-sec"><b>Visões</b></div>
-    <button class="s-item on" id="vwResumo" onclick="setVw('resumo')">
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="9"/><rect x="14" y="3" width="7" height="5"/><rect x="14" y="12" width="7" height="9"/><rect x="3" y="16" width="7" height="5"/></svg>
-      <span class="n2">Resumo Gerencial</span></button>
+    <button class="s-item on" id="vwMontadora" onclick="setVw('montadora')">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="3" width="15" height="13" rx="2"/><path d="M16 8h4l3 3v5h-7V8z"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg>
+      <span class="n2">Montadora</span><span class="n" id="nMont"></span></button>
+    <button class="s-item" id="vwFrio" onclick="setVw('frio')">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 2v20M4.9 6.5l14.2 11M19.1 6.5L4.9 17.5"/></svg>
+      <span class="n2">Frio</span><span class="n" id="nFrio"></span></button>
     <div class="s-sec"><b>Atalhos</b></div>
     <div id="pdf-slot"></div>
     <a class="s-item" href="../"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M15 18l-6-6 6-6"/></svg><span class="n2">Voltar ao Hub</span></a>
@@ -383,39 +387,41 @@ table.tab td.vazio{color:var(--txt4);}
   </aside>
 
   <main class="board">
-    
-<div class="top">
-  <div class="tit-wrap"><h1>Preventiva Frio</h1><div class="tit-sub" id="titSub">—</div></div>
-  <div class="menu-wrap">
-    <button class="tool" id="btMod" onclick="abreMenu('mMod')">
-      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 6h16M7 12h10M10 18h4"/></svg>
-      Modelo
-    </button>
-    <div class="menu" id="mMod"><div class="tit">Modelo</div><div class="rol" id="lstMod"></div></div>
-  </div>
-  <div class="menu-wrap">
-    <button class="tool" id="btSit" onclick="abreMenu('mSit')">
-      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
-      Situação
-    </button>
-    <div class="menu" id="mSit"><div class="tit">Situação</div><div class="rol" id="lstSit"></div></div>
-  </div>
-  <button class="tool ico" id="btTema" title="Claro/escuro" onclick="trocaTema()"></button>
-</div>
+    <div class="top">
+      <div class="tit-wrap"><h1 id="tit">Preventivas Seara</h1><div class="tit-sub" id="titSub">—</div></div>
+      <div class="menu-wrap">
+        <button class="tool" id="btMod" onclick="abreMenu('mMod')">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 6h16M7 12h10M10 18h4"/></svg>
+          Modelo
+        </button>
+        <div class="menu" id="mMod"><div class="tit">Modelo</div><div class="rol" id="lstMod"></div></div>
+      </div>
+      <div class="menu-wrap">
+        <button class="tool" id="btSit" onclick="abreMenu('mSit')">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+          Situação
+        </button>
+        <div class="menu" id="mSit"><div class="tit">Situação</div><div class="rol" id="lstSit"></div></div>
+      </div>
+      <button class="tool ico" id="btTema" title="Claro/escuro" onclick="trocaTema()"></button>
+    </div>
 
     <div class="cols" id="cols">
-      <div class="kpis k1">
-        <div class="kpi hero"><div class="kl">Aderência ao prazo</div>
-          <div class="kv" id="kAder">—</div><div class="km" id="kAderM">—</div></div>
-      </div>
-      <div class="kpis k4">
-        <div class="kpi"><div class="kl">Total de veículos</div><div class="kv" id="kTot">—</div></div>
-        <div class="kpi"><div class="kl">Vencidas</div><div class="kv ve" id="kVen">—</div><div class="km">dias negativos</div></div>
-        <div class="kpi"><div class="kl">Em atenção</div><div class="kv at" id="kAte">—</div><div class="km">faltando menos de 15 dias</div></div>
-        <div class="kpi"><div class="kl">No prazo</div><div class="kv ok" id="kOk">—</div></div>
+      <div class="res-hero" style="margin-bottom:12px">
+        <div>
+          <div class="rlbl">Aderência ao prazo</div>
+          <div class="res-big" id="kAder">—</div>
+          <div class="rsub" id="kAderM" style="margin:0">—</div>
+        </div>
+        <div><div class="rlbl">Total de veículos</div><b class="rval" id="kTot">—</b></div>
+        <div><div class="rlbl">Vencidas</div><b class="rval red" id="kVen">—</b>
+          <div class="rsub" id="mVen" style="margin:2px 0 0">—</div></div>
+        <div><div class="rlbl">Em atenção</div><b class="rval" id="kAte" style="color:var(--ambar)">—</b>
+          <div class="rsub" id="mAte" style="margin:2px 0 0">—</div></div>
+        <div><div class="rlbl">No prazo</div><b class="rval grn" id="kOk">—</b></div>
       </div>
       <div class="tab-wrap">
-        <table class="tab"><thead><tr><th class="">Placa</th><th class="">Modelo</th><th class="">Tipo Últ.</th><th class="">Data Últ.</th><th class="">Tipo Próx.</th><th class="">Data Próx.</th><th class="num">Dias</th></tr></thead><tbody id="tb"></tbody></table>
+        <table class="tab"><thead><tr id="th"></tr></thead><tbody id="tb"></tbody></table>
       </div>
     </div>
   </main>
@@ -428,7 +434,9 @@ table.tab td.vazio{color:var(--txt4);}
     <div class="f"><label>Data da realização</label><input type="date" id="mData"></div>
     <div class="f"><label>Tipo</label><select id="mTipo"></select></div>
   </div>
-  
+  <div class="f" id="fKm"><label>Km na realização</label>
+    <input type="number" id="mKm" placeholder="vem do hodômetro; edite se precisar">
+    <div class="msub" id="mKmDica" style="margin:6px 0 0"></div></div>
   <div class="f"><label>Observação</label><textarea id="mObs"></textarea></div>
   <div class="msub" id="mHist" style="margin-top:2px"></div>
   <div class="macoes">
@@ -438,11 +446,9 @@ table.tab td.vazio{color:var(--txt4);}
 </div></div>
 
 <script>
-const ESCOPO='frio';
-const MONTADORA=false;
 const SUPABASE_URL='https://lozwipoeacpvplgkrxkq.supabase.co';
 const SUPABASE_KEY='sb_publishable_ggKEEebc5zjgQDVsF92Upw_6uoLmKe9';
-const UNIDADES_OK=['ANG'];   // painel da Anhanguera (Renan, 31/08/2026)
+const UNIDADES_OK=['ANG'];   // painel da Seara/Anhanguera (Renan, 31/08/2026)
 
 /* ============================================================================
    REGRAS DAS PREVENTIVAS — o miolo, separado para poder ser testado sozinho.
@@ -557,7 +563,9 @@ const aderencia = linhas => linhas.length
 /* ── estado ── */
 let sb=null,USER=null,PROFILE=null,ADMIN=false,MY_UNITS=[],EU='';
 let VEICS=[],LANCS=[],LEITURAS={},LINHAS=[],BUSCA='',PLACA=null;
-const FMOD=new Set(),FSIT=new Set(),FUNI=new Set();
+let VISAO=localStorage.getItem('seara_prev_vw')||'montadora';   // montadora | frio
+const MONT=()=>VISAO==='montadora';
+const FMOD=new Set(),FSIT=new Set();
 const $=id=>document.getElementById(id);
 const esc=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const hojeBRT=()=>new Date().toLocaleDateString('en-CA',{timeZone:'America/Sao_Paulo'});
@@ -571,34 +579,32 @@ const MERCOSUL='ABCDEFGHIJ';
 const normP=p=>{const s=String(p||'').toUpperCase().replace(/[^A-Z0-9]/g,'');
   return /^[A-Z]{3}\d{4}$/.test(s)?s.slice(0,4)+MERCOSUL[+s[4]]+s.slice(5):s;};
 
+const COLS={
+  montadora:['Placa','Modelo','Tipo Últ.','Data Últ.','Km Últ.','Data Próx.','Km Próx.','Tipo Próx.','Dias','Km'],
+  frio:['Placa','Modelo','Tipo Últ.','Data Últ.','Tipo Próx.','Data Próx.','Dias'],
+};
+const NUMS=new Set(['Km Últ.','Km Próx.','Dias','Km']);
+const SUB={montadora:'VW — 30.000 km ou 1 ano',frio:'Baús fechados — 90 em 90 dias'};
+const TIPOS={montadora:['L','MP1','MP2'],frio:['Básica','Completa']};
+
 /* ── dados ── */
 async function loadVeics(){
-  const [g,m]=await Promise.all([
-    sb.from('ginfo_snapshot').select('data').eq('chave','ativos').maybeSingle(),
-    sb.from('ativos_manual').select('*')
-  ]);
-  const manuais=(m.data||[]).filter(r=>MY_UNITS.includes(r.unidade))
-    .map(r=>({placa:normP(r.placa),modelo:r.modelo||'',tipo:r.tipo_veiculo||'',unidade:r.unidade}));
-  const vistas=new Set(manuais.map(r=>r.placa));
-  const ginfo=((g.data&&g.data.data)||[]).map(r=>({placa:normP(r['Placa']),modelo:String(r['Modelo']||'').trim(),
-      tipo:String(r['Tipo Veículo']||'').trim(),unidade:null}))
-    .filter(r=>/^[A-Z0-9]{7}$/.test(r.placa)&&!vistas.has(r.placa));
-  // a ANG não existe no Ginfo: a frota dela é a manual. O Ginfo entra só se a
-  // placa estiver no cadastro manual da unidade — nunca a frota toda.
-  VEICS=manuais.length?manuais:ginfo.filter(()=>false);
-  VEICS.sort((a,b)=>a.placa.localeCompare(b.placa));
+  const {data}=await sb.from('ativos_manual').select('*');
+  VEICS=(data||[]).filter(r=>MY_UNITS.includes(r.unidade))
+    .map(r=>({placa:normP(r.placa),modelo:r.modelo||'',tipo:r.tipo_veiculo||'',unidade:r.unidade}))
+    .sort((a,b)=>a.placa.localeCompare(b.placa));
 }
 async function loadLancs(){
+  // os DOIS escopos de uma vez: trocar de visão não recarrega nada
   const {data,error}=await sb.from('preventiva_lanc').select('*')
-    .eq('escopo',ESCOPO).in('unidade',MY_UNITS).order('data',{ascending:true}).limit(5000);
+    .in('unidade',MY_UNITS).order('data',{ascending:true}).limit(5000);
   if(error)throw error;
   LANCS=(data||[]).map(r=>({...r,placa:normP(r.placa)}));
 }
 async function loadHodometro(){
   LEITURAS={};
-  if(!MONTADORA)return;                       // o Frio é só por dias
   const placas=VEICS.map(v=>v.placa);
-  for(let i=0;i<placas.length;i+=100){        // PostgREST tem limite de linhas
+  for(let i=0;i<placas.length;i+=100){        // PostgREST devolve no máx. 1.000 linhas
     const {data}=await sb.from('hodometro_leitura').select('placa,km,data')
       .in('placa',placas.slice(i,i+100)).order('data',{ascending:true}).limit(20000);
     (data||[]).forEach(r=>{const p=normP(r.placa);(LEITURAS[p]=LEITURAS[p]||[]).push(r);});
@@ -606,19 +612,21 @@ async function loadHodometro(){
 }
 
 /* ── cálculo ── */
-function calcular(){
-  const hoje=hojeBRT();
-  const porPlaca={};
-  LANCS.forEach(l=>{(porPlaca[l.placa]=porPlaca[l.placa]||[]).push(l);});
-  LINHAS=VEICS.map(v=>{
+function linhasDe(escopo){
+  const hoje=hojeBRT(), porPlaca={};
+  LANCS.filter(l=>l.escopo===escopo).forEach(l=>{(porPlaca[l.placa]=porPlaca[l.placa]||[]).push(l);});
+  const mont=escopo==='montadora';
+  const out=VEICS.map(v=>{
     const ls=porPlaca[v.placa]||[];
-    return MONTADORA ? linhaVW(v,ls,LEITURAS[v.placa]||[],hoje) : linhaFrio(v,ls,hoje);
+    return mont?linhaVW(v,ls,LEITURAS[v.placa]||[],hoje):linhaFrio(v,ls,hoje);
   });
-  // ordenada pelo que falta: o mais estourado primeiro (km na montadora, dias
-  // no frio). Sem km, vai para o topo — é vencida e precisa de atenção.
-  const chave=l=>MONTADORA?(l.kmFalta==null?-Infinity:l.kmFalta):(l.diasFalta==null?-Infinity:l.diasFalta);
-  LINHAS.sort((a,b)=>chave(a)-chave(b));
+  // ordenada pelo que falta: o mais estourado primeiro. Sem km vai para o topo
+  // — é vencida e é onde a unidade precisa olhar.
+  const chave=l=>mont?(l.kmFalta==null?-Infinity:l.kmFalta):(l.diasFalta==null?-Infinity:l.diasFalta);
+  out.sort((a,b)=>chave(a)-chave(b));
+  return out;
 }
+function calcular(){ LINHAS=linhasDe(VISAO); }
 const filtradas=()=>LINHAS.filter(l=>
   (!FMOD.size||FMOD.has(l.modelo))&&
   (!FSIT.size||FSIT.has(l.status))&&
@@ -626,44 +634,56 @@ const filtradas=()=>LINHAS.filter(l=>
 
 /* ── tela ── */
 function render(){
-  const ls=filtradas();
-  const ader=aderencia(ls);
+  const mont=MONT(), ls=filtradas(), ader=aderencia(ls);
+  $('th').innerHTML=COLS[VISAO].map(c=>`<th class="${NUMS.has(c)?'num':''}">${c}</th>`).join('');
   $('kAder').textContent=ader==null?'—':ader.toFixed(1).replace('.',',')+'%';
-  $('kAder').className='kv '+(ader==null?'':ader>=90?'ok':ader>=60?'at':'ve');
+  $('kAder').style.color=ader==null?'var(--txt3)':ader>=90?'var(--verde)':ader>=60?'var(--ambar)':'var(--vermelho)';
   $('kAderM').textContent=ls.length?`${ls.filter(l=>l.noPrazo).length} de ${ls.length} dentro do prazo`:'—';
   $('kTot').textContent=ls.length;
   $('kVen').textContent=ls.filter(l=>l.status==='vencida').length;
   $('kAte').textContent=ls.filter(l=>l.status==='atencao').length;
   $('kOk').textContent=ls.filter(l=>l.status==='prazo').length;
-  const cor=s=>s==='vencida'?'var(--vermelho)':s==='atencao'?'var(--ambar)':'var(--verde)';
+  $('mVen').textContent=mont?'km negativo ou sem km':'dias negativos';
+  $('mAte').textContent=mont?'faltando menos de 3.000 km':'faltando menos de 15 dias';
   $('tb').innerHTML=ls.length?ls.map(l=>{
-    const comuns=`<td class="forte">${esc(l.placa)}</td><td class="wrap">${esc(l.modelo)||'<span class="vazio">—</span>'}</td>
-      <td>${esc(l.tipoUlt)||'<span class="vazio">—</span>'}</td><td>${dataBR(l.dataUlt)}</td>`;
     const dias=`<td class="num" style="color:${l.diasFalta==null?'var(--txt4)':l.diasFalta<0?'var(--vermelho)':''}">${l.diasFalta==null?'—':l.diasFalta}</td>`;
     return `<tr data-placa="${esc(l.placa)}" onclick="abrirModal('${esc(l.placa)}')">
-      ${comuns}
-      ${MONTADORA?`<td class="num">${num(l.kmUlt)}</td><td>${dataBR(l.dataProx)}</td>
+      <td class="forte">${esc(l.placa)}</td><td class="wrap">${esc(l.modelo)||'<span class="vazio">—</span>'}</td>
+      <td>${esc(l.tipoUlt)||'<span class="vazio">—</span>'}</td><td>${dataBR(l.dataUlt)}</td>
+      ${mont?`<td class="num">${num(l.kmUlt)}</td><td>${dataBR(l.dataProx)}</td>
         <td class="num">${num(l.kmProx)}</td><td>${esc(l.tipoProx)}</td>${dias}
         <td class="num" style="color:${l.kmFalta==null?'var(--txt4)':l.kmFalta<0?'var(--vermelho)':''}">${l.kmFalta==null?'—':num(l.kmFalta)}</td>`
         :`<td>${esc(l.tipoProx)}</td><td>${dataBR(l.dataProx)}</td>${dias}`}
     </tr>`;}).join('')
-    :`<tr><td colspan="7" class="cvazia">Nenhum veículo no filtro atual.</td></tr>`;
-  ls.forEach(l=>{const tr=$('tb').querySelector(`tr[data-placa="${l.placa}"]`);
-    if(tr)tr.style.boxShadow='inset 3px 0 0 '+cor(l.status);});
+    :`<tr><td colspan="${COLS[VISAO].length}" class="cvazia">Nenhum veículo no filtro atual.</td></tr>`;
+  // a lateral mostra quantas estão vencidas em CADA visão, não só na aberta
+  ['montadora','frio'].forEach(e=>{
+    const v=linhasDe(e).filter(l=>l.status==='vencida').length;
+    const el=$(e==='montadora'?'nMont':'nFrio');
+    el.textContent=v||''; el.classList.toggle('alerta',v>0);
+  });
   montaMenus();
-  $('titSub').textContent=`Baús fechados — 90 em 90 dias · ${ls.length} veículo(s) · atualizado ${dataBR(hojeBRT())}`;
+  $('titSub').textContent=`${SUB[VISAO]} · ${ls.length} veículo(s) · atualizado ${dataBR(hojeBRT())}`;
+}
+function setVw(v){
+  VISAO=v; localStorage.setItem('seara_prev_vw',v);
+  $('vwMontadora').classList.toggle('on',v==='montadora');
+  $('vwFrio').classList.toggle('on',v==='frio');
+  FMOD.clear(); FSIT.clear();     // o filtro é da visão que estava aberta
+  calcular(); render();
 }
 
 /* ── filtros (mesmo menu do padrão) ── */
-function abreMenu(k){const m=$(k);const ab=m.classList.contains('open');
+function abreMenu(k){const m=$(k),ab=m.classList.contains('open');
   document.querySelectorAll('.menu').forEach(x=>x.classList.remove('open'));
   if(!ab)m.classList.add('open');}
-document.addEventListener('click',e=>{if(!e.target.closest('.menu-wrap'))document.querySelectorAll('.menu').forEach(x=>x.classList.remove('open'));});
+document.addEventListener('click',e=>{if(!e.target.closest('.menu-wrap'))
+  document.querySelectorAll('.menu').forEach(x=>x.classList.remove('open'));});
 function montaMenus(){
   const mods=[...new Set(LINHAS.map(l=>l.modelo).filter(Boolean))].sort();
   $('lstMod').innerHTML=mods.map(m=>`<label><input type="checkbox" data-m="${esc(m)}" ${FMOD.has(m)?'checked':''}><span class="mtx">${esc(m)}</span></label>`).join('');
-  const sits=[['vencida','Vencidas'],['atencao','Em atenção'],['prazo','No prazo']];
-  $('lstSit').innerHTML=sits.map(([v,n])=>`<label><input type="checkbox" data-s="${v}" ${FSIT.has(v)?'checked':''}><span class="mtx">${n}</span></label>`).join('');
+  $('lstSit').innerHTML=[['vencida','Vencidas'],['atencao','Em atenção'],['prazo','No prazo']]
+    .map(([v,n])=>`<label><input type="checkbox" data-s="${v}" ${FSIT.has(v)?'checked':''}><span class="mtx">${n}</span></label>`).join('');
   $('btMod').classList.toggle('on',FMOD.size>0);
   $('btSit').classList.toggle('on',FSIT.size>0);
 }
@@ -674,15 +694,16 @@ document.addEventListener('change',e=>{
 });
 
 /* ── modal: a unidade preenche a DATA (e o km, se quiser) ── */
-const TIPOS=["Básica","Completa"];
 function abrirModal(placa){
   PLACA=placa;
   const l=LINHAS.find(x=>x.placa===placa); if(!l)return;
-  $('mTit').textContent='Lançar preventiva · '+placa;
+  const mont=MONT();
+  $('mTit').textContent=(mont?'Preventiva Montadora · ':'Preventiva Frio · ')+placa;
   $('mSub').textContent=(l.modelo||'')+' · próxima sugerida: '+l.tipoProx;
   $('mData').value=hojeBRT();
-  $('mTipo').innerHTML=TIPOS.map(t=>{const sel=l.tipoProx.startsWith(t)?' selected':'';return `<option${sel}>${t}</option>`;}).join('');
-  if(MONTADORA){
+  $('mTipo').innerHTML=TIPOS[VISAO].map(t=>`<option${l.tipoProx.startsWith(t)?' selected':''}>${t}</option>`).join('');
+  $('fKm').style.display=mont?'':'none';
+  if(mont){
     const km=kmNaData(LEITURAS[placa]||[],hojeBRT());
     $('mKm').value=km==null?'':km;
     $('mKmDica').textContent=km==null
@@ -690,7 +711,7 @@ function abrirModal(placa){
       : 'Veio do hodômetro do último abastecimento. Pode editar.';
   }
   $('mObs').value='';
-  const hist=LANCS.filter(x=>x.placa===placa).slice(-3).reverse()
+  const hist=LANCS.filter(x=>x.placa===placa&&x.escopo===VISAO).slice(-3).reverse()
     .map(x=>`${dataBR(x.data)} · ${esc(x.tipo||'—')}${x.km?' · '+num(x.km)+' km':''}`).join(' | ');
   $('mHist').textContent=hist?('Últimas: '+hist):'Sem preventiva lançada nesta placa.';
   $('mbg').classList.add('open');
@@ -701,9 +722,9 @@ async function salvar(){
   const data=$('mData').value;
   if(!data){alert('Informe a data da realização.');return;}
   const v=VEICS.find(x=>x.placa===PLACA);
-  const reg={unidade:(v&&v.unidade)||MY_UNITS[0],placa:PLACA,escopo:ESCOPO,
+  const reg={unidade:(v&&v.unidade)||MY_UNITS[0],placa:PLACA,escopo:VISAO,
     tipo:$('mTipo').value,data,obs:$('mObs').value.trim()||null};
-  if(MONTADORA){const km=parseInt($('mKm').value,10);reg.km=isNaN(km)?null:km;}
+  if(MONT()){const km=parseInt($('mKm').value,10);reg.km=isNaN(km)?null:km;}
   const {error}=await sb.from('preventiva_lanc').insert(reg);
   if(error){alert('Não deu para salvar: '+error.message);return;}
   fecharModal();
@@ -717,8 +738,7 @@ function aplicaTema(t){document.body.classList.toggle('claro',t==='light');
   localStorage.setItem('bi_theme',t);$('btTema').innerHTML=t==='light'?_lua:_sol;}
 function trocaTema(){aplicaTema(document.body.classList.contains('claro')?'dark':'light');}
 function trocaMini(){const s=$('side');s.classList.toggle('mini');
-  localStorage.setItem('prev_mini',s.classList.contains('mini')?'1':'0');}
-function setVw(){}   // uma visão só por enquanto: Resumo Gerencial
+  localStorage.setItem('seara_prev_mini',s.classList.contains('mini')?'1':'0');}
 
 // dois avisos diferentes: quem não pode entrar e quem entrou mas não tem dado.
 // Chamar os dois de "Acesso restrito" faz a unidade achar que perdeu o acesso.
@@ -727,12 +747,12 @@ function aviso(titulo,msg,cor){
     <div style="color:${cor};font-weight:800;font-size:12px;text-transform:uppercase;letter-spacing:1px">${esc(titulo)}</div>
     <p style="font-size:13px;color:var(--txt2);line-height:1.5;margin-top:8px">${esc(msg)}</p></div>`;
 }
-const semAcesso=msg=>aviso('Acesso restrito',msg,'var(--vermelho)');
-const semDado=msg=>aviso('Sem dados',msg,'var(--txt3)');
+const semAcesso=m=>aviso('Acesso restrito',m,'var(--vermelho)');
+const semDado=m=>aviso('Sem dados',m,'var(--txt3)');
 
 async function iniciar(){
   aplicaTema(localStorage.getItem('bi_theme')||'dark');
-  if(localStorage.getItem('prev_mini')==='1')$('side').classList.add('mini');
+  if(localStorage.getItem('seara_prev_mini')==='1')$('side').classList.add('mini');
   sb=supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
   const {data:{session}}=await sb.auth.getSession();
   if(!session){location.replace('../');return;}
@@ -741,19 +761,19 @@ async function iniciar(){
   try{const r=await sb.from('fca_profiles').select('nome,unidade,is_admin').eq('user_id',USER.id).maybeSingle();prof=r.data;}catch(e){}
   PROFILE=prof||{}; ADMIN=!!PROFILE.is_admin;
   const doPerfil=String(PROFILE.unidade||'').toUpperCase().split(',').map(s=>s.trim()).filter(Boolean);
-  // painel da Anhanguera: só ANG e admin entram. Esconder o card no hub não
-  // basta — quem tiver o link chegaria aqui.
+  // painel da Seara/Anhanguera: só ANG e admin entram. Esconder o card no hub
+  // não basta — quem tiver o link chegaria aqui.
   MY_UNITS=ADMIN?UNIDADES_OK.slice():doPerfil.filter(u=>UNIDADES_OK.includes(u));
   EU=(PROFILE.nome||'').trim()||(USER.user_metadata&&USER.user_metadata.name)||(USER.email||'').split('@')[0];
   $('euNome').textContent=EU||'—'; $('euAv').textContent=iniciais(EU);
   $('euUni').textContent=MY_UNITS.join(', ')||'—';
-  if(!MY_UNITS.length){semAcesso('Este painel é da Anhanguera. Seu perfil não tem acesso a ela — peça no Gerenciar Acessos do hub.');return;}
+  if(!MY_UNITS.length){semAcesso('Este painel é da Seara (Anhanguera). Seu perfil não tem acesso a ela — peça no Gerenciar Acessos do hub.');return;}
   try{
     await loadVeics();
     if(!VEICS.length){semDado('Nenhum veículo cadastrado para a unidade. Cadastre a frota no app de Indisponibilidade.');return;}
     await Promise.all([loadLancs(),loadHodometro()]);
   }catch(e){semDado('Erro ao carregar os dados: '+(e.message||e));return;}
-  calcular(); render();
+  setVw(VISAO);
 }
 iniciar();
 </script>
@@ -761,6 +781,6 @@ iniciar();
 <script src="../assets/mobile.js?v=202608220020"></script>
 <script src="../assets/ctrlk.js"></script>
 <script src="../assets/excel-export.js"></script>
-<script src="../assets/build-check.js?v=202608311300"></script>
+<script src="../assets/build-check.js?v=202608311500"></script>
 </body>
 </html>
