@@ -14,6 +14,9 @@
 //            (usar quando a régua de pontos mudar).
 //   reproc   pergunta em /processamentos quais dias a vFleets reprocessou no
 //            período e recoleta SÓ esses dias (o dado antigo fica errado).
+//   ident    relatório de IDENTIFICAÇÃO de motorista por unidade e por placa
+//            (quem rodou identificado e quem não), sem gravar nada. Período:
+//            CE_DE/CE_ATE; sem eles, os últimos 7 dias.
 //
 // PERÍODO: CE_DE / CE_ATE (YYYY-MM-DD). Sem eles, roda o dia anterior.
 //
@@ -632,6 +635,79 @@ if (MODE === 'sonda') {
     }
   } catch (e) { console.log('\nGeotab:', e.message); }
   console.log('\nSonda encerrada — nada foi gravado.');
+  process.exit(0);
+}
+
+if (MODE === 'ident') {
+  // A operação exige identificação para rodar, mas a sonda viu ~70% das
+  // viagens sem motorista (31/08/2026). Este modo mostra ONDE: viagens e km
+  // com/sem identificação, por unidade e por placa. Só placa, unidade e
+  // contagem no log — nunca nome de pessoa (repo público).
+  const cred = await geotabLogin();
+  if (!cred) { console.error('Geotab: sem credencial'); process.exit(1); }
+  const IDE = process.env.CE_DE || iso(new Date(ontem.getTime() - 6 * 864e5));
+  const IATE = process.env.CE_ATE || iso(ontem);
+  console.log(`identificação de motorista · ${IDE} → ${IATE}`);
+
+  const [devs, grupos] = await Promise.all([
+    geotabRpc('Get', { typeName: 'Device' }, cred),
+    geotabRpc('Get', { typeName: 'Group' }, cred),
+  ]);
+  const gNome = new Map(grupos.map(g => [g.id, g.name || '']));
+  const dev = new Map(devs.map(d => {
+    const uni = (d.groups || []).map(g => gNome.get(g.id) || '').find(n => /^UNI_/.test(n));
+    return [d.id, { placa: String(d.licensePlate || d.name || d.id).toUpperCase().trim(),
+                    uni: uni ? uni.replace(/^UNI_/, '') : '(sem grupo UNI)' }];
+  }));
+
+  const porDev = new Map();   // devId → {com, sem, kmCom, kmSem}
+  for (let d = new Date(IDE + 'T12:00:00Z'); iso(d) <= IATE; d = new Date(d.getTime() + 864e5)) {
+    const de = `${iso(d)}T03:00:00.000Z`;
+    const ate = new Date(new Date(de).getTime() + 864e5 - 1).toISOString();
+    const trips = await geotabRpc('Get', { typeName: 'Trip', search: { fromDate: de, toDate: ate }, resultsLimit: 50000 }, cred);
+    for (const t of trips) {
+      const id = t.device && t.device.id; if (!id) continue;
+      const sem = !t.driver?.id || /NoDriver|UnknownDriver/.test(t.driver.id);
+      const km = +t.distance || 0;
+      const st = porDev.get(id) || { com: 0, sem: 0, kmCom: 0, kmSem: 0 };
+      if (sem) { st.sem++; st.kmSem += km; } else { st.com++; st.kmCom += km; }
+      porDev.set(id, st);
+    }
+  }
+
+  const pct = (a, b) => b ? Math.round(a / b * 100) + '%' : '—';
+  const kmR = v => Math.round(v).toLocaleString('pt-BR');
+
+  // por unidade
+  const porUni = new Map();
+  for (const [id, st] of porDev) {
+    const u = (dev.get(id) || { uni: '(dispositivo fora do cadastro)' }).uni;
+    const t = porUni.get(u) || { com: 0, sem: 0, kmCom: 0, kmSem: 0, placas: 0, placasSo: 0 };
+    t.com += st.com; t.sem += st.sem; t.kmCom += st.kmCom; t.kmSem += st.kmSem;
+    t.placas++; if (!st.com) t.placasSo++;
+    porUni.set(u, t);
+  }
+  console.log('\n── POR UNIDADE (viagens identificadas / total · km identificado / total) ──');
+  [...porUni.entries()].sort((a, b) => (a[1].com / (a[1].com + a[1].sem || 1)) - (b[1].com / (b[1].com + b[1].sem || 1)))
+    .forEach(([u, t]) => {
+      const v = t.com + t.sem, k = t.kmCom + t.kmSem;
+      console.log(`${u.padEnd(22)} viagens ${String(t.com).padStart(5)}/${String(v).padEnd(5)} (${pct(t.com, v).padStart(4)}) · km ${kmR(t.kmCom).padStart(8)}/${kmR(k).padEnd(8)} (${pct(t.kmCom, k).padStart(4)}) · ${t.placas} placa(s), ${t.placasSo} sem NENHUMA identificação`);
+    });
+
+  // por placa — da pior identificação para a melhor
+  console.log('\n── POR PLACA (pior identificação primeiro) ──');
+  console.log('placa      unidade                 viagens id/total   km id/total');
+  [...porDev.entries()].map(([id, st]) => ({ ...(dev.get(id) || { placa: id, uni: '(fora do cadastro)' }), ...st }))
+    .sort((a, b) => (a.com / (a.com + a.sem || 1)) - (b.com / (b.com + b.sem || 1)) || (b.kmSem - a.kmSem))
+    .forEach(r => {
+      const v = r.com + r.sem, k = r.kmCom + r.kmSem;
+      console.log(`${r.placa.padEnd(10)} ${r.uni.padEnd(22)} ${String(r.com).padStart(4)}/${String(v).padEnd(4)} (${pct(r.com, v).padStart(4)})   ${kmR(r.kmCom).padStart(7)}/${kmR(k).padEnd(7)} (${pct(r.kmCom, k).padStart(4)})`);
+    });
+
+  const tot = [...porDev.values()].reduce((a, s) => ({ com: a.com + s.com, sem: a.sem + s.sem,
+    kmCom: a.kmCom + s.kmCom, kmSem: a.kmSem + s.kmSem }), { com: 0, sem: 0, kmCom: 0, kmSem: 0 });
+  console.log(`\nTOTAL: ${tot.com}/${tot.com + tot.sem} viagens identificadas (${pct(tot.com, tot.com + tot.sem)}) · ${kmR(tot.kmCom)}/${kmR(tot.kmCom + tot.kmSem)} km (${pct(tot.kmCom, tot.kmCom + tot.kmSem)})`);
+  console.log('Relatório encerrado — nada foi gravado.');
   process.exit(0);
 }
 
