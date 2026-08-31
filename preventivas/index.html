@@ -1,0 +1,766 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="build" content="202608311300">
+<title>Preventiva Montadora · BI Frota</title>
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="../assets/gviz-cache.js"></script>
+<style>
+/* ============================================================
+   DISPONIBILIDADE — mesmo shell do Planner Corporativo
+   (painel de vidro + sidebar). SEM Kanban: não é plano de ação.
+   Lateral = resumo da disponibilidade + unidades; miolo = LISTA.
+   ============================================================ */
+:root{
+  /* fundo UNIFORME (mesma regra do hub): o degradê diagonal clareava para o
+     canto superior direito e deixava metade da tela mais clara que a outra */
+  --fundo:
+    radial-gradient(80% 60% at 90% 0%, rgba(255,244,232,.035) 0%, transparent 60%),
+    linear-gradient(45deg, #121214 0%, #121214 100%);
+  --luz:      inset 0 1px 0 rgba(255,255,255,.09);
+  --luz-card: inset 0 1px 0 rgba(255,255,255,.08);
+  --app:      rgba(150,185,255,.045);
+  --side:     rgba(30,30,30,.50);
+  --linha:    rgba(255,255,255,.06);
+  --card:     rgba(44,44,46,.78);
+  --brilho:   linear-gradient(180deg, rgba(255,255,255,.022) 0%, rgba(255,255,255,0) 46%);
+  --card-brd: rgba(255,255,255,.07);
+  --txt:      #EEF2FA;
+  --txt2:     #B2BCD2;
+  --txt3:     #676F83;
+  --txt4:     #4C505C;
+  --hover:    rgba(255,255,255,.06);
+  --azul:     #2E90E8;
+  --verde:    #3BB33B;
+  --vermelho: #FF5252;
+  --laranja:  #F97316;
+  --ambar:    #F4A100;
+  --cinza:    #5B657C;
+  --cabec:    #2B2B30;
+  --pop:      #26262B;   /* menus suspensos: OPACOS, nunca translúcidos */
+}
+body.claro{
+  --fundo:
+    radial-gradient(80% 60% at 90% 0%, rgba(255,255,255,.35) 0%, transparent 60%),
+    linear-gradient(45deg, #E1E2E5 0%, #E1E2E5 100%);
+  --luz:      inset 0 1px 0 rgba(255,255,255,.9);
+  --luz-card: inset 0 1px 0 rgba(255,255,255,1);
+  --app:      rgba(255,255,255,.20);
+  --side:     rgba(255,255,255,.50);
+  --linha:    rgba(15,23,42,.10);
+  --card:     rgba(255,255,255,.74);
+  --brilho:   linear-gradient(180deg, rgba(255,255,255,.6) 0%, rgba(255,255,255,0) 46%);
+  --card-brd: rgba(15,23,42,.10);
+  --txt:      #161D2B;
+  --txt2:     #4A5568;
+  --txt3:     #737D91;
+  --txt4:     #8B94A6;
+  --hover:    rgba(15,23,42,.05);
+  --azul:     #1B6FC4;
+  --verde:    #00B300;
+  --vermelho: #FF0000;
+  --ambar:    #E9A400;
+  --cinza:    #939CAF;
+  --cabec:    #DCDFE6;
+  --pop:      #FFFFFF;
+}
+*{margin:0;padding:0;box-sizing:border-box;}
+@supports not selector(::-webkit-scrollbar){
+  *{scrollbar-width:thin;scrollbar-color:color-mix(in srgb,var(--txt3) 42%,transparent) transparent;}
+}
+::-webkit-scrollbar{width:11px;height:11px;}
+::-webkit-scrollbar-track{background:transparent;}
+::-webkit-scrollbar-thumb{background:color-mix(in srgb,var(--txt3) 42%,transparent);
+  border:3px solid transparent;background-clip:content-box;border-radius:9px;}
+::-webkit-scrollbar-thumb:hover{background:color-mix(in srgb,var(--txt3) 72%,transparent);background-clip:content-box;}
+::-webkit-scrollbar-corner{background:transparent;}
+::-webkit-scrollbar-button{display:none;width:0;height:0;}
+body::after{content:'';position:fixed;inset:0;z-index:0;pointer-events:none;opacity:.5;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='3'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)' opacity='.05'/%3E%3C/svg%3E");}
+.app{z-index:1;}
+html,body{height:100%;overflow:hidden;}
+body{font-family:'Montserrat',-apple-system,BlinkMacSystemFont,sans-serif;font-size:13px;color:var(--txt);
+  background:var(--fundo);overflow:hidden;}
+
+.app{position:absolute;inset:16px;display:flex;border-radius:10px;overflow:hidden;
+  border:1px solid rgba(255,255,255,.10);box-shadow:0 28px 70px rgba(0,0,0,.55), var(--luz);}
+.app::before{content:'';position:absolute;inset:0;background:var(--app);
+  z-index:0;}
+.side,.board{position:relative;z-index:1;}
+
+/* ── barra lateral ── */
+.side{width:264px;flex:0 0 264px;display:flex;flex-direction:column;
+  background:var(--side);border-right:1px solid var(--linha);padding:16px 10px 12px;
+  backdrop-filter:blur(13px);-webkit-backdrop-filter:blur(13px);
+  box-shadow:var(--luz), 8px 0 28px rgba(0,0,0,.25);overflow:auto;}
+.s-top{display:flex;align-items:center;gap:9px;padding:2px 8px 14px;}
+.s-top b{flex:1;font-size:13.5px;font-weight:600;}
+.s-mini{display:flex;align-items:center;justify-content:center;width:24px;height:24px;flex:0 0 24px;
+  background:transparent;border:0;border-radius:6px;color:var(--txt3);cursor:pointer;}
+.s-mini:hover{background:var(--hover);color:var(--txt);}
+/* ── menu recolhido: só os ícones (mesma ideia do Planner) ── */
+.side.mini{width:64px;flex:0 0 64px;padding:16px 8px 12px;}
+.side.mini .s-top{justify-content:center;padding-bottom:12px;}
+.side.mini .s-top b,.side.mini .s-top>svg{display:none;}
+.side.mini .s-sec,.side.mini .s-kbd,.side.mini .s-res,.side.mini #lstUnidades,
+.side.mini .s-item .n,.side.mini .s-user div{display:none;}
+.side.mini .s-search{justify-content:center;padding:8px 0;margin-bottom:10px;background:var(--hover);}
+.side.mini .s-search input{display:none;}
+.side.mini .s-item{font-size:0;justify-content:center;padding:9px 0;gap:0;}
+.side.mini .s-user{flex-wrap:wrap;gap:6px;justify-content:center;padding:12px 0 2px;}
+.side.mini .s-sair{margin:0;}
+.s-search{display:flex;align-items:center;gap:8px;padding:7px 8px;border-radius:7px;margin-bottom:8px;}
+.s-search:hover{background:var(--hover);}
+.s-search input{flex:1;min-width:0;background:transparent;border:0;outline:0;font-family:inherit;font-size:12.5px;color:var(--txt);}
+.s-search input::placeholder{color:var(--txt2);}
+.s-kbd{font-size:10.5px;color:var(--txt3);white-space:nowrap;}
+.s-sec{display:flex;align-items:center;gap:6px;padding:14px 8px 8px;
+  font-size:10px;font-weight:600;color:var(--txt3);text-transform:uppercase;letter-spacing:1.1px;}
+.s-sec b{flex:1;font-weight:600;}
+.s-item{display:flex;align-items:center;gap:9px;width:100%;padding:7px 8px;border:0;border-radius:7px;
+  background:transparent;color:var(--txt2);font-family:inherit;font-size:12.5px;font-weight:500;text-align:left;cursor:pointer;}
+.s-item:hover{background:var(--hover);color:var(--txt);}
+.s-item.on{background:var(--hover);color:var(--txt);font-weight:600;}
+.s-item .n{margin-left:auto;font-size:11px;color:var(--txt3);font-weight:600;}
+.s-item .n.alerta{color:var(--vermelho);}
+/* resumo da disponibilidade na lateral */
+.tab tbody tr[data-id],.tab tbody tr[data-parou]{cursor:pointer;}
+.hsep{width:1px;height:26px;background:var(--linha);margin:0 4px;}
+/* previsão: bolinha verde (no prazo) / vermelha (estourou) — Renan, 14/08/2026 */
+.farol{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px;vertical-align:middle;}
+.farol.ok{background:var(--verde);} .farol.late{background:var(--vermelho);}
+/* no Resumo as tabelas mostram TUDO — sem barra interna (Renan, 14/08/2026) */
+.tab-wrap.inteira{overflow:visible;}
+.dimbt{white-space:nowrap;}
+.btn-mini.on{background:var(--azul);color:#fff;border-color:transparent;}
+.lapis{color:var(--txt3);font-size:11px;margin-left:5px;cursor:pointer;}
+.lapis:hover{color:var(--txt);}
+.rlbl{font-size:9.5px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:.9px;}
+.rval{font-size:18px;font-weight:800;}
+.rsep{width:1px;background:var(--linha);align-self:stretch;margin:2px 2px;}
+.rtit{font-size:12px;font-weight:800;letter-spacing:-.1px;}
+.rsub{font-size:10px;color:var(--txt3);margin:2px 0 8px;}
+/* Resumo: hero enxuto + os dois gráficos EMPILHADOS, cabendo na tela sem rolagem
+   (Renan, 15/08/2026) — as alturas saem do espaço que sobra, via flex */
+.res-wrap{flex:1;min-height:0;display:flex;flex-direction:column;gap:12px;padding-bottom:6px;}
+.res-hero{display:flex;align-items:flex-end;gap:34px;flex-wrap:wrap;flex:0 0 auto;}
+.res-big{font-size:clamp(30px,4.2vh,46px);font-weight:800;line-height:1;margin:3px 0 11px;
+  display:flex;align-items:center;gap:10px;color:var(--txt);}
+/* o número fica na cor do texto (preto no claro, branco no escuro) e quem dá o
+   recado é o farol ao lado — mesma cor da legenda (Renan, 15/08/2026) */
+.dfarol{width:13px;height:13px;border-radius:50%;flex:0 0 auto;}
+.leg{display:flex;gap:14px;flex-wrap:wrap;align-items:center;margin-top:4px;}
+.leg span{display:flex;align-items:center;gap:5px;font-size:9.5px;font-weight:700;
+  color:var(--txt3);letter-spacing:.6px;white-space:nowrap;}
+.leg i{width:8px;height:8px;border-radius:50%;}
+.cols .tab-wrap.res-graf{flex:1 1 0;min-height:150px;overflow:hidden;padding:12px 16px 10px;display:flex;flex-direction:column;}
+.res-cv{flex:1;min-height:0;position:relative;}
+/* os dois gráficos à esquerda e, ao lado, o calendário do mês num quadrado
+   (a largura sai da altura pelo aspect-ratio) — Renan, 15/08/2026 */
+.res-cols{flex:1;min-height:0;display:flex;gap:12px;}
+.res-esq{flex:1 1 auto;min-width:0;min-height:0;display:flex;flex-direction:column;gap:12px;}
+/* quadrado de verdade: a altura vem do esticão (é a dos dois gráficos) e a
+   largura sai dela pelo aspect-ratio */
+.cols .tab-wrap.res-cal{flex:0 0 auto;width:auto;aspect-ratio:1;align-self:stretch;
+  overflow:hidden;padding:12px 14px 12px;display:flex;flex-direction:column;}
+.cal-grid{flex:1;min-height:0;display:grid;grid-template-columns:repeat(7,1fr);gap:4px;margin-top:2px;}
+.cal-h{font-size:9px;font-weight:700;color:var(--txt3);text-align:center;letter-spacing:.5px;}
+.cal-c{border-radius:6px;display:flex;flex-direction:column;align-items:center;justify-content:center;
+  gap:6px;line-height:1;overflow:hidden;}
+.cal-d{font-size:9px;font-weight:600;color:rgba(255,255,255,.7);}
+.cal-p{font-size:13px;font-weight:800;color:#fff;}
+.cal-c.esc .cal-p{color:#0F1115;}
+.cal-c.esc .cal-d{color:rgba(0,0,0,.55);}
+.cal-c.vaz{background:repeating-linear-gradient(45deg,transparent,transparent 3px,var(--hover) 3px,var(--hover) 6px);}
+/* no claro o dia sem foto ficava branco demais: mesma hachura do escuro,
+   porém num cinza mais fechado (Renan, 15/08/2026) */
+body.claro .cal-c.vaz{background:repeating-linear-gradient(45deg,
+  rgba(15,23,42,.06),rgba(15,23,42,.06) 3px,rgba(15,23,42,.13) 3px,rgba(15,23,42,.13) 6px);}
+body.claro .cal-c.vaz .cal-d{color:var(--txt3);}
+.cal-c.vaz .cal-d{color:var(--txt3);}
+.cal-c.hoje{outline:2px solid var(--txt);outline-offset:-2px;}
+@media(max-width:900px){
+  .cols .tab-wrap.res-graf{flex:0 0 auto;height:240px;}
+  .res-cols{flex-direction:column;}
+  .cols .tab-wrap.res-cal{aspect-ratio:auto;height:280px;width:100%;}
+  .res-wrap{overflow:auto;}
+}
+.grn{color:var(--verde);font-size:18px;font-weight:800;}
+.red{color:var(--vermelho);font-size:18px;font-weight:800;}
+.s-res{margin:2px 8px 0;border:1px solid var(--card-brd);border-radius:10px;overflow:hidden;
+  background:var(--brilho), var(--card);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);}
+.s-hero{padding:12px 12px 10px;border-bottom:1px solid var(--linha);}
+.s-hero .hl{font-size:9px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:.9px;}
+.s-hero .hv{font-size:30px;font-weight:800;letter-spacing:-1px;line-height:1.05;margin-top:3px;}
+.s-res .rrow{display:flex;align-items:center;justify-content:space-between;padding:7px 12px;
+  font-size:11px;color:var(--txt2);border-bottom:1px solid var(--linha);}
+.s-res .rrow:last-child{border-bottom:0;}
+.s-res .rrow b{font-size:12.5px;font-weight:800;color:var(--txt);}
+.s-res .rrow b.red{color:var(--vermelho);}
+.s-res .rrow b.grn{color:var(--verde);}
+.s-ck{display:flex;align-items:center;gap:7px;padding:9px 12px;font-size:10.5px;line-height:1.35;}
+.s-ck.ok{color:var(--verde);font-weight:700;}
+.s-ck.pend{color:var(--ambar);}
+.s-user{margin-top:auto;display:flex;align-items:center;gap:9px;padding:12px 8px 2px;border-top:1px solid var(--linha);}
+.s-user div{flex:1;min-width:0;}
+.s-user b{display:block;font-size:12px;font-weight:600;line-height:1.2;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.s-user i{display:block;font-size:9.5px;font-style:normal;color:var(--txt3);text-transform:uppercase;letter-spacing:.8px;margin-top:2px;}
+.av{width:24px;height:24px;border-radius:50%;display:flex;align-items:center;justify-content:center;
+  font-size:9px;font-weight:800;letter-spacing:.2px;color:#2A1405;background:#F97316;flex:0 0 24px;
+  box-shadow:0 1px 4px rgba(0,0,0,.25);}
+.s-sair{display:flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:7px;
+  color:var(--txt3);text-decoration:none;flex:0 0 26px;}
+.s-sair:hover{background:var(--hover);color:var(--txt);}
+/* com a lateral recolhida, passar o mouse no ícone mostra o nome. Vai em
+   position:fixed porque a .side tem overflow:auto e cortaria a dica */
+.dica{position:fixed;z-index:9000;transform:translateY(-50%);pointer-events:none;opacity:0;
+  background:var(--card);color:var(--txt);border:1px solid var(--card-brd);border-radius:7px;
+  padding:5px 9px;font-size:11.5px;font-weight:600;white-space:nowrap;
+  box-shadow:0 8px 22px rgba(0,0,0,.45);transition:opacity .12s;}
+.dica.on{opacity:1;}
+
+/* ── quadro ── */
+.board{flex:1;min-width:0;display:flex;flex-direction:column;}
+.top{display:flex;align-items:center;gap:6px;padding:12px 24px 10px;flex-wrap:wrap;}
+.tit-wrap{flex:1;min-width:0;}
+.top h1{font-size:21px;font-weight:600;letter-spacing:-.3px;}
+.tit-sub{font-size:11px;color:var(--txt3);font-weight:600;margin-top:2px;letter-spacing:.2px;}
+.tool{display:flex;align-items:center;gap:7px;background:transparent;border:0;border-radius:7px;
+  padding:6px 10px;color:var(--txt2);font-family:inherit;font-size:12.5px;font-weight:500;cursor:pointer;}
+.tool:hover{background:var(--hover);color:var(--txt);}
+.tool.on{background:var(--hover);color:var(--txt);}
+.tool.ico{padding:7px 9px;}
+.tool.novo{border:1px solid color-mix(in srgb,var(--laranja) 40%,transparent);color:var(--laranja);font-weight:700;}
+.tool.novo:hover{background:color-mix(in srgb,var(--laranja) 14%,transparent);}
+.menu-wrap{position:relative;}
+.menu .rol label .mtx{overflow:visible;}
+.menu{display:none;position:absolute;top:calc(100% + 6px);right:0;z-index:40;min-width:214px;
+  background:var(--brilho), var(--card);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);
+  border:1px solid var(--card-brd);border-radius:10px;padding:6px;box-shadow:0 18px 40px rgba(0,0,0,.5);}
+body.claro .menu{box-shadow:0 18px 40px rgba(15,23,42,.16);}
+.menu.open{display:block;}
+.menu button,.menu label{display:flex;align-items:center;gap:9px;width:100%;padding:7px 9px;border:0;border-radius:7px;
+  background:transparent;color:var(--txt);font-family:inherit;font-size:12.5px;text-align:left;cursor:pointer;}
+.menu button:hover,.menu label:hover{background:var(--hover);}
+.menu .tit{padding:8px 9px 4px;font-size:10px;font-weight:600;color:var(--txt3);text-transform:uppercase;letter-spacing:1px;}
+.menu input[type=checkbox]{accent-color:var(--azul);width:14px;height:14px;flex:0 0 14px;cursor:pointer;}
+/* a última opção visível não pode ficar cortada: a altura é múltipla da linha
+   (7+7 de padding + 17 de linha = 31px) — Renan, 14/08/2026 */
+.menu .rol{max-height:248px;overflow:auto;}
+.menu .rol label{min-height:31px;}
+.menu .mall{font-weight:700;border-bottom:1px solid var(--linha);margin-bottom:4px;}
+.menu .mtx{flex:1;min-width:0;white-space:nowrap;}   /* sem cortar o nome da unidade */
+.menu .so{font-size:9px;font-weight:700;color:#F97316;padding:1px 7px;border-radius:4px;opacity:0;cursor:pointer;flex:0 0 auto;}
+.menu label:hover .so{opacity:1;}
+.menu .so:hover{background:rgba(249,115,22,.2);}
+
+/* ── área de conteúdo ── */
+.cols{flex:1;min-height:0;display:flex;flex-direction:column;overflow:hidden;padding:0 24px 24px;}
+.cols .tab-wrap{flex:1;min-height:0;overflow:auto;}
+.cvazia{padding:14px 4px;font-size:12px;color:var(--txt3);}
+.tab-wrap{overflow:auto;border:1px solid var(--card-brd);border-radius:10px;background:var(--side);
+  backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);}
+table.tab{width:100%;border-collapse:collapse;font-size:12px;}
+table.tab thead th{position:sticky;top:0;z-index:2;background:var(--cabec);text-align:left;
+  padding:11px 12px;font-size:10px;font-weight:700;color:var(--txt2);text-transform:uppercase;
+  letter-spacing:.8px;border-bottom:1px solid var(--card-brd);white-space:nowrap;}
+table.tab td{padding:11px 12px;border-bottom:1px solid var(--linha);color:var(--txt2);vertical-align:top;white-space:nowrap;}
+table.tab td.forte{color:var(--txt);font-weight:700;}
+table.tab td.livre{white-space:normal;min-width:180px;line-height:1.45;}
+/* colunas que podem QUEBRAR o texto em vez de esticar a tabela (Renan,
+   14/08/2026): modelo é a mais estreita — cabe metade e quebra o resto. */
+table.tab td.wrap,table.tab th.wrap{white-space:normal;line-height:1.35;overflow-wrap:anywhere;}
+table.tab th.c-modelo,table.tab td.c-modelo{width:11%;max-width:150px;}
+table.tab th.c-tipo,table.tab td.c-tipo{width:11%;}
+table.tab th.c-proj,table.tab td.c-proj{width:9%;}
+table.tab th.c-grupo,table.tab td.c-grupo{width:8%;}
+table.tab th.c-dias,table.tab td.c-dias{width:5%;}
+table.tab th.c-sit,table.tab td.c-sit{width:9%;}
+table.tab td.num,table.tab th.num{text-align:right;white-space:nowrap;}
+table.tab tbody tr{cursor:pointer;}
+table.tab tbody tr:hover{background:var(--hover);}
+.tag{display:inline-block;padding:2px 9px;border-radius:20px;font-size:10px;font-weight:700;white-space:nowrap;
+  background:color-mix(in srgb,var(--c) 22%,transparent);color:var(--c);
+  border:1px solid color-mix(in srgb,var(--c) 45%,transparent);}
+body.claro .tag{background:color-mix(in srgb,var(--c) 34%,transparent);color:#141922;
+  border-color:color-mix(in srgb,var(--c) 55%,transparent);}
+.atraso{color:var(--vermelho);font-weight:600;}
+.btn-mini{border:0;border-radius:6px;padding:5px 10px;cursor:pointer;font-family:inherit;font-size:10.5px;font-weight:700;}
+.btn-mini.abrir{background:color-mix(in srgb,var(--laranja) 18%,transparent);color:var(--laranja);
+  border:1px solid color-mix(in srgb,var(--laranja) 40%,transparent);}
+.btn-mini.abrir:hover{background:color-mix(in srgb,var(--laranja) 30%,transparent);}
+.btn-mini.ret{background:rgba(59,179,59,.14);color:var(--verde);border:1px solid rgba(59,179,59,.4);}
+.btn-mini.ret:hover{background:rgba(59,179,59,.28);}
+
+/* ── modal ── */
+.mbg{display:none;position:fixed;inset:0;z-index:80;background:rgba(3,6,11,.55);backdrop-filter:blur(2px);
+  align-items:center;justify-content:center;padding:20px;}
+.mbg.open{display:flex;}
+.modal{width:100%;max-width:720px;max-height:92vh;overflow:auto;background:var(--brilho), var(--card);
+  backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);
+  border:1px solid var(--card-brd);border-radius:14px;padding:22px 24px;box-shadow:0 30px 70px rgba(0,0,0,.6);}
+.modal h3{font-size:15px;font-weight:600;margin-bottom:4px;}
+.msub{font-size:11px;color:var(--txt3);margin-bottom:14px;min-height:14px;}
+.f{margin-bottom:13px;}
+.f3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;}
+.f2{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+.f3 .f,.f2 .f{margin-bottom:0;}
+.f label{display:block;font-size:10px;font-weight:600;color:var(--txt2);text-transform:uppercase;letter-spacing:.8px;margin-bottom:5px;}
+.f input,.f select,.f textarea{width:100%;background:var(--hover);border:1px solid var(--card-brd);
+  border-radius:8px;color:var(--txt);font-family:inherit;font-size:13px;padding:9px 11px;outline:0;}
+body.claro .f input,body.claro .f select,body.claro .f textarea{background:#fff;border-color:#d7dce4;}
+.f input:focus,.f select:focus,.f textarea:focus{border-color:var(--azul);}
+.f textarea{resize:vertical;min-height:64px;line-height:1.45;}
+#mObs{min-height:96px;}
+.f select option{background:#141d2b;color:#fff;}
+body.claro .f select option{background:#fff;color:#0f172a;}
+input[type=date]::-webkit-calendar-picker-indicator{cursor:pointer;}
+.macoes{display:flex;justify-content:space-between;gap:10px;margin-top:18px;flex-wrap:wrap;}
+.b{border:0;border-radius:8px;padding:9px 16px;cursor:pointer;font-family:inherit;font-size:12.5px;font-weight:600;}
+.b.pri{background:var(--azul);color:#fff;}
+.b.gho{background:transparent;color:var(--txt2);border:1px solid var(--card-brd);}
+.b.del{background:transparent;color:var(--vermelho);border:1px solid rgba(228,100,92,.4);}
+.b.ret{background:var(--verde);color:#fff;}
+
+@media(max-width:860px){
+  body{overflow:auto;}
+  .app{position:static;inset:auto;min-height:100%;border-radius:0;flex-direction:column;box-shadow:none;}
+  .side{width:auto;flex:none;border-right:0;border-bottom:1px solid var(--linha);padding:10px;overflow:visible;}
+  .s-user,.s-top{display:none;}
+  .s-res{margin:8px 0 0;}
+  .cols{overflow:visible;padding:0 14px 24px;}
+  .top{padding:10px 14px 8px;}
+  .tit-wrap{flex-basis:100%;}
+  .top h1{font-size:17px;}
+}
+.kpis{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;flex:0 0 auto;}
+.kpi{padding:19px 16px;border:1px solid var(--card-brd);border-radius:11px;background:var(--side);
+  backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);}
+.kpi .kl{font-size:9.5px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:.8px;}
+.kpi .kv{font-size:25px;font-weight:800;color:var(--txt);margin-top:7px;line-height:1.1;}
+.kpi .km{font-size:10.5px;color:var(--txt3);margin-top:8px;font-weight:600;}
+.kpi .km b{font-weight:800;}
+
+/* ── específico das preventivas ───────────────────────────────────────────
+   Só grades: o card, a tabela e o modal são os do padrão, sem componente novo. */
+.kpis.k1{grid-template-columns:1fr;margin-bottom:10px;}
+.kpis.k4{grid-template-columns:repeat(4,1fr);margin-bottom:12px;}
+.kpi.hero .kv{font-size:clamp(30px,4.4vh,44px);letter-spacing:-1px;}
+.kpi .kv.ok{color:var(--verde);} .kpi .kv.at{color:var(--ambar);} .kpi .kv.ve{color:var(--vermelho);}
+/* sem este seletor o avatar vira elipse: .s-user div{flex:1} vence pela
+   especificidade (armadilha já registrada no CLAUDE.md) */
+.s-user .av{width:24px;height:24px;flex:0 0 24px;}
+table.tab td.vazio{color:var(--txt4);}
+
+</style>
+</head>
+<body>
+<script>try{if(!sessionStorage.getItem("gem_hub"))location.replace("../");}catch(e){}</script>
+
+<div class="app">
+  <aside class="side" id="side">
+    <div class="s-top">
+      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="var(--laranja)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>
+      <b>Preventiva Montadora</b>
+      <button class="s-mini" onclick="trocaMini()" title="Recolher"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M15 18l-6-6 6-6"/></svg></button>
+    </div>
+    <label class="s-search"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--txt3)" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4-4"/></svg>
+      <input id="busca" placeholder="Buscar placa…" oninput="BUSCA=this.value;render()"></label>
+    <div class="s-sec"><b>Visões</b></div>
+    <button class="s-item on" id="vwResumo" onclick="setVw('resumo')">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="9"/><rect x="14" y="3" width="7" height="5"/><rect x="14" y="12" width="7" height="9"/><rect x="3" y="16" width="7" height="5"/></svg>
+      <span class="n2">Resumo Gerencial</span></button>
+    <div class="s-sec"><b>Atalhos</b></div>
+    <div id="pdf-slot"></div>
+    <a class="s-item" href="../"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M15 18l-6-6 6-6"/></svg><span class="n2">Voltar ao Hub</span></a>
+    <div class="s-user">
+      <div class="av" id="euAv">?</div>
+      <div><b id="euNome">—</b><i id="euUni">—</i></div>
+    </div>
+  </aside>
+
+  <main class="board">
+    
+<div class="top">
+  <div class="tit-wrap"><h1>Preventiva Montadora</h1><div class="tit-sub" id="titSub">—</div></div>
+  <div class="menu-wrap">
+    <button class="tool" id="btMod" onclick="abreMenu('mMod')">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 6h16M7 12h10M10 18h4"/></svg>
+      Modelo
+    </button>
+    <div class="menu" id="mMod"><div class="tit">Modelo</div><div class="rol" id="lstMod"></div></div>
+  </div>
+  <div class="menu-wrap">
+    <button class="tool" id="btSit" onclick="abreMenu('mSit')">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+      Situação
+    </button>
+    <div class="menu" id="mSit"><div class="tit">Situação</div><div class="rol" id="lstSit"></div></div>
+  </div>
+  <button class="tool ico" id="btTema" title="Claro/escuro" onclick="trocaTema()"></button>
+</div>
+
+    <div class="cols" id="cols">
+      <div class="kpis k1">
+        <div class="kpi hero"><div class="kl">Aderência ao prazo</div>
+          <div class="kv" id="kAder">—</div><div class="km" id="kAderM">—</div></div>
+      </div>
+      <div class="kpis k4">
+        <div class="kpi"><div class="kl">Total de veículos</div><div class="kv" id="kTot">—</div></div>
+        <div class="kpi"><div class="kl">Vencidas</div><div class="kv ve" id="kVen">—</div><div class="km">km negativo ou sem km</div></div>
+        <div class="kpi"><div class="kl">Em atenção</div><div class="kv at" id="kAte">—</div><div class="km">faltando menos de 3.000 km</div></div>
+        <div class="kpi"><div class="kl">No prazo</div><div class="kv ok" id="kOk">—</div></div>
+      </div>
+      <div class="tab-wrap">
+        <table class="tab"><thead><tr><th class="">Placa</th><th class="">Modelo</th><th class="">Tipo Últ.</th><th class="">Data Últ.</th><th class="num">Km Últ.</th><th class="">Data Próx.</th><th class="num">Km Próx.</th><th class="">Tipo Próx.</th><th class="num">Dias</th><th class="num">Km</th></tr></thead><tbody id="tb"></tbody></table>
+      </div>
+    </div>
+  </main>
+</div>
+
+<div class="mbg" id="mbg"><div class="modal">
+  <h3 id="mTit">Lançar preventiva</h3>
+  <div class="msub" id="mSub">—</div>
+  <div class="f2">
+    <div class="f"><label>Data da realização</label><input type="date" id="mData"></div>
+    <div class="f"><label>Tipo</label><select id="mTipo"></select></div>
+  </div>
+  <div class="f"><label>Km na realização</label><input type="number" id="mKm" placeholder="vem do hodômetro; edite se precisar"><div class="msub" id="mKmDica" style="margin:6px 0 0"></div></div>
+  <div class="f"><label>Observação</label><textarea id="mObs"></textarea></div>
+  <div class="msub" id="mHist" style="margin-top:2px"></div>
+  <div class="macoes">
+    <button class="b gho" onclick="fecharModal()">Cancelar</button>
+    <button class="b pri" onclick="salvar()">Salvar</button>
+  </div>
+</div></div>
+
+<script>
+const ESCOPO='montadora';
+const MONTADORA=true;
+const SUPABASE_URL='https://lozwipoeacpvplgkrxkq.supabase.co';
+const SUPABASE_KEY='sb_publishable_ggKEEebc5zjgQDVsF92Upw_6uoLmKe9';
+const UNIDADES_OK=['ANG'];   // painel da Anhanguera (Renan, 31/08/2026)
+
+/* ============================================================================
+   REGRAS DAS PREVENTIVAS — o miolo, separado para poder ser testado sozinho.
+   Este arquivo é injetado nos dois painéis (montadora e frio).
+
+   Montadora (VW): vence por 365 DIAS ou 30.000 KM, o que vier primeiro.
+     Sequência L → MP1 → L → MP2, repetindo. A cada 60.000 km do HODÔMETRO
+     entra a troca de óleo de caixa e diferencial: o tipo que cair ali ganha
+     "+ ODOT" (ex.: "MP1 + ODOT").
+   Frio (baús fechados): vence só por DIAS, de 90 em 90, alternando
+     Básica → Completa. Sem nenhuma feita, a próxima é Básica.
+
+   Km da última: vem do hodômetro na data, mas a unidade pode digitar. Sem os
+   dois, o km faltante fica "—" e o veículo conta como VENCIDA (Renan).
+   ========================================================================== */
+const CICLO_KM   = 30000;
+const CICLO_DIAS = 365;
+const ODOT_KM    = 60000;
+const FRIO_DIAS  = 90;
+const ATENCAO_KM   = 3000;
+const ATENCAO_DIAS = 15;
+const SEQ_VW = ['L', 'MP1', 'L', 'MP2'];
+
+const diaISO = d => new Date(d).toISOString().slice(0, 10);
+const somaDias = (iso, n) => {
+  const d = new Date(iso + 'T12:00:00');
+  d.setDate(d.getDate() + n);
+  return diaISO(d);
+};
+const difDias = (de, ate) =>
+  Math.round((new Date(ate + 'T12:00:00') - new Date(de + 'T12:00:00')) / 864e5);
+
+/* km do hodômetro NA DATA: a leitura mais recente até aquele dia; não havendo
+   nenhuma anterior, a primeira posterior (o veículo pode ter entrado depois). */
+function kmNaData(leituras, data) {
+  if (!leituras || !leituras.length || !data) return null;
+  const ate = leituras.filter(l => l.data.slice(0, 10) <= data);
+  if (ate.length) return ate[ate.length - 1].km;
+  return leituras[0].km;
+}
+
+/* próximo tipo da montadora. A posição na sequência sai da CONTAGEM de
+   preventivas; o tipo da última só corrige quando é inequívoco — "L" aparece
+   duas vezes na sequência e por isso não diz sozinho onde o veículo está. */
+function proxTipoVW(lancs) {
+  if (!lancs.length) return SEQ_VW[0];
+  const ult = String(lancs[lancs.length - 1].tipo || '').toUpperCase();
+  let pos = (lancs.length - 1) % 4;
+  if (ult.startsWith('MP1')) pos = 1;
+  else if (ult.startsWith('MP2')) pos = 3;
+  return SEQ_VW[(pos + 1) % 4];
+}
+
+/* a próxima cruza um múltiplo de 60.000 do hodômetro? então leva "+ ODOT" */
+const cruzaOdot = (kmUlt, kmProx) =>
+  kmUlt != null && kmProx != null && Math.floor(kmProx / ODOT_KM) > Math.floor(kmUlt / ODOT_KM);
+
+/* Uma linha da tabela da Montadora. `lancs` vem em ordem crescente de data. */
+function linhaVW(veic, lancs, leituras, hoje) {
+  const ult = lancs.length ? lancs[lancs.length - 1] : null;
+  const kmAtual = leituras && leituras.length ? leituras[leituras.length - 1].km : null;
+  // km da última: o digitado manda; senão o hodômetro na data
+  const kmUlt = ult ? (ult.km != null ? ult.km : kmNaData(leituras, ult.data)) : null;
+  const kmProx = kmUlt != null ? kmUlt + CICLO_KM : null;
+  const dataProx = ult ? somaDias(ult.data, CICLO_DIAS) : null;
+  const kmFalta = (kmProx != null && kmAtual != null) ? kmProx - kmAtual : null;
+  const diasFalta = dataProx ? difDias(hoje, dataProx) : null;
+
+  let tipoProx = proxTipoVW(lancs);
+  if (cruzaOdot(kmUlt, kmProx)) tipoProx += ' + ODOT';
+
+  // Vencida por km negativo, por prazo estourado, ou por não haver km nenhum
+  // (nem hodômetro nem digitado) — decisão do Renan, 31/08/2026.
+  const semKm = kmFalta == null;
+  const vencida = semKm || kmFalta < 0 || (diasFalta != null && diasFalta < 0) || !ult;
+  const atencao = !vencida && (kmFalta < ATENCAO_KM || (diasFalta != null && diasFalta < ATENCAO_DIAS));
+  return {
+    placa: veic.placa, modelo: veic.modelo || '',
+    tipoUlt: ult ? (ult.tipo || '') : '', dataUlt: ult ? ult.data : null,
+    kmUlt, dataProx, kmProx, tipoProx, diasFalta, kmFalta, kmAtual, semKm,
+    status: vencida ? 'vencida' : atencao ? 'atencao' : 'prazo',
+    // a aderência é PELO PRAZO: sem data da última também não está em dia
+    noPrazo: !!(diasFalta != null && diasFalta >= 0),
+  };
+}
+
+/* Uma linha da tabela do Frio: só dias, alternando Básica → Completa. */
+function linhaFrio(veic, lancs, hoje) {
+  const ult = lancs.length ? lancs[lancs.length - 1] : null;
+  const tipoUlt = ult ? String(ult.tipo || '') : '';
+  // M1 é a Básica (nome que a unidade usa na planilha)
+  const foiBasica = /^(M1|B[ÁA]SICA)/i.test(tipoUlt);
+  const tipoProx = !ult ? 'Básica' : (foiBasica ? 'Completa' : 'Básica');
+  const dataProx = ult ? somaDias(ult.data, FRIO_DIAS) : null;
+  const diasFalta = dataProx ? difDias(hoje, dataProx) : null;
+  const vencida = !ult || diasFalta < 0;
+  const atencao = !vencida && diasFalta < ATENCAO_DIAS;
+  return {
+    placa: veic.placa, modelo: veic.modelo || '',
+    tipoUlt, dataUlt: ult ? ult.data : null, tipoProx, dataProx, diasFalta,
+    status: vencida ? 'vencida' : atencao ? 'atencao' : 'prazo',
+    noPrazo: !!(diasFalta != null && diasFalta >= 0),
+  };
+}
+
+/* aderência = % de veículos no prazo (pelo prazo, como o Renan definiu) */
+const aderencia = linhas => linhas.length
+  ? Math.round(linhas.filter(l => l.noPrazo).length / linhas.length * 1000) / 10
+  : null;
+
+
+/* ── estado ── */
+let sb=null,USER=null,PROFILE=null,ADMIN=false,MY_UNITS=[],EU='';
+let VEICS=[],LANCS=[],LEITURAS={},LINHAS=[],BUSCA='',PLACA=null;
+const FMOD=new Set(),FSIT=new Set(),FUNI=new Set();
+const $=id=>document.getElementById(id);
+const esc=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const hojeBRT=()=>new Date().toLocaleDateString('en-CA',{timeZone:'America/Sao_Paulo'});
+const dataBR=iso=>iso?String(iso).slice(0,10).split('-').reverse().join('/'):'—';
+const num=v=>v==null?'—':v.toLocaleString('pt-BR');
+const iniciais=n=>{const p=String(n||'').trim().split(/\s+/).filter(Boolean);
+  return !p.length?'?':(p.length>1?p[0][0]+p[p.length-1][0]:p[0].slice(0,2)).toUpperCase();};
+// placa canônica: LLLNNNN vira Mercosul trocando o 5º caractere (0=A … 9=J).
+// Mesma regra do robô, para o hodômetro casar com o cadastro da unidade.
+const MERCOSUL='ABCDEFGHIJ';
+const normP=p=>{const s=String(p||'').toUpperCase().replace(/[^A-Z0-9]/g,'');
+  return /^[A-Z]{3}\d{4}$/.test(s)?s.slice(0,4)+MERCOSUL[+s[4]]+s.slice(5):s;};
+
+/* ── dados ── */
+async function loadVeics(){
+  const [g,m]=await Promise.all([
+    sb.from('ginfo_snapshot').select('data').eq('chave','ativos').maybeSingle(),
+    sb.from('ativos_manual').select('*')
+  ]);
+  const manuais=(m.data||[]).filter(r=>MY_UNITS.includes(r.unidade))
+    .map(r=>({placa:normP(r.placa),modelo:r.modelo||'',tipo:r.tipo_veiculo||'',unidade:r.unidade}));
+  const vistas=new Set(manuais.map(r=>r.placa));
+  const ginfo=((g.data&&g.data.data)||[]).map(r=>({placa:normP(r['Placa']),modelo:String(r['Modelo']||'').trim(),
+      tipo:String(r['Tipo Veículo']||'').trim(),unidade:null}))
+    .filter(r=>/^[A-Z0-9]{7}$/.test(r.placa)&&!vistas.has(r.placa));
+  // a ANG não existe no Ginfo: a frota dela é a manual. O Ginfo entra só se a
+  // placa estiver no cadastro manual da unidade — nunca a frota toda.
+  VEICS=manuais.length?manuais:ginfo.filter(()=>false);
+  VEICS.sort((a,b)=>a.placa.localeCompare(b.placa));
+}
+async function loadLancs(){
+  const {data,error}=await sb.from('preventiva_lanc').select('*')
+    .eq('escopo',ESCOPO).in('unidade',MY_UNITS).order('data',{ascending:true}).limit(5000);
+  if(error)throw error;
+  LANCS=(data||[]).map(r=>({...r,placa:normP(r.placa)}));
+}
+async function loadHodometro(){
+  LEITURAS={};
+  if(!MONTADORA)return;                       // o Frio é só por dias
+  const placas=VEICS.map(v=>v.placa);
+  for(let i=0;i<placas.length;i+=100){        // PostgREST tem limite de linhas
+    const {data}=await sb.from('hodometro_leitura').select('placa,km,data')
+      .in('placa',placas.slice(i,i+100)).order('data',{ascending:true}).limit(20000);
+    (data||[]).forEach(r=>{const p=normP(r.placa);(LEITURAS[p]=LEITURAS[p]||[]).push(r);});
+  }
+}
+
+/* ── cálculo ── */
+function calcular(){
+  const hoje=hojeBRT();
+  const porPlaca={};
+  LANCS.forEach(l=>{(porPlaca[l.placa]=porPlaca[l.placa]||[]).push(l);});
+  LINHAS=VEICS.map(v=>{
+    const ls=porPlaca[v.placa]||[];
+    return MONTADORA ? linhaVW(v,ls,LEITURAS[v.placa]||[],hoje) : linhaFrio(v,ls,hoje);
+  });
+  // ordenada pelo que falta: o mais estourado primeiro (km na montadora, dias
+  // no frio). Sem km, vai para o topo — é vencida e precisa de atenção.
+  const chave=l=>MONTADORA?(l.kmFalta==null?-Infinity:l.kmFalta):(l.diasFalta==null?-Infinity:l.diasFalta);
+  LINHAS.sort((a,b)=>chave(a)-chave(b));
+}
+const filtradas=()=>LINHAS.filter(l=>
+  (!FMOD.size||FMOD.has(l.modelo))&&
+  (!FSIT.size||FSIT.has(l.status))&&
+  (!BUSCA||l.placa.includes(BUSCA.toUpperCase().replace(/[^A-Z0-9]/g,''))));
+
+/* ── tela ── */
+function render(){
+  const ls=filtradas();
+  const ader=aderencia(ls);
+  $('kAder').textContent=ader==null?'—':ader.toFixed(1).replace('.',',')+'%';
+  $('kAder').className='kv '+(ader==null?'':ader>=90?'ok':ader>=60?'at':'ve');
+  $('kAderM').textContent=ls.length?`${ls.filter(l=>l.noPrazo).length} de ${ls.length} dentro do prazo`:'—';
+  $('kTot').textContent=ls.length;
+  $('kVen').textContent=ls.filter(l=>l.status==='vencida').length;
+  $('kAte').textContent=ls.filter(l=>l.status==='atencao').length;
+  $('kOk').textContent=ls.filter(l=>l.status==='prazo').length;
+  const cor=s=>s==='vencida'?'var(--vermelho)':s==='atencao'?'var(--ambar)':'var(--verde)';
+  $('tb').innerHTML=ls.length?ls.map(l=>{
+    const comuns=`<td class="forte">${esc(l.placa)}</td><td class="wrap">${esc(l.modelo)||'<span class="vazio">—</span>'}</td>
+      <td>${esc(l.tipoUlt)||'<span class="vazio">—</span>'}</td><td>${dataBR(l.dataUlt)}</td>`;
+    const dias=`<td class="num" style="color:${l.diasFalta==null?'var(--txt4)':l.diasFalta<0?'var(--vermelho)':''}">${l.diasFalta==null?'—':l.diasFalta}</td>`;
+    return `<tr data-placa="${esc(l.placa)}" onclick="abrirModal('${esc(l.placa)}')">
+      ${comuns}
+      ${MONTADORA?`<td class="num">${num(l.kmUlt)}</td><td>${dataBR(l.dataProx)}</td>
+        <td class="num">${num(l.kmProx)}</td><td>${esc(l.tipoProx)}</td>${dias}
+        <td class="num" style="color:${l.kmFalta==null?'var(--txt4)':l.kmFalta<0?'var(--vermelho)':''}">${l.kmFalta==null?'—':num(l.kmFalta)}</td>`
+        :`<td>${esc(l.tipoProx)}</td><td>${dataBR(l.dataProx)}</td>${dias}`}
+    </tr>`;}).join('')
+    :`<tr><td colspan="10" class="cvazia">Nenhum veículo no filtro atual.</td></tr>`;
+  ls.forEach(l=>{const tr=$('tb').querySelector(`tr[data-placa="${l.placa}"]`);
+    if(tr)tr.style.boxShadow='inset 3px 0 0 '+cor(l.status);});
+  montaMenus();
+  $('titSub').textContent=`VW — 30.000 km ou 1 ano · ${ls.length} veículo(s) · atualizado ${dataBR(hojeBRT())}`;
+}
+
+/* ── filtros (mesmo menu do padrão) ── */
+function abreMenu(k){const m=$(k);const ab=m.classList.contains('open');
+  document.querySelectorAll('.menu').forEach(x=>x.classList.remove('open'));
+  if(!ab)m.classList.add('open');}
+document.addEventListener('click',e=>{if(!e.target.closest('.menu-wrap'))document.querySelectorAll('.menu').forEach(x=>x.classList.remove('open'));});
+function montaMenus(){
+  const mods=[...new Set(LINHAS.map(l=>l.modelo).filter(Boolean))].sort();
+  $('lstMod').innerHTML=mods.map(m=>`<label><input type="checkbox" data-m="${esc(m)}" ${FMOD.has(m)?'checked':''}><span class="mtx">${esc(m)}</span></label>`).join('');
+  const sits=[['vencida','Vencidas'],['atencao','Em atenção'],['prazo','No prazo']];
+  $('lstSit').innerHTML=sits.map(([v,n])=>`<label><input type="checkbox" data-s="${v}" ${FSIT.has(v)?'checked':''}><span class="mtx">${n}</span></label>`).join('');
+  $('btMod').classList.toggle('on',FMOD.size>0);
+  $('btSit').classList.toggle('on',FSIT.size>0);
+}
+document.addEventListener('change',e=>{
+  const m=e.target.dataset.m,s=e.target.dataset.s;
+  if(m!=null){e.target.checked?FMOD.add(m):FMOD.delete(m);render();}
+  if(s!=null){e.target.checked?FSIT.add(s):FSIT.delete(s);render();}
+});
+
+/* ── modal: a unidade preenche a DATA (e o km, se quiser) ── */
+const TIPOS=["L","MP1","MP2"];
+function abrirModal(placa){
+  PLACA=placa;
+  const l=LINHAS.find(x=>x.placa===placa); if(!l)return;
+  $('mTit').textContent='Lançar preventiva · '+placa;
+  $('mSub').textContent=(l.modelo||'')+' · próxima sugerida: '+l.tipoProx;
+  $('mData').value=hojeBRT();
+  $('mTipo').innerHTML=TIPOS.map(t=>{const sel=l.tipoProx.startsWith(t)?' selected':'';return `<option${sel}>${t}</option>`;}).join('');
+  if(MONTADORA){
+    const km=kmNaData(LEITURAS[placa]||[],hojeBRT());
+    $('mKm').value=km==null?'':km;
+    $('mKmDica').textContent=km==null
+      ? 'Sem hodômetro para esta placa — digite o km, senão a preventiva fica sem km faltante.'
+      : 'Veio do hodômetro do último abastecimento. Pode editar.';
+  }
+  $('mObs').value='';
+  const hist=LANCS.filter(x=>x.placa===placa).slice(-3).reverse()
+    .map(x=>`${dataBR(x.data)} · ${esc(x.tipo||'—')}${x.km?' · '+num(x.km)+' km':''}`).join(' | ');
+  $('mHist').textContent=hist?('Últimas: '+hist):'Sem preventiva lançada nesta placa.';
+  $('mbg').classList.add('open');
+}
+function fecharModal(){$('mbg').classList.remove('open');PLACA=null;}
+async function salvar(){
+  if(!PLACA)return;
+  const data=$('mData').value;
+  if(!data){alert('Informe a data da realização.');return;}
+  const v=VEICS.find(x=>x.placa===PLACA);
+  const reg={unidade:(v&&v.unidade)||MY_UNITS[0],placa:PLACA,escopo:ESCOPO,
+    tipo:$('mTipo').value,data,obs:$('mObs').value.trim()||null};
+  if(MONTADORA){const km=parseInt($('mKm').value,10);reg.km=isNaN(km)?null:km;}
+  const {error}=await sb.from('preventiva_lanc').insert(reg);
+  if(error){alert('Não deu para salvar: '+error.message);return;}
+  fecharModal();
+  await loadLancs(); calcular(); render();
+}
+
+/* ── tema e menu, iguais aos dos outros painéis ── */
+const _sol=`<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.2 4.2l1.4 1.4M18.4 18.4l1.4 1.4M1 12h2M21 12h2M4.2 19.8l1.4-1.4M18.4 5.6l1.4-1.4"/></svg>`;
+const _lua=`<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>`;
+function aplicaTema(t){document.body.classList.toggle('claro',t==='light');
+  localStorage.setItem('bi_theme',t);$('btTema').innerHTML=t==='light'?_lua:_sol;}
+function trocaTema(){aplicaTema(document.body.classList.contains('claro')?'dark':'light');}
+function trocaMini(){const s=$('side');s.classList.toggle('mini');
+  localStorage.setItem('prev_mini',s.classList.contains('mini')?'1':'0');}
+function setVw(){}   // uma visão só por enquanto: Resumo Gerencial
+
+// dois avisos diferentes: quem não pode entrar e quem entrou mas não tem dado.
+// Chamar os dois de "Acesso restrito" faz a unidade achar que perdeu o acesso.
+function aviso(titulo,msg,cor){
+  $('cols').innerHTML=`<div class="tab-wrap" style="max-width:520px;margin:40px auto;padding:24px;text-align:center">
+    <div style="color:${cor};font-weight:800;font-size:12px;text-transform:uppercase;letter-spacing:1px">${esc(titulo)}</div>
+    <p style="font-size:13px;color:var(--txt2);line-height:1.5;margin-top:8px">${esc(msg)}</p></div>`;
+}
+const semAcesso=msg=>aviso('Acesso restrito',msg,'var(--vermelho)');
+const semDado=msg=>aviso('Sem dados',msg,'var(--txt3)');
+
+async function iniciar(){
+  aplicaTema(localStorage.getItem('bi_theme')||'dark');
+  if(localStorage.getItem('prev_mini')==='1')$('side').classList.add('mini');
+  sb=supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
+  const {data:{session}}=await sb.auth.getSession();
+  if(!session){location.replace('../');return;}
+  USER=session.user;
+  let prof=null;
+  try{const r=await sb.from('fca_profiles').select('nome,unidade,is_admin').eq('user_id',USER.id).maybeSingle();prof=r.data;}catch(e){}
+  PROFILE=prof||{}; ADMIN=!!PROFILE.is_admin;
+  const doPerfil=String(PROFILE.unidade||'').toUpperCase().split(',').map(s=>s.trim()).filter(Boolean);
+  // painel da Anhanguera: só ANG e admin entram. Esconder o card no hub não
+  // basta — quem tiver o link chegaria aqui.
+  MY_UNITS=ADMIN?UNIDADES_OK.slice():doPerfil.filter(u=>UNIDADES_OK.includes(u));
+  EU=(PROFILE.nome||'').trim()||(USER.user_metadata&&USER.user_metadata.name)||(USER.email||'').split('@')[0];
+  $('euNome').textContent=EU||'—'; $('euAv').textContent=iniciais(EU);
+  $('euUni').textContent=MY_UNITS.join(', ')||'—';
+  if(!MY_UNITS.length){semAcesso('Este painel é da Anhanguera. Seu perfil não tem acesso a ela — peça no Gerenciar Acessos do hub.');return;}
+  try{
+    await loadVeics();
+    if(!VEICS.length){semDado('Nenhum veículo cadastrado para a unidade. Cadastre a frota no app de Indisponibilidade.');return;}
+    await Promise.all([loadLancs(),loadHodometro()]);
+  }catch(e){semDado('Erro ao carregar os dados: '+(e.message||e));return;}
+  calcular(); render();
+}
+iniciar();
+</script>
+<script src="../assets/sortable-table.js"></script>
+<script src="../assets/mobile.js?v=202608220020"></script>
+<script src="../assets/ctrlk.js"></script>
+<script src="../assets/excel-export.js"></script>
+<script src="../assets/build-check.js?v=202608311300"></script>
+</body>
+</html>
