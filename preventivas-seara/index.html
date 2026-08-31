@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-<meta name="build" content="202608312100">
+<meta name="build" content="202608312200">
 <title>Preventivas Seara · BI Frota</title>
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -519,11 +519,13 @@ function linhaVW(veic, lancs, leituras, hoje) {
   let tipoProx = proxTipoVW(lancs);
   if (cruzaOdot(kmUlt, kmProx)) tipoProx += ' + ODOT';
 
-  // Vencida por km negativo, por prazo estourado, ou por não haver km nenhum
-  // (nem hodômetro nem digitado) — decisão do Renan, 31/08/2026.
+  // O STATUS da montadora respeita o KM, não os dias (Renan, 31/08/2026):
+  // vencida = km estourado ou sem km nenhum (nem hodômetro nem digitado);
+  // atenção = faltando menos de 3.000 km. Os dias continuam na tabela e
+  // seguem mandando na ADERÊNCIA (noPrazo), que é "ao prazo".
   const semKm = kmFalta == null;
-  const vencida = semKm || kmFalta < 0 || (diasFalta != null && diasFalta < 0) || !ult;
-  const atencao = !vencida && (kmFalta < ATENCAO_KM || (diasFalta != null && diasFalta < ATENCAO_DIAS));
+  const vencida = semKm || kmFalta < 0;
+  const atencao = !vencida && kmFalta < ATENCAO_KM;
   return {
     placa: veic.placa, modelo: veic.modelo || '',
     // "M1" não existe na montadora (é a Básica do FRIO); se veio da carga, esconde
@@ -784,6 +786,6 @@ iniciar();
 <script src="../assets/mobile.js?v=202608220020"></script>
 <script src="../assets/ctrlk.js"></script>
 <script src="../assets/excel-export.js"></script>
-<script src="../assets/build-check.js?v=202608312100"></script>
+<script src="../assets/build-check.js?v=202608312200"></script>
 </body>
 </html>
