@@ -112,8 +112,17 @@ async function porFatias(u, dias, passo) {
     const d = x => x.toISOString().slice(0, 10);
     const per = { dataInicial: d(de) + 'T00:00:00.000-03:00', dataFinal: d(ate) + 'T23:59:59.999-03:00' };
     fatias++;
-    try { out.push(...await abastecimentos(u, per)); }
-    catch (e) { falhas++; if (falhas === 1) log(`   ${u.unidade}: fatia ${d(de)}→${d(ate)} falhou (${e.message})`); }
+    // o 500 é INTERMITENTE, não só por volume: com fatias de 7 dias, 3 de 5
+    // ainda caíram. Três tentativas com espera crescente antes de desistir.
+    let ok = false, ultimo = '';
+    for (let t = 1; t <= 3 && !ok; t++) {
+      try { out.push(...await abastecimentos(u, per)); ok = true; }
+      catch (e) {
+        ultimo = e.message;
+        if (t < 3) await new Promise(r => setTimeout(r, t * 3000));
+      }
+    }
+    if (!ok) { falhas++; if (falhas === 1) log(`   ${u.unidade}: fatia ${d(de)}→${d(ate)} falhou 3x (${ultimo})`); }
   }
   if (falhas) log(`   ${u.unidade}: ${falhas}/${fatias} fatia(s) falharam`);
   if (falhas === fatias) throw new Error(`todas as ${fatias} fatias falharam`);
