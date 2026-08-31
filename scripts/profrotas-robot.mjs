@@ -53,6 +53,8 @@ const SB_URL = 'https://lozwipoeacpvplgkrxkq.supabase.co';
 const SB_KEY = (process.env.GEM_SUPABASE_SERVICE_KEY || '').trim();
 
 const log = (...a) => console.log(new Date().toISOString().slice(11, 19), ...a);
+const esperar = ms => new Promise(r => setTimeout(r, ms));
+const PAUSA = Number(process.env.PROFROTAS_PAUSA || 400);   // ms entre chamadas
 
 /* ── aba Base CNPJ (gviz) ────────────────────────────────────────────────── */
 async function lerBaseCnpj() {
@@ -99,10 +101,10 @@ const primeiro = (obj, cams) => {
   return null;
 };
 
-// A API devolveu HTTP 500 em TODAS as unidades com uma janela de 120 dias, e
-// 200 no teste de autorização — não é chave, é o tamanho do pedido. Por isso a
-// coleta é fatiada (padrão 15 dias) e uma fatia que falha não derruba as
-// outras: o robô conta quantas falharam e segue.
+// A API não aguenta pedido grande NEM rajada: 120 dias de uma vez devolveram
+// HTTP 500 em todas as unidades, e as fatias que ainda caíam vinham com HTTP
+// 429 — rate limit. Por isso a coleta é fatiada (padrão 15 dias), com uma
+// pausa entre chamadas, e uma fatia que falha não derruba as outras.
 async function porFatias(u, dias, passo) {
   const out = [];
   let falhas = 0, fatias = 0;
@@ -119,10 +121,13 @@ async function porFatias(u, dias, passo) {
       try { out.push(...await abastecimentos(u, per)); ok = true; }
       catch (e) {
         ultimo = e.message;
-        if (t < 3) await new Promise(r => setTimeout(r, t * 3000));
+        // 429 é rate limit: esperar bem mais do que num erro comum
+        const espera = /429/.test(ultimo) ? t * 15000 : t * 3000;
+        if (t < 3) await esperar(espera);
       }
     }
     if (!ok) { falhas++; if (falhas === 1) log(`   ${u.unidade}: fatia ${d(de)}→${d(ate)} falhou 3x (${ultimo})`); }
+    await esperar(PAUSA);                    // não emendar uma fatia na outra
   }
   if (falhas) log(`   ${u.unidade}: ${falhas}/${fatias} fatia(s) falharam`);
   if (falhas === fatias) throw new Error(`todas as ${fatias} fatias falharam`);
@@ -145,6 +150,7 @@ async function abastecimentos(u, per) {
     const tam = json.tamanhoPagina || regs.length || 0;
     if (!tam || !regs.length) break;
     if (pagina >= Math.ceil((json.totalItems || 0) / tam)) break;
+    await esperar(PAUSA);                    // idem entre páginas
   }
   return linhas;
 }
