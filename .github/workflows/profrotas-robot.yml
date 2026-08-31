@@ -1,0 +1,61 @@
+name: Profrotas Robot (hodometro -> Supabase)
+
+# Lê as chaves da aba "Base CNPJ" da planilha do time e guarda o hodômetro de
+# cada abastecimento em hodometro_leitura. É a fonte do "km atual" dos painéis
+# de preventiva.
+on:
+  workflow_dispatch:
+    inputs:
+      modo:
+        description: "auth = só testa as chaves · run = coleta e grava"
+        required: true
+        default: "auth"
+        type: choice
+        options: [auth, run]
+      dias:
+        description: "janela em dias (padrão 90; use 365+ no primeiro backfill)"
+        required: false
+        default: "90"
+      unidade:
+        description: "rodar só a unidade cujo nome contenha este texto"
+        required: false
+        default: ""
+      dry:
+        description: "não gravar no Supabase, só contar"
+        required: false
+        default: false
+        type: boolean
+  # todo dia às 6:30 BRT (9:30 UTC), antes do robô do Ginfo
+  schedule:
+    - cron: '30 9 * * *'
+
+concurrency:
+  group: profrotas-robot
+  cancel-in-progress: false
+
+jobs:
+  robo:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Rodar robô
+        run: node scripts/profrotas-robot.mjs
+        env:
+          PROFROTAS_MODE:           ${{ github.event.inputs.modo || 'run' }}
+          PROFROTAS_DIAS:           ${{ github.event.inputs.dias || '90' }}
+          PROFROTAS_UNIDADE:        ${{ github.event.inputs.unidade }}
+          PROFROTAS_DRY:            ${{ github.event.inputs.dry == 'true' && '1' || '' }}
+          GEM_SUPABASE_SERVICE_KEY: ${{ secrets.GEM_SUPABASE_SERVICE_KEY }}
+      - name: Avisar por e-mail se falhar
+        if: failure()
+        env:
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          MAIL_FROM:      ${{ vars.MAIL_FROM }}
+          MAIL_TO:        ${{ vars.MAIL_TO }}
+          WORKFLOW:       ${{ github.workflow }}
+          RUN_URL:        ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: bash scripts/avisa-falha.sh
