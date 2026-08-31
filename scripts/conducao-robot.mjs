@@ -214,7 +214,7 @@ function gtChave(u) {
   return doc.length >= 9 ? doc : 'gt:' + (u?.id || '');
 }
 
-async function geotabDia(dia, cred, cacheUsuarios, regras) {
+async function geotabDia(dia, cred, cacheUsuarios, regras, uniPorDev) {
   // a janela é o dia em BRT (UTC-3), não em UTC
   const de = `${dia}T03:00:00.000Z`;
   const ate = new Date(new Date(de).getTime() + 864e5 - 1).toISOString();
@@ -238,10 +238,21 @@ async function geotabDia(dia, cred, cacheUsuarios, regras) {
     }
   }
 
-  const porMot = new Map();
+  const porMot = new Map(), semLogin = new Map();
   for (const t of trips) {
     const d = t.driver?.id;
-    if (!d || d === 'NoDriverId' || d === 'UnknownDriverId') continue;   // sem motorista: não é de ninguém
+    if (!d || d === 'NoDriverId' || d === 'UnknownDriverId') {
+      // viagem sem identificação vira a linha "Sem Login" da UNIDADE do
+      // veículo (Renan, 31/08/2026) — o km não some, aparece cobrado no ranking
+      const uni = uniPorDev && uniPorDev.get(t.device?.id);
+      if (uni) {
+        const g = semLogin.get(uni) || { km: 0, dir: 0, idle: 0, v1: 0, v2: 0, v3: 0, n: 0 };
+        g.km += +t.distance || 0; g.dir += gtSeg(t.drivingDuration); g.idle += gtSeg(t.idlingDuration);
+        g.v1 += gtSeg(t.speedRange1Duration); g.v2 += gtSeg(t.speedRange2Duration); g.v3 += gtSeg(t.speedRange3Duration);
+        g.n++; semLogin.set(uni, g);
+      }
+      continue;
+    }
     const g = porMot.get(d) || { km: 0, dir: 0, idle: 0, v1: 0, v2: 0, v3: 0, acel: 0, frea: 0, vel: 0, n: 0 };
     g.km   += +t.distance || 0;
     g.dir  += gtSeg(t.drivingDuration);
@@ -267,7 +278,7 @@ async function geotabDia(dia, cred, cacheUsuarios, regras) {
     us.forEach(u => cacheUsuarios.set(u.id, u));
   }
 
-  return [...porMot.entries()].map(([id, g]) => {
+  const linhas = [...porMot.entries()].map(([id, g]) => {
     const u = cacheUsuarios.get(id) || { id };
     const tMov = g.dir || null;
     return {
@@ -287,6 +298,25 @@ async function geotabDia(dia, cred, cacheUsuarios, regras) {
       _uo: null,
     };
   });
+  // a linha "Sem Login" de cada unidade: km/idle/velocidade saem das próprias
+  // viagens; eventos de aceleração não são atribuídos (não há a quem)
+  for (const [uni, g] of semLogin) {
+    const tMov = g.dir || null;
+    linhas.push({
+      dia, chave: 'semlogin:' + uni, fonte: 'Geotab',
+      km: g.km || null,
+      h_motor: (g.dir + g.idle) ? (g.dir + g.idle) / 3600 : null,
+      rpm_verde_pct: null,
+      idle_pct: (g.dir + g.idle) ? g.idle / (g.dir + g.idle) * 100 : null,
+      acel_100km: null, frea_100km: null,
+      vel_excesso_pct: tMov ? (g.v1 + 2 * g.v2 + 3 * g.v3) / tMov * 100 : null,
+      freio_motor_pct: null, banguela_pct: null, cambio_ruim_pct: null,
+      registros: g.n,
+      bruto: { semLogin: true, viagens: g.n, seg: { dir: g.dir, idle: g.idle, v1: g.v1, v2: g.v2, v3: g.v3 } },
+      _nome: 'Sem Login · ' + uni, _uo: null, _uni: uni,
+    });
+  }
+  return linhas;
 }
 
 // ── sonda: mostra o que cada API entrega, sem gravar nada ───────────────────
@@ -403,7 +433,11 @@ async function gravaDiario(linhas) {
 
 async function garanteMotoristas(linhas) {
   const vistos = new Map();
-  linhas.forEach(l => { if (l.chave && !vistos.has(l.chave)) vistos.set(l.chave, { chave: l.chave, nome: l._nome || l.chave, fonte: l.fonte }); });
+  // a unidade só vem preenchida nas linhas "Sem Login" (é o grupo UNI_* do
+  // veículo no Geotab — dado real, não de-para inventado); motorista de
+  // verdade continua entrando com unidade nula até o de-para do Renan.
+  linhas.forEach(l => { if (l.chave && !vistos.has(l.chave))
+    vistos.set(l.chave, { chave: l.chave, nome: l._nome || l.chave, fonte: l.fonte, unidade: l._uni || null }); });
   // unidade fica NULA de propósito: o de-para UO → unidade do portal é do Renan.
   // O robô não inventa unidade — quem entra sem unidade aparece no resumo abaixo.
   if (!vistos.size) return;
@@ -720,16 +754,23 @@ if (MODE === 'recalc') {
 }
 
 // Geotab: login uma vez só (a sessão vale ~2 semanas) e caches reaproveitados
-let GT = null, GT_USERS = new Map(), GT_RULES = new Map();
+let GT = null, GT_USERS = new Map(), GT_RULES = new Map(), GT_UNIDEV = new Map();
 try {
   GT = await geotabLogin();
   if (GT) {
-    const [us, rs] = await Promise.all([
+    const [us, rs, devs, gs] = await Promise.all([
       geotabRpc('Get', { typeName: 'User', search: { isDriver: true } }, GT),
       geotabRpc('Get', { typeName: 'Rule' }, GT),
+      geotabRpc('Get', { typeName: 'Device' }, GT),
+      geotabRpc('Get', { typeName: 'Group' }, GT),
     ]);
     GT_USERS = new Map(us.map(u => [u.id, u]));
     GT_RULES = new Map(rs.map(r => [r.id, r.name]));
+    const gNome = new Map(gs.map(g => [g.id, g.name || '']));
+    devs.forEach(d => {
+      const uni = (d.groups || []).map(g => gNome.get(g.id) || '').find(n => /^UNI_/.test(n));
+      if (uni) GT_UNIDEV.set(d.id, uni.replace(/^UNI_/, ''));
+    });
     const faltando = Object.entries(GT_REGRA)
       .filter(([, r]) => ![...GT_RULES].some(([id, n]) => r.ids.includes(id) || r.nome.test(n || '')))
       .map(([k]) => k);
@@ -795,7 +836,7 @@ for (let i = 0; i < AGENDA.length; i++) {
   // Geotab no mesmo dia — a pausa de 5 min é limite da vFleets, não dele
   if (GT) {
     try {
-      const lg = await geotabDia(dia, GT, GT_USERS, GT_RULES);
+      const lg = await geotabDia(dia, GT, GT_USERS, GT_RULES, GT_UNIDEV);
       await garanteMotoristas(lg);
       total += await gravaDiario(lg);
       console.log(`${dia}: Geotab → ${lg.length} motorista(s) · ${Math.round(lg.reduce((s, l) => s + (+l.km || 0), 0))} km`);
