@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="build" content="202608311700">
+<meta name="build" content="202608311800">
 <title>Conferência de Locação · Gestão em Movimento</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -343,7 +343,10 @@ table.dre td.cg-t,.cg-t{color:var(--verde)!important;font-weight:700;}
 
 /* conteúdo ancorado nos cantos: rótulo + número em cima, apoio embaixo
    (Renan, 24/08/2026 — mesma regra do Ativos) */
-#vw-resumo .kpis{flex:0 0 auto;min-height:clamp(120px,17vh,165px);}
+#vw-resumo .kpis{flex:0 0 auto;min-height:clamp(120px,17vh,165px);grid-template-columns:repeat(6,1fr);}
+/* o card de descontos exporta o relatório ao ser clicado */
+.kpi.kexp{cursor:pointer;}
+.kpi.kexp:hover{border-color:color-mix(in srgb,var(--laranja) 45%,transparent);}
 #vw-resumo .kpi{display:flex;flex-direction:column;justify-content:flex-start;padding:14px 16px;}
 #vw-resumo .kpi .kv{font-size:32px;margin-top:6px;}
 #vw-resumo .kpi .km{margin-top:auto;padding-top:8px;}
@@ -1122,6 +1125,8 @@ function montaTela(){
         <div class="kpi"><div class="kl">Remunerados sem cobrança</div><div class="kv" id="k-rem">—</div><div class="km" id="k-rem-m">—</div></div>
         <div class="kpi"><div class="kl"># Valores divergentes</div><div class="kv" id="k-val">—</div><div class="km" id="k-val-m">—</div></div>
         <div class="kpi"><div class="kl">Reserva técnica</div><div class="kv" id="k-rt">—</div><div class="km" id="k-rt-m">—</div></div>
+        <div class="kpi kexp" id="k-desc-card" onclick="exportaDescontos()" title="Exportar o relatório em Excel">
+          <div class="kl">Descontos Vamos</div><div class="kv" id="k-desc">—</div><div class="km" id="k-desc-m">—</div></div>
       </div>
       <div class="gr2 um">
         <div class="card gcard">
@@ -1474,6 +1479,45 @@ function pintaCards(L,pre){
   põe('k-val', num(valDif.length), '<b class="'+cor(soma(valDif,'prev')-soma(valDif,'ft'))+'">'
        +brl(soma(valDif,'prev')-soma(valDif,'ft'))+'</b> de diferença');
   põe('k-rt',  num(rt.length), brl(soma(rt,'ft'))+' remunerados · '+brl(soma(rt,'prev'))+' cobrados');
+  const d=descontos(L);
+  põe('k-desc', num(d.length), d.length
+    ? '<b class="cr">'+brl(d.reduce((a,l)=>a+l.desconto,0))+'</b> a menos que a prévia · clique para exportar'
+    : 'nenhum desconto no filtro');
+}
+
+/* ══════════ Descontos Vamos ══════════
+   Desconto = o que a Vamos deixou de faturar em relação à prévia, ou seja,
+   a crítica aceita: linhas em que o FATURADO ficou abaixo da PRÉVIA.
+   Só entra quem tem os dois lados — sem faturamento não há desconto, há
+   prévia sem faturar, que é outro motivo. */
+function descontos(L){
+  return (L||[]).filter(l=>l.prev!=null&&l.fat!=null&&(l.prev-l.fat)>TOL)
+    .map(l=>({...l, desconto:l.prev-l.fat}))
+    .sort((a,b)=>b.desconto-a.desconto);
+}
+function exportaDescontos(){
+  const L=filtradas();
+  const d=descontos(L);
+  if(!d.length){ flash('Nenhum desconto no filtro atual', true); return; }
+  const linhas=d.map(l=>({
+    'Vigência': vigRot(l.vig), 'Etapa': l.etapa==='mensal'?'Mensal':'Provisão',
+    'Placa': l.placa||'', 'Unidade': l.uni||'', 'Projeto': l.proj||'',
+    'Modelo': l.modelo||'', 'Prévia': l.prev, 'Faturado': l.fat, 'Desconto': l.desconto,
+  }));
+  const total=d.reduce((a,l)=>a+l.desconto,0);
+  linhas.push({'Vigência':'', 'Etapa':'', 'Placa':'TOTAL', 'Unidade':'', 'Projeto':'',
+               'Modelo':'', 'Prévia':d.reduce((a,l)=>a+l.prev,0),
+               'Faturado':d.reduce((a,l)=>a+l.fat,0), 'Desconto':total});
+  const gerar=()=>{
+    const ws=XLSX.utils.json_to_sheet(linhas);
+    const wb=XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Descontos Vamos');
+    XLSX.writeFile(wb, 'conferencia-locacao_descontos-vamos.xlsx');
+    flash(d.length+' ativo(s) exportados · '+brl(total));
+  };
+  if(window.XlsxPronto) window.XlsxPronto(err=>err?flash('Não deu para carregar o Excel',true):gerar());
+  else if(window.XLSX) gerar();
+  else flash('Exportador de Excel indisponível', true);
 }
 
 const gGrid=()=>({display:false});
@@ -1760,6 +1804,6 @@ initPdfExport({
   isLight:()=>document.body.classList.contains('claro'), setTheme:aplicaTema
 });
 </script>
-<script src="../assets/build-check.js?v=202608311700"></script>
+<script src="../assets/build-check.js?v=202608311800"></script>
 </body>
 </html>

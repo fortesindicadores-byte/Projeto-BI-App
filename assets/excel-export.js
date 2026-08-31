@@ -270,6 +270,9 @@
     });
   }
   window.H2CPrep={ preparar:prepararH2C, limpar:limparH2C, onclone:oncloneH2C, cor:normCor, fundoDe:bgDe };
+  // o painel que precisa montar uma planilha própria usa o MESMO carregador
+  // (mesma tag, mesma CDN): se o exportador já baixou o SheetJS, reaproveita.
+  window.XlsxPronto = ensureXLSX;
   const SCALE=4; // fallback
   // Escala ADAPTATIVA: elementos menores (cards de gráfico) saem muito mais nítidos (até 8×);
   // elementos grandes (tabelões) limitam a escala para não estourar memória (~32MP alvo).
