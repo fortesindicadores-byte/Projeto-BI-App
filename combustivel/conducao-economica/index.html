@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-<meta name="build" content="202609011700">
+<meta name="build" content="202609011800">
 <title>Condução Econômica · Gestão em Movimento</title>
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -480,9 +480,12 @@ const PILAR = {
   idle:  {nome:'Motor Ocioso', full:'Motor Ocioso (idle)',   peso:20, both:true,  fmt:s=>br((100-s)/4,1)+'%',      calc:'% do tempo de motor ligado parado, sem rodar (motor ocioso).'},
   acel:  {nome:'Aceleração',   full:'Aceleração',            peso:15, both:true,  fmt:s=>br((100-s)/6,1)+'/100km', calc:'nº de acelerações bruscas a cada 100 km rodados.'},
   vel:   {nome:'Velocidade',   full:'Velocidade',            peso:15, both:true,  fmt:s=>br((100-s)/5,1)+'%',      calc:'% do tempo acima do limite (faixas 1/2/3; excesso maior pesa mais).'},
-  freio: {nome:'Freio Motor',  full:'Freio Motor & Banguela',peso:10, both:false, fmt:s=>Math.round(s)+'%',        calc:'% de uso de freio motor nas desacelerações, penalizado por tempo de banguela.'},
   cambio:{nome:'Câmbio',       full:'Marcha / Câmbio',       peso:5,  both:false, fmt:s=>br((100-s)/6,1)+'%t',     calc:'% do tempo com marcha inadequada para o RPM (batendo transmissão).'},
 };
+/* Freio Motor SAIU do painel (Renan, 01/09/2026): a varredura completa dos
+   3.525 diagnósticos do Geotab confirmou que retarder/freio motor não
+   reporta na frota. O freio_pontos da vFleets continuará sendo gravado no
+   banco quando ela entrar — só não aparece nem pontua. */
 const FIELD_ORDER   = Object.keys(PILAR);
 const FIELD_WEIGHTS = {}; FIELD_ORDER.forEach(k=>FIELD_WEIGHTS[k]=PILAR[k].peso);
 
@@ -528,7 +531,7 @@ async function fetchFromSupabase() {
   for (let de = 0; ; de += PASSO) {
     const { data: lote, error } = await sbClient()
       .from('ce_scores_mensais')
-      .select('competencia,motorista,unidade,fonte,km,dias,rpm_pontos,idle_pontos,acel_pontos,vel_pontos,freio_pontos,cambio_pontos,pontuacao,atualizado_em')
+      .select('competencia,motorista,unidade,fonte,km,dias,rpm_pontos,idle_pontos,acel_pontos,vel_pontos,cambio_pontos,pontuacao,atualizado_em')
       .order('competencia', { ascending: true }).order('chave', { ascending: true })
       .range(de, de + PASSO - 1);
     if (error) { console.warn('ce_scores_mensais:', error.message); return []; }
@@ -546,7 +549,6 @@ async function fetchFromSupabase() {
     vig:  String(r.competencia).slice(0,10).replace(/-/g, '/'),   // '2026-07-01' -> '2026/07/01'
     unit: r.motorista,
     rpm: r.rpm_pontos, idle: r.idle_pontos, acel: r.acel_pontos, vel: r.vel_pontos,
-    freio: r.freio_pontos,    // nulo nos motoristas Geotab (peso redistribuído no score)
     cambio: r.cambio_pontos,  // idem
     pont: r.pontuacao,
   }));
@@ -1109,6 +1111,6 @@ document.addEventListener('DOMContentLoaded',()=>{ initAccessLog(); initData(); 
 <script src="../../assets/mobile.js?v=202608220020"></script>
 <script src="../../assets/ctrlk.js"></script>
 <script src="../../assets/sortable-table.js"></script>
-<script src="../../assets/build-check.js?v=202609011700"></script>
+<script src="../../assets/build-check.js?v=202609011800"></script>
 </body>
 </html>
