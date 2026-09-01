@@ -283,7 +283,77 @@ function rpmJanela(amostras, ini, fim) {
   return { verde, rodando };
 }
 
-async function geotabDia(dia, cred, cacheUsuarios, regras, uniPorDev, rpmPorDev) {
+/* ── USO DE MARCHAS (Renan, 01/09/2026) ────────────────────────────────────
+   O diagnóstico "Posição da marcha" do Geotab vem autodocumentado: número
+   negativo = ré · positivo = marcha à frente · 0 = ponto morto · 126 =
+   estacionamento · 127 = acionamento · 129 = intermediário. Cruzando com o
+   RPM que já coletamos, o pilar mede o tempo em MARCHA ERRADA:
+     · esticando  — RPM alto com marcha acima disponível (o motor "grita" em
+       vez de subir a marcha; é onde o consumo mais estoura, porque sai do
+       platô de torque, a mesma ciência da Faixa Verde);
+     · forçando   — RPM baixo demais em marcha alta (roda afogando o motor).
+   Denominador = tempo rodando com marcha engatada. Neutro/ré e os códigos
+   ficam de fora, e parado também (marcha lenta é o pilar do lado).
+   Calibragem por env: CE_MARCHA_ALTO=1900 · CE_MARCHA_BAIXO=1000 ·
+   CE_MARCHA=0 desliga a coleta.
+   Medido em 31/08/2026: 6,0% do tempo em marcha errada na frota. */
+const MARCHA_ALTO  = +process.env.CE_MARCHA_ALTO  || 1900;
+const MARCHA_BAIXO = +process.env.CE_MARCHA_BAIXO || 1000;
+const GEAR_DIAG = 'DiagnosticGearPositionId';
+
+async function geotabMarchaDia(dia, cred) {
+  const de0 = `${dia}T03:00:00.000Z`;
+  const fim = new Date(new Date(de0).getTime() + 864e5 - 1).toISOString();
+  const porDev = new Map(), maxG = new Map();
+  let from = de0, paginas = 0, total = 0;
+  while (paginas < 40) {
+    const lote = await geotabRpc('Get', { typeName: 'StatusData',
+      search: { diagnosticSearch: { id: GEAR_DIAG }, fromDate: from, toDate: fim },
+      resultsLimit: 50000 }, cred);
+    paginas++; total += lote.length;
+    for (const r of lote) {
+      const id = r.device && r.device.id; if (!id) continue;
+      let a = porDev.get(id); if (!a) { a = []; porDev.set(id, a); }
+      const g = +r.data;
+      a.push({ t: new Date(r.dateTime).getTime(), g });
+      // maior marcha do veículo aprendida do próprio dado: a frota tem caixas
+      // de 5, 6 e 12 marchas, então tabela por modelo seria chute
+      if (isFinite(g) && g > 0 && g < 100 && g > (maxG.get(id) || 0)) maxG.set(id, g);
+    }
+    if (lote.length < 50000) break;
+    from = new Date(new Date(lote[lote.length - 1].dateTime).getTime() + 1).toISOString();
+  }
+  porDev.forEach(a => a.sort((x, y) => x.t - y.t));
+  return { porDev, maxG, total, paginas };
+}
+
+// tempo em marcha errada e tempo total com marcha engatada numa janela.
+// Cada amostra de marcha vale até a próxima (teto RPM_GAP_MS) e é cruzada
+// com o RPM vigente naquele instante.
+function marchaJanela(marchas, rpmAm, ini, fim, maxMarcha) {
+  let ruim = 0, total = 0;
+  if (!marchas || !rpmAm || !maxMarcha) return { ruim, total };
+  let j = 0;
+  for (let i = 0; i < marchas.length; i++) {
+    const a = marchas[i];
+    if (a.t > fim) break;
+    const prox = i + 1 < marchas.length ? marchas[i + 1].t : a.t + 1000;
+    const t0 = Math.max(a.t, ini), t1 = Math.min(prox, fim, a.t + RPM_GAP_MS);
+    if (t1 <= t0) continue;
+    const g = a.g;
+    if (!isFinite(g) || g <= 0 || g >= 100) continue;      // neutro, ré e códigos fora
+    while (j + 1 < rpmAm.length && rpmAm[j + 1].t <= a.t) j++;
+    const rpm = rpmAm[j] && Math.abs(rpmAm[j].t - a.t) <= RPM_GAP_MS ? rpmAm[j].rpm : null;
+    if (!isFinite(rpm) || rpm <= RPM_LENTA) continue;      // parado não conta
+    const dt = (t1 - t0) / 1000;
+    total += dt;
+    if (rpm > MARCHA_ALTO && g < maxMarcha) ruim += dt;            // esticando
+    else if (rpm < MARCHA_BAIXO && g >= maxMarcha - 1) ruim += dt; // forçando
+  }
+  return { ruim, total };
+}
+
+async function geotabDia(dia, cred, cacheUsuarios, regras, uniPorDev, rpmPorDev, mch) {
   // a janela é o dia em BRT (UTC-3), não em UTC
   const de = `${dia}T03:00:00.000Z`;
   const ate = new Date(new Date(de).getTime() + 864e5 - 1).toISOString();
@@ -319,9 +389,12 @@ async function geotabDia(dia, cred, cacheUsuarios, regras, uniPorDev, rpmPorDev)
         g.km += +t.distance || 0; g.dir += gtSeg(t.drivingDuration); g.idle += gtSeg(t.idlingDuration);
         g.v1 += gtSeg(t.speedRange1Duration); g.v2 += gtSeg(t.speedRange2Duration); g.v3 += gtSeg(t.speedRange3Duration);
         g.n++;
-        const am = rpmPorDev && rpmPorDev.get(t.device?.id);
-        if (am) { const j = rpmJanela(am, new Date(t.start).getTime(), new Date(t.stop).getTime());
-                  g.rpmV += j.verde; g.rpmR += j.rodando; }
+        const dev = t.device?.id;
+        const am = rpmPorDev && rpmPorDev.get(dev);
+        const ti = new Date(t.start).getTime(), tf = new Date(t.stop).getTime();
+        if (am) { const j = rpmJanela(am, ti, tf); g.rpmV += j.verde; g.rpmR += j.rodando; }
+        if (mch && am) { const k = marchaJanela(mch.porDev.get(dev), am, ti, tf, mch.maxG.get(dev));
+                         g.mchR = (g.mchR || 0) + k.ruim; g.mchT = (g.mchT || 0) + k.total; }
         semLogin.set(uni, g);
       }
       continue;
@@ -339,6 +412,8 @@ async function geotabDia(dia, cred, cacheUsuarios, regras, uniPorDev, rpmPorDev)
     porDev.forEach(x => { if (x.dev === t.device?.id && x.t >= ini && x.t <= fim && !x.usado) { g[x.qual]++; x.usado = true; } });
     const am = rpmPorDev && rpmPorDev.get(t.device?.id);
     if (am) { const j = rpmJanela(am, ini, fim); g.rpmV = (g.rpmV || 0) + j.verde; g.rpmR = (g.rpmR || 0) + j.rodando; }
+    if (mch && am) { const k = marchaJanela(mch.porDev.get(t.device?.id), am, ini, fim, mch.maxG.get(t.device?.id));
+                     g.mchR = (g.mchR || 0) + k.ruim; g.mchT = (g.mchT || 0) + k.total; }
     porMot.set(d, g);
   }
   for (const [d, m] of porDrv) {
@@ -366,10 +441,14 @@ async function geotabDia(dia, cred, cacheUsuarios, regras, uniPorDev, rpmPorDev)
       acel_100km: g.km > 0 ? g.acel / g.km * 100 : null,
       frea_100km: g.km > 0 ? g.frea / g.km * 100 : null,
       vel_excesso_pct: tMov ? (g.v1 + 2 * g.v2 + 3 * g.v3) / tMov * 100 : null,
-      freio_motor_pct: null, banguela_pct: null, cambio_ruim_pct: null,   // não existem no Geotab
+      freio_motor_pct: null, banguela_pct: null,   // freio motor não existe no Geotab
+      // marcha errada reconstruída de "Posição da marcha" × RPM; menos de
+      // 1 min com marcha engatada não vale nota
+      cambio_ruim_pct: (g.mchT || 0) > 60 ? g.mchR / g.mchT * 100 : null,
       registros: g.n,
       bruto: { viagens: g.n, seg: { dir: g.dir, idle: g.idle, v1: g.v1, v2: g.v2, v3: g.v3 },
                rpm: { verde: Math.round(g.rpmV || 0), rodando: Math.round(g.rpmR || 0) },
+               marcha: { ruim: Math.round(g.mchR || 0), total: Math.round(g.mchT || 0) },
                eventos: { acel: g.acel, frea: g.frea, vel: g.vel } },
       _nome: (u.firstName || u.lastName) ? `${u.firstName || ''} ${u.lastName || ''}`.trim() : (u.name || id),
       _uo: null, _uni: gtUni(u),
@@ -387,10 +466,12 @@ async function geotabDia(dia, cred, cacheUsuarios, regras, uniPorDev, rpmPorDev)
       idle_pct: (g.dir + g.idle) ? g.idle / (g.dir + g.idle) * 100 : null,
       acel_100km: null, frea_100km: null,
       vel_excesso_pct: tMov ? (g.v1 + 2 * g.v2 + 3 * g.v3) / tMov * 100 : null,
-      freio_motor_pct: null, banguela_pct: null, cambio_ruim_pct: null,
+      freio_motor_pct: null, banguela_pct: null,
+      cambio_ruim_pct: (g.mchT || 0) > 60 ? g.mchR / g.mchT * 100 : null,
       registros: g.n,
       bruto: { semLogin: true, viagens: g.n, seg: { dir: g.dir, idle: g.idle, v1: g.v1, v2: g.v2, v3: g.v3 },
-               rpm: { verde: Math.round(g.rpmV || 0), rodando: Math.round(g.rpmR || 0) } },
+               rpm: { verde: Math.round(g.rpmV || 0), rodando: Math.round(g.rpmR || 0) },
+               marcha: { ruim: Math.round(g.mchR || 0), total: Math.round(g.mchT || 0) } },
       _nome: 'Sem Login · ' + uni, _uo: null, _uni: uni,
     });
   }
@@ -1102,12 +1183,24 @@ for (let i = 0; i < AGENDA.length; i++) {
           rpmRot = ` · rpm: ${r.total} amostra(s)/${r.paginas} pág.`;
         } catch (e) { rpmRot = ` · rpm FALHOU (${e.message.slice(0, 80)})`; }
       }
-      const lg = await geotabDia(dia, GT, GT_USERS, GT_RULES, GT_UNIDEV, rpmDev);
+      // marcha do dia: só faz sentido com o RPM na mão (o pilar é o cruzamento
+      // dos dois). Falha aqui também não derruba o dia.
+      let mchDia = null, mchRot = '';
+      if (rpmDev && process.env.CE_MARCHA !== '0') {
+        try {
+          const m = await geotabMarchaDia(dia, GT);
+          mchDia = m;
+          mchRot = ` · marcha: ${m.total} amostra(s)`;
+        } catch (e) { mchRot = ` · marcha FALHOU (${e.message.slice(0, 80)})`; }
+      }
+      const lg = await geotabDia(dia, GT, GT_USERS, GT_RULES, GT_UNIDEV, rpmDev, mchDia);
       await garanteMotoristas(lg);
       total += await gravaDiario(lg);
       const comRpm = lg.filter(l => l.rpm_verde_pct != null).length;
+      const comMch = lg.filter(l => l.cambio_ruim_pct != null).length;
       console.log(`${dia}: Geotab → ${lg.length} motorista(s) · ${Math.round(lg.reduce((s, l) => s + (+l.km || 0), 0))} km`
-        + rpmRot + (rpmDev ? ` · faixa verde em ${comRpm} linha(s)` : ''));
+        + rpmRot + (rpmDev ? ` · faixa verde em ${comRpm} linha(s)` : '')
+        + mchRot + (mchDia ? ` · marchas em ${comMch} linha(s)` : ''));
     } catch (e) { console.log(`${dia} Geotab: ${e.message}`); falhas++; }
   }
   // a pausa longa é o limite da vFleets (1 req/5 min); o Geotab não tem isso
