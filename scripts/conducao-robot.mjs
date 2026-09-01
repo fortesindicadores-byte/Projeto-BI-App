@@ -224,7 +224,63 @@ function gtUni(u) {
   return null;
 }
 
-async function geotabDia(dia, cred, cacheUsuarios, regras, uniPorDev) {
+/* ── RPM · faixa verde reconstruída das amostras cruas do Geotab ────────────
+   Régua baseada nas fichas técnicas dos motores da frota e na literatura de
+   direção econômica (pesquisa de 01/09/2026, fontes no PR):
+   · VW Delivery 9.170/11.180 (Cummins ISF 3.8): platô de 600 Nm em
+     1.100–1.700 rpm — é a região de consumo específico (BSFC) mínimo
+   · VW Constellation 17.190 (Cummins ISB): 700 Nm em 1.100–1.600 rpm
+   · consultores/manuais de condução econômica: rodar em marcha alta entre
+     ~1.100 e 1.700 rpm; marcha lenta de diesel pesado fica em ~700–800 rpm
+   FAIXA VERDE ÚNICA da frota: 1.100–1.700 rpm. Marcha lenta (≤ 900) fica
+   FORA do denominador — a MESMA régua da vFleets, para os dois lados serem
+   comparáveis quando a Trimble entrar. Calibragem por env:
+   CE_RPM_VERDE="1100-1700" · CE_RPM_LENTA=900 · CE_RPM=0 desliga a coleta. */
+const RPM_LENTA = +process.env.CE_RPM_LENTA || 900;
+const [RPM_V_MIN, RPM_V_MAX] = String(process.env.CE_RPM_VERDE || '1100-1700').split('-').map(Number);
+const RPM_GAP_MS = 120 * 1000;   // buraco entre amostras > 2 min não conta tempo
+
+// baixa TODAS as amostras de rotação do dia, paginando pela data da última
+async function geotabRpmDia(dia, cred) {
+  const de0 = `${dia}T03:00:00.000Z`;
+  const fim = new Date(new Date(de0).getTime() + 864e5 - 1).toISOString();
+  const porDev = new Map();
+  let from = de0, paginas = 0, total = 0;
+  while (paginas < 40) {                       // teto de segurança: 2 mi de amostras
+    const lote = await geotabRpc('Get', { typeName: 'StatusData',
+      search: { diagnosticSearch: { id: 'DiagnosticEngineSpeedId' }, fromDate: from, toDate: fim },
+      resultsLimit: 50000 }, cred);
+    paginas++; total += lote.length;
+    for (const r of lote) {
+      const id = r.device && r.device.id; if (!id) continue;
+      let a = porDev.get(id); if (!a) { a = []; porDev.set(id, a); }
+      a.push({ t: new Date(r.dateTime).getTime(), rpm: +r.data });
+    }
+    if (lote.length < 50000) break;
+    from = new Date(new Date(lote[lote.length - 1].dateTime).getTime() + 1).toISOString();
+  }
+  porDev.forEach(a => a.sort((x, y) => x.t - y.t));
+  return { porDev, total, paginas };
+}
+// tempo na faixa verde e tempo rodando (rpm > marcha lenta) numa janela.
+// Cada amostra vale até a próxima (com teto de RPM_GAP_MS, p/ buraco de sinal).
+function rpmJanela(amostras, ini, fim) {
+  let verde = 0, rodando = 0;
+  for (let i = 0; i < amostras.length; i++) {
+    const a = amostras[i];
+    if (a.t > fim) break;
+    const prox = i + 1 < amostras.length ? amostras[i + 1].t : a.t + 1000;
+    const t0 = Math.max(a.t, ini), t1 = Math.min(prox, fim, a.t + RPM_GAP_MS);
+    if (t1 <= t0) continue;
+    if (!isFinite(a.rpm) || a.rpm <= RPM_LENTA) continue;   // marcha lenta fora do denominador
+    const dt = (t1 - t0) / 1000;
+    rodando += dt;
+    if (a.rpm >= RPM_V_MIN && a.rpm <= RPM_V_MAX) verde += dt;
+  }
+  return { verde, rodando };
+}
+
+async function geotabDia(dia, cred, cacheUsuarios, regras, uniPorDev, rpmPorDev) {
   // a janela é o dia em BRT (UTC-3), não em UTC
   const de = `${dia}T03:00:00.000Z`;
   const ate = new Date(new Date(de).getTime() + 864e5 - 1).toISOString();
@@ -256,10 +312,14 @@ async function geotabDia(dia, cred, cacheUsuarios, regras, uniPorDev) {
       // veículo (Renan, 31/08/2026) — o km não some, aparece cobrado no ranking
       const uni = uniPorDev && uniPorDev.get(t.device?.id);
       if (uni) {
-        const g = semLogin.get(uni) || { km: 0, dir: 0, idle: 0, v1: 0, v2: 0, v3: 0, n: 0 };
+        const g = semLogin.get(uni) || { km: 0, dir: 0, idle: 0, v1: 0, v2: 0, v3: 0, n: 0, rpmV: 0, rpmR: 0 };
         g.km += +t.distance || 0; g.dir += gtSeg(t.drivingDuration); g.idle += gtSeg(t.idlingDuration);
         g.v1 += gtSeg(t.speedRange1Duration); g.v2 += gtSeg(t.speedRange2Duration); g.v3 += gtSeg(t.speedRange3Duration);
-        g.n++; semLogin.set(uni, g);
+        g.n++;
+        const am = rpmPorDev && rpmPorDev.get(t.device?.id);
+        if (am) { const j = rpmJanela(am, new Date(t.start).getTime(), new Date(t.stop).getTime());
+                  g.rpmV += j.verde; g.rpmR += j.rodando; }
+        semLogin.set(uni, g);
       }
       continue;
     }
@@ -274,6 +334,8 @@ async function geotabDia(dia, cred, cacheUsuarios, regras, uniPorDev) {
     // eventos órfãos do mesmo veículo dentro da janela da viagem
     const ini = new Date(t.start).getTime(), fim = new Date(t.stop).getTime();
     porDev.forEach(x => { if (x.dev === t.device?.id && x.t >= ini && x.t <= fim && !x.usado) { g[x.qual]++; x.usado = true; } });
+    const am = rpmPorDev && rpmPorDev.get(t.device?.id);
+    if (am) { const j = rpmJanela(am, ini, fim); g.rpmV = (g.rpmV || 0) + j.verde; g.rpmR = (g.rpmR || 0) + j.rodando; }
     porMot.set(d, g);
   }
   for (const [d, m] of porDrv) {
@@ -295,7 +357,8 @@ async function geotabDia(dia, cred, cacheUsuarios, regras, uniPorDev) {
       dia, chave: gtChave(u), fonte: 'Geotab',
       km: g.km || null,
       h_motor: (g.dir + g.idle) ? (g.dir + g.idle) / 3600 : null,
-      rpm_verde_pct: null,                                  // o Geotab não entrega faixa de RPM pronta
+      // reconstruída das amostras cruas; menos de 1 min rodando não vale nota
+      rpm_verde_pct: (g.rpmR || 0) > 60 ? g.rpmV / g.rpmR * 100 : null,
       idle_pct: (g.dir + g.idle) ? g.idle / (g.dir + g.idle) * 100 : null,
       acel_100km: g.km > 0 ? g.acel / g.km * 100 : null,
       frea_100km: g.km > 0 ? g.frea / g.km * 100 : null,
@@ -303,6 +366,7 @@ async function geotabDia(dia, cred, cacheUsuarios, regras, uniPorDev) {
       freio_motor_pct: null, banguela_pct: null, cambio_ruim_pct: null,   // não existem no Geotab
       registros: g.n,
       bruto: { viagens: g.n, seg: { dir: g.dir, idle: g.idle, v1: g.v1, v2: g.v2, v3: g.v3 },
+               rpm: { verde: Math.round(g.rpmV || 0), rodando: Math.round(g.rpmR || 0) },
                eventos: { acel: g.acel, frea: g.frea, vel: g.vel } },
       _nome: (u.firstName || u.lastName) ? `${u.firstName || ''} ${u.lastName || ''}`.trim() : (u.name || id),
       _uo: null, _uni: gtUni(u),
@@ -316,13 +380,14 @@ async function geotabDia(dia, cred, cacheUsuarios, regras, uniPorDev) {
       dia, chave: 'semlogin:' + uni, fonte: 'Geotab',
       km: g.km || null,
       h_motor: (g.dir + g.idle) ? (g.dir + g.idle) / 3600 : null,
-      rpm_verde_pct: null,
+      rpm_verde_pct: (g.rpmR || 0) > 60 ? g.rpmV / g.rpmR * 100 : null,
       idle_pct: (g.dir + g.idle) ? g.idle / (g.dir + g.idle) * 100 : null,
       acel_100km: null, frea_100km: null,
       vel_excesso_pct: tMov ? (g.v1 + 2 * g.v2 + 3 * g.v3) / tMov * 100 : null,
       freio_motor_pct: null, banguela_pct: null, cambio_ruim_pct: null,
       registros: g.n,
-      bruto: { semLogin: true, viagens: g.n, seg: { dir: g.dir, idle: g.idle, v1: g.v1, v2: g.v2, v3: g.v3 } },
+      bruto: { semLogin: true, viagens: g.n, seg: { dir: g.dir, idle: g.idle, v1: g.v1, v2: g.v2, v3: g.v3 },
+               rpm: { verde: Math.round(g.rpmV || 0), rodando: Math.round(g.rpmR || 0) } },
       _nome: 'Sem Login · ' + uni, _uo: null, _uni: uni,
     });
   }
@@ -899,10 +964,22 @@ for (let i = 0; i < AGENDA.length; i++) {
   // Geotab no mesmo dia — a pausa de 5 min é limite da vFleets, não dele
   if (GT) {
     try {
-      const lg = await geotabDia(dia, GT, GT_USERS, GT_RULES, GT_UNIDEV);
+      // amostras de rotação do dia inteiro; falha aqui NÃO derruba a coleta —
+      // o pilar RPM só fica vazio no dia
+      let rpmDev = null, rpmRot = '';
+      if (process.env.CE_RPM !== '0') {
+        try {
+          const r = await geotabRpmDia(dia, GT);
+          rpmDev = r.porDev;
+          rpmRot = ` · rpm: ${r.total} amostra(s)/${r.paginas} pág.`;
+        } catch (e) { rpmRot = ` · rpm FALHOU (${e.message.slice(0, 80)})`; }
+      }
+      const lg = await geotabDia(dia, GT, GT_USERS, GT_RULES, GT_UNIDEV, rpmDev);
       await garanteMotoristas(lg);
       total += await gravaDiario(lg);
-      console.log(`${dia}: Geotab → ${lg.length} motorista(s) · ${Math.round(lg.reduce((s, l) => s + (+l.km || 0), 0))} km`);
+      const comRpm = lg.filter(l => l.rpm_verde_pct != null).length;
+      console.log(`${dia}: Geotab → ${lg.length} motorista(s) · ${Math.round(lg.reduce((s, l) => s + (+l.km || 0), 0))} km`
+        + rpmRot + (rpmDev ? ` · faixa verde em ${comRpm} linha(s)` : ''));
     } catch (e) { console.log(`${dia} Geotab: ${e.message}`); falhas++; }
   }
   // a pausa longa é o limite da vFleets (1 req/5 min); o Geotab não tem isso
