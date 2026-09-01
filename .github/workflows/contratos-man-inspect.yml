@@ -1,0 +1,29 @@
+name: Contratos Man Inspect (auditoria)
+
+# Mostra o que a planilha "Contratos Man." entrega pelo gviz: blocos de mês,
+# rótulos, unidades e o total lançado por mês/unidade — a base do custo de
+# CONTRATO que vai entrar na Carta de Custos. Só leitura, não grava nada.
+on:
+  workflow_dispatch:
+    inputs:
+      sheet:
+        description: 'ID da planilha (vazio = Contratos Man.)'
+        required: false
+      gid:
+        description: 'gid da aba (vazio = 0)'
+        required: false
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Inspecionar
+        env:
+          CONTRATOS_ID:  ${{ github.event.inputs.sheet }}
+          CONTRATOS_GID: ${{ github.event.inputs.gid }}
+        run: node scripts/contratos-man-inspect.mjs
