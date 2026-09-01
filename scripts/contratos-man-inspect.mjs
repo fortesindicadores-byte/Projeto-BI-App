@@ -60,11 +60,9 @@ function mesDoRotulo(s) {
   const ano = +m[2] < 100 ? 2000 + +m[2] : +m[2];
   return { ano, mes: MES3[m[1]] };
 }
-const vigDe = ({ ano, mes }) => `${ano}-${String(mes).padStart(2, '0')}-01`;
-// REGRA DO RENAN (01/09/2026): o valor lançado num mês compõe o custo do
-// MÊS SEGUINTE — o que a unidade informa agora, em agosto, é o realizado
-// de setembro.
-const proxVig = ({ ano, mes }) => mes === 12 ? vigDe({ ano: ano + 1, mes: 1 }) : vigDe({ ano, mes: mes + 1 });
+// REGRA DA VIGÊNCIA (Renan, 01/09/2026): o valor do bloco de um mês é o
+// custo DAQUELE mês — "o que vai cair em agosto é realmente agosto".
+const vigDe = ({ ano, mes }) => `${ano}-${String(mes).padStart(2, '0')}`;
 
 const url = `https://docs.google.com/spreadsheets/d/${SHEET}/gviz/tq`
   + `?gid=${GID}&tqx=out:json&headers=0&tq=${encodeURIComponent('select *')}`;
@@ -77,7 +75,7 @@ console.log(`${rows.length} linha(s) · ${nCols} coluna(s)`);
 
 const L1 = rows[0] || [], L2 = rows[1] || [];
 console.log('\nLINHA 1 (mês do bloco):');
-L1.forEach((c, i) => { const v = txtOf(c).trim(); if (v) console.log(`   col ${i}: ${v}  → vigência do custo: ${(mesDoRotulo(v) ? proxVig(mesDoRotulo(v)) : '??')}`); });
+L1.forEach((c, i) => { const v = txtOf(c).trim(); if (v) console.log(`   col ${i}: ${v}  → vigência do custo: ${(mesDoRotulo(v) ? vigDe(mesDoRotulo(v)) : '??')}`); });
 console.log('\nLINHA 2 (rótulos que o gviz devolve — nulos em coluna numérica):');
 console.log('   ' + L2.map((c, i) => `${i}:${txtOf(c)}`).join(' | '));
 
@@ -93,7 +91,7 @@ for (let i = 0; i < nCols; i++) {
 console.log(`\nBLOCOS: ${blocos.length}`);
 blocos.forEach(b => console.log(`   ${b.rot.padEnd(10)} km=col${b.km} desloc=col${b.desloc} valor=col${b.valor}`
   + ` ${b.confere ? '(rótulo "lanç km/vlr" confere)' : '(rótulo não visível — coluna numérica)'}`
-  + ` · vigência do custo: ${b.mv ? proxVig(b.mv) : '??'}`));
+  + ` · vigência do custo: ${b.mv ? vigDe(b.mv) : '??'}`));
 
 const dados = rows.slice(2).filter(r => txtOf(r[2]).trim());   // tem placa
 console.log(`\nlinhas de veículo: ${dados.length}`);
@@ -112,7 +110,7 @@ for (const b of blocos) {
     if (numOf(r[b.km])) comKm++;
   });
   console.log(`   ${b.rot.padEnd(10)} ${brl(soma).padStart(18)} · ${String(com).padStart(3)}/${dados.length} com valor`
-    + ` · ${String(comKm).padStart(3)} com km informado → custo de ${b.mv ? proxVig(b.mv).slice(0, 7) : '??'}`);
+    + ` · ${String(comKm).padStart(3)} com km informado → custo de ${b.mv ? vigDe(b.mv) : '??'}`);
 }
 
 const meses = blocos.filter(b => b.mv);
