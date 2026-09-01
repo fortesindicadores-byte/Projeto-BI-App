@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-<meta name="build" content="202608311500">
+<meta name="build" content="202609011500">
 <title>Carta de Custos</title>
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -516,10 +516,17 @@ function marcarCarregando(on){
 async function onFiltroProj(){ await loadDRE(); render(); } // só recorta no cliente + DRE
 function buildUniFilter(){ buildMs('ms-uni', ()=>ALLOWED.slice(), u=>u, selUni, onFiltroUniVig, 'Todas'); }
 function buildVigFilter(){
-  // gestão à vista: só o mês atual e meses à frente (anteriores não)
+  // da ESTREIA da carta (jul/2026) até 6 meses à frente. Mês que passou NÃO
+  // some da lista: na virada de ago→set a lista começava no mês corrente e a
+  // unidade perdia o acesso aos lançamentos de agosto — não conseguia mais
+  // colocar OC/NF neles (Lucas/NFR, 01/09/2026). O que foi feito fica ali.
   const now=new Date(); VIG_OPTS=[];
-  for(let i=0;i<=6;i++){const d=new Date(now.getFullYear(),now.getMonth()+i,1);VIG_OPTS.push(d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0'));}
-  if(!selVig.size) selVig.add(VIG_OPTS[0]);   // default = mês atual
+  const fim=new Date(now.getFullYear(), now.getMonth()+6, 1);
+  for(let d=new Date(2026,6,1); d<=fim; d.setMonth(d.getMonth()+1)){
+    VIG_OPTS.push(d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0'));
+  }
+  const mesAtual=now.getFullYear()+'-'+String(now.getMonth()+1).padStart(2,'0');
+  if(!selVig.size) selVig.add(VIG_OPTS.includes(mesAtual)?mesAtual:VIG_OPTS[0]);   // default = mês atual
   buildMs('ms-vig', ()=>VIG_OPTS.slice(), vigLabel, selVig, onFiltroUniVig, 'Todas');
 }
 function buildProjFilter(){ buildMs('ms-proj', ()=>UNIT_PROJETOS.slice(), p=>p, selProj, onFiltroProj, 'Todos'); }
@@ -1082,6 +1089,6 @@ async function exportarPDF(){
 <script src="../assets/mobile.js?v=202608220020"></script>
 <script src="../assets/ctrlk.js"></script>
 <script src="../assets/sortable-table.js"></script>
-<script src="../assets/build-check.js?v=202608311500"></script>
+<script src="../assets/build-check.js?v=202609011500"></script>
 </body>
 </html>
