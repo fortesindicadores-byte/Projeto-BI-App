@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
-<meta name="build" content="202609011000">
+<meta name="build" content="202609011300">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <title>Painel KM · Gestão em Movimento</title>
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -478,12 +478,13 @@ table.dre td.cg-t,.cg-t{color:var(--verde)!important;font-weight:700;}
             <div class="drill-tabs">
               <button class="drill-tab active" data-view="und" onclick="setDrillKM('und')">Unidade</button>
               <button class="drill-tab" data-view="proj" onclick="setDrillKM('proj')">Projeto</button>
+              <button class="drill-tab" data-view="mes" onclick="setDrillKM('mes')">Mensal</button>
               <button class="rt km-tbl-toggle" id="km-tbl-toggle" onclick="toggleKmCols()">+ Ver detalhes</button>
             </div>
           </div>
           <div class="twrap"><table class="dre" id="tbl-km">
             <thead><tr>
-              <th>Unidade</th><th class="num">Rem</th><th class="num">Real</th>
+              <th id="th-dim">Unidade</th><th class="num">Rem</th><th class="num">Real</th>
               <th class="num">Δ</th><th class="num">Δ %</th><th class="num sep-imp">Impacto (R$)</th>
               <th class="num">Δ YTD</th><th class="num">Δ YTD %</th><th class="num">Impacto YTD</th>
             </tr></thead>
@@ -512,7 +513,10 @@ let drillKM = 'und', _lastTableArgs = null;
 function setDrillKM(v) {
   drillKM = v;
   document.querySelectorAll('.drill-tab').forEach(b => b.classList.toggle('active', b.dataset.view === v));
-  document.getElementById('title-disp').textContent = v === 'und' ? 'Dispersão por Unidade' : 'Dispersão por Projeto';
+  document.getElementById('title-disp').textContent =
+    v === 'und' ? 'Dispersão por Unidade' : v === 'proj' ? 'Dispersão por Projeto' : 'Dispersão Mensal';
+  const th = document.getElementById('th-dim');
+  if (th) th.textContent = v === 'und' ? 'Unidade' : v === 'proj' ? 'Projeto' : 'Mês';
   if (_lastTableArgs) renderTable(..._lastTableArgs);
 }
 
@@ -929,11 +933,31 @@ function render() {
 
 function renderTable(F, YTD) {
   _lastTableArgs = [F, YTD];
+  const sign  = v => v >= 0 ? '+' : '';
+  let rows;
+  if (drillKM === 'mes') {
+    // MENSAL (Renan, 01/09/2026): uma linha por mês, em ordem cronológica —
+    // jan até o último mês filtrado (as linhas do YTD). As colunas YTD viram
+    // o ACUMULADO até aquele mês.
+    const vigs = [...new Set(YTD.map(r => r.vig))].filter(Boolean).sort(sortVig);
+    let acRem = 0, acReal = 0, acImp = 0;
+    rows = vigs.map(vg => {
+      const m = YTD.filter(r => r.vig === vg);
+      const rem   = m.reduce((s, r) => s + r.rem, 0);
+      const real  = m.reduce((s, r) => s + r.real, 0);
+      const delta = real - rem;
+      const deltaPct = rem ? (delta / rem) * 100 : 0;
+      const imp = m.reduce((s, r) => s + r.imp, 0);
+      acRem += rem; acReal += real; acImp += imp;
+      return { und: vigLabel(vg), rem, real, delta, deltaPct, imp,
+        ytdRem: acRem, ytdReal: acReal, ytdDelta: acReal - acRem,
+        ytdDeltaPct: acRem ? (acReal - acRem) / acRem * 100 : 0, ytdImp: acImp };
+    });
+  } else {
   const getKey = r => drillKM === 'proj' ? r.proj : r.und;
   const units = [...new Set(F.map(getKey))].filter(Boolean);
-  const sign  = v => v >= 0 ? '+' : '';
 
-  const rows = units.map(und => {
+  rows = units.map(und => {
     const m = F.filter(r => getKey(r) === und);
     const y = YTD.filter(r => getKey(r) === und);
 
@@ -953,6 +977,7 @@ function renderTable(F, YTD) {
   });
 
   rows.sort((a, b) => b.delta - a.delta);
+  }
 
   document.getElementById('tbl-body').innerHTML = rows.map(u => `<tr>
     <td>${u.und}</td>
@@ -971,14 +996,16 @@ function renderTable(F, YTD) {
   const tDelta = tReal - tRem;
   const tDPct  = tRem ? (tDelta / tRem) * 100 : 0;
   const tImp   = rows.reduce((s, u) => s + u.imp, 0);
-  const tYRem  = rows.reduce((s, u) => s + u.ytdRem, 0);
-  const tYReal = rows.reduce((s, u) => s + u.ytdReal, 0);
+  // no mensal o YTD já é acumulado: o total é a ÚLTIMA linha, não a soma
+  const ultima = rows[rows.length - 1] || { ytdRem: 0, ytdReal: 0, ytdImp: 0 };
+  const tYRem  = drillKM === 'mes' ? ultima.ytdRem  : rows.reduce((s, u) => s + u.ytdRem, 0);
+  const tYReal = drillKM === 'mes' ? ultima.ytdReal : rows.reduce((s, u) => s + u.ytdReal, 0);
   const tYD    = tYReal - tYRem;
   const tYDPct = tYRem ? (tYD / tYRem) * 100 : 0;
-  const tYImp  = rows.reduce((s, u) => s + u.ytdImp, 0);
+  const tYImp  = drillKM === 'mes' ? ultima.ytdImp  : rows.reduce((s, u) => s + u.ytdImp, 0);
 
   document.getElementById('tbl-foot').innerHTML = `<tr class="total">
-    <td class="conta">${drillKM === 'proj' ? 'TOTAL PROJETOS' : 'TOTAL UNIDADES'}</td>
+    <td class="conta">${drillKM === 'proj' ? 'TOTAL PROJETOS' : drillKM === 'mes' ? 'TOTAL' : 'TOTAL UNIDADES'}</td>
     <td class="num">${fmt(tRem)}</td>
     <td class="num">${fmt(tReal)}</td>
     <td class="num ${tDelta>0?'cr':'cg'}">${sign(tDelta)}${fmt(tDelta)}</td>
@@ -1429,6 +1456,6 @@ initPdfExport({
   isLight:()=>document.body.classList.contains('claro'), setTheme:aplicaTema
 });
 </script>
-<script src="../assets/build-check.js?v=202609011000"></script>
+<script src="../assets/build-check.js?v=202609011300"></script>
 </body>
 </html>
