@@ -666,14 +666,20 @@ if (MODE === 'sonda') {
         const alvo = diags.filter(d => /retarder|freio|brake|transmiss|gear|marcha|clutch|embreag|shift/i.test(d.name || ''));
         console.log(`diagnósticos no catálogo: ${diags.length} · candidatos a câmbio/freio motor: ${alvo.length}`);
         const de4 = `${DE}T03:00:00.000Z`, ate4 = new Date(new Date(de4).getTime() + 864e5 - 1).toISOString();
-        for (const d of alvo.slice(0, 25)) {
+        // CE_DIAG_LIM=99999 varre TODOS os candidatos (~3.500 ≈ 15 min);
+        // sem env, testa só os 25 primeiros para a sonda continuar rápida
+        const lim = +process.env.CE_DIAG_LIM || 25;
+        let vistos = 0, hits = 0;
+        for (const d of alvo.slice(0, lim)) {
           try {
             const am = await geotabRpc('Get', { typeName: 'StatusData',
               search: { diagnosticSearch: { id: d.id }, fromDate: de4, toDate: ate4 }, resultsLimit: 2000 }, cred);
-            if (am.length) console.log(`   ✓ ${String(d.name).slice(0, 70).padEnd(70)} ${am.length}${am.length >= 2000 ? '+' : ''} amostra(s) no dia`);
+            if (am.length) { hits++;
+              console.log(`   ✓ ${String(d.name).slice(0, 70).padEnd(70)} ${am.length}${am.length >= 2000 ? '+' : ''} amostra(s) no dia`); }
           } catch (e) { /* diagnóstico sem dado não interessa */ }
+          if (++vistos % 500 === 0) console.log(`   … ${vistos}/${Math.min(alvo.length, lim)} candidatos varridos`);
         }
-        console.log('   (candidato sem linha acima = zero amostras no dia)');
+        console.log(`   varridos ${vistos} candidato(s) · ${hits} com amostra no dia`);
       } catch (e) { console.log('catálogo de diagnósticos:', e.message.slice(0, 160)); }
 
       // RPM: o Geotab guarda o giro como StatusData do diagnóstico de rotação.
