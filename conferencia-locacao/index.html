@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="build" content="202608312130">
+<meta name="build" content="202609012200">
 <title>Conferência de Locação · Gestão em Movimento</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -1496,7 +1496,12 @@ function pintaCards(L,pre){
   const semRem=g('Cobrado sem remuneração'),
         semCob=g('Remunerado sem cobrança').concat(g('Reserva técnica remunerada, sem cobrança')),
         valDif=g('Valor da prévia ≠ remuneração'), rt=L.filter(l=>/RESERVA/i.test(l.status));
-  const põe=(id,v,m)=>{ $(pre+id).textContent=v; $(pre+id+'-m').innerHTML=m; };
+  // o Diagnóstico repete os cards do Resumo MENOS o de Descontos Vamos, então
+  // o `põe` ignora card que não existe naquela visão. Sem isso, $('dk-desc')
+  // vinha nulo, o erro derrubava o pintaDiag no meio e a visão inteira ficava
+  // vazia — cards em '—' e as duas tabelas sem uma linha (bug real, 01/09/2026).
+  const põe=(id,v,m)=>{ const e=$(pre+id), em=$(pre+id+'-m');
+                        if(e) e.textContent=v; if(em) em.innerHTML=m; };
   const ms=mesesDe(L);
   põe('k-n',   num(L.length), ms.length>1 ? ms.length+' meses' : (ms[0]?vigRot(ms[0]):'—'));
   põe('k-sem', num(semRem.length), brl(soma(semRem,'prev'))+' cobrados sem FT');
@@ -1846,6 +1851,6 @@ initPdfExport({
   isLight:()=>document.body.classList.contains('claro'), setTheme:aplicaTema
 });
 </script>
-<script src="../assets/build-check.js?v=202608312130"></script>
+<script src="../assets/build-check.js?v=202609012200"></script>
 </body>
 </html>
