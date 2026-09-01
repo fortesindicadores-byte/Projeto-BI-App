@@ -658,6 +658,24 @@ if (MODE === 'sonda') {
           .forEach(([u, n]) => console.log(`   ${u.padEnd(24)} ${n} motorista(s)`));
       } catch (e) { console.log('grupos dos motoristas:', e.message.slice(0, 160)); }
 
+      // Câmbio e freio motor existem em algum diagnóstico? (Renan, 01/09/2026)
+      // Varre o catálogo de Diagnostic por retarder/freio/transmissão/marcha e
+      // conta StatusData de um dia nos candidatos — só nomes e contagens.
+      try {
+        const diags = await geotabRpc('Get', { typeName: 'Diagnostic' }, cred);
+        const alvo = diags.filter(d => /retarder|freio|brake|transmiss|gear|marcha|clutch|embreag|shift/i.test(d.name || ''));
+        console.log(`diagnósticos no catálogo: ${diags.length} · candidatos a câmbio/freio motor: ${alvo.length}`);
+        const de4 = `${DE}T03:00:00.000Z`, ate4 = new Date(new Date(de4).getTime() + 864e5 - 1).toISOString();
+        for (const d of alvo.slice(0, 25)) {
+          try {
+            const am = await geotabRpc('Get', { typeName: 'StatusData',
+              search: { diagnosticSearch: { id: d.id }, fromDate: de4, toDate: ate4 }, resultsLimit: 2000 }, cred);
+            if (am.length) console.log(`   ✓ ${String(d.name).slice(0, 70).padEnd(70)} ${am.length}${am.length >= 2000 ? '+' : ''} amostra(s) no dia`);
+          } catch (e) { /* diagnóstico sem dado não interessa */ }
+        }
+        console.log('   (candidato sem linha acima = zero amostras no dia)');
+      } catch (e) { console.log('catálogo de diagnósticos:', e.message.slice(0, 160)); }
+
       // RPM: o Geotab guarda o giro como StatusData do diagnóstico de rotação.
       // Medir o VOLUME de um dia diz se dá para reconstruir a faixa verde.
       try {
