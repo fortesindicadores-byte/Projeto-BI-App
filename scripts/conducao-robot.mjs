@@ -436,16 +436,14 @@ async function gravaDiario(linhas) {
 
 async function garanteMotoristas(linhas) {
   const vistos = new Map();
-  // a unidade só vem preenchida nas linhas "Sem Login" (é o grupo UNI_* do
-  // veículo no Geotab — dado real, não de-para inventado); motorista de
-  // verdade continua entrando com unidade nula até o de-para do Renan.
+  // a unidade vem do PRÓPRIO Geotab: motorista pelo grupo UNI_* do cadastro
+  // dele (1308/1308 têm — sonda 01/09/2026), Sem Login pelo grupo do veículo.
+  // merge-duplicates ATUALIZA quem já existia com unidade nula.
   linhas.forEach(l => { if (l.chave && !vistos.has(l.chave))
     vistos.set(l.chave, { chave: l.chave, nome: l._nome || l.chave, fonte: l.fonte, unidade: l._uni || null }); });
-  // unidade fica NULA de propósito: o de-para UO → unidade do portal é do Renan.
-  // O robô não inventa unidade — quem entra sem unidade aparece no resumo abaixo.
   if (!vistos.size) return;
   const r = await fetch(`${SB_URL}/rest/v1/ce_motoristas?on_conflict=chave`, {
-    method: 'POST', headers: { ...H_SB, Prefer: 'resolution=ignore-duplicates' }, body: JSON.stringify([...vistos.values()]),
+    method: 'POST', headers: { ...H_SB, Prefer: 'resolution=merge-duplicates' }, body: JSON.stringify([...vistos.values()]),
   });
   if (!r.ok) console.log('ce_motoristas:', r.status, (await r.text()).slice(0, 200));
 }
@@ -808,10 +806,24 @@ try {
     GT_USERS = new Map(us.map(u => [u.id, u]));
     GT_RULES = new Map(rs.map(r => [r.id, r.name]));
     const gNome = new Map(gs.map(g => [g.id, g.name || '']));
+    GT_GNOME = gNome;
     devs.forEach(d => {
       const uni = (d.groups || []).map(g => gNome.get(g.id) || '').find(n => /^UNI_/.test(n));
       if (uni) GT_UNIDEV.set(d.id, uni.replace(/^UNI_/, ''));
     });
+    // sincroniza o cadastro INTEIRO de uma vez: quem já está no banco com
+    // unidade nula (das coletas antigas) ganha a unidade do grupo agora
+    if (SB_KEY) {
+      const todos = us.map(u => ({ chave: gtChave(u), fonte: 'Geotab', unidade: gtUni(u),
+        nome: (u.firstName || u.lastName) ? `${u.firstName || ''} ${u.lastName || ''}`.trim() : (u.name || u.id) }));
+      for (let i = 0; i < todos.length; i += 500) {
+        const r = await fetch(`${SB_URL}/rest/v1/ce_motoristas?on_conflict=chave`, {
+          method: 'POST', headers: { ...H_SB, Prefer: 'resolution=merge-duplicates' },
+          body: JSON.stringify(todos.slice(i, i + 500)) });
+        if (!r.ok) { console.log('sync cadastro:', r.status, (await r.text()).slice(0, 200)); break; }
+      }
+      console.log(`cadastro sincronizado: ${todos.length} motorista(s) com unidade do grupo UNI_*`);
+    }
     const faltando = Object.entries(GT_REGRA)
       .filter(([, r]) => ![...GT_RULES].some(([id, n]) => r.ids.includes(id) || r.nome.test(n || '')))
       .map(([k]) => k);
