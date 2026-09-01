@@ -9,8 +9,12 @@
 --   origem       = quem criou a linha ('contratos-planilha'); nulo = manual
 --   origem_chave = contrato:<vigência>:<placa>, única
 --
--- O índice é PARCIAL (só onde origem_chave não é nula), então lançamento
--- manual continua livre para repetir o que precisar.
+-- O índice é ÚNICO SIMPLES, não parcial (bug real, 01/09/2026): o PostgREST
+-- recusa o upsert com "42P10 there is no unique or exclusion constraint
+-- matching the ON CONFLICT specification" quando o índice tem WHERE. E o
+-- parcial nem era preciso — no Postgres vários NULL convivem num índice
+-- único, então lançamento manual (origem_chave nula) continua livre para
+-- repetir o que precisar.
 -- ============================================================
 
 alter table public.carta_custos
@@ -22,9 +26,11 @@ comment on column public.carta_custos.origem is
 comment on column public.carta_custos.origem_chave is
   'Chave de idempotência do robô (contrato:<vigencia>:<placa>). Nulo = manual.';
 
+-- derruba a versão parcial, se a primeira rodada deste script já a criou
+drop index if exists public.carta_custos_origem_chave_uidx;
+
 create unique index if not exists carta_custos_origem_chave_uidx
-  on public.carta_custos (origem_chave)
-  where origem_chave is not null;
+  on public.carta_custos (origem_chave);
 
 -- Conferência depois de rodar o robô:
 --   select vigencia, unidade, count(*), sum(valor)
