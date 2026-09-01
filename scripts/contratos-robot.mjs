@@ -236,10 +236,16 @@ for (const b of blocos) {
     }
     const contrato = txtOf(r[0]).trim();
     const nf = b.nf != null ? txtOf(r[b.nf]).trim() : '';
+    // A VIGÊNCIA DA CARTA É 'AAAA-MM', NÃO A DATA (bug real, 01/09/2026):
+    // a tela grava curVigs()[0] ('2026-08') e consulta com .in('vigencia',…)
+    // nesse formato. Gravar '2026-08-01' não casa com NADA — as linhas ficam
+    // no banco e a Carta mostra a conta zerada, sem erro nenhum. A coluna
+    // `data` é que leva a data completa.
+    const vigM = vig.slice(0, 7);
     linhas.push({
       origem: 'contratos-planilha',
-      origem_chave: `contrato:${vig}:${placa}`,
-      unidade: uni.unidade, vigencia: vig, pacote: PACOTE, projeto: uni.projeto,
+      origem_chave: `contrato:${vigM}:${placa}`,
+      unidade: uni.unidade, vigencia: vigM, pacote: PACOTE, projeto: uni.projeto,
       data: vig, equipamento: placa, fornecedor: '',
       // contrato não passa por RC/OC: é faturamento fechado por km. Entra com
       // as duas aprovações dadas e a NF da planilha; sem NF na planilha, o
@@ -287,6 +293,20 @@ if (!SB_KEY) { console.error('GEM_SUPABASE_SERVICE_KEY ausente'); process.exit(1
 
 // ── grava (upsert por origem_chave) ────────────────────────────────────────
 const H = { apikey: SB_KEY, Authorization: `Bearer ${SB_KEY}`, 'Content-Type': 'application/json' };
+
+// Limpeza das linhas da 1ª rodada, que foram gravadas com a vigência no
+// formato de DATA ('2026-08-01') e por isso a Carta nunca enxergou. Só toca
+// no que é do robô e no formato velho; passada essa faxina, não acha nada.
+{
+  const res = await fetch(`${SB_URL}/rest/v1/carta_custos`
+    + `?origem=eq.contratos-planilha&origem_chave=like.contrato:____-__-__:*`,
+    { method: 'DELETE', headers: { ...H, Prefer: 'return=representation' } });
+  if (res.ok) {
+    const velhas = await res.json();
+    if (velhas.length) console.log(`faxina: ${velhas.length} linha(s) da vigência em formato de data removidas`);
+  } else console.log('aviso: faxina do formato antigo →', res.status);
+}
+
 let gravadas = 0;
 for (let i = 0; i < linhas.length; i += 500) {
   const lote = linhas.slice(i, i + 500);
