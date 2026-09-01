@@ -9,9 +9,10 @@
 // (Km Informado · desloc. · lanç km/vlr · NF · STATUS).
 //
 // DUAS ARMADILHAS REAIS (01/09/2026, achadas na 1ª rodada):
-//  1. A planilha está em locale INGLÊS: o texto formatado vem "R$ 2,563.21"
-//     (vírgula = milhar). Ler o `.f` e converter como pt-BR virava R$ 2,56 —
-//     o total do mês saía ~1000× menor. O `.v` do gviz já é o número cru.
+//  1. A planilha está em locale INGLÊS e a coluna de valor é TEXTO: vem
+//     "R$ 2,563.21" (vírgula = milhar) no `.v`, não um número. Converter
+//     como pt-BR dava R$ 2,56; ler só número cru dava ZERO. O numOf abaixo
+//     decide o separador decimal pelo que sobra no fim.
 //  2. O gviz tipa a coluna inteira: numa coluna numérica, o RÓTULO de texto
 //     da linha 2 volta nulo. Por isso "Km Informado"/"desloc." só aparecem
 //     nos blocos ainda vazios. O bloco é lido por POSIÇÃO (km · desloc ·
@@ -24,7 +25,29 @@ const GID   = process.env.CONTRATOS_GID || '0';
 
 const parse = t => { const s = t.indexOf('{'), e = t.lastIndexOf('}'); return JSON.parse(t.slice(s, e + 1)); };
 const txtOf = c => !c ? '' : (c.f != null ? String(c.f) : (c.v == null ? '' : String(c.v)));
-const numOf = c => (c && typeof c.v === 'number' && isFinite(c.v)) ? c.v : 0;
+// A célula de valor pode vir como NÚMERO (.v) ou como TEXTO já formatado —
+// e a planilha está em locale INGLÊS ("R$ 2,563.21": vírgula de milhar).
+// Regra: o ÚLTIMO separador que sobra é o decimal; separador seguido de
+// exatamente 3 dígitos no fim é milhar. Cobre 2,563.21 e 2.563,21.
+function numOf(c) {
+  if (!c) return 0;
+  if (typeof c.v === 'number' && isFinite(c.v)) return c.v;
+  let s = String(c.v != null ? c.v : (c.f || '')).replace(/[R$\s\u00a0]/g, '');
+  if (!s) return 0;
+  const neg = /^\(.*\)$/.test(s) || s.startsWith('-');
+  s = s.replace(/[()\-]/g, '');
+  const ult = Math.max(s.lastIndexOf(','), s.lastIndexOf('.'));
+  if (ult >= 0) {
+    const casas = s.length - ult - 1;
+    if (casas === 3 && s.slice(0, ult).match(/[.,]/) === null && !/[.,]/.test(s.slice(ult + 1))) {
+      s = s.replace(/[.,]/g, '');                    // 2,563 → milhar, sem decimal
+    } else {
+      s = s.slice(0, ult).replace(/[.,]/g, '') + '.' + s.slice(ult + 1);
+    }
+  }
+  const n = parseFloat(s);
+  return isFinite(n) ? (neg ? -n : n) : 0;
+}
 const brl   = v => 'R$ ' + v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 // "mar.-26" · "jun.-26" · "Aug-26" → {ano, mes}
