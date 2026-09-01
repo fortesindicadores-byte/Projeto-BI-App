@@ -4,10 +4,9 @@
 // Sobe o custo de CONTRATO (manutenção por km rodado) da planilha
 // "Contratos Man." para a tabela `carta_custos`, uma linha por placa.
 //
-// REGRA DO RENAN (01/09/2026): "leia sempre o valor do mês para compor o
-// custo com contrato do MÊS SEGUINTE" — o que a unidade informa agora, no
-// começo de agosto, é o realizado de SETEMBRO. Por isso a vigência gravada
-// é sempre o mês do bloco + 1.
+// REGRA DA VIGÊNCIA (Renan, 01/09/2026): o valor do bloco de um mês é o
+// custo DAQUELE mês — "o que vai cair em agosto é realmente agosto". Sem
+// deslocamento: bloco jul-26 → vigência 2026-07.
 //
 // Fonte provisória: a planilha do time. O definitivo virá do ERP (o km dos
 // abastecimentos), quando a conta passa a ser hodômetro atual − km informado.
@@ -72,8 +71,7 @@ function mesDoRotulo(s) {
   if (!m || !MES3[m[1]]) return null;
   return { ano: +m[2] < 100 ? 2000 + +m[2] : +m[2], mes: MES3[m[1]] };
 }
-const vigDe   = ({ ano, mes }) => `${ano}-${String(mes).padStart(2, '0')}-01`;
-const proxVig = ({ ano, mes }) => mes === 12 ? vigDe({ ano: ano + 1, mes: 1 }) : vigDe({ ano, mes: mes + 1 });
+const vigDe = ({ ano, mes }) => `${ano}-${String(mes).padStart(2, '0')}-01`;
 const MESLBL = ['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
 const refLbl = ({ ano, mes }) => `${MESLBL[mes - 1]}/${String(ano).slice(2)}`;
 
@@ -211,7 +209,7 @@ const blocos = marcos.map((m, k) => {
 const dados = rows.slice(2).filter(r => txtOf(r[2]).trim());
 console.log(`planilha: ${dados.length} veículo(s) · ${blocos.length} bloco(s) de mês`);
 blocos.forEach(b => console.log(`   ${b.rot.padEnd(10)} ${b.largura} coluna(s)`
-  + `${b.nf == null ? ' (sem NF)' : ''} → vigência ${proxVig(b.mv)}`));
+  + `${b.nf == null ? ' (sem NF)' : ''} → vigência ${vigDe(b.mv)}`));
 
 // ── monta os lançamentos ───────────────────────────────────────────────────
 const semDePara = new Map();      // nem a frota nem a planilha resolveram
@@ -219,7 +217,7 @@ const porFonte = { ginfo: 0, manual: 0, planilha: 0 };
 const divergiu = new Map();       // placa está na frota em outra unidade que não a da planilha
 const linhas = [];
 for (const b of blocos) {
-  const vig = proxVig(b.mv);
+  const vig = vigDe(b.mv);
   if (SO_VIG && !vig.startsWith(SO_VIG)) continue;
   for (const r of dados) {
     const valor = numOf(r[b.valor]);
@@ -294,17 +292,25 @@ if (!SB_KEY) { console.error('GEM_SUPABASE_SERVICE_KEY ausente'); process.exit(1
 // ── grava (upsert por origem_chave) ────────────────────────────────────────
 const H = { apikey: SB_KEY, Authorization: `Bearer ${SB_KEY}`, 'Content-Type': 'application/json' };
 
-// Limpeza das linhas da 1ª rodada, que foram gravadas com a vigência no
-// formato de DATA ('2026-08-01') e por isso a Carta nunca enxergou. Só toca
-// no que é do robô e no formato velho; passada essa faxina, não acha nada.
-{
-  const res = await fetch(`${SB_URL}/rest/v1/carta_custos`
-    + `?origem=eq.contratos-planilha&origem_chave=like.contrato:____-__-__:*`,
-    { method: 'DELETE', headers: { ...H, Prefer: 'return=representation' } });
-  if (res.ok) {
-    const velhas = await res.json();
-    if (velhas.length) console.log(`faxina: ${velhas.length} linha(s) da vigência em formato de data removidas`);
-  } else console.log('aviso: faxina do formato antigo →', res.status);
+// FAXINA DOS ÓRFÃOS: apaga o que o ROBÔ gravou e não faz mais parte do
+// conjunto atual — linha de vigência que mudou de regra, placa que saiu da
+// planilha, valor que foi zerado. Só roda na coleta completa (com filtro de
+// vigência apagaria as outras) e só toca em origem = contratos-planilha:
+// lançamento manual tem origem nula e nunca entra nesta lista.
+if (!SO_VIG) {
+  const atuais = new Set(linhas.map(l => l.origem_chave));
+  const r = await fetch(`${SB_URL}/rest/v1/carta_custos`
+    + `?origem=eq.contratos-planilha&select=origem_chave`, { headers: H });
+  const jaTem = r.ok ? await r.json() : [];
+  const orfas = jaTem.map(x => x.origem_chave).filter(k => k && !atuais.has(k));
+  for (let i = 0; i < orfas.length; i += 200) {
+    const lote = orfas.slice(i, i + 200).map(k => `"${k}"`).join(',');
+    const d = await fetch(`${SB_URL}/rest/v1/carta_custos`
+      + `?origem=eq.contratos-planilha&origem_chave=in.(${encodeURIComponent(lote)})`,
+      { method: 'DELETE', headers: H });
+    if (!d.ok) console.log('aviso: faxina →', d.status, (await d.text()).slice(0, 160));
+  }
+  if (orfas.length) console.log(`faxina: ${orfas.length} linha(s) antiga(s) do robô removida(s)`);
 }
 
 let gravadas = 0;
