@@ -562,6 +562,44 @@ if (MODE === 'sonda') {
       const comDoc = drv.filter(u => !gtChave(u).startsWith('gt:')).length;
       console.log(`com CPF/CNH no cadastro (dá para casar com a vFleets): ${comDoc}/${drv.length}`);
 
+      // o motorista pertence a grupos UNI_* como os veículos? Se sim, a
+      // unidade do painel sai daqui, sem de-para manual. Só contagens.
+      try {
+        const gs2 = await geotabRpc('Get', { typeName: 'Group' }, cred);
+        const gn = new Map(gs2.map(g => [g.id, g.name || '']));
+        const uniDe = u => {
+          for (const campo of ['companyGroups', 'driverGroups', 'securityGroups']) {
+            const hit = (u[campo] || []).map(g => gn.get(g.id) || '').find(n => /^UNI_/.test(n));
+            if (hit) return { campo, uni: hit };
+          }
+          return null;
+        };
+        const porUni = new Map(); let semUni = 0; const campos = new Map();
+        drv.forEach(u => { const r = uniDe(u);
+          if (!r) { semUni++; return; }
+          porUni.set(r.uni, (porUni.get(r.uni) || 0) + 1);
+          campos.set(r.campo, (campos.get(r.campo) || 0) + 1); });
+        console.log(`motoristas com grupo UNI_*: ${drv.length - semUni}/${drv.length}`
+          + (campos.size ? ` (campo: ${[...campos].map(([c, n]) => c + '=' + n).join(', ')})` : ''));
+        [...porUni.entries()].sort((a, b) => b[1] - a[1])
+          .forEach(([u, n]) => console.log(`   ${u.padEnd(24)} ${n} motorista(s)`));
+      } catch (e) { console.log('grupos dos motoristas:', e.message.slice(0, 160)); }
+
+      // RPM: o Geotab guarda o giro como StatusData do diagnóstico de rotação.
+      // Medir o VOLUME de um dia diz se dá para reconstruir a faixa verde.
+      try {
+        const de3 = `${DE}T03:00:00.000Z`, ate3 = new Date(new Date(de3).getTime() + 864e5 - 1).toISOString();
+        const rpm = await geotabRpc('Get', { typeName: 'StatusData',
+          search: { diagnosticSearch: { id: 'DiagnosticEngineSpeedId' }, fromDate: de3, toDate: ate3 },
+          resultsLimit: 50000 }, cred);
+        const devsRpm = new Set(rpm.map(r => r.device && r.device.id).filter(Boolean));
+        const vals = rpm.map(r => +r.data).filter(v => isFinite(v) && v > 0);
+        console.log(`RPM (StatusData DiagnosticEngineSpeedId, ${DE}): ${rpm.length} amostra(s)`
+          + (rpm.length >= 50000 ? ' [CORTOU no limite de 50k — o dia inteiro tem mais]' : '')
+          + ` · ${devsRpm.size} veículo(s)`
+          + (vals.length ? ` · faixa ${Math.round(Math.min(...vals))}–${Math.round(Math.max(...vals))} rpm` : ''));
+      } catch (e) { console.log('RPM StatusData:', e.message.slice(0, 200)); }
+
       // as regras da conta decidem se aceleração/freada existem
       const regras = await geotabRpc('Get', { typeName: 'Rule' }, cred);
       const achadas = { acel: [], frea: [], vel: [] };
