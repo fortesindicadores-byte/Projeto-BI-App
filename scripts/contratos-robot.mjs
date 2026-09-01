@@ -54,9 +54,58 @@ const proxVig = ({ ano, mes }) => mes === 12 ? vigDe({ ano: ano + 1, mes: 1 }) :
 const MESLBL = ['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
 const refLbl = ({ ano, mes }) => `${MESLBL[mes - 1]}/${String(ano).slice(2)}`;
 
-// ── de-para: "Campo Grande Rota" → unidade do portal + projeto ──────────────
-// A base vira o código (o mesmo FIL2COD do portal) e o sufixo diz o projeto;
-// em CBA e MCC o projeto também decide o tier, como no resto do sistema.
+// ── A PLACA é quem decide unidade e projeto (Renan, 01/09/2026) ────────────
+// A coluna "Unidade" da planilha é digitada à mão e envelhece quando o
+// veículo muda de casa. A verdade da frota é a base de ativos do Ginfo
+// (ginfo_snapshot['ativos'] · Filial | Projeto | Placa), que o robô do Ginfo
+// atualiza todo dia — mais a ativos_manual, que cobre a ANG (fora do Ginfo).
+// A coluna da planilha vira só o plano B, para placa que não está em lugar
+// nenhum; o log diz quantas caíram nele.
+const D2L = '0123456789';
+// placa antiga LLLNNNN → Mercosul LLLNLNN (o 5º caractere vira letra). É só
+// para CRUZAR as bases: cada tela mostra a placa como ela veio da origem.
+function placaKey(p) {
+  const s = String(p || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+  if (!/^[A-Z]{3}\d{4}$/.test(s)) return s;
+  return s.slice(0, 4) + 'ABCDEFGHIJ'[D2L.indexOf(s[4])] + s.slice(5);
+}
+const NAME2COD = {
+  'CDD CAMBORIU':'BLC','BALNEARIO CAMBORIU':'BLC','CAMBORIU':'BLC',
+  'CDD CUIABA':'CBA T2','CUIABA':'CBA T1 WH','CUIABA EMPURRADA':'CBA T1',
+  'CDD RIO DE JANEIRO':'CGR','CAMPO GRANDE':'CGR','RIO DE JANEIRO':'CGR',
+  'CDD FLORIANOPOLIS':'FLP','FLORIANOPOLIS':'FLP',
+  'CDD GUARULHOS':'GRL','GUARULHOS':'GRL','ANHANGUERA':'ANG',
+  'CDI MACACU':'MCC T2','MACACU EMPURRADA':'MCC T1','CACHOEIRAS DE MACACU':'MCC T2','MACACU':'MCC T2',
+  'CDD NOVA FRIBURGO':'NFR','NOVA FRIBURGO':'NFR',
+  'PIRAI EMPURRADA':'PIR','PIRAI':'PIR','CDD PELOTAS':'PLT','PELOTAS':'PLT',
+  'CDD RONDONOPOLIS':'RON','RONDONOPOLIS':'RON'
+};
+// mesmo refino de tier do resto do portal: o projeto é que separa CBA/MCC
+function unitCod(nome, projeto) {
+  const n = NK(nome); if (!n) return null;
+  let cod = NAME2COD[n]; if (!cod) return null;
+  const p = NK(projeto);
+  if (cod.startsWith('CBA')) {
+    if (/EMPURRAD/.test(p)) cod = 'CBA T1';
+    else if (/APOIO|EMPILHADEIRA|ARMAZEM|\bWH\b/.test(p)) cod = 'CBA T1 WH';
+    else if (/ROTA|CDD|AUTO SERVICO|VAN/.test(p)) cod = 'CBA T2';
+  } else if (cod.startsWith('MCC')) {
+    if (/EMPURRAD/.test(p)) cod = 'MCC T1';
+    else if (/ROTA|CDI|CDD|AUTO SERVICO|VAN/.test(p)) cod = 'MCC T2';
+  }
+  return cod;
+}
+// projeto do ativo → um dos projetos que a Carta de Custos aceita
+function projPortal(p) {
+  const s = NK(p);
+  if (/EMPURRAD/.test(s)) return 'EMPURRADA';
+  if (/APOIO|EMPILHADEIRA|ARMAZEM|\bWH\b/.test(s)) return 'APOIO';
+  if (/AUTO SERVICO|\bAS\b/.test(s)) return 'AUTO SERVIÇO';
+  if (/INSUMO/.test(s)) return 'INSUMOS';
+  return 'ROTA';
+}
+
+// ── plano B: a coluna "Unidade" da planilha ────────────────────────────────
 const BASE2COD = {
   'CAMPO GRANDE': 'CGR', 'RIO DE JANEIRO': 'CGR',
   'FLORIANOPOLIS': 'FLP', 'FLORIPA': 'FLP',
@@ -85,6 +134,36 @@ function deParaUnidade(txt) {
   return { unidade, projeto: proj };
 }
 
+// ── base de ativos: placa → unidade + projeto ──────────────────────────────
+const H_SB = SB_KEY ? { apikey: SB_KEY, Authorization: `Bearer ${SB_KEY}`, 'Content-Type': 'application/json' } : null;
+const FROTA = new Map();   // placaKey → {unidade, projeto, fonte}
+async function carregaFrota() {
+  if (!H_SB) { console.log('sem service key — a frota não pode ser lida; usando a coluna da planilha'); return; }
+  const req = async q => {
+    const r = await fetch(`${SB_URL}/rest/v1/${q}`, { headers: H_SB });
+    if (!r.ok) { console.log(`aviso: ${q} → ${r.status}`); return []; }
+    return r.json();
+  };
+  const [gs] = await req('ginfo_snapshot?chave=eq.ativos&select=data,updated_at');
+  const ativos = Array.isArray(gs && gs.data) ? gs.data : [];
+  ativos.forEach(a => {
+    const k = placaKey(a['Placa'] || a['Placa Mercosul']);
+    const cod = unitCod(a['Filial'], a['Projeto']);
+    if (k && cod) FROTA.set(k, { unidade: cod, projeto: projPortal(a['Projeto']), fonte: 'ginfo' });
+  });
+  console.log(`frota Ginfo: ${ativos.length} ativo(s)${gs && gs.updated_at ? ` · atualizado ${String(gs.updated_at).slice(0, 10)}` : ''}`
+    + ` · ${FROTA.size} placa(s) com unidade`);
+  // ANG e afins não existem no Ginfo — a tabela manual cobre esse buraco
+  const man = await req('ativos_manual?select=placa,unidade,projeto');
+  let nMan = 0;
+  (Array.isArray(man) ? man : []).forEach(a => {
+    const k = placaKey(a.placa); if (!k) return;
+    FROTA.set(k, { unidade: a.unidade, projeto: projPortal(a.projeto), fonte: 'manual' }); nMan++;
+  });
+  if (nMan) console.log(`ativos manuais: ${nMan} placa(s)`);
+}
+await carregaFrota();
+
 // ── leitura da planilha ────────────────────────────────────────────────────
 const url = `https://docs.google.com/spreadsheets/d/${SHEET}/gviz/tq`
   + `?gid=${GID}&tqx=out:json&headers=0&tq=${encodeURIComponent('select *')}`;
@@ -112,7 +191,9 @@ blocos.forEach(b => console.log(`   ${b.rot.padEnd(10)} ${b.largura} coluna(s)`
   + `${b.nf == null ? ' (sem NF)' : ''} → vigência ${proxVig(b.mv)}`));
 
 // ── monta os lançamentos ───────────────────────────────────────────────────
-const semDePara = new Map();
+const semDePara = new Map();      // nem a frota nem a planilha resolveram
+const porFonte = { ginfo: 0, manual: 0, planilha: 0 };
+const divergiu = new Map();       // placa está na frota em outra unidade que não a da planilha
 const linhas = [];
 for (const b of blocos) {
   const vig = proxVig(b.mv);
@@ -120,9 +201,16 @@ for (const b of blocos) {
   for (const r of dados) {
     const valor = numOf(r[b.valor]);
     if (!(valor > 0)) continue;                                  // mês sem lançamento p/ essa placa
-    const uni = deParaUnidade(txtOf(r[1]));
-    if (!uni) { const k = txtOf(r[1]).trim(); semDePara.set(k, (semDePara.get(k) || 0) + 1); continue; }
     const placa = txtOf(r[2]).toUpperCase().trim();
+    const naFrota = FROTA.get(placaKey(placa));                  // a PLACA manda
+    const daPlan  = deParaUnidade(txtOf(r[1]));                  // plano B
+    const uni = naFrota || daPlan;
+    if (!uni) { const k = `${txtOf(r[1]).trim()} · placa fora da frota`; semDePara.set(k, (semDePara.get(k) || 0) + 1); continue; }
+    porFonte[naFrota ? naFrota.fonte : 'planilha']++;
+    if (naFrota && daPlan && naFrota.unidade !== daPlan.unidade) {
+      const k = `${daPlan.unidade} (planilha) → ${naFrota.unidade} (frota)`;
+      divergiu.set(k, (divergiu.get(k) || 0) + 1);
+    }
     const contrato = txtOf(r[0]).trim();
     const nf = b.nf != null ? txtOf(r[b.nf]).trim() : '';
     linhas.push({
@@ -156,8 +244,15 @@ console.log(`\nLANÇAMENTOS: ${linhas.length}`);
   [...t.unis.entries()].sort((a, b) => b[1] - a[1])
     .forEach(([u, s]) => console.log(`      ${u.padEnd(10)} ${brl(s).padStart(16)}`));
 });
+console.log(`\nDE ONDE VEIO A UNIDADE: frota Ginfo ${porFonte.ginfo} · ativos manuais ${porFonte.manual}`
+  + ` · coluna da planilha (plano B) ${porFonte.planilha}`);
+if (divergiu.size) {
+  console.log('\nPLACAS QUE MUDARAM DE CASA (vale a frota, não a planilha):');
+  [...divergiu.entries()].sort((a, b) => b[1] - a[1])
+    .forEach(([k, n]) => console.log(`   ${k.padEnd(44)} ${n} lançamento(s)`));
+}
 if (semDePara.size) {
-  console.log('\nUNIDADES SEM DE-PARA (linhas ignoradas — ajustar BASE2COD):');
+  console.log('\nLINHAS IGNORADAS (placa fora da frota e unidade sem de-para):');
   [...semDePara.entries()].forEach(([u, n]) => console.log(`   ${u} → ${n} linha(s)`));
 }
 
