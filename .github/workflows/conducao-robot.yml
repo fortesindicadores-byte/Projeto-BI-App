@@ -7,11 +7,11 @@ on:
   workflow_dispatch:
     inputs:
       modo:
-        description: 'sonda (não grava) · ident (identificação por placa) · ano (01/jan→ontem) · run · recalc · reproc'
+        description: 'sonda (não grava) · ident (identificação por placa) · marcha (sonda do pilar Uso de Marchas) · ano (01/jan→ontem) · run · recalc · reproc'
         required: true
         default: sonda
         type: choice
-        options: [sonda, ident, ano, run, recalc, reproc]
+        options: [sonda, ident, marcha, ano, run, recalc, reproc]
       de:
         description: 'Data inicial YYYY-MM-DD (vazio = ontem)'
         required: false
@@ -25,6 +25,12 @@ on:
         default: false
       diag_lim:
         description: 'sonda: quantos diagnósticos candidatos varrer (99999 = todos)'
+        required: false
+      marcha_alto:
+        description: 'marcha: rpm acima do qual conta como esticando (padrão 1900)'
+        required: false
+      marcha_baixo:
+        description: 'marcha: rpm abaixo do qual conta como forçando (padrão 1000)'
         required: false
   schedule:
     # O painel mostra 01/jan → hoje, então o cron roda no modo `ano`: ele pula
@@ -47,6 +53,8 @@ jobs:
           CE_ATE:  ${{ github.event.inputs.ate }}
           CE_REFAZER: ${{ github.event.inputs.refazer == 'true' && '1' || '' }}
           CE_DIAG_LIM: ${{ github.event.inputs.diag_lim }}
+          CE_MARCHA_ALTO:  ${{ github.event.inputs.marcha_alto }}
+          CE_MARCHA_BAIXO: ${{ github.event.inputs.marcha_baixo }}
           GEM_SUPABASE_SERVICE_KEY: ${{ secrets.GEM_SUPABASE_SERVICE_KEY }}
           VFLEETS_TOKEN: ${{ secrets.VFLEETS_TOKEN }}
           GEOTAB_USER:   ${{ secrets.GEOTAB_USER }}

@@ -813,6 +813,107 @@ if (MODE === 'sonda') {
   process.exit(0);
 }
 
+if (MODE === 'marcha') {
+  // SONDA DO PILAR "USO DE MARCHAS" (Renan, 01/09/2026) — só leitura, não
+  // grava nada. A varredura de diagnósticos achou "Posição da marcha" com
+  // volume alto; antes de derivar qualquer régua é preciso saber COMO ele
+  // codifica os valores (neutro/ré costumam vir como 0/126/127 em J1939) e
+  // se todos os modelos reportam. Aqui a sonda: distribuição dos valores
+  // crus, cobertura por veículo e o cruzamento marcha × RPM que viraria o
+  // pilar (esticando = RPM alto com marcha acima disponível; forçando =
+  // RPM baixo em marcha alta). Nada de nome de pessoa no log (repo público).
+  const cred = await geotabLogin();
+  if (!cred) { console.error('Geotab: sem credencial'); process.exit(1); }
+  const DIA = process.env.CE_DE || iso(ontem);
+  const ALTO = +process.env.CE_MARCHA_ALTO || 1900;   // acima disso: esticando
+  const BAIXO = +process.env.CE_MARCHA_BAIXO || 1000; // abaixo disso: forçando
+  console.log(`sonda de marcha · dia ${DIA} · limiares esticando>${ALTO} rpm · forçando<${BAIXO} rpm`);
+
+  const diags = await geotabRpc('Get', { typeName: 'Diagnostic' }, cred);
+  const cand = diags.filter(d => /posi(ç|c)(ã|a)o da marcha|gear position|marcha atual|current gear/i.test(d.name || ''));
+  console.log(`\ncandidatos de posição de marcha no catálogo: ${cand.length}`);
+  cand.forEach(d => console.log(`   ${d.id}  ${d.name}`));
+  if (!cand.length) { console.log('Nenhum diagnóstico de marcha — sonda encerrada.'); process.exit(0); }
+
+  const de0 = `${DIA}T03:00:00.000Z`;
+  const fim = new Date(new Date(de0).getTime() + 864e5 - 1).toISOString();
+
+  // baixa as amostras de marcha do dia, paginando como o RPM já faz
+  async function baixaMarcha(id) {
+    const porDev = new Map(); let from = de0, pag = 0, total = 0;
+    while (pag < 40) {
+      const lote = await geotabRpc('Get', { typeName: 'StatusData',
+        search: { diagnosticSearch: { id }, fromDate: from, toDate: fim }, resultsLimit: 50000 }, cred);
+      pag++; total += lote.length;
+      for (const r of lote) {
+        const dv = r.device && r.device.id; if (!dv) continue;
+        let a = porDev.get(dv); if (!a) { a = []; porDev.set(dv, a); }
+        a.push({ t: new Date(r.dateTime).getTime(), g: +r.data });
+      }
+      if (lote.length < 50000) break;
+      from = new Date(new Date(lote[lote.length - 1].dateTime).getTime() + 1).toISOString();
+    }
+    porDev.forEach(a => a.sort((x, y) => x.t - y.t));
+    return { porDev, total, pag };
+  }
+
+  const devs = await geotabRpc('Get', { typeName: 'Device' }, cred);
+  const devNome = new Map(devs.map(d => [d.id, String(d.licensePlate || d.name || d.id).toUpperCase().trim()]));
+
+  for (const d of cand) {
+    const { porDev, total, pag } = await baixaMarcha(d.id);
+    console.log(`\n── ${d.name} ── ${total} amostra(s) em ${pag} página(s) · ${porDev.size} veículo(s)`);
+    if (!total) { console.log('   sem amostra no dia.'); continue; }
+
+    // 1) distribuição dos valores crus: é aqui que neutro/ré se revelam
+    const hist = new Map();
+    porDev.forEach(a => a.forEach(x => hist.set(x.g, (hist.get(x.g) || 0) + 1)));
+    console.log('   valores crus (valor × amostras):');
+    [...hist.entries()].sort((a, b) => a[0] - b[0])
+      .forEach(([v, n]) => console.log(`      ${String(v).padStart(6)}  ${String(n).padStart(7)}  ${(n / total * 100).toFixed(1)}%`));
+
+    // 2) cobertura: quantos veículos reportam, e com que densidade
+    const porVeic = [...porDev.entries()].map(([id, a]) => ({ placa: devNome.get(id) || id, n: a.length,
+      max: Math.max(...a.map(x => x.g).filter(isFinite)) }));
+    const densa = porVeic.filter(v => v.n >= 100).length;
+    console.log(`   veículos com ≥100 amostras no dia: ${densa}/${porVeic.length}`);
+    console.log('   maior marcha vista por veículo (amostra dos 10 primeiros):');
+    porVeic.sort((a, b) => b.n - a.n).slice(0, 10)
+      .forEach(v => console.log(`      ${v.placa.padEnd(10)} ${String(v.n).padStart(6)} amostra(s) · maior valor ${v.max}`));
+
+    // 3) cruzamento marcha × RPM — a conta que viraria o pilar
+    const { porDev: rpmDev } = await geotabRpmDia(DIA, cred);
+    let tMarcha = 0, tEstica = 0, tForca = 0, veicCruz = 0;
+    for (const [id, ga] of porDev) {
+      const ra = rpmDev.get(id); if (!ra || ra.length < 10) continue;
+      veicCruz++;
+      const maxG = Math.max(...ga.map(x => x.g).filter(v => isFinite(v) && v < 100));  // ignora códigos 126/127
+      let j = 0;
+      for (let i = 0; i < ga.length; i++) {
+        const g = ga[i].g;
+        if (!isFinite(g) || g <= 0 || g >= 100) continue;          // neutro/ré/código fora da conta
+        const prox = i + 1 < ga.length ? ga[i + 1].t : ga[i].t + 1000;
+        const dt = Math.min(prox - ga[i].t, RPM_GAP_MS) / 1000;
+        if (dt <= 0) continue;
+        while (j + 1 < ra.length && ra[j + 1].t <= ga[i].t) j++;   // RPM vigente na hora da amostra
+        const rpm = ra[j] && Math.abs(ra[j].t - ga[i].t) <= RPM_GAP_MS ? ra[j].rpm : null;
+        if (!isFinite(rpm) || rpm <= RPM_LENTA) continue;          // parado não conta
+        tMarcha += dt;
+        if (rpm > ALTO && g < maxG) tEstica += dt;                 // dava para subir a marcha
+        else if (rpm < BAIXO && g >= maxG - 1) tForca += dt;       // afogando em marcha alta
+      }
+    }
+    const p = v => tMarcha ? (v / tMarcha * 100).toFixed(1) + '%' : '—';
+    console.log(`   cruzamento marcha × RPM em ${veicCruz} veículo(s) com as duas séries:`);
+    console.log(`      tempo rodando com marcha engatada: ${Math.round(tMarcha / 60)} min`);
+    console.log(`      esticando (rpm>${ALTO} com marcha acima disponível): ${Math.round(tEstica / 60)} min (${p(tEstica)})`);
+    console.log(`      forçando  (rpm<${BAIXO} em marcha alta):            ${Math.round(tForca / 60)} min (${p(tForca)})`);
+    console.log(`      → pilar Uso de Marchas ficaria em ${p(tEstica + tForca)} do tempo em marcha errada`);
+  }
+  console.log('\nSonda de marcha encerrada — nada foi gravado.');
+  process.exit(0);
+}
+
 if (MODE === 'ident') {
   // A operação exige identificação para rodar, mas a sonda viu ~70% das
   // viagens sem motorista (31/08/2026). Este modo mostra ONDE: viagens e km
