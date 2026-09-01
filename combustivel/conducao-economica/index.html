@@ -2,490 +2,502 @@
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
+<meta name="build" content="202609012300">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-<meta name="build" content="202609011940">
 <title>Condução Econômica · Gestão em Movimento</title>
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
-<script src="../../assets/pdf-export.js"></script>
-<script src="../../assets/excel-export.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0"></script>
 <style>
+/* ============================================================
+   CONDUÇÃO ECONÔMICA — casca extraída da Visão Financeira
+   (painel de vidro + lateral). Duas visões: Resumo Gerencial ·
+   Ranking Geral. Dados e regras: idênticos ao painel anterior.
+   ============================================================ */
 :root{
-  --bg:#0C1017;--card:#141B26;--card2:#1A2335;--border:#1E2D40;
-  --orange:#F97316;--blue:#38BDF8;--text:#F1F5F9;--text2:#94A3B8;--text3:#475569;
-  --green:#3BB33B;--red:#FF6666;--yellow:#FACC15;
-  --gold:#F59E0B;--gold2:#D97706;
+  /* fundo UNIFORME (mesma regra do hub): o degradê diagonal clareava para o
+     canto superior direito e deixava metade da tela mais clara que a outra */
+  --fundo:
+    radial-gradient(80% 60% at 90% 0%, rgba(255,244,232,.035) 0%, transparent 60%),
+    linear-gradient(45deg, #121214 0%, #121214 100%);
+  --luz:      inset 0 1px 0 rgba(255,255,255,.09);
+  --luz-card: inset 0 1px 0 rgba(255,255,255,.08);
+  --app:      rgba(150,185,255,.045);
+  --side:     rgba(30,30,30,.50);
+  --linha:    rgba(255,255,255,.06);
+  --card:     rgba(44,44,46,.78);
+  --brilho:   linear-gradient(180deg, rgba(255,255,255,.022) 0%, rgba(255,255,255,0) 46%);
+  --card-brd: rgba(255,255,255,.07);
+  --txt:      #EEF2FA;
+  --txt2:     #B2BCD2;
+  --txt3:     #676F83;
+  --txt4:     #4C505C;
+  --hover:    rgba(255,255,255,.06);
+  --azul:     #2E90E8;
+  --verde:    #3BB33B;
+  --vermelho: #FF5252;
+  --laranja:  #F97316;
+  --ambar:    #F4A100;
+  --cinza:    #5B657C;
+  --cabec:    #2B2B30;
+  --pop:      #26262B;   /* menus suspensos: OPACOS, nunca translúcidos */
 }
-*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
-body{
-  background:
-    radial-gradient(ellipse at 15% 20%,rgba(196,145,26,.07) 0%,transparent 45%),
-    radial-gradient(ellipse at 85% 80%,rgba(249,115,22,.05) 0%,transparent 45%),
-    #080C12;
-  color:var(--text);font-family:'Montserrat',-apple-system,sans-serif;font-size:13px;min-height:100vh;
+body.claro{
+  --fundo:
+    radial-gradient(80% 60% at 90% 0%, rgba(255,255,255,.35) 0%, transparent 60%),
+    linear-gradient(45deg, #E1E2E5 0%, #E1E2E5 100%);
+  --luz:      inset 0 1px 0 rgba(255,255,255,.9);
+  --luz-card: inset 0 1px 0 rgba(255,255,255,1);
+  --app:      rgba(255,255,255,.20);
+  --side:     rgba(255,255,255,.50);
+  --linha:    rgba(15,23,42,.10);
+  --card:     rgba(255,255,255,.74);
+  --brilho:   linear-gradient(180deg, rgba(255,255,255,.6) 0%, rgba(255,255,255,0) 46%);
+  --card-brd: rgba(15,23,42,.10);
+  --txt:      #161D2B;
+  --txt2:     #4A5568;
+  --txt3:     #737D91;
+  --txt4:     #8B94A6;
+  --hover:    rgba(15,23,42,.05);
+  --azul:     #1B6FC4;
+  --verde:    #00B300;
+  --vermelho: #FF0000;
+  --ambar:    #E9A400;
+  --cinza:    #939CAF;
+  --cabec:    #DCDFE6;
+  --pop:      #FFFFFF;
 }
+*{margin:0;padding:0;box-sizing:border-box;}
+@supports not selector(::-webkit-scrollbar){
+  *{scrollbar-width:thin;scrollbar-color:color-mix(in srgb,var(--txt3) 42%,transparent) transparent;}
+}
+::-webkit-scrollbar{width:11px;height:11px;}
+::-webkit-scrollbar-track{background:transparent;}
+::-webkit-scrollbar-thumb{background:color-mix(in srgb,var(--txt3) 42%,transparent);
+  border:3px solid transparent;background-clip:content-box;border-radius:9px;}
+::-webkit-scrollbar-thumb:hover{background:color-mix(in srgb,var(--txt3) 72%,transparent);background-clip:content-box;}
+::-webkit-scrollbar-corner{background:transparent;}
+::-webkit-scrollbar-button{display:none;width:0;height:0;}
+body::after{content:'';position:fixed;inset:0;z-index:0;pointer-events:none;opacity:.5;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='3'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)' opacity='.05'/%3E%3C/svg%3E");}
+.app{z-index:1;}
+html,body{height:100%;overflow:hidden;}
+body{font-family:'Montserrat',-apple-system,BlinkMacSystemFont,sans-serif;font-size:13px;color:var(--txt);
+  background:var(--fundo);overflow:hidden;}
 
-/* ── Header ── */
-.header{
-  background:rgba(12,16,23,.75);border-bottom:1px solid rgba(255,255,255,.07);
-  padding:10px 24px 12px;display:flex;flex-wrap:wrap;align-items:center;
-  position:sticky;top:0;z-index:100;
-  backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);
-  box-shadow:0 2px 12px rgba(0,0,0,.3);
-}
-.brand{flex:1;order:1;}
-.brand h1{font-size:16px;font-weight:700;color:var(--orange);}
-.brand p{font-size:10px;color:var(--text2);margin-top:2px;}
-.header-right{flex-shrink:0;order:2;display:flex;align-items:center;gap:8px;}
-.status-badge{font-size:9px;color:var(--text);background:rgba(249,115,22,.15);border:1px solid rgba(249,115,22,.3);border-radius:4px;padding:2px 8px;white-space:nowrap;}
-.access-badge{font-size:9px;color:var(--text2);background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);border-radius:4px;padding:2px 8px;white-space:nowrap;}
-.refresh-btn{background:rgba(249,115,22,.15);border:1px solid rgba(249,115,22,.3);border-radius:4px;padding:4px 8px;cursor:pointer;color:var(--orange);display:flex;align-items:center;}
-.refresh-btn:hover{background:rgba(249,115,22,.32);}
-.theme-btn{background:rgba(249,115,22,.15);border:1px solid rgba(249,115,22,.3);border-radius:4px;padding:4px 6px;cursor:pointer;color:var(--orange);display:flex;align-items:center;}
-.theme-btn:hover{background:rgba(249,115,22,.25);}
-.back-btn{background:rgba(249,115,22,.15);border:1px solid rgba(249,115,22,.3);border-radius:4px;padding:4px 8px;display:flex;align-items:center;color:var(--orange);text-decoration:none;}
-.back-btn:hover{background:rgba(249,115,22,.32);}
+.app{position:absolute;inset:16px;display:flex;border-radius:10px;overflow:hidden;
+  border:1px solid rgba(255,255,255,.10);box-shadow:0 28px 70px rgba(0,0,0,.55), var(--luz);}
+.app::before{content:'';position:absolute;inset:0;background:var(--app);
+  z-index:0;}
+.side,.board{position:relative;z-index:1;}
 
-/* ── Filters ── */
-.header-filters{flex-basis:100%;order:3;margin-top:10px;display:flex;gap:10px;flex-wrap:wrap;align-items:flex-start;}
-.filter-group{display:flex;flex-direction:column;gap:3px;}
-.filter-label{display:none;}
+/* ── barra lateral ── */
+.side{width:264px;flex:0 0 264px;display:flex;flex-direction:column;
+  background:var(--side);border-right:1px solid var(--linha);padding:16px 10px 12px;
+  backdrop-filter:blur(13px);-webkit-backdrop-filter:blur(13px);
+  box-shadow:var(--luz), 8px 0 28px rgba(0,0,0,.25);overflow:auto;}
+.s-top{display:flex;align-items:center;gap:9px;padding:2px 8px 14px;}
+.s-top b{flex:1;font-size:13.5px;font-weight:600;}
+.s-mini{display:flex;align-items:center;justify-content:center;width:24px;height:24px;flex:0 0 24px;
+  background:transparent;border:0;border-radius:6px;color:var(--txt3);cursor:pointer;}
+.s-mini:hover{background:var(--hover);color:var(--txt);}
+.side.mini{width:64px;flex:0 0 64px;padding:16px 8px 12px;}
+.side.mini .s-top{justify-content:center;padding-bottom:12px;}
+.side.mini .s-top b,.side.mini .s-top>svg{display:none;}
+.side.mini .s-sec,.side.mini .s-item .n,.side.mini .s-user div{display:none;}
+.side.mini .s-item{font-size:0;justify-content:center;padding:9px 0;gap:0;}
+.side.mini .s-user{flex-wrap:wrap;gap:6px;justify-content:center;padding:12px 0 2px;}
+.side.mini .s-sair{margin:0;}
+.s-sec{display:flex;align-items:center;gap:6px;padding:14px 8px 8px;
+  font-size:10px;font-weight:600;color:var(--txt3);text-transform:uppercase;letter-spacing:1.1px;}
+.s-item{display:flex;align-items:center;gap:9px;width:100%;padding:7px 8px;border:0;border-radius:7px;
+  background:transparent;color:var(--txt2);font-family:inherit;font-size:12.5px;font-weight:500;text-align:left;cursor:pointer;}
+.s-item:hover{background:var(--hover);color:var(--txt);}
+.s-item.on{background:var(--hover);color:var(--txt);font-weight:600;}
+.s-item .n{margin-left:auto;font-size:11px;color:var(--txt3);font-weight:600;}
+.s-user{margin-top:auto;display:flex;align-items:center;gap:9px;padding:12px 8px 2px;border-top:1px solid var(--linha);}
+.s-user div{flex:1;min-width:0;}
+.s-user b{display:block;font-size:12px;font-weight:600;line-height:1.2;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.s-user i{display:block;font-size:9.5px;font-style:normal;color:var(--txt3);text-transform:uppercase;letter-spacing:.8px;margin-top:2px;}
+.s-user .av{flex:0 0 24px;}
+.av{width:24px;height:24px;border-radius:50%;display:flex;align-items:center;justify-content:center;
+  font-size:9px;font-weight:800;letter-spacing:.2px;color:#2A1405;background:#F97316;flex:0 0 24px;
+  box-shadow:0 1px 4px rgba(0,0,0,.25);}
+.s-sair{display:flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:7px;
+  color:var(--txt3);text-decoration:none;flex:0 0 26px;}
+.s-sair:hover{background:var(--hover);color:var(--txt);}
+.dica{position:fixed;z-index:9000;transform:translateY(-50%);pointer-events:none;opacity:0;
+  background:var(--pop);color:var(--txt);border:1px solid var(--card-brd);border-radius:7px;
+  padding:5px 9px;font-size:11.5px;font-weight:600;white-space:nowrap;
+  box-shadow:0 8px 22px rgba(0,0,0,.45);transition:opacity .12s;}
+.dica.on{opacity:1;}
+
+/* ── quadro ── */
+.board{flex:1;min-width:0;display:flex;flex-direction:column;}
+.top{display:flex;align-items:center;gap:6px;padding:12px 24px 10px;flex-wrap:wrap;}
+.tit-wrap{flex:1;min-width:0;}
+.top h1{font-size:21px;font-weight:600;letter-spacing:-.3px;}
+.tit-sub{font-size:11px;color:var(--txt3);font-weight:600;margin-top:2px;letter-spacing:.2px;}
+.tool{display:flex;align-items:center;gap:7px;background:transparent;border:0;border-radius:7px;
+  padding:6px 10px;color:var(--txt2);font-family:inherit;font-size:12.5px;font-weight:500;cursor:pointer;}
+.tool:hover{background:var(--hover);color:var(--txt);}
+.tool.ico{padding:7px 9px;}
+.filtros{display:flex;align-items:center;gap:4px;min-width:0;}
+
+/* ── filtros multi-select (mesma mecânica do painel original, visual do app) ── */
 .ms-wrap{position:relative;}
-.ms-btn{display:flex;align-items:center;gap:8px;background:#0a0f18;color:var(--text);border:1px solid #2a3a50;border-radius:4px;font-family:'Montserrat',sans-serif;font-size:11px;font-weight:700;padding:6px 12px;cursor:pointer;text-transform:uppercase;letter-spacing:.5px;white-space:nowrap;min-width:140px;}
-.ms-btn:hover{border-color:var(--orange);}
-.ms-lbl{flex:1;}
-.ms-cnt{background:var(--orange);color:#000;border-radius:10px;padding:1px 6px;font-size:9px;font-weight:800;display:none;}
-.ms-btn svg{flex-shrink:0;opacity:.8;}
-.ms-panel{display:none;flex-direction:column;position:absolute;top:calc(100% + 4px);left:0;z-index:500;background:#0f1824;border:1px solid #2a3a50;border-radius:4px;min-width:200px;max-height:300px;box-shadow:0 8px 24px rgba(0,0,0,.7);}
-.ms-panel.open{display:flex;}
-.ms-list{overflow-y:auto;max-height:260px;}
-.ms-list::-webkit-scrollbar{width:4px;}
-.ms-list::-webkit-scrollbar-thumb{background:#2a3a50;border-radius:2px;}
-.ms-opt{display:flex;align-items:center;gap:8px;padding:7px 12px;cursor:pointer;font-size:11px;color:var(--text2);}
-.ms-opt:hover{background:rgba(255,255,255,.05);color:var(--text);}
-.ms-opt.all-opt{border-bottom:1px solid #1e2d40;color:var(--text);font-weight:700;}
-.ms-opt input[type=checkbox]{accent-color:var(--orange);cursor:pointer;width:14px;height:14px;flex-shrink:0;}
-.ms-only{display:none;font-size:9px;font-weight:700;color:var(--orange);padding:2px 6px;border:1px solid rgba(249,115,22,.4);border-radius:3px;white-space:nowrap;cursor:pointer;letter-spacing:.3px;}
-.ms-opt:hover .ms-only{display:inline-block;}
+.ms-btn{display:flex;align-items:center;gap:7px;background:transparent;border:0;border-radius:7px;
+  padding:6px 10px;color:var(--txt2);font-family:inherit;font-size:12.5px;font-weight:500;cursor:pointer;white-space:nowrap;}
+.ms-btn:hover{background:var(--hover);color:var(--txt);}
+.ms-wrap.ativo .ms-btn{background:var(--hover);color:var(--txt);}
+.ms-cnt{display:none;min-width:16px;height:16px;padding:0 5px;border-radius:9px;background:var(--laranja);
+  color:#2A1405;font-size:9.5px;font-weight:800;line-height:16px;text-align:center;}
+.ms-panel{display:none;position:absolute;top:calc(100% + 6px);right:0;z-index:60;min-width:236px;
+  background:var(--pop);border:1px solid var(--card-brd);border-radius:10px;padding:6px;
+  box-shadow:0 18px 44px rgba(0,0,0,.55), 0 3px 10px rgba(0,0,0,.35);}
+body.claro .ms-panel{box-shadow:0 18px 44px rgba(15,23,42,.20), 0 3px 10px rgba(15,23,42,.10);}
+.ms-panel.open{display:block;}
+.ms-search{display:flex;align-items:center;gap:7px;padding:6px 8px;margin-bottom:4px;border-bottom:1px solid var(--linha);}
+.ms-search input{flex:1;min-width:0;background:transparent;border:0;outline:0;font-family:inherit;font-size:12px;color:var(--txt);}
+.ms-list{max-height:262px;overflow:auto;}
+.ms-opt{display:flex;align-items:center;gap:9px;min-height:31px;padding:7px 9px;border-radius:7px;
+  color:var(--txt);font-size:12.5px;cursor:pointer;white-space:nowrap;}
+.ms-opt:hover{background:var(--hover);}
+.ms-opt input[type=checkbox]{accent-color:var(--azul);width:14px;height:14px;flex:0 0 14px;cursor:pointer;}
+.ms-opt.all-opt{font-weight:700;border-bottom:1px solid var(--linha);margin-bottom:4px;border-radius:0;}
+.ms-only{margin-left:auto;font-size:9px;font-weight:700;color:var(--laranja);padding:1px 7px;border-radius:4px;opacity:0;flex:0 0 auto;}
+.ms-opt:hover .ms-only{opacity:1;}
+.ms-only:hover{background:rgba(249,115,22,.2);}
 
-/* ── Main ── */
-.main{padding:20px 24px;}
+/* ── área de conteúdo ── */
+.cols{flex:1;min-height:0;display:flex;flex-direction:column;overflow:hidden;padding:0 24px 24px;}
+.vw{display:none;flex:1;min-height:0;flex-direction:column;gap:12px;}
+.vw.on{display:flex;overflow:auto;}
+.vw.rola{overflow:auto;padding-bottom:6px;}
+.card{border:1px solid var(--card-brd);border-radius:12px;background:var(--side);
+  backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);box-shadow:var(--luz-card);}
 
-/* ── Hero ── */
-.hero{margin-bottom:20px;padding:0 4px;display:flex;align-items:flex-end;gap:32px;flex-wrap:wrap;}
-.hero-main{}
-.hero-label{font-size:10px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:1px;}
-.hero-value{font-size:52px;font-weight:800;color:var(--text);line-height:1;margin:4px 0 0;}
-.hero-sub{font-size:11px;color:var(--text3);margin-top:4px;}
-.hero-badge{display:inline-flex;align-items:center;gap:6px;background:rgba(245,158,11,.12);border:1px solid rgba(245,158,11,.3);border-radius:6px;padding:6px 14px;font-size:11px;font-weight:700;color:var(--gold);margin-top:12px;}
-.hero-badge svg{width:14px;height:14px;}
+/* hero + KPIs */
+/* igual ao painel original: Receita na ponta esquerda, EBITDA na ponta direita
+   com o conteúdo alinhado à direita (.hero-ebitda{margin-left:auto;text-align:right}) */
+.fin-hero{display:flex;align-items:flex-end;gap:20px;flex:0 0 auto;}
+.heb{margin-left:auto;text-align:right;}
+.heb .hdel{justify-content:flex-end;}
+.hlbl{font-size:9.5px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:.9px;}
+.hval{font-size:clamp(26px,3.6vh,40px);font-weight:800;line-height:1;margin:4px 0 7px;color:var(--txt);}
+.hdel{display:flex;gap:18px;flex-wrap:wrap;}
+/* margem líquida ao lado do EBITDA — mesma linha, menor e apagada */
+.hmg{font-size:.46em;font-weight:700;color:var(--txt3);letter-spacing:0;margin-left:7px;}
+.hdel div{font-size:9px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:.7px;}
+.hdel b{display:block;font-size:13px;font-weight:800;color:var(--txt);margin-top:2px;letter-spacing:0;text-transform:none;}
+.kpis{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;flex:0 0 auto;}
+.kpi{padding:19px 16px;border:1px solid var(--card-brd);border-radius:11px;background:var(--side);
+  backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);}
+.kpi .kl{font-size:9.5px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:.8px;}
+.kpi .kv{font-size:25px;font-weight:800;color:var(--txt);margin-top:7px;line-height:1.1;}
+.kpi .km{font-size:10.5px;color:var(--txt3);margin-top:8px;font-weight:600;}
+.kpi .km b{font-weight:800;}
 
-/* ── Pódio — fundo temático dramático ── */
-.podio-section{
-  margin-top:8px;margin-bottom:32px;
-  padding:48px 24px 0;
-  position:relative;
-  border-radius:16px;
-  overflow:hidden;
-  background:
-    radial-gradient(ellipse at 50% 0%,  rgba(196,145,26,.18) 0%,transparent 55%),
-    radial-gradient(ellipse at 20% 100%,rgba(120,60,10,.20) 0%,transparent 50%),
-    radial-gradient(ellipse at 80% 100%,rgba(120,60,10,.20) 0%,transparent 50%),
-    linear-gradient(180deg,#0a0c0e 0%,#050608 100%);
+/* gráficos */
+.gr2{flex:1 1 auto;min-height:190px;max-height:44vh;display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+
+/* TELA BAIXA (notebook 1366x768 e afins) — o card de KPI tinha altura fixa em
+   qualquer tela, então quando a janela encolhia só o gráfico é que perdia
+   espaço: em 1600x900 a fileira de cards vale 0,54 do gráfico, e em 768 subia
+   para 0,65, com o gráfico achatado. Aqui o card também encolhe e o teto do
+   gráfico sobe para absorver a sobra. Acima de 820px nada muda. */
+@media(min-width:861px) and (max-height:820px){
+  .kpi{padding:11px 14px;}
+  .kpi .kv{font-size:21px;margin-top:5px;}
+  .kpi .km{margin-top:5px;}
+  .kpis{gap:8px;}
+  .gr2{max-height:52vh;}
 }
-.podio-section::before{content:'';}
-/* logo marca-d'água centralizado */
-.podio-section::after{
-  content:'';position:absolute;
-  top:50%;left:50%;transform:translate(-50%,-55%);
-  width:600px;height:600px;
-  background:none;
-  opacity:.09;pointer-events:none;z-index:0;
-}
-.podio-title-row{display:flex;flex-direction:column;gap:4px;margin-bottom:36px;position:relative;z-index:2;}
-.podio-title{font-size:32px;font-weight:800;color:#fff;text-transform:uppercase;letter-spacing:2px;text-shadow:0 0 30px rgba(196,145,26,.5);}
-.podio-sub{font-size:13px;color:#fff;font-weight:600;letter-spacing:.5px;}
-.podio-wrap{display:flex;align-items:flex-end;justify-content:center;gap:0;position:relative;z-index:2;}
+.gcard{min-height:0;display:flex;flex-direction:column;padding:12px 16px 10px;position:relative;}
+.gtit{font-size:12px;font-weight:800;}
+.gsub{font-size:10px;color:var(--txt3);margin:2px 0 6px;}
+.gcv{flex:1;min-height:0;position:relative;}
+.gleg{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:4px;}
+.gleg span{display:flex;align-items:center;gap:5px;font-size:9.5px;font-weight:700;color:var(--txt3);letter-spacing:.5px;}
+.gleg i{width:14px;height:0;border-top:2px dashed currentColor;display:inline-block;}
+.gleg i.sq{width:9px;height:9px;border:0;border-radius:2px;background:currentColor;}
 
-/* Slots */
-.podio-slot{display:flex;flex-direction:column;align-items:center;position:relative;}
-.podio-slot.primeiro{order:2;z-index:3;}
-.podio-slot.segundo{order:1;z-index:2;}
-.podio-slot.terceiro{order:3;z-index:1;}
+/* botões de referência / dimensão */
+.rt{background:transparent;border:1px solid var(--card-brd);border-radius:20px;padding:3px 10px;cursor:pointer;
+  font-family:inherit;font-size:9.5px;font-weight:800;color:var(--txt2);letter-spacing:.6px;white-space:nowrap;}
+.rt:hover{background:var(--hover);color:var(--txt);}
+.rt .l{color:var(--txt3);font-weight:600;}
+.rt.abs{position:absolute;top:10px;right:12px;z-index:3;}
+.dims{display:flex;gap:4px;flex-wrap:wrap;}
+.dimb{background:transparent;border:1px solid var(--card-brd);border-radius:7px;padding:4px 10px;cursor:pointer;
+  font-family:inherit;font-size:10.5px;font-weight:700;color:var(--txt2);}
+.dimb:hover{background:var(--hover);color:var(--txt);}
+.dimb.on{background:var(--azul);border-color:transparent;color:#fff;}
 
-/* Avatar */
-.avatar-wrap{position:relative;margin-bottom:-2px;z-index:2;}
-.avatar-img{width:200px;height:240px;object-fit:contain;object-position:bottom center;mix-blend-mode:multiply;filter:drop-shadow(0 16px 40px rgba(0,0,0,.9));transition:transform .25s;background:transparent;}
-.podio-slot.segundo .avatar-img,.podio-slot.terceiro .avatar-img{width:170px;height:200px;}
-.avatar-wrap:hover .avatar-img{transform:translateY(-8px);}
-.crown{position:absolute;top:-18px;left:50%;transform:translateX(-50%);font-size:26px;z-index:3;}
+/* tabelas DRE */
+.tsec{flex:1;min-height:0;display:flex;flex-direction:column;padding:14px 16px 12px;}
+.thead-row{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:2px;}
+.ttit{font-size:14px;font-weight:800;}
+.tsub{font-size:10px;color:var(--txt3);margin-bottom:8px;}
+.twrap{flex:1;min-height:0;overflow:auto;border:1px solid var(--card-brd);border-radius:10px;background:var(--side);}
+table.dre{width:100%;border-collapse:collapse;font-size:11px;}
+table.dre thead th{position:sticky;top:0;z-index:2;background:var(--cabec);text-align:left;
+  padding:10px 12px;font-size:9.5px;font-weight:700;color:var(--txt2);text-transform:uppercase;
+  letter-spacing:.7px;border-bottom:1px solid var(--card-brd);white-space:nowrap;}
+table.dre thead th .grp{display:block;font-size:8.5px;color:var(--txt3);letter-spacing:.6px;margin-bottom:1px;}
+table.dre td{padding:9px 12px;border-bottom:1px solid var(--linha);color:var(--txt2);white-space:nowrap;}
+table.dre td.conta{color:var(--txt);font-weight:600;text-align:left;}
+table.dre td.num{text-align:right;}
+table.dre tbody tr:hover{background:var(--hover);}
+/* totalizadores no tom do cabeçalho — vale para todas as tabelas do painel */
+table.dre tr.total td{font-weight:800;color:var(--txt);border-top:1px solid var(--card-brd);background:var(--cabec);}
+table.dre tr.ref-row td{color:var(--txt);background:color-mix(in srgb,var(--azul) 8%,transparent);}
+table.dre tr.ebitda-row td{color:var(--txt);font-weight:700;background:var(--cabec);}
+table.dre .sep-l{border-left:1px solid var(--card-brd);}
+/* precisa vencer o "table.dre td{color:...}", que tem especificidade maior */
+table.dre td.cr,.cr{color:var(--vermelho)!important;font-weight:700;}
+table.dre td.cg,.cg{color:var(--verde)!important;font-weight:700;}
+table.dre td.cr-t,.cr-t{color:var(--vermelho)!important;font-weight:700;}
+table.dre td.cg-t,.cg-t{color:var(--verde)!important;font-weight:700;}
 
-/* Pedestal — cilindro escuro estilo Frota de Elite */
-.pedestal{
-  position:relative;display:flex;flex-direction:column;
-  align-items:center;justify-content:flex-start;
-  padding:18px 16px 20px;cursor:default;width:220px;
-  background:linear-gradient(180deg,#1c1c1e 0%,#0d0d0f 100%);
-  border-top:3px solid rgba(255,255,255,.12);
-  border-left:1px solid rgba(255,255,255,.06);
-  border-right:1px solid rgba(255,255,255,.06);
-  box-shadow:inset 0 2px 0 rgba(255,255,255,.07), 0 -2px 20px rgba(0,0,0,.6);
-}
-.podio-slot.segundo .pedestal,.podio-slot.terceiro .pedestal{width:185px;}
-.podio-slot.primeiro .pedestal{
-  min-height:140px;
-  border-top-color:rgba(196,145,26,.5);
-  box-shadow:inset 0 2px 0 rgba(196,145,26,.2), 0 -4px 30px rgba(196,145,26,.15);
-}
-.podio-slot.segundo .pedestal{min-height:105px;}
-.podio-slot.terceiro .pedestal{min-height:85px;}
 
-.pedestal-place{
-  font-size:11px;font-weight:800;color:rgba(255,255,255,.45);
-  text-transform:uppercase;letter-spacing:2px;margin-bottom:8px;
-  border-bottom:1px solid rgba(255,255,255,.1);padding-bottom:6px;width:100%;text-align:center;
-}
-.podio-slot.primeiro .pedestal-place{color:rgba(196,145,26,.9);border-bottom-color:rgba(196,145,26,.25);}
-.pedestal-name{font-size:16px;font-weight:800;color:#fff;text-align:center;line-height:1.2;margin-top:2px;}
-.podio-slot.primeiro .pedestal-name{font-size:20px;}
-.pedestal-unit{font-size:10px;font-weight:600;color:rgba(255,255,255,.45);text-align:center;margin-top:5px;text-transform:uppercase;letter-spacing:.5px;}
-.pedestal-score{font-size:13px;font-weight:800;color:rgba(255,255,255,.7);margin-top:8px;}
-.podio-slot.primeiro .pedestal-score{font-size:16px;color:rgba(196,145,26,.9);}
-.podio-floor{height:5px;background:rgba(255,255,255,.04);width:100%;}
 
-/* ── Ranking table ── */
-.tbl-section{background:rgba(20,27,38,.55);border:1px solid rgba(255,255,255,.07);border-radius:8px;padding:18px 20px 16px;margin-bottom:16px;backdrop-filter:blur(16px);box-shadow:0 2px 12px rgba(0,0,0,.25);}
-.tbl-title{font-size:16px;font-weight:800;color:var(--text);margin-bottom:3px;}
-.tbl-sub{font-size:10px;color:var(--text2);margin-bottom:16px;}
-.tbl-notes{font-size:9px;color:var(--text3);margin-top:12px;line-height:1.6;font-style:italic;}
-table{width:100%;border-collapse:collapse;font-size:13px;}
-thead th{background:var(--card);color:var(--text);font-size:13px;font-weight:700;padding:8px 8px 12px;border-bottom:1px solid rgba(255,255,255,.10);text-transform:uppercase;letter-spacing:.5px;white-space:nowrap;}
-td{padding:11px 8px;border:none;color:var(--text);white-space:nowrap;font-size:13px;font-weight:600;}
-tbody tr:hover{background:rgba(255,255,255,.035);}
-td.num,th.num{text-align:right;}
-table td:first-child,table th:first-child{text-align:left;}
-.rank-num{font-size:13px;font-weight:700;color:var(--text3);width:28px;}
-.rank-1 .rank-num{color:var(--gold);}
-.rank-2 .rank-num{color:#9CA3AF;}
-.rank-3 .rank-num{color:#92400E;}
-.score-pill{display:inline-block;padding:3px 10px;border-radius:12px;font-size:13px;font-weight:800;min-width:46px;text-align:center;color:#111;border:none;}
-.score-green{background:#3BB33B;}
-.score-yellow{background:#F4A100;}
-.score-red{background:#FF6666;}
-/* legenda de cores */
-.color-legend{display:flex;flex-wrap:wrap;align-items:center;gap:16px;margin-bottom:14px;font-size:11px;color:var(--text2);}
-.cl-item{display:flex;align-items:center;gap:6px;font-weight:600;}
-.cl-dot{width:11px;height:11px;border-radius:50%;display:inline-block;flex-shrink:0;}
-.cl-green{background:#3BB33B;} .cl-yellow{background:#F4A100;} .cl-red{background:#FF6666;}
-.cl-note{color:var(--text3);font-style:italic;}
-.ind-pct{font-size:11px;font-weight:600;}
-.ind-green{color:var(--green);}
-.ind-yellow{color:var(--yellow);}
-.ind-red{color:var(--red);}
-.ind-dash{color:var(--text3);}
-.medal-icon{font-size:14px;}
-
-/* peso-box */
-.pesos-chart-row{display:flex;gap:12px;align-items:stretch;margin-bottom:0;}
-.peso-box{background:rgba(20,27,38,.55);border:1px solid rgba(249,115,22,.2);border-radius:8px;padding:16px 20px;margin-bottom:16px;backdrop-filter:blur(16px);flex:0 0 450px;min-width:0;align-self:stretch;display:flex;flex-direction:column;overflow:hidden;}
-.peso-title{font-size:12px;font-weight:800;color:var(--orange);margin-bottom:10px;text-transform:uppercase;letter-spacing:.5px;}
-.peso-grid{display:flex;flex-direction:column;flex:1;}
-.peso-item{font-size:13px;color:var(--text2);display:flex;justify-content:space-between;align-items:center;flex:1;padding:0 6px;border-bottom:1px solid rgba(255,255,255,.05);}
-.peso-item:last-child{border-bottom:none;}
-.peso-item span{color:var(--text2);}
-.peso-item b{color:var(--text);font-weight:800;margin-left:12px;white-space:nowrap;font-size:14px;}
-/* célula de indicador estilo termômetro: pontos grande + resultado pequeno embaixo */
-.rk-ind .p{font-weight:800;font-size:13.5px;display:block;line-height:1.05;}
-.rk-ind .v{color:var(--text3);font-size:9.5px;font-weight:600;display:block;margin-top:1px;white-space:nowrap;}
+/* ============================================================
+   CONDUÇÃO ECONÔMICA — específico do painel (sobre a casca da
+   Visão Financeira). Ranking por motorista + evolução + regras.
+   ============================================================ */
+/* miolo do Resumo: gráfico maior à esquerda, regras à direita */
+.ce-gr{grid-template-columns:1.55fr 1fr;flex:1 1 auto;max-height:66vh;}
+@media(max-width:860px){.ce-gr{max-height:none;}}
+/* célula de pilar: pontos grandes + resultado medido pequeno (estilo termômetro) */
+.rk-ind .p{font-weight:800;font-size:12.5px;display:block;line-height:1.05;}
+.rk-ind .v{color:var(--txt4);font-size:9px;font-weight:600;display:block;margin-top:1px;white-space:nowrap;}
+.ind-green{color:var(--verde)!important;}
+.ind-yellow{color:var(--ambar)!important;}
+.ind-red{color:var(--vermelho)!important;}
+.ind-dash{color:var(--txt4);}
+/* pílula da pontuação final */
+.score-pill{display:inline-block;padding:3px 10px;border-radius:12px;font-size:12px;font-weight:800;min-width:46px;text-align:center;color:#111;}
+.score-green{background:var(--verde);}
+.score-yellow{background:var(--ambar);}
+.score-red{background:var(--vermelho);}
 .pont-cell{display:flex;flex-direction:column;align-items:flex-end;gap:2px;}
-.pont-cls{font-size:9px;font-weight:800;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;}
-/* cabeçalhos do ranking clicáveis (ordenar) */
-#ranking-table th.sortable{cursor:pointer;user-select:none;white-space:nowrap;}
-#ranking-table th.sortable:hover{color:var(--orange);}
-/* rolagem do ranking: mostra ~10 linhas, resto na barra de rolagem; cabeçalho fixo */
-.rank-scroll{overflow-x:auto;overflow-y:auto;}
-#ranking-table thead th{position:sticky;top:0;z-index:2;background:#111826;}
-body.light-mode #ranking-table thead th{background:#e8e8e8;}
+.pont-cls{font-size:8.5px;font-weight:800;color:var(--txt4);text-transform:uppercase;letter-spacing:.5px;}
+/* nº do ranking + medalhas */
+.rank-num{font-weight:700;color:var(--txt4);width:30px;}
+.rank-1 .rank-num,.rank-2 .rank-num,.rank-3 .rank-num{font-size:13px;}
+/* cabeçalho ordenável (sort próprio do painel) */
+table.dre thead th.sortable{cursor:pointer;user-select:none;}
+table.dre thead th.sortable:hover{color:var(--laranja);}
 .sort-ar{font-size:8px;margin-left:3px;vertical-align:middle;}
-/* regras (bom/ruim) na caixa lateral */
-.reg-item{padding:9px 6px;border-bottom:1px solid rgba(255,255,255,.05);}
-.reg-item:last-child{border-bottom:none;}
-.reg-top{display:flex;justify-content:space-between;align-items:baseline;gap:10px;}
-.reg-nome{font-size:12px;font-weight:800;color:var(--text);}
-.reg-nome em{font-size:9px;font-weight:700;color:var(--orange);font-style:normal;}
-.reg-peso{font-size:13px;font-weight:800;color:var(--text);white-space:nowrap;}
-.reg-gb{display:flex;flex-direction:column;gap:1px;margin-top:3px;}
-.reg-gb .gd{font-size:10px;color:var(--green);font-weight:600;line-height:1.3;}
-.reg-gb .bd{font-size:10px;color:var(--red);font-weight:600;line-height:1.3;}
-.peso-header{display:flex;justify-content:space-between;font-size:10px;font-weight:800;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;padding:0 6px 8px;border-bottom:1px solid rgba(249,115,22,.25);margin-bottom:2px;}
-/* Regras de Pontuação — tabela Indicador · Descrição · Peso */
-.reg-table{width:100%;border-collapse:collapse;font-size:11px;flex:1;table-layout:fixed;}
-.reg-table thead th{text-align:left;font-size:9px;font-weight:800;color:var(--text);text-transform:uppercase;letter-spacing:.5px;padding:0 6px 8px;border-bottom:1px solid rgba(249,115,22,.25);}
-.reg-table thead th:last-child{text-align:right;}
-.reg-table td{padding:9px 6px;border-bottom:1px solid rgba(255,255,255,.05);vertical-align:top;overflow-wrap:break-word;word-break:break-word;}
-.reg-table tbody tr:last-child td{border-bottom:none;}
-.ri-nome{font-weight:800;color:var(--text);white-space:nowrap;}
-.ri-vf{display:block;font-size:8.5px;font-weight:700;color:var(--orange);text-transform:uppercase;letter-spacing:.3px;margin-top:1px;}
-.ri-desc{color:var(--text2);font-size:10.5px;line-height:1.4;white-space:normal;}
-.ri-peso{text-align:right;font-weight:800;color:var(--text);white-space:nowrap;font-size:13px;}
+/* notas de rodapé da tabela */
+.tnotes{font-size:9.5px;color:var(--txt4);margin-top:8px;line-height:1.6;font-style:italic;flex:0 0 auto;}
+/* legenda de classificação no topo do ranking */
+.rank-leg span{color:var(--txt3);}
+.rank-leg i.sq.lg-g{background:var(--verde);}
+.rank-leg i.sq.lg-y{background:var(--ambar);}
+.rank-leg i.sq.lg-r{background:var(--vermelho);}
+/* sub-rótulo (fonte) sob o nome do motorista */
+.mot-sub{font-size:8.5px;font-weight:600;color:var(--txt4);text-transform:uppercase;letter-spacing:.4px;margin-top:1px;}
 
-/* ── Chart ── */
-.chart-card{background:rgba(20,27,38,.55);border:1px solid rgba(255,255,255,.07);border-radius:8px;padding:18px 20px;margin-bottom:16px;backdrop-filter:blur(16px);box-shadow:0 2px 12px rgba(0,0,0,.25);display:flex;flex-direction:column;}
-.chart-header{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:4px;flex-wrap:wrap;gap:8px;}
-.chart-title{font-size:16px;font-weight:800;color:var(--text);}
-.chart-sub{font-size:10px;color:var(--text2);margin-bottom:16px;}
-.chart-wrap{position:relative;flex:1;min-height:240px;}
-.ind-selector{display:flex;gap:6px;flex-wrap:wrap;}
-.ind-btn{padding:4px 10px;font-family:'Montserrat',sans-serif;font-size:9px;font-weight:800;border:1px solid rgba(255,255,255,.1);border-radius:4px;cursor:pointer;background:transparent;color:var(--text2);text-transform:uppercase;letter-spacing:.5px;transition:all .2s;}
-.ind-btn:hover{border-color:rgba(249,115,22,.4);color:var(--orange);}
-.ind-btn.active{background:rgba(249,115,22,.15);border-color:rgba(249,115,22,.4);color:var(--orange);}
-
-/* ── Light mode ── */
-body.light-mode .main{background:#F0F0F0;--text:#1a1a1a;--text2:#444444;--text3:#666666;color:var(--text);--red:#ff0000;--green:#0E8C0E;}body.light-mode .hero-sep{background:rgba(0,0,0,.18)!important;color:rgba(0,0,0,.2)!important;}
-body.light-mode .kpi-card,body.light-mode .chart-card,body.light-mode .tbl-section,body.light-mode .peso-box{background:rgba(128,128,128,.14)!important;border:none!important;box-shadow:none!important;--text:#1a1a1a;--text2:#444444;--text3:#555555;}
-/* Pódio: fundo SEMPRE escuro (idêntico ao modo escuro), no claro e no escuro */
-body.light-mode td{color:var(--text);}
-body.light-mode thead th{border-bottom-color:rgba(0,0,0,.10);background:#F0F0F0;}
-body.light-mode tbody tr{border-bottom:1px solid rgba(0,0,0,.06);}
-/* pontuação: mesma cor de fundo e letra preta nos dois temas */
-body.light-mode .score-green{background:#3BB33B;}
-body.light-mode .score-yellow{background:#F4A100;}
-body.light-mode .score-red{background:#FF6666;}
-body.light-mode .ind-yellow{color:#b45309;}
-body.light-mode .ind-btn{border-color:rgba(0,0,0,.15);color:#666;}
-body.light-mode .ind-btn.active{background:rgba(217,94,8,.1);border-color:rgba(217,94,8,.4);color:#D95E08;}
-body.light-mode .podio-slot.primeiro .pedestal{box-shadow:0 -4px 24px rgba(196,145,26,.25);}
-
-/* ── Toggle indicadores (só mobile) ── */
-.tbl-ind-toggle{display:none;}
-
-/* ── Mobile ── */
-@media(max-width:768px){
-  .header{padding:8px 12px 10px;}
-  .header-right{gap:4px;}
-  .header-right .refresh-btn{display:none;}
-  .brand h1{font-size:14px;}
-  .status-badge,.access-badge{font-size:8px;padding:2px 6px;}
-  .theme-btn{padding:3px 5px;}
-  .theme-btn svg{width:13px;height:13px;}
-  .header-filters{gap:5px;margin-top:8px;}
-  .filter-group{flex:0 0 calc(50% - 3px);}
-  .ms-wrap{width:100%;}
-  .ms-btn{width:100%;min-width:0;font-size:8px;padding:3px 6px;}
-  .main{padding:12px;}
-
-  /* Hero */
-  .hero-value{font-size:36px;}
-
-  /* Pesos + Chart: empilhar verticalmente */
-  .pesos-chart-row{flex-direction:column;}
-  .peso-box{flex:none;width:100%;}
-  .chart-wrap{min-height:220px;}
-  .ind-selector{gap:3px;justify-content:flex-start;}
-  .ind-btn{font-size:7px;padding:3px 6px;}
-
-  /* Pódio */
-  .podio-section{padding:24px 12px 0;}
-  .podio-title{font-size:22px;}
-  .podio-sub{font-size:11px;}
-  .podio-wrap{gap:0;justify-content:center;}
-  .avatar-img{width:110px;height:130px;}
-  .podio-slot.segundo .avatar-img,.podio-slot.terceiro .avatar-img{width:90px;height:108px;}
-  .pedestal{width:110px;padding:10px 6px 12px;}
-  .podio-slot.segundo .pedestal,.podio-slot.terceiro .pedestal{width:90px;}
-  .podio-slot.primeiro .pedestal{height:auto;min-height:130px;overflow:visible;}
-  .podio-slot.segundo .pedestal{height:auto;min-height:105px;overflow:visible;}
-  .podio-slot.terceiro .pedestal{height:auto;min-height:80px;overflow:visible;}
-  .pedestal-place{font-size:8px;}
-  .pedestal-name{font-size:11px;}
-  .podio-slot.primeiro .pedestal-name{font-size:13px;}
-  .pedestal-unit{font-size:7px;}
-  .pedestal-score{font-size:10px;}
-  .podio-slot.primeiro .pedestal-score{font-size:12px;}
-  .pedestal-place{font-size:9px;}
-  .pedestal-name{font-size:10px;}
-  .podio-slot.primeiro .pedestal-name{font-size:12px;}
-  .pedestal-unit{font-size:7px;}
-  .pedestal-score{font-size:10px;}
-  .podio-slot.primeiro .pedestal-score{font-size:12px;}
-
-  /* Ranking: ocultar colunas de indicadores por padrão */
-  .ind-col{display:none;}
-  table{width:100%;font-size:13px;}
-  thead th{font-size:12px;padding:8px 6px 10px;}
-  td{padding:10px 6px;font-size:13px;}
-
-  /* Botão toggle indicadores */
-  .tbl-ind-toggle{
-    display:inline-flex;align-items:center;gap:6px;
-    margin-bottom:10px;
-    background:rgba(249,115,22,.12);border:1px solid rgba(249,115,22,.3);
-    border-radius:4px;padding:5px 12px;
-    font-family:'Montserrat',sans-serif;font-size:10px;font-weight:700;
-    color:var(--orange);cursor:pointer;text-transform:uppercase;letter-spacing:.5px;
-  }
-
-  /* Quando expandido: mostrar colunas e permitir scroll horizontal */
-  .tbl-expanded .ind-col{display:table-cell;}
-  .tbl-expanded table{font-size:10px;}
-  .tbl-expanded thead th{font-size:10px;padding:6px 4px;}
-  .tbl-expanded td{padding:8px 4px;font-size:10px;}
+@media(max-width:860px){
+  body{overflow:auto;}
+  .app{position:static;inset:auto;min-height:100%;border-radius:0;flex-direction:column;box-shadow:none;border:0;}
+  .app::before{position:fixed;inset:0;}
+  .side{width:auto;flex:none;border-right:0;border-bottom:1px solid var(--linha);padding:8px 10px;overflow:visible;}
+  .side.mini{width:auto;flex:none;padding:8px 10px;}
+  .s-user,.s-top,.s-sec{display:none;}
+  /* as visões viram uma fileira que rola de lado */
+  .side{display:flex;flex-direction:row;gap:6px;overflow-x:auto;scrollbar-width:none;}
+  .side::-webkit-scrollbar{display:none;}
+  .side .s-item{width:auto;flex:0 0 auto;white-space:nowrap;font-size:12px;padding:7px 11px;
+    border:1px solid var(--card-brd);border-radius:20px;}
+  .side.mini .s-item{font-size:12px;padding:7px 11px;gap:9px;}
+  .side .s-item.on{background:var(--laranja);border-color:transparent;color:#2A1405;}
+  .top{padding:12px 14px 8px;gap:4px;}
+  .tit-wrap{flex:1 1 auto;min-width:0;}
+  .top h1{font-size:17px;}
+  /* filtros numa faixa própria que rola de lado, em vez de quebrar em 3 linhas */
+  .filtros{order:3;flex:1 1 100%;overflow-x:auto;scrollbar-width:none;padding-bottom:2px;}
+  .filtros::-webkit-scrollbar{display:none;}
+  .filtros .ms-wrap{flex:0 0 auto;}
+  .ms-btn{font-size:12px;padding:6px 9px;}
+  .ms-panel{right:auto;left:0;min-width:210px;}
+  .cols{overflow:visible;padding:0 14px 22px;}
+  .vw{display:none;}
+  .vw.on{display:block;}                      /* sem flex: cada bloco cresce sozinho */
+  .vw>*{margin-bottom:12px;}
+  .fin-hero{gap:14px;flex-direction:column;align-items:flex-start;}
+  .heb{margin-left:0;text-align:left;}
+  .heb .hdel{justify-content:flex-start;}
+  .kpis{grid-template-columns:repeat(2,1fr);}
+  .gr2,.wf-grid{display:block;height:auto;}
+  .wf-grid .gcard{height:280px;margin-bottom:12px;}
+  .gcard{height:300px;margin-bottom:12px;}
+  .tsec{display:block;padding:12px 12px 10px;}
+  .thead-row{margin-bottom:6px;}
+  .twrap{max-height:none;overflow-x:auto;}
+  .emb{height:76vh;}
 }
+
 </style>
 <script>try{if(!sessionStorage.getItem("gem_hub"))location.replace("../../");}catch(e){}</script>
-<script src="../../assets/gviz-cache.js"></script>
 </head>
 <body>
 
-<header class="header">
-  <div class="brand">
-    <h1>CONDUÇÃO ECONÔMICA</h1>
-    <p>Gamificação do modo de condução · Frota</p>
-  </div>
-  <div class="header-right">
-    <a href="../" class="back-btn" title="Voltar ao Combustível">
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
-    </a>
-    <button class="theme-btn" id="themeBtn" title="Modo claro/escuro"></button>
-    <button class="refresh-btn" onclick="atualizar()" title="Atualizar dados">
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><polyline points="23 20 23 14 17 14"/><path d="M20.49 9A9 9 0 0 0 5.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 0 1 3.51 15"/></svg>
+<div class="app">
+  <!-- ══════════ lateral ══════════ -->
+  <aside class="side">
+    <div class="s-top">
+      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="var(--laranja)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 12l4-3"/><path d="M8 16a5.5 5.5 0 0 1 8 0"/></svg>
+      <b>Condução Econômica</b>
+      <button class="s-mini" id="btMini" onclick="trocaMini()" title="Recolher menu">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16"/></svg>
+      </button>
+    </div>
+
+    <div class="s-sec">Visões</div>
+    <button class="s-item on" data-vw="resumo">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>
+      Resumo Gerencial
     </button>
-    <span class="status-badge" id="status-badge">Carregando…</span>
-    <span class="access-badge" id="access-badge" style="display:none"></span>
-  </div>
-  <div class="header-filters">
-    <div class="filter-group">
-      <span class="filter-label">Vigência</span>
-      <div class="ms-wrap" id="ms-vig-wrap">
-        <button class="ms-btn" id="ms-vig-btn" onclick="toggleMs('vig')">
-          <span class="ms-lbl" id="ms-vig-lbl">Todas</span>
-          <span class="ms-cnt" id="ms-vig-cnt"></span>
-          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
-        </button>
-        <div class="ms-panel" id="ms-vig-panel">
-          <div class="ms-list" id="ms-vig-list"></div>
-        </div>
+    <button class="s-item" data-vw="ranking">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 21h8M12 17v4"/><path d="M7 4h10v6a5 5 0 0 1-10 0z"/><path d="M7 6H4a3 3 0 0 0 3 4M17 6h3a3 3 0 0 1-3 4"/></svg>
+      Ranking Geral
+    </button>
+
+    <div class="s-sec">Atalhos</div>
+    <div id="pdf-slot"></div>
+    <button class="s-item" onclick="recarregar()">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/></svg>
+      Atualizar dados
+    </button>
+
+    <div class="s-user">
+      <div class="av" id="euAv">GM</div>
+      <div><b id="euNome">Gestão em Movimento</b><i id="euSub">Condução Econômica</i></div>
+      <a class="s-sair" href="../" title="Voltar ao Combustível">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+      </a>
+    </div>
+  </aside>
+
+  <!-- ══════════ conteúdo ══════════ -->
+  <main class="board">
+    <div class="top">
+      <div class="tit-wrap"><h1 id="tit">Resumo Gerencial</h1><div class="tit-sub" id="titSub">Carregando…</div></div>
+
+      <div class="filtros">
+      <div class="ms-wrap" id="ms-vig"><button class="ms-btn" onclick="toggleMs('ms-vig')">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+        Vigência<span class="ms-cnt"></span></button>
+        <div class="ms-panel"><div class="ms-search"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M16.5 16.5 21 21"/></svg><input type="text" placeholder="Pesquisar…"></div><div class="ms-list"></div></div>
       </div>
-    </div>
-  </div>
-</header>
-
-<main class="main">
-
-  <!-- HERO -->
-  <div class="hero">
-    <div class="hero-main">
-      <div class="hero-label">Pontuação Total Média</div>
-      <div class="hero-value" id="hero-score">—</div>
-      <div class="hero-sub" id="hero-period">—</div>
-    </div>
-  </div>
-
-  <!-- RANKING -->
-  <div class="tbl-section">
-    <div class="tbl-title">Ranking Geral</div>
-    <div class="tbl-sub" id="ranking-sub">—</div>
-    <div class="color-legend">
-      <span class="cl-item"><i class="cl-dot cl-green"></i>≥ 85 — Elite</span>
-      <span class="cl-item"><i class="cl-dot cl-yellow"></i>70 a 84,9 — Bom</span>
-      <span class="cl-item"><i class="cl-dot cl-red"></i>&lt; 70 — Atenção</span>
-      <span class="cl-note">Vale para os pilares (0–100) e para a pontuação final.</span>
-    </div>
-    <button class="tbl-ind-toggle" id="tbl-ind-toggle" onclick="toggleIndCols()">+ Ver indicadores</button>
-    <div class="rank-scroll" id="rank-scroll">
-      <table id="ranking-table">
-        <thead>
-          <tr id="rank-head"></tr>
-        </thead>
-        <tbody id="ranking-tbody"></tbody>
-      </table>
-    </div>
-    <div class="tbl-notes">
-      * Cada pilar mostra os <b>pontos</b> (0–100) e, logo abaixo, o <b>resultado medido</b> — igual ao termômetro. A pontuação final é a média ponderada pelos pesos ao lado.<br>
-      * <b>Câmbio</b> por enquanto só existe na telemetria vFleets; para motoristas Geotab o pilar fica ausente e o peso é redistribuído proporcionalmente.
-    </div>
-  </div>
-
-  <!-- GRÁFICO + PESOS lado a lado -->
-  <div class="pesos-chart-row">
-    <!-- GRÁFICO TEMPORAL (esquerda, maior) -->
-    <div class="chart-card" style="flex:1;min-width:0;margin-bottom:16px;">
-      <div class="chart-header">
-        <div>
-          <div class="chart-title">Evolução Temporal</div>
-          <div class="chart-sub">Média mensal por pilar · 2026</div>
-        </div>
-        <div class="ind-selector" id="ind-selector"></div>
+      <div class="ms-wrap" id="ms-uni"><button class="ms-btn" onclick="toggleMs('ms-uni')">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M3 21h18M5 21V7l7-4 7 4v14"/><path d="M10 21v-6h4v6"/></svg>
+        Unidade<span class="ms-cnt"></span></button>
+        <div class="ms-panel"><div class="ms-search"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M16.5 16.5 21 21"/></svg><input type="text" placeholder="Pesquisar…"></div><div class="ms-list"></div></div>
       </div>
-      <div class="chart-wrap"><canvas id="chartTemporal"></canvas></div>
+      <div class="ms-wrap" id="ms-proj"><button class="ms-btn" onclick="toggleMs('ms-proj')">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 6h16M6 12h12M9 18h6"/></svg>
+        Projeto<span class="ms-cnt"></span></button>
+        <div class="ms-panel"><div class="ms-search"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M16.5 16.5 21 21"/></svg><input type="text" placeholder="Pesquisar…"></div><div class="ms-list"></div></div>
+      </div>
+      <div class="ms-wrap" id="ms-mot"><button class="ms-btn" onclick="toggleMs('ms-mot')">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+        Motorista<span class="ms-cnt"></span></button>
+        <div class="ms-panel"><div class="ms-search"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M16.5 16.5 21 21"/></svg><input type="text" placeholder="Pesquisar…"></div><div class="ms-list"></div></div>
+      </div>
+      </div>
+      <button class="tool ico" id="btTema" onclick="trocaTema()" title="Modo claro/escuro"></button>
     </div>
 
-    <!-- PESOS (direita, estreito) -->
-    <div class="peso-box">
-      <div class="peso-title">Regras de Pontuação</div>
-      <div class="peso-grid" id="peso-grid"></div>
-    </div>
-  </div>
+    <div class="cols">
 
-</main>
+      <!-- ══ 1 · RESUMO GERENCIAL ══ -->
+      <section class="vw on" id="vw-resumo">
+        <div class="fin-hero">
+          <div>
+            <div class="hlbl">Pontuação Total Média</div>
+            <div class="hval" id="h-score">—</div>
+            <div class="hdel">
+              <div>Período<b id="h-per">—</b></div>
+              <div>Motoristas<b id="h-mot">—</b></div>
+              <div>Fonte<b id="h-fonte">—</b></div>
+            </div>
+          </div>
+        </div>
+        <div class="gr2 ce-gr">
+          <div class="card gcard">
+            <div class="thead-row" style="margin-bottom:0">
+              <div><div class="gtit">Evolução Temporal</div><div class="gsub">Média mensal por pilar · 2026</div></div>
+              <div class="dims" id="ind-selector"></div>
+            </div>
+            <div class="gleg" id="g-leg"></div>
+            <div class="gcv"><canvas id="chartTemporal"></canvas></div>
+          </div>
+          <div class="card gcard">
+            <div class="gtit">Regras de Pontuação</div>
+            <div class="gsub">Pontuação final = média ponderada; pilar ausente redistribui o peso.</div>
+            <div class="twrap" style="flex:1"><table class="dre" id="tbl-pesos" data-no-sort>
+              <thead><tr><th>Indicador</th><th>Descrição do cálculo</th><th class="num">Peso</th></tr></thead>
+              <tbody id="peso-tbody"></tbody>
+            </table></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ══ 2 · RANKING GERAL ══ -->
+      <section class="vw" id="vw-ranking">
+        <div class="card tsec">
+          <div class="thead-row">
+            <div><div class="ttit">Ranking Geral</div><div class="tsub" id="rank-sub" style="margin-bottom:0">—</div></div>
+            <div class="gleg rank-leg" style="margin-bottom:0">
+              <span><i class="sq lg-g"></i>≥ 85 — Elite</span>
+              <span><i class="sq lg-y"></i>70 a 84,9 — Bom</span>
+              <span><i class="sq lg-r"></i>&lt; 70 — Atenção</span>
+            </div>
+          </div>
+          <div class="twrap" style="margin-top:8px"><table class="dre" id="ranking-table" data-no-sort>
+            <thead><tr id="rank-head"></tr></thead>
+            <tbody id="ranking-tbody"></tbody>
+          </table></div>
+          <div class="tnotes">
+            * Cada pilar mostra os <b>pontos</b> (0–100) e, logo abaixo, o <b>resultado medido</b>. A pontuação final é a média ponderada pelos pesos das Regras de Pontuação.<br>
+            * <b>Uso de Marchas</b> por enquanto só existe na telemetria vFleets; para motoristas Geotab o pilar fica ausente e o peso é redistribuído proporcionalmente.
+          </div>
+        </div>
+      </section>
+
+    </div>
+  </main>
+</div>
 
 <script>
 Chart.register(ChartDataLabels);
-
-/* ── Base: nova planilha Gerot/Frota de Elite (1 aba = 1 indicador) ──
-   Carregada via assets/gerot-base.js (GerotBase.load). Cada indicador já vem
-   com o atingimento (real/meta) por filial+vigência. Combustível saiu. */
-
-/* ── Motoristas (protótipo — dados de exemplo) ──
-   No painel real virão do coletor (Geotab / vFleets DaaS → Supabase).
-   `unit` no modelo do Frota de Elite = nome do MOTORISTA aqui. */
-const DRIVERS = [
-  {nome:'Anderson Souza', un:'CGR', src:'vFleets'},
-  {nome:'Bruno Lima',     un:'BLC', src:'Geotab'},
-  {nome:'Carlos Andrade', un:'CBA', src:'vFleets'},
-  {nome:'Diego Ferreira', un:'GRL', src:'Geotab'},
-  {nome:'Eduardo Reis',   un:'RON', src:'Geotab'},
-  {nome:'Fábio Nunes',    un:'CGR', src:'vFleets'},
-  {nome:'Gustavo Rocha',  un:'BLC', src:'vFleets'},
-  {nome:'Hélio Barros',   un:'CBA', src:'Geotab'},
-  {nome:'Igor Martins',   un:'GRL', src:'vFleets'},
-  {nome:'João Pereira',   un:'RON', src:'Geotab'},
-  {nome:'Luís Cardoso',   un:'CGR', src:'Geotab'},
-  {nome:'Marcos Vinícius',un:'BLC', src:'vFleets'},
-  {nome:'Nelson Tavares', un:'CBA', src:'vFleets'},
-  {nome:'Otávio Ramos',   un:'GRL', src:'vFleets'},
-  {nome:'Paulo Henrique', un:'RON', src:'vFleets'},
-  {nome:'Rafael Gomes',   un:'CGR', src:'vFleets'},
-  {nome:'Sérgio Antunes', un:'BLC', src:'Geotab'},
-  {nome:'Thiago Mendes',  un:'CBA', src:'vFleets'},
-];
-const UNI_OF = {}, SRC_OF = {}, NOMES = {}, AVATARES = {};
-DRIVERS.forEach(d=>{UNI_OF[d.nome]=d.un;SRC_OF[d.nome]=d.src;NOMES[d.nome]=d.nome;});
+const $=id=>document.getElementById(id);
+function set(id,v){ const el=$(id); if(el) el.textContent=v; }
+const br=(v,d)=>(+v||0).toFixed(d).replace('.',',');
 
 /* ── Pilares de Condução Econômica (fonte única) ──────────────────────
-   Cada pilar: peso, formato do RESULTADO (derivado do score p/ o protótipo —
-   no real vem o valor medido da API), e o que é BOM / RUIM. `both` = a
-   telemetria Geotab também entrega (Câmbio hoje é só vFleets).
-   calcScore_ redistribui o peso dos pilares ausentes. */
-const br=(v,d)=>(+v||0).toFixed(d).replace('.',',');
+   Cada pilar: peso, formato do RESULTADO medido e a descrição do cálculo.
+   `both` = a telemetria Geotab também entrega (Uso de Marchas hoje é só
+   vFleets). calcScore_ redistribui o peso dos pilares ausentes. */
 /* Freada brusca NÃO entra no score (Renan, 26/08/2026): mede condução SEGURA,
-   não econômica — o lugar dela é a Fase 4, quando segurança entrar. O robô
-   continua GRAVANDO frea_100km no ce_diario, então o dado não se perde e não
-   precisará ser recoletado; ele só não pontua. Os pesos restantes somam 90 e
-   calcScore_ normaliza pela soma dos presentes, então a escala segue 0-100. */
-const PILAR = {
-  rpm:   {nome:'Faixa Verde', full:'Faixa Verde de RPM',    peso:25, both:true,  fmt:s=>Math.round(s)+'%',        calc:'% do tempo em movimento com o RPM na faixa verde (econômica/potência).'},
-  idle:  {nome:'Motor Ocioso', full:'Motor Ocioso (idle)',   peso:20, both:true,  fmt:s=>br((100-s)/4,1)+'%',      calc:'% do tempo de motor ligado parado, sem rodar (motor ocioso).'},
-  acel:  {nome:'Aceleração',   full:'Aceleração',            peso:15, both:true,  fmt:s=>br((100-s)/6,1)+'/100km', calc:'nº de acelerações bruscas a cada 100 km rodados.'},
-  vel:   {nome:'Velocidade',   full:'Velocidade',            peso:15, both:true,  fmt:s=>br((100-s)/5,1)+'%',      calc:'% do tempo acima do limite (faixas 1/2/3; excesso maior pesa mais).'},
-  cambio:{nome:'Câmbio',       full:'Marcha / Câmbio',       peso:5,  both:false, fmt:s=>br((100-s)/6,1)+'%t',     calc:'% do tempo com marcha inadequada para o RPM (batendo transmissão).'},
-};
-/* Freio Motor SAIU do painel (Renan, 01/09/2026): a varredura completa dos
+   não econômica — o lugar dela é a Fase 4. O robô continua GRAVANDO
+   frea_100km no ce_diario; ele só não pontua.
+   Freio Motor SAIU do painel (Renan, 01/09/2026): a varredura completa dos
    3.525 diagnósticos do Geotab confirmou que retarder/freio motor não
-   reporta na frota. O freio_pontos da vFleets continuará sendo gravado no
-   banco quando ela entrar — só não aparece nem pontua. */
+   reporta na frota. O freio_pontos da vFleets continuará sendo gravado.
+   "Câmbio" virou "Uso de Marchas" (Renan, 01/09/2026): nome genérico demais. */
+const PILAR = {
+  rpm:   {nome:'Faixa Verde',    full:'Faixa Verde de RPM',      peso:25, both:true,  fmt:s=>Math.round(s)+'%',        calc:'% do tempo em movimento com o RPM na faixa verde (econômica/potência).'},
+  idle:  {nome:'Motor Ocioso',   full:'Motor Ocioso (idle)',     peso:20, both:true,  fmt:s=>br((100-s)/4,1)+'%',      calc:'% do tempo de motor ligado parado, sem rodar (motor ocioso).'},
+  acel:  {nome:'Aceleração',     full:'Aceleração',              peso:15, both:true,  fmt:s=>br((100-s)/6,1)+'/100km', calc:'nº de acelerações bruscas a cada 100 km rodados.'},
+  vel:   {nome:'Velocidade',     full:'Velocidade',              peso:15, both:true,  fmt:s=>br((100-s)/5,1)+'%',      calc:'% do tempo acima do limite (faixas 1/2/3; excesso maior pesa mais).'},
+  cambio:{nome:'Uso de Marchas', full:'Uso de Marchas (câmbio)', peso:5,  both:false, fmt:s=>br((100-s)/6,1)+'%t',     calc:'% do tempo com marcha inadequada para o RPM — esticando ou forçando o motor.'},
+};
 const FIELD_ORDER   = Object.keys(PILAR);
 const FIELD_WEIGHTS = {}; FIELD_ORDER.forEach(k=>FIELD_WEIGHTS[k]=PILAR[k].peso);
 
@@ -497,27 +509,66 @@ function calcScore_(fields){ let num=0,den=0;
 
 const IND_LABELS = Object.assign({media_geral:'Média Geral', pontuacao:'Pontuação'},
   Object.fromEntries(FIELD_ORDER.map(k=>[k,PILAR[k].nome])));
-const PESO_LABELS = Object.fromEntries(FIELD_ORDER.map(k=>[k,PILAR[k].full]));
+
+/* ── De-para unidade Geotab → código do portal + projeto ──────────────
+   A unidade dos motoristas vem do grupo UNI_* do Geotab ('EMP CUIABA',
+   'CDD PELOTAS'…). O de-para é o MESMO FIL2COD do gerot-base/farol-core;
+   o projeto sai do tier do código (regra CBA/MCC do portal). */
+const NK=s=>String(s||'').toUpperCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/\s+/g,' ').trim();
+const FIL2COD = {
+  'CDD CAMBORIU':'BLC','BALNEARIO CAMBORIU':'BLC',
+  'CDD CUIABA':'CBA T2','CUIABA':'CBA T1 WH','CUIABA EMPURRADA':'CBA T1',
+  'CDD RIO DE JANEIRO':'CGR','CAMPO GRANDE':'CGR',
+  'CDD FLORIANOPOLIS':'FLP','FLORIANOPOLIS':'FLP',
+  'CDD GUARULHOS':'GRL','GUARULHOS':'GRL',
+  'CDI MACACU':'MCC T2','MACACU EMPURRADA':'MCC T1','CACHOEIRAS DE MACACU':'MCC T2','MACACU':'MCC T2',
+  'CDD NOVA FRIBURGO':'NFR','NOVA FRIBURGO':'NFR',
+  'PIRAI EMPURRADA':'PIR','PIRAI':'PIR',
+  'CDD PELOTAS':'PLT','PELOTAS':'PLT',
+  'CDD RONDONOPOLIS':'RON','RONDONOPOLIS':'RON'
+};
+function codProj(cod){
+  if(/T1 WH$/.test(cod)) return 'Apoio';
+  if(/T1$/.test(cod)||cod==='PIR') return 'Empurrada';
+  if(cod==='MCC T2') return 'CDI';
+  return 'CDD';
+}
+function deParaGeo(u){
+  const s=NK(u).replace(/^AS\s+/,'');            // 'AS CDD CUIABA' → 'CDD CUIABA'
+  if(!s) return {cod:'—', proj:'—'};
+  let fil=s, m;
+  if(m=s.match(/^EMP\s+(.+)$/))        fil=m[1]+' EMPURRADA';
+  else if(m=s.match(/^(WH|APOIO)\s+(.+)$/)) fil=m[2];
+  const cod=FIL2COD[fil]||FIL2COD[s]||FIL2COD[s.replace(/^(CDD|CDI)\s+/,'')]||null;
+  return cod ? {cod, proj:codProj(cod)} : {cod:s, proj:'—'};
+}
+
+/* ── Motoristas (protótipo — dados de exemplo, só quando o banco está vazio) ── */
+const DRIVERS = [
+  {nome:'Anderson Souza', un:'CGR', src:'vFleets'}, {nome:'Bruno Lima',     un:'BLC', src:'Geotab'},
+  {nome:'Carlos Andrade', un:'CBA T2', src:'vFleets'}, {nome:'Diego Ferreira', un:'GRL', src:'Geotab'},
+  {nome:'Eduardo Reis',   un:'RON', src:'Geotab'},  {nome:'Fábio Nunes',    un:'CGR', src:'vFleets'},
+  {nome:'Gustavo Rocha',  un:'BLC', src:'vFleets'}, {nome:'Hélio Barros',   un:'CBA T1', src:'Geotab'},
+  {nome:'Igor Martins',   un:'GRL', src:'vFleets'}, {nome:'João Pereira',   un:'RON', src:'Geotab'},
+  {nome:'Luís Cardoso',   un:'CGR', src:'Geotab'},  {nome:'Marcos Vinícius',un:'BLC', src:'vFleets'},
+  {nome:'Nelson Tavares', un:'CBA T2', src:'vFleets'}, {nome:'Otávio Ramos', un:'GRL', src:'vFleets'},
+  {nome:'Paulo Henrique', un:'RON', src:'vFleets'}, {nome:'Rafael Gomes',   un:'CGR', src:'vFleets'},
+  {nome:'Sérgio Antunes', un:'BLC', src:'Geotab'},  {nome:'Thiago Mendes',  un:'CBA T2', src:'vFleets'},
+];
+const COD_OF = {}, PROJ_OF = {}, SRC_OF = {};
 
 /* ── Estado ── */
-let RAW = [];
-let selVig = [];
-let chartTemporal = null;
-let activeInd = 'media_geral';
-let sortKey = 'pont', sortDir = 'desc';   // ordenação do ranking (clique no cabeçalho)
-
-/* ── Fetch ── */
-const CACHE_KEY='bi_cache_reconhecimento_v6';
-const CACHE_TTL=60*60*1000; // 1 hora
+let RAW = [], ORIGEM = 'exemplo', ULT_COLETA = null, VW = 'resumo';
+let chartTemporal = null, activeInd = 'media_geral';
+let sortKey = 'pont', sortDir = 'desc';
 
 /* ── Leitura do Supabase (ce_scores_mensais) ────────────────────────────────
-   O painel lê a tabela que o robô (scripts/conducao-robot.mjs) alimenta. Só
-   que enquanto NÃO houver coleta — token da vFleets, credencial do Geotab —
-   a tabela volta vazia; nesse caso a tela cai nos dados de exemplo e o selo do
-   topo diz isso com todas as letras. Nada de maquete se passando por real.  */
+   O painel lê a tabela que o robô (scripts/conducao-robot.mjs) alimenta.
+   Banco vazio → dados de exemplo, com o titSub dizendo isso com todas as
+   letras. Nada de maquete se passando por real. */
 const SB_URL = 'https://lozwipoeacpvplgkrxkq.supabase.co';
 const SB_KEY = 'sb_publishable_ggKEEebc5zjgQDVsF92Upw_6uoLmKe9';   // publishable: só leitura via RLS
-let _sb = null, ORIGEM = 'exemplo', ULT_COLETA = null;
+let _sb = null;
 function sbClient(){ return _sb || (_sb = supabase.createClient(SB_URL, SB_KEY)); }
 
 async function fetchFromSupabase() {
@@ -541,34 +592,37 @@ async function fetchFromSupabase() {
   if (!data.length) return [];
 
   // o de-para vem das próprias linhas: os DRIVERS de exemplo saem de cena
-  Object.keys(UNI_OF).forEach(k => { delete UNI_OF[k]; delete SRC_OF[k]; delete NOMES[k]; });
-  data.forEach(r => { UNI_OF[r.motorista] = r.unidade || '—'; SRC_OF[r.motorista] = r.fonte; NOMES[r.motorista] = r.motorista; });
+  Object.keys(COD_OF).forEach(k => { delete COD_OF[k]; delete PROJ_OF[k]; delete SRC_OF[k]; });
+  data.forEach(r => {
+    const dp = deParaGeo(r.unidade);
+    COD_OF[r.motorista] = dp.cod; PROJ_OF[r.motorista] = dp.proj; SRC_OF[r.motorista] = r.fonte;
+  });
   ULT_COLETA = data.reduce((m, r) => (r.atualizado_em > m ? r.atualizado_em : m), '');
 
   return data.map(r => ({
     vig:  String(r.competencia).slice(0,10).replace(/-/g, '/'),   // '2026-07-01' -> '2026/07/01'
     unit: r.motorista,
     rpm: r.rpm_pontos, idle: r.idle_pontos, acel: r.acel_pontos, vel: r.vel_pontos,
-    cambio: r.cambio_pontos,  // idem
+    cambio: r.cambio_pontos,
     pont: r.pontuacao,
   }));
 }
 
-/* ── PROTÓTIPO: gera RAW (1 linha por motorista+vigência) determinístico.
-   Trocar generateRawRows() por leitura do Supabase quando o coletor existir. ── */
+/* ── PROTÓTIPO: gera RAW determinístico quando o banco está vazio ── */
 function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return ((t^t>>>14)>>>0)/4294967296;};}
 function generateRawRows(){
   const rng=mulberry32(20260729);
   const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
-  const NMES=(new Date().getFullYear()===2026)?(new Date().getMonth()+1):12;   // só 2026, até o mês atual
+  const NMES=(new Date().getFullYear()===2026)?(new Date().getMonth()+1):12;
   const out=[];
   DRIVERS.forEach(d=>{
+    COD_OF[d.nome]=d.un; PROJ_OF[d.nome]=codProj(d.un); SRC_OF[d.nome]=d.src;
     const base=.55+rng()*.4;
     const off={};FIELD_ORDER.forEach(f=>off[f]=(rng()-.5)*22);
     for(let m=1;m<=NMES;m++){
       const trend=(m-1)*1.1, f={};
       FIELD_ORDER.forEach(k=>{
-        if(!PILAR[k].both && d.src==='Geotab'){ f[k]=null; return; }              // fonte não entrega esse pilar → ausente (redistribui peso)
+        if(!PILAR[k].both && d.src==='Geotab'){ f[k]=null; return; }
         f[k]=Math.round(clamp(base*100+off[k]+trend+(rng()-.5)*14, 8, 100));
       });
       out.push(Object.assign({vig:`2026/${String(m).padStart(2,'0')}/01`, unit:d.nome}, f, {pont:calcScore_(f)}));
@@ -576,541 +630,383 @@ function generateRawRows(){
   });
   return out;
 }
-async function fetchData() {
-  let linhas = [];
-  try { linhas = await fetchFromSupabase(); } catch(e) { console.warn('Supabase indisponível:', e.message); }
-  if (linhas.length) { RAW = linhas; ORIGEM = 'banco'; }
-  else               { RAW = generateRawRows(); ORIGEM = 'exemplo'; }
-  populateFilters();
-  renderAll();
+
+/* ── multi-select (mesma mecânica da Visão Financeira) ── */
+function _buildMs(wrap, renderFn, getAllItemsFn){
+  if(!(wrap._sel instanceof Set)) wrap._sel=new Set();
+  const sel=wrap._sel;
+  const list=wrap.querySelector('.ms-list');
+  const srch=wrap.querySelector('.ms-search input');
+  const render=(q)=>{ renderFn(list,sel, q!==undefined?q:(srch.value||'')); syncBadge(wrap); };
+  wrap._render=render;
+  if(!wrap._wired){
+    wrap._wired=true;
+    list.addEventListener('change',e=>{
+      const box=e.target;
+      if(box.classList.contains('ms-all')){ sel.clear(); }
+      else if(sel.size===0){
+        if(!box.checked){ (getAllItemsFn?getAllItemsFn():[]).forEach(v=>{ if(v!==box.dataset.v) sel.add(v); }); }
+      } else {
+        if(box.checked) sel.add(box.dataset.v); else sel.delete(box.dataset.v);
+        if(getAllItemsFn){ const all=getAllItemsFn(); if(all.length>0&&all.every(v=>sel.has(v))) sel.clear(); }
+      }
+      render(srch.value); atualizar();
+    });
+    list.addEventListener('click',e=>{
+      const only=e.target.closest('.ms-only'); if(!only) return;
+      e.preventDefault(); e.stopPropagation();
+      sel.clear(); sel.add(only.dataset.v);
+      render(srch.value); atualizar();
+    });
+    srch.addEventListener('input',()=>render(srch.value));
+    srch.addEventListener('click',e=>e.stopPropagation());
+  }
+  render();
 }
-
-function initData(){ atualizar(); }   // protótipo: regenera sempre (sem cache do Frota de Elite)
-
-
-/* ── Filtros ── */
-function vigLabel(vig) {
-  const MESES = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
-  const parts = vig.split('/');
-  let m, y;
-  if (parts[0].length === 4) { y = parts[0]; m = parts[1]; }
-  else { m = parts[0]; y = parts[1]; }
-  return (MESES[parseInt(m,10)-1] || vig) + '/' + y;
+function buildMsFilter(id, items){
+  const wrap=$(id); if(!wrap) return;
+  wrap._items=items;
+  _buildMs(wrap,(list,sel,q)=>{
+    const it=wrap._items||[], f=q.toLowerCase();
+    const shown=it.filter(v=>v.toLowerCase().includes(f));
+    const allChk=sel.size===0;
+    list.innerHTML=(!q?`<label class="ms-opt all-opt"><input type="checkbox" class="ms-all" ${allChk?'checked':''}> Todos</label>`:'')+
+      shown.map(v=>`<label class="ms-opt"><input type="checkbox" data-v="${v}" ${allChk||sel.has(v)?'checked':''}> ${v}<span class="ms-only" data-v="${v}">only</span></label>`).join('');
+  }, ()=>wrap._items||[]);
 }
-
-function populateFilters() {
-  const vigs = [...new Set(RAW.map(r => r.vig))].sort((a,b) => {
-    const pa = a.split('/'), pb = b.split('/');
-    const [ya,ma] = pa[0].length===4 ? [pa[0],pa[1]] : [pa[1],pa[0]];
-    const [yb,mb] = pb[0].length===4 ? [pb[0],pb[1]] : [pb[1],pb[0]];
-    return (+yb*12 + +mb) - (+ya*12 + +ma);
-  });
-  buildMsFilter('vig', vigs);
-  // abre com TODAS as vigências que têm dados selecionadas (estado "Todas").
-  updateMsBtn('vig');
+function setMsOptions(id, items){
+  const wrap=$(id); if(!wrap) return;
+  wrap._items=items;
+  if(wrap._sel&&wrap._sel.size){ [...wrap._sel].forEach(v=>{ if(!items.includes(v)) wrap._sel.delete(v); }); }
+  if(wrap._render) wrap._render(); else buildMsFilter(id, items);
 }
-
-function buildMsFilter(key, opts) {
-  const list = document.getElementById(`ms-${key}-list`);
-  list.innerHTML =
-    `<div class="ms-opt all-opt" onclick="toggleAll('${key}')"><input type="checkbox" id="chk-${key}-all"> <label style="cursor:pointer" for="chk-${key}-all">Todas</label></div>` +
-    opts.map(o => {
-      const lbl = key === 'vig' ? vigLabel(o) : o;
-      const safe = o.replace(/\//g,'_');
-      return `<div class="ms-opt" onclick="toggleOpt('${key}','${o}')">
-        <input type="checkbox" id="chk-${key}-${safe}" value="${o}">
-        <label style="cursor:pointer;flex:1" for="chk-${key}-${safe}">${lbl}</label>
-        <span class="ms-only" onclick="event.stopPropagation();onlyOpt('${key}','${o}')">Apenas</span>
-      </div>`;
-    }).join('');
+function syncBadge(wrap){
+  const cnt=wrap.querySelector('.ms-cnt'), n=wrap._sel?wrap._sel.size:0;
+  if(cnt){ cnt.textContent=n; cnt.style.display=n?'inline-block':'none'; }
+  wrap.classList.toggle('ativo', n>0);
 }
-
-function toggleAll(key) {
-  const cur = getSelArr(key);
-  const opts = getOpts(key);
-  setSelArr(key, cur.length === opts.length ? [] : [...opts]);
-  updateMsBtn(key); renderAll();
-}
-
-function toggleOpt(key, val) {
-  const cur = getSelArr(key);
-  const idx = cur.indexOf(val);
-  if (idx >= 0) cur.splice(idx,1); else cur.push(val);
-  setSelArr(key, cur); updateMsBtn(key); renderAll();
-}
-
-function onlyOpt(key, val) {
-  setSelArr(key, [val]);
-  updateMsBtn(key); renderAll();
-}
-
-function getSelArr(key) { return key==='vig'?selVig:[]; }
-function setSelArr(key,v){ if(key==='vig') selVig=v; }
-function getOpts(key) {
-  const list = document.getElementById(`ms-${key}-list`);
-  return [...list.querySelectorAll('.ms-opt:not(.all-opt) input')].map(i=>i.value);
-}
-
-function updateMsBtn(key) {
-  const sel = getSelArr(key);
-  const opts = getOpts(key);
-  const all = sel.length === 0 || sel.length === opts.length;
-  const lbl = document.getElementById(`ms-${key}-lbl`);
-  const cnt = document.getElementById(`ms-${key}-cnt`);
-  const dispLbl = all ? 'Todas' : (sel.length===1 ? vigLabel(sel[0]) : `${sel.length} selecionadas`);
-  lbl.textContent = dispLbl;
-  cnt.style.display = (!all && sel.length>0) ? '' : 'none';
-  cnt.textContent = sel.length;
-  const list = document.getElementById(`ms-${key}-list`);
-  list.querySelectorAll('.ms-opt:not(.all-opt) input').forEach(inp => {
-    inp.checked = sel.includes(inp.value) || all;
-  });
-  const allChk = document.getElementById(`chk-${key}-all`);
-  if (allChk) allChk.checked = all;
-}
-
-function toggleMs(key) {
-  const panel = document.getElementById(`ms-${key}-panel`);
+function toggleMs(id){
+  document.querySelectorAll('.ms-panel.open').forEach(p=>{ if(p.closest('.ms-wrap').id!==id) p.classList.remove('open'); });
+  const panel=document.querySelector(`#${id} .ms-panel`);
   panel.classList.toggle('open');
+  if(panel.classList.contains('open')){ const inp=panel.querySelector('input[type=text]'); if(inp) setTimeout(()=>inp.focus(),50); }
 }
+function getMsValues(id){ const w=$(id); return w&&w._sel?[...w._sel]:[]; }
+document.addEventListener('click',e=>{ if(!e.target.closest('.ms-wrap')) document.querySelectorAll('.ms-panel.open').forEach(p=>p.classList.remove('open')); });
 
-document.addEventListener('click', e => {
-  ['vig'].forEach(key => {
-    const wrap = document.getElementById(`ms-${key}-wrap`);
-    if (wrap && !wrap.contains(e.target)) {
-      document.getElementById(`ms-${key}-panel`)?.classList.remove('open');
-    }
+/* ── Filtros: opções a partir das linhas ── */
+const MESES = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+function vigLabel(vig){
+  const p = vig.split('/');
+  const [y,m] = p[0].length===4 ? [p[0],p[1]] : [p[1],p[0]];
+  return (MESES[parseInt(m,10)-1]||vig)+'/'+y;
+}
+let L2V = {};   // rótulo da vigência → chave 'YYYY/MM/DD'
+function populateFilters(){
+  const vigs=[...new Set(RAW.map(r=>r.vig))].sort((a,b)=>{
+    const pa=a.split('/'), pb=b.split('/');
+    return (+pb[0]*12 + +pb[1]) - (+pa[0]*12 + +pa[1]);
   });
-});
-
-/* ── Filtragem ── */
-function getFiltered() {
-  return RAW.filter(r => selVig.length===0 || selVig.includes(r.vig));
+  L2V={}; vigs.forEach(v=>L2V[vigLabel(v)]=v);
+  setMsOptions('ms-vig',  vigs.map(vigLabel));
+  setMsOptions('ms-uni',  [...new Set(RAW.map(r=>COD_OF[r.unit]||'—'))].sort((a,b)=>a.localeCompare(b,'pt')));
+  setMsOptions('ms-proj', [...new Set(RAW.map(r=>PROJ_OF[r.unit]||'—'))].sort((a,b)=>a.localeCompare(b,'pt')));
+  setMsOptions('ms-mot',  [...new Set(RAW.map(r=>r.unit))].sort((a,b)=>a.localeCompare(b,'pt')));
 }
+function getFiltered(){
+  const sv=getMsValues('ms-vig').map(l=>L2V[l]).filter(Boolean);
+  const su=getMsValues('ms-uni'), sp=getMsValues('ms-proj'), sm=getMsValues('ms-mot');
+  return RAW.filter(r=>
+    (!sv.length || sv.includes(r.vig)) &&
+    (!su.length || su.includes(COD_OF[r.unit]||'—')) &&
+    (!sp.length || sp.includes(PROJ_OF[r.unit]||'—')) &&
+    (!sm.length || sm.includes(r.unit)));
+}
+function selVigKeys(){ return getMsValues('ms-vig').map(l=>L2V[l]).filter(Boolean); }
 
-/* ── Render All ── */
-function renderAll() {
-  const data = getFiltered();
+/* ── Render ── */
+function atualizar(){
+  const data=getFiltered();
   renderHero(data);
   renderRanking(data);
   renderChart();
 }
 
-/* ── Hero ── */
-function renderHero(data) {
-  const pts = data.filter(r=>r.pont!=null).map(r=>r.pont);
-  const avg = pts.length ? (pts.reduce((a,b)=>a+b,0)/pts.length) : null;
-  document.getElementById('hero-score').textContent = avg != null ? avg.toFixed(2) : '—';
-  const period = selVig.length===0 ? 'Todos os períodos' : (selVig.length===1 ? vigLabel(selVig[0]) : `${selVig.length} períodos`);
-  document.getElementById('hero-period').textContent = period;
-  document.getElementById('ranking-sub').textContent = period;
+function renderHero(data){
+  const pts=data.filter(r=>r.pont!=null).map(r=>r.pont);
+  const avg=pts.length ? (pts.reduce((a,b)=>a+b,0)/pts.length) : null;
+  set('h-score', avg!=null ? avg.toFixed(2) : '—');
+  const sv=selVigKeys();
+  const period = sv.length===0 ? 'Todos os períodos' : (sv.length===1 ? vigLabel(sv[0]) : `${sv.length} períodos`);
+  set('h-per', period);
+  set('h-mot', String(new Set(data.map(r=>r.unit)).size));
+  set('h-fonte', ORIGEM==='banco' ? 'Geotab' : 'Exemplo');
+  set('rank-sub', period);
 }
 
-/* ── Ranking por unidade (média se multi-vig) ── */
-function getRankingData(data) {
-  const byUnit = {};
-  data.forEach(r => {
-    if (!byUnit[r.unit]) byUnit[r.unit] = {unit:r.unit, rows:[]};
-    byUnit[r.unit].rows.push(r);
-  });
-  const result = Object.values(byUnit).map(({unit, rows}) => {
-    const avg = (field) => {
-      const vals = rows.map(r=>r[field]).filter(v=>v!=null);
-      return vals.length ? vals.reduce((a,b)=>a+b,0)/vals.length : null;
-    };
-    const o = { unit, pont: avg('pont') };
-    FIELD_ORDER.forEach(k => o[k] = avg(k));
+/* agrega por motorista (média nas vigências filtradas) */
+function getRankingData(data){
+  const byUnit={};
+  data.forEach(r=>{ (byUnit[r.unit]=byUnit[r.unit]||{unit:r.unit,rows:[]}).rows.push(r); });
+  return Object.values(byUnit).map(({unit,rows})=>{
+    const avg=f=>{ const vals=rows.map(r=>r[f]).filter(v=>v!=null); return vals.length?vals.reduce((a,b)=>a+b,0)/vals.length:null; };
+    const o={unit, pont:avg('pont')};
+    FIELD_ORDER.forEach(k=>o[k]=avg(k));
     return o;
-  });
-  result.sort((a,b) => (b.pont||0) - (a.pont||0));
-  return result;
+  }).sort((a,b)=>(b.pont||0)-(a.pont||0));
 }
 
-/* ── Ranking table ── */
 function buildRankHead(){
-  const h = document.getElementById('rank-head'); if(!h) return;
-  const arr = k => sortKey===k ? `<span class="sort-ar">${sortDir==='asc'?'▲':'▼'}</span>` : '';
-  const cls = k => 'sortable'+(sortKey===k?' sorted':'');
-  h.innerHTML = `<th style="width:32px;">#</th>`+
-    `<th class="${cls('unit')}" style="text-align:left;" onclick="setSort('unit')">Motorista${arr('unit')}</th>`+
-    FIELD_ORDER.map(k=>`<th class="num ind-col ${cls(k)}" title="${PILAR[k].full}" onclick="setSort('${k}')">${PILAR[k].nome}${arr(k)}</th>`).join('')+
-    `<th class="num ${cls('pont')}" onclick="setSort('pont')">Pontuação${arr('pont')}</th>`;
+  const h=$('rank-head'); if(!h) return;
+  const arr=k=>sortKey===k?`<span class="sort-ar">${sortDir==='asc'?'▲':'▼'}</span>`:'';
+  h.innerHTML = `<th style="width:34px;">#</th>`+
+    `<th class="sortable" onclick="setSort('unit')">Motorista${arr('unit')}</th>`+
+    `<th class="sortable" onclick="setSort('uni')">Unidade${arr('uni')}</th>`+
+    FIELD_ORDER.map(k=>`<th class="num sortable" title="${PILAR[k].full}" onclick="setSort('${k}')">${PILAR[k].nome}${arr(k)}</th>`).join('')+
+    `<th class="num sortable" onclick="setSort('pont')">Pontuação${arr('pont')}</th>`;
 }
-// clique no cabeçalho: alterna asc/desc (texto começa em A→Z, número em maior→menor)
 function setSort(k){
-  if(sortKey===k) sortDir = sortDir==='asc' ? 'desc' : 'asc';
-  else { sortKey = k; sortDir = (k==='unit') ? 'asc' : 'desc'; }
+  if(sortKey===k) sortDir = sortDir==='asc'?'desc':'asc';
+  else { sortKey=k; sortDir=(k==='unit'||k==='uni')?'asc':'desc'; }
   renderRanking(getFiltered());
 }
 function sortRankRows(rows){
-  const dir = sortDir==='asc' ? 1 : -1;
+  const dir=sortDir==='asc'?1:-1;
   return rows.slice().sort((a,b)=>{
-    if(sortKey==='unit') return dir * String(a.unit).localeCompare(String(b.unit),'pt');
+    if(sortKey==='unit') return dir*String(a.unit).localeCompare(String(b.unit),'pt');
+    if(sortKey==='uni')  return dir*String(COD_OF[a.unit]||'').localeCompare(String(COD_OF[b.unit]||''),'pt');
     const av=a[sortKey], bv=b[sortKey];
-    if(av==null && bv==null) return 0;
-    if(av==null) return 1;                 // sem dado sempre por último
+    if(av==null&&bv==null) return 0;
+    if(av==null) return 1;
     if(bv==null) return -1;
     return dir*(av-bv);
   });
 }
-function renderRanking(data) {
+function indClass(v){ if(v==null)return 'ind-dash'; if(v>=85)return 'ind-green'; if(v>=70)return 'ind-yellow'; return 'ind-red'; }
+function scorePill(v){
+  if(v==null) return '<span class="ind-dash">—</span>';
+  const cls=v>=85?'score-green':v>=70?'score-yellow':'score-red';
+  return `<span class="score-pill ${cls}">${v.toFixed(1)}</span>`;
+}
+function renderRanking(data){
   buildRankHead();
-  const rows = sortRankRows(getRankingData(data));
-  const canonical = sortKey==='pont' && sortDir==='desc';   // só mostra medalhas na ordem oficial
-  const tbody = document.getElementById('ranking-tbody');
-  const medals = ['🥇','🥈','🥉'];
-  // célula estilo termômetro: pontos como número principal, resultado pequeno embaixo
-  const cell = (k,v) => v==null
-    ? `<td class="num ind-col rk-ind"><span class="ind-dash">—</span></td>`
-    : `<td class="num ind-col rk-ind"><span class="p ${indClass(v)}">${v.toFixed(0)}</span><span class="v">${PILAR[k].fmt(v)}</span></td>`;
-  tbody.innerHTML = rows.map((r, i) => {
-    const rank = i+1;
-    const cls = r.pont==null ? '—' : r.pont>=85 ? 'Elite' : r.pont>=70 ? 'Bom' : 'Atenção';
+  const rows=sortRankRows(getRankingData(data));
+  const canonical = sortKey==='pont' && sortDir==='desc';
+  const medals=['🥇','🥈','🥉'];
+  const cell=(k,v)=>v==null
+    ? `<td class="num rk-ind"><span class="ind-dash">—</span></td>`
+    : `<td class="num rk-ind"><span class="p ${indClass(v)}">${v.toFixed(0)}</span><span class="v">${PILAR[k].fmt(v)}</span></td>`;
+  $('ranking-tbody').innerHTML = rows.map((r,i)=>{
+    const rank=i+1;
+    const cls=r.pont==null?'—':r.pont>=85?'Elite':r.pont>=70?'Bom':'Atenção';
     return `<tr class="rank-${canonical&&rank<=3?rank:'x'}">
       <td class="rank-num">${canonical&&rank<=3?medals[i]:rank}</td>
-      <td style="font-weight:600">${r.unit}<div style="font-size:9px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.4px;margin-top:1px;">${UNI_OF[r.unit]||''} · ${SRC_OF[r.unit]||''}</div></td>
+      <td class="conta">${r.unit}<div class="mot-sub">${SRC_OF[r.unit]||''}</div></td>
+      <td>${COD_OF[r.unit]||'—'}</td>
       ${FIELD_ORDER.map(k=>cell(k,r[k])).join('')}
       <td class="num"><div class="pont-cell">${scorePill(r.pont)}<span class="pont-cls">${cls}</span></div></td>
     </tr>`;
   }).join('');
-  fitRankScroll();
 }
 
-// limita a área visível a ~10 linhas; o resto fica na barra de rolagem (cabeçalho fica fixo)
-function fitRankScroll(){
-  const sc = document.getElementById('rank-scroll'); if(!sc) return;
-  const rows = document.getElementById('ranking-tbody').rows;
-  const thead = document.querySelector('#ranking-table thead');
-  if(rows.length <= 10){ sc.style.maxHeight = ''; return; }
-  let h = thead ? thead.offsetHeight : 0;
-  for(let i=0;i<10;i++) h += rows[i].offsetHeight;
-  sc.style.maxHeight = (h + 2) + 'px';
-}
-
-let indColsVisible = false;
-function toggleIndCols() {
-  indColsVisible = !indColsVisible;
-  const wrap = document.querySelector('.tbl-section');
-  wrap.classList.toggle('tbl-expanded', indColsVisible);
-  const btn = document.getElementById('tbl-ind-toggle');
-  if (btn) btn.textContent = indColsVisible ? '− Ocultar indicadores' : '+ Ver indicadores';
-}
-
-function indClass(v) {
-  if (v==null) return 'ind-dash';
-  if (v>=85) return 'ind-green';
-  if (v>=70) return 'ind-yellow';
-  return 'ind-red';
-}
-
-function scorePill(v) {
-  if (v==null) return '<span class="ind-dash">—</span>';
-  const cls = v>=85 ? 'score-green' : v>=70 ? 'score-yellow' : 'score-red';
-  return `<span class="score-pill ${cls}">${v.toFixed(1)}</span>`;
-}
-
-/* ── Caixa de pesos (distribuição após redistribuir Combustível) ── */
-function renderPesos() {
-  const grid = document.getElementById('peso-grid');
-  if (!grid) return;
-  const total = FIELD_ORDER.reduce((s,f)=>s+FIELD_WEIGHTS[f], 0);
-  // redistribui proporcionalmente p/ somar 100 (maior resto p/ arredondar exato)
-  const raw = FIELD_ORDER.map(f => ({f, exact: FIELD_WEIGHTS[f]/total*100}));
-  raw.forEach(o => { o.base = Math.floor(o.exact); o.rem = o.exact - o.base; });
-  let left = 100 - raw.reduce((s,o)=>s+o.base, 0);
-  raw.slice().sort((a,b)=>b.rem-a.rem).forEach(o => { if (left>0) { o.base++; left--; } });
-  grid.innerHTML = `<table class="reg-table"><colgroup><col style="width:112px"><col><col style="width:46px"></colgroup><thead><tr><th>Indicador</th><th>Descrição do cálculo</th><th>Peso</th></tr></thead><tbody>`+
-    raw.map(o => {
-      const P = PILAR[o.f];
-      return `<tr>
-        <td class="ri-nome">${P.nome}${P.both?'':'<span class="ri-vf">só vFleets</span>'}</td>
-        <td class="ri-desc">${P.calc}</td>
-        <td class="ri-peso">${o.base}%</td>
-      </tr>`;
-    }).join('')+`</tbody></table>`;
-}
-
-/* ── Pódio ── */
-function renderPodio(data) {
-  const rows = getRankingData(data);
-  const wrap = document.getElementById('podio-wrap');
-  if (rows.length < 1) { wrap.innerHTML = '<p style="color:var(--text3);padding:20px;">Sem dados para o período.</p>'; return; }
-
-  const top3 = rows.slice(0,3);
-  const crowns = ['👑','🥈','🥉'];
-  const places = ['1º LUGAR','2º LUGAR','3º LUGAR'];
-  const classes = ['primeiro','segundo','terceiro'];
-
-  // ordem visual: 2º | 1º | 3º
-  const order = top3.length >= 3 ? [top3[1],top3[0],top3[2]] : top3.length===2 ? [top3[1],top3[0]] : [top3[0]];
-  const orderClass = top3.length>=3 ? ['segundo','primeiro','terceiro'] : top3.length===2 ? ['segundo','primeiro'] : ['primeiro'];
-  const orderCrowns= top3.length>=3 ? [crowns[1],crowns[0],crowns[2]] : top3.length===2 ? [crowns[1],crowns[0]] : [crowns[0]];
-  const orderPlaces= top3.length>=3 ? [places[1],places[0],places[2]] : top3.length===2 ? [places[1],places[0]] : [places[0]];
-
-  wrap.innerHTML = order.map((r, i) => {
-    const cl   = orderClass[i];
-    const nome = r.unit;                          // no modelo do Frota de Elite, unit = nome do motorista
-    const uni  = UNI_OF[nome] || '';
-    const ini  = nome.split(' ').filter(Boolean).map(w=>w[0]).slice(0,2).join('').toUpperCase();
-    const sc   = r.pont!=null ? r.pont.toFixed(1) : '—';
-    const dim  = cl==='primeiro' ? 150 : 120;
-    const bg   = cl==='primeiro' ? 'linear-gradient(160deg,#FFE08A,#F59E0B)'
-               : cl==='segundo'  ? 'linear-gradient(160deg,#E8EDF5,#9AA6B8)'
-               :                   'linear-gradient(160deg,#E6B98A,#B5764A)';
-    return `
-    <div class="podio-slot ${cl}">
-      <div class="avatar-wrap">
-        <div style="width:${dim}px;height:${dim}px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:${Math.round(dim*0.38)}px;font-weight:800;color:#0C1017;background:${bg};box-shadow:0 14px 34px rgba(0,0,0,.6);margin-bottom:6px;">${ini}</div>
-      </div>
-      <div class="pedestal">
-        <div class="pedestal-place">${orderPlaces[i]}</div>
-        <div class="pedestal-name">${nome}</div>
-        <div class="pedestal-unit">${uni}</div>
-        <div class="pedestal-score">${sc} pts</div>
-      </div>
-      <div class="podio-floor"></div>
-    </div>`;
+/* ── Regras de Pontuação ── */
+function renderPesos(){
+  const total=FIELD_ORDER.reduce((s,f)=>s+FIELD_WEIGHTS[f],0);
+  const raw=FIELD_ORDER.map(f=>({f, exact:FIELD_WEIGHTS[f]/total*100}));
+  raw.forEach(o=>{ o.base=Math.floor(o.exact); o.rem=o.exact-o.base; });
+  let left=100-raw.reduce((s,o)=>s+o.base,0);
+  raw.slice().sort((a,b)=>b.rem-a.rem).forEach(o=>{ if(left>0){ o.base++; left--; } });
+  $('peso-tbody').innerHTML = raw.map(o=>{
+    const P=PILAR[o.f];
+    return `<tr>
+      <td class="conta" style="white-space:nowrap">${P.nome}${P.both?'':'<div class="mot-sub" style="color:var(--laranja)">só vFleets</div>'}</td>
+      <td style="white-space:normal">${P.calc}</td>
+      <td class="num" style="font-weight:800;color:var(--txt)">${o.base}%</td>
+    </tr>`;
   }).join('');
 }
 
-/* ── Gráfico Temporal ── */
-function buildIndSelector() {
-  const sel = document.getElementById('ind-selector');
-  sel.innerHTML = Object.entries(IND_LABELS).map(([k,v]) =>
-    `<button class="ind-btn${k===activeInd?' active':''}" onclick="setActiveInd('${k}')">${v}</button>`
-  ).join('');
+/* ── Gráfico Evolução Temporal (padrão de barras do portal) ── */
+function buildIndSelector(){
+  $('ind-selector').innerHTML = Object.entries(IND_LABELS).map(([k,v])=>
+    `<button class="dimb${k===activeInd?' on':''}" onclick="setActiveInd('${k}')">${v}</button>`).join('');
 }
+function setActiveInd(ind){ activeInd=ind; buildIndSelector(); renderChart(); }
 
-function setActiveInd(ind) {
-  activeInd = ind;
-  buildIndSelector();
-  renderChart();
-}
-
-function getFieldAvg(rows, key) {
-  if (key === 'media_geral') {
-    const fields = FIELD_ORDER;
-    const allVals = rows.flatMap(r => fields.map(f=>r[f]).filter(v=>v!=null));
-    return allVals.length ? allVals.reduce((a,b)=>a+b,0)/allVals.length : null;
+function getFieldAvg(rows,key){
+  if(key==='media_geral'){
+    const all=rows.flatMap(r=>FIELD_ORDER.map(f=>r[f]).filter(v=>v!=null));
+    return all.length?all.reduce((a,b)=>a+b,0)/all.length:null;
   }
-  const field = key === 'pontuacao' ? 'pont' : key;
-  const vals = rows.map(r=>r[field]).filter(v=>v!=null);
-  return vals.length ? vals.reduce((a,b)=>a+b,0)/vals.length : null;
+  const field=key==='pontuacao'?'pont':key;
+  const vals=rows.map(r=>r[field]).filter(v=>v!=null);
+  return vals.length?vals.reduce((a,b)=>a+b,0)/vals.length:null;
 }
+function vigMonth(vig){ const p=vig.split('/'); return p[0].length===4?parseInt(p[1],10):parseInt(p[0],10); }
 
-function vigMonth(vig) {
-  // YYYY/MM/DD → returns integer month 1-12
-  const parts = vig.split('/');
-  return parts[0].length === 4 ? parseInt(parts[1], 10) : parseInt(parts[0], 10);
-}
+function renderChart(){
+  const cv=$('chartTemporal'); if(!cv || !cv.offsetParent) return;   // só desenha se a visão está na tela
+  const isLight=document.body.classList.contains('claro');
+  const tickC = isLight?'#4A5568':'#B2BCD2';
+  const metaClr = isLight?'rgba(15,23,42,.55)':'rgba(255,255,255,.65)';
+  const tooltip = isLight
+    ? {backgroundColor:'#FFFFFF',titleColor:'#D95E08',bodyColor:'#161D2B',borderColor:'rgba(15,23,42,.15)',borderWidth:1,titleFont:{family:'Montserrat'},bodyFont:{family:'Montserrat'}}
+    : {backgroundColor:'#26262B',titleColor:'#F97316',bodyColor:'#EEF2FA',borderColor:'rgba(255,255,255,.12)',borderWidth:1,titleFont:{family:'Montserrat'},bodyFont:{family:'Montserrat'}};
 
-function renderChart() {
-  const isLight  = document.body.classList.contains('light-mode');
-  const gridC    = isLight ? 'rgba(0,0,0,.08)' : 'rgba(255,255,255,.06)';
-  const tickC    = isLight ? '#444' : '#94A3B8';
-  const tooltip  = {backgroundColor:'#141B26',titleColor:'#F97316',bodyColor:'#F1F5F9',borderColor:'#1E2D40',borderWidth:1,titleFont:{family:'Montserrat'},bodyFont:{family:'Montserrat'}};
-  const metaClr  = isLight ? 'rgba(0,0,0,.60)' : 'rgba(255,255,255,.70)';
+  const LABELS=['jan.','fev.','mar.','abr.','mai.','jun.','jul.','ago.','set.','out.','nov.','dez.'];
 
-  // Eixo X fixo: 12 meses
-  const LABELS   = ['jan.','fev.','mar.','abr.','mai.','jun.','jul.','ago.','set.','out.','nov.','dez.'];
+  const vigsByMonth={};
+  RAW.forEach(r=>{ const m=vigMonth(r.vig); (vigsByMonth[m]=vigsByMonth[m]||new Set()).add(r.vig); });
+  const allVigs=[...new Set(RAW.map(r=>r.vig))];
+  const sv=selVigKeys();
+  const filtroAtivo = sv.length>0 && sv.length<allVigs.length;
 
-  // Mapa: mês(1-12) → lista de vigs com esse mês
-  const vigsByMonth = {};
-  RAW.forEach(r => {
-    const m = vigMonth(r.vig);
-    if (!vigsByMonth[m]) vigsByMonth[m] = new Set();
-    vigsByMonth[m].add(r.vig);
+  const avgByMonth=Array.from({length:12},(_,i)=>{
+    const rows=RAW.filter(r=>vigMonth(r.vig)===i+1);
+    return rows.length?getFieldAvg(rows,activeInd):null;
+  });
+  const vigByMonthPos=Array.from({length:12},(_,i)=>[...(vigsByMonth[i+1]||[])][0]||null);
+
+  const rgba=(v,a)=> v==null ? `rgba(100,100,100,${a})`
+    : v>=85 ? `rgba(59,179,59,${a})` : v>=70 ? `rgba(244,161,0,${a})` : `rgba(255,82,82,${a})`;
+  const barColor=avgByMonth.map((v,i)=>{
+    const selected=!filtroAtivo||(vigByMonthPos[i]&&sv.includes(vigByMonthPos[i]));
+    return rgba(v, selected?'.9':'.18');
   });
 
-  // filtro ativo?
-  const allVigs      = [...new Set(RAW.map(r=>r.vig))];
-  const filtroAtivo  = selVig.length > 0 && selVig.length < allVigs.length;
+  const vals=avgByMonth.filter(v=>v!=null);
+  const shown=vals.length?vals.concat([70,85]):[60,85];
+  const yMin=Math.max(0, Math.floor((Math.min(...shown)-5)/5)*5);
+  const yMax=Math.min(112, Math.ceil((Math.max(...shown)+7)/5)*5);
 
-  // Para cada posição de mês (0=jan..11=dez): calcular avg das rows com esse mês
-  const avgByMonth = Array.from({length:12}, (_, i) => {
-    const m = i + 1;
-    const rows = RAW.filter(r => vigMonth(r.vig) === m);
-    return rows.length ? getFieldAvg(rows, activeInd) : null;
-  });
+  // legenda própria (.gleg) — série condicional tem legenda NEUTRA
+  $('g-leg').innerHTML =
+    `<span><i class="sq" style="background:var(--txt3)"></i>${IND_LABELS[activeInd]||''}</span>`+
+    `<span><i></i>Bom 70</span><span><i></i>Elite 85</span>`;
 
-  // Vig correspondente a cada posição de mês (para checar filtro)
-  const vigByMonthPos = Array.from({length:12}, (_, i) => {
-    const m = i + 1;
-    const vigs = [...(vigsByMonth[m] || [])];
-    return vigs[0] || null;
-  });
-
-  const barColor = avgByMonth.map((val, i) => {
-    const vig = vigByMonthPos[i];
-    const selected = !filtroAtivo || (vig && selVig.includes(vig));
-    const alpha = selected ? '.85' : '.18';
-    if (val == null) return `rgba(100,100,100,${alpha})`;
-    if (val >= 85)   return `rgba(59,179,59,${alpha})`;
-    if (val >= 70)   return `rgba(250,204,21,${alpha})`;
-    return `rgba(255,102,102,${alpha})`;
-  });
-  const barBorder = avgByMonth.map((val, i) => {
-    const vig = vigByMonthPos[i];
-    const selected = !filtroAtivo || (vig && selVig.includes(vig));
-    const op = selected ? '1' : '.25';
-    if (val == null) return `rgba(100,100,100,${op})`;
-    if (val >= 85)   return `rgba(59,179,59,${op})`;
-    if (val >= 70)   return `rgba(250,204,21,${op})`;
-    return `rgba(255,102,102,${op})`;
-  });
-
-  // Escala Y adaptável — cola nos dados + linhas de meta (70/85), sem headroom vazio
-  const vals = avgByMonth.filter(v => v != null);
-  const shown = vals.length ? vals.concat([70,85]) : [60,85];
-  const dMin = Math.min(...shown), dMax = Math.max(...shown);
-  const yMin = Math.max(0,   Math.floor((dMin - 5) / 5) * 5);
-  const yMax = Math.min(100, Math.ceil((dMax + 5) / 5) * 5);
-
-  // Meta lines: mesmo valor para todos os 12 meses
-  const meta85 = Array(12).fill(70);
-  const meta98 = Array(12).fill(85);
-
-  const ctx = document.getElementById('chartTemporal').getContext('2d');
-  if (chartTemporal) chartTemporal.destroy();
-  chartTemporal = new Chart(ctx, {
-    type: 'bar',
-    data: {
-      labels: LABELS,
-      datasets: [
-        {
-          label: IND_LABELS[activeInd] || activeInd,
-          data: avgByMonth,
-          backgroundColor: barColor,
-          borderColor: barBorder,
-          borderWidth: 1,
-          borderRadius: 4,
-          order: 3,
-          datalabels: {
-            display: (ctx) => {
-              const vig = vigByMonthPos[ctx.dataIndex];
-              return avgByMonth[ctx.dataIndex] != null && (!filtroAtivo || (vig && selVig.includes(vig)));
-            },
-            color: isLight ? '#1a1a1a' : '#F1F5F9',
-            font: {family:'Montserrat', size:15, weight:'700'},
-            formatter: v => v != null ? v.toFixed(1) : '',
-            anchor: 'end', align: 'end', offset: 2,
-          },
-        },
-        {
-          label: 'Bom 70',
-          data: meta85,
-          type: 'line',
-          borderColor: metaClr,
-          borderWidth: 2,
-          borderDash: [5, 3],
-          tension: 0,
-          fill: false,
-          pointRadius: 4,
-          pointBackgroundColor: metaClr,
-          pointBorderColor: metaClr,
-          pointBorderWidth: 1,
-          order: 1,
-          datalabels: {display: false},
-        },
-        {
-          label: 'Elite 85',
-          data: meta98,
-          type: 'line',
-          borderColor: metaClr,
-          borderWidth: 2,
-          borderDash: [5, 3],
-          tension: 0,
-          fill: false,
-          pointRadius: 4,
-          pointBackgroundColor: metaClr,
-          pointBorderColor: metaClr,
-          pointBorderWidth: 1,
-          order: 2,
-          datalabels: {display: false},
-        },
-      ],
-    },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      plugins: {
-        legend: {labels: {color: isLight?'#1a1a1a':'#F1F5F9', font:{family:'Montserrat',size:10}, boxWidth:12, padding:16}},
-        tooltip,
-        datalabels: {display: false},
-      },
-      scales: {
-        x: {grid:{color:gridC}, ticks:{color:tickC, font:{family:'Montserrat',size:13}}},
-        y: {
-          grid: {color:gridC},
-          ticks: {color:tickC, font:{family:'Montserrat',size:10}, callback: v => v},
-          min: yMin,
-          max: yMax,
-        },
+  if(chartTemporal) chartTemporal.destroy();
+  chartTemporal=new Chart(cv.getContext('2d'),{
+    type:'bar',
+    data:{ labels:LABELS, datasets:[
+      { label:IND_LABELS[activeInd]||activeInd, data:avgByMonth,
+        backgroundColor:barColor, borderWidth:0, borderRadius:0,
+        barPercentage:.97, categoryPercentage:.94, order:3,
+        datalabels:{
+          display:c=>{ const vig=vigByMonthPos[c.dataIndex];
+            return avgByMonth[c.dataIndex]!=null && (!filtroAtivo||(vig&&sv.includes(vig))); },
+          color:isLight?'#161D2B':'#EEF2FA',
+          font:{family:'Montserrat',size:11,weight:'700'},
+          formatter:v=>v!=null?v.toFixed(1):'',
+          anchor:'end', align:'end', offset:1,
+        } },
+      { label:'Bom 70',   data:Array(12).fill(70), type:'line', borderColor:metaClr, borderWidth:1.5,
+        borderDash:[5,3], tension:0, fill:false, pointRadius:0, order:1, datalabels:{display:false} },
+      { label:'Elite 85', data:Array(12).fill(85), type:'line', borderColor:metaClr, borderWidth:1.5,
+        borderDash:[5,3], tension:0, fill:false, pointRadius:0, order:2, datalabels:{display:false} },
+    ]},
+    options:{
+      responsive:true, maintainAspectRatio:false,
+      plugins:{ legend:{display:false}, tooltip, datalabels:{display:false} },
+      scales:{
+        x:{ grid:{display:false}, border:{display:false}, ticks:{color:tickC, font:{family:'Montserrat',size:11}} },
+        y:{ display:false, min:yMin, max:yMax },
       },
     },
   });
 }
 
-/* ── Atualizar ── */
-async function atualizar() {
-  set('status-badge','Carregando…');
-  try {
-    await fetchData();
-    if (ORIGEM === 'banco') {
-      const n = new Set(RAW.map(r => r.unit)).size;
-      const q = ULT_COLETA ? new Date(ULT_COLETA).toLocaleDateString('pt-BR') : '';
-      set('status-badge', `${n} motorista(s)` + (q ? ` · coleta ${q}` : ''));
-    } else {
-      set('status-badge','Prévia · dados de exemplo');
-    }
-  } catch(e) {
-    set('status-badge','Erro ao carregar dados');
-  }
+/* ── Carga ── */
+async function recarregar(){
+  set('titSub','Carregando…');
+  try{
+    let linhas=[];
+    try{ linhas=await fetchFromSupabase(); }catch(e){ console.warn('Supabase indisponível:', e.message); }
+    if(linhas.length){ RAW=linhas; ORIGEM='banco'; }
+    else             { RAW=generateRawRows(); ORIGEM='exemplo'; }
+    populateFilters();
+    atualizar();
+    if(ORIGEM==='banco'){
+      const n=new Set(RAW.map(r=>r.unit)).size;
+      const q=ULT_COLETA?new Date(ULT_COLETA).toLocaleDateString('pt-BR'):'';
+      set('titSub', `${n} motorista(s)`+(q?` · coleta ${q}`:''));
+    } else set('titSub','Prévia · dados de exemplo');
+  }catch(e){ console.error(e); set('titSub','Erro ao carregar dados'); }
 }
 
-function set(id,v){ const el=document.getElementById(id); if(el) el.textContent=v; }
-
-/* ── Último acesso ── */
-function initAccessLog() {
-  let name = localStorage.getItem('bi_user_name');
-  if (!name) { name = prompt('Qual é o seu nome?')||'Desconhecido'; localStorage.setItem('bi_user_name',name); }
-  const lastRaw = localStorage.getItem('bi_last_access');
-  if (lastRaw) {
-    const d = new Date(lastRaw);
-    const lastUser = localStorage.getItem('bi_last_user')||name;
-    const badge = document.getElementById('access-badge');
-    if (badge) { badge.textContent=`Último acesso: ${d.toLocaleDateString('pt-BR')} ${d.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})} · ${lastUser}`; badge.style.display=''; }
-  }
-  localStorage.setItem('bi_last_access',new Date().toISOString());
-  localStorage.setItem('bi_last_user',name);
+/* ── navegação entre as visões ── */
+const TIT={resumo:'Resumo Gerencial', ranking:'Ranking Geral'};
+function setVw(v){
+  VW=v;
+  document.querySelectorAll('.s-item[data-vw]').forEach(b=>b.classList.toggle('on',b.dataset.vw===v));
+  document.querySelectorAll('.vw').forEach(s=>s.classList.toggle('on', s.id==='vw-'+v));
+  set('tit', TIT[v]||'');
+  if(v==='resumo') setTimeout(renderChart,30);     // o canvas precisa estar visível
 }
+document.querySelectorAll('.s-item[data-vw]').forEach(b=>b.addEventListener('click',()=>setVw(b.dataset.vw)));
 
-/* ── Tema ── */
-const _sun=`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>`;
-const _moon=`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>`;
-function applyTheme(t){
-  document.body.classList.toggle('light-mode',t==='light');
-  localStorage.setItem('bi_theme',t);
-  const b=document.getElementById('themeBtn');
-  if(b) b.innerHTML=t==='light'?_moon:_sun;
+/* ── lateral recolhida + dicas ── */
+const DICA=document.createElement('div'); DICA.className='dica'; document.body.appendChild(DICA);
+const escondeDica=()=>DICA.classList.remove('on');
+function rotuloItem(b){
+  const c=b.cloneNode(true); c.querySelectorAll('.n,svg').forEach(e=>e.remove());
+  return c.textContent.replace(/\s+/g,' ').trim() || b.getAttribute('title') || '';
+}
+document.querySelectorAll('.side .s-item, .side .s-sair').forEach(b=>{
+  b.addEventListener('mouseenter',()=>{
+    if(!document.querySelector('.side').classList.contains('mini')) return;
+    const t=rotuloItem(b); if(!t) return;
+    DICA.textContent=t;
+    const r=b.getBoundingClientRect();
+    DICA.style.top=Math.round(r.top+r.height/2)+'px';
+    DICA.style.left=Math.round(r.right+10)+'px';
+    DICA.classList.add('on');
+  });
+  b.addEventListener('mouseleave',escondeDica);
+  b.addEventListener('click',escondeDica);
+});
+function trocaMini(){
+  escondeDica();
+  const l=document.querySelector('.side').classList.toggle('mini');
+  localStorage.setItem('ce_mini', l?'1':'0');
+  const b=$('btMini'); if(b) b.title=l?'Expandir menu':'Recolher menu';
+  setTimeout(renderChart,260);
+}
+if(localStorage.getItem('ce_mini')==='1'){ document.querySelector('.side').classList.add('mini'); $('btMini').title='Expandir menu'; }
+
+/* ── tema (chave bi_theme, a mesma do hub) ── */
+const _SOL=`<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4.5"/><path d="M12 1.5v2M12 20.5v2M4.2 4.2l1.4 1.4M18.4 18.4l1.4 1.4M1.5 12h2M20.5 12h2M4.2 19.8l1.4-1.4M18.4 5.6l1.4-1.4"/></svg>`;
+const _LUA=`<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>`;
+function aplicaTema(t){
+  document.body.classList.toggle('claro', t==='light');
+  localStorage.setItem('bi_theme', t);
+  const b=$('btTema'); if(b) b.innerHTML = t==='light'?_LUA:_SOL;
   if(RAW.length) renderChart();
 }
-(function(){
-  const t=localStorage.getItem('bi_theme')||'dark';
-  applyTheme(t);
-  document.getElementById('themeBtn').addEventListener('click',
-    ()=>applyTheme(document.body.classList.contains('light-mode')?'dark':'light'));
-})();
+function trocaTema(){ aplicaTema(document.body.classList.contains('claro')?'dark':'light'); }
+aplicaTema(localStorage.getItem('bi_theme')||'dark');
 
+/* ── início ── */
 buildIndSelector();
 renderPesos();
-document.addEventListener('DOMContentLoaded',()=>{ initAccessLog(); initData(); setInterval(atualizar,CACHE_TTL); });
+document.addEventListener('DOMContentLoaded',()=>{ recarregar(); setInterval(recarregar,60*60*1000); });
+let _rt;
+window.addEventListener('resize',()=>{ clearTimeout(_rt); _rt=setTimeout(renderChart,400); });
 </script>
-<script>(function(){function go(){try{initPdfExport();}catch(e){console.error(e);}}if(document.readyState!=='loading')go();else document.addEventListener('DOMContentLoaded',go);})();</script>
-<script src="../../assets/filters-toggle.js"></script>
 <script src="../../assets/mobile.js?v=202608220020"></script>
 <script src="../../assets/ctrlk.js"></script>
 <script src="../../assets/sortable-table.js"></script>
-<script src="../../assets/build-check.js?v=202609011940"></script>
+<script src="../../assets/excel-export.js"></script>
+<script src="../../assets/pdf-export.js"></script>
+<script>
+initPdfExport({
+  btnContainer:'#pdf-slot', btnClass:'s-item', btnAoFim:true,
+  title:'Condução Econômica', subtitle:()=>document.getElementById('titSub').textContent,
+  fileBase:'conducao-economica', main:()=>document.querySelector('.vw.on'),
+  views:()=>Object.keys(TIT).map(k=>({label:TIT[k], ativar:()=>setVw(k)})),
+  viewAtual:()=>VW, irPara:setVw,
+  isLight:()=>document.body.classList.contains('claro'), setTheme:aplicaTema
+});
+</script>
+<script src="../../assets/build-check.js?v=202609012300"></script>
 </body>
 </html>
