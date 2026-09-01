@@ -213,6 +213,16 @@ function gtChave(u) {
   const doc = String(u?.licenseNumber || u?.employeeNo || '').replace(/\D/g, '');
   return doc.length >= 9 ? doc : 'gt:' + (u?.id || '');
 }
+// unidade do motorista = grupo UNI_* do cadastro dele no Geotab (a sonda de
+// 01/09/2026 mediu: 1308/1308 têm, via companyGroups) — dado real, não de-para
+let GT_GNOME = new Map();   // id do grupo → nome (preenchido no login do run)
+function gtUni(u) {
+  for (const campo of ['companyGroups', 'driverGroups']) {
+    const hit = (u?.[campo] || []).map(g => GT_GNOME.get(g.id) || '').find(n => /^UNI_/.test(n));
+    if (hit) return hit.replace(/^UNI_/, '');
+  }
+  return null;
+}
 
 async function geotabDia(dia, cred, cacheUsuarios, regras, uniPorDev) {
   // a janela é o dia em BRT (UTC-3), não em UTC
@@ -295,7 +305,7 @@ async function geotabDia(dia, cred, cacheUsuarios, regras, uniPorDev) {
       bruto: { viagens: g.n, seg: { dir: g.dir, idle: g.idle, v1: g.v1, v2: g.v2, v3: g.v3 },
                eventos: { acel: g.acel, frea: g.frea, vel: g.vel } },
       _nome: (u.firstName || u.lastName) ? `${u.firstName || ''} ${u.lastName || ''}`.trim() : (u.name || id),
-      _uo: null,
+      _uo: null, _uni: gtUni(u),
     };
   });
   // a linha "Sem Login" de cada unidade: km/idle/velocidade saem das próprias
