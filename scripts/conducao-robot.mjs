@@ -63,7 +63,10 @@ const REGUA = {
 // econômica — fica para a Fase 4. `frea_100km` continua sendo calculado e
 // gravado no ce_diario, para o dado não se perder; ele só não entra no score.
 // Os pesos somam 90 e o score normaliza pela soma dos presentes (escala 0-100).
-const PESOS = { rpm: 25, idle: 20, acel: 15, vel: 15, freio: 10, cambio: 5 };
+// Freio Motor também saiu do score (Renan, 01/09/2026): não existe no
+// Geotab (varredura completa dos diagnósticos) — o freio_pontos continua
+// sendo calculado e gravado quando a vFleets entrar, só não pontua.
+const PESOS = { rpm: 25, idle: 20, acel: 15, vel: 15, cambio: 5 };
 
 const nota = (pilar, valor) => {
   if (valor == null || !isFinite(valor)) return null;
