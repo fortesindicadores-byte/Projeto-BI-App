@@ -960,6 +960,99 @@ const percentil = (arr, p) => {
   return s[Math.min(s.length - 1, Math.max(0, Math.floor(s.length * p)))];
 };
 
+/* ── COBERTURA DE RPM POR PLACA (Renan, 02/09/2026) ────────────────────────
+   "Quantas placas NUNCA reportaram rpm?" — um dia só não responde: veículo
+   parado no dia não prova nada. Este modo varre um período (padrão: 30
+   dias), conta para cada placa em quantos dias ela RODOU e em quantos dias
+   houve amostra de motor, e separa os três casos que se confundem:
+     · nunca rodou           → nem entra na conta;
+     · rodou e SEMPRE teve rpm → telemetria completa;
+     · rodou e NUNCA teve rpm  → ou não é veículo com ECU (implemento,
+       carreta, empilhadeira), ou o aparelho está sem o barramento ligado —
+       e essa segunda é chamado para a Argus.
+   O tipo do veículo vem da base de ativos do Ginfo, que é o que separa um
+   caso do outro. Log com placa, unidade, tipo e contagem — nada de pessoa. */
+if (MODE === 'rpmcov') {
+  const cred = await geotabLogin();
+  if (!cred) { console.error('Geotab: sem credencial'); process.exit(1); }
+  const RDE = process.env.CE_DE || iso(new Date(ontem.getTime() - 29 * 864e5));
+  const RATE = process.env.CE_ATE || iso(ontem);
+  console.log(`cobertura de RPM por placa · ${RDE} → ${RATE}`);
+
+  const est = new Map();   // devId → {diasRodou, diasRpm, km}
+  let dias = 0;
+  for (let d = new Date(RDE + 'T12:00:00Z'); iso(d) <= RATE; d = new Date(d.getTime() + 864e5)) {
+    const dia = iso(d); dias++;
+    const de = `${dia}T03:00:00.000Z`, ate = new Date(new Date(de).getTime() + 864e5 - 1).toISOString();
+    try {
+      const trips = await geotabRpc('Get', { typeName: 'Trip',
+        search: { fromDate: de, toDate: ate }, resultsLimit: 50000 }, cred);
+      const kmDia = new Map();
+      trips.forEach(t => { const id = t.device && t.device.id; if (!id) return;
+        kmDia.set(id, (kmDia.get(id) || 0) + (+t.distance || 0)); });
+      const { porDev: rpmD } = await geotabRpmDia(dia, cred);
+      for (const [id, km] of kmDia) {
+        const e = est.get(id) || { diasRodou: 0, diasRpm: 0, km: 0 };
+        e.diasRodou++; e.km += km;
+        if ((rpmD.get(id) || []).length) e.diasRpm++;
+        est.set(id, e);
+      }
+    } catch (e) { console.log(`${dia}: ${e.message.slice(0, 100)}`); }
+  }
+
+  const [devs, grupos] = await Promise.all([
+    geotabRpc('Get', { typeName: 'Device' }, cred),
+    geotabRpc('Get', { typeName: 'Group' }, cred),
+  ]);
+  const gN = new Map(grupos.map(g => [g.id, g.name || '']));
+  const info = new Map(devs.map(d => {
+    const u = (d.groups || []).map(g => gN.get(g.id) || '').find(n => /^UNI_/.test(n));
+    return [d.id, { placa: String(d.licensePlate || d.name || d.id).toUpperCase().trim(),
+                    uni: u ? u.replace(/^UNI_/, '') : '(sem grupo UNI)' }];
+  }));
+
+  // tipo do veículo: é o que separa "não tem ECU" de "instalação a corrigir"
+  const TIPO = new Map();
+  if (SB_KEY) {
+    try {
+      const r = await fetch(`${SB_URL}/rest/v1/ginfo_snapshot?chave=eq.ativos&select=data`,
+        { headers: { apikey: SB_KEY, Authorization: `Bearer ${SB_KEY}` } });
+      const [gs] = r.ok ? await r.json() : [];
+      const pk = p => { const x = String(p || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+        return /^[A-Z]{3}\d{4}$/.test(x) ? x.slice(0, 4) + 'ABCDEFGHIJ'['0123456789'.indexOf(x[4])] + x.slice(5) : x; };
+      (Array.isArray(gs && gs.data) ? gs.data : []).forEach(a =>
+        TIPO.set(pk(a['Placa']), `${a['Tipo Veículo'] || '?'} · ${a['Modelo'] || ''}`.trim()));
+    } catch (e) { console.log('ativos:', e.message.slice(0, 80)); }
+  }
+  const pk = p => { const x = String(p || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+    return /^[A-Z]{3}\d{4}$/.test(x) ? x.slice(0, 4) + 'ABCDEFGHIJ'['0123456789'.indexOf(x[4])] + x.slice(5) : x; };
+
+  const linhas = [...est.entries()].map(([id, e]) => ({ ...(info.get(id) || { placa: id, uni: '?' }), ...e }));
+  const nunca = linhas.filter(l => l.diasRpm === 0);
+  const sempre = linhas.filter(l => l.diasRpm === l.diasRodou);
+  const asVezes = linhas.filter(l => l.diasRpm > 0 && l.diasRpm < l.diasRodou);
+
+  console.log(`\n${dias} dia(s) varrido(s) · ${linhas.length} placa(s) rodaram no período`);
+  console.log(`   SEMPRE com rpm: ${sempre.length}`);
+  console.log(`   às vezes:       ${asVezes.length}`);
+  console.log(`   NUNCA com rpm:  ${nunca.length}`);
+
+  if (nunca.length) {
+    console.log('\n── PLACAS QUE RODARAM E NUNCA REPORTARAM RPM ──');
+    console.log('placa      unidade                dias   km      tipo do veículo (base de ativos)');
+    nunca.sort((a, b) => b.km - a.km).forEach(l => console.log(
+      `${l.placa.padEnd(10)} ${l.uni.padEnd(22)} ${String(l.diasRodou).padStart(4)}  `
+      + `${Math.round(l.km).toLocaleString('pt-BR').padStart(7)}  ${TIPO.get(pk(l.placa)) || '(fora da base de ativos)'}`));
+  }
+  if (asVezes.length) {
+    console.log('\n── INTERMITENTES (têm rpm em parte dos dias) ──');
+    asVezes.sort((a, b) => (a.diasRpm / a.diasRodou) - (b.diasRpm / b.diasRodou)).slice(0, 25)
+      .forEach(l => console.log(`${l.placa.padEnd(10)} ${l.uni.padEnd(22)} rpm em ${l.diasRpm}/${l.diasRodou} dia(s)`));
+  }
+  console.log('\nRelatório encerrado — nada foi gravado.');
+  process.exit(0);
+}
+
 if (MODE === 'marchacalc') {
   const cred = await geotabLogin();
   if (!cred) { console.error('Geotab: sem credencial'); process.exit(1); }
