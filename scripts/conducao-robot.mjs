@@ -972,6 +972,82 @@ const percentil = (arr, p) => {
        e essa segunda é chamado para a Argus.
    O tipo do veículo vem da base de ativos do Ginfo, que é o que separa um
    caso do outro. Log com placa, unidade, tipo e contagem — nada de pessoa. */
+/* ── BASE DE MEDIÇÃO POR MOTORISTA (Renan, 02/09/2026) ─────────────────────
+   "Quais motoristas eu consigo medir num mês, para ter parâmetro de cobrança?"
+   Um motorista que rodou 2 dias no mês não é comparável com quem rodou 20 —
+   cobrar os dois pela mesma régua é injusto e destrói a confiança no ranking.
+   Este modo mede a BASE de cada um em um mês: dias com faixa verde apurada e
+   horas de motor efetivamente medidas, e mostra a DISTRIBUIÇÃO, que é o que
+   permite escolher o corte com dado em vez de chute.
+   Repositório público: o log traz faixas, contagens e unidade — nunca nome
+   nem chave de motorista.                                                  */
+if (MODE === 'base') {
+  if (!SB_KEY) { console.error('GEM_SUPABASE_SERVICE_KEY ausente'); process.exit(1); }
+  const MES = (process.env.CE_MES || '2026-08').slice(0, 7);
+  const de = MES + '-01';
+  const ate = new Date(+MES.slice(0, 4), +MES.slice(5, 7), 0).toISOString().slice(0, 10);
+  console.log(`base de medição por motorista · ${de} → ${ate}`);
+
+  const dias = await sbTodos(`ce_diario?select=dia,chave,km,rpm_verde_pct,bruto&dia=gte.${de}&dia=lte.${ate}`);
+  const cad = await sbTodos('ce_motoristas?select=chave,unidade');
+  const uniDe = new Map(cad.map(c => [c.chave, c.unidade || '(sem unidade)']));
+
+  const por = new Map();   // chave → {dias, diasRpm, km, segRpm}
+  for (const l of dias) {
+    if (String(l.chave || '').startsWith('semlogin:')) continue;   // não é pessoa
+    const e = por.get(l.chave) || { dias: 0, diasRpm: 0, km: 0, segRpm: 0 };
+    e.dias++;
+    e.km += +l.km || 0;
+    if (l.rpm_verde_pct != null) e.diasRpm++;
+    const r = l.bruto && l.bruto.rpm;
+    if (r && isFinite(+r.rodando)) e.segRpm += +r.rodando;
+    por.set(l.chave, e);
+  }
+  const linhas = [...por.entries()].map(([k, e]) => ({ ...e, uni: uniDe.get(k) || '(fora do cadastro)',
+    horas: e.segRpm / 3600 }));
+  console.log(`\nmotoristas que rodaram no mês: ${linhas.length}`);
+
+  const faixa = (arr, rot, campo, cortes) => {
+    console.log(`\n── ${rot} ──`);
+    let ant = 0;
+    for (const c of cortes) {
+      const n = arr.filter(l => l[campo] > ant && l[campo] <= c).length;
+      console.log(`   ${String(ant + (campo === 'diasRpm' ? 1 : 0)).padStart(3)} a ${String(c).padStart(3)}: ${String(n).padStart(4)} motorista(s)`
+        + `  ${'█'.repeat(Math.round(n / Math.max(1, arr.length) * 50))}`);
+      ant = c;
+    }
+    const n = arr.filter(l => l[campo] > ant).length;
+    console.log(`   acima de ${ant}: ${String(n).padStart(4)} motorista(s)  ${'█'.repeat(Math.round(n / Math.max(1, arr.length) * 50))}`);
+  };
+  faixa(linhas, 'DIAS COM FAIXA VERDE APURADA no mês', 'diasRpm', [0, 2, 4, 7, 10, 15, 20]);
+  faixa(linhas, 'HORAS DE MOTOR MEDIDAS no mês', 'horas', [1, 5, 10, 20, 40, 80]);
+
+  // quanto do KM do mês cada corte cobre — é o que diz se o corte "perde" operação
+  const kmTot = linhas.reduce((a, l) => a + l.km, 0);
+  console.log('\n── O QUE CADA CORTE DEIXA DE FORA ──');
+  console.log('corte (dias mín.)   motoristas dentro   % do km do mês coberto');
+  for (const c of [1, 3, 5, 8, 10, 12, 15]) {
+    const dentro = linhas.filter(l => l.diasRpm >= c);
+    const km = dentro.reduce((a, l) => a + l.km, 0);
+    console.log(`   ${String(c).padStart(2)} dia(s)          ${String(dentro.length).padStart(5)}/${linhas.length}`
+      + `            ${(kmTot ? km / kmTot * 100 : 0).toFixed(1)}%`);
+  }
+
+  // por unidade: onde a base é fraca (unidade pode aparecer, pessoa não)
+  const porUni = new Map();
+  linhas.forEach(l => {
+    const t = porUni.get(l.uni) || { n: 0, ok: 0, km: 0 };
+    t.n++; if (l.diasRpm >= 8) t.ok++; t.km += l.km;
+    porUni.set(l.uni, t);
+  });
+  console.log('\n── POR UNIDADE (base ≥ 8 dias com faixa verde) ──');
+  [...porUni.entries()].sort((a, b) => (a[1].ok / a[1].n) - (b[1].ok / b[1].n))
+    .forEach(([u, t]) => console.log(`   ${u.padEnd(22)} ${String(t.ok).padStart(3)}/${String(t.n).padEnd(3)} motorista(s) com base`
+      + `  (${(t.ok / t.n * 100).toFixed(0)}%)`));
+  console.log('\nRelatório encerrado — nada foi gravado.');
+  process.exit(0);
+}
+
 if (MODE === 'rpmcov') {
   const cred = await geotabLogin();
   if (!cred) { console.error('Geotab: sem credencial'); process.exit(1); }
