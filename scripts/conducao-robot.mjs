@@ -894,6 +894,161 @@ if (MODE === 'sonda') {
   process.exit(0);
 }
 
+/* ── MARCHA DERIVADA de RPM ÷ VELOCIDADE (Renan, 02/09/2026) ───────────────
+   A sonda mostrou que só 42 de 101 veículos publicam "Posição da marcha":
+   quem tem câmbio manual sem ECU de transmissão não coloca esse PGN no
+   barramento, embora publique RPM (98 de 101). Como a relação de
+   transmissão é fixa em cada marcha, `rpm ÷ velocidade` é praticamente
+   constante enquanto a marcha não muda — então a marcha dá para DERIVAR de
+   dois dados que quase toda a frota tem.
+
+   O pilar não precisa do NÚMERO da marcha, e sim de duas respostas:
+     · "dava para subir?"  → a razão está longe da menor razão do veículo
+       (ou seja, não está na marcha mais alta) e o motor está acelerado;
+     · "está afogando?"    → a razão está perto da menor (marcha alta) e o
+       motor está abaixo do platô.
+   A menor razão de cada veículo sai do próprio dado (percentil 5), então não
+   é preciso tabela de relações por modelo — o que seria chute com 3 marcas
+   e caixas de 5, 6 e 12 marchas na frota.
+
+   Este modo NÃO grava: ele calcula e CONFERE contra os 42 que publicam a
+   marcha de verdade, que é o gabarito para saber se a derivação serve.  */
+const V_MIN_KMH = +process.env.CE_MARCHA_VMIN || 15;   // abaixo disso, embreagem/arranque sujam a razão
+const G_SUBIR   = +process.env.CE_MARCHA_GSUBIR || 1.15; // razão 15% acima da menor = tem marcha acima
+const G_ALTA    = +process.env.CE_MARCHA_GALTA  || 1.25; // até 25% acima da menor = marcha alta
+
+// velocidade do dia por veículo: LogRecord (GPS) é a fonte mais coberta
+async function geotabVelDia(dia, cred) {
+  const de0 = `${dia}T03:00:00.000Z`;
+  const fim = new Date(new Date(de0).getTime() + 864e5 - 1).toISOString();
+  const porDev = new Map();
+  let from = de0, pag = 0, total = 0;
+  while (pag < 40) {
+    const lote = await geotabRpc('Get', { typeName: 'LogRecord',
+      search: { fromDate: from, toDate: fim }, resultsLimit: 50000 }, cred);
+    pag++; total += lote.length;
+    for (const r of lote) {
+      const id = r.device && r.device.id; if (!id) continue;
+      const v = +r.speed; if (!isFinite(v)) continue;
+      let a = porDev.get(id); if (!a) { a = []; porDev.set(id, a); }
+      a.push({ t: new Date(r.dateTime).getTime(), v });
+    }
+    if (lote.length < 50000) break;
+    from = new Date(new Date(lote[lote.length - 1].dateTime).getTime() + 1).toISOString();
+  }
+  porDev.forEach(a => a.sort((x, y) => x.t - y.t));
+  return { porDev, total, paginas: pag };
+}
+
+// casa cada amostra de RPM com a velocidade vigente e devolve as razões
+function razoes(rpmAm, velAm) {
+  const out = [];
+  if (!rpmAm || !velAm || !velAm.length) return out;
+  let j = 0;
+  for (const a of rpmAm) {
+    while (j + 1 < velAm.length && velAm[j + 1].t <= a.t) j++;
+    const vv = velAm[j];
+    if (!vv || Math.abs(vv.t - a.t) > RPM_GAP_MS) continue;
+    if (!(vv.v >= V_MIN_KMH) || !isFinite(a.rpm) || a.rpm <= RPM_LENTA) continue;
+    out.push({ t: a.t, rpm: a.rpm, v: vv.v, r: a.rpm / vv.v });
+  }
+  return out;
+}
+const percentil = (arr, p) => {
+  if (!arr.length) return null;
+  const s = arr.slice().sort((a, b) => a - b);
+  return s[Math.min(s.length - 1, Math.max(0, Math.floor(s.length * p)))];
+};
+
+if (MODE === 'marchacalc') {
+  const cred = await geotabLogin();
+  if (!cred) { console.error('Geotab: sem credencial'); process.exit(1); }
+  const DIA = process.env.CE_DE || iso(ontem);
+  const ALTO = +process.env.CE_MARCHA_ALTO || 1900, BAIXO = +process.env.CE_MARCHA_BAIXO || 1000;
+  console.log(`marcha DERIVADA (rpm ÷ velocidade) · dia ${DIA}`);
+  console.log(`   velocidade mínima ${V_MIN_KMH} km/h · "tem marcha acima" acima de ${G_SUBIR}× · "marcha alta" até ${G_ALTA}×`);
+
+  const { porDev: rpmD, total: nR } = await geotabRpmDia(DIA, cred);
+  const { porDev: velD, total: nV, paginas } = await geotabVelDia(DIA, cred);
+  console.log(`\nRPM: ${nR} amostra(s) · ${rpmD.size} veículo(s)`);
+  console.log(`Velocidade (LogRecord): ${nV} amostra(s) em ${paginas} pág. · ${velD.size} veículo(s)`);
+  if (!velD.size) { console.log('Sem LogRecord — a derivação precisa de velocidade. Sonda encerrada.'); process.exit(0); }
+
+  // gabarito: os veículos que publicam a marcha de verdade
+  const mch = await geotabMarchaDia(DIA, cred);
+  console.log(`Posição da marcha (gabarito): ${mch.total} amostra(s) · ${mch.porDev.size} veículo(s)`);
+
+  const devs = await geotabRpc('Get', { typeName: 'Device' }, cred);
+  const placa = new Map(devs.map(d => [d.id, String(d.licensePlate || d.name || d.id).toUpperCase().trim()]));
+
+  let comRazao = 0, acertos = 0, comparadas = 0;
+  const linhas = [];
+  for (const [id, rpmAm] of rpmD) {
+    const pares = razoes(rpmAm, velD.get(id));
+    if (pares.length < 50) continue;                    // pouco dado no dia
+    comRazao++;
+    const rMin = percentil(pares.map(x => x.r), 0.05);  // marcha mais alta usada no dia
+    if (!rMin) continue;
+    // pilar derivado
+    let ruim = 0, tot = 0;
+    for (let i = 0; i < pares.length; i++) {
+      const dt = i + 1 < pares.length ? Math.min(pares[i + 1].t - pares[i].t, RPM_GAP_MS) / 1000 : 1;
+      if (dt <= 0) continue;
+      const g = pares[i].r / rMin;
+      tot += dt;
+      if (pares[i].rpm > ALTO && g > G_SUBIR) ruim += dt;        // dava para subir
+      else if (pares[i].rpm < BAIXO && g < G_ALTA) ruim += dt;   // afogando em marcha alta
+    }
+    const pctDer = tot ? ruim / tot * 100 : null;
+
+    // confere com o gabarito, quando o veículo publica a marcha
+    const ga = mch.porDev.get(id), maxG = mch.maxG.get(id);
+    let pctReal = null, acc = null;
+    if (ga && maxG) {
+      const jj = marchaJanela(ga, rpmAm, pares[0].t, pares[pares.length - 1].t, maxG);
+      pctReal = jj.total ? jj.ruim / jj.total * 100 : null;
+      // acurácia da pergunta que importa: "está na marcha mais alta?"
+      let ok = 0, n = 0, k = 0;
+      for (const p of pares) {
+        while (k + 1 < ga.length && ga[k + 1].t <= p.t) k++;
+        const gv = ga[k] && Math.abs(ga[k].t - p.t) <= RPM_GAP_MS ? ga[k].g : null;
+        if (!isFinite(gv) || gv <= 0 || gv >= 100) continue;
+        const naMaisAltaReal = gv >= maxG;
+        const naMaisAltaDer  = (p.r / rMin) <= G_SUBIR;
+        n++; if (naMaisAltaReal === naMaisAltaDer) ok++;
+      }
+      if (n >= 30) { acc = ok / n * 100; acertos += ok; comparadas += n; }
+    }
+    linhas.push({ placa: placa.get(id) || id, n: pares.length, rMin, pctDer, pctReal, acc });
+  }
+
+  console.log(`\nveículos com razão calculável: ${comRazao}`);
+  const comGab = linhas.filter(l => l.acc != null);
+  if (comGab.length) {
+    console.log(`\n── CONFERÊNCIA contra os que publicam a marcha (${comGab.length} veículo(s)) ──`);
+    console.log('placa      amostras  razão mín  pilar derivado  pilar real   acerto "marcha mais alta"');
+    comGab.sort((a, b) => b.acc - a.acc).forEach(l => console.log(
+      `${l.placa.padEnd(10)} ${String(l.n).padStart(7)}  ${l.rMin.toFixed(1).padStart(8)}`
+      + `  ${(l.pctDer == null ? '—' : l.pctDer.toFixed(1) + '%').padStart(13)}`
+      + `  ${(l.pctReal == null ? '—' : l.pctReal.toFixed(1) + '%').padStart(10)}`
+      + `   ${l.acc.toFixed(1)}%`));
+    const erroPilar = comGab.filter(l => l.pctDer != null && l.pctReal != null)
+      .map(l => Math.abs(l.pctDer - l.pctReal));
+    console.log(`\nacerto GLOBAL de "está na marcha mais alta": ${(acertos / comparadas * 100).toFixed(1)}%`
+      + ` (${comparadas} amostra(s) comparadas)`);
+    if (erroPilar.length) {
+      const med = erroPilar.reduce((a, b) => a + b, 0) / erroPilar.length;
+      console.log(`erro médio do PILAR (derivado × real): ${med.toFixed(1)} ponto(s) percentual(is)`);
+    }
+  } else console.log('nenhum veículo com gabarito e razão ao mesmo tempo — não dá para validar hoje');
+
+  const semGab = linhas.filter(l => l.acc == null && l.pctDer != null);
+  console.log(`\nveículos que GANHARIAM o pilar pela derivação (não publicam marcha): ${semGab.length}`);
+  console.log('   ' + semGab.slice(0, 12).map(l => `${l.placa}=${l.pctDer.toFixed(1)}%`).join(' · '));
+  console.log('\nSonda encerrada — nada foi gravado.');
+  process.exit(0);
+}
+
 if (MODE === 'marcha') {
   // SONDA DO PILAR "USO DE MARCHAS" (Renan, 01/09/2026) — só leitura, não
   // grava nada. A varredura de diagnósticos achou "Posição da marcha" com
