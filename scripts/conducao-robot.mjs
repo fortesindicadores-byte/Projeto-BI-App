@@ -916,6 +916,63 @@ if (MODE === 'marcha') {
   cand.forEach(d => console.log(`   ${d.id}  ${d.name}`));
   if (!cand.length) { console.log('Nenhum diagnóstico de marcha — sonda encerrada.'); process.exit(0); }
 
+  // POR QUE SÓ ~30% DOS MOTORISTAS TÊM O PILAR? (Renan, 01/09/2026)
+  // Telemetria devia ler em todo mundo, então antes de aceitar a cobertura
+  // baixa é preciso saber ONDE ela se perde: veículo que não reporta o
+  // parâmetro, ou outro diagnóstico (cada fabricante expõe o seu) que a
+  // gente não está lendo. Compara, no MESMO dia: veículos que rodaram ×
+  // veículos com RPM × veículos com marcha, e varre TODOS os diagnósticos
+  // de transmissão do catálogo contando veículos distintos em cada um.
+  {
+    const deD = `${DIA}T03:00:00.000Z`, ateD = new Date(new Date(deD).getTime() + 864e5 - 1).toISOString();
+    const trips = await geotabRpc('Get', { typeName: 'Trip',
+      search: { fromDate: deD, toDate: ateD }, resultsLimit: 50000 }, cred);
+    const devRod = new Set(trips.map(t => t.device && t.device.id).filter(Boolean));
+    const { porDev: rpmD } = await geotabRpmDia(DIA, cred);
+    console.log(`\n── COBERTURA em ${DIA} ──`);
+    console.log(`   veículos que rodaram (com viagem): ${devRod.size}`);
+    console.log(`   veículos com amostra de RPM:       ${rpmD.size}`);
+
+    // todo diagnóstico que cheire a transmissão/marcha, não só o que já usamos
+    const trans = diags.filter(d => /marcha|gear|transmiss|c[aâ]mbio|shift/i.test(d.name || ''));
+    console.log(`\n   diagnósticos de transmissão no catálogo: ${trans.length} — veículos distintos no dia:`);
+    const uniao = new Set();
+    for (const d of trans) {
+      try {
+        const am = await geotabRpc('Get', { typeName: 'StatusData',
+          search: { diagnosticSearch: { id: d.id }, fromDate: deD, toDate: ateD }, resultsLimit: 50000 }, cred);
+        if (!am.length) continue;
+        const devs = new Set(am.map(r => r.device && r.device.id).filter(Boolean));
+        devs.forEach(x => uniao.add(x));
+        console.log(`      ${String(am.length).padStart(6)} amostra(s) · ${String(devs.size).padStart(4)} veículo(s) · ${String(d.name).slice(0, 60)}`);
+      } catch (e) { /* diagnóstico sem dado não interessa */ }
+    }
+    console.log(`   veículos cobertos por ALGUM diagnóstico de transmissão: ${uniao.size}`);
+    const semMarcha = [...devRod].filter(id => !uniao.has(id));
+    console.log(`   rodaram mas NÃO reportam marcha em nenhum: ${semMarcha.length}`);
+    if (semMarcha.length) {
+      // placa e unidade, para cobrar a habilitação de quem falta (sem nome de pessoa)
+      const [devs2, grupos] = await Promise.all([
+        geotabRpc('Get', { typeName: 'Device' }, cred),
+        geotabRpc('Get', { typeName: 'Group' }, cred),
+      ]);
+      const gN = new Map(grupos.map(g => [g.id, g.name || '']));
+      const info = new Map(devs2.map(d => {
+        const u = (d.groups || []).map(g => gN.get(g.id) || '').find(n => /^UNI_/.test(n));
+        return [d.id, { placa: String(d.licensePlate || d.name || d.id).toUpperCase().trim(),
+                        uni: u ? u.replace(/^UNI_/, '') : '(sem grupo UNI)' }];
+      }));
+      const porUni = new Map();
+      semMarcha.forEach(id => { const u = (info.get(id) || {}).uni || '(fora do cadastro)';
+        porUni.set(u, (porUni.get(u) || 0) + 1); });
+      console.log('   por unidade:');
+      [...porUni.entries()].sort((a, b) => b[1] - a[1])
+        .forEach(([u, n]) => console.log(`      ${u.padEnd(22)} ${n} veículo(s)`));
+      console.log('   placas (para pedir a habilitação do parâmetro):');
+      console.log('      ' + semMarcha.map(id => (info.get(id) || { placa: id }).placa).sort().join(' · '));
+    }
+  }
+
   const de0 = `${DIA}T03:00:00.000Z`;
   const fim = new Date(new Date(de0).getTime() + 864e5 - 1).toISOString();
 
