@@ -327,6 +327,36 @@ async function geotabMarchaDia(dia, cred) {
   return { porDev, maxG, total, paginas };
 }
 
+/* BANGUELA (Renan, 02/09/2026): o Geotab não tem um parâmetro pronto, mas
+   tem os dois ingredientes — posição da marcha em PONTO MORTO (valor 0) e o
+   veículo em MOVIMENTO. Rodar em neutro é banguela: o motor volta à marcha
+   lenta, o freio motor some e o consumo de quem desce embalado piora, além
+   do risco. O limiar de velocidade evita contar o óbvio: parado no semáforo
+   com a marcha em neutro é correto, não é banguela.
+   Mesma limitação de cobertura do Uso de Marchas: depende do parâmetro de
+   marcha, que só 42 dos 101 veículos publicam.                            */
+const BANG_VMIN = +process.env.CE_BANG_VMIN || 20;   // km/h a partir do qual neutro = banguela
+
+function banguelaJanela(marchas, velAm, ini, fim) {
+  let neutro = 0, movimento = 0;
+  if (!marchas || !velAm || !velAm.length) return { neutro, movimento };
+  let j = 0;
+  for (let i = 0; i < marchas.length; i++) {
+    const a = marchas[i];
+    if (a.t > fim) break;
+    const prox = i + 1 < marchas.length ? marchas[i + 1].t : a.t + 1000;
+    const t0 = Math.max(a.t, ini), t1 = Math.min(prox, fim, a.t + RPM_GAP_MS);
+    if (t1 <= t0) continue;
+    while (j + 1 < velAm.length && velAm[j + 1].t <= a.t) j++;
+    const vv = velAm[j];
+    if (!vv || Math.abs(vv.t - a.t) > RPM_GAP_MS || !(vv.v >= BANG_VMIN)) continue;
+    const dt = (t1 - t0) / 1000;
+    movimento += dt;
+    if (a.g === 0) neutro += dt;                     // ponto morto rodando = banguela
+  }
+  return { neutro, movimento };
+}
+
 // tempo em marcha errada e tempo total com marcha engatada numa janela.
 // Cada amostra de marcha vale até a próxima (teto RPM_GAP_MS) e é cruzada
 // com o RPM vigente naquele instante.
@@ -353,7 +383,7 @@ function marchaJanela(marchas, rpmAm, ini, fim, maxMarcha) {
   return { ruim, total };
 }
 
-async function geotabDia(dia, cred, cacheUsuarios, regras, uniPorDev, rpmPorDev, mch) {
+async function geotabDia(dia, cred, cacheUsuarios, regras, uniPorDev, rpmPorDev, mch, velPorDev) {
   // a janela é o dia em BRT (UTC-3), não em UTC
   const de = `${dia}T03:00:00.000Z`;
   const ate = new Date(new Date(de).getTime() + 864e5 - 1).toISOString();
@@ -395,6 +425,8 @@ async function geotabDia(dia, cred, cacheUsuarios, regras, uniPorDev, rpmPorDev,
         if (am) { const j = rpmJanela(am, ti, tf); g.rpmV += j.verde; g.rpmR += j.rodando; }
         if (mch && am) { const k = marchaJanela(mch.porDev.get(dev), am, ti, tf, mch.maxG.get(dev));
                          g.mchR = (g.mchR || 0) + k.ruim; g.mchT = (g.mchT || 0) + k.total; }
+        if (mch && velPorDev) { const bg = banguelaJanela(mch.porDev.get(dev), velPorDev.get(dev), ti, tf);
+                                g.bgN = (g.bgN || 0) + bg.neutro; g.bgM = (g.bgM || 0) + bg.movimento; }
         semLogin.set(uni, g);
       }
       continue;
@@ -414,6 +446,8 @@ async function geotabDia(dia, cred, cacheUsuarios, regras, uniPorDev, rpmPorDev,
     if (am) { const j = rpmJanela(am, ini, fim); g.rpmV = (g.rpmV || 0) + j.verde; g.rpmR = (g.rpmR || 0) + j.rodando; }
     if (mch && am) { const k = marchaJanela(mch.porDev.get(t.device?.id), am, ini, fim, mch.maxG.get(t.device?.id));
                      g.mchR = (g.mchR || 0) + k.ruim; g.mchT = (g.mchT || 0) + k.total; }
+    if (mch && velPorDev) { const bg = banguelaJanela(mch.porDev.get(t.device?.id), velPorDev.get(t.device?.id), ini, fim);
+                            g.bgN = (g.bgN || 0) + bg.neutro; g.bgM = (g.bgM || 0) + bg.movimento; }
     porMot.set(d, g);
   }
   for (const [d, m] of porDrv) {
@@ -441,7 +475,10 @@ async function geotabDia(dia, cred, cacheUsuarios, regras, uniPorDev, rpmPorDev,
       acel_100km: g.km > 0 ? g.acel / g.km * 100 : null,
       frea_100km: g.km > 0 ? g.frea / g.km * 100 : null,
       vel_excesso_pct: tMov ? (g.v1 + 2 * g.v2 + 3 * g.v3) / tMov * 100 : null,
-      freio_motor_pct: null, banguela_pct: null,   // freio motor não existe no Geotab
+      freio_motor_pct: null,                       // freio motor não existe no Geotab
+      // banguela = ponto morto com o veículo em movimento; menos de 1 min
+      // em movimento com marcha lida no dia não vale nota
+      banguela_pct: (g.bgM || 0) > 60 ? g.bgN / g.bgM * 100 : null,
       // marcha errada reconstruída de "Posição da marcha" × RPM; menos de
       // 1 min com marcha engatada não vale nota
       cambio_ruim_pct: (g.mchT || 0) > 60 ? g.mchR / g.mchT * 100 : null,
@@ -449,6 +486,7 @@ async function geotabDia(dia, cred, cacheUsuarios, regras, uniPorDev, rpmPorDev,
       bruto: { viagens: g.n, seg: { dir: g.dir, idle: g.idle, v1: g.v1, v2: g.v2, v3: g.v3 },
                rpm: { verde: Math.round(g.rpmV || 0), rodando: Math.round(g.rpmR || 0) },
                marcha: { ruim: Math.round(g.mchR || 0), total: Math.round(g.mchT || 0) },
+               banguela: { neutro: Math.round(g.bgN || 0), movimento: Math.round(g.bgM || 0) },
                eventos: { acel: g.acel, frea: g.frea, vel: g.vel } },
       _nome: (u.firstName || u.lastName) ? `${u.firstName || ''} ${u.lastName || ''}`.trim() : (u.name || id),
       _uo: null, _uni: gtUni(u),
@@ -466,12 +504,14 @@ async function geotabDia(dia, cred, cacheUsuarios, regras, uniPorDev, rpmPorDev,
       idle_pct: (g.dir + g.idle) ? g.idle / (g.dir + g.idle) * 100 : null,
       acel_100km: null, frea_100km: null,
       vel_excesso_pct: tMov ? (g.v1 + 2 * g.v2 + 3 * g.v3) / tMov * 100 : null,
-      freio_motor_pct: null, banguela_pct: null,
+      freio_motor_pct: null,
+      banguela_pct: (g.bgM || 0) > 60 ? g.bgN / g.bgM * 100 : null,
       cambio_ruim_pct: (g.mchT || 0) > 60 ? g.mchR / g.mchT * 100 : null,
       registros: g.n,
       bruto: { semLogin: true, viagens: g.n, seg: { dir: g.dir, idle: g.idle, v1: g.v1, v2: g.v2, v3: g.v3 },
                rpm: { verde: Math.round(g.rpmV || 0), rodando: Math.round(g.rpmR || 0) },
-               marcha: { ruim: Math.round(g.mchR || 0), total: Math.round(g.mchT || 0) } },
+               marcha: { ruim: Math.round(g.mchR || 0), total: Math.round(g.mchT || 0) },
+               banguela: { neutro: Math.round(g.bgN || 0), movimento: Math.round(g.bgM || 0) } },
       _nome: 'Sem Login · ' + uni, _uo: null, _uni: uni,
     });
   }
@@ -1129,6 +1169,47 @@ if (MODE === 'rpmcov') {
   process.exit(0);
 }
 
+/* sonda da BANGUELA: quanto do tempo em movimento é rodado em ponto morto.
+   Só leitura — mede a magnitude antes de o pilar entrar no painel. */
+if (MODE === 'banguela') {
+  const cred = await geotabLogin();
+  if (!cred) { console.error('Geotab: sem credencial'); process.exit(1); }
+  const DIA = process.env.CE_DE || iso(ontem);
+  console.log(`sonda de banguela · dia ${DIA} · neutro acima de ${BANG_VMIN} km/h`);
+
+  const mch = await geotabMarchaDia(DIA, cred);
+  const { porDev: velD, total: nV } = await geotabVelDia(DIA, cred);
+  console.log(`\nmarcha: ${mch.total} amostra(s) · ${mch.porDev.size} veículo(s)`);
+  console.log(`velocidade: ${nV} amostra(s) · ${velD.size} veículo(s)`);
+
+  const devs = await geotabRpc('Get', { typeName: 'Device' }, cred);
+  const placa = new Map(devs.map(d => [d.id, String(d.licensePlate || d.name || d.id).toUpperCase().trim()]));
+
+  const linhas = [];
+  let totN = 0, totM = 0;
+  for (const [id, ga] of mch.porDev) {
+    const va = velD.get(id); if (!va || !va.length) continue;
+    const ini = ga[0].t, fim = ga[ga.length - 1].t;
+    const b = banguelaJanela(ga, va, ini, fim);
+    if (b.movimento < 120) continue;                       // menos de 2 min rodando não diz nada
+    totN += b.neutro; totM += b.movimento;
+    linhas.push({ placa: placa.get(id) || id, pct: b.neutro / b.movimento * 100,
+                  min: b.neutro / 60, mov: b.movimento / 60 });
+  }
+  linhas.sort((a, b) => b.pct - a.pct);
+  console.log(`\nveículos medidos: ${linhas.length}`);
+  console.log(`FROTA: ${(totM ? totN / totM * 100 : 0).toFixed(1)}% do tempo em movimento rodado em ponto morto`
+    + ` (${Math.round(totN / 60)} de ${Math.round(totM / 60)} min)`);
+  console.log('\n── POR VEÍCULO (pior primeiro) ──');
+  console.log('placa      % em neutro   min em neutro   min em movimento');
+  linhas.slice(0, 20).forEach(l => console.log(
+    `${l.placa.padEnd(10)} ${l.pct.toFixed(1).padStart(8)}%   ${l.min.toFixed(0).padStart(11)}   ${l.mov.toFixed(0).padStart(14)}`));
+  const zeros = linhas.filter(l => l.pct < 0.5).length;
+  console.log(`\nveículos praticamente sem banguela (<0,5%): ${zeros}/${linhas.length}`);
+  console.log('\nSonda encerrada — nada foi gravado.');
+  process.exit(0);
+}
+
 if (MODE === 'marchacalc') {
   const cred = await geotabLogin();
   if (!cred) { console.error('Geotab: sem credencial'); process.exit(1); }
@@ -1574,14 +1655,22 @@ for (let i = 0; i < AGENDA.length; i++) {
           mchRot = ` · marcha: ${m.total} amostra(s)`;
         } catch (e) { mchRot = ` · marcha FALHOU (${e.message.slice(0, 80)})`; }
       }
-      const lg = await geotabDia(dia, GT, GT_USERS, GT_RULES, GT_UNIDEV, rpmDev, mchDia);
+      // velocidade do dia: só é preciso quando há marcha (banguela = neutro
+      // em movimento). Falha aqui não derruba o dia.
+      let velDia = null, bgRot = '';
+      if (mchDia && process.env.CE_BANGUELA !== '0') {
+        try { const v = await geotabVelDia(dia, GT); velDia = v.porDev; }
+        catch (e) { bgRot = ` · banguela FALHOU (${e.message.slice(0, 60)})`; }
+      }
+      const lg = await geotabDia(dia, GT, GT_USERS, GT_RULES, GT_UNIDEV, rpmDev, mchDia, velDia);
       await garanteMotoristas(lg);
       total += await gravaDiario(lg);
       const comRpm = lg.filter(l => l.rpm_verde_pct != null).length;
       const comMch = lg.filter(l => l.cambio_ruim_pct != null).length;
       console.log(`${dia}: Geotab → ${lg.length} motorista(s) · ${Math.round(lg.reduce((s, l) => s + (+l.km || 0), 0))} km`
         + rpmRot + (rpmDev ? ` · faixa verde em ${comRpm} linha(s)` : '')
-        + mchRot + (mchDia ? ` · marchas em ${comMch} linha(s)` : ''));
+        + mchRot + (mchDia ? ` · marchas em ${comMch} linha(s)` : '')
+        + bgRot + (velDia ? ` · banguela em ${lg.filter(l => l.banguela_pct != null).length} linha(s)` : ''));
     } catch (e) { console.log(`${dia} Geotab: ${e.message}`); falhas++; }
   }
   // a pausa longa é o limite da vFleets (1 req/5 min); o Geotab não tem isso
