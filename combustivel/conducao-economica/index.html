@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
-<meta name="build" content="202609021030">
+<meta name="build" content="202609021230">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <title>Condução Econômica · Gestão em Movimento</title>
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -465,6 +465,7 @@ table.dre thead th.sortable:hover{color:var(--laranja);}
           </table></div>
           <div class="tnotes">
             * Cada pilar mostra os <b>pontos</b> (0–100) e, logo abaixo, o <b>resultado medido</b>. A pontuação final é a média ponderada pelos pesos das Regras de Pontuação.<br>
+            * <b>Velocidade é deflator</b>: não soma peso — multiplica a pontuação dos outros pilares. Quem não excede mantém 100% do que fez.<br>
             * Pilar sem dado na fonte fica ausente e o peso dele é redistribuído proporcionalmente entre os demais.
           </div>
         </div>
@@ -495,7 +496,10 @@ const PILAR = {
   rpm:   {nome:'Faixa Verde',    full:'Faixa Verde de RPM',      peso:25, both:true,  fmt:s=>Math.round(s)+'%',        calc:'% do tempo em movimento com o RPM na faixa verde (econômica/potência).'},
   idle:  {nome:'Motor Ocioso',   full:'Motor Ocioso (idle)',     peso:20, both:true,  fmt:s=>br((100-s)/4,1)+'%',      calc:'% do tempo de motor ligado parado, sem rodar (motor ocioso).'},
   acel:  {nome:'Aceleração',     full:'Aceleração',              peso:15, both:true,  fmt:s=>br((100-s)/6,1)+'/100km', calc:'nº de acelerações bruscas a cada 100 km rodados.'},
-  vel:   {nome:'Velocidade',     full:'Velocidade',              peso:15, both:true,  fmt:s=>br((100-s)/5,1)+'%',      calc:'% do tempo acima do limite (faixas 1/2/3; excesso maior pesa mais).'},
+  // DEFLATOR (Renan, 02/09/2026): excesso de velocidade não compensa bom RPM —
+  // ele derruba o conjunto. Não entra na média com peso: MULTIPLICA a pontuação
+  // dos demais. Sem dado de velocidade o deflator é 1 (não penaliza).
+  vel:   {nome:'Velocidade',     full:'Velocidade (deflator)',   peso:0, defl:true, both:true, fmt:s=>br((100-s)/5,1)+'%', calc:'% do tempo acima do limite (faixas 1/2/3; excesso maior pesa mais). MULTIPLICA a pontuação dos outros pilares.'},
 };
 /* USO DE MARCHAS FORA POR ENQUANTO (Renan, 02/09/2026). O pilar existe e o
    robô continua gravando cambio_ruim_pct, mas ele só tem dado real em 42 dos
@@ -511,9 +515,13 @@ const FIELD_WEIGHTS = {}; FIELD_ORDER.forEach(k=>FIELD_WEIGHTS[k]=PILAR[k].peso)
 
 // média ponderada (0-100), redistribuindo o peso dos pilares ausentes.
 function calcScore_(fields){ let num=0,den=0;
-  for(const f of FIELD_ORDER){ const w=FIELD_WEIGHTS[f]/100; const v=fields[f];
+  for(const f of FIELD_ORDER){ if(PILAR[f].defl) continue;
+    const w=FIELD_WEIGHTS[f]/100; const v=fields[f];
     if(v==null) continue; den+=w; let v01=v/100; if(v01>1)v01=1; num+=w*v01; }
-  return den>0?(num/den)*100:null; }
+  if(!den) return null;
+  const dv=FIELD_ORDER.find(f=>PILAR[f].defl);
+  const defl=(dv && fields[dv]!=null) ? Math.max(0,Math.min(1,fields[dv]/100)) : 1;
+  return (num/den)*100*defl; }
 
 const IND_LABELS = Object.assign({media_geral:'Média Geral', pontuacao:'Pontuação'},
   Object.fromEntries(FIELD_ORDER.map(k=>[k,PILAR[k].nome])));
@@ -588,11 +596,19 @@ async function fetchFromSupabase() {
   // inteiro já passa disso — sem o range o painel perderia meses em silêncio
   const data = []; const PASSO = 1000;
   for (let de = 0; ; de += PASSO) {
-    const { data: lote, error } = await sbClient()
-      .from('ce_scores_mensais')
-      .select('competencia,motorista,unidade,fonte,km,dias,rpm_pontos,idle_pontos,acel_pontos,vel_pontos,pontuacao,atualizado_em')
+    // `viagens` é coluna nova: enquanto o SQL não roda no banco, o select cai
+    // para a versão sem ela em vez de derrubar o painel inteiro
+    const COLS = 'competencia,motorista,unidade,fonte,km,dias,rpm_pontos,idle_pontos,acel_pontos,vel_pontos,pontuacao,atualizado_em';
+    let { data: lote, error } = await sbClient()
+      .from('ce_scores_mensais').select(COLS + ',viagens')
       .order('competencia', { ascending: true }).order('chave', { ascending: true })
       .range(de, de + PASSO - 1);
+    if (error && /viagens/.test(error.message || '')) {
+      ({ data: lote, error } = await sbClient()
+        .from('ce_scores_mensais').select(COLS)
+        .order('competencia', { ascending: true }).order('chave', { ascending: true })
+        .range(de, de + PASSO - 1));
+    }
     if (error) { console.warn('ce_scores_mensais:', error.message); return []; }
     data.push(...(lote || []));
     if (!lote || lote.length < PASSO) break;
@@ -611,6 +627,7 @@ async function fetchFromSupabase() {
     vig:  String(r.competencia).slice(0,10).replace(/-/g, '/'),   // '2026-07-01' -> '2026/07/01'
     unit: r.motorista,
     rpm: r.rpm_pontos, idle: r.idle_pontos, acel: r.acel_pontos, vel: r.vel_pontos,
+    km: +r.km || 0, viagens: +r.viagens || 0,
     pont: r.pontuacao,
   }));
 }
@@ -757,7 +774,8 @@ function getRankingData(data){
   data.forEach(r=>{ (byUnit[r.unit]=byUnit[r.unit]||{unit:r.unit,rows:[]}).rows.push(r); });
   return Object.values(byUnit).map(({unit,rows})=>{
     const avg=f=>{ const vals=rows.map(r=>r[f]).filter(v=>v!=null); return vals.length?vals.reduce((a,b)=>a+b,0)/vals.length:null; };
-    const o={unit, pont:avg('pont')};
+    const soma=f=>rows.reduce((a,r)=>a+(+r[f]||0),0);
+    const o={unit, pont:avg('pont'), km:soma('km'), viagens:soma('viagens')};
     FIELD_ORDER.forEach(k=>o[k]=avg(k));
     return o;
   }).sort((a,b)=>(b.pont||0)-(a.pont||0));
@@ -769,6 +787,8 @@ function buildRankHead(){
   h.innerHTML = `<th style="width:34px;">#</th>`+
     `<th class="sortable" onclick="setSort('unit')">Motorista${arr('unit')}</th>`+
     `<th class="sortable" onclick="setSort('uni')">Unidade${arr('uni')}</th>`+
+    `<th class="num sortable" onclick="setSort('km')">Km Rodado${arr('km')}</th>`+
+    `<th class="num sortable" onclick="setSort('viagens')">Viagens${arr('viagens')}</th>`+
     FIELD_ORDER.map(k=>`<th class="num sortable" title="${PILAR[k].full}" onclick="setSort('${k}')">${PILAR[k].nome}${arr(k)}</th>`).join('')+
     `<th class="num sortable" onclick="setSort('pont')">Pontuação${arr('pont')}</th>`;
 }
@@ -782,6 +802,7 @@ function sortRankRows(rows){
   return rows.slice().sort((a,b)=>{
     if(sortKey==='unit') return dir*String(a.unit).localeCompare(String(b.unit),'pt');
     if(sortKey==='uni')  return dir*String(COD_OF[a.unit]||'').localeCompare(String(COD_OF[b.unit]||''),'pt');
+    if(sortKey==='km'||sortKey==='viagens') return dir*((a[sortKey]||0)-(b[sortKey]||0));
     const av=a[sortKey], bv=b[sortKey];
     if(av==null&&bv==null) return 0;
     if(av==null) return 1;
@@ -810,6 +831,8 @@ function renderRanking(data){
       <td class="rank-num">${canonical&&rank<=3?medals[i]:rank}</td>
       <td class="conta">${r.unit}<div class="mot-sub">${SRC_OF[r.unit]||''}</div></td>
       <td>${COD_OF[r.unit]||'—'}</td>
+      <td class="num">${r.km ? Math.round(r.km).toLocaleString('pt-BR') : '—'}</td>
+      <td class="num">${r.viagens ? r.viagens.toLocaleString('pt-BR') : '—'}</td>
       ${FIELD_ORDER.map(k=>cell(k,r[k])).join('')}
       <td class="num"><div class="pont-cell">${scorePill(r.pont)}<span class="pont-cls">${cls}</span></div></td>
     </tr>`;
@@ -818,17 +841,19 @@ function renderRanking(data){
 
 /* ── Regras de Pontuação ── */
 function renderPesos(){
-  const total=FIELD_ORDER.reduce((s,f)=>s+FIELD_WEIGHTS[f],0);
-  const raw=FIELD_ORDER.map(f=>({f, exact:FIELD_WEIGHTS[f]/total*100}));
+  // o DEFLATOR não divide peso com os pilares — os 100% são só de quem soma
+  const comPeso=FIELD_ORDER.filter(f=>!PILAR[f].defl);
+  const total=comPeso.reduce((s,f)=>s+FIELD_WEIGHTS[f],0);
+  const raw=FIELD_ORDER.map(f=>({f, exact: PILAR[f].defl ? 0 : FIELD_WEIGHTS[f]/total*100}));
   raw.forEach(o=>{ o.base=Math.floor(o.exact); o.rem=o.exact-o.base; });
   let left=100-raw.reduce((s,o)=>s+o.base,0);
-  raw.slice().sort((a,b)=>b.rem-a.rem).forEach(o=>{ if(left>0){ o.base++; left--; } });
+  raw.filter(o=>!PILAR[o.f].defl).sort((a,b)=>b.rem-a.rem).forEach(o=>{ if(left>0){ o.base++; left--; } });
   $('peso-tbody').innerHTML = raw.map(o=>{
     const P=PILAR[o.f];
     return `<tr>
-      <td class="conta" style="white-space:nowrap">${P.nome}${P.both?'':'<div class="mot-sub" style="color:var(--laranja)">só vFleets</div>'}</td>
+      <td class="conta" style="white-space:nowrap">${P.nome}${P.defl?'<div class="mot-sub" style="color:var(--laranja)">deflator</div>':(P.both?'':'<div class="mot-sub" style="color:var(--laranja)">só vFleets</div>')}</td>
       <td style="white-space:normal">${P.calc}</td>
-      <td class="num" style="font-weight:800;color:var(--txt)">${o.base}%</td>
+      <td class="num" style="font-weight:800;color:${P.defl?'var(--laranja)':'var(--txt)'}">${P.defl?'×':o.base+'%'}</td>
     </tr>`;
   }).join('');
 }
@@ -1014,6 +1039,6 @@ initPdfExport({
   isLight:()=>document.body.classList.contains('claro'), setTheme:aplicaTema
 });
 </script>
-<script src="../../assets/build-check.js?v=202609021030"></script>
+<script src="../../assets/build-check.js?v=202609021230"></script>
 </body>
 </html>

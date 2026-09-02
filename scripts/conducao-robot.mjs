@@ -66,7 +66,12 @@ const REGUA = {
 // Freio Motor também saiu do score (Renan, 01/09/2026): não existe no
 // Geotab (varredura completa dos diagnósticos) — o freio_pontos continua
 // sendo calculado e gravado quando a vFleets entrar, só não pontua.
-const PESOS = { rpm: 25, idle: 20, acel: 15, vel: 15, cambio: 5 };
+/* VELOCIDADE É DEFLATOR, não pilar (Renan, 02/09/2026): excesso de
+   velocidade não "compensa" bom RPM — ele derruba o conjunto. Em vez de
+   entrar na média com um peso, ela multiplica a pontuação dos demais:
+   quem não excede mantém 100% do que fez; quem excede perde na mesma
+   proporção. Sem dado de velocidade, o deflator é 1 (não penaliza). */
+const PESOS = { rpm: 25, idle: 20, acel: 15, cambio: 5 };
 
 const nota = (pilar, valor) => {
   if (valor == null || !isFinite(valor)) return null;
@@ -80,7 +85,10 @@ const score = notas => {
     const v = notas[k]; if (v == null) continue;
     num += v * w; den += w;
   }
-  return den ? Math.round((num / den) * 10) / 10 : null;
+  if (!den) return null;
+  const base = num / den;
+  const defl = notas.vel == null ? 1 : Math.max(0, Math.min(1, notas.vel / 100));
+  return Math.round(base * defl * 10) / 10;
 };
 
 // ── campos da API (manual "Consulta de Condução Detalhada – DaaS" v1.8) ──────
@@ -714,6 +722,9 @@ async function recalculaMes(de, ate) {
     linhas.push({
       competencia, chave, motorista: m.nome || chave, unidade: m.unidade || null,
       fonte: m.fonte || ds[0].fonte, km: ds.reduce((s, d) => s + (+d.km || 0), 0), dias: ds.length,
+      // viagens do mês: o diário guarda a contagem no bruto (uma linha por
+      // viagem do Geotab / registro de condução da vFleets)
+      viagens: ds.reduce((s, d) => s + (+(d.bruto && d.bruto.viagens) || 0), 0),
       rpm_pontos: notas.rpm, idle_pontos: notas.idle, acel_pontos: notas.acel, frea_pontos: null,
       vel_pontos: notas.vel, freio_pontos: notas.freio, cambio_pontos: notas.cambio,
       pontuacao: score(notas), atualizado_em: new Date().toISOString(),
