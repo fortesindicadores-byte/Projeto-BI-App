@@ -154,8 +154,42 @@
     th.addEventListener('click', ()=>onHeaderClick(table, th));
   }
 
+  /* ── CABEÇALHO ALINHADO COM O CONTEÚDO (Renan, cobrado várias vezes) ──
+     A casca alinha todo `th` à esquerda, mas as colunas de número alinham
+     o valor à direita — e o rótulo fica solto do dado, dando a impressão de
+     coluna torta. Em vez de acertar tabela por tabela (54 páginas, e cada
+     tela nova repetia o erro), o alinhamento do cabeçalho passa a SEGUIR o
+     da própria coluna: o `th` copia o text-align das células dela.
+     Roda em toda tabela, inclusive nas que têm sort próprio, e refaz depois
+     de cada re-render (o MutationObserver abaixo chama de novo).           */
+  function alinhaCabecalhos(table){
+    const hr = getHeaderRow(table); if(!hr) return;
+    const tb = table.tBodies && table.tBodies[0]; if(!tb || !tb.rows.length) return;
+    const ths = Array.from(hr.children).filter(c=>c.tagName==='TH');
+    if(!ths.length) return;
+    // cabeçalho com colspan não mapeia 1:1 com as colunas — deixa como está
+    if(ths.some(th=>parseInt(th.getAttribute('colspan')||'1',10) > 1)) return;
+    const amostra = Array.from(tb.rows).filter(r=>r.cells.length===ths.length).slice(0,6);
+    if(!amostra.length) return;
+    ths.forEach((th,i)=>{
+      if(th.dataset.stAlin) return;                 // já alinhado nesta versão do cabeçalho
+      const votos = {};
+      for(const r of amostra){
+        const td = r.cells[i]; if(!td) continue;
+        const ta = getComputedStyle(td).textAlign;
+        const dir = (ta==='right'||ta==='end') ? 'right' : (ta==='center' ? 'center' : 'left');
+        votos[dir] = (votos[dir]||0) + 1;
+      }
+      const dir = Object.keys(votos).sort((a,b)=>votos[b]-votos[a])[0];
+      if(!dir) return;
+      th.dataset.stAlin = dir;
+      th.style.textAlign = dir;
+    });
+  }
+
   function initTable(table){
-    if(table.dataset.noSort!=null) return;
+    alinhaCabecalhos(table);                        // vale mesmo com data-no-sort
+    if(table.dataset.noSort!=null){ observaAlinhamento(table); return; }
     const headerRow = getHeaderRow(table);
     if(!headerRow) return;
     table.classList.add('st-enabled');
@@ -166,6 +200,7 @@
       table.__stObserved = true;
       const obs = new MutationObserver(()=>{
         if(table.__stSorting) return;
+        alinhaCabecalhos(table);
         const hr = getHeaderRow(table);
         if(hr) Array.from(hr.children).forEach(th=>{ if(th.tagName==='TH') wireHeader(table, th); });
         if(table.__stActive){
@@ -186,6 +221,13 @@
       });
       obs.observe(table, {childList:true, subtree:true});
     }
+  }
+
+  // tabela sem sort também precisa realinhar depois do re-render
+  function observaAlinhamento(table){
+    if(table.__stAlinObs) return;
+    table.__stAlinObs = true;
+    new MutationObserver(()=>alinhaCabecalhos(table)).observe(table, {childList:true, subtree:true});
   }
 
   function scan(root){

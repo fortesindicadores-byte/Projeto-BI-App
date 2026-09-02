@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
-<meta name="build" content="202609012300">
+<meta name="build" content="202609021030">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <title>Condução Econômica · Gestão em Movimento</title>
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -465,7 +465,7 @@ table.dre thead th.sortable:hover{color:var(--laranja);}
           </table></div>
           <div class="tnotes">
             * Cada pilar mostra os <b>pontos</b> (0–100) e, logo abaixo, o <b>resultado medido</b>. A pontuação final é a média ponderada pelos pesos das Regras de Pontuação.<br>
-            * <b>Uso de Marchas</b> por enquanto só existe na telemetria vFleets; para motoristas Geotab o pilar fica ausente e o peso é redistribuído proporcionalmente.
+            * Pilar sem dado na fonte fica ausente e o peso dele é redistribuído proporcionalmente entre os demais.
           </div>
         </div>
       </section>
@@ -496,8 +496,16 @@ const PILAR = {
   idle:  {nome:'Motor Ocioso',   full:'Motor Ocioso (idle)',     peso:20, both:true,  fmt:s=>br((100-s)/4,1)+'%',      calc:'% do tempo de motor ligado parado, sem rodar (motor ocioso).'},
   acel:  {nome:'Aceleração',     full:'Aceleração',              peso:15, both:true,  fmt:s=>br((100-s)/6,1)+'/100km', calc:'nº de acelerações bruscas a cada 100 km rodados.'},
   vel:   {nome:'Velocidade',     full:'Velocidade',              peso:15, both:true,  fmt:s=>br((100-s)/5,1)+'%',      calc:'% do tempo acima do limite (faixas 1/2/3; excesso maior pesa mais).'},
-  cambio:{nome:'Uso de Marchas', full:'Uso de Marchas (câmbio)', peso:5,  both:false, fmt:s=>br((100-s)/6,1)+'%t',     calc:'% do tempo com marcha inadequada para o RPM — esticando ou forçando o motor.'},
 };
+/* USO DE MARCHAS FORA POR ENQUANTO (Renan, 02/09/2026). O pilar existe e o
+   robô continua gravando cambio_ruim_pct, mas ele só tem dado real em 42 dos
+   101 veículos: câmbio manual sem ECU de transmissão não publica a posição
+   da marcha. A tentativa de DERIVAR a marcha de rpm÷velocidade foi validada
+   contra os que publicam e reprovou — erro médio de 8,2 pontos percentuais
+   num pilar que vale ~6%, sempre superestimando. Enquanto a Argus não
+   habilitar o parâmetro no resto da frota, o painel fica com os quatro
+   pilares que têm cobertura: Faixa Verde, Motor Ocioso, Aceleração e
+   Velocidade. Para trazer de volta, é só devolver a linha `cambio` acima. */
 const FIELD_ORDER   = Object.keys(PILAR);
 const FIELD_WEIGHTS = {}; FIELD_ORDER.forEach(k=>FIELD_WEIGHTS[k]=PILAR[k].peso);
 
@@ -582,7 +590,7 @@ async function fetchFromSupabase() {
   for (let de = 0; ; de += PASSO) {
     const { data: lote, error } = await sbClient()
       .from('ce_scores_mensais')
-      .select('competencia,motorista,unidade,fonte,km,dias,rpm_pontos,idle_pontos,acel_pontos,vel_pontos,cambio_pontos,pontuacao,atualizado_em')
+      .select('competencia,motorista,unidade,fonte,km,dias,rpm_pontos,idle_pontos,acel_pontos,vel_pontos,pontuacao,atualizado_em')
       .order('competencia', { ascending: true }).order('chave', { ascending: true })
       .range(de, de + PASSO - 1);
     if (error) { console.warn('ce_scores_mensais:', error.message); return []; }
@@ -603,7 +611,6 @@ async function fetchFromSupabase() {
     vig:  String(r.competencia).slice(0,10).replace(/-/g, '/'),   // '2026-07-01' -> '2026/07/01'
     unit: r.motorista,
     rpm: r.rpm_pontos, idle: r.idle_pontos, acel: r.acel_pontos, vel: r.vel_pontos,
-    cambio: r.cambio_pontos,
     pont: r.pontuacao,
   }));
 }
@@ -1007,6 +1014,6 @@ initPdfExport({
   isLight:()=>document.body.classList.contains('claro'), setTheme:aplicaTema
 });
 </script>
-<script src="../../assets/build-check.js?v=202609012300"></script>
+<script src="../../assets/build-check.js?v=202609021030"></script>
 </body>
 </html>
