@@ -1032,6 +1032,112 @@ const percentil = (arr, p) => {
    permite escolher o corte com dado em vez de chute.
    Repositório público: o log traz faixas, contagens e unidade — nunca nome
    nem chave de motorista.                                                  */
+/* ── SIMULAÇÃO DE PREMIAÇÃO (Renan, 02/09/2026) ────────────────────────────
+   Piloto em Piraí com teto de R$ 3.000/mês. A pergunta é de DESENHO: premiar
+   os 10 melhores, pagar proporcional ao score, ou premiar todo mundo que
+   bater uma meta? Cada modelo tem um efeito diferente sobre quem está no
+   meio da tabela — que é a maioria e é onde mora o ganho de consumo.
+   Este modo NÃO grava nada: lê os scores do mês, mostra a distribuição e
+   simula os modelos lado a lado, com o custo de cada um dentro do teto.
+   Log com faixas, contagens e valores — nunca nome de motorista.          */
+if (MODE === 'premio') {
+  if (!SB_KEY) { console.error('GEM_SUPABASE_SERVICE_KEY ausente'); process.exit(1); }
+  const MES  = (process.env.CE_MES || '2026-08').slice(0, 7);
+  const UNI  = (process.env.CE_UNI || 'EMP PIRAI').toUpperCase();
+  const TETO = +process.env.CE_TETO || 3000;
+  const BASE_MIN = +process.env.CE_BASE_MIN || 8;      // dias medidos p/ ser elegível
+  console.log(`simulação de premiação · ${UNI} · ${MES} · teto R$ ${TETO.toLocaleString('pt-BR')}`);
+
+  const mens = await sbTodos(`ce_scores_mensais?select=chave,unidade,km,dias,pontuacao&competencia=eq.${MES}-01`);
+  const elig = mens.filter(m => String(m.unidade || '').toUpperCase() === UNI
+    && !String(m.chave || '').startsWith('semlogin:')     // não é pessoa
+    && m.pontuacao != null);
+  const comBase = elig.filter(m => (+m.dias || 0) >= BASE_MIN);
+  console.log(`\nmotoristas da unidade com nota no mês: ${elig.length}`);
+  console.log(`com base de ${BASE_MIN}+ dias medidos: ${comBase.length}`);
+  if (!comBase.length) { console.log('sem gente para simular.'); process.exit(0); }
+
+  const scores = comBase.map(m => +m.pontuacao).sort((a, b) => b - a);
+  const pct = p => scores[Math.min(scores.length - 1, Math.floor(scores.length * p))];
+  const media = scores.reduce((a, b) => a + b, 0) / scores.length;
+  console.log(`\nSCORES: melhor ${scores[0].toFixed(1)} · mediana ${pct(0.5).toFixed(1)}`
+    + ` · média ${media.toFixed(1)} · pior ${scores[scores.length - 1].toFixed(1)}`);
+  console.log('\n── DISTRIBUIÇÃO ──');
+  const faixas = [[90,200],[85,90],[80,85],[75,80],[70,75],[60,70],[0,60]];
+  faixas.forEach(([lo, hi]) => {
+    const n = scores.filter(s => s >= lo && s < hi).length;
+    console.log(`   ${String(lo).padStart(3)} a ${hi === 200 ? '+  ' : String(hi).padStart(3)}: ${String(n).padStart(3)}`
+      + `  ${'█'.repeat(Math.round(n / scores.length * 44))}`);
+  });
+
+  // a curva inteira, sem nome: é ela que diz onde dá para cortar
+  console.log('\n── A CURVA (score de cada um, do melhor ao pior) ──');
+  for (let i = 0; i < scores.length; i += 10) {
+    console.log('   ' + String(i + 1).padStart(3) + 'º→  '
+      + scores.slice(i, i + 10).map(s => s.toFixed(1).padStart(5)).join(' '));
+  }
+
+  const brl = v => 'R$ ' + v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  console.log('\n══ MODELOS ══');
+
+  // A) top N em partes iguais
+  for (const N of [10, 15, 20, 30]) {
+    const n = Math.min(N, scores.length);
+    console.log(`A) top ${String(N).padStart(2)} iguais: ${n} premiado(s) · ${brl(TETO / n)} cada`
+      + ` · corte no score ${scores[n - 1].toFixed(1)} · alcança ${(n / scores.length * 100).toFixed(0)}% da unidade`);
+  }
+
+  // B) bolsa proporcional ao score, para quem passa do corte (todos ganham algo)
+  console.log('');
+  for (const corte of [70, 75, 80]) {
+    const dentro = scores.filter(s => s >= corte);
+    if (!dentro.length) { console.log(`B) corte ${corte}: ninguém se qualifica`); continue; }
+    const soma = dentro.reduce((a, s) => a + s, 0);
+    const maior = TETO * dentro[0] / soma, menor = TETO * dentro[dentro.length - 1] / soma;
+    console.log(`B) corte ${corte} · proporcional ao score: ${dentro.length} premiado(s)`
+      + ` (${(dentro.length / scores.length * 100).toFixed(0)}% da unidade) · de ${brl(menor)} a ${brl(maior)}`);
+  }
+
+  // C) valor por FAIXA (tabela fixa) — custo varia, precisa caber no teto
+  console.log('');
+  for (const [vElite, vBom, vOk] of [[150, 100, 60], [200, 120, 70], [250, 150, 80]]) {
+    const nE = scores.filter(s => s >= 85).length;
+    const nB = scores.filter(s => s >= 75 && s < 85).length;
+    const nO = scores.filter(s => s >= 70 && s < 75).length;
+    const custo = nE * vElite + nB * vBom + nO * vOk;
+    console.log(`C) faixas ${brl(vElite)}/${brl(vBom)}/${brl(vOk)}: ${nE}+${nB}+${nO} = ${nE + nB + nO} premiado(s)`
+      + ` · custo ${brl(custo)} ${custo <= TETO ? '(cabe)' : '⚠ ESTOURA o teto'}`);
+  }
+
+  // D) o desenho que eu recomendo: bolsa fixa, proporcional ao MÉRITO ACIMA
+  //    do corte, com teto individual — o custo é sempre o teto e o dinheiro
+  //    se espalha em vez de concentrar no primeiro colocado
+  console.log('');
+  for (const corte of [70, 75]) {
+    for (const tetoInd of [200, 300]) {
+      const dentro = scores.filter(s => s >= corte);
+      if (!dentro.length) continue;
+      let pts = dentro.map(s => s - corte + 10);        // +10 = piso, para o do corte não zerar
+      let valores = [], sobra = TETO, restantes = pts.slice();
+      // rateio com teto individual: quem bate o teto trava e o resto redivide
+      for (let i = 0; i < 6; i++) {
+        const somaR = restantes.reduce((a, p) => a + (p || 0), 0);
+        if (!somaR) break;
+        valores = pts.map((p, k) => restantes[k] ? Math.min(tetoInd, sobra * p / somaR) : valores[k]);
+        const travou = valores.some((v, k) => restantes[k] && v >= tetoInd - 0.01);
+        if (!travou) break;
+        valores.forEach((v, k) => { if (restantes[k] && v >= tetoInd - 0.01) { restantes[k] = 0; sobra -= tetoInd; } });
+      }
+      const tot = valores.reduce((a, v) => a + v, 0);
+      console.log(`D) corte ${corte} + teto individual ${brl(tetoInd)}: ${dentro.length} premiado(s)`
+        + ` (${(dentro.length / scores.length * 100).toFixed(0)}%) · de ${brl(Math.min(...valores))} a ${brl(Math.max(...valores))}`
+        + ` · custo ${brl(tot)}`);
+    }
+  }
+  console.log('\nSimulação encerrada — nada foi gravado.');
+  process.exit(0);
+}
+
 if (MODE === 'base') {
   if (!SB_KEY) { console.error('GEM_SUPABASE_SERVICE_KEY ausente'); process.exit(1); }
   const MES = (process.env.CE_MES || '2026-08').slice(0, 7);
