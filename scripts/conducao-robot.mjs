@@ -1279,6 +1279,125 @@ if (MODE === 'carteira') {
   process.exit(0);
 }
 
+/* ── O PROGRAMA COMO O RENAN DESENHOU (03/09/2026) ─────────────────────────
+   Elegível quem rodou 1.000+ km E está entre os 15 primeiros do ranking.
+   Cada elegível começa o mês com R$ 200 na conta e vai perdendo conforme cada
+   pilar fica abaixo de 100 — é isso que o app mostra todo dia, em dinheiro.
+   No fim, o pódio leva um extra: 1º R$ 300 · 2º R$ 150 · 3º R$ 100.
+
+   A régua de VIAGENS saiu (Renan: "tire viagens; quando conseguirmos mensurar
+   fazemos"). O motivo é conhecido: hoje "viagem" no Geotab é ciclo de
+   ignição, então parar para abastecer conta como viagem nova. Km rodado não
+   tem essa ambiguidade — é a mesma distância pelo caminho que for.
+
+   Não grava nada. Log com faixas, contagens e valores — nunca nome.        */
+if (MODE === 'programa') {
+  if (!SB_KEY) { console.error('GEM_SUPABASE_SERVICE_KEY ausente'); process.exit(1); }
+  const MES = (process.env.CE_MES || '2026-08').slice(0, 7);
+  const UNI = (process.env.CE_UNI || 'EMP PIRAI').toUpperCase();
+  const KM_MIN = +process.env.CE_KM_MIN || 1000;
+  const TOP_N  = +process.env.CE_TOP || 15;
+  const SALDO  = +process.env.CE_SALDO_UNICO || 200;
+  const PODIO  = String(process.env.CE_PODIO || '300,150,100').split(',')
+    .map(s => +s.trim()).filter(v => v > 0);
+  const brl = v => 'R$ ' + v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const PES = { rpm: 25, idle: 20, acel: 15 };
+  const ROT = { rpm: 'Faixa Verde', idle: 'Motor Ocioso', acel: 'Aceleração' };
+  const conta = (r, S) => {
+    const v = { rpm: r.rpm_pontos, idle: r.idle_pontos, acel: r.acel_pontos };
+    let den = 0; for (const k in PES) if (v[k] != null) den += PES[k];
+    if (!den) return null;
+    const perdas = {}; let base = 0;
+    for (const k in PES) {
+      if (v[k] == null) continue;
+      const w = PES[k] / den, n = Math.min(1, Math.max(0, v[k] / 100));
+      base += w * n; perdas[k] = S * w * (1 - n);
+    }
+    return { final: S * base, perdas };
+  };
+
+  console.log(`PROGRAMA · ${MES} · saldo ${brl(SALDO)} · elegível: ${KM_MIN}+ km`
+    + ` e top ${TOP_N} · pódio ${PODIO.map(brl).join(' / ')}`);
+
+  const mens = await sbTodos('ce_scores_mensais?select=chave,unidade,km,dias,'
+    + `rpm_pontos,idle_pontos,acel_pontos,pontuacao&competencia=eq.${MES}-01`);
+  const validos = mens.filter(m => !String(m.chave || '').startsWith('semlogin:')
+    && m.pontuacao != null);
+
+  // roda a conta para uma unidade e devolve o custo — serve para o piloto e
+  // para a linha de "se rodasse em todas"
+  function simula(uni, verboso) {
+    const todos = validos.filter(m => String(m.unidade || '').toUpperCase() === uni);
+    if (!todos.length) return null;
+    const comKm = todos.filter(m => (+m.km || 0) >= KM_MIN);
+    const elig = [...comKm].sort((a, b) => b.pontuacao - a.pontuacao).slice(0, TOP_N);
+    if (!elig.length) return null;
+
+    let pago = 0; const perdaTot = { rpm: 0, idle: 0, acel: 0 }; const vals = [];
+    for (const r of elig) {
+      const c = conta(r, SALDO); if (!c) continue;
+      pago += c.final; vals.push(c.final);
+      for (const k in perdaTot) perdaTot[k] += c.perdas[k] || 0;
+    }
+    const extra = PODIO.slice(0, elig.length).reduce((a, b) => a + b, 0);
+    const total = pago + extra;
+
+    if (verboso) {
+      const kms = todos.map(m => +m.km || 0).sort((a, b) => a - b);
+      console.log(`\nmotoristas com nota em ${uni}: ${todos.length}`);
+      console.log(`   km no mês: mín ${Math.round(kms[0])} · mediana`
+        + ` ${Math.round(kms[Math.floor(kms.length / 2)])} · máx ${Math.round(kms[kms.length - 1])}`);
+      console.log('   ' + [500, 1000, 2000, 3000, 5000].map(c =>
+        `${c}+ km: ${todos.filter(m => (+m.km || 0) >= c).length}`).join(' · '));
+      console.log(`\nFUNIL: ${todos.length} com nota → ${comKm.length} com ${KM_MIN}+ km`
+        + ` → ${elig.length} elegíveis (top ${TOP_N})`);
+      if (comKm.length <= TOP_N) console.log(`   ⚠ a régua de km já corta abaixo de ${TOP_N}:`
+        + ' o "top 15" não exclui mais ninguém neste mês');
+      else console.log(`   corte: o ${elig.length}º colocado tem`
+        + ` ${elig[elig.length - 1].pontuacao.toFixed(1)} pontos`
+        + ` · o 1º fora tem ${comKm.sort((a, b) => b.pontuacao - a.pontuacao)[TOP_N].pontuacao.toFixed(1)}`);
+      const ps = elig.map(m => m.pontuacao);
+      console.log(`   score dos elegíveis: ${Math.min(...ps).toFixed(1)} a ${Math.max(...ps).toFixed(1)}`
+        + ` · média ${(ps.reduce((a, b) => a + b, 0) / ps.length).toFixed(1)}`);
+
+      vals.sort((a, b) => b - a);
+      console.log(`\nCUSTO DO MÊS: ${brl(total)}`);
+      console.log(`   carteiras   ${brl(pago).padStart(12)}   (provisionado ${brl(SALDO * elig.length)}`
+        + ` · retido ${brl(SALDO * elig.length - pago)} = ${((1 - pago / (SALDO * elig.length)) * 100).toFixed(1)}%)`);
+      console.log(`   pódio       ${brl(extra).padStart(12)}   (${PODIO.slice(0, elig.length).map(brl).join(' + ')})`);
+      console.log(`\n   por motorista, só a carteira: maior ${brl(vals[0])}`
+        + ` · mediana ${brl(vals[Math.floor(vals.length / 2)])} · menor ${brl(vals[vals.length - 1])}`);
+      console.log(`   o 1º colocado leva ${brl(vals[0] + PODIO[0])} (carteira + pódio)`);
+      console.log('\n   o que comeu o saldo: ' + Object.keys(perdaTot)
+        .sort((a, b) => perdaTot[b] - perdaTot[a])
+        .map(k => `${ROT[k]} ${brl(perdaTot[k])}`).join(' · '));
+      console.log(`\n   teto do desenho (todo mundo com 100): ${brl(SALDO * elig.length + extra)}`);
+    }
+    return { uni, n: elig.length, pago, extra, total };
+  }
+
+  simula(UNI, true);
+
+  // o piloto é em Piraí, mas o desenho vai ser apresentado — vale saber o que
+  // custaria a régua inteira, unidade a unidade, com os números de hoje
+  const unis = [...new Set(validos.map(m => String(m.unidade || '').toUpperCase()))]
+    .filter(Boolean).sort();
+  const linhas = unis.map(u => simula(u, false)).filter(Boolean);
+  if (linhas.length > 1) {
+    console.log('\n── O MESMO DESENHO EM TODAS AS UNIDADES (mesmo mês) ──');
+    linhas.sort((a, b) => b.total - a.total).forEach(l =>
+      console.log(`   ${l.uni.padEnd(16)} ${String(l.n).padStart(2)} elegíveis`
+        + ` · carteiras ${brl(l.pago).padStart(12)} · pódio ${brl(l.extra).padStart(11)}`
+        + ` · TOTAL ${brl(l.total).padStart(12)}`));
+    console.log(`   ${'SOMA'.padEnd(16)} ${String(linhas.reduce((a, b) => a + b.n, 0)).padStart(2)} elegíveis`
+      + ` · carteiras ${brl(linhas.reduce((a, b) => a + b.pago, 0)).padStart(12)}`
+      + ` · pódio ${brl(linhas.reduce((a, b) => a + b.extra, 0)).padStart(11)}`
+      + ` · TOTAL ${brl(linhas.reduce((a, b) => a + b.total, 0)).padStart(12)}`);
+  }
+  console.log('\nSimulação encerrada — nada foi gravado.');
+  process.exit(0);
+}
+
 if (MODE === 'premio') {
   if (!SB_KEY) { console.error('GEM_SUPABASE_SERVICE_KEY ausente'); process.exit(1); }
   const MES  = (process.env.CE_MES || '2026-08').slice(0, 7);

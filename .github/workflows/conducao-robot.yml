@@ -7,11 +7,11 @@ on:
   workflow_dispatch:
     inputs:
       modo:
-        description: 'sonda (não grava) · ident (identificação por placa) · marcha (sonda do pilar Uso de Marchas) · marchacalc (marcha derivada de rpm÷velocidade, valida contra o gabarito) · rpmcov (placas que nunca reportam rpm no período) · base (motoristas com base para medir no mês) · banguela (quanto se roda em ponto morto) · premio (simula desenhos de premiação dentro do teto) · carteira (saldo inicial que esvazia) · trechos (o que o Geotab chama de viagem, placa a placa num dia) · nos (zonas da conta e viagens nó→nó) · velregras (que regras geram os excessos de velocidade) · regracond (o parâmetro/limiar de cada regra) · eventos (rederiva aceleração/velocidade do diário num período, sem tocar no RPM) · ano (01/jan→ontem) · run · recalc · reproc'
+        description: 'sonda (não grava) · ident (identificação por placa) · marcha (sonda do pilar Uso de Marchas) · marchacalc (marcha derivada de rpm÷velocidade, valida contra o gabarito) · rpmcov (placas que nunca reportam rpm no período) · base (motoristas com base para medir no mês) · banguela (quanto se roda em ponto morto) · premio (simula desenhos de premiação dentro do teto) · carteira (saldo inicial que esvazia) · programa (o desenho fechado: km mínimo + top N + carteira + pódio) · trechos (o que o Geotab chama de viagem, placa a placa num dia) · nos (zonas da conta e viagens nó→nó) · velregras (que regras geram os excessos de velocidade) · regracond (o parâmetro/limiar de cada regra) · eventos (rederiva aceleração/velocidade do diário num período, sem tocar no RPM) · ano (01/jan→ontem) · run · recalc · reproc'
         required: true
         default: sonda
         type: choice
-        options: [sonda, ident, marcha, marchacalc, rpmcov, base, banguela, premio, carteira, trechos, nos, velregras, regracond, eventos, ano, run, recalc, reproc]
+        options: [sonda, ident, marcha, marchacalc, rpmcov, base, banguela, premio, carteira, programa, trechos, nos, velregras, regracond, eventos, ano, run, recalc, reproc]
       de:
         description: 'Data inicial YYYY-MM-DD (vazio = ontem)'
         required: false
@@ -46,6 +46,18 @@ on:
         required: false
       score_min:
         description: 'carteira: score mínimo para receber (abaixo dele a carteira zera; 0 = sem piso)'
+        required: false
+      km_min:
+        description: 'programa: km rodado no mês para ser elegível (padrão 1000)'
+        required: false
+      top:
+        description: 'programa: quantos primeiros do ranking entram (padrão 15)'
+        required: false
+      saldo_unico:
+        description: 'programa: saldo inicial da carteira em R$ (padrão 200)'
+        required: false
+      podio:
+        description: 'programa: extras do pódio em R$, separados por vírgula (padrão 300,150,100)'
         required: false
       bang_vmin:
         description: 'banguela: km/h a partir do qual neutro conta (padrão 20)'
@@ -84,6 +96,10 @@ jobs:
           CE_SALDO: ${{ github.event.inputs.saldo }}
           CE_VIAG_MIN: ${{ github.event.inputs.viag_min }}
           CE_SCORE_MIN: ${{ github.event.inputs.score_min }}
+          CE_KM_MIN: ${{ github.event.inputs.km_min }}
+          CE_TOP: ${{ github.event.inputs.top }}
+          CE_SALDO_UNICO: ${{ github.event.inputs.saldo_unico }}
+          CE_PODIO: ${{ github.event.inputs.podio }}
           CE_BANG_VMIN: ${{ github.event.inputs.bang_vmin }}
           CE_MARCHA_ALTO:  ${{ github.event.inputs.marcha_alto }}
           CE_MARCHA_BAIXO: ${{ github.event.inputs.marcha_baixo }}
