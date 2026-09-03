@@ -767,7 +767,7 @@ async function recalculaMes(de, ate) {
     grupos.get(k).push(d);
   });
 
-  const linhas = []; const velDist = [];
+  const linhas = []; const velDist = [], acelDist = [];
   for (const [k, ds] of grupos) {
     const [competencia, chave] = k.split('|');
     const m = cad.get(chave) || {};
@@ -779,7 +779,7 @@ async function recalculaMes(de, ate) {
     const notas = {
       rpm:    nota('rpm',    pond('rpm_verde_pct')),
       idle:   nota('idle',   pond('idle_pct')),
-      acel:   nota('acel',   pond('acel_100km')),
+      acel:   (() => { const v = pond('acel_100km'); if (v != null) acelDist.push(v); return nota('acel', v); })(),
       vel:    (() => { const v = pond('vel_excesso_pct'); if (v != null) velDist.push(v); return nota('vel', v); })(),
       // o painel descreve este pilar como "% de uso de freio motor nas
       // desacelerações, PENALIZADO por tempo de banguela" — desconto 1:1,
@@ -803,6 +803,20 @@ async function recalculaMes(de, ate) {
       vel_pontos: notas.vel, freio_pontos: notas.freio, cambio_pontos: notas.cambio,
       pontuacao: score(notas), atualizado_em: new Date().toISOString(),
     });
+  }
+  if (acelDist.length) {
+    // onde a frota está em aceleração brusca — é o que calibra REGUA.acel.zeraEm
+    // (Renan, 03/09/2026: "aceleração está bom demais para ser verdade")
+    const v = acelDist.slice().sort((a, b) => a - b), q = p => v[Math.min(v.length - 1, Math.floor(v.length * p))];
+    const notaDe = z => x => Math.max(0, 100 - x / z * 100);
+    console.log(`aceleração · eventos por 100 km em ${v.length} motorista-mês: zero em ${v.filter(x => x === 0).length}`
+      + ` · p25 ${q(.25).toFixed(2)} · mediana ${q(.5).toFixed(2)} · p75 ${q(.75).toFixed(2)} · p90 ${q(.9).toFixed(2)} · máx ${v[v.length - 1].toFixed(2)}`
+      + ` · régua zera em ${REGUA.acel.zeraEm.toFixed(1)}`);
+    for (const z of [REGUA.acel.zeraEm, 8, 5, 3, 2]) {
+      const n = notaDe(z), ms = v.map(n).sort((a, b) => a - b), qq = p => ms[Math.min(ms.length - 1, Math.floor(ms.length * p))];
+      console.log(`   se zerar em ${String(z.toFixed(1)).padStart(4)}/100km → nota mediana ${qq(.5).toFixed(0)} · p25 ${qq(.25).toFixed(0)} · p10 ${qq(.1).toFixed(0)}`
+        + ` · abaixo de 70: ${ms.filter(x => x < 70).length} · acima de 85: ${ms.filter(x => x >= 85).length}`);
+    }
   }
   if (velDist.length) {
     // onde a frota está no pilar de velocidade — é o que calibra REGUA.vel.zeraEm
