@@ -100,3 +100,12 @@ select c.placa,
        end as valor_mes
   from public.contratos_placa c
   left join ult u on u.placa = c.placa;
+
+-- ── 4) placa de origem (03/09/2026) ───────────────────────────────────────
+-- A coluna `placa` das duas tabelas passou a guardar a placa CANÔNICA
+-- (Mercosul), que é por onde o km do ERP acha o contrato: o ERP e a planilha
+-- não emplacam ao mesmo tempo, e cruzar pela placa crua faria o veículo
+-- simplesmente não achar o contrato — sem erro, só sumindo da conta do mês.
+-- `placa_origem` guarda a placa como ela veio, que é a que aparece na tela.
+alter table public.erp_abastecimentos add column if not exists placa_origem text;
+alter table public.contratos_placa   add column if not exists placa_origem text;
