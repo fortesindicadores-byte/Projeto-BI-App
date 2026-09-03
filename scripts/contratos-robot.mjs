@@ -317,6 +317,7 @@ for (const b of blocos) {
 const blocosOrd = [...blocos].sort((a, b) => vigDe(a.mv).localeCompare(vigDe(b.mv)));
 const contratos = [];
 const semTaxa = [];
+const reclass = [];      // pareciam por km, mas o valor não muda: são fixos
 for (const r of dados) {
   const placaOrig = txtOf(r[COL_PLACA]).toUpperCase().trim();
   if (!placaOrig) continue;
@@ -343,9 +344,30 @@ for (const r of dados) {
       fixo = val; fixoVig = vigDe(b.mv).slice(0, 7);
     }
   }
-  // já rodou por km alguma vez ⇒ é contrato variável, mesmo que o último mês
-  // tenha ficado parado (desloc. 0 num mês não muda a natureza do contrato)
-  const tipo = taxa != null ? 'variavel' : (fixo != null ? 'fixo' : null);
+  /* FRANQUIA NÃO É DESLOCAMENTO (achado em 03/09/2026, com a linha crua na
+     mão). Havia 27 placas classificadas como "por km" e sem km informado em
+     mês nenhum. Não era a unidade que esqueceu de preencher nem coluna errada
+     — o rótulo "Km Informado" confere na posição lida. São contratos FIXOS
+     COM FRANQUIA: a coluna desloc. traz o km contratado uma única vez (1500,
+     em janeiro) e o valor se repete idêntico nos oito meses. Ver desloc. +
+     valor num mês não basta para chamar de variável.
+
+     A prova de que o contrato é por km é o valor MUDAR de um mês para o
+     outro. Se ele é o mesmo em todos os meses lançados (com folga de 1% para
+     centavo de arredondamento), o custo não depende do km rodado: é fixo. */
+  const lanc = []; let ultVig = null;
+  for (const b of blocosOrd) {
+    const v = numOf(r[b.valor]);
+    if (v > 0) { lanc.push(v); ultVig = vigDe(b.mv).slice(0, 7); }
+  }
+  const parado = lanc.length >= 2
+    && Math.max(...lanc) / Math.min(...lanc) <= 1.01;
+  let tipo = taxa != null ? 'variavel' : (fixo != null ? 'fixo' : null);
+  if (tipo === 'variavel' && parado) {            // franquia disfarçada de km
+    tipo = 'fixo'; fixo = lanc[lanc.length - 1]; fixoVig = ultVig;
+    taxa = null; taxas = [];
+    reclass.push(placa);
+  }
   if (!tipo) { semTaxa.push(placa); continue; }
   contratos.push({
     placa, unidade: uni.unidade, projeto: uni.projeto, tipo,
@@ -360,6 +382,8 @@ for (const r of dados) {
 const nVar = contratos.filter(c => c.tipo === 'variavel').length;
 const nFix = contratos.length - nVar;
 console.log(`\nCONTRATO POR PLACA: ${contratos.length} placa(s) · ${nVar} por km · ${nFix} valor fixo`);
+if (reclass.length) console.log(`   ${reclass.length} vieram com desloc. num mês só (franquia)`
+  + ' e valor idêntico em todos — contadas como FIXAS, não por km.');
 if (nFix) console.log(`   fixo: ${brl(contratos.filter(c => c.tipo === 'fixo')
   .reduce((s, c) => s + c.valor_fixo, 0))} por mês, somando as ${nFix} placa(s)`);
 if (nVar) {
