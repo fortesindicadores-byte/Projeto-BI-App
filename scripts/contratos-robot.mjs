@@ -244,8 +244,15 @@ console.log(`colunas de identificação: placa=${String.fromCharCode(65 + COL_PL
 
 const dados = rows.slice(2).filter(r => txtOf(r[COL_PLACA]).trim());
 console.log(`planilha: ${dados.length} veículo(s) · ${blocos.length} bloco(s) de mês`);
+/* A linha 2 traz os rótulos do bloco (Km Informado · desloc. · lanç km/vlr ·
+   NF · STATUS), mas o gviz tipa a coluna inteira: num bloco já preenchido a
+   coluna é numérica e o rótulo de texto volta NULO. Por isso a leitura é por
+   posição — e por isso vale imprimir os rótulos que dá para ver, que são a
+   única conferência de que km/desloc/valor estão nas colunas certas. */
+const L2 = rows[1] || [];
 blocos.forEach(b => console.log(`   ${b.rot.padEnd(10)} ${b.largura} coluna(s)`
-  + `${b.nf == null ? ' (sem NF)' : ''} → vigência ${vigDe(b.mv)}`));
+  + `${b.nf == null ? ' (sem NF)' : ''} → vigência ${vigDe(b.mv)}`
+  + `   rótulos: km="${txtOf(L2[b.km])}" desloc="${txtOf(L2[b.desloc])}" valor="${txtOf(L2[b.valor])}"`));
 
 // ── monta os lançamentos ───────────────────────────────────────────────────
 const semDePara = new Map();      // nem a frota nem a planilha resolveram
@@ -311,9 +318,13 @@ const blocosOrd = [...blocos].sort((a, b) => vigDe(a.mv).localeCompare(vigDe(b.m
 const contratos = [];
 const semTaxa = [];
 for (const r of dados) {
-  const placa = txtOf(r[COL_PLACA]).toUpperCase().trim();
-  if (!placa) continue;
-  const naFrota = FROTA.get(placaKey(placa));
+  const placaOrig = txtOf(r[COL_PLACA]).toUpperCase().trim();
+  if (!placaOrig) continue;
+  // A CHAVE É A PLACA MERCOSUL (Renan, 03/09/2026): é por ela que o km do ERP
+  // vai achar este contrato. A planilha e o ERP não emplacam ao mesmo tempo, e
+  // cruzar pela placa crua faria o veículo sumir da conta sem erro nenhum.
+  const placa = placaKey(placaOrig);
+  const naFrota = FROTA.get(placa);
   const daPlan  = deParaUnidade(txtOf(r[COL_UNI]));
   const uni = naFrota || daPlan || { unidade: null, projeto: null };
 
@@ -342,7 +353,7 @@ for (const r of dados) {
     valor_fixo: tipo === 'fixo' ? fixo : null,
     ultimo_km_informado: ultKm,
     vig_referencia: tipo === 'variavel' ? taxaVig : fixoVig,
-    _taxas: taxas, _ultKmVig: ultKmVig,
+    _taxas: taxas, _ultKmVig: ultKmVig, _row: r,
   });
 }
 
@@ -373,9 +384,34 @@ if (nVar) {
   }
 }
 const semKm = contratos.filter(c => c.tipo === 'variavel' && c.ultimo_km_informado == null);
-if (semKm.length) console.log(`   ⚠ ${semKm.length} placa(s) por km SEM "km informado" na planilha`
-  + ` — o mês em andamento delas fica sem deslocamento: ${semKm.slice(0, 8).map(c => c.placa).join(', ')}`
-  + (semKm.length > 8 ? '…' : ''));
+if (semKm.length) {
+  console.log(`   ⚠ ${semKm.length} placa(s) por km SEM "km informado" em mês NENHUM da planilha`
+    + ' — o mês em andamento delas ficaria sem deslocamento.');
+  /* POR QUE ELAS NÃO TÊM KM (Renan perguntou, 03/09/2026): a busca já varre
+     todos os meses e para no primeiro com km, então "sem km" quer dizer que a
+     coluna "Km Informado" está vazia no ano inteiro para essa placa. Imprimo
+     a linha crua mês a mês para separar as duas causas possíveis: a unidade
+     não preencheu (dado), ou eu estou lendo a coluna errada (código). */
+  console.log('   as 4 primeiras, mês a mês (km · desloc. · valor), como estão na planilha:');
+  semKm.slice(0, 4).forEach(c => {
+    console.log(`      ${c.placa}`);
+    blocosOrd.forEach(b => {
+      const km = numOf(c._row[b.km]), de = numOf(c._row[b.desloc]), va = numOf(c._row[b.valor]);
+      if (!km && !de && !va) return;                       // mês em branco, não polui
+      console.log(`         ${b.rot.padEnd(9)} km=${String(km || '—').padStart(9)}`
+        + ` desloc=${String(de || '—').padStart(8)} valor=${va ? brl(va) : '—'}`);
+    });
+  });
+  // se TODAS as placas sem km também estiverem sem desloc., é dado faltando;
+  // se elas têm desloc. mas nunca km, a coluna de km é que não é essa
+  const comDesloc = semKm.filter(c => blocosOrd.some(b => numOf(c._row[b.desloc]) > 0)).length;
+  console.log(`   ${comDesloc}/${semKm.length} dessas têm DESLOC. preenchido em algum mês`
+    + (comDesloc === semKm.length
+      ? ' — todas: a coluna de km é que pode não ser a que estou lendo.'
+      : comDesloc === 0
+        ? ' — nenhuma: é a planilha que está sem o km dessas placas.'
+        : '.'));
+}
 if (semTaxa.length) console.log(`   ${semTaxa.length} placa(s) na planilha sem valor em mês nenhum (ignoradas)`);
 
 // ── resumo do que seria gravado ────────────────────────────────────────────

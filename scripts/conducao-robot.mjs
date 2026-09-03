@@ -1360,6 +1360,41 @@ if (MODE === 'programa') {
       console.log(`   score dos elegíveis: ${Math.min(...ps).toFixed(1)} a ${Math.max(...ps).toFixed(1)}`
         + ` · média ${(ps.reduce((a, b) => a + b, 0) / ps.length).toFixed(1)}`);
 
+      /* POR QUE OS SCORES FICAM TÃO COLADOS (Renan perguntou, 03/09/2026).
+         O score é média ponderada: quem separa as pessoas é o pilar cuja
+         CONTRIBUIÇÃO (peso × nota) mais varia. Um pilar em que todo mundo
+         tira quase 100 não separa ninguém — só dilui os que separam. Este
+         bloco mede isso em vez de supor: dispersão de cada pilar entre quem
+         passou do km, e quanto de espalhamento sobra no score final.       */
+      const dp = xs => { const m = xs.reduce((a, b) => a + b, 0) / xs.length;
+        return Math.sqrt(xs.reduce((a, b) => a + (b - m) * (b - m), 0) / xs.length); };
+      const q = (xs, p) => { const s = [...xs].sort((a, b) => a - b);
+        return s[Math.min(s.length - 1, Math.floor(p * s.length))]; };
+      let denPad = 0; for (const k in PES) denPad += PES[k];
+      console.log('\n── O QUE SEPARA AS PESSOAS (entre os que passaram do km) ──');
+      for (const k of Object.keys(PES)) {
+        const xs = comKm.map(m => m[k + '_pontos']).filter(v => v != null).map(Number);
+        if (!xs.length) { console.log(`   ${ROT[k].padEnd(13)} sem dado`); continue; }
+        const w = PES[k] / denPad;
+        console.log(`   ${ROT[k].padEnd(13)} nota ${q(xs, .05).toFixed(1)} a ${q(xs, .95).toFixed(1)}`
+          + ` (mediana ${q(xs, .5).toFixed(1)}) · desvio ${dp(xs).toFixed(1)}`
+          + ` · peso ${(w * 100).toFixed(0)}% → move o score em ±${(dp(xs) * w).toFixed(1)} ponto(s)`);
+      }
+      const pk = comKm.map(m => m.pontuacao);
+      console.log(`   ${'SCORE FINAL'.padEnd(13)} ${q(pk, .05).toFixed(1)} a ${q(pk, .95).toFixed(1)}`
+        + ` · desvio ${dp(pk).toFixed(1)} ponto(s)`);
+      // se o ranking fosse por um pilar só, quanto o 1º se descolaria do 15º?
+      console.log('   distância entre o 1º e o 15º, se o ranking fosse por:');
+      for (const k of Object.keys(PES)) {
+        const xs = comKm.map(m => m[k + '_pontos']).filter(v => v != null).map(Number)
+          .sort((a, b) => b - a);
+        if (xs.length >= TOP_N) console.log(`      ${ROT[k].padEnd(13)}`
+          + ` ${(xs[0] - xs[TOP_N - 1]).toFixed(1)} ponto(s)`);
+      }
+      const pord = [...pk].sort((a, b) => b - a);
+      if (pord.length >= TOP_N) console.log(`      ${'score de hoje'.padEnd(13)}`
+        + ` ${(pord[0] - pord[TOP_N - 1]).toFixed(1)} ponto(s)`);
+
       vals.sort((a, b) => b - a);
       console.log(`\nCUSTO DO MÊS: ${brl(total)}`);
       console.log(`   carteiras   ${brl(pago).padStart(12)}   (provisionado ${brl(SALDO * elig.length)}`
