@@ -1727,6 +1727,64 @@ if (MODE === 'marcha') {
   process.exit(0);
 }
 
+if (MODE === 'trechos') {
+  /* O QUE É UMA "VIAGEM" DO GEOTAB (Renan, 03/09/2026: "tem motorista com 242
+     trechos num mês, não faz sentido"). A Trip do Geotab termina em toda
+     parada mais longa que o limite de parada — numa empurrada, cada cliente
+     encerra uma. Este modo lista, para um dia e uma unidade, os trechos das
+     placas que mais tiveram trecho: hora que saiu, hora que parou, km e quanto
+     tempo ficou parada antes do próximo — é para reconhecer a rota no log.
+     Só placa, horário e km; nunca nome de pessoa (repo público). */
+  const cred = await geotabLogin();
+  if (!cred) { console.error('Geotab: sem credencial'); process.exit(1); }
+  const DIA = process.env.CE_DE || '2026-08-20';
+  const UNI = (process.env.CE_UNI || 'EMP PIRAI').toUpperCase();
+  const QTD = +process.env.CE_QTD || 3;
+  console.log(`trechos do Geotab · ${UNI} · ${DIA}`);
+
+  const [devs, grupos] = await Promise.all([
+    geotabRpc('Get', { typeName: 'Device' }, cred),
+    geotabRpc('Get', { typeName: 'Group' }, cred),
+  ]);
+  const gNome = new Map(grupos.map(g => [g.id, g.name || '']));
+  const dev = new Map(devs.map(d => {
+    const uni = (d.groups || []).map(g => gNome.get(g.id) || '').find(n => /^UNI_/.test(n));
+    return [d.id, { placa: String(d.licensePlate || d.name || d.id).toUpperCase().trim(),
+                    uni: uni ? uni.replace(/^UNI_/, '').toUpperCase() : '' }];
+  }));
+  const de = `${DIA}T03:00:00.000Z`, ate = new Date(new Date(de).getTime() + 864e5 - 1).toISOString();
+  const trips = await geotabRpc('Get', { typeName: 'Trip', search: { fromDate: de, toDate: ate }, resultsLimit: 50000 }, cred);
+  if (trips[0]) console.log('campos da Trip:', Object.keys(trips[0]).join(', '));
+
+  const porDev = new Map();
+  for (const t of trips) {
+    const id = t.device && t.device.id; const d = id && dev.get(id);
+    if (!d || d.uni !== UNI) continue;
+    (porDev.get(id) || porDev.set(id, []).get(id)).push(t);
+  }
+  const placas = [...porDev.entries()].sort((a, b) => b[1].length - a[1].length);
+  const ns = placas.map(([, ts]) => ts.length).sort((a, b) => a - b);
+  console.log(`\n${placas.length} placa(s) da unidade rodaram no dia · trechos por placa:`
+    + ` mín ${ns[0]} · mediana ${ns[Math.floor(ns.length / 2)]} · máx ${ns[ns.length - 1]}`);
+
+  const hh = s => new Date(s).toLocaleTimeString('pt-BR', { timeZone: 'America/Sao_Paulo', hour: '2-digit', minute: '2-digit' });
+  const min = s => Math.round(+s / 60);
+  for (const [id, ts] of placas.slice(0, QTD)) {
+    ts.sort((a, b) => new Date(a.start) - new Date(b.start));
+    console.log(`\n── ${dev.get(id).placa} · ${ts.length} trecho(s) · ${Math.round(ts.reduce((a, t) => a + (+t.distance || 0), 0))} km ──`);
+    console.log('   saiu   parou   km    dirigiu   parada depois');
+    ts.forEach((t, i) => {
+      const prox = ts[i + 1];
+      const parada = t.stopDuration != null ? min(gtSeg(t.stopDuration))
+        : (prox ? Math.round((new Date(prox.start) - new Date(t.stop)) / 60000) : null);
+      console.log(`   ${hh(t.start)}  ${hh(t.stop)}  ${String((+t.distance || 0).toFixed(1)).padStart(5)}`
+        + `  ${String(min(gtSeg(t.drivingDuration))).padStart(4)} min`
+        + `   ${parada == null ? '—' : parada + ' min'}`);
+    });
+  }
+  process.exit(0);
+}
+
 if (MODE === 'ident') {
   // A operação exige identificação para rodar, mas a sonda viu ~70% das
   // viagens sem motorista (31/08/2026). Este modo mostra ONDE: viagens e km
