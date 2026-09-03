@@ -664,15 +664,31 @@ async function garanteMotoristas(linhas) {
 // PostgREST devolve no máximo 1.000 linhas por chamada. Com o ano inteiro em
 // ce_diario (237 dias × N motoristas) isso corta o mensal em silêncio — daí a
 // paginação por Range.
+/* PAGINAR SEM ORDER É PEGAR LINHA REPETIDA (bug real, 03/09/2026): o PostgREST
+   corta em 1.000 linhas e a paginação por Range só é consistente se houver uma
+   ordenação ESTÁVEL — sem ela o Postgres pode devolver as linhas em ordem
+   diferente a cada página, e a mesma linha aparece duas vezes enquanto outra
+   nunca aparece. Sintoma: um motorista com 37 "dias" num mês de 31, o km do
+   mês inflado e a média ponderada puxada pelos dias contados em dobro.
+   `id` é a chave primária de todas as tabelas lidas aqui, então serve de
+   critério estável; a deduplicação por id fica como rede (e avisa no log). */
 async function sbTodos(caminho) {
-  const out = []; const PASSO = 1000;
+  const url = caminho.includes('order=') ? caminho
+    : caminho + (caminho.includes('?') ? '&' : '?') + 'order=id.asc';
+  const out = []; const PASSO = 1000; const vistos = new Set(); let repetidas = 0;
   for (let de = 0; ; de += PASSO) {
-    const r = await fetch(`${SB_URL}/rest/v1/${caminho}`, {
+    const r = await fetch(`${SB_URL}/rest/v1/${url}`, {
       headers: { ...H_SB, Range: `${de}-${de + PASSO - 1}` } });
     if (!r.ok) throw new Error(`${caminho}: ${r.status} ${(await r.text()).slice(0, 200)}`);
     const lote = await r.json();
-    out.push(...lote);
-    if (lote.length < PASSO) return out;
+    for (const l of lote) {
+      if (l && l.id != null) { if (vistos.has(l.id)) { repetidas++; continue; } vistos.add(l.id); }
+      out.push(l);
+    }
+    if (lote.length < PASSO) {
+      if (repetidas) console.log(`⚠ ${repetidas} linha(s) repetida(s) descartada(s) em ${caminho.split('?')[0]}`);
+      return out;
+    }
   }
 }
 // dias JÁ gravados no intervalo — é o que permite retomar um backfill.
@@ -1106,6 +1122,20 @@ if (MODE === 'carteira') {
     + ` · máx ${vgs[vgs.length - 1]}`);
   console.log('viagens  ' + [1, 5, 10, 20, 40].map(c =>
     `${c}+: ${todos.filter(m => (+m.viagens || 0) >= c).length}`).join(' · '));
+
+  // Um pilar que ninguém perde ponto não está medindo nada — e sem isto a
+  // diferença entre "todo mundo dirige bem" e "a fonte não entrega o dado"
+  // some dentro da média.
+  console.log('\n── COBERTURA DOS PILARES (nota 100 = não tira nada do saldo) ──');
+  for (const [k, rot] of Object.entries(ROT)) {
+    const col = k + '_pontos';
+    const vs = todos.map(m => m[col]).filter(v => v != null).map(Number);
+    if (!vs.length) { console.log(`   ${rot.padEnd(14)} SEM DADO em nenhum motorista`); continue; }
+    const med = vs.reduce((a, b) => a + b, 0) / vs.length;
+    console.log(`   ${rot.padEnd(14)} ${vs.length}/${todos.length} com nota`
+      + ` · média ${med.toFixed(1)} · em 100 (nota cheia): ${vs.filter(v => v >= 99.95).length}`
+      + ` · em 0: ${vs.filter(v => v <= 0.05).length}`);
+  }
 
   for (const S of SALDOS) {
     console.log(`\n══ SALDO INICIAL ${brl(S)} ══`);
