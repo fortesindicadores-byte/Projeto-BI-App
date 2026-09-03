@@ -1973,7 +1973,8 @@ if (MODE === 'velregras') {
   const de = `${DIA}T03:00:00.000Z`, ate = new Date(new Date(de).getTime() + 864e5 - 1).toISOString();
   const excs = await geotabRpc('Get', { typeName: 'ExceptionEvent', search: { fromDate: de, toDate: ate }, resultsLimit: 50000 }, cred);
   if (excs[0]) console.log('\ncampos do ExceptionEvent:', Object.keys(excs[0]).join(', '));
-  const daUni = excs.filter(e => { const d = dev.get(e.device && e.device.id); return d && d.uni === UNI; });
+  // CE_UNI=* varre a frota inteira — é o que diz se uma regra oficial está viva
+  const daUni = excs.filter(e => { const d = dev.get(e.device && e.device.id); return d && (UNI === '*' || d.uni === UNI); });
   console.log(`\n${excs.length} evento(s) na frota no dia · ${daUni.length} na unidade`);
 
   const porRegra = new Map();
