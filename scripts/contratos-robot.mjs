@@ -359,10 +359,18 @@ if (nVar) {
   // taxa que MUDOU de um mês para o outro é reajuste (normal) ou digitação
   // errada (não é). Quem olha o log decide — o robô só avisa.
   const oscila = contratos.filter(c => c.tipo === 'variavel' && c._taxas.length > 1
-    && Math.max(...c._taxas) / Math.min(...c._taxas) > 1.15);
-  if (oscila.length) console.log(`   ${oscila.length} placa(s) com R$/km variando +15% entre os meses`
-    + ` (reajuste ou digitação — conferir): ${oscila.slice(0, 8).map(c => c.placa).join(', ')}`
-    + (oscila.length > 8 ? '…' : ''));
+    && Math.max(...c._taxas) / Math.min(...c._taxas) > 1.15)
+    .sort((a, b) => (Math.max(...b._taxas) / Math.min(...b._taxas))
+                  - (Math.max(...a._taxas) / Math.min(...a._taxas)));
+  if (oscila.length) {
+    console.log(`   ${oscila.length} placa(s) com R$/km variando +15% entre os meses`
+      + ' (reajuste ou digitação — conferir).');
+    // as taxas vêm do mais recente para o mais antigo; imprimo na ordem do
+    // calendário para dar de ler como uma série
+    console.log('   as 6 que mais oscilam, mês a mês (do mais antigo ao mais novo):');
+    oscila.slice(0, 6).forEach(c => console.log(`      ${c.placa.padEnd(9)}`
+      + `${[...c._taxas].reverse().map(t => t.toFixed(3)).join(' → ')}`));
+  }
 }
 const semKm = contratos.filter(c => c.tipo === 'variavel' && c.ultimo_km_informado == null);
 if (semKm.length) console.log(`   ⚠ ${semKm.length} placa(s) por km SEM "km informado" na planilha`
