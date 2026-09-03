@@ -2158,7 +2158,10 @@ if (MODE === 'eventos') {
         const a = porChave.get(l.chave);
         if (!a) { semLinha++; continue; }
         const bruto = { ...(a.bruto || {}), eventos: l.bruto.eventos, velArgus: l.bruto.velArgus };
-        patch.push({ dia, chave: l.chave, acel_100km: l.acel_100km, frea_100km: l.frea_100km,
+        // `fonte` é NOT NULL e o Postgres valida NOT NULL ANTES de resolver o
+        // ON CONFLICT — sem ela o upsert parcial cai com 23502 mesmo quando a
+        // linha existe (bug real, 03/09/2026: 31 dias falharam)
+        patch.push({ dia, chave: l.chave, fonte: 'Geotab', acel_100km: l.acel_100km, frea_100km: l.frea_100km,
                      vel_excesso_pct: l.vel_excesso_pct, bruto });
       }
       for (let i = 0; i < patch.length; i += 500) {
