@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
-<meta name="build" content="202609031200">
+<meta name="build" content="202609031300">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <title>Condução Econômica · Gestão em Movimento</title>
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -465,7 +465,7 @@ table.dre thead th.sortable:hover{color:var(--laranja);}
           </table></div>
           <div class="tnotes">
             * Cada pilar mostra os <b>pontos</b> (0–100) e, logo abaixo, o <b>resultado medido</b>. A pontuação final é a média ponderada pelos pesos das Regras de Pontuação.<br>
-            * <b>Velocidade é deflator</b>: não soma peso — multiplica a pontuação dos outros pilares. Quem não excede mantém 100% do que fez.<br>
+            * <b>Velocidade</b>: % do tempo em movimento acima do limite da via, pelas regras oficiais da Argus (faixas até 20% / 20–30% / acima de 30%); a quantidade de excessos aparece embaixo da nota.<br>
             * Pilar sem dado na fonte fica ausente e o peso dele é redistribuído proporcionalmente entre os demais.
           </div>
         </div>
@@ -499,7 +499,11 @@ const PILAR = {
   // DEFLATOR (Renan, 02/09/2026): excesso de velocidade não compensa bom RPM —
   // ele derruba o conjunto. Não entra na média com peso: MULTIPLICA a pontuação
   // dos demais. Sem dado de velocidade o deflator é 1 (não penaliza).
-  vel:   {nome:'Velocidade (deflator)', full:'Velocidade (deflator)', peso:0, defl:true, both:true, fmt:s=>br((100-s)/5,1)+'%', calc:'OK = nenhum excesso de velocidade no período; NOK = houve excesso (a quantidade aparece embaixo). MULTIPLICA a pontuação dos outros pilares.'},
+  // PILAR de novo (Renan, 03/09/2026): "inclua novamente velocidade na pontuação,
+  // não como deflator". Medição: % do tempo em movimento acima do limite da via,
+  // pelas regras oficiais da Argus por faixa (até 20% · 20–30% · acima de 30%;
+  // excesso maior pesa mais). Regras de teste/piloto não contam.
+  vel:   {nome:'Velocidade',     full:'Velocidade',              peso:15, both:true, fmt:s=>br((100-s)/5,1)+'%', calc:'% do tempo em movimento acima do limite da via (faixas até 20% / 20–30% / acima de 30%; excesso maior pesa mais). Embaixo, a quantidade de excessos registrados.'},
 };
 /* USO DE MARCHAS FORA POR ENQUANTO (Renan, 02/09/2026). O pilar existe e o
    robô continua gravando cambio_ruim_pct, mas ele só tem dado real em 42 dos
@@ -824,13 +828,12 @@ function renderRanking(data){
   const cell=(k,v)=>v==null
     ? `<td class="num rk-ind"><span class="ind-dash">—</span></td>`
     : `<td class="num rk-ind"><span class="p ${indClass(v)}">${v.toFixed(0)}</span><span class="v">${PILAR[k].fmt(v)}</span></td>`;
-  // Velocidade é deflator, não nota: OK quando não houve excesso, NOK com a
-  // quantidade de excessos embaixo (Renan, 03/09/2026)
+  // Velocidade: nota como os outros pilares e, embaixo, o resultado medido
+  // mais a quantidade de excessos registrados (Renan, 03/09/2026)
   const cellVel=(v,nx)=>{
-    if(v==null && !nx) return `<td class="num rk-ind"><span class="ind-dash">—</span></td>`;
-    const nok = (nx>0) || (v!=null && v<99.95);
-    const sub = nok ? (nx>0 ? `${nx.toLocaleString('pt-BR')} excesso${nx>1?'s':''}` : PILAR.vel.fmt(v)) : '';
-    return `<td class="num rk-ind"><span class="p ${nok?'ind-red':'ind-green'}">${nok?'NOK':'OK'}</span>${sub?`<span class="v">${sub}</span>`:''}</td>`;
+    if(v==null) return `<td class="num rk-ind"><span class="ind-dash">—</span></td>`;
+    const sub = PILAR.vel.fmt(v) + (nx>0 ? ` · ${nx.toLocaleString('pt-BR')} exc.` : '');
+    return `<td class="num rk-ind"><span class="p ${indClass(v)}">${v.toFixed(0)}</span><span class="v">${sub}</span></td>`;
   };
   $('ranking-tbody').innerHTML = rows.map((r,i)=>{
     const rank=i+1;
@@ -841,7 +844,7 @@ function renderRanking(data){
       <td>${COD_OF[r.unit]||'—'}</td>
       <td class="num">${r.km ? Math.round(r.km).toLocaleString('pt-BR') : '—'}</td>
       <td class="num">${r.viagens ? r.viagens.toLocaleString('pt-BR') : '—'}</td>
-      ${FIELD_ORDER.map(k=>PILAR[k].defl ? cellVel(r[k], r.velx||0) : cell(k,r[k])).join('')}
+      ${FIELD_ORDER.map(k=>k==='vel' ? cellVel(r[k], r.velx||0) : cell(k,r[k])).join('')}
       <td class="num"><div class="pont-cell">${scorePill(r.pont)}<span class="pont-cls">${cls}</span></div></td>
     </tr>`;
   }).join('');
@@ -1047,6 +1050,6 @@ initPdfExport({
   isLight:()=>document.body.classList.contains('claro'), setTheme:aplicaTema
 });
 </script>
-<script src="../../assets/build-check.js?v=202609031200"></script>
+<script src="../../assets/build-check.js?v=202609031300"></script>
 </body>
 </html>

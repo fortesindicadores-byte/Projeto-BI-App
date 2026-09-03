@@ -77,7 +77,13 @@ const REGUA = {
    tela não mostra, e os outros não. O cambio_ruim_pct segue sendo coletado e
    o cambio_pontos gravado; ele volta a pontuar quando a Argus habilitar a
    marcha no resto da frota. */
-const PESOS = { rpm: 25, idle: 20, acel: 15 };
+/* VELOCIDADE VOLTOU A SER PILAR (Renan, 03/09/2026: "inclua novamente
+   velocidade na pontuação, não como deflator"). O deflator de 02/09 nunca
+   mordeu: era calculado pelas faixas de velocidade das viagens, que vêm
+   zeradas nesta conta. A medição do pilar é a fórmula original (tempo acima
+   do limite ponderado por faixa ÷ tempo em movimento), agora com as faixas
+   das regras da Argus — ver GT_REGRA. */
+const PESOS = { rpm: 25, idle: 20, acel: 15, vel: 15 };
 
 const nota = (pilar, valor) => {
   if (valor == null || !isFinite(valor)) return null;
@@ -92,9 +98,7 @@ const score = notas => {
     num += v * w; den += w;
   }
   if (!den) return null;
-  const base = num / den;
-  const defl = notas.vel == null ? 1 : Math.max(0, Math.min(1, notas.vel / 100));
-  return Math.round(base * defl * 10) / 10;
+  return Math.round(num / den * 10) / 10;
 };
 
 // ── campos da API (manual "Consulta de Condução Detalhada – DaaS" v1.8) ──────
@@ -211,19 +215,40 @@ function gtSeg(v) {
   const [h = 0, m = 0, s = 0] = resto.split(':').map(Number);
   return dias * 86400 + (+h || 0) * 3600 + (+m || 0) * 60 + Math.floor(+s || 0);
 }
-// as regras de aceleração/freada/velocidade: id de sistema ou nome da regra
+/* REGRAS OFICIAIS, NÃO "NOME CONTÉM VELOCIDADE" (bug real, 03/09/2026): a
+   conta tem 110 regras e a maioria é teste ou piloto — prefixos TESTE,
+   [Teste …], z_[PILOTO], X_, Y-, [ Demarco ]. Classificar pelo nome somava
+   tudo: "TESTE - FREIO ESTACIONARIO VELOCIDADE" (2 h por evento), "X_ Excesso
+   Velocidade Chuva" (um evento por segundo), três pilotos (2%/5%/8% > via)
+   contando o MESMO excesso três vezes… e o ranking mostrou 1.077 "excessos"
+   num mês. A velocidade passa a vir SÓ das regras da Argus por faixa acima
+   do limite da via ("[Argus] Exc. Veloc. Via até 20% / entre 20% e 30% /
+   acima de 30%") — as oficiais, e as mesmas faixas da vFleets, com o que o
+   pilar volta à fórmula original: (t1 + 2·t2 + 3·t3) ÷ tempo em movimento.
+   Aceleração/freada: regra de teste/piloto fica fora; a oficial ainda vai ser
+   confirmada com o Renan (o modo velregras lista todas). */
+const GT_TESTE = /^\s*(TESTE\b|\[\s*TESTE|\[\s*Teste\b|Teste\s+\w|z_\[PILOTO\]|X_|Y\s*-|\[\s*Demarco)/i;
 const GT_REGRA = {
   acel: { ids: ['RuleHarshAccelerationId'], nome: /harsh.?accel|acelera/i },
   frea: { ids: ['RuleHarshBrakingId'],      nome: /harsh.?brak|frena|freada/i },
-  vel:  { ids: ['RuleSpeedingId'],          nome: /speeding|velocidade/i },
 };
+const GT_VEL_ARGUS = /^\[Argus\]\s*Exc\.?\s*Veloc\.?\s*Via/i;
+// devolve 'vel1' | 'vel2' | 'vel3' | 'acel' | 'frea' | null
 const gtQualRegra = (ruleId, ruleNome) => {
+  const nome = ruleNome || '';
+  if (GT_VEL_ARGUS.test(nome)) {
+    if (/at[ée]\s*20/i.test(nome)) return 'vel1';
+    if (/entre\s*20/i.test(nome)) return 'vel2';
+    return 'vel3';
+  }
+  if (GT_TESTE.test(nome)) return null;             // teste/piloto não pontua
   for (const [k, r] of Object.entries(GT_REGRA)) {
     if (r.ids.includes(ruleId)) return k;
-    if (ruleNome && r.nome.test(ruleNome)) return k;
+    if (nome && r.nome.test(nome)) return k;
   }
   return null;
 };
+const GT_VEL_PESO = { vel1: 1, vel2: 2, vel3: 3 };
 // chave do motorista: o CPF/CNH do cadastro, quando houver — é o que permite
 // casar a mesma pessoa entre Geotab e vFleets. Sem isso, o id do Geotab.
 function gtChave(u) {
@@ -409,15 +434,22 @@ async function geotabDia(dia, cred, cacheUsuarios, regras, uniPorDev, rpmPorDev,
   // eventos por motorista; quando o evento não traz motorista, cai no device
   const nomeRegra = id => (regras.get(id) || '');
   const porDrv = new Map(), porDev = [];
+  // soma um evento no acumulador: aceleração/freada contam; velocidade conta
+  // E guarda os segundos por faixa (é o tempo, não a contagem, que vira o pilar)
+  const soma = (m, qual, seg) => {
+    if (GT_VEL_PESO[qual]) { m.vel++; m.velSeg = (m.velSeg || 0) + seg * GT_VEL_PESO[qual]; m['s' + qual] = (m['s' + qual] || 0) + seg; }
+    else m[qual]++;
+  };
   for (const e of excs) {
     const qual = gtQualRegra(e.rule?.id, nomeRegra(e.rule?.id));
     if (!qual) continue;
+    const seg = gtSeg(e.duration);
     const d = e.driver?.id;
     if (d && d !== 'NoDriverId' && d !== 'UnknownDriverId') {
       const m = porDrv.get(d) || { acel: 0, frea: 0, vel: 0 };
-      m[qual]++; porDrv.set(d, m);
+      soma(m, qual, seg); porDrv.set(d, m);
     } else if (e.device?.id) {
-      porDev.push({ dev: e.device.id, t: new Date(e.activeFrom).getTime(), qual });
+      porDev.push({ dev: e.device.id, t: new Date(e.activeFrom).getTime(), qual, seg });
     }
   }
 
@@ -455,7 +487,7 @@ async function geotabDia(dia, cred, cacheUsuarios, regras, uniPorDev, rpmPorDev,
     g.n++;
     // eventos órfãos do mesmo veículo dentro da janela da viagem
     const ini = new Date(t.start).getTime(), fim = new Date(t.stop).getTime();
-    porDev.forEach(x => { if (x.dev === t.device?.id && x.t >= ini && x.t <= fim && !x.usado) { g[x.qual]++; x.usado = true; } });
+    porDev.forEach(x => { if (x.dev === t.device?.id && x.t >= ini && x.t <= fim && !x.usado) { soma(g, x.qual, x.seg); x.usado = true; } });
     const am = rpmPorDev && rpmPorDev.get(t.device?.id);
     if (am) { const j = rpmJanela(am, ini, fim); g.rpmV = (g.rpmV || 0) + j.verde; g.rpmR = (g.rpmR || 0) + j.rodando; }
     if (mch && am) { const k = marchaJanela(mch.porDev.get(t.device?.id), am, ini, fim, mch.maxG.get(t.device?.id));
@@ -467,6 +499,8 @@ async function geotabDia(dia, cred, cacheUsuarios, regras, uniPorDev, rpmPorDev,
   for (const [d, m] of porDrv) {
     const g = porMot.get(d); if (!g) continue;
     g.acel += m.acel; g.frea += m.frea; g.vel += m.vel;
+    g.velSeg = (g.velSeg || 0) + (m.velSeg || 0);
+    for (const k of ['svel1', 'svel2', 'svel3']) g[k] = (g[k] || 0) + (m[k] || 0);
   }
 
   // nome e chave dos motoristas que apareceram
@@ -488,7 +522,9 @@ async function geotabDia(dia, cred, cacheUsuarios, regras, uniPorDev, rpmPorDev,
       idle_pct: (g.dir + g.idle) ? g.idle / (g.dir + g.idle) * 100 : null,
       acel_100km: g.km > 0 ? g.acel / g.km * 100 : null,
       frea_100km: g.km > 0 ? g.frea / g.km * 100 : null,
-      vel_excesso_pct: tMov ? (g.v1 + 2 * g.v2 + 3 * g.v3) / tMov * 100 : null,
+      // (t1 + 2·t2 + 3·t3) ÷ tempo em movimento, com as faixas da Argus —
+      // os speedRange da viagem vêm zerados nesta conta (03/09/2026)
+      vel_excesso_pct: tMov ? (g.velSeg || 0) / tMov * 100 : null,
       freio_motor_pct: null,                       // freio motor não existe no Geotab
       // banguela = ponto morto com o veículo em movimento; menos de 1 min
       // em movimento com marcha lida no dia não vale nota
@@ -501,7 +537,8 @@ async function geotabDia(dia, cred, cacheUsuarios, regras, uniPorDev, rpmPorDev,
                rpm: { verde: Math.round(g.rpmV || 0), rodando: Math.round(g.rpmR || 0) },
                marcha: { ruim: Math.round(g.mchR || 0), total: Math.round(g.mchT || 0) },
                banguela: { neutro: Math.round(g.bgN || 0), movimento: Math.round(g.bgM || 0) },
-               eventos: { acel: g.acel, frea: g.frea, vel: g.vel } },
+               eventos: { acel: g.acel, frea: g.frea, vel: g.vel },
+               velArgus: { s1: Math.round(g.svel1 || 0), s2: Math.round(g.svel2 || 0), s3: Math.round(g.svel3 || 0) } },
       _nome: (u.firstName || u.lastName) ? `${u.firstName || ''} ${u.lastName || ''}`.trim() : (u.name || id),
       _uo: null, _uni: gtUni(u),
     };
@@ -517,7 +554,7 @@ async function geotabDia(dia, cred, cacheUsuarios, regras, uniPorDev, rpmPorDev,
       rpm_verde_pct: (g.rpmR || 0) > 60 ? g.rpmV / g.rpmR * 100 : null,
       idle_pct: (g.dir + g.idle) ? g.idle / (g.dir + g.idle) * 100 : null,
       acel_100km: null, frea_100km: null,
-      vel_excesso_pct: tMov ? (g.v1 + 2 * g.v2 + 3 * g.v3) / tMov * 100 : null,
+      vel_excesso_pct: null,                       // evento não é atribuído a quem não tem login
       freio_motor_pct: null,
       banguela_pct: (g.bgM || 0) > 60 ? g.bgN / g.bgM * 100 : null,
       cambio_ruim_pct: (g.mchT || 0) > 60 ? g.mchR / g.mchT * 100 : null,
@@ -718,7 +755,7 @@ async function recalculaMes(de, ate) {
     grupos.get(k).push(d);
   });
 
-  const linhas = [];
+  const linhas = []; const velDist = [];
   for (const [k, ds] of grupos) {
     const [competencia, chave] = k.split('|');
     const m = cad.get(chave) || {};
@@ -731,7 +768,7 @@ async function recalculaMes(de, ate) {
       rpm:    nota('rpm',    pond('rpm_verde_pct')),
       idle:   nota('idle',   pond('idle_pct')),
       acel:   nota('acel',   pond('acel_100km')),
-      vel:    nota('vel',    pond('vel_excesso_pct')),
+      vel:    (() => { const v = pond('vel_excesso_pct'); if (v != null) velDist.push(v); return nota('vel', v); })(),
       // o painel descreve este pilar como "% de uso de freio motor nas
       // desacelerações, PENALIZADO por tempo de banguela" — desconto 1:1,
       // calibrável quando o Renan olhar a distribuição real.
@@ -754,6 +791,13 @@ async function recalculaMes(de, ate) {
       vel_pontos: notas.vel, freio_pontos: notas.freio, cambio_pontos: notas.cambio,
       pontuacao: score(notas), atualizado_em: new Date().toISOString(),
     });
+  }
+  if (velDist.length) {
+    // onde a frota está no pilar de velocidade — é o que calibra REGUA.vel.zeraEm
+    const v = velDist.slice().sort((a, b) => a - b), q = p => v[Math.min(v.length - 1, Math.floor(v.length * p))];
+    console.log(`velocidade · % do tempo acima do limite (ponderado por faixa) em ${v.length} motorista-mês:`
+      + ` zero em ${v.filter(x => x === 0).length} · mediana ${q(.5).toFixed(2)} · p75 ${q(.75).toFixed(2)}`
+      + ` · p90 ${q(.9).toFixed(2)} · máx ${v[v.length - 1].toFixed(2)} · régua zera em ${REGUA.vel.zeraEm}%`);
   }
   if (linhas.length) {
     // coluna nova que ainda não existe no banco (PGRST204) não derruba o mensal:
@@ -1110,22 +1154,20 @@ if (MODE === 'carteira') {
   if (!todos.length) { console.log('sem gente na unidade neste mês.'); process.exit(0); }
 
   // pesos do score de hoje — velocidade é deflator, não entra na média
-  const PES = { rpm: 25, idle: 20, acel: 15 };
+  const PES = { rpm: 25, idle: 20, acel: 15, vel: 15 };   // velocidade é pilar (03/09/2026)
   const ROT = { rpm: 'Faixa Verde', idle: 'Motor Ocioso', acel: 'Aceleração', vel: 'Velocidade' };
   const conta = (r, S) => {
-    const v = { rpm: r.rpm_pontos, idle: r.idle_pontos, acel: r.acel_pontos };
+    const v = { rpm: r.rpm_pontos, idle: r.idle_pontos, acel: r.acel_pontos, vel: r.vel_pontos };
     let den = 0; for (const k in PES) if (v[k] != null) den += PES[k];
     if (!den) return null;
-    const defl = r.vel_pontos == null ? 1 : Math.max(0, Math.min(1, r.vel_pontos / 100));
     const perdas = {}; let base = 0;
     for (const k in PES) {
       if (v[k] == null) continue;
       const w = PES[k] / den, n = Math.min(1, Math.max(0, v[k] / 100));
       base += w * n;
-      perdas[k] = S * w * (1 - n) * defl;
+      perdas[k] = S * w * (1 - n);
     }
-    perdas.vel = S * (1 - defl);
-    return { final: S * base * defl, perdas };
+    return { final: S * base, perdas };
   };
 
   const diasMax = Math.max(...todos.map(m => +m.dias || 0));
@@ -1924,8 +1966,9 @@ if (MODE === 'velregras') {
                     uni: uni ? uni.replace(/^UNI_/, '').toUpperCase() : '' }];
   }));
   const rNome = new Map(regras.map(r => [r.id, r.name || r.id]));
-  console.log(`\nregras que o robô classifica como VELOCIDADE (${regras.length} na conta):`);
-  regras.forEach(r => { if (gtQualRegra(r.id, r.name) === 'vel') console.log(`   · ${r.name} [${r.id}]${r.baseType ? ' base=' + r.baseType : ''}`); });
+  console.log(`\nTODAS as regras da conta (${regras.length}) e como o robô classifica cada uma (— = não pontua):`);
+  regras.slice().sort((a, b) => String(a.name).localeCompare(String(b.name), 'pt')).forEach(r =>
+    console.log(`   ${String(gtQualRegra(r.id, r.name) || '—').padEnd(5)} ${r.name} [${r.id}]${r.baseType ? ' base=' + r.baseType : ''}`));
 
   const de = `${DIA}T03:00:00.000Z`, ate = new Date(new Date(de).getTime() + 864e5 - 1).toISOString();
   const excs = await geotabRpc('Get', { typeName: 'ExceptionEvent', search: { fromDate: de, toDate: ate }, resultsLimit: 50000 }, cred);
@@ -1950,7 +1993,7 @@ if (MODE === 'velregras') {
 
   // sequência da placa com mais eventos de velocidade
   const porDev = new Map();
-  daUni.forEach(e => { if (gtQualRegra(e.rule && e.rule.id, rNome.get(e.rule && e.rule.id)) !== 'vel') return;
+  daUni.forEach(e => { if (!/^vel/.test(gtQualRegra(e.rule && e.rule.id, rNome.get(e.rule && e.rule.id)) || '')) return;
     (porDev.get(e.device.id) || porDev.set(e.device.id, []).get(e.device.id)).push(e); });
   const top = [...porDev.entries()].sort((a, b) => b[1].length - a[1].length)[0];
   if (top) {
@@ -2091,6 +2134,49 @@ if (!VF_TOKEN && !GT) {
 
 // que dias coletar
 let AGENDA = [];
+if (MODE === 'eventos') {
+  /* REDERIVA SÓ O QUE VEM DE EVENTO (03/09/2026): depois de trocar a
+     classificação das regras, o diário inteiro estava com aceleração e
+     velocidade contaminadas por regra de teste. Recoletar tudo levaria horas
+     por causa das amostras de RPM; este modo baixa só viagens + eventos do
+     dia (segundos) e regrava, nas linhas que JÁ existem, apenas acel_100km,
+     frea_100km, vel_excesso_pct e o bruto.eventos/velArgus — RPM, marcha e
+     banguela ficam intactos. Depois, rodar o recalc. */
+  if (!GT) { console.error('Geotab: sem credencial'); process.exit(1); }
+  if (!SB_KEY) { console.error('GEM_SUPABASE_SERVICE_KEY ausente'); process.exit(1); }
+  console.log(`rederivando eventos · ${DE} → ${ATE}`);
+  let dias = 0, linhasOk = 0, semLinha = 0;
+  for (let d = new Date(DE + 'T12:00:00Z'); iso(d) <= ATE; d = new Date(d.getTime() + 864e5)) {
+    const dia = iso(d);
+    try {
+      const novas = await geotabDia(dia, GT, GT_USERS, GT_RULES, GT_UNIDEV, null, null, null);
+      const atuais = await sbTodos(`ce_diario?select=id,chave,bruto&dia=eq.${dia}&fonte=eq.Geotab`);
+      const porChave = new Map(atuais.map(a => [a.chave, a]));
+      const patch = [];
+      for (const l of novas) {
+        const a = porChave.get(l.chave);
+        if (!a) { semLinha++; continue; }
+        const bruto = { ...(a.bruto || {}), eventos: l.bruto.eventos, velArgus: l.bruto.velArgus };
+        patch.push({ dia, chave: l.chave, acel_100km: l.acel_100km, frea_100km: l.frea_100km,
+                     vel_excesso_pct: l.vel_excesso_pct, bruto });
+      }
+      for (let i = 0; i < patch.length; i += 500) {
+        const r = await fetch(`${SB_URL}/rest/v1/ce_diario?on_conflict=dia,chave`, {
+          method: 'POST', headers: { ...H_SB, Prefer: 'resolution=merge-duplicates' },
+          body: JSON.stringify(patch.slice(i, i + 500)) });
+        if (!r.ok) throw new Error(`ce_diario: ${r.status} ${(await r.text()).slice(0, 200)}`);
+      }
+      const comVel = patch.filter(x => x.vel_excesso_pct != null && x.vel_excesso_pct > 0).length;
+      const ex = novas.reduce((s, l) => s + ((l.bruto.eventos && l.bruto.eventos.vel) || 0), 0);
+      console.log(`${dia}: ${patch.length} linha(s) regravada(s) · ${ex} excesso(s) da Argus · ${comVel} motorista(s) com tempo acima do limite`);
+      dias++; linhasOk += patch.length;
+    } catch (e) { console.log(`${dia}: FALHOU (${String(e.message || e).slice(0, 120)})`); }
+  }
+  console.log(`\n${dias} dia(s) · ${linhasOk} linha(s) regravada(s) · ${semLinha} motorista-dia sem linha no banco (ignorados)`);
+  if (dias) { const n = await recalculaMes(DE, ATE); console.log(`recalculado: ${n} linha(s) em ce_scores_mensais`); }
+  process.exit(0);
+}
+
 if (MODE === 'reproc') {
   if (!VF_TOKEN) { console.error('reproc é da vFleets — sem VFLEETS_TOKEN não há o que reprocessar.'); process.exit(1); }
   const { dias, erro } = await vfleetsReprocessados(DE, ATE);
