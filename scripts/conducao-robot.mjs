@@ -55,7 +55,10 @@ const REGUA = {
   rpm:    { direto: true },                    // % na faixa verde já é a nota
   freio:  { direto: true },                    // % de uso de freio motor idem
   idle:   { zeraEm: 25 },                      // 25% do tempo em marcha lenta → 0
-  acel:   { zeraEm: 100 / 6 },                 // ~16,7 acelerações bruscas/100km → 0
+  // 3 acelerações bruscas/100 km → 0 (Renan, 03/09/2026). A regra padrão do
+  // Geotab dispara em 0,29 G, que caminhão carregado raramente atinge: a
+  // frota fica em ~1/100 km e a régua antiga (16,7) dava 99 para todos.
+  acel:   { zeraEm: +process.env.CE_ACEL_ZERA || 3 },
   vel:    { zeraEm: 20 },                      // 20% do tempo acima do limite → 0
   cambio: { zeraEm: 100 / 6 },                 // ~16,7% do tempo com marcha ruim → 0
 };
