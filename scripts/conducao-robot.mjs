@@ -71,7 +71,13 @@ const REGUA = {
    entrar na média com um peso, ela multiplica a pontuação dos demais:
    quem não excede mantém 100% do que fez; quem excede perde na mesma
    proporção. Sem dado de velocidade, o deflator é 1 (não penaliza). */
-const PESOS = { rpm: 25, idle: 20, acel: 15, cambio: 5 };
+/* USO DE MARCHAS TAMBÉM SAIU DO SCORE (Renan, 02/09/2026): o painel deixou de
+   mostrar o pilar, mas o peso 5 continuava aqui — quem roda num dos 42
+   veículos que publicam a posição da marcha era pontuado por um pilar que a
+   tela não mostra, e os outros não. O cambio_ruim_pct segue sendo coletado e
+   o cambio_pontos gravado; ele volta a pontuar quando a Argus habilitar a
+   marcha no resto da frota. */
+const PESOS = { rpm: 25, idle: 20, acel: 15 };
 
 const nota = (pilar, valor) => {
   if (valor == null || !isFinite(valor)) return null;
@@ -1040,6 +1046,96 @@ const percentil = (arr, p) => {
    Este modo NÃO grava nada: lê os scores do mês, mostra a distribuição e
    simula os modelos lado a lado, com o custo de cada um dentro do teto.
    Log com faixas, contagens e valores — nunca nome de motorista.          */
+if (MODE === 'carteira') {
+  /* CARTEIRA QUE ESVAZIA (Renan, 03/09/2026): em vez de disputar um prêmio no
+     fim do mês, o motorista COMEÇA com um saldo e vai perdendo conforme cada
+     pilar fica abaixo de 100 — é o que o app mostraria linha a linha ("você
+     perdeu R$ X em faixa verde"). O saldo final é saldo × score/100, e a perda
+     DECOMPÕE exatamente por pilar:
+       perda do pilar i = saldo × peso_i × (1 − nota_i) × deflator
+       perda de velocidade = saldo × (1 − deflator)
+     A soma das perdas com o saldo final devolve o saldo inicial (conferido no
+     log): não há dinheiro sumindo em arredondamento de explicação. */
+  if (!SB_KEY) { console.error('GEM_SUPABASE_SERVICE_KEY ausente'); process.exit(1); }
+  const MES  = (process.env.CE_MES || '2026-08').slice(0, 7);
+  const UNI  = (process.env.CE_UNI || 'EMP PIRAI').toUpperCase();
+  const BASE_MIN = +process.env.CE_BASE_MIN || 8;
+  const SALDOS = String(process.env.CE_SALDO || '200,300').split(',')
+    .map(s => +s.trim()).filter(v => v > 0);
+  const brl = v => 'R$ ' + v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  console.log(`carteira do motorista · ${UNI} · ${MES} · saldo inicial ${SALDOS.map(brl).join(' e ')}`);
+
+  const mens = await sbTodos('ce_scores_mensais?select=chave,unidade,km,dias,viagens,'
+    + `rpm_pontos,idle_pontos,acel_pontos,vel_pontos,pontuacao&competencia=eq.${MES}-01`);
+  const todos = mens.filter(m => String(m.unidade || '').toUpperCase() === UNI
+    && !String(m.chave || '').startsWith('semlogin:')   // não é pessoa
+    && m.pontuacao != null);
+  if (!todos.length) { console.log('sem gente na unidade neste mês.'); process.exit(0); }
+
+  // pesos do score de hoje — velocidade é deflator, não entra na média
+  const PES = { rpm: 25, idle: 20, acel: 15 };
+  const ROT = { rpm: 'Faixa Verde', idle: 'Motor Ocioso', acel: 'Aceleração', vel: 'Velocidade' };
+  const conta = (r, S) => {
+    const v = { rpm: r.rpm_pontos, idle: r.idle_pontos, acel: r.acel_pontos };
+    let den = 0; for (const k in PES) if (v[k] != null) den += PES[k];
+    if (!den) return null;
+    const defl = r.vel_pontos == null ? 1 : Math.max(0, Math.min(1, r.vel_pontos / 100));
+    const perdas = {}; let base = 0;
+    for (const k in PES) {
+      if (v[k] == null) continue;
+      const w = PES[k] / den, n = Math.min(1, Math.max(0, v[k] / 100));
+      base += w * n;
+      perdas[k] = S * w * (1 - n) * defl;
+    }
+    perdas.vel = S * (1 - defl);
+    return { final: S * base * defl, perdas };
+  };
+
+  const diasMax = Math.max(...todos.map(m => +m.dias || 0));
+  const recortes = [
+    ['TODOS os que rodaram no mês', todos, r => 1],
+    [`só quem tem base de ${BASE_MIN}+ dias medidos`, todos.filter(m => (+m.dias || 0) >= BASE_MIN), r => 1],
+    [`base de ${BASE_MIN}+ dias, saldo PRÓ-RATA pelos dias rodados (mês cheio = ${diasMax} dias)`,
+      todos.filter(m => (+m.dias || 0) >= BASE_MIN), r => Math.min(1, (+r.dias || 0) / diasMax)],
+  ];
+
+  console.log(`\nmotoristas com nota no mês: ${todos.length}`
+    + ` · com ${BASE_MIN}+ dias: ${todos.filter(m => (+m.dias || 0) >= BASE_MIN).length}`);
+  const vgs = todos.map(m => +m.viagens || 0).sort((a, b) => a - b);
+  console.log(`viagens no mês por motorista: mín ${vgs[0]} · mediana ${vgs[Math.floor(vgs.length / 2)]}`
+    + ` · máx ${vgs[vgs.length - 1]}`);
+  console.log('viagens  ' + [1, 5, 10, 20, 40].map(c =>
+    `${c}+: ${todos.filter(m => (+m.viagens || 0) >= c).length}`).join(' · '));
+
+  for (const S of SALDOS) {
+    console.log(`\n══ SALDO INICIAL ${brl(S)} ══`);
+    for (const [rot, lista, prorata] of recortes) {
+      let pago = 0, bolsa = 0, vals = [];
+      const perdaTot = { rpm: 0, idle: 0, acel: 0, vel: 0 };
+      for (const r of lista) {
+        const s = S * prorata(r), c = conta(r, s);
+        if (!c) continue;
+        bolsa += s; pago += c.final; vals.push(c.final);
+        for (const k in perdaTot) perdaTot[k] += c.perdas[k] || 0;
+      }
+      if (!vals.length) continue;
+      vals.sort((a, b) => b - a);
+      const guard = bolsa - pago - Object.values(perdaTot).reduce((a, b) => a + b, 0);
+      console.log(`\n${rot} — ${vals.length} motorista(s)`);
+      console.log(`   provisionado ${brl(bolsa)} · PAGO ${brl(pago)} (${(pago / bolsa * 100).toFixed(1)}%)`
+        + ` · retido ${brl(bolsa - pago)}`);
+      console.log(`   por motorista: maior ${brl(vals[0])} · mediana ${brl(vals[Math.floor(vals.length / 2)])}`
+        + ` · menor ${brl(vals[vals.length - 1])}`);
+      console.log('   o que comeu o saldo: ' + Object.keys(perdaTot)
+        .sort((a, b) => perdaTot[b] - perdaTot[a])
+        .map(k => `${ROT[k]} ${brl(perdaTot[k])}`).join(' · '));
+      if (Math.abs(guard) > 0.01) console.log(`   ⚠ decomposição não fecha por ${brl(guard)}`);
+    }
+  }
+  console.log('\nSimulação encerrada — nada foi gravado.');
+  process.exit(0);
+}
+
 if (MODE === 'premio') {
   if (!SB_KEY) { console.error('GEM_SUPABASE_SERVICE_KEY ausente'); process.exit(1); }
   const MES  = (process.env.CE_MES || '2026-08').slice(0, 7);
