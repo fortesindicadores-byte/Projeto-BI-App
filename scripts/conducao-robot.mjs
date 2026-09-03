@@ -1079,6 +1079,9 @@ if (MODE === 'carteira') {
   // elegibilidade por VIAGENS no mês (Renan, 03/09/2026) — é a unidade de
   // trabalho do motorista, e não depende de o dia ter sido medido inteiro
   const VIAG_MIN = +process.env.CE_VIAG_MIN || 0;
+  // piso de SCORE para receber (Renan, 03/09/2026): abaixo dele a carteira
+  // zera — quem não chegou na régua não leva o que sobrou
+  const SCORE_MIN = +process.env.CE_SCORE_MIN || 0;
   const SALDOS = String(process.env.CE_SALDO || '200,300').split(',')
     .map(s => +s.trim()).filter(v => v > 0);
   const brl = v => 'R$ ' + v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -1132,6 +1135,11 @@ if (MODE === 'carteira') {
       [`${VIAG_MIN}+ viagens · saldo POR COTA de ${VIAG_MIN} viagens (sem teto)`,
         elig, r => vg(r) / VIAG_MIN],
     );
+    if (SCORE_MIN > 0) {
+      const eligS = elig.filter(m => +m.pontuacao >= SCORE_MIN);
+      recortes.push([`${VIAG_MIN}+ viagens E score ${SCORE_MIN}+ · saldo cheio`
+        + ` (${elig.length - eligS.length} ficaram abaixo do piso e recebem zero)`, eligS, r => 1]);
+    }
   }
 
   console.log(`\nmotoristas com nota no mês: ${todos.length}`
