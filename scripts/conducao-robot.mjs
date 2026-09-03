@@ -2033,6 +2033,43 @@ if (MODE === 'velregras') {
   process.exit(0);
 }
 
+if (MODE === 'regracond') {
+  /* QUAL É O PARÂMETRO DA REGRA? (Renan, 03/09/2026). A nota de aceleração
+     fica alta porque a regra dispara pouco, e ela dispara pouco por causa do
+     limiar. O limiar mora na árvore de condições da Rule no Geotab — este
+     modo imprime essa árvore, achatada, para as regras de aceleração e
+     velocidade (padrão, Argus, ENG e pilotos). Só nome de regra, diagnóstico
+     e valores; nada de pessoa. CE_REGRA filtra por trecho do nome. */
+  const cred = await geotabLogin();
+  if (!cred) { console.error('Geotab: sem credencial'); process.exit(1); }
+  const FILTRO = new RegExp(process.env.CE_REGRA || 'accel|acelera|exc\\. veloc\\. via|speeding', 'i');
+  const [regras, diags] = await Promise.all([
+    geotabRpc('Get', { typeName: 'Rule' }, cred),
+    geotabRpc('Get', { typeName: 'Diagnostic', resultsLimit: 5000 }, cred).catch(() => []),
+  ]);
+  const dNome = new Map(diags.map(d => [d.id, d.name || d.id]));
+  const linha = (c, nivel) => {
+    const pad = '   ' + '  '.repeat(nivel);
+    const partes = [c.conditionType || '?'];
+    if (c.value != null) partes.push(`valor=${c.value}`);
+    if (c.diagnostic) partes.push(`diag=${dNome.get(c.diagnostic.id) || c.diagnostic.id}`);
+    if (c.unit) partes.push(`unid=${c.unit}`);
+    if (c.driver) partes.push('driver');
+    if (c.device) partes.push('device');
+    if (c.zone) partes.push(`zone=${c.zone.id}`);
+    if (c.workTime) partes.push(`workTime=${c.workTime.id}`);
+    console.log(pad + partes.join(' · '));
+    (c.children || []).forEach(k => linha(k, nivel + 1));
+  };
+  const alvo = regras.filter(r => FILTRO.test(r.name || '')).sort((a, b) => String(a.name).localeCompare(String(b.name), 'pt'));
+  console.log(`${alvo.length} regra(s) casando com /${FILTRO.source}/i:`);
+  for (const r of alvo) {
+    console.log(`\n── ${r.name} [${r.id}] base=${r.baseType || '?'}${r.comment ? ' · ' + String(r.comment).slice(0, 120) : ''}`);
+    if (r.condition) linha(r.condition, 0); else console.log('   (sem árvore de condição visível)');
+  }
+  process.exit(0);
+}
+
 if (MODE === 'ident') {
   // A operação exige identificação para rodar, mas a sonda viu ~70% das
   // viagens sem motorista (31/08/2026). Este modo mostra ONDE: viagens e km
