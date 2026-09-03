@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
-<meta name="build" content="202609031330">
+<meta name="build" content="202609031400">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <title>Condução Econômica · Gestão em Movimento</title>
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -268,6 +268,7 @@ table.dre td.cg-t,.cg-t{color:var(--verde)!important;font-weight:700;}
    Visão Financeira). Ranking por motorista + evolução + regras.
    ============================================================ */
 /* miolo do Resumo: gráfico maior à esquerda, regras à direita */
+.ce-kpis{grid-template-columns:repeat(3,1fr);margin-top:14px;}
 .ce-gr{grid-template-columns:1.55fr 1fr;flex:1 1 auto;max-height:66vh;}
 @media(max-width:860px){.ce-gr{max-height:none;}}
 /* célula de pilar: pontos grandes + resultado medido pequeno (estilo termômetro) */
@@ -428,6 +429,8 @@ table.dre thead th.sortable:hover{color:var(--laranja);}
             </div>
           </div>
         </div>
+        <!-- pontuação média de cada pilar no recorte (Renan, 03/09/2026) -->
+        <div class="kpis ce-kpis" id="kpi-pilares"></div>
         <div class="gr2 ce-gr">
           <div class="card gcard">
             <div class="thead-row" style="margin-bottom:0">
@@ -772,6 +775,15 @@ function renderHero(data){
   set('h-mot', String(new Set(data.map(r=>r.unit)).size));
   set('h-fonte', ORIGEM==='banco' ? 'Geotab' : 'Exemplo');
   set('rank-sub', period);
+  // um card por pilar: pontos médios do recorte e, embaixo, o resultado medido
+  const box=$('kpi-pilares');
+  if(box) box.innerHTML = FIELD_ORDER.map(k=>{
+    const vals=data.map(r=>r[k]).filter(v=>v!=null);
+    const m=vals.length ? vals.reduce((a,b)=>a+b,0)/vals.length : null;
+    return `<div class="kpi"><div class="kl">${PILAR[k].nome}</div>
+      <div class="kv ${m==null?'':indClass(m)}">${m==null?'—':m.toFixed(1)}</div>
+      <div class="km">${m==null?'sem dado no recorte':`resultado medido: <b>${PILAR[k].fmt(m)}</b>`}</div></div>`;
+  }).join('');
 }
 
 /* agrega por motorista (média nas vigências filtradas) */
@@ -1045,6 +1057,6 @@ initPdfExport({
   isLight:()=>document.body.classList.contains('claro'), setTheme:aplicaTema
 });
 </script>
-<script src="../../assets/build-check.js?v=202609031330"></script>
+<script src="../../assets/build-check.js?v=202609031400"></script>
 </body>
 </html>
