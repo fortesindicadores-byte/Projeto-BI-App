@@ -1076,6 +1076,9 @@ if (MODE === 'carteira') {
   const MES  = (process.env.CE_MES || '2026-08').slice(0, 7);
   const UNI  = (process.env.CE_UNI || 'EMP PIRAI').toUpperCase();
   const BASE_MIN = +process.env.CE_BASE_MIN || 8;
+  // elegibilidade por VIAGENS no mês (Renan, 03/09/2026) — é a unidade de
+  // trabalho do motorista, e não depende de o dia ter sido medido inteiro
+  const VIAG_MIN = +process.env.CE_VIAG_MIN || 0;
   const SALDOS = String(process.env.CE_SALDO || '200,300').split(',')
     .map(s => +s.trim()).filter(v => v > 0);
   const brl = v => 'R$ ' + v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -1108,12 +1111,28 @@ if (MODE === 'carteira') {
   };
 
   const diasMax = Math.max(...todos.map(m => +m.dias || 0));
+  const vg = r => +r.viagens || 0;
   const recortes = [
     ['TODOS os que rodaram no mês', todos, r => 1],
     [`só quem tem base de ${BASE_MIN}+ dias medidos`, todos.filter(m => (+m.dias || 0) >= BASE_MIN), r => 1],
     [`base de ${BASE_MIN}+ dias, saldo PRÓ-RATA pelos dias rodados (mês cheio = ${diasMax} dias)`,
       todos.filter(m => (+m.dias || 0) >= BASE_MIN), r => Math.min(1, (+r.dias || 0) / diasMax)],
   ];
+  if (VIAG_MIN > 0) {
+    /* Com a régua por viagens o saldo pode ser COTA: cada bloco de VIAG_MIN
+       viagens vale um saldo cheio (2 blocos = 2 saldos). É o desenho em que
+       quem roda mais tem mais a ganhar e a mais a perder — e o único que
+       muda o custo de verdade, porque o corte de elegibilidade sozinho não
+       tira quase ninguém: quase todo mundo passa de 15 viagens no mês. */
+    const elig = todos.filter(m => vg(m) >= VIAG_MIN);
+    recortes.push(
+      [`ELEGÍVEL: ${VIAG_MIN}+ viagens no mês · saldo cheio para cada um`, elig, r => 1],
+      [`${VIAG_MIN}+ viagens · saldo PRÓ-RATA (${VIAG_MIN} viagens = saldo cheio, teto de 1 saldo)`,
+        elig, r => Math.min(1, vg(r) / VIAG_MIN)],
+      [`${VIAG_MIN}+ viagens · saldo POR COTA de ${VIAG_MIN} viagens (sem teto)`,
+        elig, r => vg(r) / VIAG_MIN],
+    );
+  }
 
   console.log(`\nmotoristas com nota no mês: ${todos.length}`
     + ` · com ${BASE_MIN}+ dias: ${todos.filter(m => (+m.dias || 0) >= BASE_MIN).length}`);
