@@ -44,6 +44,19 @@ const NK = s => String(s || '').toUpperCase().normalize('NFD').replace(/[̀-ͯ]/
   .replace(/[^A-Z0-9]+/g, ' ').trim();
 const brl = v => 'R$ ' + v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
+/* PLACA CANÔNICA — a mesma lógica Mercosul do resto do portal (Renan,
+   03/09/2026). O ERP e a planilha de contratos não emplacam ao mesmo tempo:
+   uma pode ter LLLNNNN e a outra já o Mercosul LLLNLNN. Cruzar pela placa
+   crua faz o km do ERP simplesmente NÃO ACHAR o contrato — sem erro, só um
+   veículo que some da conta. A chave converte o formato antigo trocando o 5º
+   caractere pelo dígito→letra (0=A … 9=J); quem já é Mercosul fica igual.
+   `placa_origem` guarda a placa como ela veio, que é a que aparece na tela. */
+function placaKey(p) {
+  const s = String(p || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+  if (!/^[A-Z]{3}\d{4}$/.test(s)) return s;
+  return s.slice(0, 4) + 'ABCDEFGHIJ'[+s[4]] + s.slice(5);
+}
+
 // número que pode vir cru (.v) ou como texto formatado em locale inglês
 function numOf(c) {
   if (!c) return null;
@@ -159,12 +172,13 @@ const linhas = [];
 let semPlaca = 0, semData = 0, foraJanela = 0;
 const chaves = new Set();
 for (const r of cel) {
-  const placa = txtOf(r[idx.placa]).toUpperCase().trim();
-  if (!placa) { semPlaca++; continue; }
+  const placaOrig = txtOf(r[idx.placa]).toUpperCase().trim();
+  if (!placaOrig) { semPlaca++; continue; }
+  const placa = placaKey(placaOrig);              // é por ela que o km acha o contrato
   const data = dataOf(r[idx.data]);
   if (!data) { semData++; continue; }
   if (DE && data < DE) { foraJanela++; continue; }
-  const l = { placa, data };
+  const l = { placa, placa_origem: placaOrig, data };
   for (const campo of Object.keys(idx)) {
     if (campo === 'placa' || campo === 'data') continue;
     const c = r[idx[campo]];
@@ -215,6 +229,36 @@ console.log('\nTOP 10 PLACAS POR KM RODADO:');
 [...porPlaca.entries()].sort((a, b) => b[1].km - a[1].km).slice(0, 10).forEach(([placa, p]) =>
   console.log(`   ${placa.padEnd(10)} ${String(Math.round(p.km)).padStart(7)} km · hodômetro ${String(p.hodo ?? '—').padStart(9)}`
     + ` · ${p.n} abastecimento(s) · último ${p.ult}`));
+
+/* O CRUZAMENTO COM O CONTRATO É O PONTO DE FALHA SILENCIOSA: placa que não
+   casa não dá erro nenhum, só some da conta do mês. Por isso a conferência é
+   parte da prévia — antes de gravar já dá para ver quantas das placas com
+   contrato o ERP está alcançando, e quais ficaram de fora. */
+const conv = linhas.filter(l => l.placa !== l.placa_origem);
+if (conv.length) {
+  const placasConv = new Set(conv.map(l => l.placa_origem));
+  console.log(`\nplacas convertidas para o formato Mercosul: ${placasConv.size}`
+    + ` (ex.: ${[...placasConv].slice(0, 3).map(p => `${p}→${placaKey(p)}`).join(', ')})`);
+}
+if (SB_KEY) {
+  const rc = await fetch(`${SB_URL}/rest/v1/contratos_placa?select=placa,tipo`,
+    { headers: { apikey: SB_KEY, Authorization: `Bearer ${SB_KEY}` } });
+  if (rc.ok) {
+    const ct = await rc.json();
+    if (ct.length) {
+      const noErp = new Set(porPlaca.keys());
+      const achou = ct.filter(c => noErp.has(placaKey(c.placa)));
+      const perdeu = ct.filter(c => c.tipo === 'variavel' && !noErp.has(placaKey(c.placa)));
+      console.log(`\nCRUZAMENTO COM O CONTRATO: ${achou.length}/${ct.length} placa(s) com contrato`
+        + ' têm abastecimento no período.');
+      if (perdeu.length) console.log(`   ${perdeu.length} placa(s) por km SEM abastecimento no período`
+        + ` — ficam sem deslocamento no mês: ${perdeu.slice(0, 8).map(c => c.placa).join(', ')}`
+        + (perdeu.length > 8 ? '…' : ''));
+    } else {
+      console.log('\ncontratos_placa está vazia — rode o Contratos Robot em modo gravar primeiro.');
+    }
+  }
+}
 
 if (MODE !== 'gravar') {
   console.log('\nmodo prévia — nada foi gravado. Rode com modo=gravar para subir.');
