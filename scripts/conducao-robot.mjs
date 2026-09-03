@@ -83,7 +83,12 @@ const REGUA = {
    zeradas nesta conta. A medição do pilar é a fórmula original (tempo acima
    do limite ponderado por faixa ÷ tempo em movimento), agora com as faixas
    das regras da Argus — ver GT_REGRA. */
-const PESOS = { rpm: 25, idle: 20, acel: 15, vel: 15 };
+/* VELOCIDADE SAIU DO SCORE (Renan, 03/09/2026, "não ficou legal, tire excesso
+   de velocidade"): as regras por faixa da Argus são recentes e a frota quase
+   não pontua nelas. O diário continua guardando vel_excesso_pct e os eventos,
+   e o mensal continua gravando vel_pontos/vel_excessos — só não entra na
+   pontuação nem na tela. */
+const PESOS = { rpm: 25, idle: 20, acel: 15 };
 
 const nota = (pilar, valor) => {
   if (valor == null || !isFinite(valor)) return null;
@@ -1161,7 +1166,7 @@ if (MODE === 'carteira') {
   if (!todos.length) { console.log('sem gente na unidade neste mês.'); process.exit(0); }
 
   // pesos do score de hoje — velocidade é deflator, não entra na média
-  const PES = { rpm: 25, idle: 20, acel: 15, vel: 15 };   // velocidade é pilar (03/09/2026)
+  const PES = { rpm: 25, idle: 20, acel: 15 };   // velocidade fora do score (03/09/2026)
   const ROT = { rpm: 'Faixa Verde', idle: 'Motor Ocioso', acel: 'Aceleração', vel: 'Velocidade' };
   const conta = (r, S) => {
     const v = { rpm: r.rpm_pontos, idle: r.idle_pontos, acel: r.acel_pontos, vel: r.vel_pontos };
