@@ -206,7 +206,37 @@ const blocos = marcos.map((m, k) => {
            nf: largura >= 5 ? m.ini + 3 : null, largura };
 }).filter(b => b.mv);
 
-const dados = rows.slice(2).filter(r => txtOf(r[2]).trim());
+/* AS COLUNAS DE IDENTIFICAÇÃO SÃO DESCOBERTAS, NÃO FIXAS (bug real,
+   03/09/2026). O robô lia contrato/unidade/placa em A/B/C por posição; a
+   planilha foi reorganizada no meio da tarde (a placa saiu da C, que passou
+   a ter a unidade) e a leitura caiu para ZERO lançamentos sem erro nenhum.
+   Agora cada coluna anterior ao primeiro bloco de mês é testada contra as
+   bases: a coluna de PLACA é a que mais casa com a frota, e a de UNIDADE a
+   que mais casa com o de-para de nomes. Inserir, mover ou renomear coluna
+   deixa de quebrar o robô. */
+const idCols = blocos.length ? blocos[0].km : Math.min(nCols, 6);
+const amostra = rows.slice(2, 200);
+const pontua = (col, fn) => amostra.reduce((n, r) => n + (fn(txtOf(r[col]).trim()) ? 1 : 0), 0);
+let colPlaca = -1, colUni = -1, melhorP = 0, melhorU = 0;
+for (let c = 0; c < idCols; c++) {
+  const p = pontua(c, v => v && FROTA.has(placaKey(v)));
+  if (p > melhorP) { melhorP = p; colPlaca = c; }
+  const u = pontua(c, v => v && deParaUnidade(v));
+  if (u > melhorU) { melhorU = u; colUni = c; }
+}
+if (colPlaca < 0 && colUni < 0) {
+  console.error('\n⚠ Não achei a coluna de placa nem a de unidade nas'
+    + ` ${idCols} primeiras colunas. A planilha mudou de layout — rode o`
+    + ' workflow "Contratos Man Inspect" e ajuste.');
+}
+const COL_PLACA = colPlaca >= 0 ? colPlaca : 2;
+const COL_UNI   = colUni   >= 0 ? colUni   : 1;
+const COL_CONTR = [0, 1, 2].find(c => c !== COL_PLACA && c !== COL_UNI) ?? 0;
+console.log(`colunas de identificação: placa=${String.fromCharCode(65 + COL_PLACA)}`
+  + ` (${melhorP}/${amostra.length} casam com a frota) · unidade=${String.fromCharCode(65 + COL_UNI)}`
+  + ` (${melhorU}/${amostra.length} no de-para) · contrato=${String.fromCharCode(65 + COL_CONTR)}`);
+
+const dados = rows.slice(2).filter(r => txtOf(r[COL_PLACA]).trim());
 console.log(`planilha: ${dados.length} veículo(s) · ${blocos.length} bloco(s) de mês`);
 blocos.forEach(b => console.log(`   ${b.rot.padEnd(10)} ${b.largura} coluna(s)`
   + `${b.nf == null ? ' (sem NF)' : ''} → vigência ${vigDe(b.mv)}`));
@@ -222,17 +252,17 @@ for (const b of blocos) {
   for (const r of dados) {
     const valor = numOf(r[b.valor]);
     if (!(valor > 0)) continue;                                  // mês sem lançamento p/ essa placa
-    const placa = txtOf(r[2]).toUpperCase().trim();
+    const placa = txtOf(r[COL_PLACA]).toUpperCase().trim();
     const naFrota = FROTA.get(placaKey(placa));                  // a PLACA manda
-    const daPlan  = deParaUnidade(txtOf(r[1]));                  // plano B
+    const daPlan  = deParaUnidade(txtOf(r[COL_UNI]));            // plano B
     const uni = naFrota || daPlan;
-    if (!uni) { const k = `${txtOf(r[1]).trim()} · placa fora da frota`; semDePara.set(k, (semDePara.get(k) || 0) + 1); continue; }
+    if (!uni) { const k = `${txtOf(r[COL_UNI]).trim()} · placa fora da frota`; semDePara.set(k, (semDePara.get(k) || 0) + 1); continue; }
     porFonte[naFrota ? naFrota.fonte : 'planilha']++;
     if (naFrota && daPlan && naFrota.unidade !== daPlan.unidade) {
       const k = `${daPlan.unidade} (planilha) → ${naFrota.unidade} (frota)`;
       divergiu.set(k, (divergiu.get(k) || 0) + 1);
     }
-    const contrato = txtOf(r[0]).trim();
+    const contrato = txtOf(r[COL_CONTR]).trim();
     const nf = b.nf != null ? txtOf(r[b.nf]).trim() : '';
     // A VIGÊNCIA DA CARTA É 'AAAA-MM', NÃO A DATA (bug real, 01/09/2026):
     // a tela grava curVigs()[0] ('2026-08') e consulta com .in('vigencia',…)
