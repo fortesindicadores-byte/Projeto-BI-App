@@ -287,6 +287,20 @@ if (MODE !== 'gravar') {
   console.log('\nmodo prévia — nada foi gravado. Rode com modo=gravar para subir.');
   process.exit(0);
 }
+
+/* TRAVA: LEITURA VAZIA NÃO APAGA A CARTA (bug real, 03/09/2026). A planilha
+   mudou de layout e o robô passou a ler 0 lançamentos — nenhum erro, só o
+   conjunto vazio. Como a faxina apaga tudo que não está no conjunto atual, o
+   próximo cron teria APAGADO os 733 lançamentos que já estavam na Carta. Sem
+   linha nenhuma, o robô aborta antes de tocar no banco: o silêncio de uma
+   planilha reorganizada não pode virar exclusão em massa. */
+if (!linhas.length) {
+  console.error('\n⚠ NADA A GRAVAR: a planilha não rendeu nenhum lançamento.');
+  console.error('  Isso costuma ser mudança de layout (coluna inserida/movida), não mês vazio.');
+  console.error('  O robô ABORTA sem gravar e sem faxina — o que já está na Carta fica intacto.');
+  console.error('  Rode o workflow "Contratos Man Inspect" para ver as colunas atuais.');
+  process.exit(1);
+}
 if (!SB_KEY) { console.error('GEM_SUPABASE_SERVICE_KEY ausente'); process.exit(1); }
 
 // ── grava (upsert por origem_chave) ────────────────────────────────────────
