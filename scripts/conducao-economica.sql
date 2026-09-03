@@ -80,6 +80,9 @@ create table if not exists public.ce_scores_mensais (
   unique (competencia, chave)
 );
 create index if not exists ce_scores_comp_idx on public.ce_scores_mensais (competencia);
+-- reexecutável: colunas que entraram depois
+alter table public.ce_scores_mensais add column if not exists viagens      int;   -- ciclos de ignição no mês (Geotab Trip)
+alter table public.ce_scores_mensais add column if not exists vel_excessos int;   -- eventos de excesso de velocidade no mês
 
 -- ---------- 4) RLS: leitura para quem está logado, escrita só do robô -------
 alter table public.ce_motoristas     enable row level security;

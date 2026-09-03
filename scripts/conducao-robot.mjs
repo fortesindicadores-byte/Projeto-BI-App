@@ -747,16 +747,31 @@ async function recalculaMes(de, ate) {
       // viagens do mês: o diário guarda a contagem no bruto (uma linha por
       // viagem do Geotab / registro de condução da vFleets)
       viagens: ds.reduce((s, d) => s + (+(d.bruto && d.bruto.viagens) || 0), 0),
+      // excessos de velocidade = eventos da regra de speeding do Geotab no mês
+      // (Renan, 03/09/2026: a coluna do painel mostra OK/NOK e a quantidade)
+      vel_excessos: ds.reduce((s, d) => s + (+(d.bruto && d.bruto.eventos && d.bruto.eventos.vel) || 0), 0),
       rpm_pontos: notas.rpm, idle_pontos: notas.idle, acel_pontos: notas.acel, frea_pontos: null,
       vel_pontos: notas.vel, freio_pontos: notas.freio, cambio_pontos: notas.cambio,
       pontuacao: score(notas), atualizado_em: new Date().toISOString(),
     });
   }
   if (linhas.length) {
-    const r2 = await fetch(`${SB_URL}/rest/v1/ce_scores_mensais?on_conflict=competencia,chave`, {
-      method: 'POST', headers: { ...H_SB, Prefer: 'resolution=merge-duplicates' }, body: JSON.stringify(linhas),
+    // coluna nova que ainda não existe no banco (PGRST204) não derruba o mensal:
+    // o robô avisa e regrava sem ela — foi o que parou o cron de 02/09/2026
+    // quando `viagens` entrou antes do SQL rodar
+    const gravar = async ls => fetch(`${SB_URL}/rest/v1/ce_scores_mensais?on_conflict=competencia,chave`, {
+      method: 'POST', headers: { ...H_SB, Prefer: 'resolution=merge-duplicates' }, body: JSON.stringify(ls),
     });
-    if (!r2.ok) throw new Error(`ce_scores_mensais: ${r2.status} ${(await r2.text()).slice(0, 300)}`);
+    let r2 = await gravar(linhas);
+    if (!r2.ok) {
+      const txt = await r2.text();
+      const m = /Could not find the '([a-z_]+)' column/.exec(txt);
+      if (r2.status === 400 && m) {
+        console.log(`⚠ ce_scores_mensais sem a coluna '${m[1]}' — gravando sem ela (rodar o SQL em scripts/conducao-economica.sql)`);
+        r2 = await gravar(linhas.map(({ [m[1]]: _, ...l }) => l));
+        if (!r2.ok) throw new Error(`ce_scores_mensais: ${r2.status} ${(await r2.text()).slice(0, 300)}`);
+      } else throw new Error(`ce_scores_mensais: ${r2.status} ${txt.slice(0, 300)}`);
+    }
   }
   return linhas.length;
 }
