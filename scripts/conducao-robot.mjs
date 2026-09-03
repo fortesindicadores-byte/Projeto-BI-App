@@ -1900,6 +1900,69 @@ if (MODE === 'nos') {
   process.exit(0);
 }
 
+if (MODE === 'velregras') {
+  /* 1.077 "EXCESSOS" NUM MÊS (Renan, 03/09/2026): um a cada 2,5 km não é
+     excesso de velocidade — é regra disparando o tempo todo. Este modo abre a
+     caixa: para um dia e uma unidade, agrupa os ExceptionEvent por REGRA
+     (quantos, em quantas placas, duração média, km médio) e mostra a sequência
+     de eventos da placa com mais eventos. Nome de regra e placa no log; nunca
+     nome de pessoa. */
+  const cred = await geotabLogin();
+  if (!cred) { console.error('Geotab: sem credencial'); process.exit(1); }
+  const DIA = process.env.CE_DE || '2026-08-20';
+  const UNI = (process.env.CE_UNI || 'CDD PELOTAS').toUpperCase();
+  console.log(`regras de velocidade · ${UNI} · ${DIA}`);
+  const [devs, grupos, regras] = await Promise.all([
+    geotabRpc('Get', { typeName: 'Device' }, cred),
+    geotabRpc('Get', { typeName: 'Group' }, cred),
+    geotabRpc('Get', { typeName: 'Rule' }, cred),
+  ]);
+  const gNome = new Map(grupos.map(g => [g.id, g.name || '']));
+  const dev = new Map(devs.map(d => {
+    const uni = (d.groups || []).map(g => gNome.get(g.id) || '').find(n => /^UNI_/.test(n));
+    return [d.id, { placa: String(d.licensePlate || d.name || d.id).toUpperCase().trim(),
+                    uni: uni ? uni.replace(/^UNI_/, '').toUpperCase() : '' }];
+  }));
+  const rNome = new Map(regras.map(r => [r.id, r.name || r.id]));
+  console.log(`\nregras que o robô classifica como VELOCIDADE (${regras.length} na conta):`);
+  regras.forEach(r => { if (gtQualRegra(r.id, r.name) === 'vel') console.log(`   · ${r.name} [${r.id}]${r.baseType ? ' base=' + r.baseType : ''}`); });
+
+  const de = `${DIA}T03:00:00.000Z`, ate = new Date(new Date(de).getTime() + 864e5 - 1).toISOString();
+  const excs = await geotabRpc('Get', { typeName: 'ExceptionEvent', search: { fromDate: de, toDate: ate }, resultsLimit: 50000 }, cred);
+  if (excs[0]) console.log('\ncampos do ExceptionEvent:', Object.keys(excs[0]).join(', '));
+  const daUni = excs.filter(e => { const d = dev.get(e.device && e.device.id); return d && d.uni === UNI; });
+  console.log(`\n${excs.length} evento(s) na frota no dia · ${daUni.length} na unidade`);
+
+  const porRegra = new Map();
+  for (const e of daUni) {
+    const rid = e.rule && e.rule.id, nome = rNome.get(rid) || rid;
+    const q = gtQualRegra(rid, nome);
+    const k = `${q || '—'} | ${nome}`;
+    const g = porRegra.get(k) || { n: 0, devs: new Set(), seg: 0, km: 0 };
+    g.n++; g.devs.add(e.device.id);
+    g.seg += gtSeg(e.duration); g.km += +e.distance || 0;
+    porRegra.set(k, g);
+  }
+  console.log('\n── POR REGRA (unidade, no dia) ──');
+  console.log('   classe | regra                                              eventos  placas  dur.média  km médio');
+  [...porRegra.entries()].sort((a, b) => b[1].n - a[1].n).forEach(([k, g]) =>
+    console.log(`   ${k.slice(0, 58).padEnd(58)} ${String(g.n).padStart(7)}  ${String(g.devs.size).padStart(6)}  ${String(Math.round(g.seg / g.n)).padStart(6)} s  ${(g.km / g.n).toFixed(2).padStart(7)}`));
+
+  // sequência da placa com mais eventos de velocidade
+  const porDev = new Map();
+  daUni.forEach(e => { if (gtQualRegra(e.rule && e.rule.id, rNome.get(e.rule && e.rule.id)) !== 'vel') return;
+    (porDev.get(e.device.id) || porDev.set(e.device.id, []).get(e.device.id)).push(e); });
+  const top = [...porDev.entries()].sort((a, b) => b[1].length - a[1].length)[0];
+  if (top) {
+    const [id, es] = top; es.sort((a, b) => new Date(a.activeFrom) - new Date(b.activeFrom));
+    const hh = s => new Date(s).toLocaleTimeString('pt-BR', { timeZone: 'America/Sao_Paulo', hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    console.log(`\n── ${dev.get(id).placa} · ${es.length} evento(s) de velocidade no dia (primeiros 40) ──`);
+    console.log('   início     fim        dur    km     regra');
+    es.slice(0, 40).forEach(e => console.log(`   ${hh(e.activeFrom)}  ${hh(e.activeTo)}  ${String(gtSeg(e.duration)).padStart(4)}s  ${(+e.distance || 0).toFixed(2).padStart(5)}  ${String(rNome.get(e.rule && e.rule.id) || '').slice(0, 50)}`));
+  }
+  process.exit(0);
+}
+
 if (MODE === 'ident') {
   // A operação exige identificação para rodar, mas a sonda viu ~70% das
   // viagens sem motorista (31/08/2026). Este modo mostra ONDE: viagens e km
