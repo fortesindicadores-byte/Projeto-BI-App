@@ -265,8 +265,11 @@ for (const b of blocos) {
   for (const r of dados) {
     const valor = numOf(r[b.valor]);
     if (!(valor > 0)) continue;                                  // mês sem lançamento p/ essa placa
-    const placa = txtOf(r[COL_PLACA]).toUpperCase().trim();
-    const naFrota = FROTA.get(placaKey(placa));                  // a PLACA manda
+    // a CHAVE é a placa Mercosul (estável quando a planilha emplaca); o que
+    // aparece na Carta é a placa como está na origem
+    const placaOrig = txtOf(r[COL_PLACA]).toUpperCase().trim();
+    const placa = placaKey(placaOrig);
+    const naFrota = FROTA.get(placa);                            // a PLACA manda
     const daPlan  = deParaUnidade(txtOf(r[COL_UNI]));            // plano B
     const uni = naFrota || daPlan;
     if (!uni) { const k = `${txtOf(r[COL_UNI]).trim()} · placa fora da frota`; semDePara.set(k, (semDePara.get(k) || 0) + 1); continue; }
@@ -287,7 +290,7 @@ for (const b of blocos) {
       origem: 'contratos-planilha',
       origem_chave: `contrato:${vigM}:${placa}`,
       unidade: uni.unidade, vigencia: vigM, pacote: PACOTE, projeto: uni.projeto,
-      data: vig, equipamento: placa, fornecedor: '',
+      data: vig, equipamento: placaOrig, fornecedor: '',
       // contrato não passa por RC/OC: é faturamento fechado por km. Entra com
       // as duas aprovações dadas e a NF da planilha; sem NF na planilha, o
       // documento é o próprio nº do contrato (senão a linha não conta no
@@ -376,7 +379,8 @@ for (const r of dados) {
   }
   if (!tipo) { semTaxa.push(placa); continue; }
   contratos.push({
-    placa, unidade: uni.unidade, projeto: uni.projeto, tipo,
+    placa, placa_origem: placaOrig,
+    unidade: uni.unidade, projeto: uni.projeto, tipo,
     taxa_km: tipo === 'variavel' ? +taxa.toFixed(6) : null,
     valor_fixo: tipo === 'fixo' ? fixo : null,
     ultimo_km_informado: ultKm,
