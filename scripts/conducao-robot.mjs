@@ -1785,6 +1785,106 @@ if (MODE === 'trechos') {
   process.exit(0);
 }
 
+if (MODE === 'nos') {
+  /* A VIAGEM É O TRECHO ENTRE NÓS DA MALHA (Renan, 03/09/2026): fábrica → CD,
+     CD → fábrica, e pode atravessar dias. O Geotab não tem "viagem", mas tem
+     ZONAS (cercas) — se a Ambev cadastrou as fábricas e os CDs, o ponto de
+     parada de cada Trip diz se o caminhão parou num nó, e a viagem fecha ali.
+     Este modo: (1) lista as zonas da conta; (2) para as placas da unidade,
+     reconstrói as viagens nó→nó num período e mostra cada uma (de onde, para
+     onde, km, quantos ciclos de ignição ela engoliu); (3) se não houver zona,
+     agrupa as paradas longas da frota inteira para PROPOR os nós, com
+     coordenada e contagem, para o Renan nomear. Só placa, zona, horário e km. */
+  const cred = await geotabLogin();
+  if (!cred) { console.error('Geotab: sem credencial'); process.exit(1); }
+  const DE = process.env.CE_DE || '2026-08-18', ATE = process.env.CE_ATE || '2026-08-22';
+  const UNI = (process.env.CE_UNI || 'EMP PIRAI').toUpperCase();
+  const QTD = +process.env.CE_QTD || 3;
+  console.log(`nós da malha · ${UNI} · ${DE} → ${ATE}`);
+
+  // (1) zonas
+  let zonas = [];
+  try { zonas = await geotabRpc('Get', { typeName: 'Zone', resultsLimit: 5000 }, cred); }
+  catch (e) { console.log('Zone: ' + String(e.message || e).slice(0, 160)); }
+  console.log(`\nzonas cadastradas na conta: ${zonas.length}`);
+  const tipos = new Map();
+  zonas.forEach(z => { const t = (z.zoneTypes || []).map(x => x.id || x).join('+') || '(sem tipo)'; tipos.set(t, (tipos.get(t) || 0) + 1); });
+  [...tipos].sort((a, b) => b[1] - a[1]).slice(0, 12).forEach(([t, n]) => console.log(`   tipo ${t}: ${n}`));
+  zonas.slice(0, 60).forEach(z => console.log(`   · ${String(z.name || '').slice(0, 60)} (${(z.points || []).length} pts)`));
+  if (zonas.length > 60) console.log(`   … +${zonas.length - 60}`);
+
+  // ponto dentro de polígono (ray casting); Geotab: points[{x:lon,y:lat}]
+  const dentro = (lon, lat, pts) => {
+    let ok = false;
+    for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
+      const xi = pts[i].x, yi = pts[i].y, xj = pts[j].x, yj = pts[j].y;
+      if (((yi > lat) !== (yj > lat)) && (lon < (xj - xi) * (lat - yi) / (yj - yi) + xi)) ok = !ok;
+    }
+    return ok;
+  };
+  const zonaDe = (lon, lat) => {
+    for (const z of zonas) if ((z.points || []).length >= 3 && dentro(lon, lat, z.points)) return z.name || z.id;
+    return null;
+  };
+
+  // (2) placas da unidade
+  const [devs, grupos] = await Promise.all([
+    geotabRpc('Get', { typeName: 'Device' }, cred),
+    geotabRpc('Get', { typeName: 'Group' }, cred),
+  ]);
+  const gNome = new Map(grupos.map(g => [g.id, g.name || '']));
+  const dev = new Map(devs.map(d => {
+    const uni = (d.groups || []).map(g => gNome.get(g.id) || '').find(n => /^UNI_/.test(n));
+    return [d.id, { placa: String(d.licensePlate || d.name || d.id).toUpperCase().trim(),
+                    uni: uni ? uni.replace(/^UNI_/, '').toUpperCase() : '' }];
+  }));
+  const de = `${DE}T03:00:00.000Z`;
+  const ate = new Date(new Date(`${ATE}T03:00:00.000Z`).getTime() + 864e5 - 1).toISOString();
+  const trips = await geotabRpc('Get', { typeName: 'Trip', search: { fromDate: de, toDate: ate }, resultsLimit: 50000 }, cred);
+  const porDev = new Map();
+  const paradasLongas = new Map();   // grade ~300 m → {n, devs:Set, seg}
+  for (const t of trips) {
+    const id = t.device && t.device.id; const d = id && dev.get(id); if (!d) continue;
+    const sp = t.stopPoint || {};
+    const segParada = gtSeg(t.stopDuration);
+    if (sp.x != null && segParada >= 3600) {
+      const k = `${sp.y.toFixed(3)},${sp.x.toFixed(3)}`;
+      const e = paradasLongas.get(k) || { n: 0, devs: new Set(), seg: 0, lat: sp.y, lon: sp.x, zona: zonaDe(sp.x, sp.y) };
+      e.n++; e.devs.add(id); e.seg += segParada; paradasLongas.set(k, e);
+    }
+    if (d.uni !== UNI) continue;
+    (porDev.get(id) || porDev.set(id, []).get(id)).push(t);
+  }
+
+  const hh = s => new Date(s).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+  const placas = [...porDev.entries()].sort((a, b) => b[1].reduce((s, t) => s + (+t.distance || 0), 0) - a[1].reduce((s, t) => s + (+t.distance || 0), 0));
+  if (zonas.length) {
+    console.log(`\n── VIAGENS NÓ→NÓ (${placas.length} placas da unidade; mostrando ${Math.min(QTD, placas.length)}) ──`);
+    for (const [id, ts] of placas.slice(0, QTD)) {
+      ts.sort((a, b) => new Date(a.start) - new Date(b.start));
+      const viagens = []; let cur = null, origem = '(início do período)';
+      for (const t of ts) {
+        if (!cur) cur = { de: origem, saiu: t.start, km: 0, ciclos: 0 };
+        cur.km += +t.distance || 0; cur.ciclos++;
+        const sp = t.stopPoint || {};
+        const z = sp.x != null ? zonaDe(sp.x, sp.y) : null;
+        if (z) { viagens.push({ ...cur, para: z, chegou: t.stop }); origem = z; cur = null; }
+      }
+      if (cur) viagens.push({ ...cur, para: '(ainda em viagem)', chegou: null });
+      const reais = viagens.filter(v => v.km >= 5);
+      console.log(`\n${dev.get(id).placa} · ${ts.length} ciclos de ignição → ${viagens.length} paradas em nó (${reais.length} com 5+ km)`);
+      viagens.forEach(v => console.log(`   ${hh(v.saiu)} → ${v.chegou ? hh(v.chegou) : '…'}  ${String(v.km.toFixed(0)).padStart(4)} km  ${String(v.ciclos).padStart(3)} ciclos   ${v.de} → ${v.para}`));
+    }
+  }
+
+  // (3) paradas longas da frota inteira (proposta de nós)
+  const top = [...paradasLongas.values()].sort((a, b) => b.devs.size - a.devs.size).slice(0, 20);
+  console.log(`\n── ONDE A FROTA PARA 1h+ (frota inteira, ${DE}→${ATE}; top 20 por nº de placas) ──`);
+  console.log('   lat,lon              placas  paradas  horas   zona do Geotab');
+  top.forEach(e => console.log(`   ${e.lat.toFixed(4)},${e.lon.toFixed(4)}   ${String(e.devs.size).padStart(4)}   ${String(e.n).padStart(6)}   ${String(Math.round(e.seg / 3600)).padStart(5)}   ${e.zona || '—'}`));
+  process.exit(0);
+}
+
 if (MODE === 'ident') {
   // A operação exige identificação para rodar, mas a sonda viu ~70% das
   // viagens sem motorista (31/08/2026). Este modo mostra ONDE: viagens e km
