@@ -352,16 +352,22 @@ for (const r of dados) {
      em janeiro) e o valor se repete idêntico nos oito meses. Ver desloc. +
      valor num mês não basta para chamar de variável.
 
-     A prova de que o contrato é por km é o valor MUDAR de um mês para o
-     outro. Se ele é o mesmo em todos os meses lançados (com folga de 1% para
-     centavo de arredondamento), o custo não depende do km rodado: é fixo. */
-  const lanc = []; let ultVig = null;
+     A prova é o MECANISMO, não o valor: contrato por km tem deslocamento
+     MEDIDO todos os meses, porque é ele que gera a conta. Franquia tem o km
+     contratado uma vez e pronto. Por isso a régua é "desloc. em 2+ meses".
+     Tentei antes por tolerância de valor (mesmo valor todo mês, folga de 1%)
+     e o reajuste de julho — R$ 1.997,50 → R$ 2.036,66, 2% — furou a folga em
+     8 placas: elas continuavam contadas como por km. Tolerância de preço não
+     é régua, porque reajuste é normal e o km também varia pouco em alguns
+     meses. Placa com um mês só de dado cai em fixo, que é o lado seguro:
+     repete o valor em vez de multiplicar o km real do ERP por um chute. */
+  const lanc = []; let ultVig = null, mesesDesloc = 0;
   for (const b of blocosOrd) {
     const v = numOf(r[b.valor]);
     if (v > 0) { lanc.push(v); ultVig = vigDe(b.mv).slice(0, 7); }
+    if (numOf(r[b.desloc]) > 0) mesesDesloc++;
   }
-  const parado = lanc.length >= 2
-    && Math.max(...lanc) / Math.min(...lanc) <= 1.01;
+  const parado = mesesDesloc < 2;
   let tipo = taxa != null ? 'variavel' : (fixo != null ? 'fixo' : null);
   if (tipo === 'variavel' && parado) {            // franquia disfarçada de km
     tipo = 'fixo'; fixo = lanc[lanc.length - 1]; fixoVig = ultVig;
@@ -382,8 +388,8 @@ for (const r of dados) {
 const nVar = contratos.filter(c => c.tipo === 'variavel').length;
 const nFix = contratos.length - nVar;
 console.log(`\nCONTRATO POR PLACA: ${contratos.length} placa(s) · ${nVar} por km · ${nFix} valor fixo`);
-if (reclass.length) console.log(`   ${reclass.length} vieram com desloc. num mês só (franquia)`
-  + ' e valor idêntico em todos — contadas como FIXAS, não por km.');
+if (reclass.length) console.log(`   ${reclass.length} tinham desloc. em um mês só (franquia`
+  + ' contratada, não km medido) — contadas como FIXAS, não por km.');
 if (nFix) console.log(`   fixo: ${brl(contratos.filter(c => c.tipo === 'fixo')
   .reduce((s, c) => s + c.valor_fixo, 0))} por mês, somando as ${nFix} placa(s)`);
 if (nVar) {
