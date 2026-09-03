@@ -1973,7 +1973,8 @@ if (MODE === 'velregras') {
   const de = `${DIA}T03:00:00.000Z`, ate = new Date(new Date(de).getTime() + 864e5 - 1).toISOString();
   const excs = await geotabRpc('Get', { typeName: 'ExceptionEvent', search: { fromDate: de, toDate: ate }, resultsLimit: 50000 }, cred);
   if (excs[0]) console.log('\ncampos do ExceptionEvent:', Object.keys(excs[0]).join(', '));
-  const daUni = excs.filter(e => { const d = dev.get(e.device && e.device.id); return d && d.uni === UNI; });
+  // CE_UNI=* varre a frota inteira — é o que diz se uma regra oficial está viva
+  const daUni = excs.filter(e => { const d = dev.get(e.device && e.device.id); return d && (UNI === '*' || d.uni === UNI); });
   console.log(`\n${excs.length} evento(s) na frota no dia · ${daUni.length} na unidade`);
 
   const porRegra = new Map();
@@ -2157,7 +2158,10 @@ if (MODE === 'eventos') {
         const a = porChave.get(l.chave);
         if (!a) { semLinha++; continue; }
         const bruto = { ...(a.bruto || {}), eventos: l.bruto.eventos, velArgus: l.bruto.velArgus };
-        patch.push({ dia, chave: l.chave, acel_100km: l.acel_100km, frea_100km: l.frea_100km,
+        // `fonte` é NOT NULL e o Postgres valida NOT NULL ANTES de resolver o
+        // ON CONFLICT — sem ela o upsert parcial cai com 23502 mesmo quando a
+        // linha existe (bug real, 03/09/2026: 31 dias falharam)
+        patch.push({ dia, chave: l.chave, fonte: 'Geotab', acel_100km: l.acel_100km, frea_100km: l.frea_100km,
                      vel_excesso_pct: l.vel_excesso_pct, bruto });
       }
       for (let i = 0; i < patch.length; i += 500) {
