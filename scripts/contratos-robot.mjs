@@ -11,6 +11,12 @@
 // Fonte provisória: a planilha do time. O definitivo virá do ERP (o km dos
 // abastecimentos), quando a conta passa a ser hodômetro atual − km informado.
 //
+// GRAVA DUAS COISAS (03/09/2026):
+//  · `carta_custos` — o custo dos meses FECHADOS, um lançamento por placa/mês;
+//  · `contratos_placa` — a régua de cada placa (R$/km ou valor fixo, mais o
+//    último km informado), que é o que a Carta usa para calcular o mês EM
+//    ANDAMENTO contra o hodômetro real do ERP (`erp_abastecimentos`).
+//
 // ARMADILHAS da planilha (achadas na auditoria, ver contratos-man-inspect):
 //  · locale INGLÊS e coluna de valor em TEXTO — "R$ 2,563.21" tem vírgula de
 //    milhar; o numOf decide o decimal pelo separador do fim;
@@ -287,6 +293,83 @@ for (const b of blocos) {
   }
 }
 
+// ── o CONTRATO de cada placa (para o cálculo em tempo real) ────────────────
+/* A Carta mostra o mês fechado a partir dos blocos acima. O mês EM ANDAMENTO
+   não existe na planilha ainda: ele sai do km real do ERP —
+
+       desloc. do mês = hodômetro atual (abastecimentos) − último km informado
+       valor do mês   = desloc. × R$/km  (ou o valor fixo, quando não é por km)
+
+   Este bloco extrai da própria planilha o que essa conta precisa, uma linha
+   por placa. Nada é inventado: a taxa é o `valor ÷ desloc.` do mês mais
+   recente em que a placa rodou, e o "último km informado" é a coluna de km
+   do bloco mais recente que a placa tem preenchido.
+
+   Renan (03/09/2026): "só vale as placas que estão na planilha — nem todas
+   têm contrato". Por isso a base é a planilha, não a frota. */
+const blocosOrd = [...blocos].sort((a, b) => vigDe(a.mv).localeCompare(vigDe(b.mv)));
+const contratos = [];
+const semTaxa = [];
+for (const r of dados) {
+  const placa = txtOf(r[COL_PLACA]).toUpperCase().trim();
+  if (!placa) continue;
+  const naFrota = FROTA.get(placaKey(placa));
+  const daPlan  = deParaUnidade(txtOf(r[COL_UNI]));
+  const uni = naFrota || daPlan || { unidade: null, projeto: null };
+
+  // do mais recente para o mais antigo: o contrato vigente é o último visto
+  let taxa = null, taxaVig = null, taxas = [], fixo = null, fixoVig = null;
+  let ultKm = null, ultKmVig = null;
+  for (let i = blocosOrd.length - 1; i >= 0; i--) {
+    const b = blocosOrd[i];
+    const km = numOf(r[b.km]), desl = numOf(r[b.desloc]), val = numOf(r[b.valor]);
+    if (ultKm == null && km > 0) { ultKm = km; ultKmVig = vigDe(b.mv).slice(0, 7); }
+    if (desl > 0 && val > 0) {
+      const t = val / desl;
+      taxas.push(t);
+      if (taxa == null) { taxa = t; taxaVig = vigDe(b.mv).slice(0, 7); }
+    } else if (val > 0 && fixo == null && desl <= 0) {
+      fixo = val; fixoVig = vigDe(b.mv).slice(0, 7);
+    }
+  }
+  // já rodou por km alguma vez ⇒ é contrato variável, mesmo que o último mês
+  // tenha ficado parado (desloc. 0 num mês não muda a natureza do contrato)
+  const tipo = taxa != null ? 'variavel' : (fixo != null ? 'fixo' : null);
+  if (!tipo) { semTaxa.push(placa); continue; }
+  contratos.push({
+    placa, unidade: uni.unidade, projeto: uni.projeto, tipo,
+    taxa_km: tipo === 'variavel' ? +taxa.toFixed(6) : null,
+    valor_fixo: tipo === 'fixo' ? fixo : null,
+    ultimo_km_informado: ultKm,
+    vig_referencia: tipo === 'variavel' ? taxaVig : fixoVig,
+    _taxas: taxas, _ultKmVig: ultKmVig,
+  });
+}
+
+const nVar = contratos.filter(c => c.tipo === 'variavel').length;
+const nFix = contratos.length - nVar;
+console.log(`\nCONTRATO POR PLACA: ${contratos.length} placa(s) · ${nVar} por km · ${nFix} valor fixo`);
+if (nFix) console.log(`   fixo: ${brl(contratos.filter(c => c.tipo === 'fixo')
+  .reduce((s, c) => s + c.valor_fixo, 0))} por mês, somando as ${nFix} placa(s)`);
+if (nVar) {
+  const ts = contratos.filter(c => c.tipo === 'variavel').map(c => c.taxa_km).sort((a, b) => a - b);
+  const med = ts[Math.floor(ts.length / 2)];
+  console.log(`   R$/km: menor ${ts[0].toFixed(3)} · mediana ${med.toFixed(3)}`
+    + ` · maior ${ts[ts.length - 1].toFixed(3)}`);
+  // taxa que MUDOU de um mês para o outro é reajuste (normal) ou digitação
+  // errada (não é). Quem olha o log decide — o robô só avisa.
+  const oscila = contratos.filter(c => c.tipo === 'variavel' && c._taxas.length > 1
+    && Math.max(...c._taxas) / Math.min(...c._taxas) > 1.15);
+  if (oscila.length) console.log(`   ${oscila.length} placa(s) com R$/km variando +15% entre os meses`
+    + ` (reajuste ou digitação — conferir): ${oscila.slice(0, 8).map(c => c.placa).join(', ')}`
+    + (oscila.length > 8 ? '…' : ''));
+}
+const semKm = contratos.filter(c => c.tipo === 'variavel' && c.ultimo_km_informado == null);
+if (semKm.length) console.log(`   ⚠ ${semKm.length} placa(s) por km SEM "km informado" na planilha`
+  + ` — o mês em andamento delas fica sem deslocamento: ${semKm.slice(0, 8).map(c => c.placa).join(', ')}`
+  + (semKm.length > 8 ? '…' : ''));
+if (semTaxa.length) console.log(`   ${semTaxa.length} placa(s) na planilha sem valor em mês nenhum (ignoradas)`);
+
 // ── resumo do que seria gravado ────────────────────────────────────────────
 const porVig = new Map();
 linhas.forEach(l => {
@@ -374,3 +457,36 @@ for (let i = 0; i < linhas.length; i += 500) {
   gravadas += lote.length;
 }
 console.log(`\ngravado: ${gravadas} lançamento(s) em carta_custos.`);
+
+// ── contratos_placa: a régua do mês em andamento ───────────────────────────
+// Substitui a lista inteira (a planilha é a base de quem tem contrato), mas
+// só depois de ter linhas em mãos — a trava de leitura vazia lá em cima já
+// impediu que chegássemos aqui com a planilha ilegível.
+if (contratos.length) {
+  const payload = contratos.map(({ _taxas, _ultKmVig, ...c }) => c);
+  const atuais = new Set(payload.map(c => c.placa));
+  const rr = await fetch(`${SB_URL}/rest/v1/contratos_placa?select=placa`, { headers: H });
+  const jaTem = rr.ok ? await rr.json() : [];
+  const fora = jaTem.map(x => x.placa).filter(p => p && !atuais.has(p));
+  for (let i = 0; i < fora.length; i += 200) {
+    const lote = fora.slice(i, i + 200).map(p => `"${p}"`).join(',');
+    await fetch(`${SB_URL}/rest/v1/contratos_placa?placa=in.(${encodeURIComponent(lote)})`,
+      { method: 'DELETE', headers: H });
+  }
+  if (fora.length) console.log(`contratos_placa: ${fora.length} placa(s) que saíram da planilha removida(s)`);
+  for (let i = 0; i < payload.length; i += 500) {
+    const res = await fetch(`${SB_URL}/rest/v1/contratos_placa?on_conflict=placa`, {
+      method: 'POST', headers: { ...H, Prefer: 'resolution=merge-duplicates' },
+      body: JSON.stringify(payload.slice(i, i + 500).map(c => ({ ...c, atualizado_em: new Date().toISOString() }))),
+    });
+    if (!res.ok) {
+      const t = await res.text();
+      if (/contratos_placa/.test(t) && res.status === 404) {
+        console.error('\nA tabela contratos_placa ainda não existe.'
+          + ' Rode scripts/erp-abastecimentos.sql no SQL Editor e tente de novo.');
+      }
+      throw new Error(`contratos_placa: ${res.status} ${t.slice(0, 300)}`);
+    }
+  }
+  console.log(`gravado: ${payload.length} contrato(s) em contratos_placa.`);
+}
