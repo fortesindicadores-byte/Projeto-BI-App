@@ -1,0 +1,51 @@
+name: Abastecimentos Robot (ERP → Supabase)
+
+# Sobe os abastecimentos do ERP (a fonte do km real) para o Supabase. Cada
+# abastecimento traz o hodômetro do veículo, e é dele que sai o deslocamento
+# do mês na Carta de Custos.
+#
+# FONTE PROVISÓRIA: a aba "Query Banco" da planilha Contratos Man., onde o
+# resultado da query é colado. Quando a TI liberar o endpoint, muda só a
+# função `baixar()` do script — a tabela e a chave continuam as mesmas.
+#
+# A chave é o HANDLE da linha de combustível, então rodar de novo corrige em
+# vez de duplicar: a planilha pode ser limpa quando o mês vira.
+on:
+  workflow_dispatch:
+    inputs:
+      modo:
+        description: 'previa (não grava) · gravar'
+        required: true
+        default: previa
+        type: choice
+        options: [previa, gravar]
+      de:
+        description: 'Só a partir desta data, AAAA-MM-DD (vazio = tudo o que a aba tem)'
+        required: false
+      sheet:
+        description: 'ID da planilha (vazio = Contratos Man.)'
+        required: false
+      aba:
+        description: 'Nome da aba (vazio = Query Banco)'
+        required: false
+  schedule:
+    # o dado do dia anterior já está fechado no ERP às 8h
+    - cron: '15 11 * * *'   # 08:15 BRT
+
+jobs:
+  subir:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Subir abastecimentos
+        env:
+          AB_MODE:   ${{ github.event.inputs.modo || 'gravar' }}
+          AB_DE:     ${{ github.event.inputs.de }}
+          ABAST_ID:  ${{ github.event.inputs.sheet }}
+          ABAST_ABA: ${{ github.event.inputs.aba }}
+          GEM_SUPABASE_SERVICE_KEY: ${{ secrets.GEM_SUPABASE_SERVICE_KEY }}
+        run: node scripts/abastecimentos-robot.mjs
