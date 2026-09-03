@@ -228,9 +228,16 @@ function gtSeg(v) {
    Aceleração/freada: regra de teste/piloto fica fora; a oficial ainda vai ser
    confirmada com o Renan (o modo velregras lista todas). */
 const GT_TESTE = /^\s*(TESTE\b|\[\s*TESTE|\[\s*Teste\b|Teste\s+\w|z_\[PILOTO\]|X_|Y\s*-|\[\s*Demarco)/i;
+/* ACELERAÇÃO = "Hard Acceleration", a regra padrão do Geotab (Renan,
+   03/09/2026, opção 1). A varredura da frota inteira num dia mostrou que a
+   regra oficial da Argus quase não dispara (2 eventos em ~100 caminhões) e
+   que as que "enxergam" aceleração brusca são as de limiar baixo, todas
+   marcadas como teste/piloto. A padrão de fábrica fica no meio (215/dia,
+   50 placas) e não é teste — é ela, e SÓ ela, para não contar o mesmo
+   evento duas vezes. */
 const GT_REGRA = {
-  acel: { ids: ['RuleHarshAccelerationId'], nome: /harsh.?accel|acelera/i },
-  frea: { ids: ['RuleHarshBrakingId'],      nome: /harsh.?brak|frena|freada/i },
+  acel: { ids: ['RuleJackrabbitStartsId'], nome: /^Hard Acceleration$/i },
+  frea: { ids: ['RuleHarshBrakingId'],     nome: /harsh.?brak|frena|freada/i },
 };
 const GT_VEL_ARGUS = /^\[Argus\]\s*Exc\.?\s*Veloc\.?\s*Via/i;
 // devolve 'vel1' | 'vel2' | 'vel3' | 'acel' | 'frea' | null
