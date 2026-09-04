@@ -292,7 +292,8 @@ if (MODE === 'conferir') {
   let cv = null;
   try {
     cv = await pegaTudo('custo_vigencia?select=vig_cobranca,vig_km,placa,tipo,km_vig,'
-      + 'km_hodometro,km_erp,divergencia_pct,custo_vig&order=vig_cobranca.asc,placa.asc');
+      + 'km_hodometro,km_erp,divergencia_pct,custo_vig,previa'
+      + '&order=vig_cobranca.asc,placa.asc');
   } catch (e) {
     console.log(`\n(custo por vigência indisponível: ${String(e.message).slice(0, 120)})`);
   }
@@ -300,7 +301,8 @@ if (MODE === 'conferir') {
     const porVig = new Map();
     cv.forEach(r => {
       const a = porVig.get(r.vig_cobranca)
-        || { vigKm: r.vig_km, placas: 0, semKm: 0, km: 0, custo: 0, fixo: 0, div: 0 };
+        || { vigKm: r.vig_km, previa: r.previa, placas: 0, semKm: 0, km: 0,
+             custo: 0, fixo: 0, div: 0 };
       a.placas++;
       if (r.tipo === 'variavel' && r.km_vig == null) a.semKm++;
       a.km += +r.km_vig || 0;
@@ -317,7 +319,8 @@ if (MODE === 'conferir') {
       console.log(`   ${v}   ${a.vigKm}   ${String(a.placas).padStart(6)}`
         + `   ${Math.round(a.km).toLocaleString('pt-BR').padStart(12)}`
         + `   ${brlN(a.custo).padStart(14)}   ${brlN(a.fixo).padStart(14)}`
-        + `   ${String(a.semKm).padStart(6)}   ${String(a.div).padStart(10)}`);
+        + `   ${String(a.semKm).padStart(6)}   ${String(a.div).padStart(10)}`
+        + (a.previa ? '   ← PRÉVIA (km do mês ainda em formação)' : ''));
     });
 
     /* As divergentes são o material da validação: o número sozinho não diz se
