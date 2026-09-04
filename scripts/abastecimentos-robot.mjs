@@ -254,6 +254,58 @@ if (MODE === 'conferir') {
     console.log('\nnenhuma placa com deslocamento ainda — confira se o "km informado"'
       + ' da planilha é anterior ao hodômetro do ERP.');
   }
+
+  /* CUSTO POR VIGÊNCIA (Renan, 04/09/2026): "eu preciso entender o custo,
+     então preciso do km da vigência". O km do mês sai de dois caminhos
+     independentes — a distância entre os hodômetros das duas pontas e a soma
+     do km_rodado que o próprio ERP grava. Mostrar os dois lado a lado é o que
+     permite VALIDAR: se batem, a base fecha; se divergem, é hodômetro
+     digitado errado, e a placa tem de aparecer para conferência em vez de
+     virar custo calado.
+
+     A view pode não existir ainda (o SQL é colado à mão), e isso não é motivo
+     para derrubar o resto da conferência. */
+  let cv = null;
+  try {
+    cv = await pega('custo_vigencia?select=vig,placa,tipo,km_vig,km_hodometro,'
+      + 'km_erp,divergencia_pct,custo_vig&order=vig.asc&limit=20000');
+  } catch (e) {
+    console.log(`\n(custo por vigência indisponível: ${String(e.message).slice(0, 90)})`);
+  }
+  if (cv && cv.length) {
+    const porVig = new Map();
+    cv.forEach(r => {
+      const a = porVig.get(r.vig) || { placas: 0, km: 0, custo: 0, fixo: 0, div: 0 };
+      a.placas++;
+      a.km += +r.km_vig || 0;
+      a.custo += +r.custo_vig || 0;
+      if (r.tipo === 'fixo') a.fixo += +r.custo_vig || 0;
+      if (r.divergencia_pct != null && +r.divergencia_pct > 5) a.div++;
+      porVig.set(r.vig, a);
+    });
+    console.log('\nCUSTO POR VIGÊNCIA (km do mês × taxa do contrato)');
+    console.log('   VIGÊNCIA   PLACAS         KM DO MÊS            CUSTO'
+      + '            (FIXO)   PLACAS C/ DIVERGÊNCIA >5%');
+    [...porVig.keys()].sort().forEach(v => {
+      const a = porVig.get(v);
+      console.log(`   ${v}   ${String(a.placas).padStart(6)}`
+        + `   ${Math.round(a.km).toLocaleString('pt-BR').padStart(15)}`
+        + `   ${brlN(a.custo).padStart(14)}   ${brlN(a.fixo).padStart(14)}`
+        + `   ${String(a.div).padStart(6)}`);
+    });
+
+    /* As divergentes são o material da validação: o número sozinho não diz se
+       a base está boa, a lista das que não fecham diz. */
+    const div = cv.filter(r => r.divergencia_pct != null && +r.divergencia_pct > 5)
+      .sort((a, b) => (+b.divergencia_pct) - (+a.divergencia_pct)).slice(0, 12);
+    if (div.length) {
+      console.log('\nPLACAS EM QUE OS DOIS CAMINHOS NÃO FECHAM (conferir hodômetro):');
+      div.forEach(r => console.log(`   ${r.vig}  ${String(r.placa).padEnd(9)}`
+        + ` hodômetro ${String(Math.round(r.km_hodometro)).padStart(7)} km`
+        + ` · ERP ${String(Math.round(r.km_erp)).padStart(7)} km`
+        + ` · ${(+r.divergencia_pct).toFixed(1)}%`));
+    }
+  }
   process.exit(0);
 }
 
