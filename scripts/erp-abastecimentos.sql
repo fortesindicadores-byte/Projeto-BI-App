@@ -115,67 +115,115 @@ select c.placa,
 alter table public.erp_abastecimentos add column if not exists placa_origem text;
 alter table public.contratos_placa   add column if not exists placa_origem text;
 
--- ── 5) custo por VIGÊNCIA (Renan, 04/09/2026) ─────────────────────────────
--- "Eu preciso entender o custo, então preciso do km da vigência." A view da
--- seção 3 mede do último "Km Informado" da planilha até hoje — bom para
--- faturar (não deixa km escapar), ruim para entender o mês: medido contra o
--- hodômetro de 31/08, aquele informado estava ~1.500 km atrás em 102 das 107
--- placas conferidas, então o delta carrega meses anteriores junto.
+-- ── 5) km e custo por VIGÊNCIA (Renan, 04/09/2026) ────────────────────────
+-- "Eu preciso entender o custo, então preciso do km da vigência."
 --
--- O km do mês sai por DOIS caminhos independentes, de propósito. Um número
--- sozinho não dá para validar; dois que se conferem, sim:
---   A) hodômetro do último abastecimento do mês − o do último do mês anterior
---   B) soma do km_rodado (DESGASTE) que o próprio ERP grava em cada linha
--- Divergência grande = hodômetro digitado errado, e aí a placa aparece para
--- conferência em vez de virar custo calado.
+-- DUAS REGRAS DE NEGÓCIO QUE MANDAM AQUI:
+--   1. A cobrança é DEFASADA em um mês: "o km considerado em agosto é o de
+--      julho, o de setembro o de agosto e assim sucessivamente". Por isso a
+--      view expõe `vig_km` (mês em que rodou) E `vig_cobranca` (mês em que
+--      vira fatura) — misturar as duas põe o custo no mês errado.
+--   2. Quando o hodômetro não fecha o mês, APROXIMA em vez de deixar vazio.
 --
--- Duas limitações conhecidas, para ninguém ler o histórico errado:
---   · o PRIMEIRO mês carregado não tem `km_hodometro` (falta a leitura do mês
---     anterior) — fica só com o km do ERP;
---   · `contratos_placa` é uma foto do contrato de HOJE, sem data de início, então
---     o custo fixo aparece igual em toda vigência, inclusive antes de o contrato
---     existir.
+-- COMO O KM DO MÊS É CALCULADO: cada intervalo entre dois abastecimentos tem
+-- uma distância conhecida (hodômetro de um menos o do outro) e um número de
+-- dias. Essa distância é RATEADA por dia e somada por mês. Duas consequências
+-- boas, e é por isso que o rateio é a conta principal:
+--   · placa que passou o mês sem abastecer continua tendo km no mês, tirado do
+--     intervalo que atravessa aquele mês — antes ela simplesmente sumia;
+--   · abastecimento que cai no dia 2 não joga no mês novo o km rodado no fim
+--     do mês anterior.
+-- `km_hodometro` (a conta simples: última leitura do mês menos a do mês
+-- anterior) fica ao lado como conferência, e `km_erp` (soma do DESGASTE) como
+-- terceira opinião.
+--
+-- O DESGASTE DO ERP NÃO SERVE DE FONTE, só de conferência: em parte das linhas
+-- ele traz leitura de hodômetro em vez de distância (uma placa apareceu com
+-- 1.002.338 km num mês). Usá-lo como reserva injetaria lixo no custo sem aviso.
+--
+-- GUARDA CONTRA HODÔMETRO DIGITADO ERRADO: intervalo que dá mais de 2.000
+-- km/dia é descartado do rateio — não existe caminhão que rode isso, é erro de
+-- digitação, e sem o corte um zero a mais viraria dezenas de milhares de reais.
 create or replace view public.km_vigencia as
-with mes as (
+with leitura as (
+  -- uma leitura por placa/dia: dois abastecimentos no mesmo dia não viram
+  -- intervalo de zero dia (divisão por zero no rateio)
+  select placa, data, max(hodometro) as hodo
+    from public.erp_abastecimentos
+   where data is not null
+     and data <= current_date          -- ERP tem lançamento com ano 2222
+     and hodometro is not null and hodometro > 0
+   group by placa, data
+),
+par as (
+  select placa,
+         lag(data) over (partition by placa order by data) as d0,
+         lag(hodo) over (partition by placa order by data) as h0,
+         data as d1, hodo as h1
+    from leitura
+),
+intervalo as (
+  select placa, d0, d1, (h1 - h0) as km, (d1 - d0) as dias
+    from par
+   where d0 is not null
+     and h1 >= h0                      -- hodômetro para trás = erro, não crédito
+     and d1 > d0
+     and (h1 - h0) / (d1 - d0) <= 2000
+),
+por_dia as (
+  select i.placa,
+         to_char(g.dia, 'YYYY-MM')       as vig,
+         i.km::numeric / i.dias          as km_dia
+    from intervalo i,
+         generate_series(i.d0 + 1, i.d1, interval '1 day') g(dia)
+),
+rateio as (
+  select placa, vig, sum(km_dia) as km_rateio, count(*) as dias_com_km
+    from por_dia group by placa, vig
+),
+mes as (
   select placa,
          to_char(data, 'YYYY-MM')            as vig,
          max(hodometro)                      as hodo_fim,
-         min(hodometro)                      as hodo_min,
-         sum(km_rodado)                      as km_somado,
+         sum(km_rodado)                      as km_erp,
          sum(litros)                         as litros,
          sum(valor)                          as valor_diesel,
          count(*)                            as abastecimentos,
          max(data)                           as ultimo_abast
     from public.erp_abastecimentos
-   where data is not null
-     and data <= current_date          -- ERP tem lançamento com ano 2222
-     and hodometro is not null
-   group by 1, 2
+   where data is not null and data <= current_date and hodometro is not null
+   group by placa, to_char(data, 'YYYY-MM')
 ),
-seq as (
-  select m.*,
-         lag(hodo_fim) over (partition by placa order by vig) as hodo_ini,
-         lag(vig)      over (partition by placa order by vig) as vig_ant
-    from mes m
+simples as (
+  select placa, vig, hodo_fim, km_erp, litros, valor_diesel, abastecimentos,
+         ultimo_abast,
+         hodo_fim - lag(hodo_fim) over (partition by placa order by vig) as km_hodometro
+    from mes
 )
-select placa, vig, vig_ant,
-       hodo_ini, hodo_fim, ultimo_abast, abastecimentos, litros, valor_diesel,
-       case when hodo_ini is not null
-            then greatest(hodo_fim - hodo_ini, 0) end        as km_hodometro,
-       km_somado                                             as km_erp,
-       case when hodo_ini is not null and km_somado > 0
-            then round(abs(greatest(hodo_fim - hodo_ini, 0) - km_somado)
-                       / km_somado * 100, 1) end             as divergencia_pct
-  from seq;
+select coalesce(r.placa, s.placa)                       as placa,
+       coalesce(r.vig, s.vig)                           as vig_km,
+       to_char(to_date(coalesce(r.vig, s.vig), 'YYYY-MM')
+               + interval '1 month', 'YYYY-MM')         as vig_cobranca,
+       round(r.km_rateio, 1)                            as km_vig,
+       case when s.km_hodometro >= 0 then s.km_hodometro end as km_hodometro,
+       s.km_erp, s.hodo_fim, s.litros, s.valor_diesel,
+       s.abastecimentos, s.ultimo_abast, r.dias_com_km,
+       case when r.km_rateio is null                    then 'sem leitura'
+            when s.abastecimentos is null               then 'rateio (mês sem abastecer)'
+            else 'rateio' end                           as origem_km,
+       case when s.km_erp > 0 and r.km_rateio is not null
+            then round(abs(r.km_rateio - s.km_erp) / s.km_erp * 100, 1)
+       end                                              as divergencia_pct
+  from rateio r
+  full outer join simples s on s.placa = r.placa and s.vig = r.vig;
 
 create or replace view public.custo_vigencia as
-select k.vig,
+select k.vig_cobranca, k.vig_km,
        c.placa, c.placa_origem, c.unidade, c.projeto, c.tipo,
        c.taxa_km, c.valor_fixo,
-       k.km_hodometro, k.km_erp, k.divergencia_pct,
-       coalesce(k.km_hodometro, k.km_erp) as km_vig,
+       k.km_vig, k.km_hodometro, k.km_erp, k.divergencia_pct, k.origem_km,
        case when c.tipo = 'fixo' then c.valor_fixo
-            else coalesce(k.km_hodometro, k.km_erp, 0) * coalesce(c.taxa_km, 0)
+            else coalesce(k.km_vig, 0) * coalesce(c.taxa_km, 0)
        end                                as custo_vig,
        k.litros, k.valor_diesel, k.abastecimentos, k.ultimo_abast
   from public.km_vigencia k
