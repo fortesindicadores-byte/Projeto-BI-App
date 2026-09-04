@@ -75,6 +75,11 @@ with ult as (
          sum(litros)    filter (
            where data >= date_trunc('month', current_date)) as litros_mes
     from public.erp_abastecimentos
+   -- DATA NO FUTURO É DIGITAÇÃO ERRADA DO ERP (bug real, 04/09/2026): a
+   -- primeira carga trouxe lançamento com ano 2222. Sem este corte ele entra
+   -- como km do mês em andamento e infla o custo de uma placa sem aviso.
+   where data is not null
+     and data <= current_date
    group by placa
 )
 select c.placa,
