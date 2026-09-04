@@ -36,23 +36,51 @@ var DESDE = '2026-09-01';        // só deste mês em diante — a consulta inte
 var LOTE = 2000;                 // linhas por escrita na planilha
 
 function SQL_() {
-  return ''
-    + 'SELECT '
-    + '  mf.HANDLE AS ORDEM_SERVICO, fi.HANDLE AS CODIGO_FILIAL, fi.NOME AS FILIAL,'
-    + '  rc.CODIGO AS PLACA, vm.NOME AS MODELO, rc.UNIDADEPRODUCAO AS UNIDADE,'
-    + '  pj.NOME AS PROJETO_OS, pv.NOME AS PROJETO_VEICULO,'
-    + '  os.DESGASTEREAL AS HODOMETRO, mf.DESGASTE AS KM_RODADO,'
-    + '  mf.QUANTIDADE AS LITROS, mf.MEDIA AS MEDIA_KM_L,'
-    + '  mf.VALORTOTAL AS VALOR, mf.DATA AS DATA '
-    + 'FROM MF_ORDEMSERVICOCOMBUSTIVEIS mf '
-    + 'INNER JOIN MF_ORDEMSERVICOS os ON os.HANDLE = mf.ORDEMSERVICO '
-    + 'LEFT JOIN FILIAIS fi ON fi.HANDLE = os.FILIAL '
-    + 'LEFT JOIN MA_RECURSOS rc ON rc.HANDLE = os.VEICULO '
-    + 'LEFT JOIN MF_VEICULOMODELOS vm ON vm.HANDLE = rc.MODELOVEICULO '
-    + 'LEFT JOIN GN_PROJETOS pj ON pj.HANDLE = os.PROJETO '
-    + 'LEFT JOIN GN_PROJETOS pv ON pv.HANDLE = rc.PROJETO '
-    + "WHERE os.EMPRESA = 12 AND mf.DATA >= '" + DESDE + "' "
-    + 'ORDER BY rc.CODIGO, os.DATAINICIAL';
+  // mesma query de scripts/erp-abastecimentos-query.sql
+  return [
+    "WITH base AS (",
+    "  SELECT",
+    "      mf.HANDLE            AS ORDEM_SERVICO,",
+    "      fi.HANDLE            AS CODIGO_FILIAL,",
+    "      fi.NOME              AS FILIAL,",
+    "      rc.CODIGO            AS PLACA,",
+    "      vm.NOME              AS MODELO,",
+    "      rc.UNIDADEPRODUCAO   AS UNIDADE,",
+    "      pj.NOME              AS PROJETO_OS,",
+    "      pv.NOME              AS PROJETO_VEICULO,",
+    "      os.DESGASTEREAL      AS HODOMETRO,",
+    "      mf.DESGASTE          AS KM_RODADO,",
+    "      mf.QUANTIDADE        AS LITROS,",
+    "      mf.MEDIA             AS MEDIA_KM_L,",
+    "      mf.VALORTOTAL        AS VALOR,",
+    "      mf.DATA              AS DATA",
+    "  FROM MF_ORDEMSERVICOCOMBUSTIVEIS mf",
+    "  INNER JOIN MF_ORDEMSERVICOS   os ON os.HANDLE = mf.ORDEMSERVICO",
+    "  LEFT  JOIN FILIAIS            fi ON fi.HANDLE = os.FILIAL",
+    "  LEFT  JOIN MA_RECURSOS        rc ON rc.HANDLE = os.VEICULO",
+    "  LEFT  JOIN MF_VEICULOMODELOS  vm ON vm.HANDLE = rc.MODELOVEICULO",
+    "  LEFT  JOIN GN_PROJETOS        pj ON pj.HANDLE = os.PROJETO",
+    "  LEFT  JOIN GN_PROJETOS        pv ON pv.HANDLE = rc.PROJETO",
+    "  WHERE os.EMPRESA = 12",
+    "),",
+    "anterior AS (",
+    "  SELECT b.*, ROW_NUMBER() OVER (PARTITION BY b.PLACA ORDER BY b.DATA DESC) AS RN",
+    "  FROM base b",
+    "  WHERE b.DATA < '2026-09-01'",
+    ")",
+    "SELECT ORDEM_SERVICO, CODIGO_FILIAL, FILIAL, PLACA, MODELO, UNIDADE,",
+    "       PROJETO_OS, PROJETO_VEICULO, HODOMETRO, KM_RODADO, LITROS,",
+    "       MEDIA_KM_L, VALOR, DATA",
+    "  FROM base",
+    " WHERE DATA >= '2026-09-01'",
+    "UNION ALL",
+    "SELECT ORDEM_SERVICO, CODIGO_FILIAL, FILIAL, PLACA, MODELO, UNIDADE,",
+    "       PROJETO_OS, PROJETO_VEICULO, HODOMETRO, KM_RODADO, LITROS,",
+    "       MEDIA_KM_L, VALOR, DATA",
+    "  FROM anterior",
+    " WHERE RN = 1",
+    "ORDER BY PLACA, DATA",
+  ].join(' ');
 }
 
 function atualizarQueryBanco() {
