@@ -1293,7 +1293,27 @@ if (MODE === 'carteira') {
    Não grava nada. Log com faixas, contagens e valores — nunca nome.        */
 if (MODE === 'programa') {
   if (!SB_KEY) { console.error('GEM_SUPABASE_SERVICE_KEY ausente'); process.exit(1); }
-  const MES = (process.env.CE_MES || '2026-08').slice(0, 7);
+  /* O MÊS ACEITA FAIXA (Renan, 04/09/2026): "quanto daria mensal a Conlog
+     inteira" não se responde com um mês — o custo varia com quem rodou e com
+     quem foi bem. Aceita '2026-08', uma lista '2026-06,2026-07' ou a faixa
+     '2026-01..2026-08', e o resumo do fim mostra o mês a mês, a média e o
+     teto (todo mundo com 100). */
+  const MESES = (() => {
+    const cru = (process.env.CE_MES || '2026-08').trim();
+    if (cru.includes('..')) {
+      const [a, b] = cru.split('..').map(x => x.trim().slice(0, 7));
+      const out = []; let [ay, am] = a.split('-').map(Number);
+      const [by, bm] = b.split('-').map(Number);
+      while (ay < by || (ay === by && am <= bm)) {
+        out.push(`${ay}-${String(am).padStart(2, '0')}`);
+        if (++am > 12) { am = 1; ay++; }
+        if (out.length > 60) break;
+      }
+      return out;
+    }
+    return cru.split(',').map(x => x.trim().slice(0, 7)).filter(Boolean);
+  })();
+  const MES = MESES[MESES.length - 1];
   /* UNIDADE ACEITA LISTA (Renan, 03/09/2026): "PIR e Lata PIR juntos" é UM
      programa com UM pódio, não a soma de dois. Somar os dois totais separados
      daria 22 elegíveis e dois pódios; no pool os 15 melhores são escolhidos
@@ -1325,10 +1345,18 @@ if (MODE === 'programa') {
   console.log(`PROGRAMA · ${UNI} · ${MES} · saldo ${brl(SALDO)} · elegível: ${KM_MIN}+ km`
     + ` e top ${TOP_N} · pódio ${PODIO.map(brl).join(' / ')}`);
 
-  const mens = await sbTodos('ce_scores_mensais?select=chave,unidade,km,dias,'
-    + `rpm_pontos,idle_pontos,acel_pontos,pontuacao&competencia=eq.${MES}-01`);
-  const validos = mens.filter(m => !String(m.chave || '').startsWith('semlogin:')
-    && m.pontuacao != null);
+  // uma leitura só para todos os meses pedidos; depois agrupa por competência
+  const mens = await sbTodos('ce_scores_mensais?select=chave,unidade,km,dias,competencia,'
+    + `rpm_pontos,idle_pontos,acel_pontos,pontuacao&competencia=gte.${MESES[0]}-01`
+    + `&competencia=lte.${MES}-01`);
+  const porMes = new Map();
+  mens.filter(m => !String(m.chave || '').startsWith('semlogin:') && m.pontuacao != null)
+    .forEach(m => {
+      const k = String(m.competencia).slice(0, 7);
+      if (!MESES.includes(k)) return;
+      (porMes.get(k) || porMes.set(k, []).get(k)).push(m);
+    });
+  let validos = porMes.get(MES) || [];
 
   // roda a conta para uma unidade e devolve o custo — serve para o piloto e
   // para a linha de "se rodasse em todas"
@@ -1421,22 +1449,75 @@ if (MODE === 'programa') {
 
   simula(UNIS, true);
 
-  // o piloto é em Piraí, mas o desenho vai ser apresentado — vale saber o que
-  // custaria a régua inteira, unidade a unidade, com os números de hoje
-  const unis = [...new Set(validos.map(m => String(m.unidade || '').toUpperCase()))]
-    .filter(Boolean).sort();
-  const linhas = unis.map(u => simula(u, false)).filter(Boolean);
-  if (linhas.length > 1) {
-    console.log('\n── O MESMO DESENHO EM TODAS AS UNIDADES (mesmo mês) ──');
-    linhas.sort((a, b) => b.total - a.total).forEach(l =>
-      console.log(`   ${l.uni.padEnd(16)} ${String(l.n).padStart(2)} elegíveis`
+  /* A CONLOG INTEIRA = cada unidade com o seu próprio programa (o seu top 15
+     e o seu pódio), somadas. Não é um ranking único nacional: o motorista de
+     Piraí não disputa com o de Pelotas, porque a operação é outra. */
+  function conlog(mes) {
+    validos = porMes.get(mes) || [];
+    const unis = [...new Set(validos.map(m => String(m.unidade || '').toUpperCase()))]
+      .filter(Boolean).sort();
+    const linhas = unis.map(u => simula(u, false)).filter(Boolean);
+    if (!linhas.length) return null;
+    return {
+      mes, linhas,
+      n:     linhas.reduce((a, b) => a + b.n, 0),
+      pago:  linhas.reduce((a, b) => a + b.pago, 0),
+      extra: linhas.reduce((a, b) => a + b.extra, 0),
+      total: linhas.reduce((a, b) => a + b.total, 0),
+      motoristas: validos.length,
+    };
+  }
+
+  const doMes = conlog(MES);
+  if (doMes && doMes.linhas.length > 1) {
+    console.log(`\n── A CONLOG INTEIRA em ${MES} (cada unidade com o seu top ${TOP_N} e o seu pódio) ──`);
+    doMes.linhas.sort((a, b) => b.total - a.total).forEach(l =>
+      console.log(`   ${l.uni.padEnd(17)} ${String(l.n).padStart(2)} elegíveis`
         + ` · carteiras ${brl(l.pago).padStart(12)} · pódio ${brl(l.extra).padStart(11)}`
         + ` · TOTAL ${brl(l.total).padStart(12)}`));
-    console.log(`   ${'SOMA'.padEnd(16)} ${String(linhas.reduce((a, b) => a + b.n, 0)).padStart(2)} elegíveis`
-      + ` · carteiras ${brl(linhas.reduce((a, b) => a + b.pago, 0)).padStart(12)}`
-      + ` · pódio ${brl(linhas.reduce((a, b) => a + b.extra, 0)).padStart(11)}`
-      + ` · TOTAL ${brl(linhas.reduce((a, b) => a + b.total, 0)).padStart(12)}`);
+    console.log(`   ${'SOMA'.padEnd(17)} ${String(doMes.n).padStart(2)} elegíveis`
+      + ` · carteiras ${brl(doMes.pago).padStart(12)}`
+      + ` · pódio ${brl(doMes.extra).padStart(11)}`
+      + ` · TOTAL ${brl(doMes.total).padStart(12)}`);
+    /* O PÓDIO NÃO ESCALA COM A UNIDADE PEQUENA: numa unidade com 1 ou 2
+       elegíveis o R$ 300 do 1º lugar sai sem disputa nenhuma, e o pódio passa
+       a pesar mais que as carteiras. Quem decide se isso é aceitável é o
+       Renan — o robô só mostra quanto disso existe. */
+    const magras = doMes.linhas.filter(l => l.n < PODIO.length);
+    if (magras.length) console.log(`\n   ⚠ ${magras.length} unidade(s) com menos de ${PODIO.length}`
+      + ` elegíveis — o pódio delas soma ${brl(magras.reduce((a, b) => a + b.extra, 0))}`
+      + ' sem disputa real: ' + magras.map(l => `${l.uni} (${l.n})`).join(', '));
   }
+
+  /* MÊS A MÊS: um mês só é uma foto. O que o Renan precisa para aprovar
+     orçamento é a média e o pior mês, mais o teto de quanto poderia custar se
+     todo mundo tirasse 100 — o programa é bom quando CUSTA o teto. */
+  if (MESES.length > 1) {
+    console.log(`\n── CUSTO MENSAL DA CONLOG INTEIRA, mês a mês ──`);
+    const hist = MESES.map(conlog).filter(Boolean);
+    hist.forEach(h => {
+      const teto = SALDO * h.n + h.extra;
+      console.log(`   ${h.mes}  ${String(h.linhas.length).padStart(2)} unidade(s)`
+        + ` · ${String(h.n).padStart(3)} elegíveis · carteiras ${brl(h.pago).padStart(12)}`
+        + ` · pódio ${brl(h.extra).padStart(11)} · TOTAL ${brl(h.total).padStart(12)}`
+        + `   (teto ${brl(teto)})`);
+    });
+    const tot = hist.map(h => h.total);
+    const med = tot.reduce((a, b) => a + b, 0) / tot.length;
+    const tetos = hist.map(h => SALDO * h.n + h.extra);
+    console.log(`\n   MÉDIA MENSAL ${brl(med)} · menor ${brl(Math.min(...tot))}`
+      + ` · maior ${brl(Math.max(...tot))}`);
+    console.log(`   TETO MÉDIO (todo mundo com 100) ${brl(tetos.reduce((a, b) => a + b, 0) / tetos.length)}`
+      + ` · maior teto ${brl(Math.max(...tetos))}`);
+    console.log(`   no ano, somando os ${hist.length} meses: ${brl(tot.reduce((a, b) => a + b, 0))}`);
+    // a cobertura cresce conforme mais motoristas são identificados: um mês
+    // com menos unidades custa menos porque MEDE menos, não porque foi melhor
+    const uMin = Math.min(...hist.map(h => h.linhas.length));
+    const uMax = Math.max(...hist.map(h => h.linhas.length));
+    if (uMin !== uMax) console.log(`\n   ⚠ a cobertura varia de ${uMin} a ${uMax} unidades no período:`
+      + ' mês com menos unidade custa menos porque MEDE menos, não porque foi melhor.');
+  }
+
   console.log('\nSimulação encerrada — nada foi gravado.');
   process.exit(0);
 }
