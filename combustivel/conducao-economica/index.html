@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
-<meta name="build" content="202609041400">
+<meta name="build" content="202609041500">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <title>Condução Econômica · Gestão em Movimento</title>
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -269,8 +269,14 @@ table.dre td.cg-t,.cg-t{color:var(--verde)!important;font-weight:700;}
    ============================================================ */
 /* miolo do Resumo: gráfico maior à esquerda, regras à direita */
 .ce-kpis{grid-template-columns:repeat(3,1fr);margin-top:14px;}
-.ce-gr{grid-template-columns:1.55fr 1fr;flex:1 1 auto;max-height:66vh;}
-@media(max-width:860px){.ce-gr{max-height:none;}}
+/* A FILEIRA DE BAIXO USA A MESMA GRADE DOS CARDS (Renan, 04/09/2026): o
+   gráfico ocupa as duas primeiras colunas e as Regras a terceira, então as
+   bordas batem com os cards de cima. Proporção em fração (1.55fr 1fr) nunca
+   bate, porque a largura da coluna depende do gap; a mesma grade com um
+   `span 2` bate sempre, em qualquer tela. O gap tem de ser o mesmo dos KPIs. */
+.ce-gr{grid-template-columns:repeat(3,1fr);gap:10px;flex:1 1 auto;max-height:66vh;}
+.ce-gr > :first-child{grid-column:span 2;}
+@media(max-width:860px){.ce-gr{max-height:none;} .ce-gr > :first-child{grid-column:auto;}}
 /* a visão do Ranking é só legenda + tabela, sem card em volta: o .twrap já
    traz borda, fundo e cantos, e a moldura extra só desenhava a mesma coisa
    duas vezes e roubava a altura de duas linhas */
@@ -283,7 +289,7 @@ table.dre td.cg-t,.cg-t{color:var(--verde)!important;font-weight:700;}
    para as linhas, que agora respiram quase como na casca (8px) e ainda cabem
    as 15. Vale só para esta tabela; as tabelas de número do resto do portal
    continuam como estão. */
-#ranking-table td{padding:7px 12px;}
+#ranking-table td{padding:var(--rk-pad,7px) 12px;}
 #ranking-table thead th{padding:8px 12px;}
 /* QUEM DEFINE A ALTURA DA LINHA É A CÉLULA DA PONTUAÇÃO, não o padding: a
    pílula mais o rótulo Elite/Bom embaixo dão ~33px, contra ~25px das células
@@ -316,7 +322,14 @@ table.dre thead th.sortable{cursor:pointer;user-select:none;}
 table.dre thead th.sortable:hover{color:var(--laranja);}
 .sort-ar{font-size:8px;margin-left:3px;vertical-align:middle;}
 /* notas de rodapé da tabela */
-.tnotes{font-size:9.5px;color:var(--txt4);margin-top:8px;line-height:1.6;font-style:italic;flex:0 0 auto;}
+/* NOTAS LEGÍVEIS (Renan, 04/09/2026: "não dá para enxergar nada, principalmente
+   na visão escura"). Eram 9,5px em itálico no --txt4, o tom mais apagado da
+   paleta — no escuro isso é cinza sobre cinza. Passam a 11px, sem itálico e no
+   --txt2, e ficam DENTRO da moldura da tabela, separadas por um filete, como
+   se fossem a última linha da explicação. */
+.tnotes{font-size:11px;color:var(--txt2);line-height:1.65;flex:0 0 auto;
+  padding:10px 12px 11px;border-top:1px solid var(--linha);}
+.tnotes b{color:var(--txt);}
 /* legenda de classificação — mora na lateral, junto das visões e atalhos */
 .s-leg{display:flex;flex-direction:column;gap:6px;padding:2px 8px 4px;}
 .s-leg span{display:flex;align-items:center;gap:8px;font-size:11px;color:var(--txt3);white-space:nowrap;}
@@ -486,16 +499,19 @@ table.dre thead th.sortable:hover{color:var(--laranja);}
           <div class="card gcard">
             <div class="gtit">Regras de Pontuação</div>
             <div class="gsub">Pontuação final = média ponderada; pilar ausente redistribui o peso.</div>
+            <!-- as notas ficam DENTRO da moldura da tabela (Renan, 04/09/2026:
+                 "não dá para enxergar nada, principalmente na visão escura").
+                 Soltas embaixo do card elas pareciam sobra de página; dentro
+                 do .twrap são a última linha da explicação dos pesos, que é
+                 do que elas falam. -->
             <div class="twrap" style="flex:1"><table class="dre" id="tbl-pesos" data-no-sort>
               <thead><tr><th>Indicador</th><th>Descrição do cálculo</th><th class="num">Peso</th></tr></thead>
               <tbody id="peso-tbody"></tbody>
-            </table></div>
-            <!-- as notas vivem AQUI, embaixo da explicação dos pesos (Renan,
-                 04/09/2026): é delas que as notas falam. No Ranking elas
-                 roubavam a altura das linhas sem explicar nada de novo. -->
-            <div class="tnotes">
-              * Cada pilar mostra os <b>pontos</b> (0–100) e, logo abaixo, o <b>resultado medido</b>.<br>
-              * Pilar sem dado na fonte fica ausente e o peso dele é redistribuído proporcionalmente entre os demais.
+            </table>
+              <div class="tnotes">
+                Cada pilar mostra os <b>pontos</b> (0–100) e, logo abaixo, o <b>resultado medido</b>.<br>
+                Pilar sem dado na fonte fica ausente e o peso dele é redistribuído proporcionalmente entre os demais.
+              </div>
             </div>
           </div>
         </div>
@@ -941,7 +957,35 @@ function renderRanking(data){
       <td class="num"><div class="pont-cell">${scorePill(r.pont)}<span class="pont-cls">${cls}</span></div></td>
     </tr>`;
   }).join('');
+  requestAnimationFrame(ajustaAlturaLinhas);
 }
+
+/* AS 15 PRIMEIRAS PREENCHEM A ÁREA — CALCULADO, NÃO CHUTADO (Renan cobrou
+   duas vezes: "precisa aparecer os 15", "pode ter mais espaçamento e ficar 15
+   visíveis"). Calibrar o padding no olho acerta numa tela e erra na seguinte:
+   com 7px cabiam 17 e sobrava meia linha cortada no rodapé. Aqui a conta é
+   feita ao contrário — mede-se a altura disponível, divide-se por 15 e o
+   padding vira o que sobra depois do conteúdo da linha (que é ditado pela
+   célula da pontuação, a mais alta). O resultado: exatamente 15 linhas
+   preenchendo a área, com o maior espaçamento que couber, em qualquer
+   tela. */
+const LINHAS_VISIVEIS = 15;
+function ajustaAlturaLinhas(){
+  const wrap = document.querySelector('#vw-ranking .twrap');
+  const tb = document.getElementById('ranking-tbody');
+  if(!wrap || !tb || !tb.rows.length || !wrap.clientHeight) return;   // visão escondida
+  const tabela = document.getElementById('ranking-table');
+  const cabec = wrap.querySelector('thead');
+  const disp = wrap.clientHeight - (cabec ? cabec.getBoundingClientRect().height : 0);
+  const alvo = disp / LINHAS_VISIVEIS;
+  const cel = tb.rows[0].cells[0];
+  const padAtual = parseFloat(getComputedStyle(cel).paddingTop) || 0;
+  // tudo o que não é padding: texto, sub-rótulo e a borda de baixo
+  const conteudo = tb.rows[0].getBoundingClientRect().height - 2 * padAtual;
+  const pad = Math.max(4, Math.min(20, (alvo - conteudo) / 2));
+  tabela.style.setProperty('--rk-pad', pad.toFixed(1) + 'px');
+}
+addEventListener('resize', ()=>requestAnimationFrame(ajustaAlturaLinhas));
 
 /* ── Regras de Pontuação ── */
 function renderPesos(){
@@ -1101,6 +1145,8 @@ function setVw(v){
   document.querySelectorAll('.vw').forEach(s=>s.classList.toggle('on', s.id==='vw-'+v));
   set('tit', TIT[v]||'');
   if(v==='resumo') setTimeout(renderChart,30);     // o canvas precisa estar visível
+  // o .twrap do ranking só tem altura depois de a seção ficar visível
+  if(v==='ranking') requestAnimationFrame(ajustaAlturaLinhas);
 }
 document.querySelectorAll('.s-item[data-vw]').forEach(b=>b.addEventListener('click',()=>setVw(b.dataset.vw)));
 
@@ -1167,6 +1213,6 @@ initPdfExport({
   isLight:()=>document.body.classList.contains('claro'), setTheme:aplicaTema
 });
 </script>
-<script src="../../assets/build-check.js?v=202609041400"></script>
+<script src="../../assets/build-check.js?v=202609041500"></script>
 </body>
 </html>
