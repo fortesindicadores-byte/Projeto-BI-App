@@ -155,6 +155,23 @@ if (MODE === 'conferir') {
     if (!r.ok) throw new Error(`${q} → ${r.status} ${(await r.text()).slice(0, 200)}`);
     return r.json();
   };
+  /* O `limit=` DA URL NÃO VENCE O TETO DO SERVIDOR (bug real, 04/09/2026): o
+     PostgREST corta a resposta em 1.000 linhas por padrão, e pedir 20.000 não
+     muda isso — ele devolve as mil primeiras, com status 200 e sem aviso. O
+     relatório de vigências saiu com jan e fev só, somando exatamente 1.000
+     linhas, e parecia que a carga do ano tinha falhado.
+     Paginar por Range é a única leitura que garante o conjunto inteiro. */
+  const pegaTudo = async (q, passo = 1000) => {
+    const tudo = [];
+    for (let off = 0; ; off += passo) {
+      const r = await fetch(`${SB_URL}/rest/v1/${q}`,
+        { headers: { ...H, Range: `${off}-${off + passo - 1}` } });
+      if (!r.ok) throw new Error(`${q} → ${r.status} ${(await r.text()).slice(0, 200)}`);
+      const lote = await r.json();
+      tudo.push(...lote);
+      if (lote.length < passo) return tudo;
+    }
+  };
   /* CONTAGEM QUE NÃO MENTE (bug real, 04/09/2026): a primeira versão devolvia
      o total do header `content-range` sem olhar o status. Requisição recusada
      não traz esse header, então QUALQUER erro — chave errada, tabela ausente,
@@ -194,9 +211,9 @@ if (MODE === 'conferir') {
   console.log(`  mês corrente (desde ${ini}): ${nMes} · âncoras anteriores: `
     + `${nAb - nMes - nFut}${nFut ? ` · DATA NO FUTURO (erro do ERP): ${nFut}` : ''}`);
 
-  const vw = await pega('contrato_mes_atual?select=placa,tipo,taxa_km,valor_fixo,'
+  const vw = await pegaTudo('contrato_mes_atual?select=placa,tipo,taxa_km,valor_fixo,'
     + 'ultimo_km_informado,hodometro_atual,ultimo_abastecimento,km_mes,desloc_mes,valor_mes'
-    + '&order=valor_mes.desc.nullslast&limit=2000');
+    + '&order=valor_mes.desc.nullslast');
   const comHodo = vw.filter(v => v.hodometro_atual != null);
   const varComHodo = vw.filter(v => v.tipo === 'variavel' && v.hodometro_atual != null);
   const varSem = vw.filter(v => v.tipo === 'variavel' && v.hodometro_atual == null);
@@ -215,8 +232,8 @@ if (MODE === 'conferir') {
      isso em vez de deduzir: informado ≈ âncora ⇒ o fechamento é do mês
      passado e o delta É o mês corrente; informado bem abaixo ⇒ o delta
      carrega meses anteriores junto. */
-  const ancRows = await pega(`erp_abastecimentos?select=placa,hodometro,data`
-    + `&data=lt.${ini}&data=lte.${hoje}&hodometro=not.is.null&limit=20000`);
+  const ancRows = await pegaTudo(`erp_abastecimentos?select=placa,hodometro,data`
+    + `&data=lt.${ini}&data=lte.${hoje}&hodometro=not.is.null&order=data.asc`);
   const anc = new Map();
   ancRows.forEach(r => {
     const a = anc.get(r.placa);
@@ -256,42 +273,51 @@ if (MODE === 'conferir') {
   }
 
   /* CUSTO POR VIGÊNCIA (Renan, 04/09/2026): "eu preciso entender o custo,
-     então preciso do km da vigência". O km do mês sai de dois caminhos
-     independentes — a distância entre os hodômetros das duas pontas e a soma
-     do km_rodado que o próprio ERP grava. Mostrar os dois lado a lado é o que
-     permite VALIDAR: se batem, a base fecha; se divergem, é hodômetro
-     digitado errado, e a placa tem de aparecer para conferência em vez de
-     virar custo calado.
+     então preciso do km da vigência".
+
+     A COBRANÇA É DEFASADA EM UM MÊS (Renan, 04/09/2026): "o km considerado em
+     agosto é o de julho, o de setembro o de agosto e assim sucessivamente".
+     Por isso a tabela traz as duas colunas — o mês em que o veículo rodou e o
+     mês em que aquilo vira fatura. Misturar as duas é o erro que faz o custo
+     aparecer no mês errado e ninguém achar a diferença depois.
+
+     O km do mês é a distância entre os hodômetros das duas pontas. A soma do
+     km_rodado do ERP fica só como CONFERÊNCIA, não como fonte: ela devolve
+     valores impossíveis em parte das linhas (uma placa apareceu com 1.002.338
+     km num mês, que é leitura de hodômetro, não distância), então usá-la de
+     reserva injetaria lixo no custo sem aviso.
 
      A view pode não existir ainda (o SQL é colado à mão), e isso não é motivo
      para derrubar o resto da conferência. */
   let cv = null;
   try {
-    cv = await pega('custo_vigencia?select=vig,placa,tipo,km_vig,km_hodometro,'
-      + 'km_erp,divergencia_pct,custo_vig&order=vig.asc&limit=20000');
+    cv = await pegaTudo('custo_vigencia?select=vig_cobranca,vig_km,placa,tipo,km_vig,'
+      + 'km_hodometro,km_erp,divergencia_pct,custo_vig&order=vig_cobranca.asc,placa.asc');
   } catch (e) {
-    console.log(`\n(custo por vigência indisponível: ${String(e.message).slice(0, 90)})`);
+    console.log(`\n(custo por vigência indisponível: ${String(e.message).slice(0, 120)})`);
   }
   if (cv && cv.length) {
     const porVig = new Map();
     cv.forEach(r => {
-      const a = porVig.get(r.vig) || { placas: 0, km: 0, custo: 0, fixo: 0, div: 0 };
+      const a = porVig.get(r.vig_cobranca)
+        || { vigKm: r.vig_km, placas: 0, semKm: 0, km: 0, custo: 0, fixo: 0, div: 0 };
       a.placas++;
+      if (r.tipo === 'variavel' && r.km_vig == null) a.semKm++;
       a.km += +r.km_vig || 0;
       a.custo += +r.custo_vig || 0;
       if (r.tipo === 'fixo') a.fixo += +r.custo_vig || 0;
       if (r.divergencia_pct != null && +r.divergencia_pct > 5) a.div++;
-      porVig.set(r.vig, a);
+      porVig.set(r.vig_cobranca, a);
     });
-    console.log('\nCUSTO POR VIGÊNCIA (km do mês × taxa do contrato)');
-    console.log('   VIGÊNCIA   PLACAS         KM DO MÊS            CUSTO'
-      + '            (FIXO)   PLACAS C/ DIVERGÊNCIA >5%');
+    console.log('\nCUSTO POR VIGÊNCIA — a vigência COBRA o km do mês anterior');
+    console.log('   COBRANÇA   KM DE    PLACAS      KM DO MÊS'
+      + '            CUSTO           (FIXO)   SEM KM   DIVERG.>5%');
     [...porVig.keys()].sort().forEach(v => {
       const a = porVig.get(v);
-      console.log(`   ${v}   ${String(a.placas).padStart(6)}`
-        + `   ${Math.round(a.km).toLocaleString('pt-BR').padStart(15)}`
+      console.log(`   ${v}   ${a.vigKm}   ${String(a.placas).padStart(6)}`
+        + `   ${Math.round(a.km).toLocaleString('pt-BR').padStart(12)}`
         + `   ${brlN(a.custo).padStart(14)}   ${brlN(a.fixo).padStart(14)}`
-        + `   ${String(a.div).padStart(6)}`);
+        + `   ${String(a.semKm).padStart(6)}   ${String(a.div).padStart(10)}`);
     });
 
     /* As divergentes são o material da validação: o número sozinho não diz se
@@ -299,10 +325,12 @@ if (MODE === 'conferir') {
     const div = cv.filter(r => r.divergencia_pct != null && +r.divergencia_pct > 5)
       .sort((a, b) => (+b.divergencia_pct) - (+a.divergencia_pct)).slice(0, 12);
     if (div.length) {
-      console.log('\nPLACAS EM QUE OS DOIS CAMINHOS NÃO FECHAM (conferir hodômetro):');
-      div.forEach(r => console.log(`   ${r.vig}  ${String(r.placa).padEnd(9)}`
+      console.log(`\nPLACAS EM QUE O KM DO HODÔMETRO E O DO ERP NÃO FECHAM`
+        + ` (${cv.filter(r => r.divergencia_pct != null && +r.divergencia_pct > 5).length}`
+        + ` de ${cv.filter(r => r.divergencia_pct != null).length} comparáveis):`);
+      div.forEach(r => console.log(`   ${r.vig_km}  ${String(r.placa).padEnd(9)}`
         + ` hodômetro ${String(Math.round(r.km_hodometro)).padStart(7)} km`
-        + ` · ERP ${String(Math.round(r.km_erp)).padStart(7)} km`
+        + ` · ERP ${String(Math.round(r.km_erp)).padStart(9)} km`
         + ` · ${(+r.divergencia_pct).toFixed(1)}%`));
     }
   }
