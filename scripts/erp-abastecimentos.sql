@@ -217,14 +217,42 @@ select coalesce(r.placa, s.placa)                       as placa,
   from rateio r
   full outer join simples s on s.placa = r.placa and s.vig = r.vig;
 
+-- COBERTURA DA CARGA (04/09/2026): as leituras "âncora" (a última de cada placa
+-- antes do início da carga) criam vigências de mentira no começo da base — um
+-- mês com uma leitura por placa e quase nenhum km. Elas não podem entrar como
+-- vigência de custo, e o corte não é uma data fixa: é a cobertura. Vale a
+-- vigência em que pelo menos metade das placas teve abastecimento.
+--
+-- O FIXO NÃO DEPENDE DE KM (Renan, 04/09/2026): antes o contrato fixo só
+-- aparecia na vigência em que a placa teve leitura, e por isso a PRÉVIA do mês
+-- corrente saía menor — em setembro veio R$ 171.917 em vez dos R$ 199.634 de
+-- sempre, como se a frota tivesse encolhido no meio do mês. Agora toda placa
+-- com contrato existe em toda vigência: o fixo entra inteiro desde o dia 1º e o
+-- variável acompanha o km que já rodou.
 create or replace view public.custo_vigencia as
-select k.vig_cobranca, k.vig_km,
+with cob as (
+  select vig_km, count(distinct placa) as placas
+    from public.km_vigencia
+   where abastecimentos > 0
+   group by vig_km
+),
+vigs as (
+  select vig_km,
+         to_char(to_date(vig_km, 'YYYY-MM') + interval '1 month', 'YYYY-MM') as vig_cobranca
+    from cob
+   where placas >= (select max(placas) from cob) * 0.5
+)
+select v.vig_cobranca, v.vig_km,
        c.placa, c.placa_origem, c.unidade, c.projeto, c.tipo,
        c.taxa_km, c.valor_fixo,
-       k.km_vig, k.km_hodometro, k.km_erp, k.divergencia_pct, k.origem_km,
+       k.km_vig, k.km_hodometro, k.km_erp, k.divergencia_pct,
+       coalesce(k.origem_km, 'sem leitura') as origem_km,
        case when c.tipo = 'fixo' then c.valor_fixo
             else coalesce(k.km_vig, 0) * coalesce(c.taxa_km, 0)
-       end                                as custo_vig,
-       k.litros, k.valor_diesel, k.abastecimentos, k.ultimo_abast
-  from public.km_vigencia k
-  join public.contratos_placa c on c.placa = k.placa;
+       end                                  as custo_vig,
+       k.litros, k.valor_diesel, k.abastecimentos, k.ultimo_abast,
+       -- a vigência do mês corrente é PRÉVIA: o km ainda está sendo formado
+       (v.vig_km = to_char(current_date, 'YYYY-MM')) as previa
+  from vigs v
+  cross join public.contratos_placa c
+  left join public.km_vigencia k on k.placa = c.placa and k.vig_km = v.vig_km;
