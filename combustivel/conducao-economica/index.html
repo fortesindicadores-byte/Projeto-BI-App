@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
-<meta name="build" content="202609041300">
+<meta name="build" content="202609041400">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <title>Condução Econômica · Gestão em Movimento</title>
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -1052,13 +1052,34 @@ function renderChart(){
 }
 
 /* ── Carga ── */
+/* SEM FAIXA VERDE NÃO ENTRA (Renan, 04/09/2026: "pode tirar da visualização o
+   que não tiver faixa verde de RPM"). A nota de RPM depende do veículo
+   publicar o diagnóstico de motor no Geotab, não de quanto se rodou — e quem
+   nunca teve leitura ficava SEM o pilar de MAIOR peso (42%), que era
+   redistribuído entre Motor Ocioso e Aceleração, dois pilares em que quase
+   todo mundo tira nota alta. Resultado medido em 04/09/2026: 6 dos 10
+   primeiros do ranking geral não tinham faixa verde, com km mediano de 134 no
+   ano inteiro. Eram 13 de 307 motoristas.
+
+   O corte é pela PESSOA, não pela linha: quem tem leitura em ALGUM mês fica
+   com todos os seus meses (a média das vigências é que vale na tela). E é
+   feito na carga, para que contagem, filtros, gráfico e ranking falem todos
+   do mesmo conjunto — filtrar só na tabela deixaria o "318 motorista(s)" do
+   topo contando gente que não aparece em lugar nenhum. */
+function semRpmFora(linhas){
+  const com = new Set(linhas.filter(r => r.rpm != null).map(r => r.unit));
+  const fora = new Set(linhas.map(r => r.unit).filter(u => !com.has(u)));
+  if(fora.size) console.info(`condução: ${fora.size} motorista(s) fora da tela`
+    + ' — nenhuma leitura de RPM no período (o veículo não publica o diagnóstico).');
+  return linhas.filter(r => com.has(r.unit));
+}
 let SUB_BASE = '';        // "N motorista(s) · coleta dd/mm/aaaa"
 async function recarregar(){
   set('titSub','Carregando…');
   try{
     let linhas=[];
     try{ linhas=await fetchFromSupabase(); }catch(e){ console.warn('Supabase indisponível:', e.message); }
-    if(linhas.length){ RAW=linhas; ORIGEM='banco'; }
+    if(linhas.length){ RAW=semRpmFora(linhas); ORIGEM='banco'; }
     else             { RAW=generateRawRows(); ORIGEM='exemplo'; }
     populateFilters();
     // o SUB_BASE precisa existir ANTES do atualizar(), que é quem escreve o
@@ -1146,6 +1167,6 @@ initPdfExport({
   isLight:()=>document.body.classList.contains('claro'), setTheme:aplicaTema
 });
 </script>
-<script src="../../assets/build-check.js?v=202609041300"></script>
+<script src="../../assets/build-check.js?v=202609041400"></script>
 </body>
 </html>
