@@ -177,6 +177,20 @@ if (MODE === 'conferir') {
   const [max] = await pega('erp_abastecimentos?select=data&order=data.desc&limit=1');
   console.log(`  período: ${min && min.data} → ${max && max.data}`);
 
+  /* DE QUANDO É CADA LINHA (04/09/2026): a query do ERP traz DUAS coisas — o
+     mês corrente inteiro e, por placa, o último abastecimento ANTERIOR a ele,
+     que é a âncora do hodômetro (sem ela, placa que não abasteceu no mês
+     sumiria da conta). Misturadas na mesma tabela, dão um período que assusta
+     — a base tem lançamento de 2014 e outro com ano 2222, digitado errado no
+     ERP. Separar as duas contagens é o que responde "desde quando estou
+     buscando" sem precisar abrir o SQL. */
+  const ini = new Date().toISOString().slice(0, 8) + '01';
+  const hoje = new Date().toISOString().slice(0, 10);
+  const nMes  = await conta(`erp_abastecimentos?data=gte.${ini}&data=lte.${hoje}`);
+  const nFut  = await conta(`erp_abastecimentos?data=gt.${hoje}`);
+  console.log(`  mês corrente (desde ${ini}): ${nMes} · âncoras anteriores: `
+    + `${nAb - nMes - nFut}${nFut ? ` · DATA NO FUTURO (erro do ERP): ${nFut}` : ''}`);
+
   const vw = await pega('contrato_mes_atual?select=placa,tipo,taxa_km,valor_fixo,'
     + 'ultimo_km_informado,hodometro_atual,ultimo_abastecimento,km_mes,desloc_mes,valor_mes'
     + '&order=valor_mes.desc.nullslast&limit=2000');
