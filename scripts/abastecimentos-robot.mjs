@@ -205,10 +205,42 @@ if (MODE === 'conferir') {
   if (varSem.length) console.log(`  sem hodômetro (ficam sem deslocamento): `
     + varSem.slice(0, 10).map(v => v.placa).join(', ') + (varSem.length > 10 ? '…' : ''));
 
+  /* DE QUANDO É O "KM INFORMADO" (Renan perguntou em 04/09/2026 se ele podia
+     estar errado). Ele não está errado — é de OUTRA data. É a leitura do
+     último fechamento da planilha, e se aquele fechamento foi em julho, o
+     delta até o hodômetro de hoje cobre julho+agosto+setembro. Certo para
+     faturar, errado para chamar de "mês em andamento".
+
+     A âncora de agosto (último abastecimento antes do dia 1º) permite medir
+     isso em vez de deduzir: informado ≈ âncora ⇒ o fechamento é do mês
+     passado e o delta É o mês corrente; informado bem abaixo ⇒ o delta
+     carrega meses anteriores junto. */
+  const ancRows = await pega(`erp_abastecimentos?select=placa,hodometro,data`
+    + `&data=lt.${ini}&data=lte.${hoje}&hodometro=not.is.null&limit=20000`);
+  const anc = new Map();
+  ancRows.forEach(r => {
+    const a = anc.get(r.placa);
+    if (!a || r.data > a.data) anc.set(r.placa, r);
+  });
+  const comAnc = vw.filter(v => v.tipo === 'variavel'
+    && v.ultimo_km_informado != null && anc.has(v.placa));
+  if (comAnc.length) {
+    const dif = comAnc.map(v => (+anc.get(v.placa).hodometro) - (+v.ultimo_km_informado));
+    const ord = [...dif].sort((a, b) => a - b);
+    const med = ord[Math.floor(ord.length / 2)];
+    const doMes = dif.filter(d => Math.abs(d) <= 300).length;
+    console.log(`\n"KM INFORMADO" × hodômetro no fim de agosto (${comAnc.length} placas):`);
+    console.log(`   diferença mediana: ${Math.round(med)} km`);
+    console.log(`   informado bate com o fim de agosto (±300 km): ${doMes}`
+      + `  →  nessas, o deslocamento É o do mês corrente`);
+    console.log(`   informado mais antigo (>300 km atrás): ${comAnc.length - doMes}`
+      + `  →  nessas, o deslocamento carrega meses anteriores`);
+  }
+
   const brlN = v => 'R$ ' + (+v || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const total = vw.reduce((s, v) => s + (+v.valor_mes || 0), 0);
   const fixo = vw.filter(v => v.tipo === 'fixo').reduce((s, v) => s + (+v.valor_mes || 0), 0);
-  console.log(`\nCUSTO DO MÊS EM ANDAMENTO: ${brlN(total)}`
+  console.log(`\nA COBRAR DESDE O ÚLTIMO KM INFORMADO: ${brlN(total)}`
     + ` (fixo ${brlN(fixo)} · por km ${brlN(total - fixo)})`);
 
   const top = vw.filter(v => v.desloc_mes > 0).slice(0, 12);
