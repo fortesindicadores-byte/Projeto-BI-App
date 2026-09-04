@@ -1620,6 +1620,87 @@ if (MODE === 'premio') {
   process.exit(0);
 }
 
+/* POR QUE UM MOTORISTA FICA SEM FAIXA VERDE (Renan perguntou, 04/09/2026:
+   "é por ter rodado pouco? vi um com 185 km e mesmo assim não mediu").
+   A nota de RPM só nasce quando o dia tem MAIS DE 60 SEGUNDOS de leitura de
+   RPM (`rpm.rodando` no bruto) — e essa leitura vem do diagnóstico de motor
+   do VEÍCULO, não da distância. Carro que não publica RPM no Geotab roda 500
+   km e entrega zero segundo. Este modo separa as duas causas com o dado na
+   mão: quanto km rodou quem ficou sem nota, quantos segundos de RPM o dia
+   registrou, e se a mesma pessoa tem nota em outro mês (aí é o veículo).
+   Também mede o efeito colateral no ranking: sem o pilar de MAIOR peso, ele
+   é redistribuído e o motorista sobe — é isso que põe quem rodou 1 km no
+   topo. Log com contagens e faixas; nunca nome.                            */
+if (MODE === 'semrpm') {
+  if (!SB_KEY) { console.error('GEM_SUPABASE_SERVICE_KEY ausente'); process.exit(1); }
+  const MES = (process.env.CE_MES || '2026-08').slice(0, 7);
+  const de = MES + '-01';
+  const ate = new Date(+MES.slice(0, 4), +MES.slice(5, 7), 0).toISOString().slice(0, 10);
+  console.log(`sem Faixa Verde · ${MES}`);
+
+  const dias = await sbTodos(`ce_diario?select=dia,chave,km,rpm_verde_pct,bruto&dia=gte.${de}&dia=lte.${ate}`);
+  const por = new Map();
+  for (const l of dias) {
+    if (String(l.chave || '').startsWith('semlogin:')) continue;
+    const e = por.get(l.chave) || { dias: 0, comRpm: 0, km: 0, seg: 0, segZero: 0 };
+    e.dias++; e.km += +l.km || 0;
+    if (l.rpm_verde_pct != null) e.comRpm++;
+    const r = (l.bruto && l.bruto.rpm) || {};
+    const seg = +r.rodando || 0;
+    e.seg += seg;
+    if (!seg) e.segZero++;
+    por.set(l.chave, e);
+  }
+  const todos = [...por.entries()].map(([k, e]) => ({ k, ...e }));
+  const sem = todos.filter(t => !t.comRpm), com = todos.filter(t => t.comRpm);
+  console.log(`\nmotoristas que rodaram no mês: ${todos.length}`
+    + ` · COM faixa verde em algum dia: ${com.length} · SEM em nenhum: ${sem.length}`);
+
+  const q = (arr, p) => { if (!arr.length) return 0;
+    const v = arr.map(x => x.km).sort((a, b) => a - b);
+    return Math.round(v[Math.min(v.length - 1, Math.floor(p * v.length))]); };
+  console.log(`   km no mês de quem TEM nota:  mín ${q(com, 0)} · mediana ${q(com, .5)} · máx ${q(com, 1)}`);
+  console.log(`   km no mês de quem NÃO tem:   mín ${q(sem, 0)} · mediana ${q(sem, .5)} · máx ${q(sem, 1)}`);
+  const semRodou = sem.filter(t => t.km >= 100);
+  console.log(`\n   ${semRodou.length} motorista(s) SEM nota rodaram 100+ km`
+    + ` (o maior deles, ${Math.round(Math.max(0, ...semRodou.map(t => t.km)))} km).`);
+  console.log('   Se rodar bastante e mesmo assim não medir, a causa não é distância.');
+
+  // 0 segundo de RPM no mês inteiro = o veículo não publica o diagnóstico;
+  // alguns segundos e abaixo do corte = medição fraca, outra conversa
+  const zero = sem.filter(t => t.seg === 0), pouco = sem.filter(t => t.seg > 0);
+  console.log(`\n   dos ${sem.length} sem nota: ${zero.length} tiveram ZERO segundo de RPM no mês`
+    + ` · ${pouco.length} tiveram algum, mas abaixo do corte de 60s/dia`);
+
+  // a mesma pessoa com nota em OUTRO mês prova que é o veículo, não ela
+  const outros = await sbTodos('ce_scores_mensais?select=chave,competencia,rpm_pontos');
+  const temEmOutroMes = new Set(outros.filter(o => o.rpm_pontos != null
+    && String(o.competencia).slice(0, 7) !== MES).map(o => o.chave));
+  const viraLata = sem.filter(t => temEmOutroMes.has(t.k)).length;
+  console.log(`   ${viraLata} deles TÊM faixa verde em outro mês — ou seja, a pessoa mede;`
+    + ' o que não mede é o veículo que ela dirigiu neste mês.');
+
+  /* O EFEITO NO RANKING: sem o pilar de maior peso (42%), o score vira média
+     de Motor Ocioso e Aceleração — dois pilares em que quase todo mundo tira
+     nota alta —, então quem não tem RPM SOBE. */
+  const mens = await sbTodos('ce_scores_mensais?select=chave,unidade,km,'
+    + `rpm_pontos,idle_pontos,acel_pontos,pontuacao&competencia=eq.${MES}-01`);
+  const vv = mens.filter(m => !String(m.chave || '').startsWith('semlogin:') && m.pontuacao != null)
+    .sort((a, b) => b.pontuacao - a.pontuacao);
+  const semN = vv.filter(m => m.rpm_pontos == null);
+  const md = a => a.length ? (a.reduce((x, y) => x + y.pontuacao, 0) / a.length).toFixed(1) : '—';
+  console.log(`\n── EFEITO NO RANKING (${MES}) ──`);
+  console.log(`   score médio de quem TEM faixa verde: ${md(vv.filter(m => m.rpm_pontos != null))}`
+    + ` · de quem NÃO tem: ${md(semN)}`);
+  [10, 15, 30].forEach(n => { const top = vv.slice(0, n);
+    console.log(`   no top ${String(n).padStart(2)} geral: ${top.filter(m => m.rpm_pontos == null).length}`
+      + ` sem faixa verde · km mediano do top ${n}: `
+      + Math.round([...top].map(m => +m.km || 0).sort((a, b) => a - b)[Math.floor(n / 2)]));
+  });
+  console.log('\nAnálise encerrada — nada foi gravado.');
+  process.exit(0);
+}
+
 if (MODE === 'base') {
   if (!SB_KEY) { console.error('GEM_SUPABASE_SERVICE_KEY ausente'); process.exit(1); }
   const MES = (process.env.CE_MES || '2026-08').slice(0, 7);
