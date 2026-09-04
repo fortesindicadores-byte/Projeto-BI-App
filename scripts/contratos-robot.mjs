@@ -541,7 +541,16 @@ console.log(`\ngravado: ${gravadas} lançamento(s) em carta_custos.`);
 // só depois de ter linhas em mãos — a trava de leitura vazia lá em cima já
 // impediu que chegássemos aqui com a planilha ilegível.
 if (contratos.length) {
-  const payload = contratos.map(({ _taxas, _ultKmVig, ...c }) => c);
+  /* O PAYLOAD LISTA AS COLUNAS, NÃO EXCLUI AS AUXILIARES (bug real, 04/09/2026).
+     Antes era `({_taxas, _ultKmVig, ...c}) => c`: bastava eu acrescentar um
+     campo de diagnóstico ao objeto — foi o `_row`, que guarda a linha crua para
+     explicar as placas sem km — para ele viajar até o PostgREST e derrubar a
+     gravação inteira com PGRST204. Lista explícita não tem esse buraco: campo
+     auxiliar novo simplesmente não entra. */
+  const COLS = ['placa','placa_origem','unidade','projeto','tipo','taxa_km',
+                'valor_fixo','ultimo_km_informado','vig_referencia'];
+  const payload = contratos.map(c => Object.fromEntries(
+    COLS.filter(k => c[k] !== undefined).map(k => [k, c[k]])));
   const atuais = new Set(payload.map(c => c.placa));
   const rr = await fetch(`${SB_URL}/rest/v1/contratos_placa?select=placa`, { headers: H });
   const jaTem = rr.ok ? await rr.json() : [];
