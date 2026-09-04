@@ -141,6 +141,65 @@ async function baixar() {
   }
 }
 
+/* MODO CONFERIR (04/09/2026): não lê planilha nenhuma — olha o que já está no
+   Supabase. Serve para depois de uma carga vinda de fora (o PowerShell que o
+   Renan roda de dentro da rede da Conlog, por exemplo): quantos
+   abastecimentos entraram, de que período, quantas placas, e — o que importa
+   de verdade — quantas placas COM CONTRATO acharam hodômetro, porque placa que
+   não casa some da conta do mês sem dar erro nenhum. */
+if (MODE === 'conferir') {
+  if (!SB_KEY) { console.error('GEM_SUPABASE_SERVICE_KEY ausente'); process.exit(1); }
+  const H = { apikey: SB_KEY, Authorization: `Bearer ${SB_KEY}` };
+  const pega = async (q) => {
+    const r = await fetch(`${SB_URL}/rest/v1/${q}`, { headers: H });
+    if (!r.ok) throw new Error(`${q} → ${r.status} ${(await r.text()).slice(0, 200)}`);
+    return r.json();
+  };
+  const conta = async (tabela) => {
+    const r = await fetch(`${SB_URL}/rest/v1/${tabela}?select=*`,
+      { headers: { ...H, Prefer: 'count=exact', Range: '0-0' } });
+    return +(r.headers.get('content-range') || '').split('/')[1] || 0;
+  };
+
+  const nAb = await conta('erp_abastecimentos');
+  console.log(`erp_abastecimentos: ${nAb} linha(s)`);
+  if (!nAb) { console.log('  (vazio — ninguém carregou ainda)'); process.exit(0); }
+
+  const [min] = await pega('erp_abastecimentos?select=data&order=data.asc&limit=1');
+  const [max] = await pega('erp_abastecimentos?select=data&order=data.desc&limit=1');
+  console.log(`  período: ${min && min.data} → ${max && max.data}`);
+
+  const vw = await pega('contrato_mes_atual?select=placa,tipo,taxa_km,valor_fixo,'
+    + 'ultimo_km_informado,hodometro_atual,ultimo_abastecimento,km_mes,desloc_mes,valor_mes'
+    + '&order=valor_mes.desc.nullslast&limit=2000');
+  const comHodo = vw.filter(v => v.hodometro_atual != null);
+  const varComHodo = vw.filter(v => v.tipo === 'variavel' && v.hodometro_atual != null);
+  const varSem = vw.filter(v => v.tipo === 'variavel' && v.hodometro_atual == null);
+  console.log(`\ncontratos: ${vw.length} placa(s) · ${comHodo.length} com hodômetro no ERP`);
+  console.log(`  por km: ${varComHodo.length} com hodômetro · ${varSem.length} SEM`);
+  if (varSem.length) console.log(`  sem hodômetro (ficam sem deslocamento): `
+    + varSem.slice(0, 10).map(v => v.placa).join(', ') + (varSem.length > 10 ? '…' : ''));
+
+  const brlN = v => 'R$ ' + (+v || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const total = vw.reduce((s, v) => s + (+v.valor_mes || 0), 0);
+  const fixo = vw.filter(v => v.tipo === 'fixo').reduce((s, v) => s + (+v.valor_mes || 0), 0);
+  console.log(`\nCUSTO DO MÊS EM ANDAMENTO: ${brlN(total)}`
+    + ` (fixo ${brlN(fixo)} · por km ${brlN(total - fixo)})`);
+
+  const top = vw.filter(v => v.desloc_mes > 0).slice(0, 12);
+  if (top.length) {
+    console.log('\nMAIOR DESLOCAMENTO NO MÊS (é a tela que o Renan pediu):');
+    top.sort((a, b) => (+b.desloc_mes) - (+a.desloc_mes)).forEach(v =>
+      console.log(`   ${String(v.placa).padEnd(9)} ${String(Math.round(v.desloc_mes)).padStart(7)} km`
+        + ` × ${(+v.taxa_km || 0).toFixed(3)} = ${brlN(v.valor_mes).padStart(13)}`
+        + `   (hodômetro ${v.hodometro_atual} · informado ${v.ultimo_km_informado})`));
+  } else {
+    console.log('\nnenhuma placa com deslocamento ainda — confira se o "km informado"'
+      + ' da planilha é anterior ao hodômetro do ERP.');
+  }
+  process.exit(0);
+}
+
 console.log(`abastecimentos · planilha ${SHEET} · aba "${ABA}"${DE ? ` · de ${DE}` : ''}`);
 const cel = await baixar();
 const cols = cel.cols || [];
