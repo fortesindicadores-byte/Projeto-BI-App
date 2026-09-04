@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
-<meta name="build" content="202609031630">
+<meta name="build" content="202609032030">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <title>Condução Econômica · Gestão em Movimento</title>
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -637,6 +637,11 @@ async function fetchFromSupabase() {
     vig:  String(r.competencia).slice(0,10).replace(/-/g, '/'),   // '2026-07-01' -> '2026/07/01'
     unit: r.motorista,
     rpm: r.rpm_pontos, idle: r.idle_pontos, acel: r.acel_pontos, vel: r.vel_pontos,
+    // VIAGENS SAIU DA TELA (Renan, 03/09/2026): o que o Geotab chama de
+    // viagem é ciclo de ignição — parar para abastecer conta como viagem
+    // nova —, então o número não serve para régua nem para leitura. Continua
+    // sendo LIDO e guardado, como a freada brusca, para não precisar
+    // recoletar quando a malha de nós (fábricas e CDs) chegar.
     km: +r.km || 0, viagens: +r.viagens || 0, velx: +r.vel_excessos || 0,
     pont: r.pontuacao,
   }));
@@ -807,7 +812,6 @@ function buildRankHead(){
     `<th class="sortable" onclick="setSort('unit')">Motorista${arr('unit')}</th>`+
     `<th class="sortable" onclick="setSort('uni')">Unidade${arr('uni')}</th>`+
     `<th class="num sortable" onclick="setSort('km')">Km Rodado${arr('km')}</th>`+
-    `<th class="num sortable" onclick="setSort('viagens')">Viagens${arr('viagens')}</th>`+
     FIELD_ORDER.map(k=>`<th class="num sortable" title="${PILAR[k].full}" onclick="setSort('${k}')">${PILAR[k].nome}${arr(k)}</th>`).join('')+
     `<th class="num sortable" onclick="setSort('pont')">Pontuação${arr('pont')}</th>`;
 }
@@ -821,7 +825,7 @@ function sortRankRows(rows){
   return rows.slice().sort((a,b)=>{
     if(sortKey==='unit') return dir*String(a.unit).localeCompare(String(b.unit),'pt');
     if(sortKey==='uni')  return dir*String(COD_OF[a.unit]||'').localeCompare(String(COD_OF[b.unit]||''),'pt');
-    if(sortKey==='km'||sortKey==='viagens') return dir*((a[sortKey]||0)-(b[sortKey]||0));
+    if(sortKey==='km') return dir*((a[sortKey]||0)-(b[sortKey]||0));
     const av=a[sortKey], bv=b[sortKey];
     if(av==null&&bv==null) return 0;
     if(av==null) return 1;
@@ -851,7 +855,6 @@ function renderRanking(data){
       <td class="conta">${r.unit}<div class="mot-sub">${SRC_OF[r.unit]||''}</div></td>
       <td>${COD_OF[r.unit]||'—'}</td>
       <td class="num">${r.km ? Math.round(r.km).toLocaleString('pt-BR') : '—'}</td>
-      <td class="num">${r.viagens ? r.viagens.toLocaleString('pt-BR') : '—'}</td>
       ${FIELD_ORDER.map(k=>cell(k,r[k])).join('')}
       <td class="num"><div class="pont-cell">${scorePill(r.pont)}<span class="pont-cls">${cls}</span></div></td>
     </tr>`;
@@ -1058,6 +1061,6 @@ initPdfExport({
   isLight:()=>document.body.classList.contains('claro'), setTheme:aplicaTema
 });
 </script>
-<script src="../../assets/build-check.js?v=202609031630"></script>
+<script src="../../assets/build-check.js?v=202609032030"></script>
 </body>
 </html>
