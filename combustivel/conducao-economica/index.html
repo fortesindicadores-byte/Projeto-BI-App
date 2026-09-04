@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
-<meta name="build" content="202609041700">
+<meta name="build" content="202609041800">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <title>Condução Econômica · Gestão em Movimento</title>
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -457,11 +457,6 @@ table.dre thead th.sortable:hover{color:var(--laranja);}
         Unidade<span class="ms-cnt"></span></button>
         <div class="ms-panel"><div class="ms-search"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M16.5 16.5 21 21"/></svg><input type="text" placeholder="Pesquisar…"></div><div class="ms-list"></div></div>
       </div>
-      <div class="ms-wrap" id="ms-proj"><button class="ms-btn" onclick="toggleMs('ms-proj')">
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 6h16M6 12h12M9 18h6"/></svg>
-        Projeto<span class="ms-cnt"></span></button>
-        <div class="ms-panel"><div class="ms-search"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M16.5 16.5 21 21"/></svg><input type="text" placeholder="Pesquisar…"></div><div class="ms-list"></div></div>
-      </div>
       <div class="ms-wrap" id="ms-mot"><button class="ms-btn" onclick="toggleMs('ms-mot')">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
         Motorista<span class="ms-cnt"></span></button>
@@ -606,7 +601,7 @@ const IND_LABELS = Object.assign({media_geral:'Média Geral', pontuacao:'Pontua�
    o projeto sai do tier do código (regra CBA/MCC do portal). */
 const NK=s=>String(s||'').toUpperCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/\s+/g,' ').trim();
 const FIL2COD = {
-  'CDD CAMBORIU':'BLC','BALNEARIO CAMBORIU':'BLC',
+  'CDD CAMBORIU':'BLC','BALNEARIO CAMBORIU':'BLC','BALNEARIO':'BLC','CAMBORIU':'BLC',
   'CDD CUIABA':'CBA T2','CUIABA':'CBA T1 WH','CUIABA EMPURRADA':'CBA T1',
   'CDD RIO DE JANEIRO':'CGR','CAMPO GRANDE':'CGR',
   'CDD FLORIANOPOLIS':'FLP','FLORIANOPOLIS':'FLP',
@@ -617,20 +612,25 @@ const FIL2COD = {
   'CDD PELOTAS':'PLT','PELOTAS':'PLT',
   'CDD RONDONOPOLIS':'RON','RONDONOPOLIS':'RON'
 };
-function codProj(cod){
-  if(/T1 WH$/.test(cod)) return 'Apoio';
-  if(/T1$/.test(cod)||cod==='PIR') return 'Empurrada';
-  if(cod==='MCC T2') return 'CDI';
-  return 'CDD';
-}
+/* O CÓDIGO DA UNIDADE JÁ CARREGA O PROJETO (Renan, 04/09/2026) — CBA T1 WH,
+   MCC T1, PIR INS. Por isso o filtro de Projeto saiu: ele repartia pelo mesmo
+   critério que a Unidade já reparte.
+
+   INSUMOS: a unidade do Geotab vem como "INS LATA PIRAI"; o Renan pediu para
+   chamá-la de PIR INS, no mesmo formato do "CBA T1 WH" — código da filial mais
+   o marcador da operação. O prefixo é resolvido pela filial que sobra depois
+   dele, então "INS LATA PIRAI" acha PIRAI → PIR e vira PIR INS. */
 function deParaGeo(u){
   const s=NK(u).replace(/^AS\s+/,'');            // 'AS CDD CUIABA' → 'CDD CUIABA'
-  if(!s) return {cod:'—', proj:'—'};
-  let fil=s, m;
-  if(m=s.match(/^EMP\s+(.+)$/))        fil=m[1]+' EMPURRADA';
+  if(!s) return {cod:'—'};
+  let fil=s, m, sufixo='';
+  if(m=s.match(/^EMP\s+(.+)$/))            fil=m[1]+' EMPURRADA';
   else if(m=s.match(/^(WH|APOIO)\s+(.+)$/)) fil=m[2];
-  const cod=FIL2COD[fil]||FIL2COD[s]||FIL2COD[s.replace(/^(CDD|CDI)\s+/,'')]||null;
-  return cod ? {cod, proj:codProj(cod)} : {cod:s, proj:'—'};
+  else if(m=s.match(/^INS\s+(.+)$/))        { fil=m[1]; sufixo=' INS'; }
+  const acha = f => FIL2COD[f] || FIL2COD[f.replace(/^(CDD|CDI)\s+/,'')] || null;
+  // "LATA PIRAI" não está no de-para: cai para a última palavra, que é a filial
+  let cod = acha(fil) || acha(s) || acha(fil.split(' ').slice(-1)[0]);
+  return cod ? {cod: cod + sufixo} : {cod:s};
 }
 
 /* ── Motoristas (protótipo — dados de exemplo, só quando o banco está vazio) ── */
@@ -645,7 +645,7 @@ const DRIVERS = [
   {nome:'Paulo Henrique', un:'RON', src:'vFleets'}, {nome:'Rafael Gomes',   un:'CGR', src:'vFleets'},
   {nome:'Sérgio Antunes', un:'BLC', src:'Geotab'},  {nome:'Thiago Mendes',  un:'CBA T2', src:'vFleets'},
 ];
-const COD_OF = {}, PROJ_OF = {}, SRC_OF = {};
+const COD_OF = {}, SRC_OF = {};
 
 /* ── Estado ── */
 let RAW = [], ORIGEM = 'exemplo', ULT_COLETA = null, VW = 'resumo';
@@ -690,10 +690,10 @@ async function fetchFromSupabase() {
   if (!data.length) return [];
 
   // o de-para vem das próprias linhas: os DRIVERS de exemplo saem de cena
-  Object.keys(COD_OF).forEach(k => { delete COD_OF[k]; delete PROJ_OF[k]; delete SRC_OF[k]; });
+  Object.keys(COD_OF).forEach(k => { delete COD_OF[k]; delete SRC_OF[k]; });
   data.forEach(r => {
     const dp = deParaGeo(r.unidade);
-    COD_OF[r.motorista] = dp.cod; PROJ_OF[r.motorista] = dp.proj; SRC_OF[r.motorista] = r.fonte;
+    COD_OF[r.motorista] = dp.cod; SRC_OF[r.motorista] = r.fonte;
   });
   ULT_COLETA = data.reduce((m, r) => (r.atualizado_em > m ? r.atualizado_em : m), '');
 
@@ -719,7 +719,7 @@ function generateRawRows(){
   const NMES=(new Date().getFullYear()===2026)?(new Date().getMonth()+1):12;
   const out=[];
   DRIVERS.forEach(d=>{
-    COD_OF[d.nome]=d.un; PROJ_OF[d.nome]=codProj(d.un); SRC_OF[d.nome]=d.src;
+    COD_OF[d.nome]=d.un; SRC_OF[d.nome]=d.src;
     const base=.55+rng()*.4;
     const off={};FIELD_ORDER.forEach(f=>off[f]=(rng()-.5)*22);
     for(let m=1;m<=NMES;m++){
@@ -818,7 +818,6 @@ function populateFilters(){
   L2V={}; vigs.forEach(v=>L2V[vigLabel(v)]=v);
   setMsOptions('ms-vig',  vigs.map(vigLabel));
   setMsOptions('ms-uni',  [...new Set(RAW.map(r=>COD_OF[r.unit]||'—'))].sort((a,b)=>a.localeCompare(b,'pt')));
-  setMsOptions('ms-proj', [...new Set(RAW.map(r=>PROJ_OF[r.unit]||'—'))].sort((a,b)=>a.localeCompare(b,'pt')));
   setMsOptions('ms-mot',  [...new Set(RAW.map(r=>r.unit))].sort((a,b)=>a.localeCompare(b,'pt')));
   setMsOptions('ms-eleg', ['Sim','Não']);
 }
@@ -850,11 +849,10 @@ function elegiveisDe(rows){
 }
 function getFiltered(){
   const sv=getMsValues('ms-vig').map(l=>L2V[l]).filter(Boolean);
-  const su=getMsValues('ms-uni'), sp=getMsValues('ms-proj'), sm=getMsValues('ms-mot');
+  const su=getMsValues('ms-uni'), sm=getMsValues('ms-mot');
   const base = RAW.filter(r=>
     (!sv.length || sv.includes(r.vig)) &&
     (!su.length || su.includes(COD_OF[r.unit]||'—')) &&
-    (!sp.length || sp.includes(PROJ_OF[r.unit]||'—')) &&
     (!sm.length || sm.includes(r.unit)));
   const se = getMsValues('ms-eleg');
   if(!se.length || se.length > 1) return base;      // "Todos" ou Sim+Não
@@ -1205,7 +1203,7 @@ window.addEventListener('resize',()=>{ clearTimeout(_rt); _rt=setTimeout(renderC
 </script>
 <script src="../../assets/mobile.js?v=202608220020"></script>
 <script src="../../assets/ctrlk.js"></script>
-<script src="../../assets/sortable-table.js?v=202609041700"></script>
+<script src="../../assets/sortable-table.js?v=202609041800"></script>
 <script src="../../assets/excel-export.js"></script>
 <script src="../../assets/pdf-export.js"></script>
 <script>
@@ -1218,6 +1216,6 @@ initPdfExport({
   isLight:()=>document.body.classList.contains('claro'), setTheme:aplicaTema
 });
 </script>
-<script src="../../assets/build-check.js?v=202609041700"></script>
+<script src="../../assets/build-check.js?v=202609041800"></script>
 </body>
 </html>
