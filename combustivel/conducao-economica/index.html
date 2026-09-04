@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
-<meta name="build" content="202609032030">
+<meta name="build" content="202609041045">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <title>Condução Econômica · Gestão em Movimento</title>
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -271,6 +271,13 @@ table.dre td.cg-t,.cg-t{color:var(--verde)!important;font-weight:700;}
 .ce-kpis{grid-template-columns:repeat(3,1fr);margin-top:14px;}
 .ce-gr{grid-template-columns:1.55fr 1fr;flex:1 1 auto;max-height:66vh;}
 @media(max-width:860px){.ce-gr{max-height:none;}}
+/* OS 15 PRIMEIROS TÊM DE CABER SEM ROLAR (Renan, 04/09/2026): são eles os
+   elegíveis do programa, então é a primeira coisa que se quer ver ao abrir o
+   Ranking. A casca dá 9px de padding na linha, o que faz ~13 linhas na tela;
+   com 5px cabem as 15. Vale só para esta tabela — as tabelas de número do
+   resto do portal continuam com a respiração da casca. */
+#ranking-table td{padding:5px 12px;}
+#ranking-table thead th{padding:7px 12px;}
 /* célula de pilar: pontos grandes + resultado medido pequeno (estilo termômetro) */
 .rk-ind .p{font-weight:800;font-size:12.5px;display:block;line-height:1.05;}
 .rk-ind .v{color:var(--txt4);font-size:9px;font-weight:600;display:block;margin-top:1px;white-space:nowrap;}
@@ -409,6 +416,11 @@ table.dre thead th.sortable:hover{color:var(--laranja);}
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
         Motorista<span class="ms-cnt"></span></button>
         <div class="ms-panel"><div class="ms-search"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M16.5 16.5 21 21"/></svg><input type="text" placeholder="Pesquisar…"></div><div class="ms-list"></div></div>
+      </div>
+      <div class="ms-wrap" id="ms-eleg"><button class="ms-btn" onclick="toggleMs('ms-eleg')">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+        Elegível<span class="ms-cnt"></span></button>
+        <div class="ms-panel"><div class="ms-list"></div></div>
       </div>
       </div>
       <button class="tool ico" id="btTema" onclick="trocaTema()" title="Modo claro/escuro"></button>
@@ -676,7 +688,10 @@ function _buildMs(wrap, renderFn, getAllItemsFn){
   const sel=wrap._sel;
   const list=wrap.querySelector('.ms-list');
   const srch=wrap.querySelector('.ms-search input');
-  const render=(q)=>{ renderFn(list,sel, q!==undefined?q:(srch.value||'')); syncBadge(wrap); };
+  /* O filtro Elegível não tem caixa de busca (são duas opções), então `srch`
+     pode ser nulo — sem estas guardas o painel inteiro morre num TypeError ao
+     montar o filtro. */
+  const render=(q)=>{ renderFn(list,sel, q!==undefined?q:((srch&&srch.value)||'')); syncBadge(wrap); };
   wrap._render=render;
   if(!wrap._wired){
     wrap._wired=true;
@@ -689,16 +704,18 @@ function _buildMs(wrap, renderFn, getAllItemsFn){
         if(box.checked) sel.add(box.dataset.v); else sel.delete(box.dataset.v);
         if(getAllItemsFn){ const all=getAllItemsFn(); if(all.length>0&&all.every(v=>sel.has(v))) sel.clear(); }
       }
-      render(srch.value); atualizar();
+      render(); atualizar();
     });
     list.addEventListener('click',e=>{
       const only=e.target.closest('.ms-only'); if(!only) return;
       e.preventDefault(); e.stopPropagation();
       sel.clear(); sel.add(only.dataset.v);
-      render(srch.value); atualizar();
+      render(); atualizar();
     });
-    srch.addEventListener('input',()=>render(srch.value));
-    srch.addEventListener('click',e=>e.stopPropagation());
+    if(srch){
+      srch.addEventListener('input',()=>render(srch.value));
+      srch.addEventListener('click',e=>e.stopPropagation());
+    }
   }
   render();
 }
@@ -751,15 +768,46 @@ function populateFilters(){
   setMsOptions('ms-uni',  [...new Set(RAW.map(r=>COD_OF[r.unit]||'—'))].sort((a,b)=>a.localeCompare(b,'pt')));
   setMsOptions('ms-proj', [...new Set(RAW.map(r=>PROJ_OF[r.unit]||'—'))].sort((a,b)=>a.localeCompare(b,'pt')));
   setMsOptions('ms-mot',  [...new Set(RAW.map(r=>r.unit))].sort((a,b)=>a.localeCompare(b,'pt')));
+  setMsOptions('ms-eleg', ['Sim','Não']);
+}
+
+/* ELEGÍVEL = a régua do programa (Renan, 04/09/2026): rodou 1.000+ km no
+   recorte E está entre os 15 primeiros da SUA unidade. Como as duas coisas
+   dependem do recorte, isto é recalculado a cada filtro — e SEMPRE sobre o
+   conjunto ANTES do próprio filtro de elegibilidade, senão escolher "Não"
+   esvaziaria a lista e, na rodada seguinte, os que sobraram virariam os 15
+   primeiros de si mesmos. */
+const KM_MIN_ELEG = 1000, TOP_ELEG = 15;
+function elegiveisDe(rows){
+  const agg = {};
+  rows.forEach(r=>{
+    const a = agg[r.unit] || (agg[r.unit] = { km:0, pts:[], uni: COD_OF[r.unit]||'—' });
+    a.km += +r.km||0;
+    if(r.pont!=null) a.pts.push(r.pont);
+  });
+  const porUni = {};
+  Object.entries(agg).forEach(([mot,a])=>{
+    if(a.km < KM_MIN_ELEG || !a.pts.length) return;
+    const pont = a.pts.reduce((x,y)=>x+y,0)/a.pts.length;
+    (porUni[a.uni] = porUni[a.uni] || []).push({ mot, pont });
+  });
+  const ok = new Set();
+  Object.values(porUni).forEach(arr=>arr
+    .sort((a,b)=>b.pont-a.pont).slice(0,TOP_ELEG).forEach(l=>ok.add(l.mot)));
+  return ok;
 }
 function getFiltered(){
   const sv=getMsValues('ms-vig').map(l=>L2V[l]).filter(Boolean);
   const su=getMsValues('ms-uni'), sp=getMsValues('ms-proj'), sm=getMsValues('ms-mot');
-  return RAW.filter(r=>
+  const base = RAW.filter(r=>
     (!sv.length || sv.includes(r.vig)) &&
     (!su.length || su.includes(COD_OF[r.unit]||'—')) &&
     (!sp.length || sp.includes(PROJ_OF[r.unit]||'—')) &&
     (!sm.length || sm.includes(r.unit)));
+  const se = getMsValues('ms-eleg');
+  if(!se.length || se.length > 1) return base;      // "Todos" ou Sim+Não
+  const ok = elegiveisDe(base), quer = se.includes('Sim');
+  return base.filter(r => ok.has(r.unit) === quer);
 }
 function selVigKeys(){ return getMsValues('ms-vig').map(l=>L2V[l]).filter(Boolean); }
 
@@ -1061,6 +1109,6 @@ initPdfExport({
   isLight:()=>document.body.classList.contains('claro'), setTheme:aplicaTema
 });
 </script>
-<script src="../../assets/build-check.js?v=202609032030"></script>
+<script src="../../assets/build-check.js?v=202609041045"></script>
 </body>
 </html>
