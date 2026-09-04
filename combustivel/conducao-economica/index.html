@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
-<meta name="build" content="202609041800">
+<meta name="build" content="202609041900">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <title>Condução Econômica · Gestão em Movimento</title>
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -297,12 +297,11 @@ table.dre td.cg-t,.cg-t{color:var(--verde)!important;font-weight:700;}
    continuam como estão. */
 #ranking-table td{padding:var(--rk-pad,7px) 12px;}
 #ranking-table thead th{padding:8px 12px;}
-/* A CÉLULA DA PONTUAÇÃO É SÓ A PÍLULA (Renan, 04/09/2026: "tire Elite, Bom e
-   Atenção dali, tem na legenda"). O rótulo embaixo repetia a faixa que a cor
-   da pílula já diz e que a legenda da lateral explica — e, sendo o conteúdo
-   mais alto da linha, era ele que ditava a altura de todas. Sem ele a linha
-   fica mais baixa, o ajustaAlturaLinhas() devolve a sobra em espaçamento, e a
-   coluna volta a alinhar com o cabeçalho. */
+/* A célula da pontuação segue a MESMA estrutura das de pilar: valor em cima,
+   rótulo pequeno embaixo, com a classe `.v` compartilhada. É isso que mantém a
+   fileira alinhada — o rótulo é o par do "resultado medido" das outras
+   colunas. A pílula não leva ajuste de padding próprio: quem resolve a altura
+   da linha é o ajustaAlturaLinhas(). */
 /* célula de pilar: pontos grandes + resultado medido pequeno (estilo termômetro) */
 .rk-ind .p{font-weight:800;font-size:12.5px;display:block;line-height:1.05;}
 .rk-ind .v{color:var(--txt4);font-size:9px;font-weight:600;display:block;margin-top:1px;white-space:nowrap;}
@@ -328,6 +327,14 @@ table.dre thead th.sortable{cursor:pointer;user-select:none;}
 table.dre thead th.sortable:hover{color:var(--laranja);}
 .sort-ar{font-size:8px;margin-left:3px;vertical-align:middle;}
 /* notas de rodapé da tabela */
+/* explicação da régua, embaixo da tabela de pesos */
+.reg-exp{flex:0 1 auto;min-height:0;overflow:auto;padding:12px 2px 2px;font-size:11px;
+  line-height:1.6;color:var(--txt2);}
+.reg-exp h4{font-size:9.5px;font-weight:700;color:var(--txt3);text-transform:uppercase;
+  letter-spacing:.7px;margin:12px 0 5px;}
+.reg-exp h4:first-child{margin-top:0;}
+.reg-exp p{margin:0 0 7px;}
+.reg-exp b{color:var(--txt);font-weight:700;}
 /* NOTAS LEGÍVEIS (Renan, 04/09/2026: "não dá para enxergar nada, principalmente
    na visão escura"). Eram 9,5px em itálico no --txt4, o tom mais apagado da
    paleta — no escuro isso é cinza sobre cinza. Passam a 11px, sem itálico e no
@@ -499,20 +506,40 @@ table.dre thead th.sortable:hover{color:var(--laranja);}
           </div>
           <div class="card gcard">
             <div class="gtit">Regras de Pontuação</div>
-            <div class="gsub">Pontuação final = média ponderada; pilar ausente redistribui o peso.</div>
-            <!-- as notas ficam DENTRO da moldura da tabela (Renan, 04/09/2026:
-                 "não dá para enxergar nada, principalmente na visão escura").
-                 Soltas embaixo do card elas pareciam sobra de página; dentro
-                 do .twrap são a última linha da explicação dos pesos, que é
-                 do que elas falam. -->
-            <div class="twrap" style="flex:1"><table class="dre" id="tbl-pesos" data-no-sort>
+            <div class="gsub">O que cada pilar mede, quanto pesa e como vira nota.</div>
+            <!-- sem flex:1 aqui: a tabela tem 3 linhas e deve ficar do tamanho
+                 delas — a sobra da altura é da explicação, logo abaixo -->
+            <div class="twrap"><table class="dre" id="tbl-pesos" data-no-sort>
               <thead><tr><th>Indicador</th><th>Descrição do cálculo</th><th class="num">Peso</th></tr></thead>
               <tbody id="peso-tbody"></tbody>
             </table>
-              <div class="tnotes">
-                Cada pilar mostra os <b>pontos</b> (0–100) e, logo abaixo, o <b>resultado medido</b>.<br>
-                Pilar sem dado na fonte fica ausente e o peso dele é redistribuído proporcionalmente entre os demais.
-              </div>
+            </div>
+            <!-- O ESPAÇO ABAIXO DA TABELA EXPLICA A RÉGUA (Renan, 04/09/2026:
+                 "use esse espaço para explicar melhor as regras e como cria o
+                 score de cada indicador"). A tabela diz O QUE cada pilar mede
+                 e quanto pesa; aqui está COMO o número medido vira nota, que
+                 era o que faltava para alguém conferir a própria pontuação.
+                 Os valores são os do robô (scripts/conducao-robot.mjs, REGUA e
+                 função nota) — se a régua mudar lá, muda aqui. -->
+            <div class="reg-exp">
+              <h4>Como a nota de cada pilar nasce (0 a 100)</h4>
+              <p><b>Faixa Verde</b> — a nota é o próprio percentual: quem roda 80% do tempo
+                com o RPM na faixa verde tira 80. O dado vem do diagnóstico de motor do
+                veículo; o dia só conta com mais de 60 s de leitura de RPM.</p>
+              <p><b>Motor Ocioso</b> — nenhum tempo parado com o motor ligado tira 100;
+                <b>25% do tempo zera</b>. Entre os dois é proporcional — 8,9% ocioso dá 64,4.</p>
+              <p><b>Aceleração</b> — nenhuma aceleração brusca tira 100; <b>3 a cada 100 km
+                zeram</b>. Entre os dois é proporcional. Brusca é a regra padrão do Geotab,
+                que dispara a partir de 0,29 G.</p>
+              <h4>Do dia para o mês</h4>
+              <p>O resultado de cada dia entra na média <b>ponderada pelo km rodado naquele
+                dia</b>, e a nota é calculada sobre essa média. Um dia de 400 km pesa mais
+                que um de 20 km.</p>
+              <h4>Pontuação final</h4>
+              <p>Média das três notas pelos pesos da tabela acima. Pilar sem dado na fonte
+                fica de fora e o peso dele é <b>redistribuído</b> entre os demais, então a
+                escala continua de 0 a 100. Na tabela do Ranking, cada pilar mostra os
+                <b>pontos</b> e, logo abaixo, o <b>resultado medido</b> que os gerou.</p>
             </div>
           </div>
         </div>
@@ -951,13 +978,22 @@ function renderRanking(data){
     : `<td class="num rk-ind"><span class="p ${indClass(v)}">${v.toFixed(0)}</span><span class="v">${PILAR[k].fmt(v)}</span></td>`;
   $('ranking-tbody').innerHTML = rows.map((r,i)=>{
     const rank=i+1;
+    /* O RÓTULO DA FAIXA VOLTA, NO TAMANHO DOS DEMAIS (Renan, 04/09/2026:
+       "deixe Elite, Bom e Atenção abaixo, mas no mesmo tamanho que estão os
+       números abaixo dos indicadores"). Tirei antes por achar redundante com a
+       legenda, e o efeito foi o oposto do pretendido: todas as outras células
+       têm duas linhas — pontos em cima, resultado medido embaixo — e a da
+       pontuação ficou com uma só, desencontrada da fileira. Agora ela usa a
+       MESMA classe `.v` das outras, então o alinhamento é o mesmo por
+       construção, não por coincidência de tamanho. */
+    const cls=r.pont==null?'—':r.pont>=85?'Elite':r.pont>=70?'Bom':'Atenção';
     return `<tr class="rank-${canonical&&rank<=3?rank:'x'}">
       <td class="rank-num">${canonical&&rank<=3?medals[i]:rank}</td>
       <td class="conta">${r.unit}<div class="mot-sub">${SRC_OF[r.unit]||''}</div></td>
       <td>${COD_OF[r.unit]||'—'}</td>
       <td class="num">${r.km ? Math.round(r.km).toLocaleString('pt-BR') : '—'}</td>
       ${FIELD_ORDER.map(k=>cell(k,r[k])).join('')}
-      <td class="num">${scorePill(r.pont)}</td>
+      <td class="num rk-ind">${scorePill(r.pont)}<span class="v">${cls}</span></td>
     </tr>`;
   }).join('');
   requestAnimationFrame(ajustaAlturaLinhas);
@@ -1203,7 +1239,7 @@ window.addEventListener('resize',()=>{ clearTimeout(_rt); _rt=setTimeout(renderC
 </script>
 <script src="../../assets/mobile.js?v=202608220020"></script>
 <script src="../../assets/ctrlk.js"></script>
-<script src="../../assets/sortable-table.js?v=202609041800"></script>
+<script src="../../assets/sortable-table.js?v=202609041900"></script>
 <script src="../../assets/excel-export.js"></script>
 <script src="../../assets/pdf-export.js"></script>
 <script>
@@ -1216,6 +1252,6 @@ initPdfExport({
   isLight:()=>document.body.classList.contains('claro'), setTheme:aplicaTema
 });
 </script>
-<script src="../../assets/build-check.js?v=202609041800"></script>
+<script src="../../assets/build-check.js?v=202609041900"></script>
 </body>
 </html>
