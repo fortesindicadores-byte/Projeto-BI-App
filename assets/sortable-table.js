@@ -155,33 +155,62 @@
   }
 
   /* ── CABEÇALHO ALINHADO COM O CONTEÚDO (Renan, cobrado várias vezes) ──
-     A casca alinha todo `th` à esquerda, mas as colunas de número alinham
-     o valor à direita — e o rótulo fica solto do dado, dando a impressão de
-     coluna torta. Em vez de acertar tabela por tabela (54 páginas, e cada
-     tela nova repetia o erro), o alinhamento do cabeçalho passa a SEGUIR o
-     da própria coluna: o `th` copia o text-align das células dela.
-     Roda em toda tabela, inclusive nas que têm sort próprio, e refaz depois
-     de cada re-render (o MutationObserver abaixo chama de novo).           */
+     A casca alinha todo `th` a um lado só, mas cada coluna alinha o seu
+     conteúdo do jeito dela — texto à esquerda, número à direita — e o rótulo
+     fica solto do dado, dando a impressão de coluna torta. Em vez de acertar
+     tabela por tabela (dezenas de páginas, e cada tela nova repetindo o erro),
+     o alinhamento do cabeçalho SEGUE o da própria coluna: o `th` copia o
+     text-align das células dela. Roda em toda tabela, inclusive nas que têm
+     sort próprio, e refaz depois de cada re-render.
+
+     COLSPAN NÃO PODE FAZER A FUNÇÃO DESISTIR (bug real, 04/09/2026): a versão
+     anterior abortava a tabela inteira quando QUALQUER th tinha colspan — e é
+     exatamente o caso das tabelas do portal, que agrupam colunas no cabeçalho
+     e têm linhas de total/seção com célula esticada. Resultado: a correção
+     nunca chegava onde mais aparecia. Agora as colunas são contadas com o
+     colspan; th agrupador (colspan > 1) fica como está, porque cobre colunas
+     de alinhamentos diferentes, e os demais seguem a coluna que ocupam.    */
+  function mapaColunas(row){
+    // devolve, para cada coluna real, a célula que a ocupa
+    const out = [];
+    for(const cel of row.cells){
+      const n = parseInt(cel.getAttribute('colspan')||'1',10) || 1;
+      for(let i=0;i<n;i++) out.push({cel, span:n});
+    }
+    return out;
+  }
   function alinhaCabecalhos(table){
     const hr = getHeaderRow(table); if(!hr) return;
     const tb = table.tBodies && table.tBodies[0]; if(!tb || !tb.rows.length) return;
-    const ths = Array.from(hr.children).filter(c=>c.tagName==='TH');
-    if(!ths.length) return;
-    // cabeçalho com colspan não mapeia 1:1 com as colunas — deixa como está
-    if(ths.some(th=>parseInt(th.getAttribute('colspan')||'1',10) > 1)) return;
-    const amostra = Array.from(tb.rows).filter(r=>r.cells.length===ths.length).slice(0,6);
-    if(!amostra.length) return;
-    ths.forEach((th,i)=>{
-      if(th.dataset.stAlin) return;                 // já alinhado nesta versão do cabeçalho
+    const cols = mapaColunas(hr);
+    if(!cols.length) return;
+    const corpo = Array.from(tb.rows).map(mapaColunas).filter(m=>m.length===cols.length);
+    if(!corpo.length) return;
+    const amostra = corpo.slice(0, 8);
+    const vistos = new Set();
+    const dirDaColuna = (i)=>{
       const votos = {};
-      for(const r of amostra){
-        const td = r.cells[i]; if(!td) continue;
-        const ta = getComputedStyle(td).textAlign;
+      for(const linha of amostra){
+        const alvo = linha[i]; if(!alvo || alvo.span > 1) continue;   // célula esticada não vota
+        const ta = getComputedStyle(alvo.cel).textAlign;
         const dir = (ta==='right'||ta==='end') ? 'right' : (ta==='center' ? 'center' : 'left');
         votos[dir] = (votos[dir]||0) + 1;
       }
-      const dir = Object.keys(votos).sort((a,b)=>votos[b]-votos[a])[0];
-      if(!dir) return;
+      return Object.keys(votos).sort((a,b)=>votos[b]-votos[a])[0] || null;
+    };
+    cols.forEach((c, i)=>{
+      const th = c.cel;
+      if(th.tagName!=='TH') return;
+      if(vistos.has(th)) return; vistos.add(th);
+      /* Agrupador (colspan > 1) só é alinhado quando TODAS as colunas que ele
+         cobre concordam — "Conta" sobre duas colunas de texto vai para a
+         esquerda; um agrupador sobre texto + número fica onde está, porque
+         não existe lado certo para ele. */
+      const dirs = [];
+      for(let k = i; k < i + c.span; k++){ const d = dirDaColuna(k); if(d) dirs.push(d); }
+      if(!dirs.length) return;
+      const dir = dirs.every(d=>d===dirs[0]) ? dirs[0] : null;
+      if(!dir || th.dataset.stAlin===dir) return;
       th.dataset.stAlin = dir;
       th.style.textAlign = dir;
     });
