@@ -147,9 +147,15 @@ const cols = cel.cols || [];
 console.log(`aba: ${cel.length} linha(s) · ${cols.length} coluna(s)`);
 
 if (!cel.length) {
-  console.error('\n⚠ A aba está VAZIA — nada a fazer.');
-  console.error('  Cole o resultado da query (com a linha de cabeçalho) e rode de novo.');
-  process.exit(MODE === 'gravar' ? 1 : 0);
+  /* ABA VAZIA NÃO É ERRO (04/09/2026). Enquanto o endpoint da TI não sai, a aba
+     só tem dado depois que alguém cola o resultado da query — então "vazia" é
+     um estado NORMAL do dia a dia, não uma falha. Saindo com 1, o cron das
+     08h15 ficaria vermelho toda manhã e o alarme perderia o sentido: quando um
+     erro de verdade aparecesse, ninguém ia olhar. Sai com 0 e diz o que falta. */
+  console.log('\n⚠ A aba está VAZIA — nada a fazer nesta rodada.');
+  console.log('  Cole o resultado da query (com a linha de cabeçalho) e rode de novo,');
+  console.log('  ou espere o endpoint da TI, que dispensa a colagem.');
+  process.exit(0);
 }
 
 // de-para cabeçalho → campo
