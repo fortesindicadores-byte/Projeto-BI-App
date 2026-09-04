@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
-<meta name="build" content="202609041045">
+<meta name="build" content="202609041130">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <title>Condução Econômica · Gestão em Movimento</title>
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -273,11 +273,13 @@ table.dre td.cg-t,.cg-t{color:var(--verde)!important;font-weight:700;}
 @media(max-width:860px){.ce-gr{max-height:none;}}
 /* OS 15 PRIMEIROS TÊM DE CABER SEM ROLAR (Renan, 04/09/2026): são eles os
    elegíveis do programa, então é a primeira coisa que se quer ver ao abrir o
-   Ranking. A casca dá 9px de padding na linha, o que faz ~13 linhas na tela;
-   com 5px cabem as 15. Vale só para esta tabela — as tabelas de número do
-   resto do portal continuam com a respiração da casca. */
-#ranking-table td{padding:5px 12px;}
-#ranking-table thead th{padding:7px 12px;}
+   Ranking. Cheguei a espremer a linha para 5px, mas depois saíram daqui o
+   título repetido e as notas de rodapé — e a altura que eles ocupavam voltou
+   para as linhas, que agora respiram quase como na casca (8px) e ainda cabem
+   as 15. Vale só para esta tabela; as tabelas de número do resto do portal
+   continuam como estão. */
+#ranking-table td{padding:8px 12px;}
+#ranking-table thead th{padding:8px 12px;}
 /* célula de pilar: pontos grandes + resultado medido pequeno (estilo termômetro) */
 .rk-ind .p{font-weight:800;font-size:12.5px;display:block;line-height:1.05;}
 .rk-ind .v{color:var(--txt4);font-size:9px;font-weight:600;display:block;margin-top:1px;white-space:nowrap;}
@@ -459,6 +461,13 @@ table.dre thead th.sortable:hover{color:var(--laranja);}
               <thead><tr><th>Indicador</th><th>Descrição do cálculo</th><th class="num">Peso</th></tr></thead>
               <tbody id="peso-tbody"></tbody>
             </table></div>
+            <!-- as notas vivem AQUI, embaixo da explicação dos pesos (Renan,
+                 04/09/2026): é delas que as notas falam. No Ranking elas
+                 roubavam a altura das linhas sem explicar nada de novo. -->
+            <div class="tnotes">
+              * Cada pilar mostra os <b>pontos</b> (0–100) e, logo abaixo, o <b>resultado medido</b>.<br>
+              * Pilar sem dado na fonte fica ausente e o peso dele é redistribuído proporcionalmente entre os demais.
+            </div>
           </div>
         </div>
       </section>
@@ -466,23 +475,21 @@ table.dre thead th.sortable:hover{color:var(--laranja);}
       <!-- ══ 2 · RANKING GERAL ══ -->
       <section class="vw" id="vw-ranking">
         <div class="card tsec">
+          <!-- SEM TÍTULO AQUI (Renan, 04/09/2026): o topo da página já diz
+               "Ranking Geral", e o período foi para o subtítulo dele, junto
+               da contagem de motoristas. Só a legenda de faixas fica. -->
           <div class="thead-row">
-            <div><div class="ttit">Ranking Geral</div><div class="tsub" id="rank-sub" style="margin-bottom:0">—</div></div>
+            <div></div>
             <div class="gleg rank-leg" style="margin-bottom:0">
               <span><i class="sq lg-g"></i>≥ 85 — Elite</span>
               <span><i class="sq lg-y"></i>70 a 84,9 — Bom</span>
               <span><i class="sq lg-r"></i>&lt; 70 — Atenção</span>
             </div>
           </div>
-          <div class="twrap" style="margin-top:8px"><table class="dre" id="ranking-table" data-no-sort>
+          <div class="twrap"><table class="dre" id="ranking-table" data-no-sort>
             <thead><tr id="rank-head"></tr></thead>
             <tbody id="ranking-tbody"></tbody>
           </table></div>
-          <div class="tnotes">
-            * Cada pilar mostra os <b>pontos</b> (0–100) e, logo abaixo, o <b>resultado medido</b>. A pontuação final é a média ponderada pelos pesos das Regras de Pontuação.<br>
-
-            * Pilar sem dado na fonte fica ausente e o peso dele é redistribuído proporcionalmente entre os demais.
-          </div>
         </div>
       </section>
 
@@ -828,7 +835,11 @@ function renderHero(data){
   set('h-per', period);
   set('h-mot', String(new Set(data.map(r=>r.unit)).size));
   set('h-fonte', ORIGEM==='banco' ? 'Geotab' : 'Exemplo');
-  set('rank-sub', period);
+  /* O PERÍODO MORA NO SUBTÍTULO DA PÁGINA (Renan, 04/09/2026): o card do
+     Ranking perdeu o título, que só repetia o do topo, e com ele iria embora
+     a única indicação de qual recorte está na tela. O período passa a ficar
+     ao lado da contagem de motoristas, que é onde o olho já procura. */
+  set('titSub', period + (SUB_BASE ? ' · ' + SUB_BASE : ''));
   // um card por pilar: pontos médios do recorte e, embaixo, o resultado medido
   const box=$('kpi-pilares');
   if(box) box.innerHTML = FIELD_ORDER.map(k=>{
@@ -1018,6 +1029,7 @@ function renderChart(){
 }
 
 /* ── Carga ── */
+let SUB_BASE = '';        // "N motorista(s) · coleta dd/mm/aaaa"
 async function recarregar(){
   set('titSub','Carregando…');
   try{
@@ -1026,12 +1038,14 @@ async function recarregar(){
     if(linhas.length){ RAW=linhas; ORIGEM='banco'; }
     else             { RAW=generateRawRows(); ORIGEM='exemplo'; }
     populateFilters();
-    atualizar();
+    // o SUB_BASE precisa existir ANTES do atualizar(), que é quem escreve o
+    // subtítulo junto com o período do recorte
     if(ORIGEM==='banco'){
       const n=new Set(RAW.map(r=>r.unit)).size;
       const q=ULT_COLETA?new Date(ULT_COLETA).toLocaleDateString('pt-BR'):'';
-      set('titSub', `${n} motorista(s)`+(q?` · coleta ${q}`:''));
-    } else set('titSub','Prévia · dados de exemplo');
+      SUB_BASE = `${n} motorista(s)`+(q?` · coleta ${q}`:'');
+    } else SUB_BASE = 'prévia · dados de exemplo';
+    atualizar();
   }catch(e){ console.error(e); set('titSub','Erro ao carregar dados'); }
 }
 
@@ -1109,6 +1123,6 @@ initPdfExport({
   isLight:()=>document.body.classList.contains('claro'), setTheme:aplicaTema
 });
 </script>
-<script src="../../assets/build-check.js?v=202609041045"></script>
+<script src="../../assets/build-check.js?v=202609041130"></script>
 </body>
 </html>
