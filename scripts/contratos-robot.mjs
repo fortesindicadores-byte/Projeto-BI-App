@@ -552,19 +552,46 @@ if (contratos.length) {
       { method: 'DELETE', headers: H });
   }
   if (fora.length) console.log(`contratos_placa: ${fora.length} placa(s) que saíram da planilha removida(s)`);
-  for (let i = 0; i < payload.length; i += 500) {
-    const res = await fetch(`${SB_URL}/rest/v1/contratos_placa?on_conflict=placa`, {
-      method: 'POST', headers: { ...H, Prefer: 'resolution=merge-duplicates' },
-      body: JSON.stringify(payload.slice(i, i + 500).map(c => ({ ...c, atualizado_em: new Date().toISOString() }))),
+  /* COLUNA QUE FALTA NÃO PODE DERRUBAR O ROBÔ (04/09/2026). A `carta_custos`
+     — que é o que a Carta lê — já foi gravada acima; se o insert de
+     contratos_placa quebrar por causa de uma coluna nova que ainda não foi
+     criada no banco, o cron das 08h vira vermelho todo dia por um detalhe que
+     não afeta a tela. Então: tenta com tudo; se o Postgrest reclamar da
+     coluna (PGRST204), REPETE sem ela, avisando qual SQL falta. Só um erro de
+     verdade (tabela ausente, permissão) é que aborta. */
+  const enviaLote = async (lote, semPlacaOrigem) => {
+    const corpo = lote.map(c => {
+      const l = { ...c, atualizado_em: new Date().toISOString() };
+      if (semPlacaOrigem) delete l.placa_origem;
+      return l;
     });
-    if (!res.ok) {
+    return fetch(`${SB_URL}/rest/v1/contratos_placa?on_conflict=placa`, {
+      method: 'POST', headers: { ...H, Prefer: 'resolution=merge-duplicates' },
+      body: JSON.stringify(corpo),
+    });
+  };
+  let semPO = false, gravadosCt = 0;
+  for (let i = 0; i < payload.length; i += 500) {
+    const lote = payload.slice(i, i + 500);
+    let res = await enviaLote(lote, semPO);
+    if (!res.ok && !semPO) {
       const t = await res.text();
-      if (/contratos_placa/.test(t) && res.status === 404) {
-        console.error('\nA tabela contratos_placa ainda não existe.'
+      if (/placa_origem/.test(t)) {
+        console.log('\n⚠ contratos_placa ainda não tem a coluna placa_origem —'
+          + ' gravando sem ela. Para ativar, rode no SQL Editor:');
+        console.log('    alter table public.contratos_placa   add column if not exists placa_origem text;');
+        console.log('    alter table public.erp_abastecimentos add column if not exists placa_origem text;');
+        semPO = true;
+        res = await enviaLote(lote, true);
+      } else {
+        if (res.status === 404) console.error('\nA tabela contratos_placa ainda não existe.'
           + ' Rode scripts/erp-abastecimentos.sql no SQL Editor e tente de novo.');
+        throw new Error(`contratos_placa: ${res.status} ${t.slice(0, 300)}`);
       }
-      throw new Error(`contratos_placa: ${res.status} ${t.slice(0, 300)}`);
     }
+    if (!res.ok) throw new Error(`contratos_placa: ${res.status} ${(await res.text()).slice(0, 300)}`);
+    gravadosCt += lote.length;
   }
-  console.log(`gravado: ${payload.length} contrato(s) em contratos_placa.`);
+  console.log(`gravado: ${gravadosCt} contrato(s) em contratos_placa`
+    + (semPO ? ' (sem placa_origem).' : '.'));
 }
