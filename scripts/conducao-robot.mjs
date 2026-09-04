@@ -1294,7 +1294,13 @@ if (MODE === 'carteira') {
 if (MODE === 'programa') {
   if (!SB_KEY) { console.error('GEM_SUPABASE_SERVICE_KEY ausente'); process.exit(1); }
   const MES = (process.env.CE_MES || '2026-08').slice(0, 7);
-  const UNI = (process.env.CE_UNI || 'EMP PIRAI').toUpperCase();
+  /* UNIDADE ACEITA LISTA (Renan, 03/09/2026): "PIR e Lata PIR juntos" é UM
+     programa com UM pódio, não a soma de dois. Somar os dois totais separados
+     daria 22 elegíveis e dois pódios; no pool os 15 melhores são escolhidos
+     entre os dois e o pódio é um só — o custo é MENOR e a disputa é maior. */
+  const UNIS = (process.env.CE_UNI || 'EMP PIRAI').toUpperCase()
+    .split(/\s*[,+]\s*/).map(s => s.trim()).filter(Boolean);
+  const UNI = UNIS.join(' + ');
   const KM_MIN = +process.env.CE_KM_MIN || 1000;
   const TOP_N  = +process.env.CE_TOP || 15;
   const SALDO  = +process.env.CE_SALDO_UNICO || 200;
@@ -1316,7 +1322,7 @@ if (MODE === 'programa') {
     return { final: S * base, perdas };
   };
 
-  console.log(`PROGRAMA · ${MES} · saldo ${brl(SALDO)} · elegível: ${KM_MIN}+ km`
+  console.log(`PROGRAMA · ${UNI} · ${MES} · saldo ${brl(SALDO)} · elegível: ${KM_MIN}+ km`
     + ` e top ${TOP_N} · pódio ${PODIO.map(brl).join(' / ')}`);
 
   const mens = await sbTodos('ce_scores_mensais?select=chave,unidade,km,dias,'
@@ -1327,7 +1333,9 @@ if (MODE === 'programa') {
   // roda a conta para uma unidade e devolve o custo — serve para o piloto e
   // para a linha de "se rodasse em todas"
   function simula(uni, verboso) {
-    const todos = validos.filter(m => String(m.unidade || '').toUpperCase() === uni);
+    const alvo = Array.isArray(uni) ? uni : [uni];
+    const rot = alvo.join(' + ');
+    const todos = validos.filter(m => alvo.includes(String(m.unidade || '').toUpperCase()));
     if (!todos.length) return null;
     const comKm = todos.filter(m => (+m.km || 0) >= KM_MIN);
     const elig = [...comKm].sort((a, b) => b.pontuacao - a.pontuacao).slice(0, TOP_N);
@@ -1344,7 +1352,7 @@ if (MODE === 'programa') {
 
     if (verboso) {
       const kms = todos.map(m => +m.km || 0).sort((a, b) => a - b);
-      console.log(`\nmotoristas com nota em ${uni}: ${todos.length}`);
+      console.log(`\nmotoristas com nota em ${rot}: ${todos.length}`);
       console.log(`   km no mês: mín ${Math.round(kms[0])} · mediana`
         + ` ${Math.round(kms[Math.floor(kms.length / 2)])} · máx ${Math.round(kms[kms.length - 1])}`);
       console.log('   ' + [500, 1000, 2000, 3000, 5000].map(c =>
@@ -1408,10 +1416,10 @@ if (MODE === 'programa') {
         .map(k => `${ROT[k]} ${brl(perdaTot[k])}`).join(' · '));
       console.log(`\n   teto do desenho (todo mundo com 100): ${brl(SALDO * elig.length + extra)}`);
     }
-    return { uni, n: elig.length, pago, extra, total };
+    return { uni: rot, n: elig.length, pago, extra, total };
   }
 
-  simula(UNI, true);
+  simula(UNIS, true);
 
   // o piloto é em Piraí, mas o desenho vai ser apresentado — vale saber o que
   // custaria a régua inteira, unidade a unidade, com os números de hoje
