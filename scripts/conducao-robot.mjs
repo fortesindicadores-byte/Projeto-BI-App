@@ -1633,10 +1633,19 @@ if (MODE === 'premio') {
    topo. Log com contagens e faixas; nunca nome.                            */
 if (MODE === 'semrpm') {
   if (!SB_KEY) { console.error('GEM_SUPABASE_SERVICE_KEY ausente'); process.exit(1); }
-  const MES = (process.env.CE_MES || '2026-08').slice(0, 7);
-  const de = MES + '-01';
-  const ate = new Date(+MES.slice(0, 4), +MES.slice(5, 7), 0).toISOString().slice(0, 10);
-  console.log(`sem Faixa Verde · ${MES}`);
+  /* A JANELA TEM DE SER A MESMA DA TELA (Renan, 04/09/2026): o painel abre em
+     "Todos os períodos" e AGREGA — o km da linha é a soma do ano e a nota é a
+     média das vigências. Medir um mês só responde outra pergunta: em agosto
+     sozinho são 2 motoristas sem RPM, na tela dele são vários. Aceita
+     '2026-08' ou a faixa '2026-01..2026-08'. */
+  const CRU = (process.env.CE_MES || '2026-01..2026-08').trim();
+  const [M1, M2] = CRU.includes('..')
+    ? CRU.split('..').map(x => x.trim().slice(0, 7))
+    : [CRU.slice(0, 7), CRU.slice(0, 7)];
+  const MES = M2;
+  const de = M1 + '-01';
+  const ate = new Date(+M2.slice(0, 4), +M2.slice(5, 7), 0).toISOString().slice(0, 10);
+  console.log(`sem Faixa Verde · ${de} → ${ate}`);
 
   const dias = await sbTodos(`ce_diario?select=dia,chave,km,rpm_verde_pct,bruto&dia=gte.${de}&dia=lte.${ate}`);
   const por = new Map();
@@ -1675,7 +1684,8 @@ if (MODE === 'semrpm') {
   // a mesma pessoa com nota em OUTRO mês prova que é o veículo, não ela
   const outros = await sbTodos('ce_scores_mensais?select=chave,competencia,rpm_pontos');
   const temEmOutroMes = new Set(outros.filter(o => o.rpm_pontos != null
-    && String(o.competencia).slice(0, 7) !== MES).map(o => o.chave));
+    && (String(o.competencia).slice(0, 7) < M1 || String(o.competencia).slice(0, 7) > M2))
+    .map(o => o.chave));
   const viraLata = sem.filter(t => temEmOutroMes.has(t.k)).length;
   console.log(`   ${viraLata} deles TÊM faixa verde em outro mês — ou seja, a pessoa mede;`
     + ' o que não mede é o veículo que ela dirigiu neste mês.');
@@ -1683,13 +1693,29 @@ if (MODE === 'semrpm') {
   /* O EFEITO NO RANKING: sem o pilar de maior peso (42%), o score vira média
      de Motor Ocioso e Aceleração — dois pilares em que quase todo mundo tira
      nota alta —, então quem não tem RPM SOBE. */
-  const mens = await sbTodos('ce_scores_mensais?select=chave,unidade,km,'
-    + `rpm_pontos,idle_pontos,acel_pontos,pontuacao&competencia=eq.${MES}-01`);
-  const vv = mens.filter(m => !String(m.chave || '').startsWith('semlogin:') && m.pontuacao != null)
+  const mens = await sbTodos('ce_scores_mensais?select=chave,unidade,km,competencia,'
+    + `rpm_pontos,idle_pontos,acel_pontos,pontuacao&competencia=gte.${de}&competencia=lte.${M2}-01`);
+  // agrega como a TELA agrega: km somado, notas em média das vigências
+  const ag = new Map();
+  mens.filter(m => !String(m.chave || '').startsWith('semlogin:') && m.pontuacao != null)
+    .forEach(m => {
+      const e = ag.get(m.chave) || { km: 0, pont: [], rpm: [] };
+      e.km += +m.km || 0; e.pont.push(m.pontuacao);
+      if (m.rpm_pontos != null) e.rpm.push(m.rpm_pontos);
+      ag.set(m.chave, e);
+    });
+  const vv = [...ag.values()].map(e => ({ km: e.km,
+    pontuacao: e.pont.reduce((a, b) => a + b, 0) / e.pont.length,
+    rpm_pontos: e.rpm.length ? e.rpm.reduce((a, b) => a + b, 0) / e.rpm.length : null }))
     .sort((a, b) => b.pontuacao - a.pontuacao);
   const semN = vv.filter(m => m.rpm_pontos == null);
   const md = a => a.length ? (a.reduce((x, y) => x + y.pontuacao, 0) / a.length).toFixed(1) : '—';
-  console.log(`\n── EFEITO NO RANKING (${MES}) ──`);
+  console.log(`\n── EFEITO NO RANKING, agregado como na tela (${de} → ${ate}) ──`);
+  console.log(`   ${vv.length} motorista(s) no ranking · ${semN.length} sem faixa verde em vigência nenhuma`);
+  const kmSem = semN.map(m => m.km).sort((a, b) => a - b);
+  if (kmSem.length) console.log(`   km desses, somando o período: mín ${Math.round(kmSem[0])}`
+    + ` · mediana ${Math.round(kmSem[Math.floor(kmSem.length/2)])}`
+    + ` · máx ${Math.round(kmSem[kmSem.length-1])}`);
   console.log(`   score médio de quem TEM faixa verde: ${md(vv.filter(m => m.rpm_pontos != null))}`
     + ` · de quem NÃO tem: ${md(semN)}`);
   [10, 15, 30].forEach(n => { const top = vv.slice(0, n);
