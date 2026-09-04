@@ -5,30 +5,30 @@
  *
  * Substitui a colagem manual: roda a query no ERP por JDBC e escreve o
  * resultado na aba "Query Banco" da planilha Contratos Man. O robô do portal
- * lê essa aba de hora em hora e leva para o Supabase — nada mais muda.
+ * lê essa aba e leva para o Supabase — nada mais muda.
  *
  * A CONDIÇÃO É DE REDE, não de código: o Apps Script roda nos servidores do
  * Google, então o banco do ERP precisa aceitar conexão de fora. Se ele só
- * existe na rede interna, isto falha por timeout — a mesma pedra que parou o
- * robô do Qlik. O teste é a própria execução: se conectar, resolvido.
+ * existe na rede interna, isto falha na conexão — a mesma pedra que parou o
+ * robô do Qlik. A própria execução é o teste.
  *
- * COMO USAR
- *  1. Na planilha: Extensões › Apps Script, cole este arquivo.
- *  2. Configure as credenciais UMA vez (Projeto › Configurações do projeto ›
- *     Propriedades do script), ou rode `configurar()` depois de preencher os
- *     valores lá embaixo e apague-os do código em seguida:
- *        ERP_URL   jdbc:sqlserver://SERVIDOR:1433;databaseName=BANCO
- *                  (Oracle: jdbc:oracle:thin:@//SERVIDOR:1521/SERVICO)
- *        ERP_USER  usuário
- *        ERP_PASS  senha
- *  3. Rode `atualizarQueryBanco` uma vez, aceite a autorização e veja o log.
- *  4. Funcionando: Acionadores › Adicionar acionador › atualizarQueryBanco ›
- *     Baseado no tempo › Diário, 6h–7h (antes do robô das 08h15).
+ * COMO USAR: preencher as três variáveis abaixo, salvar e rodar
+ * `atualizarQueryBanco`. Funcionando, criar o acionador diário entre 6h e 7h
+ * (antes do robô das 08h15).
  *
- * SENHA NÃO FICA NO CÓDIGO: vai nas Propriedades do script, que não aparecem
- * para quem só tem acesso de leitura à planilha.
+ * CREDENCIAL NO TOPO, E NÃO NAS PROPRIEDADES DO SCRIPT (Renan, 04/09/2026):
+ * a versão anterior lia de PropertiesService, que é mais seguro, mas exigia
+ * um passeio pelas Definições do projeto antes de o script rodar. Ele pediu
+ * tudo num arquivo só. A planilha é interna e o script é vinculado a ela.
  * ============================================================
  */
+
+var ERP_URL  = 'jdbc:sqlserver://SERVIDOR:1433;databaseName=BANCO';
+var ERP_USER = 'usuario';
+var ERP_PASS = 'senha';
+
+// Se o ERP for Oracle:
+// var ERP_URL = 'jdbc:oracle:thin:@//SERVIDOR:1521/SERVICO';
 
 var ABA = 'Query Banco';
 var DESDE = '2026-09-01';        // só deste mês em diante — a consulta inteira
@@ -84,13 +84,11 @@ function SQL_() {
 }
 
 function atualizarQueryBanco() {
-  var p = PropertiesService.getScriptProperties();
-  var url = p.getProperty('ERP_URL'), user = p.getProperty('ERP_USER'), pass = p.getProperty('ERP_PASS');
-  if (!url || !user || !pass) {
-    throw new Error('Faltam ERP_URL / ERP_USER / ERP_PASS nas Propriedades do script.');
+  if (ERP_URL.indexOf('SERVIDOR') >= 0) {
+    throw new Error('Preencha ERP_URL, ERP_USER e ERP_PASS no topo do script.');
   }
 
-  var conn = Jdbc.getConnection(url, user, pass);
+  var conn = Jdbc.getConnection(ERP_URL, ERP_USER, ERP_PASS);
   var st = conn.createStatement();
   st.setQueryTimeout(120);
   var rs = st.executeQuery(SQL_());
@@ -99,12 +97,12 @@ function atualizarQueryBanco() {
   var cab = [];
   for (var c = 1; c <= n; c++) cab.push(meta.getColumnLabel(c));
 
-  var linhas = [], total = 0;
   var aba = SpreadsheetApp.getActive().getSheetByName(ABA);
   if (!aba) throw new Error('A aba "' + ABA + '" não existe nesta planilha.');
   aba.clearContents();
   aba.getRange(1, 1, 1, n).setValues([cab]);
 
+  var linhas = [], total = 0;
   var escreve = function () {
     if (!linhas.length) return;
     aba.getRange(total + 2, 1, linhas.length, n).setValues(linhas);
@@ -126,6 +124,8 @@ function atualizarQueryBanco() {
       }
     }
     linhas.push(linha);
+    // escrita em lote: o Apps Script corta em 6 minutos e uma chamada por
+    // linha estoura muito antes disso
     if (linhas.length >= LOTE) escreve();
   }
   escreve();
@@ -133,13 +133,4 @@ function atualizarQueryBanco() {
   rs.close(); st.close(); conn.close();
   Logger.log('Query Banco: %s linha(s) gravada(s) · desde %s', total, DESDE);
   return total;
-}
-
-/** Atalho para gravar as credenciais uma vez. Preencha, rode, e APAGUE daqui. */
-function configurar() {
-  PropertiesService.getScriptProperties().setProperties({
-    ERP_URL:  'jdbc:sqlserver://SERVIDOR:1433;databaseName=BANCO',
-    ERP_USER: 'usuario',
-    ERP_PASS: 'senha',
-  });
 }
