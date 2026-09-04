@@ -328,12 +328,12 @@ if (MODE === 'conferir') {
     const div = cv.filter(r => r.divergencia_pct != null && +r.divergencia_pct > 5)
       .sort((a, b) => (+b.divergencia_pct) - (+a.divergencia_pct)).slice(0, 12);
     if (div.length) {
-      console.log(`\nPLACAS EM QUE O KM DO HODÔMETRO E O DO ERP NÃO FECHAM`
+      console.log(`\nPLACAS EM QUE O RATEIO E A CONTA SIMPLES DO HODÔMETRO NÃO FECHAM`
         + ` (${cv.filter(r => r.divergencia_pct != null && +r.divergencia_pct > 5).length}`
         + ` de ${cv.filter(r => r.divergencia_pct != null).length} comparáveis):`);
       div.forEach(r => console.log(`   ${r.vig_km}  ${String(r.placa).padEnd(9)}`
-        + ` hodômetro ${String(Math.round(r.km_hodometro)).padStart(7)} km`
-        + ` · ERP ${String(Math.round(r.km_erp)).padStart(9)} km`
+        + ` rateio ${String(Math.round(r.km_vig)).padStart(7)} km`
+        + ` · hodômetro ${String(Math.round(r.km_hodometro)).padStart(7)} km`
         + ` · ${(+r.divergencia_pct).toFixed(1)}%`));
     }
   }

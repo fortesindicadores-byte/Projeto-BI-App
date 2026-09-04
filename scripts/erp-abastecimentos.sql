@@ -211,17 +211,29 @@ select coalesce(r.placa, s.placa)                       as placa,
        case when r.km_rateio is null                    then 'sem leitura'
             when s.abastecimentos is null               then 'rateio (mês sem abastecer)'
             else 'rateio' end                           as origem_km,
-       case when s.km_erp > 0 and r.km_rateio is not null
-            then round(abs(r.km_rateio - s.km_erp) / s.km_erp * 100, 1)
+       -- CONFERÊNCIA: rateio × conta simples do hodômetro. O DESGASTE do ERP
+       -- saiu daqui — ele traz leitura de hodômetro em vez de distância em boa
+       -- parte das linhas, então acusava divergência em 2 de cada 3 placas e
+       -- não servia de segunda opinião.
+       case when s.km_hodometro > 0 and r.km_rateio is not null
+            then round(abs(r.km_rateio - s.km_hodometro) / s.km_hodometro * 100, 1)
        end                                              as divergencia_pct
   from rateio r
   full outer join simples s on s.placa = r.placa and s.vig = r.vig;
 
--- COBERTURA DA CARGA (04/09/2026): as leituras "âncora" (a última de cada placa
--- antes do início da carga) criam vigências de mentira no começo da base — um
--- mês com uma leitura por placa e quase nenhum km. Elas não podem entrar como
--- vigência de custo, e o corte não é uma data fixa: é a cobertura. Vale a
--- vigência em que pelo menos metade das placas teve abastecimento.
+-- ONDE A BASE COMEÇA A VALER (04/09/2026): a carga traz, além do período
+-- pedido, a última leitura de cada placa ANTES dele — a âncora, que existe só
+-- para dar ponto de partida ao hodômetro. Esse mês tem EXATAMENTE uma leitura
+-- por placa, e é isso que o identifica; mês de verdade tem várias. O corte é a
+-- primeira vigência acima dessa marca, e dali em diante vale tudo, inclusive o
+-- mês corrente.
+--
+-- A primeira tentativa cortava por PROPORÇÃO de placas e fez o contrário do
+-- pedido: guardou o mês-âncora e derrubou a prévia. A contagem pegava a frota
+-- inteira do ERP, não as placas com contrato, então o mês em que quase todo
+-- veículo tem a leitura-âncora passava, e o mês corrente — com poucos dias
+-- rodados — não. Contar mecanismo (leituras por placa) em vez de proporção
+-- resolve porque a âncora é, por construção, uma leitura só.
 --
 -- O FIXO NÃO DEPENDE DE KM (Renan, 04/09/2026): antes o contrato fixo só
 -- aparecia na vigência em que a placa teve leitura, e por isso a PRÉVIA do mês
@@ -230,17 +242,21 @@ select coalesce(r.placa, s.placa)                       as placa,
 -- com contrato existe em toda vigência: o fixo entra inteiro desde o dia 1º e o
 -- variável acompanha o km que já rodou.
 create or replace view public.custo_vigencia as
-with cob as (
-  select vig_km, count(distinct placa) as placas
+with dens as (
+  select vig_km,
+         sum(abastecimentos)::numeric / nullif(count(distinct placa), 0) as por_placa
     from public.km_vigencia
    where abastecimentos > 0
    group by vig_km
 ),
+corte as (
+  select min(vig_km) as vig0 from dens where por_placa >= 1.5
+),
 vigs as (
-  select vig_km,
-         to_char(to_date(vig_km, 'YYYY-MM') + interval '1 month', 'YYYY-MM') as vig_cobranca
-    from cob
-   where placas >= (select max(placas) from cob) * 0.5
+  select distinct k.vig_km,
+         to_char(to_date(k.vig_km, 'YYYY-MM') + interval '1 month', 'YYYY-MM') as vig_cobranca
+    from public.km_vigencia k, corte
+   where k.vig_km >= corte.vig0
 )
 select v.vig_cobranca, v.vig_km,
        c.placa, c.placa_origem, c.unidade, c.projeto, c.tipo,
