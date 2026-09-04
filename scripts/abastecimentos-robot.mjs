@@ -160,8 +160,11 @@ if (MODE === 'conferir') {
      não traz esse header, então QUALQUER erro — chave errada, tabela ausente,
      permissão — virava um "0 linha(s)" convincente, e eu ia concluir que a
      carga não tinha entrado quando o problema era a própria conferência. */
-  const conta = async (tabela) => {
-    const r = await fetch(`${SB_URL}/rest/v1/${tabela}?select=*`,
+  const conta = async (tabela, filtro = '') => {
+    // o filtro entra separado do nome da tabela: grudar `?select=*` depois de
+    // uma query string faria o último valor virar `2026-09-04?select=*` e o
+    // Postgres recusar a data (foi o que aconteceu)
+    const r = await fetch(`${SB_URL}/rest/v1/${tabela}?select=*${filtro ? '&' + filtro : ''}`,
       { headers: { ...H, Prefer: 'count=exact', Range: '0-0' } });
     if (!r.ok) throw new Error(`${tabela} → HTTP ${r.status}: ${(await r.text()).slice(0, 200)}`);
     const cr = r.headers.get('content-range');
@@ -186,8 +189,8 @@ if (MODE === 'conferir') {
      buscando" sem precisar abrir o SQL. */
   const ini = new Date().toISOString().slice(0, 8) + '01';
   const hoje = new Date().toISOString().slice(0, 10);
-  const nMes  = await conta(`erp_abastecimentos?data=gte.${ini}&data=lte.${hoje}`);
-  const nFut  = await conta(`erp_abastecimentos?data=gt.${hoje}`);
+  const nMes  = await conta('erp_abastecimentos', `data=gte.${ini}&data=lte.${hoje}`);
+  const nFut  = await conta('erp_abastecimentos', `data=gt.${hoje}`);
   console.log(`  mês corrente (desde ${ini}): ${nMes} · âncoras anteriores: `
     + `${nAb - nMes - nFut}${nFut ? ` · DATA NO FUTURO (erro do ERP): ${nFut}` : ''}`);
 
