@@ -11,7 +11,18 @@ Cada painel é um arquivo `index.html` autocontido — sem framework, sem backen
 
 > **Git push:** Hoje `git push origin main` **funciona** normalmente (deploy automático no GitHub Pages). _(Nota histórica: o repo foi renomeado de `Projeto-BI-App`; numa época o proxy local rejeitava o push e era preciso usar `mcp__github__push_files` — não é mais o caso.)_
 
-> **SQL para o Supabase:** sempre que houver um script SQL para o Renan rodar (mesmo que já exista em `scripts/*.sql`), **colar o SQL completo direto no chat** — ele copia dali para o Supabase SQL Editor; não basta apontar o arquivo.
+> **TUDO QUE O RENAN VAI RODAR VEM COLADO NO CHAT** (regra dele, 04/09/2026:
+> *"Traga sempre, mas absolutamente sempre, scripts, querys, tudo aqui para eu
+> copiar e colar. A não ser que consiga fazer direto por mim. Senão aqui!"*).
+> Vale para SQL do Supabase, query de banco, Apps Script, comando de terminal —
+> qualquer coisa. **Apontar o caminho do arquivo no repositório NÃO conta**: ele
+> não vai abrir o repositório para copiar. Versionar o arquivo continua certo,
+> mas o conteúdo tem de aparecer no chat, inteiro, pronto para colar. A única
+> dispensa é quando eu mesmo consigo executar — aí executo e não peço nada.
+>
+> **A query dos abastecimentos do ERP foi a TI que passou** para o Renan
+> consultar o banco (`scripts/erp-abastecimentos-query.sql`). Não perguntar de
+> novo de onde ela veio.
 
 ---
 
