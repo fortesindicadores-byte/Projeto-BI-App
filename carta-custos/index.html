@@ -220,7 +220,7 @@ body.claro .ms-panel{box-shadow:0 18px 44px rgba(15,23,42,.20), 0 3px 10px rgba(
   .kpis{gap:8px;}
   .gr2{max-height:52vh;}
   /* três gráficos numa tela baixa comem a tabela inteira — a sobra é DIVIDIDA */
-  .gr3{max-height:33vh;}
+  .gr3{max-height:26vh;}
 }
 .gcard{min-height:0;display:flex;flex-direction:column;padding:12px 16px 10px;position:relative;}
 .gtit{font-size:12px;font-weight:800;}
@@ -316,8 +316,13 @@ table.dre td.cg-t,.cg-t{color:var(--verde)!important;font-weight:700;}
    lado e o valor do outro. Vale para as quatro tabelas do painel. */
 table.dre thead th.num{text-align:right;}
 
-/* três gráficos lado a lado — o .gr2 da casca é de dois */
-.gr3{flex:1 1 auto;min-height:180px;max-height:40vh;display:grid;grid-template-columns:repeat(3,1fr);gap:12px;}
+/* três gráficos lado a lado — o .gr2 da casca é de dois.
+   O TETO É BAIXO DE PROPÓSITO: com 40vh os gráficos comiam a tabela de contas
+   e as últimas contas ficavam fora da tela. A sobra é DIVIDIDA — o gráfico
+   para de crescer e o que resta vai para a tabela, que precisa mostrar as seis
+   contas mais o total sem rolagem. */
+.gr3{flex:0 1 auto;min-height:170px;max-height:31vh;display:grid;grid-template-columns:repeat(3,1fr);gap:12px;}
+#vw-resumo .tsec{flex:1 1 auto;min-height:270px;}
 
 /* fileira de ações dentro do cabeçalho da tabela */
 .tacts{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
@@ -442,7 +447,7 @@ body.claro input[type=date]{color-scheme:light;}
     </button>
     <button class="s-item" data-vw="consol">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 17h4V9H3zM10 17h4V4h-4zM17 17h4v-5h-4z"/></svg>
-      Consolidado
+      Consolidado Contrato
     </button>
 
     <div class="s-sec">Atalhos</div>
@@ -530,9 +535,7 @@ body.claro input[type=date]{color-scheme:light;}
           <div class="thead-row">
             <div><div class="ttit">Contrato por placa</div>
               <div class="tsub" id="pl-sub">Km do mês pelo hodômetro do ERP × taxa do contrato · a vigência cobra o km do mês anterior</div></div>
-            <div class="chips" id="pl-vig"></div>
           </div>
-          <div class="chips" id="pl-uni" style="margin-bottom:8px"></div>
           <div class="kpis" id="pl-kpis" style="margin-bottom:10px"></div>
           <div class="twrap"><table class="dre" id="tbl-placas"></table></div>
         </div>
@@ -540,7 +543,6 @@ body.claro input[type=date]{color-scheme:light;}
 
       <!-- ══ 4 · CONSOLIDADO ══ -->
       <section class="vw" id="vw-consol">
-        <div class="chips" id="co-uni"></div>
         <div class="gr2" style="max-height:34vh">
           <div class="card gcard"><div class="gtit">Custo de contrato por vigência</div>
             <div class="gsub">fixo + variável · a vigência cobra o km do mês anterior</div>
@@ -550,8 +552,12 @@ body.claro input[type=date]{color-scheme:light;}
             <div class="gcv"><canvas id="ch-consolkm"></canvas></div></div>
         </div>
         <div class="card tsec">
-          <div class="thead-row"><div><div class="ttit">Consolidado por vigência</div>
-            <div class="tsub" id="co-sub">—</div></div></div>
+          <div class="thead-row">
+            <div><div class="ttit">Consolidado do contrato</div><div class="tsub" id="co-sub">—</div></div>
+            <!-- o toggle abre o consolidado por UNIDADE ou por PLACA; o recorte
+                 de unidade e de vigência é o do filtro do topo, não daqui -->
+            <div class="chips" id="co-dim"></div>
+          </div>
           <div class="twrap"><table class="dre" id="tbl-consol"></table></div>
         </div>
       </section>
@@ -778,7 +784,7 @@ function marcarCarregando(on){
   document.querySelectorAll('.twrap,.gr3').forEach(e=>e.classList.toggle('carregando',on));
   if(on) set('lanc-sub','Carregando…');
 }
-async function onFiltroProj(){ await loadDRE(); render(); }
+async function onFiltroProj(){ await loadDRE(); render(); renderPlacas(); renderConsol(); }
 function buildUniFilter(){ buildMs('ms-uni', ()=>ALLOWED.slice(), u=>u, selUni, onFiltroUniVig, 'Todas'); }
 function buildVigFilter(){
   // de AGO/2026 — quando a carta começou a rodar de verdade — até 6 meses à
@@ -850,6 +856,7 @@ async function loadRows(){
   if(seq!==_loadSeq) return;
   refreshProjetos();
   render();
+  renderPlacas(); renderConsol();   // as visões novas seguem o mesmo filtro
   marcarCarregando(false);
   const now=new Date();
   set('titSub', curUnits().length===1?DEPARA[curUnits()[0]]||curUnits()[0]:curUnits().length+' unidades'
@@ -1143,7 +1150,7 @@ function renderCharts(rows){
    · o mês corrente é PRÉVIA, não vigência fechada: o km ainda está
      sendo formado, e o fixo já entra inteiro desde o dia 1º.
    ══════════════════════════════════════════════════════════════ */
-let CONTR=[], PL_VIG='', PL_UNI='', CO_UNI='';
+let CONTR=[], CO_DIM='vigencia';
 // o PostgREST corta a resposta em 1.000 linhas e ignora um limit maior —
 // são ~360 placas × 9 vigências, então sem paginar a tabela vem pela metade
 async function pgAll(tabela,select,ordem){
@@ -1163,34 +1170,34 @@ async function loadContratos(){
     'vig_cobranca,vig_km,placa,placa_origem,unidade,projeto,tipo,taxa_km,km_vig,'
     +'km_hodometro,divergencia_pct,origem_km,custo_vig,abastecimentos,ultimo_abast,previa',
     [['vig_cobranca',false],['custo_vig',false]]);
-  // só as unidades que o usuário enxerga
   const perm=new Set(ALLOWED);
   CONTR=CONTR.filter(r=>!r.unidade||perm.has(r.unidade));
-  const vigs=[...new Set(CONTR.map(r=>r.vig_cobranca))].sort().reverse();
-  if(!PL_VIG||!vigs.includes(PL_VIG)) PL_VIG=vigs[0]||'';
+  /* UM FILTRO DE VIGÊNCIA SÓ (Renan, 04/09/2026): a lista do topo nasce em
+     AGO/26, que é quando a carta começou, mas o contrato tem vigência desde
+     fevereiro. Sem juntar as duas listas, metade do histórico do contrato
+     ficaria inalcançável — e um segundo seletor dentro da visão seria a mesma
+     pergunta feita duas vezes na mesma tela. */
+  const novas=[...new Set(CONTR.map(r=>r.vig_cobranca).filter(Boolean))];
+  const antes=VIG_OPTS.length;
+  VIG_OPTS=[...new Set(VIG_OPTS.concat(novas))].sort();
+  if(VIG_OPTS.length!==antes) buildMs('ms-vig', ()=>VIG_OPTS.slice(), vigLabel, selVig, onFiltroUniVig, 'Todas');
   renderPlacas(); renderConsol();
 }
-const unisDe=rows=>[...new Set(rows.map(r=>r.unidade).filter(Boolean))].sort();
-function chipsHTML(vals,atual,fn,rot){
-  return (rot?`<span class="rot">${esc(rot)}</span>`:'')
-    + `<button class="chip${atual===''?' on':''}" onclick="${fn}('')">Todas</button>`
-    + vals.map(v=>`<button class="chip${atual===v?' on':''}" onclick="${fn}('${esc(v)}')">${esc(v)}</button>`).join('');
-}
-function setPlUni(u){ PL_UNI=u; renderPlacas(); }
-function setPlVig(v){ PL_VIG=v; renderPlacas(); }
-function setCoUni(u){ CO_UNI=u; renderConsol(); }
-function placasDaVig(){
-  return CONTR.filter(r=>r.vig_cobranca===PL_VIG && (!PL_UNI||r.unidade===PL_UNI));
-}
+// o recorte das duas visões novas é o do filtro do topo
+const contrDoFiltro=()=>{
+  const u=new Set(curUnits()), v=new Set(curVigs()), p=curProjs();
+  return CONTR.filter(r=>u.has(r.unidade) && v.has(r.vig_cobranca)
+    && (!p || !r.projeto || p.includes(String(r.projeto).toUpperCase())));
+};
+function setCoDim(d){ CO_DIM=d; renderConsol(); }
+
 function renderPlacas(){
-  const vigs=[...new Set(CONTR.map(r=>r.vig_cobranca))].sort().reverse().slice(0,12);
-  $('pl-vig').innerHTML = (vigs.length?'<span class="rot">Vigência</span>':'')
-    + vigs.map(v=>`<button class="chip${PL_VIG===v?' on':''}" onclick="setPlVig('${esc(v)}')">${esc(vigLabel(v))}</button>`).join('');
-  $('pl-uni').innerHTML = chipsHTML(unisDe(CONTR),PL_UNI,'setPlUni','Unidade');
-  const rows=placasDaVig();
+  const rows=contrDoFiltro();
+  const multiVig=curVigs().length>1, multiUni=curUnits().length>1;
   if(!rows.length){
     $('pl-kpis').innerHTML='';
-    $('tbl-placas').innerHTML=`<tbody><tr><td><div class="vazio">Sem contrato de placa para este recorte. A base vem do ERP — se acabou de carregar, atualize.</div></td></tr></tbody>`;
+    set('pl-sub','Sem contrato de placa para o recorte do filtro.');
+    $('tbl-placas').innerHTML=`<tbody><tr><td><div class="vazio">Sem contrato de placa para este recorte. A base do contrato vem do ERP e da planilha Contratos Man.</div></td></tr></tbody>`;
     return;
   }
   const previa=rows.some(r=>r.previa);
@@ -1198,70 +1205,123 @@ function renderPlacas(){
   const tot=rows.reduce((s,r)=>s+(+r.custo_vig||0),0);
   const fixo=rows.filter(r=>r.tipo==='fixo').reduce((s,r)=>s+(+r.custo_vig||0),0);
   const semKm=rows.filter(r=>r.tipo==='variavel'&&r.km_vig==null).length;
-  const vigKm=rows[0].vig_km;
-  set('pl-sub', `Cobrança ${vigLabel(PL_VIG)} — km de ${vigLabel(vigKm)}`
-    + (previa?' · PRÉVIA: o km do mês ainda está sendo formado':'')
+  const vigsKm=[...new Set(rows.map(r=>r.vig_km))].sort();
+  set('pl-sub', (multiVig?`${curVigs().length} vigências`:`Cobrança ${vigLabel(curVigs()[0])}`)
+    + ` — km de ${vigsKm.map(vigLabel).join(', ')}`
+    + (previa?' · PRÉVIA: o km do mês corrente ainda está sendo formado':'')
     + ' · botão direito → exportar Excel');
   $('pl-kpis').innerHTML=
-    `<div class="kpi"><div class="kl">Placas</div><div class="kv">${rows.length}</div><div class="km">${semKm} sem km no mês</div></div>`+
+    `<div class="kpi"><div class="kl">Placas</div><div class="kv">${new Set(rows.map(r=>r.placa)).size}</div><div class="km">${semKm} sem km no mês</div></div>`+
     `<div class="kpi"><div class="kl">Km do mês</div><div class="kv">${fmt(km)}</div><div class="km">hodômetro do ERP</div></div>`+
     `<div class="kpi"><div class="kl">Variável</div><div class="kv">${fmt(tot-fixo)}</div><div class="km">km × taxa</div></div>`+
     `<div class="kpi"><div class="kl">Fixo</div><div class="kv">${fmt(fixo)}</div><div class="km">independe de km</div></div>`+
-    `<div class="kpi"><div class="kl">Total</div><div class="kv">${fmt(tot)}</div><div class="km">${previa?'<b style="color:var(--ambar)">prévia</b>':'vigência fechada'}</div></div>`;
-  let h=`<thead><tr><th>Placa</th><th>Unidade</th><th>Projeto</th><th>Tipo</th>`
-    +`<th class="num">R$/km</th><th class="num">Km do mês</th><th class="num">Custo</th>`
-    +`<th class="num">Abast.</th><th>Últ. abast.</th><th>Km do mês por</th></tr></thead><tbody>`;
+    `<div class="kpi"><div class="kl">Total</div><div class="kv">${fmt(tot)}</div><div class="km">${previa?'<b style="color:var(--ambar)">com prévia</b>':'vigência fechada'}</div></div>`;
+  let h='<thead><tr>'
+    +(multiVig?'<th>Cobrança</th>':'')+'<th>Placa</th>'
+    +(multiUni?'<th>Unidade</th>':'')+'<th>Projeto</th><th>Tipo</th>'
+    +'<th class="num">R$/km</th><th class="num">Km do mês</th><th class="num">Custo</th>'
+    +'<th class="num">Abast.</th><th>Últ. abast.</th><th>Km do mês por</th></tr></thead><tbody>';
   rows.slice().sort((a,b)=>(+b.custo_vig||0)-(+a.custo_vig||0)).forEach(r=>{
-    const kmv=r.km_vig==null?D:numBR(r.km_vig);
-    h+=`<tr><td class="conta">${esc(r.placa_origem||r.placa)}</td><td>${esc(r.unidade||'—')}</td>`
+    h+='<tr>'+(multiVig?`<td>${esc(vigLabel(r.vig_cobranca))}</td>`:'')
+      +`<td class="conta">${esc(r.placa_origem||r.placa)}</td>`
+      +(multiUni?`<td>${esc(r.unidade||'—')}</td>`:'')
       +`<td>${esc(r.projeto||'—')}</td><td>${r.tipo==='fixo'?'Fixo':'Por km'}</td>`
       +`<td class="num">${r.taxa_km!=null?(+r.taxa_km).toFixed(3):D}</td>`
-      +`<td class="num">${kmv}</td><td class="num">${fmt(r.custo_vig)}</td>`
+      +`<td class="num">${r.km_vig==null?D:numBR(r.km_vig)}</td><td class="num">${fmt(r.custo_vig)}</td>`
       +`<td class="num">${r.abastecimentos||D}</td><td>${esc(dataBR(r.ultimo_abast))}</td>`
       +`<td>${esc(r.origem_km||'—')}</td></tr>`;
   });
-  h+=`</tbody><tfoot><tr class="total"><td class="conta">Total</td><td></td><td></td><td></td><td></td>`
-   +`<td class="num">${fmt(km)}</td><td class="num">${fmt(tot)}</td><td></td><td></td><td></td></tr></tfoot>`;
+  const vaz=n=>'<td></td>'.repeat(n);
+  h+=`</tbody><tfoot><tr class="total"><td class="conta">Total</td>`
+   +vaz(3+(multiVig?1:0)+(multiUni?1:0))
+   +`<td class="num">${fmt(km)}</td><td class="num">${fmt(tot)}</td>${vaz(3)}</tr></tfoot>`;
   $('tbl-placas').innerHTML=h;
 }
+
+/* O TOGGLE É DE ABERTURA, NÃO DE FILTRO (Renan, 04/09/2026). Ele diz o que
+   vira LINHA do consolidado — vigência, unidade ou placa. Quem recorta é o
+   filtro do topo; repetir os mesmos valores aqui dentro seria a mesma pergunta
+   feita duas vezes na mesma tela, e foi o que eu tinha feito.
+
+   · Vigência — o mês a mês: km, variável, fixo e total de cada cobrança;
+   · Unidade / Placa — uma linha por unidade ou por placa, com uma coluna por
+     vigência de cobrança e o total na ponta.                               */
+const CO_DIMS=[['vigencia','Vigência'],['unidade','Unidade'],['placa','Placa']];
 function renderConsol(){
-  $('co-uni').innerHTML = chipsHTML(unisDe(CONTR),CO_UNI,'setCoUni','Unidade');
-  const base=CONTR.filter(r=>!CO_UNI||r.unidade===CO_UNI);
-  const porVig=new Map();
-  base.forEach(r=>{
-    const a=porVig.get(r.vig_cobranca)||{vigKm:r.vig_km,previa:!!r.previa,placas:0,km:0,fixo:0,tot:0};
-    a.placas++; a.km+=+r.km_vig||0; a.tot+=+r.custo_vig||0;
-    if(r.tipo==='fixo') a.fixo+=+r.custo_vig||0;
-    porVig.set(r.vig_cobranca,a);
-  });
-  const vigs=[...porVig.keys()].sort();
-  if(!vigs.length){
-    $('tbl-consol').innerHTML=`<tbody><tr><td><div class="vazio">Sem consolidado para este recorte.</div></td></tr></tbody>`;
-    set('co-sub','—'); return;
+  $('co-dim').innerHTML='<span class="rot">Abrir por</span>'
+    + CO_DIMS.map(([k,r])=>`<button class="chip${CO_DIM===k?' on':''}" onclick="setCoDim('${k}')">${r}</button>`).join('');
+  const base=contrDoFiltro();
+  if(!base.length){
+    $('tbl-consol').innerHTML=`<tbody><tr><td><div class="vazio">Sem consolidado para o recorte do filtro.</div></td></tr></tbody>`;
+    set('co-sub','—'); colChart('ch-consol',[],[]); colChart('ch-consolkm',[],[]); return;
   }
-  set('co-sub', `${vigs.length} vigência(s) · ${CO_UNI||'todas as unidades'} · a última é prévia enquanto o mês corre`);
+  const vigs=[...new Set(base.map(r=>r.vig_cobranca))].sort();
+  const porVig=new Map(vigs.map(v=>[v,{vigKm:'',previa:false,placas:new Set(),km:0,fixo:0,tot:0}]));
+  base.forEach(r=>{
+    const a=porVig.get(r.vig_cobranca);
+    a.vigKm=r.vig_km; a.previa=a.previa||!!r.previa; a.placas.add(r.placa);
+    a.km+=+r.km_vig||0; a.tot+=+r.custo_vig||0;
+    if(r.tipo==='fixo') a.fixo+=+r.custo_vig||0;
+  });
   colChart('ch-consol', vigs.map(vigLabel), vigs.map(v=>porVig.get(v).tot));
   colChart('ch-consolkm', vigs.map(v=>vigLabel(porVig.get(v).vigKm)), vigs.map(v=>porVig.get(v).km), 'rgba(46,144,232,.85)');
-  let h=`<thead><tr><th>Cobrança</th><th>Km de</th><th class="num">Placas</th><th class="num">Km do mês</th>`
-    +`<th class="num">Variável</th><th class="num">Fixo</th><th class="num">Total</th><th></th></tr></thead><tbody>`;
-  let tK=0,tV=0,tF=0,tT=0;
-  vigs.forEach(v=>{
-    const a=porVig.get(v);
-    tK+=a.km; tV+=a.tot-a.fixo; tF+=a.fixo; tT+=a.tot;
-    h+=`<tr><td class="conta">${esc(vigLabel(v))}</td><td>${esc(vigLabel(a.vigKm))}</td>`
-      +`<td class="num">${a.placas}</td><td class="num">${numBR(a.km)}</td>`
-      +`<td class="num">${fmt(a.tot-a.fixo)}</td><td class="num">${fmt(a.fixo)}</td>`
-      +`<td class="num">${fmt(a.tot)}</td>`
-      +`<td>${a.previa?'<span class="aviso">prévia</span>':''}</td></tr>`;
+  const temPrevia=vigs.some(v=>porVig.get(v).previa);
+  const rodape=(temPrevia?' · a última é prévia enquanto o mês corre':'')+' · botão direito → exportar Excel';
+
+  if(CO_DIM==='vigencia'){
+    set('co-sub', `${vigs.length} vigência(s) de cobrança · a vigência cobra o km do mês anterior`+rodape);
+    let h='<thead><tr><th>Cobrança</th><th>Km de</th><th class="num">Placas</th>'
+      +'<th class="num">Km do mês</th><th class="num">Variável</th><th class="num">Fixo</th>'
+      +'<th class="num">Total</th><th></th></tr></thead><tbody>';
+    let tK=0,tV=0,tF=0,tT=0;
+    vigs.forEach(v=>{
+      const a=porVig.get(v);
+      tK+=a.km; tV+=a.tot-a.fixo; tF+=a.fixo; tT+=a.tot;
+      h+=`<tr><td class="conta">${esc(vigLabel(v))}</td><td>${esc(vigLabel(a.vigKm))}</td>`
+        +`<td class="num">${a.placas.size}</td><td class="num">${numBR(a.km)}</td>`
+        +`<td class="num">${fmt(a.tot-a.fixo)}</td><td class="num">${fmt(a.fixo)}</td>`
+        +`<td class="num">${fmt(a.tot)}</td>`
+        +`<td>${a.previa?'<span class="aviso">prévia</span>':''}</td></tr>`;
+    });
+    h+=`</tbody><tfoot><tr class="total"><td class="conta">Total</td><td></td><td></td>`
+     +`<td class="num">${numBR(tK)}</td><td class="num">${fmt(tV)}</td><td class="num">${fmt(tF)}</td>`
+     +`<td class="num">${fmt(tT)}</td><td></td></tr></tfoot>`;
+    $('tbl-consol').innerHTML=h;
+    return;
+  }
+
+  const porPlaca=CO_DIM==='placa';
+  const chave=r=> porPlaca ? (r.placa_origem||r.placa) : (r.unidade||'—');
+  const linhas=new Map();
+  base.forEach(r=>{
+    const k=chave(r);
+    const a=linhas.get(k)||{sub:porPlaca?(r.unidade||''):'', vig:{}, tot:0};
+    a.vig[r.vig_cobranca]=(a.vig[r.vig_cobranca]||0)+(+r.custo_vig||0);
+    a.tot+=+r.custo_vig||0;
+    linhas.set(k,a);
   });
-  h+=`</tbody><tfoot><tr class="total"><td class="conta">Total</td><td></td><td></td>`
-   +`<td class="num">${numBR(tK)}</td><td class="num">${fmt(tV)}</td><td class="num">${fmt(tF)}</td>`
-   +`<td class="num">${fmt(tT)}</td><td></td></tr></tfoot>`;
+  const ord=[...linhas.entries()].sort((a,b)=>b[1].tot-a[1].tot);
+  set('co-sub', `${ord.length} ${porPlaca?'placa(s)':'unidade(s)'} · ${vigs.length} vigência(s) de cobrança`+rodape);
+  let h='<thead><tr><th>'+(porPlaca?'Placa':'Unidade')+'</th>'
+    +(porPlaca?'<th>Unidade</th>':'')
+    +vigs.map(v=>`<th class="num">${esc(vigLabel(v))}${porVig.get(v).previa?' *':''}</th>`).join('')
+    +'<th class="num">Total</th></tr></thead><tbody>';
+  ord.forEach(([k,a])=>{
+    h+=`<tr><td class="conta">${esc(k)}</td>`
+      +(porPlaca?`<td>${esc(a.sub)}</td>`:'')
+      +vigs.map(v=>`<td class="num">${a.vig[v]?fmt(a.vig[v]):D}</td>`).join('')
+      +`<td class="num">${fmt(a.tot)}</td></tr>`;
+  });
+  const totG=ord.reduce((s,x)=>s+x[1].tot,0);
+  h+=`</tbody><tfoot><tr class="total"><td class="conta">Total</td>`
+   +(porPlaca?'<td></td>':'')
+   +vigs.map(v=>`<td class="num">${fmt(porVig.get(v).tot)}</td>`).join('')
+   +`<td class="num">${fmt(totG)}</td></tr></tfoot>`;
   $('tbl-consol').innerHTML=h;
 }
 
 /* ── navegação entre as visões ── */
-const TIT={resumo:'Resumo Gerencial',lanc:'Lançamentos',placas:'Contrato por Placa',consol:'Consolidado por Vigência'};
+const TIT={resumo:'Resumo Gerencial',lanc:'Lançamentos',placas:'Contrato por Placa',consol:'Consolidado Contrato'};
 function setVw(v){
   VW=v;
   document.querySelectorAll('.s-item[data-vw]').forEach(b=>b.classList.toggle('on',b.dataset.vw===v));
