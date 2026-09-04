@@ -155,10 +155,18 @@ if (MODE === 'conferir') {
     if (!r.ok) throw new Error(`${q} → ${r.status} ${(await r.text()).slice(0, 200)}`);
     return r.json();
   };
+  /* CONTAGEM QUE NÃO MENTE (bug real, 04/09/2026): a primeira versão devolvia
+     o total do header `content-range` sem olhar o status. Requisição recusada
+     não traz esse header, então QUALQUER erro — chave errada, tabela ausente,
+     permissão — virava um "0 linha(s)" convincente, e eu ia concluir que a
+     carga não tinha entrado quando o problema era a própria conferência. */
   const conta = async (tabela) => {
     const r = await fetch(`${SB_URL}/rest/v1/${tabela}?select=*`,
       { headers: { ...H, Prefer: 'count=exact', Range: '0-0' } });
-    return +(r.headers.get('content-range') || '').split('/')[1] || 0;
+    if (!r.ok) throw new Error(`${tabela} → HTTP ${r.status}: ${(await r.text()).slice(0, 200)}`);
+    const cr = r.headers.get('content-range');
+    if (!cr) throw new Error(`${tabela} → resposta sem content-range (status ${r.status})`);
+    return +cr.split('/')[1] || 0;
   };
 
   const nAb = await conta('erp_abastecimentos');
