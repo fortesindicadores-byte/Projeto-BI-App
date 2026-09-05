@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-<meta name="build" content="202609050300">
+<meta name="build" content="202609050320">
 <title>Carta de Custos</title>
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -532,6 +532,26 @@ body.claro input[type=date]{color-scheme:light;}
           Projeto<span class="ms-cnt"></span></button>
           <div class="ms-panel"><div class="ms-search"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M16.5 16.5 21 21"/></svg><input type="text" placeholder="Pesquisar…"></div><div class="ms-list"></div></div>
         </div>
+        <div class="ms-wrap" id="ms-grupo"><button class="ms-btn" onclick="toggleMs('ms-grupo')">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M21 16V8l-9-5-9 5v8l9 5z"/><path d="M3.3 7 12 12l8.7-5M12 22V12"/></svg>
+          Grupo<span class="ms-cnt"></span></button>
+          <div class="ms-panel"><div class="ms-search"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M16.5 16.5 21 21"/></svg><input type="text" placeholder="Pesquisar…"></div><div class="ms-list"></div></div>
+        </div>
+        <div class="ms-wrap" id="ms-forn"><button class="ms-btn" onclick="toggleMs('ms-forn')">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M3 21h18M5 21V7l7-4 7 4v14"/><path d="M9 21v-5h6v5"/></svg>
+          Fornecedor<span class="ms-cnt"></span></button>
+          <div class="ms-panel"><div class="ms-search"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M16.5 16.5 21 21"/></svg><input type="text" placeholder="Pesquisar…"></div><div class="ms-list"></div></div>
+        </div>
+        <div class="ms-wrap" id="ms-conta"><button class="ms-btn" onclick="toggleMs('ms-conta')">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+          Conta<span class="ms-cnt"></span></button>
+          <div class="ms-panel"><div class="ms-search"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M16.5 16.5 21 21"/></svg><input type="text" placeholder="Pesquisar…"></div><div class="ms-list"></div></div>
+        </div>
+        <div class="ms-wrap" id="ms-data"><button class="ms-btn" onclick="toggleMs('ms-data')">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M3 10h18M8 2v4M16 2v4"/><path d="M8 14h3M13 14h3M8 18h3"/></svg>
+          Data<span class="ms-cnt"></span></button>
+          <div class="ms-panel"><div class="ms-search"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M16.5 16.5 21 21"/></svg><input type="text" placeholder="Pesquisar…"></div><div class="ms-list"></div></div>
+        </div>
       </div>
       <button class="tool ico" id="btTema" onclick="trocaTema()" title="Modo claro/escuro"></button>
     </div>
@@ -670,6 +690,14 @@ const GRUPOS={
 
 // ── seleção dos filtros (Set vazio = "Todos") ──
 const selUni=new Set(), selVig=new Set(), selProj=new Set(), selAno=new Set();
+/* FILTROS DO LANÇAMENTO (Renan, 05/09/2026): Grupo, Fornecedor, Conta e Data
+   do lançamento. Recortam NO CLIENTE — as opções nascem do que já foi lido
+   para o filtro de unidade/vigência, então não há nova consulta ao banco. */
+const selGrupo=new Set(), selForn=new Set(), selConta=new Set(), selData=new Set();
+const passaExtras=r=>(!selGrupo.size||selGrupo.has(r.grupo||'—'))
+  && (!selForn.size||selForn.has(r.fornecedor||'—'))
+  && (!selConta.size||selConta.has(r.conta||'—'))
+  && (!selData.size||selData.has(String(r.data||'').slice(0,10)||'—'));
 let VIG_OPTS=[], ROWS=[];
 const curUnits =()=> selUni.size ? [...selUni] : ALLOWED.slice();
 /* FILTRO DE ANO (Renan, 04/09/2026): "vamos precisar quando o ano virar".
@@ -857,6 +885,17 @@ function onFiltroAno(){
   buildVigFilter(); onFiltroUniVig();
 }
 function buildProjFilter(){ buildMs('ms-proj', ()=>UNIT_PROJETOS.slice(), p=>p, selProj, onFiltroProj, 'Todos'); }
+// as opções saem das linhas já lidas; valor vazio aparece como "—"
+const opsDe=k=>[...new Set(ROWS.map(r=>k==='data'?(String(r.data||'').slice(0,10)||'—'):(r[k]||'—')))].sort();
+function buildExtras(){
+  const limpa=(sel,ops)=>[...sel].forEach(v=>{ if(!ops.includes(v)) sel.delete(v); });
+  const g=opsDe('grupo'), f=opsDe('fornecedor'), c=opsDe('conta'), d=opsDe('data').reverse();
+  limpa(selGrupo,g); limpa(selForn,f); limpa(selConta,c); limpa(selData,d);
+  buildMs('ms-grupo', ()=>g, v=>v, selGrupo, render, 'Todos');
+  buildMs('ms-forn',  ()=>f, v=>v, selForn,  render, 'Todos');
+  buildMs('ms-conta', ()=>c, v=>v, selConta, render, 'Todas');
+  buildMs('ms-data',  ()=>d, v=>v==='—'?v:dataBR(v), selData, render, 'Todas');
+}
 
 // ── DB ──
 function fromDB(d){return{id:d.id,origem:d.origem||'',unidade:d.unidade,vigencia:d.vigencia,pacote:d.pacote,data:d.data||'',projeto:d.projeto||'',equipamento:(d.equipamento||''),fornecedor:(d.fornecedor||''),rc:d.rc||'',oc:d.oc||'',nf:d.nf||'',conta:d.conta||'',grupo:d.grupo||'',descricao:d.descricao||'',valor:+d.valor||0,aprovado:!!d.aprovado,aprovado_oc:!!d.aprovado_oc};}
@@ -922,7 +961,7 @@ async function loadRows(){
   else ROWS=data.map(fromDB);
   await loadDRE();
   if(seq!==_loadSeq) return;
-  refreshProjetos();
+  refreshProjetos(); buildExtras();
   render();
   renderPlacas(); renderConsol();   // as visões novas seguem o mesmo filtro
   marcarCarregando(false);
@@ -1099,7 +1138,7 @@ async function excluirLancModal(){
 
 // ── render ──
 const PACS=['Manutenção'];
-function curRows(){const ps=curProjs();return ROWS.filter(r=>!ps||ps.includes(r.projeto));}
+function curRows(){const ps=curProjs();return ROWS.filter(r=>(!ps||ps.includes(r.projeto))&&passaExtras(r));}
 function geralTotals(){
   const real=curRows().filter(counts).reduce((s,r)=>s+r.valor,0);
   let orc=0,rem=0,hasO=false;
@@ -1145,7 +1184,7 @@ function renderAcomp(){
   PACS.forEach(pac=>{
     const byC=new Map(CONTAS[pac].map(c=>[c,0]));
     const ps=curProjs();
-    ROWS.filter(r=>(PACS.length===1||r.pacote===pac)&&(!ps||ps.includes(r.projeto))&&counts(r)).forEach(r=>byC.set(r.conta,(byC.get(r.conta)||0)+r.valor));
+    ROWS.filter(r=>(PACS.length===1||r.pacote===pac)&&(!ps||ps.includes(r.projeto))&&passaExtras(r)&&counts(r)).forEach(r=>byC.set(r.conta,(byC.get(r.conta)||0)+r.valor));
     let tR=0,tO=0,tRe=0,tHas=false;
     const prev=contratoPrevia();
     if(prev>0) byC.set(CONTA_CONTRATO,(byC.get(CONTA_CONTRATO)||0)+prev);
@@ -1528,6 +1567,6 @@ initPdfExport({ btnContainer:'#pdf-slot', btnClass:'s-item', btnAoFim:true,
   viewAtual:()=>VW, irPara:setVw,
   isLight:()=>document.body.classList.contains('claro'), setTheme:aplicaTema });
 </script>
-<script src="../assets/build-check.js?v=202609050300"></script>
+<script src="../assets/build-check.js?v=202609050320"></script>
 </body>
 </html>
