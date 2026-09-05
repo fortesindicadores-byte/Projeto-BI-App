@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-<meta name="build" content="202609050130">
+<meta name="build" content="202609050140">
 <title>Carta de Custos</title>
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -1162,18 +1162,25 @@ function hexLerp(c1,c2,t){const p=h=>[parseInt(h.slice(1,3),16),parseInt(h.slice
 const labelPlugin={afterDatasetsDraw(chart){const meta=chart.getDatasetMeta(0),ds=chart.data.datasets[0];if(!meta)return;const ctx=chart.ctx;ctx.save();ctx.font='700 10px Montserrat,sans-serif';ctx.fillStyle=isClaro()?'#161D2B':'#EEF2FA';ctx.textAlign='left';ctx.textBaseline='middle';ds.data.forEach((v,i)=>{const pt=meta.data[i];if(!pt||v==null)return;ctx.fillText(fmt(v),pt.x+6,pt.y);});ctx.restore();}};
 const TT={backgroundColor:'#141B26',titleColor:'#F97316',bodyColor:'#F1F5F9',borderColor:'#1E2D40',borderWidth:1,titleFont:{family:'Montserrat'},bodyFont:{family:'Montserrat'}};
 // barras verticais dos 12 meses (Consolidado: custo do ano)
-function anoChart(id,labels,vals){
+/* PADRÃO DO PORTAL (Renan, 05/09/2026): todo mês com valor aparece; o que está
+   no filtro vem cheio e com rótulo, o resto fica translúcido e sem rótulo —
+   igual à Visão Financeira (alfa CC no foco, 33 fora dele, borda cheia). */
+function anoChart(id,labels,vals,foco){
   if(charts[id])charts[id].destroy();
   if(!$(id))return;
+  const f=foco||labels.map(()=>true);
   charts[id]=new Chart($(id),{type:'bar',
-    data:{labels,datasets:[{data:vals,backgroundColor:'rgba(249,115,22,.85)',borderRadius:4,borderSkipped:false}]},
+    data:{labels,datasets:[{data:vals,
+      backgroundColor:vals.map((v,i)=>v?('#F97316'+(f[i]?'CC':'33')):'transparent'),
+      borderColor:vals.map(v=>v?'#F97316':'transparent'),borderWidth:1,
+      borderRadius:4,borderSkipped:false}]},
     options:{responsive:true,maintainAspectRatio:false,
       plugins:{legend:{display:false},tooltip:Object.assign({callbacks:{label:c=>fmt(c.raw)}},TT)},
-      scales:{x:{grid:{display:false},border:{display:false},ticks:getTick(10)},
+      scales:{x:{grid:{display:false},border:{display:false},ticks:getTick(12)},
         y:{grid:{display:false},border:{display:false},ticks:{display:false},beginAtZero:true,grace:'14%'}}},
     plugins:[{id:'vlab',afterDatasetsDraw(ch){const m=ch.getDatasetMeta(0);if(!m)return;const c=ch.ctx;c.save();
       c.font='700 10px Montserrat,sans-serif';c.fillStyle=isClaro()?'#161D2B':'#EEF2FA';c.textAlign='center';c.textBaseline='bottom';
-      ch.data.datasets[0].data.forEach((v,i)=>{const p=m.data[i];if(p&&v)c.fillText(fmt(v),p.x,p.y-4);});c.restore();}}]});
+      ch.data.datasets[0].data.forEach((v,i)=>{const p=m.data[i];if(p&&v&&f[i])c.fillText(fmt(v),p.x,p.y-4);});c.restore();}}]});
 }
 function barChart(id,pairs,max){
   const top=pairs.slice(0,max||10);
@@ -1360,8 +1367,11 @@ function renderConsol(){
   const ord=[...linhas.entries()].sort((a,b)=>b[1].tot-a[1].tot);
   const tMes={}; let totG=0;
   ord.forEach(([,a])=>{ meses.forEach(m=>{ if(a.mes[m]) tMes[m]=(tMes[m]||0)+a.mes[m]; }); totG+=a.tot; });
-  // o gráfico é a linha Total da tabela, mês a mês
-  anoChart('ch-consol', meses.map(m=>MESES[+m.slice(5)-1]), meses.map(m=>tMes[m]||0));
+  // o gráfico mostra TODOS os meses do ano que têm valor (o filtro só decide o
+  // foco): a tabela responde ao filtro, o gráfico dá o ano inteiro de contexto
+  const tAno={};
+  base.forEach(r=>{ if(r.vig_cobranca.slice(0,4)===ano) tAno[r.vig_cobranca]=(tAno[r.vig_cobranca]||0)+(+r.custo_vig||0); });
+  anoChart('ch-consol', meses.map(m=>MESES[+m.slice(5)-1]), meses.map(m=>tAno[m]||0), meses.map(m=>vSel.has(m)));
   set('co-gsub', `fixo + variável por vigência de cobrança · ${ano}`);
   let h='<thead><tr><th>Unidade</th>'
     +meses.map(m=>`<th class="num">${MESES[+m.slice(5)-1]}</th>`).join('')
@@ -1472,6 +1482,6 @@ initPdfExport({ btnContainer:'#pdf-slot', btnClass:'s-item', btnAoFim:true,
   viewAtual:()=>VW, irPara:setVw,
   isLight:()=>document.body.classList.contains('claro'), setTheme:aplicaTema });
 </script>
-<script src="../assets/build-check.js?v=202609050130"></script>
+<script src="../assets/build-check.js?v=202609050140"></script>
 </body>
 </html>
