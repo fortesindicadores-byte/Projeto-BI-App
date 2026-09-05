@@ -147,6 +147,74 @@ async function baixar() {
    abastecimentos entraram, de que período, quantas placas, e — o que importa
    de verdade — quantas placas COM CONTRATO acharam hodômetro, porque placa que
    não casa some da conta do mês sem dar erro nenhum. */
+/* MODO COMPARAR (05/09/2026): a planilha Contratos Man. contra o cálculo pelo
+   km do ERP, placa a placa e mês a mês. O Renan somou junho na planilha e deu
+   389k; o painel dizia 580k. A planilha já está no banco (as linhas que o
+   contratos-robot gravou em carta_custos, origem 'contratos-planilha'), então
+   a comparação é entre duas colunas do mesmo banco — sem adivinhar. */
+if (MODE === 'comparar') {
+  if (!SB_KEY) { console.error('GEM_SUPABASE_SERVICE_KEY ausente'); process.exit(1); }
+  const H = { apikey: SB_KEY, Authorization: `Bearer ${SB_KEY}` };
+  const pegaTudo = async (q, passo = 1000) => {
+    const tudo = [];
+    for (let off = 0; ; off += passo) {
+      const r = await fetch(`${SB_URL}/rest/v1/${q}`, { headers: { ...H, Range: `${off}-${off + passo - 1}` } });
+      if (!r.ok) throw new Error(`${q} → ${r.status} ${(await r.text()).slice(0, 200)}`);
+      const lote = await r.json(); tudo.push(...lote);
+      if (lote.length < passo) return tudo;
+    }
+  };
+  const brlN = v => 'R$ ' + (+v || 0).toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+  const plan = await pegaTudo('carta_custos?select=vigencia,equipamento,valor&origem=eq.contratos-planilha&order=vigencia.asc');
+  const calc = await pegaTudo('custo_vigencia?select=vig_cobranca,placa,placa_origem,tipo,km_vig,taxa_km,valor_fixo,custo_vig&order=vig_cobranca.asc');
+  const contr = await pegaTudo('contratos_placa?select=placa,placa_origem,tipo,taxa_km,valor_fixo');
+  const canon = new Map(contr.map(c => [String(c.placa_origem || c.placa).toUpperCase(), c.placa]));
+  const tipoDe = new Map(contr.map(c => [c.placa, c.tipo]));
+  console.log(`planilha: ${plan.length} linha(s) · cálculo: ${calc.length} · contratos: ${contr.length}`);
+
+  const P = new Map();
+  plan.forEach(r => {
+    const k = canon.get(String(r.equipamento || '').toUpperCase()) || String(r.equipamento || '').toUpperCase();
+    if (!P.has(r.vigencia)) P.set(r.vigencia, new Map());
+    const m = P.get(r.vigencia); m.set(k, (m.get(k) || 0) + (+r.valor || 0));
+  });
+  const C = new Map();
+  calc.forEach(r => { if (!C.has(r.vig_cobranca)) C.set(r.vig_cobranca, new Map()); C.get(r.vig_cobranca).set(r.placa, r); });
+
+  console.log('\nPLANILHA × CÁLCULO, por vigência (só as que a planilha tem):');
+  console.log('   VIG       PLANILHA     CÁLCULO   dif  | fixo: planilha / cálculo | variável: planilha / cálculo');
+  const vigs = [...P.keys()].sort();
+  const divergentes = [];
+  vigs.forEach(v => {
+    const pm = P.get(v), cm = C.get(v) || new Map();
+    let pT = 0, cT = 0, pF = 0, cF = 0, pV = 0, cV = 0;
+    pm.forEach((val, placa) => {
+      const t = tipoDe.get(placa) || '?', c = cm.get(placa);
+      const cv = c ? +c.custo_vig || 0 : 0;
+      pT += val; cT += cv;
+      if (t === 'fixo') { pF += val; cF += cv; } else { pV += val; cV += cv; }
+      if (c && Math.abs(cv - val) > Math.max(300, val * 0.25)) divergentes.push({ v, placa, t, val, cv, km: c.km_vig, taxa: c.taxa_km, fx: c.valor_fixo });
+    });
+    const d = pT ? ((cT / pT - 1) * 100).toFixed(0) + '%' : '—';
+    console.log(`   ${v} ${brlN(pT).padStart(11)} ${brlN(cT).padStart(11)} ${d.padStart(5)}  | ${brlN(pF).padStart(10)} / ${brlN(cF).padStart(10)} | ${brlN(pV).padStart(10)} / ${brlN(cV).padStart(10)}`);
+  });
+
+  console.log('\nPLACAS QUE O CÁLCULO COBRA MAS A PLANILHA NÃO TEM NO MÊS:');
+  vigs.forEach(v => {
+    const pm = P.get(v), cm = C.get(v) || new Map();
+    let n = 0, soma = 0, nF = 0, sF = 0;
+    cm.forEach((c, placa) => { if (!pm.has(placa)) { n++; soma += +c.custo_vig || 0; if (c.tipo === 'fixo') { nF++; sF += +c.custo_vig || 0; } } });
+    if (n) console.log(`   ${v}: ${n} placa(s) = ${brlN(soma)} (${nF} fixas = ${brlN(sF)})`);
+  });
+
+  divergentes.sort((a, b) => Math.abs(b.cv - b.val) - Math.abs(a.cv - a.val));
+  console.log(`\nMAIORES DIVERGÊNCIAS POR PLACA (${divergentes.length} acima de 25% ou R$ 300):`);
+  divergentes.slice(0, 20).forEach(x => console.log(`   ${x.v}  ${String(x.placa).padEnd(9)} ${x.t.padEnd(8)}`
+    + ` planilha ${brlN(x.val).padStart(10)} · cálculo ${brlN(x.cv).padStart(10)}`
+    + (x.t === 'fixo' ? ` · fixo cadastrado ${brlN(x.fx)}` : ` · ${Math.round(x.km || 0)} km × ${(+x.taxa || 0).toFixed(3)}`)));
+  process.exit(0);
+}
+
 if (MODE === 'conferir') {
   if (!SB_KEY) { console.error('GEM_SUPABASE_SERVICE_KEY ausente'); process.exit(1); }
   const H = { apikey: SB_KEY, Authorization: `Bearer ${SB_KEY}` };
