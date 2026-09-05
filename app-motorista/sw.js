@@ -15,7 +15,7 @@
    `activate` apaga as antigas. Sem isso o celular serviria a versão velha para
    sempre — é o erro clássico de PWA.
    ============================================================ */
-const CACHE = 'conducao-v3';
+const CACHE = 'conducao-v4';
 const ESSENCIAIS = ['./', './index.html', './manifest.json',
                     './img/icone-192.png', './img/icone-512.png'];
 
