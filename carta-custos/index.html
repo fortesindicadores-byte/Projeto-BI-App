@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-<meta name="build" content="202609050340">
+<meta name="build" content="202609050400">
 <title>Carta de Custos</title>
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -1276,9 +1276,10 @@ function renderCharts(rows){
 let CONTR=[], CONTR_OK=false;   // CONTR_OK: a leitura já respondeu (mesmo vazia)
 // o PostgREST corta a resposta em 1.000 linhas e ignora um limit maior —
 // são ~360 placas × 9 vigências, então sem paginar a tabela vem pela metade
-async function pgAll(tabela,select,ordem){
+async function pgAll(tabela,select,ordem,ajuste){
   const passo=1000;
   const q=()=>{ let x=sb.from(tabela).select(select,{count:'exact'});
+    if(ajuste) x=ajuste(x);
     if(ordem) ordem.forEach(o=>{ x=x.order(o[0],{ascending:o[1]!==false}); }); return x; };
   // a 1ª página traz a contagem; as outras saem TODAS de uma vez. Em sequência
   // cada página esperava a anterior, e cada uma recalcula a view inteira.
@@ -1304,6 +1305,27 @@ async function loadContratos(){
     catch(e2){ console.warn('custo_vigencia:',e2.message); CONTR=[]; } }
   const perm=new Set(ALLOWED);
   CONTR=CONTR.filter(r=>!r.unidade||perm.has(r.unidade));
+  /* MÊS QUE A PLANILHA TEM, VALE A PLANILHA — sem conta (Renan, 05/09/2026:
+     "não precisa fazer conta, o valor está na planilha"). O robô já gravou em
+     carta_custos uma linha por placa e mês da planilha Contratos Man. (origem
+     'contratos-planilha'). Aqui essas linhas SOBREPÕEM o cálculo: em toda
+     unidade+vigência coberta pela planilha, o custo da placa passa a ser o da
+     planilha (zero se a placa não está nela naquele mês) e a linha deixa de
+     ser prévia. O cálculo pelo km do ERP fica só para o mês que a planilha
+     ainda não fechou. O km continua vindo do ERP nas duas situações. */
+  try{
+    const plan=await pgAll('carta_custos','unidade,vigencia,equipamento,valor',[['vigencia',true]],
+      q=>q.eq('origem','contratos-planilha').in('unidade',ALLOWED));
+    const cobre=new Set(), val=new Map();
+    plan.forEach(r=>{ cobre.add(r.unidade+'|'+r.vigencia);
+      const k=r.vigencia+'|'+String(r.equipamento||'').toUpperCase();
+      val.set(k,(val.get(k)||0)+(+r.valor||0)); });
+    CONTR.forEach(r=>{
+      if(!cobre.has(r.unidade+'|'+r.vig_cobranca)) return;
+      const k=r.vig_cobranca+'|'+String(r.placa_origem||r.placa).toUpperCase();
+      r.custo_vig=val.get(k)||0; r.previa=false; r.origem='planilha';
+    });
+  }catch(e){ console.warn('planilha do contrato indisponível, ficou o cálculo:',e.message); }
   CONTR_OK=true;
   /* UM FILTRO DE VIGÊNCIA SÓ (Renan, 04/09/2026): a lista do topo nasce em
      AGO/26, que é quando a carta começou, mas o contrato tem vigência desde
@@ -1575,6 +1597,6 @@ initPdfExport({ btnContainer:'#pdf-slot', btnClass:'s-item', btnAoFim:true,
   viewAtual:()=>VW, irPara:setVw,
   isLight:()=>document.body.classList.contains('claro'), setTheme:aplicaTema });
 </script>
-<script src="../assets/build-check.js?v=202609050340"></script>
+<script src="../assets/build-check.js?v=202609050400"></script>
 </body>
 </html>
