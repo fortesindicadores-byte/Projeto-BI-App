@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-<meta name="build" content="202609050400">
+<meta name="build" content="202609050420">
 <title>Carta de Custos</title>
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -340,6 +340,7 @@ table.dre thead th.num{text-align:right;}
    a cada filtro — mês vazio estreito, mês cheio largo. Com table-layout:fixed
    os doze meses e o Total dividem a largura por igual; só Unidade é fixa. */
 #tbl-consol{table-layout:fixed;}
+#tbl-consol tr.mom td{font-size:10.5px;color:var(--txt3);border-top:0;padding-top:4px;}
 #tbl-consol th:first-child,#tbl-consol td:first-child{width:96px;}
 #vw-consol table.dre thead th{padding:8px 12px;}
 #vw-consol .gcard{flex:1 1 0;min-height:160px;}
@@ -1494,9 +1495,16 @@ function renderConsol(){
       +meses.map(m=>`<td class="num"${calor(a.mes[m],mn,mx)}>${a.mes[m]?fmt(a.mes[m]):D}</td>`).join('')
       +`<td class="num forte">${fmt(a.tot)}</td></tr>`;
   });
+  /* MoM ABAIXO DO TOTAL (Renan, 05/09/2026): variação do total contra o mês
+     anterior. Custo é custo: subiu = vermelho, caiu = verde. Só existe onde os
+     dois meses têm valor — mês vazio de um lado não vira −100%. */
+  const mom=meses.map((m,i)=>{ const a=tMes[m], b=i?tMes[meses[i-1]]:null; return (a&&b)?(a/b-1)*100:null; });
   h+=`</tbody><tfoot><tr class="total"><td class="conta">Total</td>`
    +meses.map(m=>`<td class="num">${tMes[m]?fmt(tMes[m]):D}</td>`).join('')
-   +`<td class="num">${fmt(totG)}</td></tr></tfoot>`;
+   +`<td class="num">${fmt(totG)}</td></tr>`
+   +`<tr class="mom"><td class="conta">MoM</td>`
+   +mom.map(v=>`<td class="num ${v==null?'':(v>0?'cr':'cg')}">${v==null?D:(v>0?'+':'')+v.toFixed(1)+'%'}</td>`).join('')
+   +`<td></td></tr></tfoot>`;
   $('tbl-consol').innerHTML=h;
 }
 
@@ -1597,6 +1605,6 @@ initPdfExport({ btnContainer:'#pdf-slot', btnClass:'s-item', btnAoFim:true,
   viewAtual:()=>VW, irPara:setVw,
   isLight:()=>document.body.classList.contains('claro'), setTheme:aplicaTema });
 </script>
-<script src="../assets/build-check.js?v=202609050400"></script>
+<script src="../assets/build-check.js?v=202609050420"></script>
 </body>
 </html>
