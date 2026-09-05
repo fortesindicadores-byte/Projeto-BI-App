@@ -394,3 +394,55 @@ alter function public.ce_app_dados(uuid, text)      set search_path = public, ex
 alter function public.ce_app_motoristas(uuid)       set search_path = public, extensions;
 alter function public.ce_app_sair(uuid)             set search_path = public, extensions;
 notify pgrst, 'reload schema';
+
+-- ============================================================
+-- 12) AUTOCADASTRO (Renan, 05/09/2026): "tem que ter os CPFs. Se não tem,
+--     considere o que ele cadastrar." O motorista digita o CPF dele, cria o
+--     PIN e escolhe a unidade + o próprio nome na lista (só quem ainda não se
+--     cadastrou). Daí em diante aquele CPF é daquele motorista. Se alguém
+--     pegar o nome errado, o gestor conserta apagando ce_app_acesso e
+--     zerando o cpf em ce_motoristas.
+-- ============================================================
+create or replace function public.ce_app_cadastro_lista(p_unidade text default null)
+returns jsonb language plpgsql security definer set search_path = public, extensions as $$
+begin
+  if p_unidade is null then
+    return jsonb_build_object('ok', true, 'unidades', coalesce((
+      select jsonb_agg(u order by u) from (select distinct unidade as u from ce_scores_mensais
+        where pontuacao is not null and chave not like 'semlogin:%' and unidade is not null) z), '[]'::jsonb));
+  end if;
+  return jsonb_build_object('ok', true, 'motoristas', coalesce((
+    select jsonb_agg(jsonb_build_object('chave', x.chave, 'nome', x.motorista) order by x.motorista)
+    from (select distinct on (s.chave) s.chave, s.motorista from ce_scores_mensais s
+          where s.unidade = p_unidade and s.pontuacao is not null and s.chave not like 'semlogin:%'
+          order by s.chave, s.competencia desc) x
+    left join ce_motoristas mo on mo.chave = x.chave
+    where mo.cpf is null), '[]'::jsonb));
+end $$;
+
+create or replace function public.ce_app_cadastro(p_cpf text, p_pin text, p_chave text)
+returns jsonb language plpgsql security definer set search_path = public, extensions as $$
+declare v_cpf text := ce_app_so_digitos(p_cpf); v_pin text := ce_app_so_digitos(p_pin); sc record;
+begin
+  if length(v_cpf) <> 11 or v_cpf ~ '^(\d)\1{10}$' then return jsonb_build_object('ok', false, 'erro', 'CPF inválido.'); end if;
+  if length(v_pin) <> 4 then return jsonb_build_object('ok', false, 'erro', 'A senha são 4 números.'); end if;
+  if exists (select 1 from ce_motoristas where cpf = v_cpf) then
+    return jsonb_build_object('ok', false, 'erro', 'Este CPF já tem cadastro. Entre com a sua senha.');
+  end if;
+  if exists (select 1 from ce_motoristas where chave = p_chave and cpf is not null) then
+    return jsonb_build_object('ok', false, 'erro', 'Este motorista já foi cadastrado. Se é você, fale com o seu gestor.');
+  end if;
+  select motorista, unidade, fonte into sc from ce_scores_mensais where chave = p_chave and pontuacao is not null order by competencia desc limit 1;
+  if sc is null then return jsonb_build_object('ok', false, 'erro', 'Motorista não encontrado.'); end if;
+  insert into ce_motoristas (chave, nome, unidade, fonte, ativo, cpf) values (p_chave, sc.motorista, sc.unidade, sc.fonte, true, v_cpf)
+    on conflict (chave) do update set cpf = excluded.cpf, ativo = true;
+  delete from ce_app_acesso where chave = p_chave;
+  insert into ce_app_acesso (chave, pin_hash) values (p_chave, crypt(v_pin, gen_salt('bf')));
+  return ce_app_login(v_cpf, v_pin);
+end $$;
+
+revoke all on function public.ce_app_cadastro_lista(text)        from public;
+revoke all on function public.ce_app_cadastro(text, text, text)  from public;
+grant execute on function public.ce_app_cadastro_lista(text)       to anon, authenticated;
+grant execute on function public.ce_app_cadastro(text, text, text) to anon, authenticated;
+notify pgrst, 'reload schema';

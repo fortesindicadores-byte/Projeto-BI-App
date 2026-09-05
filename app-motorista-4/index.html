@@ -7,7 +7,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="DriverPro">
-<meta name="build" content="202609061900">
+<meta name="build" content="202609062000">
 <title>DriverPro</title>
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="img/icone-192.png">
@@ -104,7 +104,7 @@ body.claro .nav button.on{color:#fff;}
 .gcab{display:flex;align-items:center;gap:10px;margin-top:22px;}
 .gcab .rot{flex:1;}
 .anosel{position:relative;}
-.anosel select{appearance:none;-webkit-appearance:none;background:var(--card);border:1px solid var(--brd);border-radius:8px;color:var(--txt);
+.anosel select{appearance:none;-webkit-appearance:none;background:var(--linha);border:1px solid var(--brd);border-radius:8px;color:var(--txt);
   font-family:inherit;font-size:12px;font-weight:600;padding:7px 28px 7px 12px;cursor:pointer;}
 .anosel::after{content:'';position:absolute;right:11px;top:50%;width:6px;height:6px;border-right:1.5px solid var(--txt2);border-bottom:1.5px solid var(--txt2);transform:translateY(-70%) rotate(45deg);pointer-events:none;}
 .gtot{font-size:33px;font-weight:600;letter-spacing:.4px;line-height:1.1;margin:8px 0 22px;}
@@ -192,7 +192,8 @@ body.claro .nav button.on{color:#fff;}
 <!-- ══════════ ADMIN: escolhe o motorista ══════════ -->
 <div id="tela-sel">
   <div class="sel-cab"><div class="logo-sm"><svg viewBox="0 0 48 48" fill="none" aria-hidden="true"><rect x="2" y="2" width="44" height="44" rx="12" fill="#F22C05"/><path d="M12 30a12 12 0 1 1 24 0" stroke="#fff" stroke-width="3.2" stroke-linecap="round"/><path d="M24 30l7-8" stroke="#fff" stroke-width="3.2" stroke-linecap="round"/><circle cx="24" cy="30" r="2.4" fill="#fff"/></svg></div><div><b>Selecione o motorista</b><span id="selSub">para ver o app como ele vê</span></div>
-    <button class="rb-sair" onclick="sair()">Sair</button></div>
+    <button class="rb-sair" onclick="CAD=null;sair()">Voltar</button></div>
+  <div class="anosel" id="selUniWrap" style="display:none;margin-bottom:10px"><select id="selUni" onchange="cadUnidade(this.value)" aria-label="Unidade" style="width:100%"></select></div>
   <input id="selBusca" type="search" placeholder="Buscar por nome ou unidade" autocomplete="off">
   <div class="sel-lista" id="selLista"></div>
 </div>
@@ -503,7 +504,11 @@ function entrar(){
   var bt = $('btEntrar'); bt.disabled = true; erroLogin('');
   rpc(MODO === 'criar' ? 'ce_app_criar_pin' : 'ce_app_login', { p_cpf: cpf, p_pin: pin }).then(function(r){
     bt.disabled = false;
-    if (!r.ok) { if (r.primeira_vez) modoLogin('criar'); return erroLogin(r.erro || 'Não deu certo.'); }
+    if (!r.ok) {
+      if (r.primeira_vez) modoLogin('criar');
+      if (MODO === 'criar' && /não está no programa/i.test(r.erro || '')) return quemEVoce(cpf, pin);
+      return erroLogin(r.erro || 'Não deu certo.');
+    }
     try { localStorage.setItem('app4_token', r.token); localStorage.setItem('app4_admin', r.admin ? '1' : ''); localStorage.removeItem('app4_chave'); } catch(e){}
     if (r.admin) escolheMotorista(); else carrega(r.token);
   }).catch(function(e){ bt.disabled = false; erroLogin('Sem conexão com o servidor. Tente de novo.'); console.warn(e); });
@@ -514,10 +519,35 @@ function carrega(token, chave){
     D = r; abre();
   }).catch(function(e){ erroLogin('Sem conexão com o servidor. Tente de novo.'); console.warn(e); });
 }
+/* ── autocadastro: CPF novo → escolhe a unidade e o próprio nome ── */
+var CAD = null;
+function quemEVoce(cpf, pin){
+  CAD = { cpf: cpf, pin: pin };
+  $('app').style.display = 'none'; $('tela-login').classList.remove('on'); $('tela-sel').classList.add('on');
+  $('selBusca').value = ''; $('selBusca').placeholder = 'Buscar o seu nome';
+  document.querySelector('#tela-sel .sel-cab b').textContent = 'Quem é você?';
+  $('selSub').textContent = 'escolha a sua unidade e toque no seu nome';
+  $('selUniWrap').style.display = ''; MOTORISTAS = []; filtraMotoristas();
+  rpc('ce_app_cadastro_lista', {}).then(function(r){
+    var us = (r.unidades || []);
+    $('selUni').innerHTML = '<option value="">Sua unidade…</option>' + us.map(function(u){ return '<option value="' + u + '">' + u + '</option>'; }).join('');
+  }).catch(function(){ $('selLista').innerHTML = '<div class="li"><div class="tx"><span>Sem conexão. Tente de novo.</span></div></div>'; });
+}
+function cadUnidade(u){
+  MOTORISTAS = []; filtraMotoristas(); if (!u) return;
+  $('selLista').innerHTML = '<div class="li"><div class="tx"><span>Carregando…</span></div></div>';
+  rpc('ce_app_cadastro_lista', { p_unidade: u }).then(function(r){
+    MOTORISTAS = (r.motoristas || []).map(function(m){ return { chave: m.chave, nome: m.nome, unidade: u }; }); filtraMotoristas();
+    if (!MOTORISTAS.length) $('selLista').innerHTML = '<div class="li"><div class="tx"><span>Todo mundo desta unidade já se cadastrou. Se você não está, fale com o seu gestor.</span></div></div>';
+  });
+}
+
 /* ── admin: escolhe o motorista e entra como ele ── */
 var MOTORISTAS = [];
 function escolheMotorista(){
   var t = null; try { t = localStorage.getItem('app4_token'); } catch(e){}
+  CAD = null; $('selUniWrap').style.display = 'none'; $('selBusca').placeholder = 'Buscar por nome ou unidade';
+  document.querySelector('#tela-sel .sel-cab b').textContent = 'Selecione o motorista'; $('selSub').textContent = 'para ver o app como ele vê';
   $('app').style.display = 'none'; $('tela-login').classList.remove('on'); $('tela-sel').classList.add('on'); fechaMenu();
   $('selLista').innerHTML = '<div class="li"><div class="tx"><span>Carregando…</span></div></div>';
   rpc('ce_app_motoristas', { p_token: t }).then(function(r){
@@ -536,6 +566,18 @@ function filtraMotoristas(){
 $('selBusca').addEventListener('input', filtraMotoristas);
 $('selLista').addEventListener('click', function(e){
   var li = e.target.closest('.li[data-chave]'); if (!li) return;
+  if (CAD) {   // autocadastro: amarra o CPF a este motorista e entra
+    var nome = li.querySelector('.tx b').textContent;
+    if (!confirm('Você é ' + nome + '?')) return;
+    li.style.opacity = '.5';
+    rpc('ce_app_cadastro', { p_cpf: CAD.cpf, p_pin: CAD.pin, p_chave: li.dataset.chave }).then(function(r){
+      li.style.opacity = '';
+      if (!r.ok) { alert(r.erro || 'Não deu certo.'); return; }
+      try { localStorage.setItem('app4_token', r.token); localStorage.setItem('app4_admin', ''); } catch(e){}
+      CAD = null; $('tela-sel').classList.remove('on'); carrega(r.token);
+    }).catch(function(){ li.style.opacity = ''; alert('Sem conexão com o servidor. Tente de novo.'); });
+    return;
+  }
   var t = null; try { t = localStorage.getItem('app4_token'); localStorage.setItem('app4_chave', li.dataset.chave); } catch(e){}
   $('tela-sel').classList.remove('on'); carrega(t, li.dataset.chave);
 });
