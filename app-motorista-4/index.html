@@ -7,7 +7,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="DriverPro">
-<meta name="build" content="202609062000">
+<meta name="build" content="202609062030">
 <title>DriverPro</title>
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="img/icone-192.png">
@@ -173,6 +173,15 @@ body.claro .nav button.on{color:#fff;}
 .lg-erro{font-size:12px;color:var(--vermelho);font-weight:500;margin:2px 0 6px;line-height:1.4;}
 .btn[disabled]{opacity:.6;cursor:default;}
 .proto{text-align:center;font-size:10px;color:var(--txt3);margin:6px 0 8px;}
+/* instalar o app: link nas telas de login/seleção + folha com o passo a passo quando o navegador não oferece o botão (iPhone, Safari) */
+.inst-link{text-align:center;font-size:12px;margin-top:14px;}
+.inst-link a{color:var(--txt2);font-weight:600;cursor:pointer;text-decoration:underline;text-underline-offset:3px;}
+.inst{position:fixed;inset:0;z-index:60;background:rgba(0,0,0,.55);display:none;align-items:flex-end;justify-content:center;}
+.inst.on{display:flex;}
+.inst-box{width:100%;max-width:440px;background:var(--card);border:1px solid var(--brd);border-radius:18px 18px 0 0;padding:20px 22px calc(22px + var(--safe-bot,0px));}
+.inst-box b{display:block;font-size:15px;margin-bottom:6px;}
+.inst-box p{font-size:12.5px;color:var(--txt2);line-height:1.55;margin:0 0 6px;}
+.inst-box .btn{margin-top:14px;}
 </style>
 </head>
 <body>
@@ -187,6 +196,7 @@ body.claro .nav button.on{color:#fff;}
   <div class="lg-erro" id="lgErro" style="display:none"></div>
   <button class="btn" id="btEntrar" onclick="entrar()">Entrar</button>
   <div class="lg-rodape" id="lgRodape">Primeira vez aqui? <a onclick="modoLogin('criar')">Criar senha</a></div>
+  <div class="inst-link" id="lgInstalar" style="display:none"><a onclick="instalar()">Instalar o app no celular</a></div>
 </div>
 
 <!-- ══════════ ADMIN: escolhe o motorista ══════════ -->
@@ -196,6 +206,16 @@ body.claro .nav button.on{color:#fff;}
   <div class="anosel" id="selUniWrap" style="display:none;margin-bottom:10px"><select id="selUni" onchange="cadUnidade(this.value)" aria-label="Unidade" style="width:100%"></select></div>
   <input id="selBusca" type="search" placeholder="Buscar por nome ou unidade" autocomplete="off">
   <div class="sel-lista" id="selLista"></div>
+  <div class="inst-link" id="selInstalar" style="display:none"><a onclick="instalar()">Instalar o app no celular</a></div>
+</div>
+
+<!-- passo a passo de instalação, quando o navegador não oferece o botão -->
+<div class="inst" id="inst" onclick="if(event.target===this)this.classList.remove('on')">
+  <div class="inst-box">
+    <b>Instalar o DriverPro</b>
+    <div id="instTxt"></div>
+    <button class="btn" onclick="document.getElementById('inst').classList.remove('on')">Entendi</button>
+  </div>
 </div>
 
 <!-- ══════════ APP ══════════ -->
@@ -478,9 +498,25 @@ $('btTema').addEventListener('click', function(){ aplicaTema(document.body.class
 /* ── PWA: registra o service worker e oferece "Adicionar à tela de início" ── */
 var INSTALL = null;
 if ('serviceWorker' in navigator) window.addEventListener('load', function(){ navigator.serviceWorker.register('sw.js').catch(function(e){ console.warn('sw:', e.message); }); });
-window.addEventListener('beforeinstallprompt', function(e){ e.preventDefault(); INSTALL = e; var b = $('btInstalar'); if (b) b.style.display = ''; });
-function instalar(){ if (!INSTALL) return; INSTALL.prompt(); INSTALL.userChoice.then(function(){ INSTALL = null; $('btInstalar').style.display = 'none'; }); }
-window.addEventListener('appinstalled', function(){ var b = $('btInstalar'); if (b) b.style.display = 'none'; });
+/* O botão aparece em TODAS as telas (login, seleção do admin e menu do app) e
+   some quando o app já está instalado (aberto em standalone). No Android/Chrome
+   e no Chrome de computador o navegador entrega o prompt (beforeinstallprompt);
+   no iPhone não existe prompt — a folha mostra o caminho pelo Safari. */
+var INSTALADO = !!(window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) || navigator.standalone === true;
+function mostraInstalar(){ ['btInstalar','lgInstalar','selInstalar'].forEach(function(id){ var b = $(id); if (b) b.style.display = INSTALADO ? 'none' : ''; }); }
+window.addEventListener('beforeinstallprompt', function(e){ e.preventDefault(); INSTALL = e; mostraInstalar(); });
+window.addEventListener('appinstalled', function(){ INSTALADO = true; INSTALL = null; mostraInstalar(); });
+function instalar(){
+  if (INSTALL) { INSTALL.prompt(); INSTALL.userChoice.then(function(){ INSTALL = null; }); return; }
+  var ua = navigator.userAgent || '', ios = /iPhone|iPad|iPod/i.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  $('instTxt').innerHTML = ios
+    ? '<p>No iPhone o app se instala pelo <b style="display:inline">Safari</b>:</p><p>1. Toque no botão <b style="display:inline">Compartilhar</b> (o quadrado com a seta para cima, embaixo da tela).</p><p>2. Role e toque em <b style="display:inline">Adicionar à Tela de Início</b>.</p><p>3. Toque em <b style="display:inline">Adicionar</b>. O DriverPro fica na tela inicial e abre sem o navegador.</p>'
+    : /Android/i.test(ua)
+    ? '<p>Toque no menu do navegador (os três pontinhos, no canto de cima) e depois em <b style="display:inline">Instalar aplicativo</b> ou <b style="display:inline">Adicionar à tela inicial</b>. O DriverPro fica na tela inicial e abre sem o navegador.</p>'
+    : '<p>No computador, use o Chrome ou o Edge: clique no ícone de instalar no fim da barra de endereço (ou no menu do navegador, em <b style="display:inline">Instalar DriverPro</b>). O app abre numa janela própria, sem as abas do navegador.</p>';
+  $('inst').classList.add('on');
+}
+mostraInstalar();
 
 /* ── login ── */
 var MODO = 'entrar';
