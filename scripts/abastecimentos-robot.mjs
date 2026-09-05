@@ -207,6 +207,30 @@ if (MODE === 'comparar') {
     if (n) console.log(`   ${v}: ${n} placa(s) = ${brlN(soma)} (${nF} fixas = ${brlN(sF)})`);
   });
 
+  /* DE QUE MÊS É O KM DO BLOCO "ago./26" DA PLANILHA? (05/09/2026) O rótulo
+     virou duas vezes por interpretação. Aqui o dado decide: para cada placa
+     variável, o valor da planilha no mês V é comparado ao cálculo pelo km do
+     MESMO mês e ao do mês ANTERIOR — qual dos dois fica mais perto, mais vezes. */
+  const Ckm = new Map();
+  calc.forEach(r => { if (!Ckm.has(r.vig_km)) Ckm.set(r.vig_km, new Map()); Ckm.get(r.vig_km).set(r.placa, r); });
+  const mesAnt = v => { const [y, m] = v.split('-').map(Number); return `${m === 1 ? y - 1 : y}-${String(m === 1 ? 12 : m - 1).padStart(2, '0')}`; };
+  console.log('\nALINHAMENTO DO RÓTULO (placas variáveis; quem fica a menos de 10% do valor da planilha):');
+  console.log('   VIG       mesmo mês   mês anterior   (empates/sem par)');
+  let tS = 0, tA = 0;
+  vigs.forEach(v => {
+    let same = 0, ant = 0, nd = 0;
+    P.get(v).forEach((val, placa) => {
+      if (tipoDe.get(placa) !== 'variavel' || !(val > 0)) return;
+      const a = (Ckm.get(v) || new Map()).get(placa), b = (Ckm.get(mesAnt(v)) || new Map()).get(placa);
+      const ea = a ? Math.abs((+a.custo_vig || 0) / val - 1) : Infinity;
+      const eb = b ? Math.abs((+b.custo_vig || 0) / val - 1) : Infinity;
+      if (ea < .10 && eb < .10) nd++; else if (ea < .10) same++; else if (eb < .10) ant++; else nd++;
+    });
+    tS += same; tA += ant;
+    console.log(`   ${v}   ${String(same).padStart(7)}   ${String(ant).padStart(11)}   ${String(nd).padStart(8)}`);
+  });
+  console.log(`   TOTAL     ${String(tS).padStart(7)}   ${String(tA).padStart(11)}   → o bloco "V" da planilha é o km de ${tS >= tA ? 'V (mesmo mês)' : 'V−1 (mês anterior: cobrança)'}`);
+
   divergentes.sort((a, b) => Math.abs(b.cv - b.val) - Math.abs(a.cv - a.val));
   console.log(`\nMAIORES DIVERGÊNCIAS POR PLACA (${divergentes.length} acima de 25% ou R$ 300):`);
   divergentes.slice(0, 20).forEach(x => console.log(`   ${x.v}  ${String(x.placa).padEnd(9)} ${x.t.padEnd(8)}`
