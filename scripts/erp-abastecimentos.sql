@@ -278,3 +278,27 @@ select v.vig_cobranca, v.vig_km,
   from vigs v
   cross join public.contratos_placa c
   left join public.km_vigencia k on k.placa = c.placa and k.vig_km = v.vig_km;
+
+-- ── 6) materializada para a Carta (05/09/2026) ────────────────────────────
+-- A view custo_vigencia recalcula o rateio dos ~57 mil abastecimentos a CADA
+-- pedido (generate_series dia a dia, ~200 mil linhas intermediárias), e o
+-- painel lê em quatro páginas — era o que deixava a Carta lenta. A materializada
+-- guarda o resultado pronto; o painel lê dela primeiro e cai na view se ela não
+-- existir. Refresh a cada 10 min pelo pg_cron (o ERP só muda quando o Renan roda
+-- o PowerShell) e sob demanda pela função, para o robô chamar depois da carga.
+-- O índice único é obrigatório para o refresh CONCURRENTLY, que não trava a
+-- leitura enquanto recalcula.
+create materialized view if not exists public.custo_vigencia_mv as
+  select * from public.custo_vigencia;
+create unique index if not exists custo_vigencia_mv_pk
+  on public.custo_vigencia_mv (vig_cobranca, placa);
+grant select on public.custo_vigencia_mv to authenticated;
+
+create or replace function public.refresh_custo_vigencia()
+returns void language sql security definer set search_path = public as
+$$ refresh materialized view concurrently public.custo_vigencia_mv; $$;
+revoke all on function public.refresh_custo_vigencia() from public;
+grant execute on function public.refresh_custo_vigencia() to service_role;
+
+select cron.schedule('custo-vigencia-refresh', '*/10 * * * *',
+  $$refresh materialized view concurrently public.custo_vigencia_mv$$);
