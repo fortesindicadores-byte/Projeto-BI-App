@@ -1,0 +1,50 @@
+# DriverPro Site Sync — vai no repositório SEPARADO `fortesindicadores-byte/driverpro`
+# (em .github/workflows/driverpro-site-sync.yml), NÃO neste.
+#
+# Por quê: o GitHub Pages aceita UM domínio por repositório. O portal fica no
+# github.io; o app ganha um subdomínio próprio (driverpro.<domínio>) servido do
+# repositório `driverpro`, que espelha a pasta app-motorista-4/ deste portal a
+# cada 15 min. A fonte continua sendo este repositório — ninguém edita lá.
+#
+# Passos (uma vez):
+#   1. Criar o repositório público `driverpro` na conta fortesindicadores-byte.
+#   2. Colar este arquivo lá em .github/workflows/driverpro-site-sync.yml e
+#      rodar "Run workflow" uma vez (Actions → DriverPro Site Sync).
+#   3. Settings → Pages → Source: Deploy from a branch → main / (root).
+#   4. Settings → Pages → Custom domain: driverpro.<domínio> → Save
+#      (isso cria o arquivo CNAME; o sync preserva ele) → marcar Enforce HTTPS
+#      quando o certificado ficar pronto (alguns minutos).
+#   5. No DNS do domínio: registro CNAME  driverpro  →  fortesindicadores-byte.github.io
+name: DriverPro Site Sync
+
+on:
+  schedule:
+    - cron: '*/15 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Puxa app-motorista-4 do portal
+        run: |
+          rm -rf /tmp/portal
+          git clone --depth 1 --filter=blob:none --sparse https://github.com/fortesindicadores-byte/gestao-em-movimento /tmp/portal
+          git -C /tmp/portal sparse-checkout set app-motorista-4
+          rsync -a --delete --exclude .git --exclude .github --exclude CNAME --exclude README.md /tmp/portal/app-motorista-4/ ./
+          touch .nojekyll
+          echo "PORTAL_SHA=$(git -C /tmp/portal rev-parse --short HEAD)" >> "$GITHUB_ENV"
+
+      - name: Publica se mudou
+        run: |
+          git config user.name  "driverpro-sync"
+          git config user.email "driverpro-sync@users.noreply.github.com"
+          git add -A
+          if git diff --cached --quiet; then echo "sem mudança"; exit 0; fi
+          git commit -m "sync: app-motorista-4 @ ${PORTAL_SHA}"
+          git push
