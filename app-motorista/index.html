@@ -7,7 +7,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Condução">
-<meta name="build" content="202609060400">
+<meta name="build" content="202609060500">
 <title>Condução Econômica</title>
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="img/icone-192.png">
@@ -132,8 +132,18 @@ body{background:var(--fundo);color:var(--txt);font-family:'Montserrat',-apple-sy
    jan→dez dentro do mesmo card. Barras apagadas, SÓ a selecionada em laranja,
    com a linha branca subindo até o check e o balão com o valor. Meses sem
    dado ficam vazios: o eixo é sempre o ano inteiro. */
-.gtot{font-size:28px;font-weight:900;letter-spacing:-1px;line-height:1;margin:6px 0 2px;}
-.graf{position:relative;height:196px;margin-top:14px;}
+.gtot{font-size:28px;font-weight:900;letter-spacing:-1px;line-height:1;margin:8px 0 2px;}
+/* setas de ano: dois botões redondos e grandes, o ano no meio; a seta some
+   quando não há ano naquela direção */
+.anonav{display:flex;align-items:center;gap:10px;}
+.anonav b{font-size:10px;font-weight:700;color:var(--txt2);text-transform:uppercase;letter-spacing:1.2px;}
+.anonav button{width:28px;height:28px;border-radius:50%;background:var(--cartao2);border:1px solid var(--linha);color:var(--txt);
+  font-family:inherit;font-size:18px;font-weight:800;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center;padding-bottom:2px;}
+.anonav button[disabled]{visibility:hidden;}
+.desde{font-size:10.5px;color:var(--txt2);font-weight:600;margin-top:4px;}
+.desde b{color:var(--txt);}
+.graf .vazio-ano{position:absolute;left:0;right:0;top:34%;text-align:center;font-size:11px;font-weight:700;color:var(--txt2);line-height:1.5;}
+.graf{position:relative;height:182px;margin-top:12px;}
 .graf .bars{position:absolute;left:0;right:0;top:52px;bottom:22px;display:flex;align-items:flex-end;gap:5px;}
 .graf .b{flex:1;position:relative;height:100%;display:flex;align-items:flex-end;cursor:pointer;}
 .graf .b i{display:block;width:100%;border-radius:6px 6px 3px 3px;background:rgba(255,255,255,.10);min-height:5px;transition:height .3s;}
@@ -300,8 +310,13 @@ body{background:var(--fundo);color:var(--txt);font-family:'Montserrat',-apple-sy
     <!-- ── GANHOS: o mês a mês (Renan, 04/09/2026) ── -->
     <section class="tela" id="v-ganhos">
       <div class="card destaque">
-        <div class="rot">Você já ganhou em 2026</div>
+        <div class="anonav">
+          <button id="anoAnt" onclick="mudaAno(-1)" aria-label="Ano anterior">‹</button>
+          <b id="anoTit">Você ganhou em 2026</b>
+          <button id="anoProx" onclick="mudaAno(1)" aria-label="Próximo ano">›</button>
+        </div>
         <div class="gtot pos" id="ganhoAno">R$ 0,00</div>
+        <div class="desde" id="desde"></div>
         <div class="graf" id="graf"></div>
       </div>
 
@@ -412,7 +427,15 @@ var EU = 0;
    mês a mês". Guarda o que ele RECEBEU, não a nota: para o motorista o mês só
    existe se virou dinheiro. Mês em que ele não foi elegível entra com zero e o
    motivo, senão ele acha que o app esqueceu dele. */
-var HISTORICO = [
+/* HISTÓRICO POR ANO (Renan, 05/09/2026): quando o programa virar o ano, o
+   motorista troca de ano pelas setas do card de Ganhos — sem menu, sem lista.
+   Índice = mês (0 = janeiro); mês sem dado = null. */
+var HIST_ANOS = {
+  2025: [null,null,null,null,null,null,null,null,null,
+    ['outubro',  74.0, 148.00,   0, ''],
+    ['novembro', 79.5, 159.00,   0, ''],
+    ['dezembro', 82.3, 164.60, 100, '']],
+  2026: [
   // mês, nota, carteira, pódio, motivo quando não recebeu
   ['janeiro',   78.4, 156.80,   0, ''],
   ['fevereiro', 81.2, 162.40,   0, ''],
@@ -422,7 +445,10 @@ var HISTORICO = [
   ['junho',     83.0, 166.00,   0, ''],
   ['julho',     88.2, 176.40, 300, ''],
   ['agosto',    90.5, 181.00, 300, ''],
-];
+]};
+var ANO_SEL = (function(){ var a = new Date().getFullYear(); return HIST_ANOS[a] ? a : Math.max.apply(null, Object.keys(HIST_ANOS).map(Number)); })();
+function histDe(ano){ return HIST_ANOS[ano] || []; }
+var HISTORICO = histDe(ANO_SEL);
 
 
 var RANKING = [
@@ -562,22 +588,8 @@ function pinta(){
       + (i < 3 ? '<div class="extra">+ R$ ' + PODIO[i] + '</div>' : '') + '</div>';
   }).join('');
 
-  // ── ganhos mês a mês ──
-  var totais = HISTORICO.map(function(h){ return h[2] + h[3]; });
-  var soma = totais.reduce(function(a,b){ return a+b; }, 0);
-  $('ganhoAno').textContent = brl(soma);
-  if (MES_SEL < 0) MES_SEL = HISTORICO.length - 1;
-  desenhaGrafico();
-
-  $('meses').innerHTML = HISTORICO.slice().reverse().map(function(h){
-    var v = h[2] + h[3];
-    var detalhe = v === 0 ? h[4]
-      : 'nota ' + h[1].toFixed(1).replace('.', ',')
-        + (h[3] ? ' · pódio + ' + brl(h[3]) : '');
-    return '<div class="mes-l"><div class="m">' + h[0].slice(0,3) + '</div>'
-      + '<div class="d">' + detalhe + '</div>'
-      + '<div class="v ' + (v ? 'pos' : 'neg') + '">' + brl(v) + '</div></div>';
-  }).join('');
+  // ── ganhos: o ano selecionado ──
+  renderGanhos();
 
   // ── régua, na língua do motorista ──
   $('regua').innerHTML = [
@@ -601,6 +613,32 @@ function cond(ok, titulo, detalhe){
     + '<div class="txt"><b>' + titulo + '</b><span>' + detalhe + '</span></div></div>';
 }
 
+/* ── GANHOS por ano: total, "desde que entrou", gráfico e lista ── */
+function somaDe(h){ return h.reduce(function(a, x){ return a + (x ? x[2] + x[3] : 0); }, 0); }
+function mudaAno(d){
+  var anos = Object.keys(HIST_ANOS).map(Number).sort(), i = anos.indexOf(ANO_SEL) + d;
+  if (i < 0 || i >= anos.length) return;
+  ANO_SEL = anos[i]; HISTORICO = histDe(ANO_SEL); MES_SEL = -1; renderGanhos();
+}
+function renderGanhos(){
+  var anos = Object.keys(HIST_ANOS).map(Number).sort();
+  var comDado = HISTORICO.filter(Boolean);
+  $('anoTit').textContent = comDado.length ? 'Você ganhou em ' + ANO_SEL : ANO_SEL + ' ainda não fechou nenhum mês';
+  $('anoAnt').disabled = anos.indexOf(ANO_SEL) === 0;
+  $('anoProx').disabled = anos.indexOf(ANO_SEL) === anos.length - 1;
+  $('ganhoAno').textContent = brl(somaDe(HISTORICO));
+  var tudo = anos.reduce(function(a, y){ return a + somaDe(histDe(y)); }, 0);
+  $('desde').innerHTML = 'Desde que você entrou: <b>' + brl(tudo) + '</b>';
+  if (MES_SEL < 0 || !HISTORICO[MES_SEL]) { MES_SEL = -1; HISTORICO.forEach(function(h, i){ if (h) MES_SEL = i; }); }
+  desenhaGrafico();
+  $('meses').innerHTML = comDado.length ? HISTORICO.slice().reverse().filter(Boolean).map(function(h){
+    var v = h[2] + h[3];
+    var detalhe = v === 0 ? h[4] : 'nota ' + h[1].toFixed(1).replace('.', ',') + (h[3] ? ' · pódio + ' + brl(h[3]) : '');
+    return '<div class="mes-l"><div class="m">' + h[0].slice(0,3) + '</div><div class="d">' + detalhe + '</div>'
+      + '<div class="v ' + (v ? 'pos' : 'neg') + '">' + brl(v) + '</div></div>';
+  }).join('') : '<div class="mes-l"><div class="d">O primeiro mês de ' + ANO_SEL + ' aparece aqui quando fechar. Toque em ‹ para ver ' + (ANO_SEL - 1) + '.</div></div>';
+}
+
 /* o gráfico do ano: 12 barras fixas, jan→dez; a selecionada em laranja com o balão */
 var MESES12 = ['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
 var MES_SEL = -1;
@@ -613,9 +651,11 @@ function desenhaGrafico(){
       + (on ? '<div class="linha" style="bottom:' + alt + '%;top:-44px"></div><div class="ck" style="top:-54px">✓</div>' : '') + '</div>';
   }).join('');
   var eixo = MESES12.map(function(m, i){ return '<span class="' + (i === MES_SEL ? 'on' : vals[i] === null ? 'vazio' : '') + '">' + m + '</span>'; }).join('');
+  if (MES_SEL < 0) { $('graf').innerHTML = '<div class="bars">' + bars + '</div><div class="eixo">' + eixo + '</div>'
+    + '<div class="vazio-ano">Nenhum mês fechado ainda.<br>O ano passado está na seta ‹</div>'; return; }
   var h = HISTORICO[MES_SEL], v = vals[MES_SEL] || 0;
   var lado = MES_SEL >= 6 ? 'right:' + Math.round((12 - MES_SEL - 0.5) / 12 * 100 + 1) + '%' : 'left:' + Math.round((MES_SEL + 0.5) / 12 * 100 + 1) + '%';
-  var tip = '<div class="tip" style="' + lado + '"><b>' + h[0].charAt(0).toUpperCase() + h[0].slice(1) + ' de 2026</b>'
+  var tip = '<div class="tip" style="' + lado + '"><b>' + h[0].charAt(0).toUpperCase() + h[0].slice(1) + ' de ' + ANO_SEL + '</b>'
     + (v ? '<div><span>Carteira</span><em>' + brl(h[2]) + '</em></div>' + (h[3] ? '<div><span>Pódio</span><em>+ ' + brl(h[3]) + '</em></div>' : '')
          + '<div><span>Total</span><em>' + brl(v) + '</em></div>'
        : '<div><span>' + h[4] + '</span><em>R$ 0,00</em></div>') + '</div>';
