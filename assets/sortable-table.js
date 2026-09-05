@@ -219,12 +219,13 @@
   function initTable(table){
     alinhaCabecalhos(table);                        // vale mesmo com data-no-sort
     if(table.dataset.noSort!=null){ observaAlinhamento(table); return; }
-    const headerRow = getHeaderRow(table);
-    if(!headerRow) return;
-    table.classList.add('st-enabled');
-    Array.from(headerRow.children).forEach(th=>{
-      if(th.tagName==='TH') wireHeader(table, th);
-    });
+    /* O OBSERVADOR É INSTALADO ANTES DE OLHAR O CABEÇALHO (bug real,
+       04/09/2026). Painel que monta a tabela só depois de responder o banco tem
+       a <table> VAZIA no boot: o `return` por falta de header saía sem observar
+       nada, e quando o thead chegava não havia mais quem religasse os cliques —
+       a tabela nascia sem ordenação, calada. O observador do <body> também não
+       pegava, porque `innerHTML` acrescenta thead/tbody, não uma <table> nova.
+       Instalado primeiro, ele mesmo faz o wire assim que o cabeçalho aparece. */
     if(!table.__stObserved){
       table.__stObserved = true;
       const obs = new MutationObserver(()=>{
@@ -250,6 +251,12 @@
       });
       obs.observe(table, {childList:true, subtree:true});
     }
+    const headerRow = getHeaderRow(table);
+    if(!headerRow) return;                // sem cabeçalho ainda: o observador religa
+    table.classList.add('st-enabled');
+    Array.from(headerRow.children).forEach(th=>{
+      if(th.tagName==='TH') wireHeader(table, th);
+    });
   }
 
   // tabela sem sort também precisa realinhar depois do re-render
