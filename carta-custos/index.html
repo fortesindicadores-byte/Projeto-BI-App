@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-<meta name="build" content="202609050140">
+<meta name="build" content="202609050200">
 <title>Carta de Custos</title>
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -899,10 +899,21 @@ async function loadRows(){
   if(!sb||!units.length||!vigs.length){ marcarCarregando(false); return; }
   const seq=++_loadSeq;
   marcarCarregando(true);
-  const {data,error}=await sb.from('carta_custos').select('*').in('unidade',units).in('vigencia',vigs).order('data',{ascending:false}).order('created_at',{ascending:false});
+  /* PAGINADO (bug real, 05/09/2026): o PostgREST devolve no máximo 1.000
+     linhas por pedido, sem erro. Com todas as unidades e vigências no filtro
+     a Carta mostrava "1000 lançamento(s)" — o teto, não o total — e o resto
+     simplesmente não existia na tela. */
+  const data=[]; let erro=null;
+  for(let off=0;;off+=1000){
+    const r=await sb.from('carta_custos').select('*').in('unidade',units).in('vigencia',vigs)
+      .order('data',{ascending:false}).order('created_at',{ascending:false}).range(off,off+999);
+    if(r.error){ erro=r.error; break; }
+    data.push(...(r.data||[]));
+    if(!r.data||r.data.length<1000) break;
+  }
   if(seq!==_loadSeq) return;
-  if(error){ console.error(error); ROWS=[]; }
-  else ROWS=(data||[]).map(fromDB);
+  if(erro){ console.error(erro); ROWS=[]; }
+  else ROWS=data.map(fromDB);
   await loadDRE();
   if(seq!==_loadSeq) return;
   refreshProjetos();
@@ -957,11 +968,14 @@ const counts=r=>!!(r&&r.nf&&String(r.nf).trim())&&r.valor>0;
 const contaRC=r=>!!(r&&r.rc&&String(r.rc).trim())&&r.valor>0;
 function lancRowBox(r){
   const pend=!counts(r);
-  const ctx=[curUnits().length>1?r.unidade:'', curVigs().length>1?vigLabel(r.vigencia):''].filter(Boolean).join(' · ');
-  const tag=ctx?`<span class="ro-uni">${esc(ctx)}</span>`:'';
+  /* UNIDADE É COLUNA, NÃO PÍLULA (Renan, 05/09/2026): a pílula laranja com
+     unidade e mês grudada no projeto não se lia. Unidade vira coluna de texto
+     — só quando há mais de uma no filtro, porque quem é de uma unidade só vê a
+     dela — e Projeto fica na coluna dele. O mês já está na Data. */
+  const multiUni=curUnits().length>1;
   return `<tr class="clicavel${pend?' pend':''}" data-id="${r.id||''}" onclick="abrirLanc('${r.id||''}')" title="Clique para abrir">
-    <td>${esc(dataBR(r.data))}</td>
-    <td>${tag}${esc(r.projeto||'—')}</td>
+    <td>${esc(dataBR(r.data))}</td>`+(multiUni?`<td>${esc(r.unidade||'—')}</td>`:'')+`
+    <td>${esc(r.projeto||'—')}</td>
     <td>${esc(r.equipamento||'—')}</td>
     <td class="wrap forn">${esc(r.fornecedor||'—')}</td>
     <td class="wrap cta">${esc(r.conta||'—')}</td>
@@ -1141,16 +1155,17 @@ function renderAcomp(){
 }
 function renderLanc(rows){
   const single=singleCtx();
-  const th=`<thead><tr><th>Data</th><th>Projeto</th><th>Equipamento</th><th>Fornecedor</th><th>Conta</th><th>Grupo</th><th>Descrição</th><th class="num">Valor</th><th>RC</th><th class="num" title="Aprovação da RC — libera a OC">OK</th><th>OC</th><th class="num" title="Aprovação da OC — libera a NF">OK</th><th>NF</th></tr></thead><tbody>`;
+  const multiUni=curUnits().length>1;
+  const th=`<thead><tr><th>Data</th>${multiUni?'<th>Unidade</th>':''}<th>Projeto</th><th>Equipamento</th><th>Fornecedor</th><th>Conta</th><th>Grupo</th><th>Descrição</th><th class="num">Valor</th><th>RC</th><th class="num" title="Aprovação da RC — libera a OC">OK</th><th>OC</th><th class="num" title="Aprovação da OC — libera a NF">OK</th><th>NF</th></tr></thead><tbody>`;
   let h=th;
   set('lanc-sub', rows.length+' lançamento(s) · '
     + (single ? 'clique na linha para abrir o custo'
               : 'visão agregada (várias unidades/meses) · a caixa mostra a unidade e a vigência de cada lançamento')
     + ' · botão direito → exportar Excel');
-  if(!rows.length) h+=`<tr><td colspan="13"><div class="vazio">${single?'Nenhum custo lançado neste mês.':'Nenhum custo lançado no filtro atual.'} Clique em “+ lançar custo”.</div></td></tr>`;
+  if(!rows.length) h+=`<tr><td colspan="${multiUni?14:13}"><div class="vazio">${single?'Nenhum custo lançado neste mês.':'Nenhum custo lançado no filtro atual.'} Clique em “+ lançar custo”.</div></td></tr>`;
   h+=rows.map(lancRowBox).join('');
   const tot=rows.filter(contaRC).reduce((s,r)=>s+r.valor,0);
-  h+=`</tbody><tfoot><tr class="total"><td class="conta">Total</td>${'<td></td>'.repeat(6)}`
+  h+=`</tbody><tfoot><tr class="total"><td class="conta">Total</td>${'<td></td>'.repeat(multiUni?7:6)}`
    + `<td class="num" id="lanc-total">${fmt(tot)}</td>${'<td></td>'.repeat(5)}</tr></tfoot>`;
   $('tbl-lanc').innerHTML=h;
 }
@@ -1482,6 +1497,6 @@ initPdfExport({ btnContainer:'#pdf-slot', btnClass:'s-item', btnAoFim:true,
   viewAtual:()=>VW, irPara:setVw,
   isLight:()=>document.body.classList.contains('claro'), setTheme:aplicaTema });
 </script>
-<script src="../assets/build-check.js?v=202609050140"></script>
+<script src="../assets/build-check.js?v=202609050200"></script>
 </body>
 </html>
