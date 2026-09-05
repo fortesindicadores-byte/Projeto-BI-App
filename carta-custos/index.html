@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-<meta name="build" content="202609042140">
+<meta name="build" content="202609042230">
 <title>Carta de Custos</title>
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -349,6 +349,9 @@ table.dre td.desc{white-space:normal;max-width:180px;line-height:1.35;}
 .ro-uni{display:inline-block;background:rgba(249,115,22,.15);color:var(--laranja);border-radius:3px;
   padding:0 5px;font-size:9px;font-weight:800;margin-right:4px;}
 .dash{color:var(--txt4);font-size:10px;}
+/* o número que a visão existe para mostrar (km e custo) vem em negrito, na cor
+   cheia do texto — o resto da linha é cadastro do veículo */
+table.dre td.forte{font-weight:800;color:var(--txt);}
 .tag-pill{display:inline-block;font-size:10.5px;font-weight:800;padding:2px 9px;border-radius:10px;
   min-width:50px;text-align:center;}
 .vazio{text-align:center;color:var(--txt3);padding:26px;font-size:12.5px;}
@@ -1164,7 +1167,7 @@ async function loadContratos(){
   if(!sb) return;
   CONTR=await pgAll('custo_vigencia',
     'vig_cobranca,vig_km,placa,placa_origem,unidade,projeto,tipo,taxa_km,km_vig,'
-    +'km_hodometro,divergencia_pct,origem_km,custo_vig,abastecimentos,ultimo_abast,previa',
+    +'km_hodometro,divergencia_pct,origem_km,custo_vig,abastecimentos,ultimo_abast,previa,modelo',
     [['vig_cobranca',false],['custo_vig',false]]);
   const perm=new Set(ALLOWED);
   CONTR=CONTR.filter(r=>!r.unidade||perm.has(r.unidade));
@@ -1187,53 +1190,68 @@ const contrDoFiltro=()=>{
 };
 
 function renderPlacas(){
-  const rows=contrDoFiltro();
+  /* SÓ CONTRATO VARIÁVEL (Renan, 04/09/2026). Placa de contrato fixo paga o
+     mesmo valor rode ou não rode — numa visão cujo assunto é o km rodado ela
+     só faz peso, e ainda entrava na soma do custo como se o km explicasse
+     aquele valor. O fixo continua inteiro no Consolidado Contrato. */
+  const rows=contrDoFiltro().filter(r=>r.tipo==='variavel');
   const multiVig=curVigs().length>1, multiUni=curUnits().length>1;
   if(!rows.length){
     $('pl-kpis').innerHTML='';
-    set('pl-sub','Sem contrato de placa para o recorte do filtro.');
-    $('tbl-placas').innerHTML=`<tbody><tr><td><div class="vazio">Sem contrato de placa para este recorte. A base do contrato vem do ERP e da planilha Contratos Man.</div></td></tr></tbody>`;
+    set('pl-sub','Sem placa de contrato por km no recorte do filtro.');
+    $('tbl-placas').innerHTML=`<tbody><tr><td><div class="vazio">Sem placa de contrato por km neste recorte.</div></td></tr></tbody>`;
     return;
   }
+  /* MÉDIA MENSAL DA PLACA: o custo dela dividido pelos meses em que houve
+     apuração, em TODA a base — não só no filtro. É a régua contra a qual o mês
+     escolhido se lê: rodou mais ou menos que de costume. */
+  const hist=new Map();
+  CONTR.filter(r=>r.tipo==='variavel'&&r.km_vig!=null).forEach(r=>{
+    const a=hist.get(r.placa)||{n:0,km:0,custo:0};
+    a.n++; a.km+=+r.km_vig||0; a.custo+=+r.custo_vig||0; hist.set(r.placa,a);
+  });
   const previa=rows.some(r=>r.previa);
   const km=rows.reduce((s,r)=>s+(+r.km_vig||0),0);
   const tot=rows.reduce((s,r)=>s+(+r.custo_vig||0),0);
-  const fixo=rows.filter(r=>r.tipo==='fixo').reduce((s,r)=>s+(+r.custo_vig||0),0);
-  const semKm=rows.filter(r=>r.tipo==='variavel'&&r.km_vig==null).length;
+  const nPl=new Set(rows.map(r=>r.placa)).size;
+  const semKm=rows.filter(r=>r.km_vig==null).length;
   const vigsKm=[...new Set(rows.map(r=>r.vig_km))].sort();
-  set('pl-sub', (multiVig?`${curVigs().length} vigências de cobrança`:`Cobrança ${vigLabel(curVigs()[0])}`)
-    + ` — km de ${vigsKm.map(vigLabel).join(', ')}`
-    + (previa?' · PRÉVIA: o km do mês corrente ainda está sendo formado':'')
+  set('pl-sub', (multiVig?`${curVigs().length} vigências`:`Vigência ${vigLabel(curVigs()[0])}`)
+    + ` — km rodado em ${vigsKm.map(vigLabel).join(', ')}, que é o mês que essa vigência cobra`
+    + (previa?' · PRÉVIA: o mês corrente ainda está sendo formado':'')
     + ' · clique no cabeçalho para ordenar · botão direito → exportar Excel');
   $('pl-kpis').innerHTML=
-    `<div class="kpi"><div class="kl">Placas</div><div class="kv">${new Set(rows.map(r=>r.placa)).size}</div><div class="km">${semKm} sem km no mês</div></div>`+
-    `<div class="kpi"><div class="kl">Km do mês</div><div class="kv">${fmt(km)}</div><div class="km">hodômetro do ERP</div></div>`+
-    `<div class="kpi"><div class="kl">Variável</div><div class="kv">${fmt(tot-fixo)}</div><div class="km">km × taxa</div></div>`+
-    `<div class="kpi"><div class="kl">Fixo</div><div class="kv">${fmt(fixo)}</div><div class="km">independe de km</div></div>`+
-    `<div class="kpi"><div class="kl">Total</div><div class="kv">${fmt(tot)}</div><div class="km">${previa?'<b style="color:var(--ambar)">com prévia</b>':'vigência fechada'}</div></div>`;
-  /* KM E CUSTO SÃO AS ÚLTIMAS COLUNAS (Renan, 04/09/2026) — o que se lê é o
-     número do fim da linha, e o cadastro da placa fica antes dele.
-     A taxa vai em pt-BR: `toFixed(3)` escrevia "1.393", que em português se lê
-     mil trezentos e noventa e três em vez de um real e trinta e nove. */
+    `<div class="kpi"><div class="kl">Km rodado</div><div class="kv">${fmt(km)}</div><div class="km">hodômetro do ERP</div></div>`+
+    `<div class="kpi"><div class="kl">Placas</div><div class="kv">${nPl}</div><div class="km">${semKm} sem km no mês</div></div>`+
+    `<div class="kpi"><div class="kl">Km médio</div><div class="kv">${fmt(nPl?km/nPl:0)}</div><div class="km">por placa no mês</div></div>`+
+    `<div class="kpi"><div class="kl">R$/km médio</div><div class="kv">${km?(tot/km).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2}):'—'}</div><div class="km">custo ÷ km</div></div>`+
+    `<div class="kpi"><div class="kl">Custo</div><div class="kv">${fmt(tot)}</div><div class="km">${previa?'<b style="color:var(--ambar)">com prévia</b>':'vigência fechada'}</div></div>`;
   let h='<thead><tr>'
-    +(multiVig?'<th>Cobrança</th>':'')+'<th>Placa</th>'
-    +(multiUni?'<th>Unidade</th>':'')+'<th>Projeto</th><th>Tipo</th>'
+    +(multiVig?'<th>Vigência</th>':'')+'<th>Placa</th><th>Modelo</th>'
+    +(multiUni?'<th>Unidade</th>':'')+'<th>Projeto</th>'
     +'<th class="num">R$/km</th><th class="num">Abast.</th><th>Últ. abast.</th>'
-    +'<th class="num">Km do mês</th><th class="num">Custo</th></tr></thead><tbody>';
-  rows.slice().sort((a,b)=>(+b.custo_vig||0)-(+a.custo_vig||0)).forEach(r=>{
+    +'<th class="num">Média/mês</th><th class="num">Km do mês</th><th class="num">Custo</th></tr></thead><tbody>';
+  // ORDEM INICIAL PELO KM: o assunto da visão é quanto cada placa rodou
+  rows.slice().sort((a,b)=>(+b.km_vig||0)-(+a.km_vig||0)).forEach(r=>{
+    const hs=hist.get(r.placa);
     h+='<tr>'+(multiVig?`<td>${esc(vigLabel(r.vig_cobranca))}</td>`:'')
       +`<td class="conta">${esc(r.placa_origem||r.placa)}</td>`
+      +`<td>${esc(r.modelo||'—')}</td>`
       +(multiUni?`<td>${esc(r.unidade||'—')}</td>`:'')
-      +`<td>${esc(r.projeto||'—')}</td><td>${r.tipo==='fixo'?'Fixo':'Por km'}</td>`
+      +`<td>${esc(r.projeto||'—')}</td>`
       +`<td class="num">${r.taxa_km!=null?(+r.taxa_km).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2}):D}</td>`
       +`<td class="num">${r.abastecimentos||D}</td><td>${esc(dataBR(r.ultimo_abast))}</td>`
-      +`<td class="num">${r.km_vig==null?D:numBR(r.km_vig)}</td>`
-      +`<td class="num">${fmt(r.custo_vig)}</td></tr>`;
+      +`<td class="num">${hs&&hs.n?fmt(hs.custo/hs.n):D}</td>`
+      +`<td class="num forte">${r.km_vig==null?D:numBR(r.km_vig)}</td>`
+      +`<td class="num forte">${fmt(r.custo_vig)}</td></tr>`;
   });
   const vaz=n=>'<td></td>'.repeat(n);
+  // 9 colunas fixas (Placa, Modelo, Projeto, R$/km, Abast., Últ. abast.,
+  // Média/mês, Km, Custo): o rodapé precisa de 6 células vazias entre o
+  // "Total" e os dois números, mais uma para cada coluna condicional
   h+=`</tbody><tfoot><tr class="total"><td class="conta">Total</td>`
-   +vaz(5+(multiVig?1:0)+(multiUni?1:0))
-   +`<td class="num">${numBR(km)}</td><td class="num">${fmt(tot)}</td></tr></tfoot>`;
+   +vaz(6+(multiVig?1:0)+(multiUni?1:0))
+   +`<td class="num forte">${numBR(km)}</td><td class="num forte">${fmt(tot)}</td></tr></tfoot>`;
   $('tbl-placas').innerHTML=h;
 }
 
@@ -1395,6 +1413,6 @@ initPdfExport({ btnContainer:'#pdf-slot', btnClass:'s-item', btnAoFim:true,
   viewAtual:()=>VW, irPara:setVw,
   isLight:()=>document.body.classList.contains('claro'), setTheme:aplicaTema });
 </script>
-<script src="../assets/build-check.js?v=202609042140"></script>
+<script src="../assets/build-check.js?v=202609042230"></script>
 </body>
 </html>

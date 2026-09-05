@@ -189,14 +189,15 @@ mes as (
          sum(litros)                         as litros,
          sum(valor)                          as valor_diesel,
          count(*)                            as abastecimentos,
-         max(data)                           as ultimo_abast
+         max(data)                           as ultimo_abast,
+         max(modelo)                         as modelo
     from public.erp_abastecimentos
    where data is not null and data <= current_date and hodometro is not null
    group by placa, to_char(data, 'YYYY-MM')
 ),
 simples as (
   select placa, vig, hodo_fim, km_erp, litros, valor_diesel, abastecimentos,
-         ultimo_abast,
+         ultimo_abast, modelo,
          hodo_fim - lag(hodo_fim) over (partition by placa order by vig) as km_hodometro
     from mes
 )
@@ -217,7 +218,11 @@ select coalesce(r.placa, s.placa)                       as placa,
        -- não servia de segunda opinião.
        case when s.km_hodometro > 0 and r.km_rateio is not null
             then round(abs(r.km_rateio - s.km_hodometro) / s.km_hodometro * 100, 1)
-       end                                              as divergencia_pct
+       end                                              as divergencia_pct,
+       -- MODELO NO FIM DO SELECT de propósito: `create or replace view` só
+       -- aceita acréscimo no fim, e a custo_vigencia depende desta view —
+       -- inserir no meio exigiria derrubar as duas.
+       s.modelo
   from rateio r
   full outer join simples s on s.placa = r.placa and s.vig = r.vig;
 
@@ -268,7 +273,8 @@ select v.vig_cobranca, v.vig_km,
        end                                  as custo_vig,
        k.litros, k.valor_diesel, k.abastecimentos, k.ultimo_abast,
        -- a vigência do mês corrente é PRÉVIA: o km ainda está sendo formado
-       (v.vig_km = to_char(current_date, 'YYYY-MM')) as previa
+       (v.vig_km = to_char(current_date, 'YYYY-MM')) as previa,
+       k.modelo
   from vigs v
   cross join public.contratos_placa c
   left join public.km_vigencia k on k.placa = c.placa and k.vig_km = v.vig_km;
