@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-<meta name="build" content="202609050320">
+<meta name="build" content="202609050340">
 <title>Carta de Custos</title>
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -1459,10 +1459,18 @@ function renderConsol(){
   let h='<thead><tr><th>Unidade</th>'
     +meses.map(m=>`<th class="num">${MESES[+m.slice(5)-1]}</th>`).join('')
     +'<th class="num">Total</th></tr></thead><tbody>';
+  /* MAPA DE CALOR POR LINHA (Renan, 05/09/2026): cada unidade colore os
+     próprios meses do mais barato ao mais caro, para o mês fora da curva
+     saltar aos olhos sem precisar ler os números. É rgba direto, não
+     color-mix — o html2canvas aborta o PDF com color-mix (bug conhecido). */
+  const calor=(v,mn,mx)=>{ if(!v) return ''; const t=mx>mn?(v-mn)/(mx-mn):.5;
+    return ` style="background:rgba(249,115,22,${(0.06+0.40*t).toFixed(2)})"`; };
   ord.forEach(([k,a])=>{
+    const vs=meses.map(m=>a.mes[m]||0).filter(Boolean);
+    const mn=Math.min(...vs), mx=Math.max(...vs);
     h+=`<tr><td class="conta">${esc(k)}</td>`
-      +meses.map(m=>`<td class="num">${a.mes[m]?fmt(a.mes[m]):D}</td>`).join('')
-      +`<td class="num">${fmt(a.tot)}</td></tr>`;
+      +meses.map(m=>`<td class="num"${calor(a.mes[m],mn,mx)}>${a.mes[m]?fmt(a.mes[m]):D}</td>`).join('')
+      +`<td class="num forte">${fmt(a.tot)}</td></tr>`;
   });
   h+=`</tbody><tfoot><tr class="total"><td class="conta">Total</td>`
    +meses.map(m=>`<td class="num">${tMes[m]?fmt(tMes[m]):D}</td>`).join('')
@@ -1567,6 +1575,6 @@ initPdfExport({ btnContainer:'#pdf-slot', btnClass:'s-item', btnAoFim:true,
   viewAtual:()=>VW, irPara:setVw,
   isLight:()=>document.body.classList.contains('claro'), setTheme:aplicaTema });
 </script>
-<script src="../assets/build-check.js?v=202609050320"></script>
+<script src="../assets/build-check.js?v=202609050340"></script>
 </body>
 </html>
