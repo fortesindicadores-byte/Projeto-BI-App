@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-<meta name="build" content="202609050200">
+<meta name="build" content="202609050240">
 <title>Carta de Custos</title>
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -1228,28 +1228,38 @@ function renderCharts(rows){
    · o mês corrente é PRÉVIA, não vigência fechada: o km ainda está
      sendo formado, e o fixo já entra inteiro desde o dia 1º.
    ══════════════════════════════════════════════════════════════ */
-let CONTR=[];
+let CONTR=[], CONTR_OK=false;   // CONTR_OK: a leitura já respondeu (mesmo vazia)
 // o PostgREST corta a resposta em 1.000 linhas e ignora um limit maior —
 // são ~360 placas × 9 vigências, então sem paginar a tabela vem pela metade
 async function pgAll(tabela,select,ordem){
-  const out=[], passo=1000;
-  for(let off=0;;off+=passo){
-    let q=sb.from(tabela).select(select);
-    if(ordem) ordem.forEach(o=>{ q=q.order(o[0],{ascending:o[1]!==false}); });
-    const {data,error}=await q.range(off,off+passo-1);
-    if(error){ console.warn(tabela+':',error.message); return out; }
-    out.push(...(data||[]));
-    if(!data||data.length<passo) return out;
-  }
+  const passo=1000;
+  const q=()=>{ let x=sb.from(tabela).select(select,{count:'exact'});
+    if(ordem) ordem.forEach(o=>{ x=x.order(o[0],{ascending:o[1]!==false}); }); return x; };
+  // a 1ª página traz a contagem; as outras saem TODAS de uma vez. Em sequência
+  // cada página esperava a anterior, e cada uma recalcula a view inteira.
+  const p0=await q().range(0,passo-1);
+  if(p0.error) throw p0.error;
+  const total=p0.count||0, out=p0.data||[];
+  const resto=[]; for(let off=passo;off<total;off+=passo) resto.push(q().range(off,off+passo-1));
+  for(const r of await Promise.all(resto)){ if(r.error) throw r.error; out.push(...(r.data||[])); }
+  return out;
 }
 async function loadContratos(){
   if(!sb) return;
-  CONTR=await pgAll('custo_vigencia',
-    'vig_cobranca,vig_km,placa,placa_origem,unidade,projeto,tipo,taxa_km,km_vig,'
-    +'valor_fixo,km_hodometro,divergencia_pct,origem_km,custo_vig,abastecimentos,ultimo_abast,previa,modelo',
-    [['vig_cobranca',false],['custo_vig',false]]);
+  const cols='vig_cobranca,vig_km,placa,placa_origem,unidade,projeto,tipo,taxa_km,km_vig,'
+    +'valor_fixo,km_hodometro,divergencia_pct,origem_km,custo_vig,abastecimentos,ultimo_abast,previa,modelo';
+  const ordem=[['vig_cobranca',false],['custo_vig',false]];
+  /* A MATERIALIZADA PRIMEIRO (05/09/2026): a view recalcula o rateio dos 57 mil
+     abastecimentos a cada pedido — é o que deixava o painel lento. Se a
+     `custo_vigencia_mv` existir no banco, lê dela (pronta, instantânea);
+     se ainda não existir, cai na view e funciona como antes, só mais devagar. */
+  try{ CONTR=await pgAll('custo_vigencia_mv',cols,ordem); }
+  catch(e){ console.warn('custo_vigencia_mv indisponível, usando a view:',e.message);
+    try{ CONTR=await pgAll('custo_vigencia',cols,ordem); }
+    catch(e2){ console.warn('custo_vigencia:',e2.message); CONTR=[]; } }
   const perm=new Set(ALLOWED);
   CONTR=CONTR.filter(r=>!r.unidade||perm.has(r.unidade));
+  CONTR_OK=true;
   /* UM FILTRO DE VIGÊNCIA SÓ (Renan, 04/09/2026): a lista do topo nasce em
      AGO/26, que é quando a carta começou, mas o contrato tem vigência desde
      fevereiro. Sem juntar as duas listas, metade do histórico do contrato
@@ -1281,6 +1291,11 @@ function renderPlacas(){
   const fixo=PL_TIPO==='fixo';
   const rows=contrDoFiltro().filter(r=>r.tipo===PL_TIPO);
   const multiVig=curVigs().length>1, multiUni=curUnits().length>1;
+  if(!CONTR_OK){
+    $('pl-kpis').innerHTML=''; set('pl-sub','Carregando o contrato…');
+    $('tbl-placas').innerHTML=`<tbody><tr><td><div class="vazio">Carregando…</div></td></tr></tbody>`;
+    return;
+  }
   if(!rows.length){
     $('pl-kpis').innerHTML='';
     set('pl-sub',`Sem placa de contrato ${fixo?'fixo':'por km'} no recorte do filtro.`);
@@ -1324,7 +1339,7 @@ function renderPlacas(){
     h+='<tr>'+(multiVig?`<td>${esc(vigLabel(r.vig_cobranca))}</td>`:'')
       +`<td class="conta">${esc(r.placa_origem||r.placa)}</td>`
       +`<td>${esc(r.modelo||'—')}</td>`
-      +(multiUni?`<td>${esc(r.unidade||'—')}</td>`:'')
+      +(multiUni?`<td>${esc(UNIT_BASE(r.unidade)||'—')}</td>`:'')
       +`<td>${esc(r.projeto||'—')}</td>`
       +(fixo
         ? `<td class="num">${r.valor_fixo!=null?fmt(r.valor_fixo):D}</td>`
@@ -1367,13 +1382,21 @@ function renderConsol(){
     && (!pSel || !r.projeto || pSel.includes(String(r.projeto).toUpperCase())));
   const noFiltro=r=>vSel.has(r.vig_cobranca);
 
+  if(!CONTR_OK){
+    $('tbl-consol').innerHTML=`<tbody><tr><td><div class="vazio">Carregando…</div></td></tr></tbody>`;
+    anoChart('ch-consol',[],[]); return;
+  }
   if(!base.length){
     $('tbl-consol').innerHTML=`<tbody><tr><td><div class="vazio">Sem consolidado para o recorte do filtro.</div></td></tr></tbody>`;
     anoChart('ch-consol',[],[]); return;
   }
+  /* UNIDADE SEM TIER (Renan, 05/09/2026): MCC T1 e MCC T2 somam em MCC, os
+     três de Cuiabá em CBA. O tier é o projeto (Empurrada = T1, Apoio = T1 WH),
+     e quem quiser esse recorte abre pelo filtro de Projeto. O filtro de
+     Unidade do topo segue por tier porque é ele que carrega o acesso. */
   const linhas=new Map();
   base.forEach(r=>{
-    const k=r.unidade||'—';
+    const k=UNIT_BASE(r.unidade)||'—';
     const a=linhas.get(k)||{mes:{},tot:0};
     if(noFiltro(r) && r.vig_cobranca.slice(0,4)===ano){
       a.mes[r.vig_cobranca]=(a.mes[r.vig_cobranca]||0)+(+r.custo_vig||0); a.tot+=+r.custo_vig||0; }
@@ -1478,8 +1501,10 @@ async function init(){
   if(!ALLOWED.length){ showRestricted('Seu usuário não tem unidade vinculada. Fale com o corporativo para liberar seu acesso à Carta de Custos.'); return; }
   selUni.add(ALLOWED[0]);
   buildUniFilter(); buildVigFilter(); buildAnoFilter(); buildProjFilter();
+  // lançamentos e contrato carregam JUNTOS: o contrato não depende do DRE nem
+  // dos lançamentos, e esperar por eles só atrasava as visões novas
+  loadContratos();
   await loadRows();
-  loadContratos();   // as visões novas carregam em segundo plano
 }
 init();
 </script>
@@ -1497,6 +1522,6 @@ initPdfExport({ btnContainer:'#pdf-slot', btnClass:'s-item', btnAoFim:true,
   viewAtual:()=>VW, irPara:setVw,
   isLight:()=>document.body.classList.contains('claro'), setTheme:aplicaTema });
 </script>
-<script src="../assets/build-check.js?v=202609050200"></script>
+<script src="../assets/build-check.js?v=202609050240"></script>
 </body>
 </html>
