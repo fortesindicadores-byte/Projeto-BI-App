@@ -7,10 +7,11 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="DriverPro">
-<meta name="build" content="202609061800">
+<meta name="build" content="202609061900">
 <title>DriverPro</title>
-<link rel="apple-touch-icon" href="../app-motorista/img/icone-192.png">
-<link rel="icon" href="../app-motorista/img/icone-192.png">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="img/icone-192.png">
+<link rel="icon" href="img/icone-192.png">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
 /* ============================================================
@@ -207,6 +208,7 @@ body.claro .nav button.on{color:#fff;}
     </div>
   </div>
   <div class="menu" id="menu">
+    <button id="btInstalar" onclick="instalar();fechaMenu()" style="display:none">Instalar no celular</button>
     <button id="btTrocar" onclick="escolheMotorista()" style="display:none">Trocar motorista</button>
     <button onclick="sair()">Sair</button>
   </div>
@@ -471,6 +473,13 @@ function aplicaTema(t){
 }
 $('btTema').addEventListener('click', function(){ aplicaTema(document.body.classList.contains('claro') ? 'escuro' : 'claro'); });
 (function(){ var t; try { t = localStorage.getItem('app4_theme'); } catch(e){} aplicaTema(t === 'light' ? 'claro' : 'escuro'); })();
+
+/* ── PWA: registra o service worker e oferece "Adicionar à tela de início" ── */
+var INSTALL = null;
+if ('serviceWorker' in navigator) window.addEventListener('load', function(){ navigator.serviceWorker.register('sw.js').catch(function(e){ console.warn('sw:', e.message); }); });
+window.addEventListener('beforeinstallprompt', function(e){ e.preventDefault(); INSTALL = e; var b = $('btInstalar'); if (b) b.style.display = ''; });
+function instalar(){ if (!INSTALL) return; INSTALL.prompt(); INSTALL.userChoice.then(function(){ INSTALL = null; $('btInstalar').style.display = 'none'; }); }
+window.addEventListener('appinstalled', function(){ var b = $('btInstalar'); if (b) b.style.display = 'none'; });
 
 /* ── login ── */
 var MODO = 'entrar';
