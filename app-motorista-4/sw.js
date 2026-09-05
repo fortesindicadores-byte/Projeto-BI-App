@@ -4,7 +4,7 @@
    Estratégia: rede primeiro, cache como rede de segurança (pátio com sinal
    ruim mostra o último estado carregado). As chamadas ao Supabase NUNCA entram
    no cache — dado é sempre da rede. Ao publicar, trocar CACHE. */
-const CACHE = 'driverpro-v5';
+const CACHE = 'driverpro-v6';
 const ESSENCIAIS = ['./', './index.html', './manifest.json', './img/icone-192.png', './img/icone-512.png'];
 
 self.addEventListener('install', e => {
