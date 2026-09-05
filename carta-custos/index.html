@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-<meta name="build" content="202609050100">
+<meta name="build" content="202609050120">
 <title>Carta de Custos</title>
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -540,7 +540,7 @@ body.claro input[type=date]{color-scheme:light;}
              número duas vezes, comendo a altura que faltava aos gráficos. -->
         <div class="card tsec">
           <div class="thead-row"><div><div class="ttit">Acompanhamento por Conta</div>
-            <div class="tsub">Orçado e Remunerado do DRE (aba Frota) · Ating. ≥90% âmbar, ≥100% vermelho · botão direito → exportar Excel</div></div></div>
+            <div class="tsub">Orçado e Remunerado do DRE (aba Frota) · Contratos: mês fechado vem da planilha, mês em aberto vem do km do ERP (prévia) · Ating. ≥90% âmbar, ≥100% vermelho · botão direito → exportar Excel</div></div></div>
           <div class="twrap"><table class="dre" id="tbl-conta"></table></div>
         </div>
 
@@ -853,7 +853,7 @@ function onFiltroAno(){
 function buildProjFilter(){ buildMs('ms-proj', ()=>UNIT_PROJETOS.slice(), p=>p, selProj, onFiltroProj, 'Todos'); }
 
 // ── DB ──
-function fromDB(d){return{id:d.id,unidade:d.unidade,vigencia:d.vigencia,pacote:d.pacote,data:d.data||'',projeto:d.projeto||'',equipamento:(d.equipamento||''),fornecedor:(d.fornecedor||''),rc:d.rc||'',oc:d.oc||'',nf:d.nf||'',conta:d.conta||'',grupo:d.grupo||'',descricao:d.descricao||'',valor:+d.valor||0,aprovado:!!d.aprovado,aprovado_oc:!!d.aprovado_oc};}
+function fromDB(d){return{id:d.id,origem:d.origem||'',unidade:d.unidade,vigencia:d.vigencia,pacote:d.pacote,data:d.data||'',projeto:d.projeto||'',equipamento:(d.equipamento||''),fornecedor:(d.fornecedor||''),rc:d.rc||'',oc:d.oc||'',nf:d.nf||'',conta:d.conta||'',grupo:d.grupo||'',descricao:d.descricao||'',valor:+d.valor||0,aprovado:!!d.aprovado,aprovado_oc:!!d.aprovado_oc};}
 /* Aprovação em DUAS ETAPAS, uma por documento (Renan, 27/08/2026):
      RC → farol 1 → libera a OC → farol 2 → libera a NF
    cinza = documento anterior em branco · vermelho = aguardando o coordenador ·
@@ -1105,6 +1105,21 @@ function acompCells(orc,rem,real){
     `<td class="num">${atO!=null?`<span class="tag-pill" style="${atColor(atO)}">${pct(atO)}</span>`:D}</td>`+
     `<td class="num">${atR!=null?`<span class="tag-pill" style="${atColor(atR)}">${pct(atR)}</span>`:D}</td>`;
 }
+/* O CONTRATO SOBE PARA A CARTA (Renan, 05/09/2026: "filtrei outubro, cadê o
+   valor dos contratos?"). A conta "Contratos de Manutenção Fabricante" tem
+   duas origens, e elas NÃO se somam no mesmo mês:
+   · mês FECHADO — o robô já gravou em carta_custos as linhas da planilha
+     Contratos Man. (origem 'contratos-planilha'), uma por placa, com NF;
+   · mês ainda SEM fechamento — não há linha na planilha, então o valor vem do
+     km real do ERP (view custo_vigencia): é a prévia, e é o que aparece em
+     outubro no dia 5 de setembro.
+   O par unidade+vigência decide: se a planilha já cobriu, o ERP não entra. */
+const CONTA_CONTRATO='Contratos de Manutenção Fabricante';
+function contratoPrevia(){
+  const fechados=new Set(ROWS.filter(r=>r.origem==='contratos-planilha').map(r=>r.unidade+'|'+r.vigencia));
+  return contrDoFiltro().filter(r=>!fechados.has(r.unidade+'|'+r.vig_cobranca))
+    .reduce((s,r)=>s+(+r.custo_vig||0),0);
+}
 function renderAcomp(){
   let h=`<thead><tr><th>Conta</th><th class="num">Orç</th><th class="num">Rem (tend.)</th><th class="num">Real</th><th class="num">▲ Orç</th><th class="num">▲ Rem</th><th class="num">Ating. Orç %</th><th class="num">Ating. Rem %</th></tr></thead><tbody>`;
   PACS.forEach(pac=>{
@@ -1112,6 +1127,8 @@ function renderAcomp(){
     const ps=curProjs();
     ROWS.filter(r=>(PACS.length===1||r.pacote===pac)&&(!ps||ps.includes(r.projeto))&&counts(r)).forEach(r=>byC.set(r.conta,(byC.get(r.conta)||0)+r.valor));
     let tR=0,tO=0,tRe=0,tHas=false;
+    const prev=contratoPrevia();
+    if(prev>0) byC.set(CONTA_CONTRATO,(byC.get(CONTA_CONTRATO)||0)+prev);
     [...byC.entries()].forEach(([c,real])=>{
       const d=DRE[c]; const orc=d?d.orc:null, rem=d?d.rem:null;
       tR+=real; if(d){tO+=orc;tRe+=rem;tHas=true;}
@@ -1220,7 +1237,7 @@ async function loadContratos(){
   const antes=VIG_OPTS.length;
   VIG_OPTS=[...new Set(VIG_OPTS.concat(novas))].sort();
   if(VIG_OPTS.length!==antes){ buildAnoFilter(); buildVigFilter(); }
-  renderPlacas(); renderConsol();
+  renderAcomp(); renderPlacas(); renderConsol();
 }
 // o recorte das duas visões novas é o do filtro do topo
 const contrDoFiltro=()=>{
@@ -1455,6 +1472,6 @@ initPdfExport({ btnContainer:'#pdf-slot', btnClass:'s-item', btnAoFim:true,
   viewAtual:()=>VW, irPara:setVw,
   isLight:()=>document.body.classList.contains('claro'), setTheme:aplicaTema });
 </script>
-<script src="../assets/build-check.js?v=202609050100"></script>
+<script src="../assets/build-check.js?v=202609050120"></script>
 </body>
 </html>
