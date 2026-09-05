@@ -89,7 +89,7 @@ language sql immutable as $$
 -- Conlog cadastrou) e ainda NÃO tem PIN. Depois disso o PIN só muda por aqui,
 -- apagando a linha de ce_app_acesso do motorista.
 create or replace function public.ce_app_criar_pin(p_cpf text, p_pin text)
-returns jsonb language plpgsql security definer set search_path = public as $$
+returns jsonb language plpgsql security definer set search_path = public, extensions as $$
 declare v_cpf text := ce_app_so_digitos(p_cpf); v_pin text := ce_app_so_digitos(p_pin); v_chave text;
 begin
   if length(v_cpf) <> 11 then return jsonb_build_object('ok', false, 'erro', 'CPF precisa ter 11 números.'); end if;
@@ -106,7 +106,7 @@ end $$;
 -- ---------- 6) login: CPF + PIN → token ------------------------------------
 -- 5 erros seguidos bloqueiam por 15 min (4 dígitos = 10 mil combinações).
 create or replace function public.ce_app_login(p_cpf text, p_pin text)
-returns jsonb language plpgsql security definer set search_path = public as $$
+returns jsonb language plpgsql security definer set search_path = public, extensions as $$
 declare v_cpf text := ce_app_so_digitos(p_cpf); v_pin text := ce_app_so_digitos(p_pin);
         m record; a record; v_token uuid;
 begin
@@ -132,7 +132,7 @@ begin
 end $$;
 
 create or replace function public.ce_app_sair(p_token uuid)
-returns void language sql security definer set search_path = public as $$
+returns void language sql security definer set search_path = public, extensions as $$
   delete from public.ce_app_sessao where token = p_token $$;
 
 -- ---------- 7) tudo que o app mostra ---------------------------------------
@@ -143,7 +143,7 @@ returns void language sql security definer set search_path = public as $$
 -- Elegível = bate km_min, viagens_min, dias_min, score_min e está no top_n
 -- da unidade (ranking pela pontuação gravada em ce_scores_mensais).
 create or replace function public.ce_app_dados(p_token uuid)
-returns jsonb language plpgsql security definer set search_path = public as $$
+returns jsonb language plpgsql security definer set search_path = public, extensions as $$
 declare s record; m record; R record; v_vig date := date_trunc('month', now())::date;
         v_meses jsonb; v_rank jsonb; v_pos int; v_atual jsonb;
 begin
@@ -251,7 +251,7 @@ alter table public.ce_app_sessao alter column chave drop not null;
 
 -- login: se o CPF é de admin, valida o PIN dele e abre sessão de admin
 create or replace function public.ce_app_login(p_cpf text, p_pin text)
-returns jsonb language plpgsql security definer set search_path = public as $$
+returns jsonb language plpgsql security definer set search_path = public, extensions as $$
 declare v_cpf text := ce_app_so_digitos(p_cpf); v_pin text := ce_app_so_digitos(p_pin);
         m record; a record; adm record; v_token uuid;
 begin
@@ -284,7 +284,7 @@ end $$;
 
 -- lista de motoristas para o admin escolher (só quem tem nota em algum mês)
 create or replace function public.ce_app_motoristas(p_token uuid)
-returns jsonb language plpgsql security definer set search_path = public as $$
+returns jsonb language plpgsql security definer set search_path = public, extensions as $$
 declare s record;
 begin
   select * into s from ce_app_sessao where token = p_token and expira_em > now();
@@ -298,7 +298,7 @@ end $$;
 -- dados: o motorista da sessão, ou o escolhido pelo admin (p_chave)
 drop function if exists public.ce_app_dados(uuid);
 create or replace function public.ce_app_dados(p_token uuid, p_chave text default null)
-returns jsonb language plpgsql security definer set search_path = public as $$
+returns jsonb language plpgsql security definer set search_path = public, extensions as $$
 declare s record; m record; R record; v_vig date := date_trunc('month', now())::date;
         v_chave text; v_meses jsonb; v_rank jsonb; v_pos int;
 begin
@@ -380,3 +380,17 @@ notify pgrst, 'reload schema';
 --   insert into public.ce_app_admins (cpf, nome, pin_hash)
 --   values ('<cpf só dígitos>', '<nome>', crypt('<pin de 4 dígitos>', gen_salt('bf')))
 --   on conflict (cpf) do update set pin_hash = excluded.pin_hash, nome = excluded.nome;
+
+-- ============================================================
+-- 11) BUG REAL (05/09/2026): no Supabase o pgcrypto mora no schema
+--     `extensions`; com search_path só em `public`, gen_salt/crypt não
+--     existem dentro das funções ("function gen_salt(unknown) does not
+--     exist"). Todas as funções acima já saem com `public, extensions`;
+--     este bloco conserta uma instalação feita antes da correção.
+-- ============================================================
+alter function public.ce_app_criar_pin(text, text)  set search_path = public, extensions;
+alter function public.ce_app_login(text, text)      set search_path = public, extensions;
+alter function public.ce_app_dados(uuid, text)      set search_path = public, extensions;
+alter function public.ce_app_motoristas(uuid)       set search_path = public, extensions;
+alter function public.ce_app_sair(uuid)             set search_path = public, extensions;
+notify pgrst, 'reload schema';
