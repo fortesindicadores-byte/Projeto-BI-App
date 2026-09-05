@@ -270,6 +270,38 @@ function gtChave(u) {
   const doc = String(u?.licenseNumber || u?.employeeNo || '').replace(/\D/g, '');
   return doc.length >= 9 ? doc : 'gt:' + (u?.id || '');
 }
+// CPF do motorista no Geotab (modo cpf, 05/09/2026): o LOGIN dele (`name`) é o
+// próprio CPF — 1.310 de 1.313 cadastros. licenseNumber/employeeNo vêm antes,
+// se um dia forem preenchidos. Só aceita CPF com os dígitos verificadores
+// certos (CNH também tem 11 dígitos). A chave continua sendo `gt:<id>` — o
+// histórico do diário e do mensal está amarrado nela; o CPF é só para o login.
+function cpfValido(d) {
+  if (!/^\d{11}$/.test(d) || /^(\d)\1{10}$/.test(d)) return false;
+  const dv = n => { let s = 0; for (let i = 0; i < n; i++) s += +d[i] * (n + 1 - i); const r = (s * 10) % 11; return r === 10 ? 0 : r; };
+  return dv(9) === +d[9] && dv(10) === +d[10];
+}
+function gtCpf(u) {
+  for (const k of ['licenseNumber', 'employeeNo', 'name']) {
+    const d = String(u?.[k] || '').replace(/\D/g, '');
+    if (cpfValido(d)) return d;
+  }
+  return null;
+}
+// preenche ce_motoristas.cpf de quem ainda está sem — nunca sobrescreve
+async function gtPreencheCpf(us) {
+  const banco = await sbTodos('ce_motoristas?select=id,chave,cpf&fonte=eq.Geotab');
+  const semCpf = new Map(banco.filter(m => !m.cpf).map(m => [m.chave, m.id]));
+  const usados = new Set(banco.map(m => m.cpf).filter(Boolean));
+  let gravados = 0, falhas = 0;
+  for (const u of us) {
+    const id = semCpf.get(gtChave(u)); const cpf = gtCpf(u);
+    if (!id || !cpf || usados.has(cpf)) continue;
+    const r = await fetch(`${SB_URL}/rest/v1/ce_motoristas?id=eq.${id}&cpf=is.null`, {
+      method: 'PATCH', headers: { ...H_SB, Prefer: 'return=minimal' }, body: JSON.stringify({ cpf }) });
+    if (r.ok) { gravados++; usados.add(cpf); } else falhas++;
+  }
+  return { gravados, falhas, semCpf: semCpf.size - gravados };
+}
 // unidade do motorista = grupo UNI_* do cadastro dele no Geotab (a sonda de
 // 01/09/2026 mediu: 1308/1308 têm, via companyGroups) — dado real, não de-para
 let GT_GNOME = new Map();   // id do grupo → nome (preenchido no login do run)
@@ -2439,11 +2471,6 @@ if (MODE === 'cpf') {
   GT_GNOME = new Map(grupos.map(g => [g.id, g.name || '']));
   console.log(`Geotab (db=${GT_DB}): ${us.length} motorista(s) cadastrado(s)`);
 
-  const cpfValido = d => {
-    if (!/^\d{11}$/.test(d) || /^(\d)\1{10}$/.test(d)) return false;
-    const dv = n => { let s = 0; for (let i = 0; i < n; i++) s += +d[i] * (n + 1 - i); const r = (s * 10) % 11; return r === 10 ? 0 : r; };
-    return dv(9) === +d[9] && dv(10) === +d[10];
-  };
   // CPFs dentro de um texto qualquer ("CPF: 123.456.789-09", "12345678909")
   const cpfsEm = s => {
     const out = new Set();
@@ -2482,7 +2509,9 @@ if (MODE === 'cpf') {
       console.log(`${k.padEnd(34)} ${String(c.n).padStart(5)}/${us.length}  ${top.padEnd(40)} cpf=${c.cpf} d11=${c.d11} d9=${c.d9}`);
     });
 
-  // 2) um CPF por motorista: licenseNumber → employeeNo → qualquer outro campo
+  // 2) um CPF por motorista: licenseNumber → employeeNo → name (login) → qualquer
+  //    outro campo (o serial da chave física às vezes contém 11 dígitos que
+  //    "validam" por acaso — por isso os campos de cadastro vêm primeiro)
   const achado = new Map(); let ambiguos = 0; const porCampo = new Map();
   for (const u of us) {
     const cands = new Map();   // cpf → campo onde apareceu
@@ -2492,7 +2521,7 @@ if (MODE === 'cpf') {
       if (typeof v === 'object') { for (const [k, x] of Object.entries(v)) olha(x, path ? path + '.' + k : k); return; }
       for (const c of cpfsEm(v)) if (!cands.has(c)) cands.set(c, path);
     };
-    for (const k of ['licenseNumber', 'employeeNo']) olha(u[k], k);
+    for (const k of ['licenseNumber', 'employeeNo', 'name']) { olha(u[k], k); if (cands.size) break; }
     if (!cands.size) olha(u, '');
     if (cands.size > 1) { ambiguos++; continue; }
     if (cands.size === 1) {
@@ -2527,8 +2556,8 @@ if (MODE === 'cpf') {
   }
   console.log(`\nce_motoristas: ${gravados} CPF(s) gravado(s) · ${jaTinha} já batiam · ${diverge} divergem do que está no banco (mantido o do banco)`
     + ` · ${emOutro} CPF já usado por outra chave · ${foraDoBanco} motorista(s) ainda sem linha no banco` + (falhas ? ` · ${falhas} falha(s)` : ''));
-  const semCpf = [...banco.values()].filter(m => !m.cpf && String(m.chave).startsWith('gt:')).length;
-  console.log(`ainda sem CPF no banco (chave gt:…): ${semCpf}`);
+  const semCpf = [...banco.values()].filter(m => !m.cpf && String(m.chave).startsWith('gt:')).length - gravados;
+  console.log(`ainda sem CPF no banco (chave gt:…): ${semCpf} — cadastros antigos que já não são motorista no Geotab, ou os ${ambiguos + duplicados + diverge} acima`);
   process.exit(0);
 }
 
@@ -2644,6 +2673,11 @@ try {
         if (!r.ok) { console.log('sync cadastro:', r.status, (await r.text()).slice(0, 200)); break; }
       }
       console.log(`cadastro sincronizado: ${todos.length} motorista(s) com unidade do grupo UNI_*`);
+      // motorista novo no Geotab ganha o CPF (login do app) no mesmo dia
+      try {
+        const c = await gtPreencheCpf(us);
+        if (c.gravados || c.falhas) console.log(`CPF preenchido em ${c.gravados} motorista(s) novo(s)` + (c.falhas ? ` · ${c.falhas} falha(s)` : ''));
+      } catch (e) { console.log('preencher CPF:', e.message.slice(0, 160)); }
     }
     const faltando = Object.entries(GT_REGRA)
       .filter(([, r]) => ![...GT_RULES].some(([id, n]) => r.ids.includes(id) || r.nome.test(n || '')))
