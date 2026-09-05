@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-<meta name="build" content="202609042230">
+<meta name="build" content="202609042320">
 <title>Carta de Custos</title>
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -454,7 +454,7 @@ body.claro input[type=date]{color-scheme:light;}
     </button>
     <button class="s-item" data-vw="placas">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><rect x="2" y="6" width="20" height="12" rx="2"/><path d="M6 10h3M6 14h8"/></svg>
-      Placas
+      Placas Contrato
     </button>
     <button class="s-item" data-vw="consol">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 17h4V9H3zM10 17h4V4h-4zM17 17h4v-5h-4z"/></svg>
@@ -545,7 +545,11 @@ body.claro input[type=date]{color-scheme:light;}
              no topo da tela — repeti-lo dentro do card era redundância -->
         <div class="kpis" id="pl-kpis"></div>
         <div class="card tsec">
-          <div class="thead-row"><div><div class="tsub" id="pl-sub">—</div></div></div>
+          <div class="thead-row">
+            <div><div class="tsub" id="pl-sub">—</div></div>
+            <!-- toggle de ABERTURA (contrato por km ou fixo), não de filtro -->
+            <div class="chips" id="pl-tipo"></div>
+          </div>
           <div class="twrap"><table class="dre" id="tbl-placas"></table></div>
         </div>
       </section>
@@ -1167,7 +1171,7 @@ async function loadContratos(){
   if(!sb) return;
   CONTR=await pgAll('custo_vigencia',
     'vig_cobranca,vig_km,placa,placa_origem,unidade,projeto,tipo,taxa_km,km_vig,'
-    +'km_hodometro,divergencia_pct,origem_km,custo_vig,abastecimentos,ultimo_abast,previa,modelo',
+    +'valor_fixo,km_hodometro,divergencia_pct,origem_km,custo_vig,abastecimentos,ultimo_abast,previa,modelo',
     [['vig_cobranca',false],['custo_vig',false]]);
   const perm=new Set(ALLOWED);
   CONTR=CONTR.filter(r=>!r.unidade||perm.has(r.unidade));
@@ -1189,24 +1193,30 @@ const contrDoFiltro=()=>{
     && (!p || !r.projeto || p.includes(String(r.projeto).toUpperCase())));
 };
 
+/* TOGGLE VARIÁVEL / FIXO (Renan, 04/09/2026): abre a visão por tipo de
+   contrato, começando no variável — é nele que o km explica o custo. O fixo
+   paga o mesmo valor rode ou não rode, então misturar os dois na mesma soma
+   fazia o km parecer explicar um valor que não depende dele. */
+let PL_TIPO='variavel';
+function setPlTipo(t){ PL_TIPO=t; renderPlacas(); }
 function renderPlacas(){
-  /* SÓ CONTRATO VARIÁVEL (Renan, 04/09/2026). Placa de contrato fixo paga o
-     mesmo valor rode ou não rode — numa visão cujo assunto é o km rodado ela
-     só faz peso, e ainda entrava na soma do custo como se o km explicasse
-     aquele valor. O fixo continua inteiro no Consolidado Contrato. */
-  const rows=contrDoFiltro().filter(r=>r.tipo==='variavel');
+  $('pl-tipo').innerHTML='<span class="rot">Contrato</span>'
+    +`<button class="chip${PL_TIPO==='variavel'?' on':''}" onclick="setPlTipo('variavel')">Variável</button>`
+    +`<button class="chip${PL_TIPO==='fixo'?' on':''}" onclick="setPlTipo('fixo')">Fixo</button>`;
+  const fixo=PL_TIPO==='fixo';
+  const rows=contrDoFiltro().filter(r=>r.tipo===PL_TIPO);
   const multiVig=curVigs().length>1, multiUni=curUnits().length>1;
   if(!rows.length){
     $('pl-kpis').innerHTML='';
-    set('pl-sub','Sem placa de contrato por km no recorte do filtro.');
-    $('tbl-placas').innerHTML=`<tbody><tr><td><div class="vazio">Sem placa de contrato por km neste recorte.</div></td></tr></tbody>`;
+    set('pl-sub',`Sem placa de contrato ${fixo?'fixo':'por km'} no recorte do filtro.`);
+    $('tbl-placas').innerHTML=`<tbody><tr><td><div class="vazio">Sem placa de contrato ${fixo?'fixo':'por km'} neste recorte.</div></td></tr></tbody>`;
     return;
   }
   /* MÉDIA MENSAL DA PLACA: o custo dela dividido pelos meses em que houve
      apuração, em TODA a base — não só no filtro. É a régua contra a qual o mês
      escolhido se lê: rodou mais ou menos que de costume. */
   const hist=new Map();
-  CONTR.filter(r=>r.tipo==='variavel'&&r.km_vig!=null).forEach(r=>{
+  CONTR.filter(r=>r.tipo===PL_TIPO&&r.km_vig!=null).forEach(r=>{
     const a=hist.get(r.placa)||{n:0,km:0,custo:0};
     a.n++; a.km+=+r.km_vig||0; a.custo+=+r.custo_vig||0; hist.set(r.placa,a);
   });
@@ -1224,12 +1234,14 @@ function renderPlacas(){
     `<div class="kpi"><div class="kl">Km rodado</div><div class="kv">${fmt(km)}</div><div class="km">hodômetro do ERP</div></div>`+
     `<div class="kpi"><div class="kl">Placas</div><div class="kv">${nPl}</div><div class="km">${semKm} sem km no mês</div></div>`+
     `<div class="kpi"><div class="kl">Km médio</div><div class="kv">${fmt(nPl?km/nPl:0)}</div><div class="km">por placa no mês</div></div>`+
-    `<div class="kpi"><div class="kl">R$/km médio</div><div class="kv">${km?(tot/km).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2}):'—'}</div><div class="km">custo ÷ km</div></div>`+
+    (fixo
+      ? `<div class="kpi"><div class="kl">Valor fixo médio</div><div class="kv">${fmt(nPl?tot/nPl:0)}</div><div class="km">por placa no mês</div></div>`
+      : `<div class="kpi"><div class="kl">R$/km médio</div><div class="kv">${km?(tot/km).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2}):'—'}</div><div class="km">custo ÷ km</div></div>`)+
     `<div class="kpi"><div class="kl">Custo</div><div class="kv">${fmt(tot)}</div><div class="km">${previa?'<b style="color:var(--ambar)">com prévia</b>':'vigência fechada'}</div></div>`;
   let h='<thead><tr>'
     +(multiVig?'<th>Vigência</th>':'')+'<th>Placa</th><th>Modelo</th>'
     +(multiUni?'<th>Unidade</th>':'')+'<th>Projeto</th>'
-    +'<th class="num">R$/km</th><th class="num">Abast.</th><th>Últ. abast.</th>'
+    +(fixo?'<th class="num">Valor fixo</th>':'<th class="num">R$/km</th>')+'<th class="num">Abast.</th><th>Últ. abast.</th>'
     +'<th class="num">Média/mês</th><th class="num">Km do mês</th><th class="num">Custo</th></tr></thead><tbody>';
   // ORDEM INICIAL PELO KM: o assunto da visão é quanto cada placa rodou
   rows.slice().sort((a,b)=>(+b.km_vig||0)-(+a.km_vig||0)).forEach(r=>{
@@ -1239,7 +1251,9 @@ function renderPlacas(){
       +`<td>${esc(r.modelo||'—')}</td>`
       +(multiUni?`<td>${esc(r.unidade||'—')}</td>`:'')
       +`<td>${esc(r.projeto||'—')}</td>`
-      +`<td class="num">${r.taxa_km!=null?(+r.taxa_km).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2}):D}</td>`
+      +(fixo
+        ? `<td class="num">${r.valor_fixo!=null?fmt(r.valor_fixo):D}</td>`
+        : `<td class="num">${r.taxa_km!=null?(+r.taxa_km).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2}):D}</td>`)
       +`<td class="num">${r.abastecimentos||D}</td><td>${esc(dataBR(r.ultimo_abast))}</td>`
       +`<td class="num">${hs&&hs.n?fmt(hs.custo/hs.n):D}</td>`
       +`<td class="num forte">${r.km_vig==null?D:numBR(r.km_vig)}</td>`
@@ -1319,7 +1333,7 @@ function renderConsol(){
 }
 
 /* ── navegação entre as visões ── */
-const TIT={resumo:'Resumo Gerencial',lanc:'Lançamentos',placas:'Contrato por Placa',consol:'Consolidado Contrato'};
+const TIT={resumo:'Resumo Gerencial',lanc:'Lançamentos',placas:'Placas Contrato',consol:'Consolidado Contrato'};
 function setVw(v){
   VW=v;
   document.querySelectorAll('.s-item[data-vw]').forEach(b=>b.classList.toggle('on',b.dataset.vw===v));
@@ -1413,6 +1427,6 @@ initPdfExport({ btnContainer:'#pdf-slot', btnClass:'s-item', btnAoFim:true,
   viewAtual:()=>VW, irPara:setVw,
   isLight:()=>document.body.classList.contains('claro'), setTheme:aplicaTema });
 </script>
-<script src="../assets/build-check.js?v=202609042230"></script>
+<script src="../assets/build-check.js?v=202609042320"></script>
 </body>
 </html>
