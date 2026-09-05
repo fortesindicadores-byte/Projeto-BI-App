@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
-<meta name="build" content="202609042300">
+<meta name="build" content="202609050330">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <title>Visão Financeira · DRE Frota</title>
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -803,6 +803,16 @@ function setMsOptions(id, items){
 let _vigM1Done=false;
 function buildVigMsFilter(vigList){
   const wrap=$('ms-vig'); if(!wrap) return;
+  /* SÓ MÊS COM REALIZADO, DO MAIS RECENTE PARA O MAIS ANTIGO (Renan,
+     05/09/2026). A lista trazia o ano inteiro em ordem crescente: para achar o
+     mês corrente era preciso rolar por meses que só têm orçado. Aqui filtra
+     pelo realizado e inverte a ordem. Só o FILTRO muda — a lista `vigs` que
+     desenha os gráficos continua com o ano todo, senão o orçado tracejado
+     dos meses futuros sumiria. */
+  const comReal=new Set();
+  (allRows||[]).forEach(r=>{ if(Math.abs(+r[C.real])>0){ const d=parseVig(r[C.vig]); if(d) comReal.add(vigKey(d)); } });
+  if(comReal.size) vigList=vigList.filter(d=>comReal.has(vigKey(d)));
+  vigList=vigList.slice().sort((a,b)=>b-a);
   if(!(wrap._sel instanceof Set)) wrap._sel=new Set();
   const sel=wrap._sel;
   const validKeys=new Set(vigList.map(d=>vigKey(d)));
@@ -2098,6 +2108,6 @@ initPdfExport({
   isLight:()=>document.body.classList.contains('claro'), setTheme:aplicaTema
 });
 </script>
-<script src="../assets/build-check.js?v=202609042300"></script>
+<script src="../assets/build-check.js?v=202609050330"></script>
 </body>
 </html>
