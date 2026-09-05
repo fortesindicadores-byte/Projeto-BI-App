@@ -1,0 +1,407 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+<meta name="theme-color" content="#1C1F26">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Condução">
+<meta name="build" content="202609060800">
+<title>Condução Econômica</title>
+<link rel="apple-touch-icon" href="../app-motorista/img/icone-192.png">
+<link rel="icon" href="../app-motorista/img/icone-192.png">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+/* ============================================================
+   APP DO MOTORISTA — 4ª VISÃO (Renan, 05/09/2026): fiel ao app de orçamento
+   escuro. Grafite (não preto), "Hi, Vicky! / June, 2025" no alto à esquerda,
+   toggle de tema (meio círculo) + avatar à direita; "Current Balance" pequeno
+   e o valor grande em fonte FINA; card "Monthly Budget" com a barra VERMELHA,
+   "$12,00 / $2,000" à esquerda e "%75" à direita; lista com ícone quadrado,
+   nome + data, valor à direita (verde/vermelho); barra de baixo só com a
+   casa, o "+" vermelho grande no meio e o gráfico.
+
+   Fonte Inter (a da imagem). A cor é o vermelho-alaranjado dela. Tema claro
+   no toggle do topo. Dados de exemplo. Os outros: /app-motorista/, -2, -3.
+   ============================================================ */
+:root{
+  --bg:#1C1F26; --card:#262A33; --card2:#30353F; --brd:rgba(255,255,255,.06);
+  --txt:#F2F3F5; --txt2:#9AA0AB; --txt3:#646B77;
+  --acc:#E8412A; --verde:#3DD273; --vermelho:#F04B3E; --nav:#171A20;
+  --safe-top:env(safe-area-inset-top,0px); --safe-bot:env(safe-area-inset-bottom,0px);
+}
+body.claro{
+  --bg:#EEF0F3; --card:#FFFFFF; --card2:#F1F3F6; --brd:rgba(20,24,32,.07);
+  --txt:#181C24; --txt2:#5E6674; --txt3:#9AA2AE; --verde:#1E9E52; --vermelho:#D93A2E; --nav:#FFFFFF;
+}
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+html,body{height:100%;}
+body{background:var(--bg);color:var(--txt);font-family:'Inter',-apple-system,'Segoe UI',sans-serif;font-size:13px;overflow:hidden;overscroll-behavior:none;}
+.app{height:100%;display:flex;flex-direction:column;position:relative;}
+.corpo{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:0 20px 20px;}
+.tela{display:none;} .tela.on{display:block;}
+svg{display:block;}
+
+/* ── topo ── */
+.topo{padding:calc(var(--safe-top) + 16px) 20px 6px;display:flex;align-items:flex-start;gap:12px;}
+.topo b{display:block;font-size:15px;font-weight:600;line-height:1.2;}
+.topo span{display:block;font-size:11px;color:var(--txt2);font-weight:400;margin-top:3px;}
+.topo .acoes{margin-left:auto;display:flex;align-items:center;gap:12px;}
+.tema{width:22px;height:22px;border-radius:50%;border:2px solid var(--txt);background:linear-gradient(90deg,var(--txt) 50%,transparent 50%);cursor:pointer;}
+.topo .av{width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:600;font-size:12px;color:#fff;
+  background:linear-gradient(145deg,#5B6270,#3A404B);cursor:pointer;border:0;font-family:inherit;}
+.menu{position:absolute;right:20px;top:calc(var(--safe-top) + 58px);z-index:20;background:var(--card2);border:1px solid var(--brd);border-radius:12px;
+  padding:6px;min-width:190px;box-shadow:0 12px 30px rgba(0,0,0,.4);display:none;}
+.menu.on{display:block;}
+.menu button{display:block;width:100%;text-align:left;background:none;border:0;color:var(--txt);font-family:inherit;font-size:12.5px;font-weight:500;padding:10px 12px;border-radius:8px;cursor:pointer;}
+.menu button:hover{background:var(--brd);}
+
+/* ── saldo: rótulo pequeno e o valor grande em fonte fina ── */
+.rot{font-size:10.5px;color:var(--txt2);font-weight:400;}
+.saldo{margin:22px 0 18px;}
+.saldo .val{font-size:40px;font-weight:300;letter-spacing:-.5px;line-height:1.1;margin-top:6px;}
+.saldo .val small{font-size:26px;font-weight:300;margin-right:4px;}
+.saldo .aviso{font-size:11px;color:var(--txt2);margin-top:8px;line-height:1.45;}
+.saldo .aviso b{color:var(--txt);font-weight:600;}
+
+/* ── card "Meta do mês" com a barra vermelha ── */
+.card{background:var(--card);border-radius:14px;padding:16px;margin-bottom:14px;}
+.meta b{display:block;font-size:14px;font-weight:600;}
+.barra{height:9px;border-radius:6px;background:var(--card2);overflow:hidden;margin:14px 0 10px;}
+.barra i{display:block;height:100%;border-radius:6px;background:var(--acc);transition:width .4s;}
+.meta .pe{display:flex;justify-content:space-between;font-size:10.5px;color:var(--txt2);font-weight:400;}
+.meta .pe b{display:inline;font-size:10.5px;font-weight:600;color:var(--txt);}
+
+/* ── lista: cards separados com ícone quadrado ── */
+.sec{font-size:10.5px;color:var(--txt2);font-weight:400;margin:4px 0 10px;display:flex;}
+.sec a{margin-left:auto;color:var(--txt2);cursor:pointer;}
+.li{display:flex;align-items:center;gap:12px;background:var(--card);border-radius:12px;padding:12px 14px;margin-bottom:10px;}
+.li .ic{width:34px;height:34px;border-radius:9px;background:var(--card2);flex:0 0 auto;display:flex;align-items:center;justify-content:center;color:var(--txt);}
+.li .ic svg{width:16px;height:16px;}
+.li .tx{flex:1;min-width:0;}
+.li .tx b{display:block;font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.li .tx span{display:block;font-size:10.5px;color:var(--txt2);font-weight:400;margin-top:3px;}
+.li .vl{flex:0 0 auto;font-size:12.5px;font-weight:600;text-align:right;}
+.li .vl small{display:block;font-size:10px;color:var(--txt3);font-weight:400;margin-top:2px;}
+.pos{color:var(--verde);} .neg{color:var(--vermelho);}
+.li.eu .ic{background:var(--acc);color:#fff;}
+
+/* ── barra de baixo: casa · "+" vermelho grande · gráfico ── */
+.nav{flex:0 0 auto;position:relative;background:var(--nav);border-top:1px solid var(--brd);padding:14px 0 calc(var(--safe-bot) + 12px);display:flex;justify-content:space-around;align-items:center;}
+.nav button{background:none;border:0;color:var(--txt3);cursor:pointer;padding:6px 18px;}
+.nav button svg{width:22px;height:22px;}
+.nav button.on{color:var(--txt);}
+.nav button.mais{width:54px;height:54px;border-radius:50%;background:var(--acc);color:#fff;display:flex;align-items:center;justify-content:center;padding:0;margin-top:-34px;
+  box-shadow:0 10px 24px rgba(232,65,42,.4);}
+.nav button.mais svg{width:24px;height:24px;}
+
+/* ── GANHOS ── */
+.gcab{display:flex;align-items:center;gap:10px;margin-top:22px;}
+.gcab .rot{flex:1;}
+.anosel{position:relative;}
+.anosel select{appearance:none;-webkit-appearance:none;background:var(--card);border:1px solid var(--brd);border-radius:8px;color:var(--txt);
+  font-family:inherit;font-size:12px;font-weight:600;padding:7px 28px 7px 12px;cursor:pointer;}
+.anosel::after{content:'';position:absolute;right:11px;top:50%;width:6px;height:6px;border-right:1.5px solid var(--txt2);border-bottom:1.5px solid var(--txt2);transform:translateY(-70%) rotate(45deg);pointer-events:none;}
+.gtot{font-size:40px;font-weight:300;letter-spacing:-.5px;line-height:1.1;margin:6px 0 20px;}
+.gtot small{font-size:26px;font-weight:300;margin-right:4px;}
+.li.vig .tx b{color:var(--acc);}
+.li.vig .tx span i{font-style:normal;background:rgba(232,65,42,.14);color:var(--acc);border-radius:5px;padding:1px 6px;font-size:9.5px;font-weight:600;margin-left:4px;}
+
+/* ── NOTA ── */
+.anelwrap{display:flex;align-items:center;gap:16px;margin-top:8px;}
+.anel{position:relative;width:118px;height:118px;flex:0 0 auto;}
+.anel > svg{width:100%;height:100%;transform:rotate(-90deg);}
+.anel > svg circle{fill:none;stroke-width:10;stroke-linecap:round;}
+.anel .trilho{stroke:var(--card2);}
+.anel .arco{stroke:var(--acc);}
+.anel .dentro{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;}
+.anel .n{font-size:30px;font-weight:300;line-height:1;}
+.anel .l{font-size:10px;color:var(--txt2);margin-top:3px;}
+.anelwrap .tx b{display:block;font-size:15px;font-weight:600;}
+.anelwrap .tx span{display:block;font-size:11.5px;color:var(--txt2);margin-top:4px;line-height:1.45;}
+.pilar{padding:11px 0;border-bottom:1px solid var(--brd);}
+.pilar:last-child{border-bottom:0;padding-bottom:2px;}
+.pilar:first-child{padding-top:0;}
+.pilar .cab{display:flex;align-items:center;gap:10px;}
+.pilar .cab b{font-size:13px;font-weight:600;flex:1;}
+.pilar .cab .nota{font-size:20px;font-weight:300;}
+.pilar .med{font-size:10.5px;color:var(--txt2);margin-top:4px;}
+.pilar .dica{font-size:11.5px;color:var(--txt2);margin-top:8px;line-height:1.5;background:var(--card2);border-radius:10px;padding:9px 11px;border-left:2px solid var(--acc);}
+
+/* ── REGRAS ── */
+.passo{display:flex;gap:12px;padding:11px 0;border-bottom:1px solid var(--brd);}
+.passo:last-child{border-bottom:0;padding-bottom:2px;}
+.passo:first-child{padding-top:0;}
+.passo .n{width:28px;height:28px;border-radius:8px;flex:0 0 auto;display:flex;align-items:center;justify-content:center;font-weight:600;font-size:12px;background:var(--acc);color:#fff;}
+.passo .t b{display:block;font-size:13px;font-weight:600;margin:4px 0 3px;}
+.passo .t span{font-size:11.5px;color:var(--txt2);line-height:1.5;}
+
+/* ── LOGIN ── */
+#tela-login{display:none;height:100%;flex-direction:column;justify-content:center;padding:0 28px;}
+#tela-login.on{display:flex;}
+.lg-t{font-size:26px;font-weight:600;letter-spacing:-.3px;}
+.lg-s{font-size:12px;color:var(--txt2);margin:6px 0 28px;}
+.campo{margin-bottom:12px;}
+.campo label{display:block;font-size:10.5px;color:var(--txt2);margin-bottom:7px;}
+.campo input{width:100%;background:var(--card);border:1px solid var(--brd);border-radius:12px;padding:15px 16px;color:var(--txt);font-family:inherit;font-size:15px;font-weight:500;letter-spacing:.5px;}
+.campo input::placeholder{color:var(--txt3);font-weight:400;}
+.campo input:focus{outline:none;border-color:var(--acc);}
+.btn{width:100%;border:0;border-radius:12px;padding:16px;font-family:inherit;font-size:14.5px;font-weight:600;cursor:pointer;color:#fff;background:var(--acc);margin-top:10px;box-shadow:0 10px 24px rgba(232,65,42,.3);}
+.lg-rodape{text-align:center;font-size:12px;color:var(--txt2);margin-top:20px;}
+.lg-rodape a{color:var(--txt);font-weight:600;cursor:pointer;}
+.proto{text-align:center;font-size:10px;color:var(--txt3);margin:6px 0 8px;}
+</style>
+</head>
+<body>
+
+<!-- ══════════ LOGIN ══════════ -->
+<div id="tela-login" class="on">
+  <div class="lg-t">Olá!</div>
+  <div class="lg-s">Entre para ver quanto você tem a ganhar este mês</div>
+  <div class="campo"><label>Seu CPF</label><input id="cpf" type="tel" inputmode="numeric" placeholder="000.000.000-00" maxlength="14"></div>
+  <div class="campo"><label>Sua senha de 4 números</label><input id="pin" type="password" inputmode="numeric" placeholder="••••" maxlength="4"></div>
+  <button class="btn" onclick="entrar()">Entrar</button>
+  <div class="lg-rodape">Primeira vez aqui? <a onclick="alert('No app de verdade: cria a senha de 4 números na primeira vez.')">Criar senha</a></div>
+</div>
+
+<!-- ══════════ APP ══════════ -->
+<div class="app" id="app" style="display:none">
+  <div class="topo">
+    <div><b id="ola">Olá, Marcio!</b><span id="sub">Setembro, 2026</span></div>
+    <div class="acoes">
+      <div class="tema" id="btTema" role="button" aria-label="Tema"></div>
+      <button class="av" id="av" onclick="document.getElementById('menu').classList.toggle('on')">MA</button>
+    </div>
+  </div>
+  <div class="menu" id="menu">
+    <button onclick="irPara('ranking');fechaMenu()">Ranking da unidade</button>
+    <button onclick="irPara('regras');fechaMenu()">Regras do programa</button>
+    <button onclick="trocaExemplo();fechaMenu()" id="btProto">Ver quem não é elegível</button>
+    <button onclick="sair()">Sair</button>
+  </div>
+
+  <div class="corpo">
+
+    <!-- ── INÍCIO ── -->
+    <section class="tela on" id="v-inicio">
+      <div class="saldo">
+        <div class="rot" id="rotSaldo">Saldo atual</div>
+        <div class="val" id="saldo"><small>R$</small>180,80</div>
+        <div class="aviso" id="avisoEleg" style="display:none"></div>
+      </div>
+
+      <div class="card meta">
+        <b>Meta do mês</b>
+        <div class="barra"><i id="barraSaldo" style="width:90%"></i></div>
+        <div class="pe"><span id="metaTxt"><b>R$ 180,80</b> / R$ 200,00</span><span id="metaPct">90%</span></div>
+      </div>
+
+      <div class="sec">Onde o dinheiro foi<a onclick="irPara('nota')">Ver a nota</a></div>
+      <div id="perdas"></div>
+
+      <div class="sec">Pódio e elegibilidade<a onclick="irPara('ranking')">Ver ranking</a></div>
+      <div id="extras"></div>
+      <div class="proto">Protótipo · dados de exemplo · <span id="unid">PIR</span></div>
+    </section>
+
+    <!-- ── GANHOS ── -->
+    <section class="tela" id="v-ganhos">
+      <div class="gcab"><div class="rot" id="anoTit">Você ganhou em 2026</div><div class="anosel"><select id="anoSel" onchange="mudaAno(+this.value)" aria-label="Ano"></select></div></div>
+      <div class="gtot" id="ganhoAno">R$ 0,00</div>
+      <div class="sec">Mês a mês</div>
+      <div id="meses"></div>
+    </section>
+
+    <!-- ── NOTA ── -->
+    <section class="tela" id="v-nota">
+      <div class="card anelwrap">
+        <div class="anel">
+          <svg viewBox="0 0 100 100" aria-hidden="true"><circle class="trilho" cx="50" cy="50" r="42"/><circle class="arco" id="arco" cx="50" cy="50" r="42"/></svg>
+          <div class="dentro"><div class="n" id="score">90,4</div><div class="l">sua nota</div></div>
+        </div>
+        <div class="tx"><b id="faixaTxt">Elite</b><span>De 0 a 100. A nota decide quanto dos R$ 200 fica com você.</span></div>
+      </div>
+      <div class="sec">Nota de cada coisa</div>
+      <div class="card" id="pilares"></div>
+    </section>
+
+    <!-- ── RANKING ── -->
+    <section class="tela" id="v-ranking">
+      <div class="sec" style="margin-top:22px">Os 15 de Piraí · setembro</div>
+      <div id="ranking"></div>
+    </section>
+
+    <!-- ── REGRAS ── -->
+    <section class="tela" id="v-regras">
+      <div class="sec" style="margin-top:22px">Como funciona</div>
+      <div class="card">
+        <div class="passo"><div class="n">1</div><div class="t"><b>Todo mês você ganha R$ 200</b><span>O dinheiro já entra na sua conta no dia 1º. Ele é seu — o que você faz durante o mês decide quanto fica.</span></div></div>
+        <div class="passo"><div class="n">2</div><div class="t"><b>Dirigindo mal, o saldo cai</b><span>Cada coisa que a gente mede tem um peso. Quanto pior o resultado, mais o saldo desce. Você vê a queda todo dia, aqui.</span></div></div>
+        <div class="passo"><div class="n">3</div><div class="t"><b>No fim do mês você recebe o que sobrou</b><span>Se rodou 1.000 km e ficou entre os 15. Os três melhores da unidade ainda levam R$ 300, R$ 150 e R$ 100.</span></div></div>
+      </div>
+      <div class="sec">Como a nota é feita</div>
+      <div class="card" id="regua"></div>
+    </section>
+
+  </div>
+
+  <nav class="nav" id="nav">
+    <button class="on" data-v="inicio" aria-label="Início"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l9-8 9 8v9a2 2 0 0 1-2 2h-4v-7H9v7H5a2 2 0 0 1-2-2z"/></svg></button>
+    <button class="mais" data-v="nota" aria-label="Nota"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg></button>
+    <button data-v="ganhos" aria-label="Ganhos"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg></button>
+  </nav>
+</div>
+
+<script>
+/* DADOS DE EXEMPLO — os mesmos do /app-motorista/. No app real vêm do Supabase. */
+var SALDO_INICIAL = 200, KM_MIN = 1000, TOP = 15, PODIO = [300, 150, 100], PESO = { rpm: 42, idle: 33, acel: 25 };
+var EXEMPLOS = [
+  { nome:'Marcio Andre', unidade:'PIR', km:1240, posicao:7,  rpm:85, idle:90, acel:100, medRpm:'85% do tempo na faixa', medIdle:'2,5% do tempo parado', medAcel:'0,0 por 100 km' },
+  { nome:'Denilson Maia', unidade:'PIR', km:640, posicao:22, rpm:72, idle:89, acel:97,  medRpm:'72% do tempo na faixa', medIdle:'2,7% do tempo parado', medAcel:'0,1 por 100 km' },
+];
+var EU = 0;
+var HIST_ANOS = {
+  2025: [null,null,null,null,null,null,null,null,null,['outubro',74.0,148.00,0,''],['novembro',79.5,159.00,0,''],['dezembro',82.3,164.60,100,'']],
+  2026: [['janeiro',78.4,156.80,0,''],['fevereiro',81.2,162.40,0,''],['março',69.5,0,0,'não bateu os 1.000 km'],['abril',84.1,168.20,100,''],
+         ['maio',86.9,173.80,150,''],['junho',83.0,166.00,0,''],['julho',88.2,176.40,300,''],['agosto',90.5,181.00,300,'']],
+};
+var HOJE = new Date(), ANO_VIG = HOJE.getFullYear(), MES_VIG = HOJE.getMonth();
+var ANO_SEL = HIST_ANOS[ANO_VIG] ? ANO_VIG : Math.max.apply(null, Object.keys(HIST_ANOS).map(Number));
+var MESES_N = ['janeiro','fevereiro','março','abril','maio','junho','julho','agosto','setembro','outubro','novembro','dezembro'];
+var RANKING = [
+  ['Marcio A.',90.5],['Anderson M.',89.3],['Wanderson P.',88.4],['Mario Sergio D.',86.4],['Breno E.',86.4],['Lucas C.',85.8],['Willian A.',84.1],
+  ['Luiz Carlos S.',83.8],['Thiago A.',83.7],['Paulo Roberto A.',83.6],['Wandiney T.',83.6],['Carlos Roberto C.',83.4],['Dalisvan S.',83.4],['Luiz Carlos B.',83.3],['Natanael S.',83.3],
+];
+var I = function(d){ return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">' + d + '</svg>'; };
+var ICO = {
+  rpm:  I('<path d="M4 16a8 8 0 1 1 16 0"/><path d="M12 16l4-5"/>'),
+  idle: I('<circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 2.5"/><path d="M9 2h6"/>'),
+  acel: I('<path d="M13 2L4 14h7l-1 8 9-12h-7z"/>'),
+  trof: I('<path d="M7 4h10v5a5 5 0 0 1-10 0z"/><path d="M17 5h2.5a2.5 2.5 0 0 1 0 5H17"/><path d="M7 5H4.5a2.5 2.5 0 0 0 0 5H7"/><path d="M12 14v3M8.5 20h7"/>'),
+  km:   I('<path d="M4 20L9 4M20 20L15 4"/><path d="M12 4v3M12 10v4M12 17v3"/>'),
+  cal:  I('<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/>'),
+};
+var PILARES = [
+  { k:'rpm',  nome:'Faixa verde do motor', dica:'Trocar a marcha antes de o motor gritar mantém o giro na faixa verde — é o que mais pesa no seu saldo.' },
+  { k:'idle', nome:'Motor ligado parado',  dica:'Parada de mais de um minuto, desliga. Motor ligado parado gasta diesel e não anda um metro.' },
+  { k:'acel', nome:'Arrancadas bruscas',   dica:'Sair suave do sinal gasta menos e chega junto. Cada arrancada brusca custa do seu saldo.' },
+];
+var brl = function(v){ return 'R$ ' + v.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2}); };
+var $ = function(id){ return document.getElementById(id); };
+var SALDO_VIG = 0;
+function calcula(m){
+  var nota = (m.rpm*PESO.rpm + m.idle*PESO.idle + m.acel*PESO.acel) / 100, perdas = {};
+  ['rpm','idle','acel'].forEach(function(k){ perdas[k] = SALDO_INICIAL * (PESO[k]/100) * (1 - m[k]/100); });
+  return { nota:nota, saldo:SALDO_INICIAL * nota / 100, perdas:perdas, elegivel: m.km >= KM_MIN && m.posicao <= TOP };
+}
+function fmtVal(v){ var t = v.toFixed(2).replace('.', ','); return '<small>R$</small>' + t.replace(/\B(?=(\d{3})+(?!\d),)/g, '.'); }
+function linha(ico, nome, sub, valor, cls, small, extra){
+  return '<div class="li' + (extra||'') + '"><div class="ic">' + ico + '</div><div class="tx"><b>' + nome + '</b><span>' + sub + '</span></div>'
+    + '<div class="vl ' + (cls||'') + '">' + valor + (small ? '<small>' + small + '</small>' : '') + '</div></div>';
+}
+
+function pinta(){
+  var m = EXEMPLOS[EU], c = calcula(m), faltaKm = Math.max(0, KM_MIN - m.km), pct = Math.round(c.saldo / SALDO_INICIAL * 100);
+  SALDO_VIG = c.elegivel ? c.saldo : 0;
+  $('ola').textContent = 'Olá, ' + m.nome.split(' ')[0] + '!';
+  $('sub').textContent = MESES_N[MES_VIG].charAt(0).toUpperCase() + MESES_N[MES_VIG].slice(1) + ', ' + ANO_VIG;
+  $('unid').textContent = m.unidade;
+  $('av').textContent = m.nome.split(' ').map(function(p){return p[0];}).join('').slice(0,2).toUpperCase();
+  $('btProto').textContent = EU === 0 ? 'Ver quem não é elegível' : 'Ver quem é elegível';
+
+  // ── saldo + meta do mês ──
+  $('rotSaldo').textContent = c.elegivel ? 'Saldo atual' : 'Você teria';
+  $('saldo').innerHTML = fmtVal(c.saldo);
+  $('barraSaldo').style.width = pct + '%';
+  $('metaTxt').innerHTML = '<b>' + brl(c.saldo) + '</b> / ' + brl(SALDO_INICIAL);
+  $('metaPct').textContent = pct + '%';
+  var av = $('avisoEleg');
+  if (c.elegivel) av.style.display = 'none';
+  else { av.style.display = ''; av.innerHTML = 'Para receber, ainda falta: ' + (faltaKm ? '<b>' + faltaKm.toLocaleString('pt-BR') + ' km</b>' : '')
+    + (faltaKm && m.posicao > TOP ? ' e ' : '') + (m.posicao > TOP ? '<b>subir para os ' + TOP + ' primeiros</b>' : ''); }
+
+  // ── onde o dinheiro foi ──
+  $('perdas').innerHTML = PILARES.map(function(p){
+    var v = c.perdas[p.k], ok = v < 0.005;
+    return linha(ICO[p.k], p.nome, 'nota ' + m[p.k], ok ? 'tudo certo' : '− ' + brl(v), ok ? 'pos' : 'neg');
+  }).join('');
+
+  // ── pódio + elegibilidade ──
+  var podio = c.elegivel && m.posicao <= 3 ? PODIO[m.posicao-1] : 0, okKm = m.km >= KM_MIN, okPos = m.posicao <= TOP;
+  $('extras').innerHTML =
+      linha(ICO.trof, 'Prêmio do pódio', '1º R$ 300 · 2º R$ 150 · 3º R$ 100', podio ? '+ ' + brl(podio) : m.posicao + 'º lugar', podio ? 'pos' : '', podio ? m.posicao + 'º lugar' : 'o pódio é até o 3º', podio ? ' eu' : '')
+    + linha(ICO.km, 'Rodar ' + KM_MIN.toLocaleString('pt-BR') + ' km', okKm ? 'você já rodou' : 'faltam ' + faltaKm.toLocaleString('pt-BR') + ' km', m.km.toLocaleString('pt-BR') + ' km', okKm ? 'pos' : 'neg')
+    + linha(ICO.trof, 'Ficar entre os ' + TOP, okPos ? 'da sua unidade' : 'precisa subir ' + (m.posicao - TOP), m.posicao + 'º', okPos ? 'pos' : 'neg');
+
+  // ── ganhos, nota, ranking, régua ──
+  renderGanhos();
+  var VOLTA = 2 * Math.PI * 42;
+  $('arco').style.strokeDasharray = VOLTA; $('arco').style.strokeDashoffset = VOLTA * (1 - c.nota / 100);
+  $('score').textContent = c.nota.toFixed(1).replace('.', ',');
+  $('faixaTxt').textContent = c.nota >= 85 ? 'Elite' : c.nota >= 70 ? 'Bom' : 'Precisa melhorar';
+  $('pilares').innerHTML = PILARES.map(function(p){
+    var n = m[p.k];
+    return '<div class="pilar"><div class="cab"><b>' + p.nome + '</b><div class="nota">' + n + '</div></div>'
+      + '<div class="med">' + m['med' + p.k.charAt(0).toUpperCase() + p.k.slice(1)] + ' · vale ' + PESO[p.k] + '% da nota</div>'
+      + '<div class="dica">' + p.dica + '</div></div>';
+  }).join('');
+  $('ranking').innerHTML = RANKING.map(function(r, i){
+    var eu = (i + 1) === m.posicao, ini = r[0].split(' ').map(function(p){return p[0];}).join('').slice(0,2).toUpperCase();
+    return linha('<b style="font-size:11px">' + ini + '</b>', eu ? 'Você' : r[0], (i+1) + 'º lugar' + (i < 3 ? ' · + R$ ' + PODIO[i] : ''), r[1].toFixed(1).replace('.', ','), '', 'nota', eu ? ' eu' : '');
+  }).join('');
+  $('regua').innerHTML = [
+    ['Faixa verde do motor','Vale 42% da nota. A nota é o próprio tempo na faixa: ficou 80% do tempo, tira 80.'],
+    ['Motor ligado parado','Vale 33%. Zero tempo parado com o motor ligado é nota 100. Em 25% do tempo, a nota zera.'],
+    ['Arrancadas bruscas','Vale 25%. Nenhuma arrancada é nota 100. Com 3 a cada 100 km, a nota zera.'],
+  ].map(function(r, i){ return '<div class="passo"><div class="n" style="background:var(--card2);color:var(--txt)">' + (i+1) + '</div><div class="t"><b>' + r[0] + '</b><span>' + r[1] + '</span></div></div>'; }).join('');
+}
+
+/* ── GANHOS: totalizador do ano + filtro de ano + mês a mês, com o mês vigente sempre no topo ── */
+function somaDe(h){ return h.reduce(function(a, x){ return a + (x ? x[2] + x[3] : 0); }, 0); }
+function mudaAno(ano){ ANO_SEL = ano; renderGanhos(); }
+function rotMes(nome, ano){ return nome.slice(0,3) + '/' + ano; }
+function renderGanhos(){
+  var H = HIST_ANOS[ANO_SEL] || [], anos = Object.keys(HIST_ANOS).map(Number).sort(function(a,b){ return b-a; });
+  if (anos.indexOf(ANO_VIG) < 0) anos.unshift(ANO_VIG);
+  $('anoSel').innerHTML = anos.map(function(a){ return '<option value="' + a + '"' + (a === ANO_SEL ? ' selected' : '') + '>' + a + '</option>'; }).join('');
+  var comDado = H.filter(Boolean);
+  $('anoTit').textContent = comDado.length ? 'Você ganhou em ' + ANO_SEL : ANO_SEL + ' ainda não fechou nenhum mês';
+  $('ganhoAno').innerHTML = fmtVal(somaDe(H));
+  var vig = linha(ICO.cal, rotMes(MESES_N[MES_VIG], ANO_VIG), 'em andamento<i>prévia</i>', brl(SALDO_VIG), '', '', ' vig');
+  var fechados = H.slice().reverse().filter(Boolean).map(function(h){
+    var v = h[2] + h[3];
+    return linha(ICO.cal, rotMes(h[0], ANO_SEL), v === 0 ? h[4] : 'nota ' + h[1].toFixed(1).replace('.', ',') + (h[3] ? ' · pódio + R$ ' + h[3] : ''), (v ? '+ ' : '') + brl(v), v ? 'pos' : 'neg');
+  }).join('');
+  $('meses').innerHTML = vig + (fechados || '<div class="li"><div class="tx"><span>Nenhum mês fechado em ' + ANO_SEL + ' ainda.</span></div></div>');
+}
+
+function trocaExemplo(){ EU = EU === 0 ? 1 : 0; pinta(); }
+function fechaMenu(){ $('menu').classList.remove('on'); }
+function irPara(v){
+  document.querySelectorAll('#nav button').forEach(function(x){ x.classList.toggle('on', x.dataset.v === v); });
+  document.querySelectorAll('.tela').forEach(function(s){ s.classList.remove('on'); });
+  $('v-' + v).classList.add('on'); document.querySelector('.corpo').scrollTop = 0; fechaMenu();
+}
+document.querySelectorAll('#nav button').forEach(function(b){ b.addEventListener('click', function(){ irPara(b.dataset.v); }); });
+document.querySelector('.corpo').addEventListener('click', fechaMenu);
+
+/* tema — o meio círculo do topo; mesma chave do portal */
+function aplicaTema(t){
+  document.body.classList.toggle('claro', t === 'claro');
+  try { localStorage.setItem('bi_theme', t === 'claro' ? 'light' : 'dark'); } catch(e){}
+  document.querySelector('meta[name=theme-color]').content = t === 'claro' ? '#EEF0F3' : '#1C1F26';
+}
+$('btTema').addEventListener('click', function(){ aplicaTema(document.body.classList.contains('claro') ? 'escuro' : 'claro'); });
+(function(){ var t; try { t = localStorage.getItem('bi_theme'); } catch(e){} aplicaTema(t === 'light' ? 'claro' : 'escuro'); })();
+
+/* login (protótipo: qualquer CPF + 4 números entra) */
+$('cpf').addEventListener('input', function(e){
+  var v = e.target.value.replace(/\D/g, '').slice(0, 11);
+  e.target.value = v.replace(/(\d{3})(\d)/, '$1.$2').replace(/(\d{3})(\d)/, '$1.$2').replace(/(\d{3})(\d{1,2})$/, '$1-$2');
+});
+function entrar(){ $('tela-login').classList.remove('on'); $('app').style.display = 'flex'; pinta(); }
+function sair(){ $('app').style.display = 'none'; $('tela-login').classList.add('on'); $('pin').value = ''; fechaMenu(); irPara('inicio'); }
+</script>
+</body>
+</html>
