@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-<meta name="build" content="202609042010">
+<meta name="build" content="202609042110">
 <title>Carta de Custos</title>
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -220,7 +220,7 @@ body.claro .ms-panel{box-shadow:0 18px 44px rgba(15,23,42,.20), 0 3px 10px rgba(
   .kpis{gap:8px;}
   .gr2{max-height:52vh;}
   /* três gráficos numa tela baixa comem a tabela inteira — a sobra é DIVIDIDA */
-  .gr3{max-height:26vh;}
+
 }
 .gcard{min-height:0;display:flex;flex-direction:column;padding:12px 16px 10px;position:relative;}
 .gtit{font-size:12px;font-weight:800;}
@@ -317,12 +317,15 @@ table.dre td.cg-t,.cg-t{color:var(--verde)!important;font-weight:700;}
 table.dre thead th.num{text-align:right;}
 
 /* três gráficos lado a lado — o .gr2 da casca é de dois.
-   O TETO É BAIXO DE PROPÓSITO: com 40vh os gráficos comiam a tabela de contas
-   e as últimas contas ficavam fora da tela. A sobra é DIVIDIDA — o gráfico
-   para de crescer e o que resta vai para a tabela, que precisa mostrar as seis
-   contas mais o total sem rolagem. */
-.gr3{flex:0 1 auto;min-height:170px;max-height:31vh;display:grid;grid-template-columns:repeat(3,1fr);gap:12px;}
-#vw-resumo .tsec{flex:1 1 auto;min-height:270px;}
+   A VISÃO PREENCHE A TELA INTEIRA, QUALQUER QUE SEJA (Renan, 04/09/2026):
+   tabela e gráficos DIVIDEM a altura disponível em vez de terem teto fixo em
+   vh. Com teto, tela grande sobrava faixa vazia embaixo e tela pequena cortava
+   a tabela — os dois defeitos ao mesmo tempo. O `flex:1 1 0` reparte o que
+   existe, e o min-height só garante que nenhum dos dois desapareça. */
+.gr3{flex:1 1 0;min-height:170px;display:grid;grid-template-columns:repeat(3,1fr);gap:12px;}
+#vw-resumo .tsec{flex:1.15 1 0;min-height:250px;}
+#vw-placas .tsec,#vw-consol .tsec{flex:1 1 0;min-height:220px;}
+#vw-consol .gcard{flex:0 1 auto;min-height:150px;max-height:26vh;}
 
 /* fileira de ações dentro do cabeçalho da tabela */
 .tacts{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
@@ -495,26 +498,20 @@ body.claro input[type=date]{color-scheme:light;}
 
       <!-- ══ 1 · RESUMO GERENCIAL ══ -->
       <section class="vw on" id="vw-resumo">
-        <div class="kpis">
-          <!-- a REFERÊNCIA vem antes do RESULTADO: orçado e remunerado primeiro,
-               realizado depois, como se lê a linha do DRE -->
-          <div class="kpi"><div class="kl">Orçado</div><div class="kv" id="k-orc">—</div><div class="km">DRE · mês</div></div>
-          <div class="kpi"><div class="kl">Remunerado</div><div class="kv" id="k-rem">—</div><div class="km">tendência do ano</div></div>
-          <div class="kpi"><div class="kl">Realizado</div><div class="kv" id="k-real">—</div><div class="km">só custo com NF</div></div>
-          <div class="kpi"><div class="kl">Δ Orçado</div><div class="kv" id="k-dorc">—</div><div class="km">orçado − realizado</div></div>
-          <div class="kpi"><div class="kl">Ating. Orç.</div><div class="kv" id="k-ato">—</div><div class="km">realizado ÷ orçado</div></div>
+        <!-- A TABELA VEM PRIMEIRO e os gráficos embaixo (Renan, 04/09/2026):
+             os cards de KPI saíram porque a linha "Total Manutenção" da tabela
+             já dá orçado, remunerado, realizado, Δ e atingimento — eram o mesmo
+             número duas vezes, comendo a altura que faltava aos gráficos. -->
+        <div class="card tsec">
+          <div class="thead-row"><div><div class="ttit">Acompanhamento por Conta</div>
+            <div class="tsub">Orçado e Remunerado do DRE (aba Frota) · Ating. ≥90% âmbar, ≥100% vermelho · botão direito → exportar Excel</div></div></div>
+          <div class="twrap"><table class="dre" id="tbl-conta"></table></div>
         </div>
 
         <div class="gr3">
           <div class="card gcard"><div class="gtit">Custo por Grupo</div><div class="gsub">no mês · top 10</div><div class="gcv"><canvas id="ch-grupo"></canvas></div></div>
           <div class="card gcard"><div class="gtit">Custo por Placa</div><div class="gsub">top 10 equipamentos</div><div class="gcv"><canvas id="ch-placa"></canvas></div></div>
           <div class="card gcard"><div class="gtit">Custo por Fornecedor</div><div class="gsub">top 10 fornecedores</div><div class="gcv"><canvas id="ch-forn"></canvas></div></div>
-        </div>
-
-        <div class="card tsec">
-          <div class="thead-row"><div><div class="ttit">Acompanhamento por Conta</div>
-            <div class="tsub">Orçado e Remunerado do DRE (aba Frota) · Ating. ≥90% âmbar, ≥100% vermelho</div></div></div>
-          <div class="twrap"><table class="dre" id="tbl-conta"></table></div>
         </div>
       </section>
 
@@ -531,33 +528,25 @@ body.claro input[type=date]{color-scheme:light;}
 
       <!-- ══ 3 · PLACAS ══ -->
       <section class="vw" id="vw-placas">
+        <!-- os cards ficam FORA do card da tabela, e o título da visão já está
+             no topo da tela — repeti-lo dentro do card era redundância -->
+        <div class="kpis" id="pl-kpis"></div>
         <div class="card tsec">
-          <div class="thead-row">
-            <div><div class="ttit">Contrato por placa</div>
-              <div class="tsub" id="pl-sub">Km do mês pelo hodômetro do ERP × taxa do contrato · a vigência cobra o km do mês anterior</div></div>
-          </div>
-          <div class="kpis" id="pl-kpis" style="margin-bottom:10px"></div>
+          <div class="thead-row"><div><div class="tsub" id="pl-sub">—</div></div></div>
           <div class="twrap"><table class="dre" id="tbl-placas"></table></div>
         </div>
       </section>
 
       <!-- ══ 4 · CONSOLIDADO ══ -->
       <section class="vw" id="vw-consol">
-        <div class="gr2" style="max-height:34vh">
-          <div class="card gcard"><div class="gtit">Custo de contrato por vigência</div>
-            <div class="gsub">fixo + variável · a vigência cobra o km do mês anterior</div>
-            <div class="gcv"><canvas id="ch-consol"></canvas></div></div>
-          <div class="card gcard"><div class="gtit">Km do mês</div>
-            <div class="gsub">soma do km rateado das placas com contrato</div>
-            <div class="gcv"><canvas id="ch-consolkm"></canvas></div></div>
+        <div class="chips" id="co-proj"></div>
+        <div class="card gcard" id="co-graf">
+          <div class="gtit">Custo do contrato por unidade</div>
+          <div class="gsub" id="co-gsub">fixo + variável no período do filtro</div>
+          <div class="gcv"><canvas id="ch-consol"></canvas></div>
         </div>
         <div class="card tsec">
-          <div class="thead-row">
-            <div><div class="ttit">Consolidado do contrato</div><div class="tsub" id="co-sub">—</div></div>
-            <!-- o toggle abre o consolidado por UNIDADE ou por PLACA; o recorte
-                 de unidade e de vigência é o do filtro do topo, não daqui -->
-            <div class="chips" id="co-dim"></div>
-          </div>
+          <div class="thead-row"><div><div class="tsub" id="co-sub">—</div></div></div>
           <div class="twrap"><table class="dre" id="tbl-consol"></table></div>
         </div>
       </section>
@@ -1035,19 +1024,7 @@ function geralTotals(){
   PACS.forEach(pac=>CONTAS[pac].forEach(c=>{const d=DRE[c];if(d){orc+=d.orc;rem+=d.rem;hasO=true;}}));
   return {real,orc:hasO?orc:null,rem:hasO?rem:null};
 }
-const atCol=p=>p==null||!isFinite(p)?'':(p>=100?'var(--vermelho)':p>=90?'var(--ambar)':'var(--verde)');
-function renderKpis(){
-  const t=geralTotals();
-  set('k-real',fmtFull(t.real));
-  set('k-orc',t.orc!=null?fmtFull(t.orc):'—');
-  set('k-rem',t.rem!=null?fmtFull(t.rem):'—');
-  const dO=t.orc!=null?t.orc-t.real:null;
-  const e=$('k-dorc'); e.textContent=dO!=null?fmtFull(dO):'—';
-  e.style.color=dO==null?'':(dO<0?'var(--vermelho)':'var(--verde)');
-  const atO=t.orc?t.real/t.orc*100:null, a=$('k-ato');
-  a.textContent=atO!=null?Math.round(atO)+'%':'—'; a.style.color=atCol(atO);
-}
-function render(){const rows=curRows();renderKpis();renderAcomp();renderLanc(rows);renderCharts(rows);}
+function render(){const rows=curRows();renderAcomp();renderLanc(rows);renderCharts(rows);}
 function aggBy(rows,key){const m=new Map();rows.forEach(r=>{const k=r[key]||'—';m.set(k,(m.get(k)||0)+r.valor);});return [...m.entries()].sort((a,b)=>b[1]-a[1]);}
 function atColor(p){
   if(p==null||!isFinite(p))return '';
@@ -1105,8 +1082,8 @@ const getTick=(sz=10)=>({color:isClaro()?'#4A5568':'#B2BCD2',font:{family:'Monts
 function hexLerp(c1,c2,t){const p=h=>[parseInt(h.slice(1,3),16),parseInt(h.slice(3,5),16),parseInt(h.slice(5,7),16)];const a=p(c1),b=p(c2);const m=a.map((v,i)=>Math.round(v+(b[i]-v)*t));return `rgb(${m[0]},${m[1]},${m[2]})`;}
 const labelPlugin={afterDatasetsDraw(chart){const meta=chart.getDatasetMeta(0),ds=chart.data.datasets[0];if(!meta)return;const ctx=chart.ctx;ctx.save();ctx.font='700 10px Montserrat,sans-serif';ctx.fillStyle=isClaro()?'#161D2B':'#EEF2FA';ctx.textAlign='left';ctx.textBaseline='middle';ds.data.forEach((v,i)=>{const pt=meta.data[i];if(!pt||v==null)return;ctx.fillText(fmt(v),pt.x+6,pt.y);});ctx.restore();}};
 const TT={backgroundColor:'#141B26',titleColor:'#F97316',bodyColor:'#F1F5F9',borderColor:'#1E2D40',borderWidth:1,titleFont:{family:'Montserrat'},bodyFont:{family:'Montserrat'}};
-function barChart(id,pairs){
-  const top=pairs.slice(0,10);
+function barChart(id,pairs,max){
+  const top=pairs.slice(0,max||10);
   if(charts[id])charts[id].destroy();
   if(!$(id))return;
   charts[id]=new Chart($(id),{type:'bar',
@@ -1116,20 +1093,6 @@ function barChart(id,pairs){
       plugins:{legend:{display:false},tooltip:Object.assign({callbacks:{label:c=>fmt(c.raw)}},TT)},
       scales:{y:{grid:{display:false},border:{display:false},ticks:Object.assign({autoSkip:false,callback:function(v){const l=this.getLabelForValue(v);return l.length>18?l.slice(0,17)+'…':l;}},getTick())},
         x:{display:false,beginAtZero:true,grace:'8%'}}}});
-}
-// barras verticais por vigência (visão Consolidado)
-function colChart(id,labels,vals,cor){
-  if(charts[id])charts[id].destroy();
-  if(!$(id))return;
-  charts[id]=new Chart($(id),{type:'bar',
-    data:{labels,datasets:[{data:vals,backgroundColor:cor||'rgba(249,115,22,.85)',borderRadius:4,borderSkipped:false}]},
-    options:{responsive:true,maintainAspectRatio:false,
-      plugins:{legend:{display:false},tooltip:Object.assign({callbacks:{label:c=>fmt(c.raw)}},TT)},
-      scales:{x:{grid:{display:false},border:{display:false},ticks:getTick(9.5)},
-        y:{grid:{display:false},border:{display:false},ticks:{display:false},beginAtZero:true,grace:'14%'}}},
-    plugins:[{id:'vlab',afterDatasetsDraw(ch){const m=ch.getDatasetMeta(0);if(!m)return;const c=ch.ctx;c.save();
-      c.font='700 9.5px Montserrat,sans-serif';c.fillStyle=isClaro()?'#161D2B':'#EEF2FA';c.textAlign='center';c.textBaseline='bottom';
-      ch.data.datasets[0].data.forEach((v,i)=>{const p=m.data[i];if(p)c.fillText(fmt(v),p.x,p.y-4);});c.restore();}}]});
 }
 function renderCharts(rows){
   const cr=rows.filter(counts);
@@ -1150,7 +1113,7 @@ function renderCharts(rows){
    · o mês corrente é PRÉVIA, não vigência fechada: o km ainda está
      sendo formado, e o fixo já entra inteiro desde o dia 1º.
    ══════════════════════════════════════════════════════════════ */
-let CONTR=[], CO_DIM='vigencia';
+let CONTR=[];
 // o PostgREST corta a resposta em 1.000 linhas e ignora um limit maior —
 // são ~360 placas × 9 vigências, então sem paginar a tabela vem pela metade
 async function pgAll(tabela,select,ordem){
@@ -1189,7 +1152,6 @@ const contrDoFiltro=()=>{
   return CONTR.filter(r=>u.has(r.unidade) && v.has(r.vig_cobranca)
     && (!p || !r.projeto || p.includes(String(r.projeto).toUpperCase())));
 };
-function setCoDim(d){ CO_DIM=d; renderConsol(); }
 
 function renderPlacas(){
   const rows=contrDoFiltro();
@@ -1206,116 +1168,101 @@ function renderPlacas(){
   const fixo=rows.filter(r=>r.tipo==='fixo').reduce((s,r)=>s+(+r.custo_vig||0),0);
   const semKm=rows.filter(r=>r.tipo==='variavel'&&r.km_vig==null).length;
   const vigsKm=[...new Set(rows.map(r=>r.vig_km))].sort();
-  set('pl-sub', (multiVig?`${curVigs().length} vigências`:`Cobrança ${vigLabel(curVigs()[0])}`)
+  set('pl-sub', (multiVig?`${curVigs().length} vigências de cobrança`:`Cobrança ${vigLabel(curVigs()[0])}`)
     + ` — km de ${vigsKm.map(vigLabel).join(', ')}`
     + (previa?' · PRÉVIA: o km do mês corrente ainda está sendo formado':'')
-    + ' · botão direito → exportar Excel');
+    + ' · clique no cabeçalho para ordenar · botão direito → exportar Excel');
   $('pl-kpis').innerHTML=
     `<div class="kpi"><div class="kl">Placas</div><div class="kv">${new Set(rows.map(r=>r.placa)).size}</div><div class="km">${semKm} sem km no mês</div></div>`+
     `<div class="kpi"><div class="kl">Km do mês</div><div class="kv">${fmt(km)}</div><div class="km">hodômetro do ERP</div></div>`+
     `<div class="kpi"><div class="kl">Variável</div><div class="kv">${fmt(tot-fixo)}</div><div class="km">km × taxa</div></div>`+
     `<div class="kpi"><div class="kl">Fixo</div><div class="kv">${fmt(fixo)}</div><div class="km">independe de km</div></div>`+
     `<div class="kpi"><div class="kl">Total</div><div class="kv">${fmt(tot)}</div><div class="km">${previa?'<b style="color:var(--ambar)">com prévia</b>':'vigência fechada'}</div></div>`;
+  /* KM E CUSTO SÃO AS ÚLTIMAS COLUNAS (Renan, 04/09/2026) — o que se lê é o
+     número do fim da linha, e o cadastro da placa fica antes dele.
+     A taxa vai em pt-BR: `toFixed(3)` escrevia "1.393", que em português se lê
+     mil trezentos e noventa e três em vez de um real e trinta e nove. */
   let h='<thead><tr>'
     +(multiVig?'<th>Cobrança</th>':'')+'<th>Placa</th>'
     +(multiUni?'<th>Unidade</th>':'')+'<th>Projeto</th><th>Tipo</th>'
-    +'<th class="num">R$/km</th><th class="num">Km do mês</th><th class="num">Custo</th>'
-    +'<th class="num">Abast.</th><th>Últ. abast.</th><th>Km do mês por</th></tr></thead><tbody>';
+    +'<th class="num">R$/km</th><th class="num">Abast.</th><th>Últ. abast.</th>'
+    +'<th class="num">Km do mês</th><th class="num">Custo</th></tr></thead><tbody>';
   rows.slice().sort((a,b)=>(+b.custo_vig||0)-(+a.custo_vig||0)).forEach(r=>{
     h+='<tr>'+(multiVig?`<td>${esc(vigLabel(r.vig_cobranca))}</td>`:'')
       +`<td class="conta">${esc(r.placa_origem||r.placa)}</td>`
       +(multiUni?`<td>${esc(r.unidade||'—')}</td>`:'')
       +`<td>${esc(r.projeto||'—')}</td><td>${r.tipo==='fixo'?'Fixo':'Por km'}</td>`
-      +`<td class="num">${r.taxa_km!=null?(+r.taxa_km).toFixed(3):D}</td>`
-      +`<td class="num">${r.km_vig==null?D:numBR(r.km_vig)}</td><td class="num">${fmt(r.custo_vig)}</td>`
+      +`<td class="num">${r.taxa_km!=null?(+r.taxa_km).toLocaleString('pt-BR',{minimumFractionDigits:3,maximumFractionDigits:3}):D}</td>`
       +`<td class="num">${r.abastecimentos||D}</td><td>${esc(dataBR(r.ultimo_abast))}</td>`
-      +`<td>${esc(r.origem_km||'—')}</td></tr>`;
+      +`<td class="num">${r.km_vig==null?D:numBR(r.km_vig)}</td>`
+      +`<td class="num">${fmt(r.custo_vig)}</td></tr>`;
   });
   const vaz=n=>'<td></td>'.repeat(n);
   h+=`</tbody><tfoot><tr class="total"><td class="conta">Total</td>`
-   +vaz(3+(multiVig?1:0)+(multiUni?1:0))
-   +`<td class="num">${fmt(km)}</td><td class="num">${fmt(tot)}</td>${vaz(3)}</tr></tfoot>`;
+   +vaz(5+(multiVig?1:0)+(multiUni?1:0))
+   +`<td class="num">${numBR(km)}</td><td class="num">${fmt(tot)}</td></tr></tfoot>`;
   $('tbl-placas').innerHTML=h;
 }
 
-/* O TOGGLE É DE ABERTURA, NÃO DE FILTRO (Renan, 04/09/2026). Ele diz o que
-   vira LINHA do consolidado — vigência, unidade ou placa. Quem recorta é o
-   filtro do topo; repetir os mesmos valores aqui dentro seria a mesma pergunta
-   feita duas vezes na mesma tela, e foi o que eu tinha feito.
+/* CONSOLIDADO CONTRATO (Renan, 04/09/2026): gráfico por unidade em cima, com
+   toggle de projeto, e embaixo a tabela do ANO INTEIRO.
 
-   · Vigência — o mês a mês: km, variável, fixo e total de cada cobrança;
-   · Unidade / Placa — uma linha por unidade ou por placa, com uma coluna por
-     vigência de cobrança e o total na ponta.                               */
-const CO_DIMS=[['vigencia','Vigência'],['unidade','Unidade'],['placa','Placa']];
+   OS DOZE MESES FICAM SEMPRE NA TABELA. Filtrar um mês no topo apaga os
+   números dos outros, mas não tira as colunas — assim a leitura do ano não
+   muda de forma a cada filtro, e dá para ver de imediato o que já foi
+   apurado e o que ainda não. */
+let CO_PROJ='';
+function setCoProj(p){ CO_PROJ=p; renderConsol(); }
 function renderConsol(){
-  $('co-dim').innerHTML='<span class="rot">Abrir por</span>'
-    + CO_DIMS.map(([k,r])=>`<button class="chip${CO_DIM===k?' on':''}" onclick="setCoDim('${k}')">${r}</button>`).join('');
-  const base=contrDoFiltro();
+  const projs=[...new Set(CONTR.map(r=>r.projeto).filter(Boolean))].sort();
+  $('co-proj').innerHTML='<span class="rot">Projeto</span>'
+    +`<button class="chip${CO_PROJ===''?' on':''}" onclick="setCoProj('')">Todos</button>`
+    + projs.map(p=>`<button class="chip${CO_PROJ===p?' on':''}" onclick="setCoProj('${esc(p)}')">${esc(p)}</button>`).join('');
+
+  const uSel=new Set(curUnits()), vSel=new Set(curVigs());
+  // o ano da tabela é o da vigência mais recente que o filtro deixa passar
+  const ano=(curVigs().slice().sort().pop()||'').slice(0,4)
+        || (CONTR.map(r=>r.vig_cobranca).sort().pop()||'').slice(0,4);
+  const meses=Array.from({length:12},(_,i)=>ano+'-'+String(i+1).padStart(2,'0'));
+  const base=CONTR.filter(r=>uSel.has(r.unidade) && (!CO_PROJ||r.projeto===CO_PROJ));
+  const noFiltro=r=>vSel.has(r.vig_cobranca);
+
+  // gráfico: custo por unidade no período do filtro
+  const porUni=new Map();
+  base.filter(noFiltro).forEach(r=>porUni.set(r.unidade||'—',(porUni.get(r.unidade||'—')||0)+(+r.custo_vig||0)));
+  const ordU=[...porUni.entries()].sort((a,b)=>b[1]-a[1]);
+  barChart('ch-consol', ordU, ordU.length);
+  set('co-gsub', `fixo + variável · ${vSel.size===1?vigLabel([...vSel][0]):vSel.size+' vigências'}`
+    + (CO_PROJ?' · projeto '+CO_PROJ:''));
+
   if(!base.length){
     $('tbl-consol').innerHTML=`<tbody><tr><td><div class="vazio">Sem consolidado para o recorte do filtro.</div></td></tr></tbody>`;
-    set('co-sub','—'); colChart('ch-consol',[],[]); colChart('ch-consolkm',[],[]); return;
+    set('co-sub','—'); return;
   }
-  const vigs=[...new Set(base.map(r=>r.vig_cobranca))].sort();
-  const porVig=new Map(vigs.map(v=>[v,{vigKm:'',previa:false,placas:new Set(),km:0,fixo:0,tot:0}]));
-  base.forEach(r=>{
-    const a=porVig.get(r.vig_cobranca);
-    a.vigKm=r.vig_km; a.previa=a.previa||!!r.previa; a.placas.add(r.placa);
-    a.km+=+r.km_vig||0; a.tot+=+r.custo_vig||0;
-    if(r.tipo==='fixo') a.fixo+=+r.custo_vig||0;
-  });
-  colChart('ch-consol', vigs.map(vigLabel), vigs.map(v=>porVig.get(v).tot));
-  colChart('ch-consolkm', vigs.map(v=>vigLabel(porVig.get(v).vigKm)), vigs.map(v=>porVig.get(v).km), 'rgba(46,144,232,.85)');
-  const temPrevia=vigs.some(v=>porVig.get(v).previa);
-  const rodape=(temPrevia?' · a última é prévia enquanto o mês corre':'')+' · botão direito → exportar Excel';
-
-  if(CO_DIM==='vigencia'){
-    set('co-sub', `${vigs.length} vigência(s) de cobrança · a vigência cobra o km do mês anterior`+rodape);
-    let h='<thead><tr><th>Cobrança</th><th>Km de</th><th class="num">Placas</th>'
-      +'<th class="num">Km do mês</th><th class="num">Variável</th><th class="num">Fixo</th>'
-      +'<th class="num">Total</th><th></th></tr></thead><tbody>';
-    let tK=0,tV=0,tF=0,tT=0;
-    vigs.forEach(v=>{
-      const a=porVig.get(v);
-      tK+=a.km; tV+=a.tot-a.fixo; tF+=a.fixo; tT+=a.tot;
-      h+=`<tr><td class="conta">${esc(vigLabel(v))}</td><td>${esc(vigLabel(a.vigKm))}</td>`
-        +`<td class="num">${a.placas.size}</td><td class="num">${numBR(a.km)}</td>`
-        +`<td class="num">${fmt(a.tot-a.fixo)}</td><td class="num">${fmt(a.fixo)}</td>`
-        +`<td class="num">${fmt(a.tot)}</td>`
-        +`<td>${a.previa?'<span class="aviso">prévia</span>':''}</td></tr>`;
-    });
-    h+=`</tbody><tfoot><tr class="total"><td class="conta">Total</td><td></td><td></td>`
-     +`<td class="num">${numBR(tK)}</td><td class="num">${fmt(tV)}</td><td class="num">${fmt(tF)}</td>`
-     +`<td class="num">${fmt(tT)}</td><td></td></tr></tfoot>`;
-    $('tbl-consol').innerHTML=h;
-    return;
-  }
-
-  const porPlaca=CO_DIM==='placa';
-  const chave=r=> porPlaca ? (r.placa_origem||r.placa) : (r.unidade||'—');
   const linhas=new Map();
   base.forEach(r=>{
-    const k=chave(r);
-    const a=linhas.get(k)||{sub:porPlaca?(r.unidade||''):'', vig:{}, tot:0};
-    a.vig[r.vig_cobranca]=(a.vig[r.vig_cobranca]||0)+(+r.custo_vig||0);
-    a.tot+=+r.custo_vig||0;
+    const k=r.unidade||'—';
+    const a=linhas.get(k)||{mes:{},tot:0};
+    if(noFiltro(r)){ a.mes[r.vig_cobranca]=(a.mes[r.vig_cobranca]||0)+(+r.custo_vig||0); a.tot+=+r.custo_vig||0; }
     linhas.set(k,a);
   });
   const ord=[...linhas.entries()].sort((a,b)=>b[1].tot-a[1].tot);
-  set('co-sub', `${ord.length} ${porPlaca?'placa(s)':'unidade(s)'} · ${vigs.length} vigência(s) de cobrança`+rodape);
-  let h='<thead><tr><th>'+(porPlaca?'Placa':'Unidade')+'</th>'
-    +(porPlaca?'<th>Unidade</th>':'')
-    +vigs.map(v=>`<th class="num">${esc(vigLabel(v))}${porVig.get(v).previa?' *':''}</th>`).join('')
+  const apurados=meses.filter(m=>ord.some(([,a])=>a.mes[m]));
+  set('co-sub', `${ord.length} unidade(s) · ano ${ano} · ${apurados.length} mês(es) com apuração no filtro`
+    + (CO_PROJ?` · projeto ${CO_PROJ}`:'')
+    + ' · clique no cabeçalho para ordenar · botão direito → exportar Excel');
+  const tMes={}; let totG=0;
+  ord.forEach(([,a])=>{ meses.forEach(m=>{ if(a.mes[m]) tMes[m]=(tMes[m]||0)+a.mes[m]; }); totG+=a.tot; });
+  let h='<thead><tr><th>Unidade</th>'
+    +meses.map(m=>`<th class="num">${MESES[+m.slice(5)-1]}</th>`).join('')
     +'<th class="num">Total</th></tr></thead><tbody>';
   ord.forEach(([k,a])=>{
     h+=`<tr><td class="conta">${esc(k)}</td>`
-      +(porPlaca?`<td>${esc(a.sub)}</td>`:'')
-      +vigs.map(v=>`<td class="num">${a.vig[v]?fmt(a.vig[v]):D}</td>`).join('')
+      +meses.map(m=>`<td class="num">${a.mes[m]?fmt(a.mes[m]):D}</td>`).join('')
       +`<td class="num">${fmt(a.tot)}</td></tr>`;
   });
-  const totG=ord.reduce((s,x)=>s+x[1].tot,0);
   h+=`</tbody><tfoot><tr class="total"><td class="conta">Total</td>`
-   +(porPlaca?'<td></td>':'')
-   +vigs.map(v=>`<td class="num">${fmt(porVig.get(v).tot)}</td>`).join('')
+   +meses.map(m=>`<td class="num">${tMes[m]?fmt(tMes[m]):D}</td>`).join('')
    +`<td class="num">${fmt(totG)}</td></tr></tfoot>`;
   $('tbl-consol').innerHTML=h;
 }
@@ -1415,6 +1362,6 @@ initPdfExport({ btnContainer:'#pdf-slot', btnClass:'s-item', btnAoFim:true,
   viewAtual:()=>VW, irPara:setVw,
   isLight:()=>document.body.classList.contains('claro'), setTheme:aplicaTema });
 </script>
-<script src="../assets/build-check.js?v=202609042010"></script>
+<script src="../assets/build-check.js?v=202609042110"></script>
 </body>
 </html>
