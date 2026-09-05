@@ -2423,6 +2423,115 @@ if (MODE === 'regracond') {
   process.exit(0);
 }
 
+if (MODE === 'cpf') {
+  // "Impossível não ter isso" (Renan, 05/09/2026): o robô só lia licenseNumber
+  // e employeeNo. Este modo varre TODOS os campos do cadastro de motorista do
+  // Geotab procurando um CPF válido (11 dígitos com os dois verificadores
+  // certos — CNH também tem 11 dígitos, por isso a conta) e grava em
+  // ce_motoristas.cpf onde ainda está vazio. No log só nome de campo, formato
+  // (dígito→9, letra→A) e contagens — nunca o número nem o nome da pessoa.
+  const cred = await geotabLogin();
+  if (!cred) { console.error('Geotab: sem credencial'); process.exit(1); }
+  const [us, grupos] = await Promise.all([
+    geotabRpc('Get', { typeName: 'User', search: { isDriver: true } }, cred),
+    geotabRpc('Get', { typeName: 'Group' }, cred),
+  ]);
+  GT_GNOME = new Map(grupos.map(g => [g.id, g.name || '']));
+  console.log(`Geotab (db=${GT_DB}): ${us.length} motorista(s) cadastrado(s)`);
+
+  const cpfValido = d => {
+    if (!/^\d{11}$/.test(d) || /^(\d)\1{10}$/.test(d)) return false;
+    const dv = n => { let s = 0; for (let i = 0; i < n; i++) s += +d[i] * (n + 1 - i); const r = (s * 10) % 11; return r === 10 ? 0 : r; };
+    return dv(9) === +d[9] && dv(10) === +d[10];
+  };
+  // CPFs dentro de um texto qualquer ("CPF: 123.456.789-09", "12345678909")
+  const cpfsEm = s => {
+    const out = new Set();
+    for (const m of String(s).match(/\d{3}\.?\d{3}\.?\d{3}-?\d{2}/g) || []) {
+      const d = m.replace(/\D/g, ''); if (cpfValido(d)) out.add(d);
+    }
+    return [...out];
+  };
+  const forma = s => String(s).replace(/\d/g, '9').replace(/[A-Za-zÀ-ÿ]/g, 'A').slice(0, 24);
+
+  // 1) esquema do cadastro: todo campo (inclusive aninhado), preenchimento e formato
+  const campos = new Map();   // caminho → {n, formas:Map, cpf, d11, d9}
+  const anota = (path, v) => {
+    const c = campos.get(path) || { n: 0, formas: new Map(), cpf: 0, d11: 0, d9: 0 };
+    c.n++;
+    if (typeof v === 'string' || typeof v === 'number') {
+      const f = forma(v); c.formas.set(f, (c.formas.get(f) || 0) + 1);
+      const dig = String(v).replace(/\D/g, '');
+      if (cpfsEm(v).length) c.cpf++;
+      else if (dig.length === 11) c.d11++;
+      else if (dig.length >= 9) c.d9++;
+    }
+    campos.set(path, c);
+  };
+  const walk = (v, path, prof) => {
+    if (v == null || v === '' || prof > 3) return;
+    if (Array.isArray(v)) { if (!v.length) return; v.forEach(x => walk(x, path + '[]', prof + 1)); return; }
+    if (typeof v === 'object') { for (const [k, x] of Object.entries(v)) walk(x, path ? path + '.' + k : k, prof + 1); return; }
+    anota(path, v);
+  };
+  us.forEach(u => walk(u, '', 0));
+  console.log('\n── CAMPOS DO CADASTRO (preenchidos / total · formato mais comum · CPF válido · 11 dígitos sem ser CPF · ≥9 dígitos) ──');
+  [...campos.entries()].sort((a, b) => b[1].cpf - a[1].cpf || b[1].d11 - a[1].d11 || b[1].n - a[1].n)
+    .forEach(([k, c]) => {
+      const top = [...c.formas.entries()].sort((a, b) => b[1] - a[1]).slice(0, 2).map(([f, n]) => `"${f}"×${n}`).join(' ');
+      console.log(`${k.padEnd(34)} ${String(c.n).padStart(5)}/${us.length}  ${top.padEnd(40)} cpf=${c.cpf} d11=${c.d11} d9=${c.d9}`);
+    });
+
+  // 2) um CPF por motorista: licenseNumber → employeeNo → qualquer outro campo
+  const achado = new Map(); let ambiguos = 0; const porCampo = new Map();
+  for (const u of us) {
+    const cands = new Map();   // cpf → campo onde apareceu
+    const olha = (v, path) => {
+      if (v == null) return;
+      if (Array.isArray(v)) { v.forEach(x => olha(x, path)); return; }
+      if (typeof v === 'object') { for (const [k, x] of Object.entries(v)) olha(x, path ? path + '.' + k : k); return; }
+      for (const c of cpfsEm(v)) if (!cands.has(c)) cands.set(c, path);
+    };
+    for (const k of ['licenseNumber', 'employeeNo']) olha(u[k], k);
+    if (!cands.size) olha(u, '');
+    if (cands.size > 1) { ambiguos++; continue; }
+    if (cands.size === 1) {
+      const [[cpf, campo]] = cands;
+      achado.set(u.id, cpf); porCampo.set(campo, (porCampo.get(campo) || 0) + 1);
+    }
+  }
+  const repet = new Map(); achado.forEach(c => repet.set(c, (repet.get(c) || 0) + 1));
+  const duplicados = [...repet.values()].filter(n => n > 1).length;
+  console.log(`\nmotoristas com CPF válido em algum campo: ${achado.size}/${us.length}`
+    + (porCampo.size ? ` (${[...porCampo].map(([c, n]) => (c || '(raiz)') + '=' + n).join(', ')})` : '')
+    + (ambiguos ? ` · ${ambiguos} com mais de um CPF no cadastro (ignorados)` : '')
+    + (duplicados ? ` · ${duplicados} CPF(s) em mais de um cadastro (ignorados)` : ''));
+  const porUni = new Map();
+  us.forEach(u => { const k = gtUni(u) || '(sem grupo UNI)'; const t = porUni.get(k) || { n: 0, cpf: 0 }; t.n++; if (achado.has(u.id)) t.cpf++; porUni.set(k, t); });
+  [...porUni.entries()].sort((a, b) => b[1].n - a[1].n).forEach(([k, t]) => console.log(`   ${k.padEnd(24)} ${String(t.cpf).padStart(4)}/${t.n} com CPF`));
+
+  // 3) grava onde ainda está vazio — nunca sobrescreve
+  if (!SB_KEY) { console.log('\nGEM_SUPABASE_SERVICE_KEY ausente — nada gravado.'); process.exit(0); }
+  const banco = new Map((await sbTodos('ce_motoristas?select=id,chave,cpf')).map(m => [m.chave, m]));
+  const usados = new Set([...banco.values()].map(m => m.cpf).filter(Boolean));
+  let gravados = 0, jaTinha = 0, diverge = 0, foraDoBanco = 0, emOutro = 0, falhas = 0;
+  for (const u of us) {
+    const cpf = achado.get(u.id); if (!cpf || repet.get(cpf) > 1) continue;
+    const m = banco.get(gtChave(u));
+    if (!m) { foraDoBanco++; continue; }
+    if (m.cpf) { if (m.cpf === cpf) jaTinha++; else diverge++; continue; }
+    if (usados.has(cpf)) { emOutro++; continue; }
+    const r = await fetch(`${SB_URL}/rest/v1/ce_motoristas?id=eq.${m.id}&cpf=is.null`, {
+      method: 'PATCH', headers: { ...H_SB, Prefer: 'return=minimal' }, body: JSON.stringify({ cpf }) });
+    if (r.ok) { gravados++; usados.add(cpf); } else { falhas++; if (falhas <= 3) console.log('   gravar:', r.status, (await r.text()).slice(0, 120)); }
+  }
+  console.log(`\nce_motoristas: ${gravados} CPF(s) gravado(s) · ${jaTinha} já batiam · ${diverge} divergem do que está no banco (mantido o do banco)`
+    + ` · ${emOutro} CPF já usado por outra chave · ${foraDoBanco} motorista(s) ainda sem linha no banco` + (falhas ? ` · ${falhas} falha(s)` : ''));
+  const semCpf = [...banco.values()].filter(m => !m.cpf && String(m.chave).startsWith('gt:')).length;
+  console.log(`ainda sem CPF no banco (chave gt:…): ${semCpf}`);
+  process.exit(0);
+}
+
 if (MODE === 'ident') {
   // A operação exige identificação para rodar, mas a sonda viu ~70% das
   // viagens sem motorista (31/08/2026). Este modo mostra ONDE: viagens e km
