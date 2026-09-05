@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-<meta name="build" content="202609042110">
+<meta name="build" content="202609042140">
 <title>Carta de Custos</title>
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -323,7 +323,12 @@ table.dre thead th.num{text-align:right;}
    a tabela — os dois defeitos ao mesmo tempo. O `flex:1 1 0` reparte o que
    existe, e o min-height só garante que nenhum dos dois desapareça. */
 .gr3{flex:1 1 0;min-height:170px;display:grid;grid-template-columns:repeat(3,1fr);gap:12px;}
-#vw-resumo .tsec{flex:1.15 1 0;min-height:250px;}
+/* O PACOTE TEM SEMPRE AS MESMAS 6 CONTAS + total (Renan, 04/09/2026), então a
+   tabela do Resumo tem altura conhecida e não precisa esticar: ela ocupa o que
+   precisa e TODA a sobra vai para os gráficos, em vez de virar faixa vazia
+   embaixo das contas. */
+#vw-resumo .tsec{flex:0 0 auto;}
+#vw-resumo .twrap{flex:0 0 auto;max-height:none;overflow:visible;}
 #vw-placas .tsec,#vw-consol .tsec{flex:1 1 0;min-height:220px;}
 #vw-consol .gcard{flex:0 1 auto;min-height:150px;max-height:26vh;}
 
@@ -480,6 +485,11 @@ body.claro input[type=date]{color-scheme:light;}
           Unidade<span class="ms-cnt"></span></button>
           <div class="ms-panel"><div class="ms-search"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M16.5 16.5 21 21"/></svg><input type="text" placeholder="Pesquisar…"></div><div class="ms-list"></div></div>
         </div>
+        <div class="ms-wrap" id="ms-ano"><button class="ms-btn" onclick="toggleMs('ms-ano')">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M3 10h18M8 2v4M16 2v4"/></svg>
+          Ano<span class="ms-cnt"></span></button>
+          <div class="ms-panel"><div class="ms-search"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M16.5 16.5 21 21"/></svg><input type="text" placeholder="Pesquisar…"></div><div class="ms-list"></div></div>
+        </div>
         <div class="ms-wrap" id="ms-vig"><button class="ms-btn" onclick="toggleMs('ms-vig')">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
           Vigência<span class="ms-cnt"></span></button>
@@ -624,10 +634,22 @@ const GRUPOS={
 (function(){const dl=document.createElement('datalist');dl.id='dl-grupos';dl.innerHTML=GRUPOS['Manutenção'].map(g=>'<option value="'+g.replace(/"/g,'&quot;')+'">').join('');document.addEventListener('DOMContentLoaded',()=>document.body.appendChild(dl));})();
 
 // ── seleção dos filtros (Set vazio = "Todos") ──
-const selUni=new Set(), selVig=new Set(), selProj=new Set();
+const selUni=new Set(), selVig=new Set(), selProj=new Set(), selAno=new Set();
 let VIG_OPTS=[], ROWS=[];
 const curUnits =()=> selUni.size ? [...selUni] : ALLOWED.slice();
-const curVigs  =()=> selVig.size ? [...selVig] : VIG_OPTS.slice();
+/* FILTRO DE ANO (Renan, 04/09/2026): "vamos precisar quando o ano virar".
+   O ano não é um filtro paralelo ao da vigência — ele RECORTA a lista dela.
+   Sem isso, na virada do ano a lista de meses cresceria sem parar e jan/27
+   apareceria misturado com jan/26 sem o usuário ter como separar os dois. */
+const anosDe=vs=>[...new Set(vs.map(v=>String(v).slice(0,4)))].sort().reverse();
+const ANO_OPTS=()=>anosDe(VIG_OPTS);
+const vigsDoAno=()=>selAno.size?VIG_OPTS.filter(v=>selAno.has(v.slice(0,4))):VIG_OPTS.slice();
+const curVigs  =()=>{
+  const base=vigsDoAno();
+  if(!selVig.size) return base;
+  const rec=[...selVig].filter(v=>base.includes(v));
+  return rec.length?rec:base;   // mês selecionado que não é do ano escolhido não zera a tela
+};
 const curProjs =()=> selProj.size ? [...selProj] : null;
 const singleCtx=()=> curUnits().length===1 && curVigs().length===1;
 const charts={};
@@ -779,14 +801,25 @@ function buildVigFilter(){
   // de AGO/2026 — quando a carta começou a rodar de verdade — até 6 meses à
   // frente. Mês que passou NÃO some da lista: na virada a unidade perderia o
   // acesso aos lançamentos do mês anterior sem conseguir pôr OC/NF neles.
-  const now=new Date(); VIG_OPTS=[];
+  // a lista é RECONSTRUÍDA por união, não do zero: o filtro de ano chama esta
+  // função de novo, e zerar VIG_OPTS aqui apagaria as vigências do contrato
+  // que o loadContratos já tinha juntado (o histórico voltaria a sumir)
+  const now=new Date(); const base=[];
   const fim=new Date(now.getFullYear(), now.getMonth()+6, 1);
   for(let d=new Date(2026,7,1); d<=fim; d.setMonth(d.getMonth()+1)){
-    VIG_OPTS.push(d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0'));
+    base.push(d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0'));
   }
+  VIG_OPTS=[...new Set(VIG_OPTS.concat(base))].sort();
   const mesAtual=now.getFullYear()+'-'+String(now.getMonth()+1).padStart(2,'0');
   if(!selVig.size) selVig.add(VIG_OPTS.includes(mesAtual)?mesAtual:VIG_OPTS[0]);
-  buildMs('ms-vig', ()=>VIG_OPTS.slice(), vigLabel, selVig, onFiltroUniVig, 'Todas');
+  buildMs('ms-vig', vigsDoAno, vigLabel, selVig, onFiltroUniVig, 'Todas');
+}
+function buildAnoFilter(){ buildMs('ms-ano', ANO_OPTS, a=>a, selAno, onFiltroAno, 'Todos'); }
+function onFiltroAno(){
+  // trocar de ano remonta a lista de meses; os meses que não são dele saem da
+  // seleção, senão o filtro ficaria dizendo uma coisa e mostrando outra
+  [...selVig].forEach(v=>{ if(selAno.size && !selAno.has(v.slice(0,4))) selVig.delete(v); });
+  buildVigFilter(); onFiltroUniVig();
 }
 function buildProjFilter(){ buildMs('ms-proj', ()=>UNIT_PROJETOS.slice(), p=>p, selProj, onFiltroProj, 'Todos'); }
 
@@ -1143,7 +1176,7 @@ async function loadContratos(){
   const novas=[...new Set(CONTR.map(r=>r.vig_cobranca).filter(Boolean))];
   const antes=VIG_OPTS.length;
   VIG_OPTS=[...new Set(VIG_OPTS.concat(novas))].sort();
-  if(VIG_OPTS.length!==antes) buildMs('ms-vig', ()=>VIG_OPTS.slice(), vigLabel, selVig, onFiltroUniVig, 'Todas');
+  if(VIG_OPTS.length!==antes){ buildAnoFilter(); buildVigFilter(); }
   renderPlacas(); renderConsol();
 }
 // o recorte das duas visões novas é o do filtro do topo
@@ -1192,7 +1225,7 @@ function renderPlacas(){
       +`<td class="conta">${esc(r.placa_origem||r.placa)}</td>`
       +(multiUni?`<td>${esc(r.unidade||'—')}</td>`:'')
       +`<td>${esc(r.projeto||'—')}</td><td>${r.tipo==='fixo'?'Fixo':'Por km'}</td>`
-      +`<td class="num">${r.taxa_km!=null?(+r.taxa_km).toLocaleString('pt-BR',{minimumFractionDigits:3,maximumFractionDigits:3}):D}</td>`
+      +`<td class="num">${r.taxa_km!=null?(+r.taxa_km).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2}):D}</td>`
       +`<td class="num">${r.abastecimentos||D}</td><td>${esc(dataBR(r.ultimo_abast))}</td>`
       +`<td class="num">${r.km_vig==null?D:numBR(r.km_vig)}</td>`
       +`<td class="num">${fmt(r.custo_vig)}</td></tr>`;
@@ -1342,7 +1375,7 @@ async function init(){
   set('euSub', IS_ADMIN?'Coordenação':(ALLOWED[0]||'Frota'));
   if(!ALLOWED.length){ showRestricted('Seu usuário não tem unidade vinculada. Fale com o corporativo para liberar seu acesso à Carta de Custos.'); return; }
   selUni.add(ALLOWED[0]);
-  buildUniFilter(); buildVigFilter(); buildProjFilter();
+  buildUniFilter(); buildVigFilter(); buildAnoFilter(); buildProjFilter();
   await loadRows();
   loadContratos();   // as visões novas carregam em segundo plano
 }
@@ -1350,7 +1383,7 @@ init();
 </script>
 <script src="../assets/mobile.js?v=202608220020"></script>
 <script src="../assets/ctrlk.js"></script>
-<script src="../assets/sortable-table.js?v=202609041600"></script>
+<script src="../assets/sortable-table.js?v=202609042200"></script>
 <script src="../assets/excel-export.js"></script>
 <script src="../assets/pdf-export.js"></script>
 <script>
@@ -1362,6 +1395,6 @@ initPdfExport({ btnContainer:'#pdf-slot', btnClass:'s-item', btnAoFim:true,
   viewAtual:()=>VW, irPara:setVw,
   isLight:()=>document.body.classList.contains('claro'), setTheme:aplicaTema });
 </script>
-<script src="../assets/build-check.js?v=202609042110"></script>
+<script src="../assets/build-check.js?v=202609042140"></script>
 </body>
 </html>
