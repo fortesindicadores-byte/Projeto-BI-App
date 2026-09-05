@@ -1,30 +1,26 @@
-# ============================================================
-# DriverPro no domínio próprio — workflow do REPOSITÓRIO SEPARADO
+# DriverPro Site Sync — vai no repositório SEPARADO `fortesindicadores-byte/driverpro`
+# (em .github/workflows/driverpro-site-sync.yml), NÃO neste.
 #
-# O GitHub Pages aceita UM domínio por repositório, e o portal inteiro já
-# mora em gestao-em-movimento. Para o app ter um subdomínio só dele
-# (driverpro.<dominio>), ele é servido de um segundo repositório, que este
-# workflow mantém igual à pasta app-motorista-4/ do portal.
+# Por quê: o GitHub Pages aceita UM domínio por repositório. O portal fica no
+# github.io; o app ganha um subdomínio próprio (driverpro.<domínio>) servido do
+# repositório `driverpro`, que espelha a pasta app-motorista-4/ deste portal a
+# cada 15 min. A fonte continua sendo este repositório — ninguém edita lá.
 #
-# COMO USAR (uma vez):
-#   1. Criar o repositório público fortesindicadores-byte/driverpro (vazio).
-#   2. Colocar este arquivo nele em .github/workflows/sync.yml.
+# Passos (uma vez):
+#   1. Criar o repositório público `driverpro` na conta fortesindicadores-byte.
+#   2. Colar este arquivo lá em .github/workflows/driverpro-site-sync.yml e
+#      rodar "Run workflow" uma vez (Actions → DriverPro Site Sync).
 #   3. Settings → Pages → Source: Deploy from a branch → main / (root).
-#   4. Settings → Pages → Custom domain: driverpro.<dominio>  (marcar Enforce HTTPS
-#      depois que o certificado sair, ~10 min).
-#   5. No DNS do domínio: CNAME  driverpro  →  fortesindicadores-byte.github.io
-#   6. Actions → Sync DriverPro → Run workflow (a primeira carga). Depois roda
-#      sozinho a cada 15 min e só commita quando o app mudou no portal.
-#
-# Não precisa de token: o portal é público (git clone sem credencial) e o
-# commit aqui usa o GITHUB_TOKEN do próprio repositório.
-# ============================================================
-name: Sync DriverPro
+#   4. Settings → Pages → Custom domain: driverpro.<domínio> → Save
+#      (isso cria o arquivo CNAME; o sync preserva ele) → marcar Enforce HTTPS
+#      quando o certificado ficar pronto (alguns minutos).
+#   5. No DNS do domínio: registro CNAME  driverpro  →  fortesindicadores-byte.github.io
+name: DriverPro Site Sync
 
 on:
-  workflow_dispatch:
   schedule:
     - cron: '*/15 * * * *'
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -34,20 +30,21 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Baixar a pasta do app no portal
+
+      - name: Puxa app-motorista-4 do portal
         run: |
-          git clone --depth 1 --filter=blob:none --sparse https://github.com/fortesindicadores-byte/gestao-em-movimento.git /tmp/portal
-          cd /tmp/portal && git sparse-checkout set app-motorista-4
-      - name: Trocar o conteúdo do site pelo app
-        run: |
-          find . -mindepth 1 -maxdepth 1 ! -name .git ! -name .github ! -name CNAME -exec rm -rf {} +
-          cp -r /tmp/portal/app-motorista-4/. .
+          rm -rf /tmp/portal
+          git clone --depth 1 --filter=blob:none --sparse https://github.com/fortesindicadores-byte/gestao-em-movimento /tmp/portal
+          git -C /tmp/portal sparse-checkout set app-motorista-4
+          rsync -a --delete --exclude .git --exclude .github --exclude CNAME --exclude README.md /tmp/portal/app-motorista-4/ ./
           touch .nojekyll
-      - name: Commitar se mudou
+          echo "PORTAL_SHA=$(git -C /tmp/portal rev-parse --short HEAD)" >> "$GITHUB_ENV"
+
+      - name: Publica se mudou
         run: |
           git config user.name  "driverpro-sync"
           git config user.email "driverpro-sync@users.noreply.github.com"
           git add -A
           if git diff --cached --quiet; then echo "sem mudança"; exit 0; fi
-          git commit -m "sync: app-motorista-4 do portal ($(date -u +%Y-%m-%dT%H:%MZ))"
+          git commit -m "sync: app-motorista-4 @ ${PORTAL_SHA}"
           git push
