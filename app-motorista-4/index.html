@@ -7,7 +7,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="DriverPro">
-<meta name="build" content="202609061700">
+<meta name="build" content="202609061800">
 <title>DriverPro</title>
 <link rel="apple-touch-icon" href="../app-motorista/img/icone-192.png">
 <link rel="icon" href="../app-motorista/img/icone-192.png">
@@ -137,6 +137,19 @@ body.claro .nav button.on{color:#fff;}
 .passo .t b{display:block;font-size:13px;font-weight:600;margin:4px 0 3px;}
 .passo .t span{font-size:11.5px;color:var(--txt2);line-height:1.5;}
 
+/* ── ADMIN: lista de motoristas ── */
+#tela-sel{display:none;height:100%;flex-direction:column;padding:calc(var(--safe-top) + 16px) 20px 16px;}
+#tela-sel.on{display:flex;}
+.sel-cab{display:flex;align-items:center;gap:10px;margin-bottom:14px;}
+.sel-cab b{display:block;font-size:15px;font-weight:600;}
+.sel-cab span{display:block;font-size:11px;color:var(--txt2);margin-top:3px;}
+.rb-sair{margin-left:auto;background:none;border:1px solid var(--brd);color:var(--txt2);font-family:inherit;font-size:11.5px;font-weight:500;border-radius:8px;padding:7px 11px;cursor:pointer;}
+#selBusca{width:100%;background:var(--linha);border:1px solid var(--brd);border-radius:9px;padding:12px 14px;color:var(--txt);font-family:inherit;font-size:14px;margin-bottom:12px;}
+#selBusca:focus{outline:none;border-color:var(--acc);}
+.sel-lista{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;}
+.sel-lista .li{cursor:pointer;}
+.sel-lista .li:active{border-color:var(--acc);}
+
 /* ── LOGIN ── */
 #tela-login{display:none;height:100%;flex-direction:column;justify-content:center;padding:0 28px;}
 #tela-login.on{display:flex;}
@@ -175,6 +188,14 @@ body.claro .nav button.on{color:#fff;}
   <div class="lg-rodape" id="lgRodape">Primeira vez aqui? <a onclick="modoLogin('criar')">Criar senha</a></div>
 </div>
 
+<!-- ══════════ ADMIN: escolhe o motorista ══════════ -->
+<div id="tela-sel">
+  <div class="sel-cab"><div class="logo-sm"><svg viewBox="0 0 48 48" fill="none" aria-hidden="true"><rect x="2" y="2" width="44" height="44" rx="12" fill="#F22C05"/><path d="M12 30a12 12 0 1 1 24 0" stroke="#fff" stroke-width="3.2" stroke-linecap="round"/><path d="M24 30l7-8" stroke="#fff" stroke-width="3.2" stroke-linecap="round"/><circle cx="24" cy="30" r="2.4" fill="#fff"/></svg></div><div><b>Selecione o motorista</b><span id="selSub">para ver o app como ele vê</span></div>
+    <button class="rb-sair" onclick="sair()">Sair</button></div>
+  <input id="selBusca" type="search" placeholder="Buscar por nome ou unidade" autocomplete="off">
+  <div class="sel-lista" id="selLista"></div>
+</div>
+
 <!-- ══════════ APP ══════════ -->
 <div class="app" id="app" style="display:none">
   <div class="topo">
@@ -186,6 +207,7 @@ body.claro .nav button.on{color:#fff;}
     </div>
   </div>
   <div class="menu" id="menu">
+    <button id="btTrocar" onclick="escolheMotorista()" style="display:none">Trocar motorista</button>
     <button onclick="sair()">Sair</button>
   </div>
 
@@ -473,24 +495,50 @@ function entrar(){
   rpc(MODO === 'criar' ? 'ce_app_criar_pin' : 'ce_app_login', { p_cpf: cpf, p_pin: pin }).then(function(r){
     bt.disabled = false;
     if (!r.ok) { if (r.primeira_vez) modoLogin('criar'); return erroLogin(r.erro || 'Não deu certo.'); }
-    try { localStorage.setItem('app4_token', r.token); } catch(e){}
-    carrega(r.token);
+    try { localStorage.setItem('app4_token', r.token); localStorage.setItem('app4_admin', r.admin ? '1' : ''); localStorage.removeItem('app4_chave'); } catch(e){}
+    if (r.admin) escolheMotorista(); else carrega(r.token);
   }).catch(function(e){ bt.disabled = false; erroLogin('Sem conexão com o servidor. Tente de novo.'); console.warn(e); });
 }
-function carrega(token){
-  rpc('ce_app_dados', { p_token: token }).then(function(r){
-    if (!r.ok) { sair(); return erroLogin(r.erro || 'Entre de novo.'); }
+function carrega(token, chave){
+  rpc('ce_app_dados', chave ? { p_token: token, p_chave: chave } : { p_token: token }).then(function(r){
+    if (!r.ok) { if (r.admin) return escolheMotorista(); sair(); return erroLogin(r.erro || 'Entre de novo.'); }
     D = r; abre();
   }).catch(function(e){ erroLogin('Sem conexão com o servidor. Tente de novo.'); console.warn(e); });
 }
-function abre(){ $('tela-login').classList.remove('on'); $('app').style.display = 'flex'; $('pin').value = ''; ANO_SEL = null; pinta(); }
+/* ── admin: escolhe o motorista e entra como ele ── */
+var MOTORISTAS = [];
+function escolheMotorista(){
+  var t = null; try { t = localStorage.getItem('app4_token'); } catch(e){}
+  $('app').style.display = 'none'; $('tela-login').classList.remove('on'); $('tela-sel').classList.add('on'); fechaMenu();
+  $('selLista').innerHTML = '<div class="li"><div class="tx"><span>Carregando…</span></div></div>';
+  rpc('ce_app_motoristas', { p_token: t }).then(function(r){
+    if (!r.ok) { sair(); return erroLogin(r.erro || 'Entre de novo.'); }
+    MOTORISTAS = r.motoristas || []; $('selSub').textContent = MOTORISTAS.length + ' motoristas com nota'; filtraMotoristas();
+  }).catch(function(e){ $('selLista').innerHTML = '<div class="li"><div class="tx"><span>Sem conexão. Tente de novo.</span></div></div>'; console.warn(e); });
+}
+function filtraMotoristas(){
+  var q = ($('selBusca').value || '').toLowerCase();
+  var l = MOTORISTAS.filter(function(m){ return !q || (m.nome + ' ' + (m.unidade || '')).toLowerCase().indexOf(q) >= 0; });
+  $('selLista').innerHTML = l.slice(0, 200).map(function(m){
+    var ini = m.nome.split(' ').map(function(p){return p[0];}).join('').slice(0,2).toUpperCase();
+    return '<div class="li" data-chave="' + m.chave + '"><div class="ic"><b style="font-size:11px">' + ini + '</b></div><div class="tx"><b>' + m.nome + '</b><span>' + (m.unidade || 'sem unidade') + '</span></div></div>';
+  }).join('') || '<div class="li"><div class="tx"><span>Ninguém com esse nome.</span></div></div>';
+}
+$('selBusca').addEventListener('input', filtraMotoristas);
+$('selLista').addEventListener('click', function(e){
+  var li = e.target.closest('.li[data-chave]'); if (!li) return;
+  var t = null; try { t = localStorage.getItem('app4_token'); localStorage.setItem('app4_chave', li.dataset.chave); } catch(e){}
+  $('tela-sel').classList.remove('on'); carrega(t, li.dataset.chave);
+});
+function abre(){ $('tela-login').classList.remove('on'); $('tela-sel').classList.remove('on'); $('app').style.display = 'flex'; $('pin').value = ''; ANO_SEL = null; $('btTrocar').style.display = D.admin ? '' : 'none'; pinta(); }
 function sair(){
-  var t = null; try { t = localStorage.getItem('app4_token'); localStorage.removeItem('app4_token'); } catch(e){}
+  var t = null; try { t = localStorage.getItem('app4_token'); localStorage.removeItem('app4_token'); localStorage.removeItem('app4_admin'); localStorage.removeItem('app4_chave'); } catch(e){}
   if (t && !DEMO) rpc('ce_app_sair', { p_token: t }).catch(function(){});
-  D = null; $('app').style.display = 'none'; $('tela-login').classList.add('on'); $('pin').value = ''; fechaMenu(); irPara('inicio'); modoLogin('entrar');
+  D = null; $('app').style.display = 'none'; $('tela-sel').classList.remove('on'); $('tela-login').classList.add('on'); $('pin').value = ''; fechaMenu(); irPara('inicio'); modoLogin('entrar');
 }
 /* sessão guardada: entra direto */
-(function(){ var t = null; try { t = localStorage.getItem('app4_token'); } catch(e){} if (t && !DEMO) carrega(t); })();
+(function(){ var t = null, adm = '', ch = null; try { t = localStorage.getItem('app4_token'); adm = localStorage.getItem('app4_admin'); ch = localStorage.getItem('app4_chave'); } catch(e){}
+  if (!t || DEMO) return; if (adm === '1' && !ch) escolheMotorista(); else carrega(t, adm === '1' ? ch : null); })();
 </script>
 </body>
 </html>

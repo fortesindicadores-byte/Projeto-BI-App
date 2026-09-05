@@ -14,10 +14,10 @@ console.log('login com PIN errado/sem PIN →', r.status, JSON.stringify({ ok: r
 ok(r.status === 200 && r.j.ok === false, 'login recusa PIN errado');
 if (r.j.primeira_vez) {
   r = await rpc('ce_app_criar_pin', { p_cpf: CPF, p_pin: PIN });
-  console.log('criar_pin →', r.status, JSON.stringify({ ok: r.j.ok, erro: r.j.erro, unidade: r.j.unidade, token: r.j.token ? 'ok' : '-' }));
+  console.log('criar_pin →', r.status, r.j.ok ? JSON.stringify({ ok: true, unidade: r.j.unidade, token: 'ok' }) : JSON.stringify(r.j));
   ok(r.j.ok === true, 'criar PIN no primeiro acesso');
 }
-if (!r.j.token) { r = await rpc('ce_app_login', { p_cpf: CPF, p_pin: PIN }); console.log('login →', r.status, JSON.stringify({ ok: r.j.ok, erro: r.j.erro, unidade: r.j.unidade })); }
+if (!r.j.token) { r = await rpc('ce_app_login', { p_cpf: CPF, p_pin: PIN }); console.log('login →', r.status, r.j.ok ? JSON.stringify({ ok: true, unidade: r.j.unidade }) : JSON.stringify(r.j)); }
 ok(!!r.j.token, 'login devolve token');
 if (r.j.token) {
   const d = await rpc('ce_app_dados', { p_token: r.j.token }), j = d.j;

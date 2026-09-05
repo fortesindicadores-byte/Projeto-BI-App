@@ -119,7 +119,7 @@ begin
       ceil(extract(epoch from (a.bloqueado_ate - now())) / 60) || ' min.');
   end if;
   if a.pin_hash <> crypt(v_pin, a.pin_hash) then
-    update ce_app_acesso set tentativas = tentativas + 1,
+    update ce_app_acesso set
       bloqueado_ate = case when tentativas + 1 >= 5 then now() + interval '15 minutes' else null end,
       tentativas = case when tentativas + 1 >= 5 then 0 else tentativas + 1 end
       where chave = m.chave;
@@ -232,3 +232,151 @@ grant execute on function public.ce_app_sair(uuid)            to anon, authentic
 --   select * from public.ce_app_regras;
 --   select chave, ultimo_acesso, tentativas from public.ce_app_acesso;
 --   select chave, criado_em, expira_em from public.ce_app_sessao order by criado_em desc;
+
+-- ============================================================
+-- 10) ADMINISTRADOR (Renan, 05/09/2026): entra com o próprio CPF + PIN e
+--     escolhe um motorista para ver o app como se fosse ele.
+--     O CPF/PIN do admin NÃO fica neste arquivo (repositório público):
+--     é inserido pela query passada no chat.
+-- ============================================================
+create table if not exists public.ce_app_admins (
+  cpf         text primary key,              -- só dígitos
+  nome        text not null,
+  pin_hash    text not null,
+  criado_em   timestamptz not null default now()
+);
+alter table public.ce_app_admins enable row level security;
+alter table public.ce_app_sessao add column if not exists admin_cpf text;
+alter table public.ce_app_sessao alter column chave drop not null;
+
+-- login: se o CPF é de admin, valida o PIN dele e abre sessão de admin
+create or replace function public.ce_app_login(p_cpf text, p_pin text)
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare v_cpf text := ce_app_so_digitos(p_cpf); v_pin text := ce_app_so_digitos(p_pin);
+        m record; a record; adm record; v_token uuid;
+begin
+  select * into adm from ce_app_admins where cpf = v_cpf;
+  if adm is not null then
+    if adm.pin_hash <> crypt(v_pin, adm.pin_hash) then return jsonb_build_object('ok', false, 'erro', 'Senha errada.'); end if;
+    insert into ce_app_sessao (admin_cpf) values (v_cpf) returning token into v_token;
+    return jsonb_build_object('ok', true, 'token', v_token, 'nome', adm.nome, 'admin', true);
+  end if;
+  select * into m from ce_motoristas where cpf = v_cpf and ativo;
+  if m is null then return jsonb_build_object('ok', false, 'erro', 'CPF não está no programa.'); end if;
+  select * into a from ce_app_acesso where chave = m.chave;
+  if a is null then return jsonb_build_object('ok', false, 'erro', 'Primeira vez? Crie sua senha.', 'primeira_vez', true); end if;
+  if a.bloqueado_ate is not null and a.bloqueado_ate > now() then
+    return jsonb_build_object('ok', false, 'erro', 'Muitas tentativas. Espere ' ||
+      ceil(extract(epoch from (a.bloqueado_ate - now())) / 60) || ' min.');
+  end if;
+  if a.pin_hash <> crypt(v_pin, a.pin_hash) then
+    update ce_app_acesso set
+      bloqueado_ate = case when tentativas + 1 >= 5 then now() + interval '15 minutes' else null end,
+      tentativas = case when tentativas + 1 >= 5 then 0 else tentativas + 1 end
+      where chave = m.chave;
+    return jsonb_build_object('ok', false, 'erro', 'Senha errada.');
+  end if;
+  update ce_app_acesso set tentativas = 0, bloqueado_ate = null, ultimo_acesso = now() where chave = m.chave;
+  delete from ce_app_sessao where chave = m.chave and expira_em < now();
+  insert into ce_app_sessao (chave) values (m.chave) returning token into v_token;
+  return jsonb_build_object('ok', true, 'token', v_token, 'nome', m.nome, 'unidade', m.unidade);
+end $$;
+
+-- lista de motoristas para o admin escolher (só quem tem nota em algum mês)
+create or replace function public.ce_app_motoristas(p_token uuid)
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare s record;
+begin
+  select * into s from ce_app_sessao where token = p_token and expira_em > now();
+  if s is null or s.admin_cpf is null then return jsonb_build_object('ok', false, 'erro', 'Só administrador.'); end if;
+  return jsonb_build_object('ok', true, 'motoristas', coalesce((
+    select jsonb_agg(jsonb_build_object('chave', x.chave, 'nome', x.motorista, 'unidade', x.unidade) order by x.unidade, x.motorista)
+    from (select distinct on (chave) chave, motorista, unidade from ce_scores_mensais
+          where pontuacao is not null and chave not like 'semlogin:%' order by chave, competencia desc) x), '[]'::jsonb));
+end $$;
+
+-- dados: o motorista da sessão, ou o escolhido pelo admin (p_chave)
+drop function if exists public.ce_app_dados(uuid);
+create or replace function public.ce_app_dados(p_token uuid, p_chave text default null)
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare s record; m record; R record; v_vig date := date_trunc('month', now())::date;
+        v_chave text; v_meses jsonb; v_rank jsonb; v_pos int;
+begin
+  select * into s from ce_app_sessao where token = p_token and expira_em > now();
+  if s is null then return jsonb_build_object('ok', false, 'erro', 'Sessão expirada. Entre de novo.'); end if;
+  v_chave := case when s.admin_cpf is not null then p_chave else s.chave end;
+  if v_chave is null then return jsonb_build_object('ok', false, 'erro', 'Escolha um motorista.', 'admin', true); end if;
+  -- o motorista pode não estar no de-para: pega nome/unidade do último mês com nota
+  select coalesce(mo.nome, sc.motorista) as nome, coalesce(mo.unidade, sc.unidade) as unidade into m
+    from (select 1) z
+    left join ce_motoristas mo on mo.chave = v_chave
+    left join lateral (select motorista, unidade from ce_scores_mensais where chave = v_chave order by competencia desc limit 1) sc on true;
+  if m.nome is null then return jsonb_build_object('ok', false, 'erro', 'Motorista sem dados.'); end if;
+  select * into R from ce_app_regras where id = 1;
+
+  with u as (
+    select x.chave, x.motorista, x.pontuacao,
+           row_number() over (order by x.pontuacao desc nulls last, x.km desc nulls last) as pos
+    from ce_scores_mensais x
+    where x.competencia = v_vig and x.unidade is not distinct from m.unidade
+      and x.pontuacao is not null and x.chave not like 'semlogin:%'
+  )
+  select coalesce(jsonb_agg(jsonb_build_object('pos', pos, 'nome', ce_app_abrevia(motorista),
+                   'pontuacao', round(pontuacao::numeric, 1), 'eu', chave = v_chave) order by pos), '[]'::jsonb),
+         max(pos) filter (where chave = v_chave)
+    into v_rank, v_pos from u;
+
+  with h as (
+    select x.*,
+           row_number() over (partition by x.competencia
+                              order by x.pontuacao desc nulls last, x.km desc nulls last) as pos
+    from ce_scores_mensais x
+    where x.competencia <= v_vig and x.unidade is not distinct from m.unidade
+      and x.pontuacao is not null and x.chave not like 'semlogin:%'
+  ), meu as (
+    select h.*,
+      (coalesce(h.km,0)      >= R.km_min)      and (coalesce(h.viagens,0) >= R.viagens_min)
+      and (coalesce(h.dias,0) >= R.dias_min)   and (coalesce(h.pontuacao,0) >= R.score_min)
+      and (R.top_n = 0 or h.pos <= R.top_n) as elegivel
+    from h where h.chave = v_chave
+  )
+  select coalesce(jsonb_agg(jsonb_build_object(
+      'competencia', to_char(competencia, 'YYYY-MM'),
+      'nota', round(pontuacao::numeric, 1), 'km', round(coalesce(km,0)::numeric), 'dias', dias, 'viagens', viagens,
+      'posicao', pos, 'elegivel', elegivel,
+      'carteira', case when elegivel then round(R.saldo_inicial * pontuacao / 100, 2) else 0 end,
+      'podio',    case when elegivel and pos <= coalesce(array_length(R.podio,1),0) then R.podio[pos] else 0 end,
+      'rpm', round(rpm_pontos::numeric,1), 'idle', round(idle_pontos::numeric,1), 'acel', round(acel_pontos::numeric,1),
+      'vel', round(vel_pontos::numeric,1),
+      'motivo', case when elegivel then null
+                     when coalesce(km,0) < R.km_min then 'não bateu os ' || R.km_min || ' km'
+                     when coalesce(viagens,0) < R.viagens_min then 'não bateu as ' || R.viagens_min || ' viagens'
+                     when coalesce(dias,0) < R.dias_min then 'menos de ' || R.dias_min || ' dias medidos'
+                     when coalesce(pontuacao,0) < R.score_min then 'nota abaixo de ' || R.score_min
+                     else 'fora dos ' || R.top_n || ' primeiros' end
+    ) order by competencia desc), '[]'::jsonb)
+    into v_meses from meu;
+
+  return jsonb_build_object(
+    'ok', true, 'admin', s.admin_cpf is not null,
+    'nome', m.nome, 'unidade', m.unidade, 'chave', v_chave,
+    'vigente', to_char(v_vig, 'YYYY-MM'),
+    'regras', jsonb_build_object('saldo_inicial', R.saldo_inicial, 'km_min', R.km_min, 'viagens_min', R.viagens_min,
+       'dias_min', R.dias_min, 'score_min', R.score_min, 'top_n', R.top_n, 'podio', to_jsonb(R.podio),
+       'pesos', jsonb_build_object('rpm', R.peso_rpm, 'idle', R.peso_idle, 'acel', R.peso_acel)),
+    'posicao', v_pos,
+    'ranking', v_rank,
+    'meses', v_meses
+  );
+end $$;
+
+revoke all on function public.ce_app_motoristas(uuid)     from public;
+revoke all on function public.ce_app_dados(uuid, text)    from public;
+grant execute on function public.ce_app_motoristas(uuid)  to anon, authenticated;
+grant execute on function public.ce_app_dados(uuid, text) to anon, authenticated;
+notify pgrst, 'reload schema';
+
+-- Cadastro de admin (rodar à parte, com o CPF e o PIN reais — NÃO versionar):
+--   insert into public.ce_app_admins (cpf, nome, pin_hash)
+--   values ('<cpf só dígitos>', '<nome>', crypt('<pin de 4 dígitos>', gen_salt('bf')))
+--   on conflict (cpf) do update set pin_hash = excluded.pin_hash, nome = excluded.nome;
