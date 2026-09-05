@@ -7,7 +7,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Condução">
-<meta name="build" content="202609060600">
+<meta name="build" content="202609061300">
 <title>Condução Econômica</title>
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="img/icone-192.png">
@@ -53,7 +53,10 @@ body{background:var(--fundo);color:var(--txt);font-family:'Montserrat',-apple-sy
 .pod{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;padding:10px 14px 12px;}
 .pod .l{text-align:center;border-radius:13px;padding:10px 4px 11px;background:var(--cartao2);}
 .pod .l.eu{background:rgba(249,115,22,.16);box-shadow:inset 0 0 0 1px rgba(249,115,22,.45);}
-.pod .l .m{font-size:17px;line-height:1;}
+.pod .l .m{position:relative;width:26px;height:26px;margin:0 auto;color:var(--txt2);}
+.pod .l .m svg{width:26px;height:26px;}
+.pod .l .m b{position:absolute;left:0;right:0;top:9px;text-align:center;font-size:8px;font-weight:900;color:var(--txt);line-height:1;}
+.pod .l.eu .m{color:var(--laranja);}
 .pod .l .q{font-size:10px;font-weight:700;color:var(--txt3);margin-top:5px;}
 .pod .l .v{font-size:12px;font-weight:900;color:var(--laranja);margin-top:2px;letter-spacing:-.3px;}
 .pod .l.eu .q{color:var(--laranja);}
@@ -92,7 +95,8 @@ body{background:var(--fundo);color:var(--txt);font-family:'Montserrat',-apple-sy
 .perda{display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--linha);}
 .perda:last-child{border-bottom:0;padding-bottom:0;}
 .perda .ico{width:35px;height:35px;border-radius:11px;background:var(--cartao2);flex:0 0 auto;
-  display:flex;align-items:center;justify-content:center;font-size:17px;}
+  display:flex;align-items:center;justify-content:center;color:var(--txt);}
+.perda .ico svg{width:17px;height:17px;}
 .perda .txt{flex:1;min-width:0;}
 .perda .txt b{display:block;font-size:12px;font-weight:700;}
 .perda .txt span{display:block;font-size:10.5px;color:var(--txt2);font-weight:600;margin-top:2px;}
@@ -155,7 +159,9 @@ body{background:var(--fundo);color:var(--txt);font-family:'Montserrat',-apple-sy
 /* ── ranking ── */
 .rk{display:flex;align-items:center;gap:12px;padding:11px 0;border-bottom:1px solid var(--linha);}
 .rk:last-child{border-bottom:0;}
-.rk .pos{width:26px;text-align:center;font-size:12px;font-weight:800;color:var(--txt3);flex:0 0 auto;}
+.rk .pos{width:26px;text-align:center;font-size:12px;font-weight:800;color:var(--txt3);flex:0 0 auto;position:relative;}
+.rk .pos svg{width:22px;height:22px;margin:0 auto;}
+.rk .pos b{position:absolute;left:0;right:0;top:8px;text-align:center;font-size:7px;font-weight:900;color:var(--txt);line-height:1;}
 .rk .nome{flex:1;font-size:12.5px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .rk .pts{font-size:12px;font-weight:800;}
 .rk .extra{font-size:10.5px;font-weight:800;color:var(--laranja);margin-left:8px;}
@@ -168,6 +174,7 @@ body{background:var(--fundo);color:var(--txt);font-family:'Montserrat',-apple-sy
 .passo:last-child{border-bottom:0;padding-bottom:0;}
 .passo .n{width:27px;height:27px;border-radius:50%;background:var(--laranja);color:#2A1405;flex:0 0 auto;
   display:flex;align-items:center;justify-content:center;font-weight:900;font-size:12px;}
+.passo .n svg{width:14px;height:14px;}
 .passo .t b{display:block;font-size:12px;font-weight:800;margin-bottom:3px;}
 .passo .t span{font-size:11.5px;color:var(--txt2);font-weight:600;line-height:1.55;}
 
@@ -438,14 +445,25 @@ var RANKING = [
   ['Dalisvan S.',83.4],['Luiz Carlos B.',83.3],['Natanael S.',83.3],
 ];
 
+/* ÍCONES EM LINHA, MONOCROMÁTICOS (Renan, 05/09/2026): o emoji da planta no
+   RPM não dizia nada ("que porra é essa?") e os desenhos coloridos saíram.
+   RPM = conta-giros com ponteiro · parado = relógio · arrancada = raio ·
+   pódio = medalha de contorno com o número. Herdam a cor do texto. */
+var SVG = function(d){ return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' + d + '</svg>'; };
+var ICO = {
+  rpm:  SVG('<path d="M4 16a8 8 0 1 1 16 0"/><path d="M12 16l4-5"/><circle cx="12" cy="16" r="1.2" fill="currentColor"/>'),
+  idle: SVG('<circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 2.5"/><path d="M9 2h6"/>'),
+  acel: SVG('<path d="M13 2L4 14h7l-1 8 9-12h-7z"/>'),
+  medalha: function(n){ return SVG('<circle cx="12" cy="14" r="6.5"/><path d="M8.5 8.5L6 2h4l2 5M15.5 8.5L18 2h-4l-2 5"/>') + '<b>' + n + '</b>'; },
+};
 var PILARES = [
-  { k:'rpm',  ico:'🌿', nome:'Faixa verde do motor',
+  { k:'rpm',  ico:ICO.rpm,  nome:'Faixa verde do motor',
     sub:'quanto tempo o giro ficou na faixa boa',
     dica:'Trocar a marcha antes de o motor gritar mantém o giro na faixa verde — é o que mais pesa no seu saldo.' },
-  { k:'idle', ico:'⏱️', nome:'Motor ligado parado',
+  { k:'idle', ico:ICO.idle, nome:'Motor ligado parado',
     sub:'tempo de motor ligado sem sair do lugar',
     dica:'Parada de mais de um minuto, desliga. Motor ligado parado gasta diesel e não anda um metro.' },
-  { k:'acel', ico:'🚀', nome:'Arrancadas bruscas',
+  { k:'acel', ico:ICO.acel, nome:'Arrancadas bruscas',
     sub:'quantas vezes você acelerou forte demais',
     dica:'Sair suave do sinal gasta menos e chega junto. Cada arrancada brusca custa do seu saldo.' },
 ];
@@ -516,7 +534,7 @@ function pinta(){
   $('podio').innerHTML =
       '<div class="pod">' + PODIO.map(function(v, i){
         return '<div class="l' + (m.posicao === i+1 ? ' eu' : '') + '">'
-          + '<div class="m">' + ['🥇','🥈','🥉'][i] + '</div>'
+          + '<div class="m">' + ICO.medalha(i+1) + '</div>'
           + '<div class="q">' + (i+1) + 'º lugar</div>'
           + '<div class="v">+ R$ ' + v + '</div></div>';
       }).join('') + '</div>'
@@ -561,7 +579,7 @@ function pinta(){
   // ── ranking ──
   $('ranking').innerHTML = RANKING.map(function(r, i){
     var eu = (i + 1) === m.posicao;
-    var medalha = ['🥇','🥈','🥉'][i] || (i + 1);
+    var medalha = i < 3 ? ICO.medalha(i+1) : (i + 1);
     return '<div class="rk' + (eu ? ' eu' : '') + '"><div class="pos">' + medalha + '</div>'
       + '<div class="nome">' + (eu ? 'Você' : r[0]) + '</div>'
       + '<div class="pts ' + corDaNota(r[1]) + '">' + r[1].toFixed(1).replace('.', ',') + '</div>'
@@ -574,9 +592,9 @@ function pinta(){
 
   // ── régua, na língua do motorista ──
   $('regua').innerHTML = [
-    ['🌿','Faixa verde do motor','Vale 42% da nota. A nota é o próprio tempo na faixa: ficou 80% do tempo, tira 80.'],
-    ['⏱️','Motor ligado parado','Vale 33%. Zero tempo parado com o motor ligado é nota 100. Em 25% do tempo, a nota zera.'],
-    ['🚀','Arrancadas bruscas','Vale 25%. Nenhuma arrancada é nota 100. Com 3 a cada 100 km, a nota zera.'],
+    [ICO.rpm,'Faixa verde do motor','Vale 42% da nota. A nota é o próprio tempo na faixa: ficou 80% do tempo, tira 80.'],
+    [ICO.idle,'Motor ligado parado','Vale 33%. Zero tempo parado com o motor ligado é nota 100. Em 25% do tempo, a nota zera.'],
+    [ICO.acel,'Arrancadas bruscas','Vale 25%. Nenhuma arrancada é nota 100. Com 3 a cada 100 km, a nota zera.'],
   ].map(function(r){
     return '<div class="passo"><div class="n" style="background:var(--cartao2);color:var(--txt)">'
       + r[0] + '</div><div class="t"><b>' + r[1] + '</b><span>' + r[2] + '</span></div></div>';
