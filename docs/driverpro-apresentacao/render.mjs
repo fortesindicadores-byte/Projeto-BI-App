@@ -1,0 +1,13 @@
+import { chromium } from 'playwright';
+const [,, inp, out] = process.argv;
+const b = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium' });
+const p = await b.newPage({ viewport: { width: 1280, height: 720 } });
+p.on('pageerror', e => console.log('PAGEERROR', e.message));
+await p.goto('file://' + inp, { waitUntil: 'networkidle' });
+await p.evaluate(() => document.fonts.ready);
+await p.waitForTimeout(600);
+console.log('Montserrat carregada:', await p.evaluate(() => document.fonts.check('700 20px Montserrat')));
+await p.pdf({ path: out, width: '1280px', height: '720px', printBackground: true, margin: { top: 0, right: 0, bottom: 0, left: 0 } });
+const n = await p.evaluate(() => document.querySelectorAll('.slide').length);
+console.log('ok', out, n, 'slides');
+await b.close();
