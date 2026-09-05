@@ -18,7 +18,16 @@
   'use strict';
   var SUPA = 'https://lozwipoeacpvplgkrxkq.supabase.co';
   var KEY = 'sb_publishable_ggKEEebc5zjgQDVsF92Upw_6uoLmKe9';
-  var MAX_IDADE = 3 * 60 * 60 * 1000;   // snapshot vale por 3h (robô roda de hora em hora)
+  /* O SNAPSHOT VALE 12h, NÃO 3h (Renan, 05/09/2026: "às vezes volta a demorar").
+     O robô é agendado de hora em hora, mas o cron do GitHub Actions atrasa muito
+     em repositório público — medido em 05/09: 14:15 → 18:18 → 21:23 → 23:57 →
+     04:16, intervalos de 2h34 a 4h19. Com o teto em 3h o snapshot ficava vencido
+     boa parte do tempo e o painel caía no Google, que é justamente o caminho
+     lento; daí a lentidão ser intermitente e parecer aleatória.
+     12h é seguro porque as abas mudam no máximo uma vez por dia, e quem quer o
+     dado do minuto usa "Atualizar dados", que sai da janela de 15s e vai direto
+     ao Google de qualquer jeito. */
+  var MAX_IDADE = 12 * 60 * 60 * 1000;
   var JANELA = 15000;                    // só a carga inicial usa o snapshot
   var NASCEU = Date.now();
   var fetchOrig = window.fetch ? window.fetch.bind(window) : null;
