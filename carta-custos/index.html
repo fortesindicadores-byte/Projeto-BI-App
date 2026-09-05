@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-<meta name="build" content="202609050450">
+<meta name="build" content="202609050510">
 <title>Carta de Custos</title>
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -1177,7 +1177,7 @@ function acompCells(orc,rem,real){
 const CONTA_CONTRATO='Contratos de Manutenção Fabricante';
 function contratoPrevia(){
   const fechados=new Set(ROWS.filter(r=>r.origem==='contratos-planilha').map(r=>r.unidade+'|'+r.vigencia));
-  return contrDoFiltro().filter(r=>!fechados.has(r.unidade+'|'+r.vig_km))
+  return contrDoFiltro().filter(r=>!fechados.has(r.unidade+'|'+r.vig_cobranca))
     .reduce((s,r)=>s+(+r.custo_vig||0),0);
 }
 function renderAcomp(){
@@ -1237,7 +1237,7 @@ function anoChart(id,labels,vals,foco){
       borderRadius:4,borderSkipped:false}]},
     options:{responsive:true,maintainAspectRatio:false,
       plugins:{legend:{display:false},tooltip:Object.assign({callbacks:{label:c=>fmt(c.raw)}},TT)},
-      scales:{x:{grid:{display:false},border:{display:false},ticks:getTick(12)},
+      scales:{x:{grid:{display:false},border:{display:false},ticks:getTick(14)},
         y:{grid:{display:false},border:{display:false},ticks:{display:false},beginAtZero:true,grace:'14%'}}},
     plugins:[{id:'vlab',afterDatasetsDraw(ch){const m=ch.getDatasetMeta(0);if(!m)return;const c=ch.ctx;c.save();
       c.font='700 10px Montserrat,sans-serif';c.fillStyle=isClaro()?'#161D2B':'#EEF2FA';c.textAlign='center';c.textBaseline='bottom';
@@ -1293,13 +1293,13 @@ async function pgAll(tabela,select,ordem,ajuste){
 }
 async function loadContratos(){
   if(!sb) return;
-  /* VIGÊNCIA = MÊS DO KM, como na planilha (Renan, 05/09/2026): o bloco
-     "ago./26" da Contratos Man. é o km rodado em agosto. A view guarda também a
-     vigência de cobrança (mês seguinte), mas a Carta fala a língua da planilha
-     — senão o que ela chama de agosto aparecia aqui como setembro. */
-  const cols='vig_km,placa,placa_origem,unidade,projeto,tipo,taxa_km,km_vig,'
+  /* VIGÊNCIA = MÊS DE COBRANÇA (Renan, 05/09/2026): "o de setembro que estamos
+     rodando é que vai compor outubro". O km rodado num mês vira fatura no mês
+     seguinte, então a vigência da tela é a cobrança e o `vig_km` fica ao lado
+     só para dizer de qual mês veio o km. Eu tinha trocado isso por engano. */
+  const cols='vig_cobranca,vig_km,placa,placa_origem,unidade,projeto,tipo,taxa_km,km_vig,'
     +'valor_fixo,km_hodometro,divergencia_pct,origem_km,custo_vig,abastecimentos,ultimo_abast,previa,modelo';
-  const ordem=[['vig_km',false],['custo_vig',false]];
+  const ordem=[['vig_cobranca',false],['custo_vig',false]];
   /* A MATERIALIZADA PRIMEIRO (05/09/2026): a view recalcula o rateio dos 57 mil
      abastecimentos a cada pedido — é o que deixava o painel lento. Se a
      `custo_vigencia_mv` existir no banco, lê dela (pronta, instantânea);
@@ -1321,14 +1321,23 @@ async function loadContratos(){
   try{
     const plan=await pgAll('carta_custos','unidade,vigencia,equipamento,valor',[['vigencia',true]],
       q=>q.eq('origem','contratos-planilha').in('unidade',ALLOWED));
-    const cobre=new Set(), val=new Map();
+    const cobre=new Set(), val=new Map(), ultFixo=new Map();
     plan.forEach(r=>{ cobre.add(r.unidade+'|'+r.vigencia);
-      const k=r.vigencia+'|'+String(r.equipamento||'').toUpperCase();
-      val.set(k,(val.get(k)||0)+(+r.valor||0)); });
+      const pl=String(r.equipamento||'').toUpperCase();
+      val.set(r.vigencia+'|'+pl,(val.get(r.vigencia+'|'+pl)||0)+(+r.valor||0)); });
+    /* O FIXO DA PRÉVIA É O DO MÊS ANTERIOR (Renan, 05/09/2026): a estimativa do
+       mês que ainda não fechou é o km já rodado × a taxa, MAIS o valor fixo que
+       a planilha cobrou por último naquela placa — não o `valor_fixo` derivado
+       do contrato, que é uma reconstrução minha. `plan` vem ordenado por
+       vigência, então o último visto é o mais recente. */
+    plan.forEach(r=>ultFixo.set(String(r.equipamento||'').toUpperCase(),+r.valor||0));
     CONTR.forEach(r=>{
-      if(!cobre.has(r.unidade+'|'+r.vig_km)) return;
-      const k=r.vig_km+'|'+String(r.placa_origem||r.placa).toUpperCase();
-      r.custo_vig=val.get(k)||0; r.previa=false; r.origem='planilha';
+      const pl=String(r.placa_origem||r.placa).toUpperCase();
+      if(cobre.has(r.unidade+'|'+r.vig_cobranca)){
+        r.custo_vig=val.get(r.vig_cobranca+'|'+pl)||0; r.previa=false; r.origem='planilha';
+      }else if(r.tipo==='fixo' && ultFixo.has(pl)){
+        r.custo_vig=ultFixo.get(pl); r.origem='fixo do mês anterior';
+      }
     });
   }catch(e){ console.warn('planilha do contrato indisponível, ficou o cálculo:',e.message); }
   CONTR_OK=true;
@@ -1337,7 +1346,7 @@ async function loadContratos(){
      fevereiro. Sem juntar as duas listas, metade do histórico do contrato
      ficaria inalcançável — e um segundo seletor dentro da visão seria a mesma
      pergunta feita duas vezes na mesma tela. */
-  const novas=[...new Set(CONTR.map(r=>r.vig_km).filter(Boolean))];
+  const novas=[...new Set(CONTR.map(r=>r.vig_cobranca).filter(Boolean))];
   const antes=VIG_OPTS.length;
   VIG_OPTS=[...new Set(VIG_OPTS.concat(novas))].sort();
   if(VIG_OPTS.length!==antes){ buildAnoFilter(); buildVigFilter(); }
@@ -1346,7 +1355,7 @@ async function loadContratos(){
 // o recorte das duas visões novas é o do filtro do topo
 const contrDoFiltro=()=>{
   const u=new Set(curUnits()), v=new Set(curVigs()), p=curProjs();
-  return CONTR.filter(r=>u.has(r.unidade) && v.has(r.vig_km)
+  return CONTR.filter(r=>u.has(r.unidade) && v.has(r.vig_cobranca)
     && (!p || !r.projeto || p.includes(String(r.projeto).toUpperCase())));
 };
 
@@ -1407,7 +1416,7 @@ function renderPlacas(){
   // ORDEM INICIAL PELO KM: o assunto da visão é quanto cada placa rodou
   rows.slice().sort((a,b)=>(+b.km_vig||0)-(+a.km_vig||0)).forEach(r=>{
     const hs=hist.get(r.placa);
-    h+='<tr>'+(multiVig?`<td>${esc(vigLabel(r.vig_km))}</td>`:'')
+    h+='<tr>'+(multiVig?`<td>${esc(vigLabel(r.vig_cobranca))}</td>`:'')
       +`<td class="conta">${esc(r.placa_origem||r.placa)}</td>`
       +`<td>${esc(r.modelo||'—')}</td>`
       +(multiUni?`<td>${esc(UNIT_BASE(r.unidade)||'—')}</td>`:'')
@@ -1444,14 +1453,14 @@ function renderConsol(){
      à frente — e a tabela vinha com doze colunas vazias e um Total que somava
      tudo. O ano é o do filtro de Ano quando há um só; senão, o mais recente que
      TEM DADO dentro do filtro. */
-  const comDado=CONTR.filter(r=>vSel.has(r.vig_km)).map(r=>r.vig_km.slice(0,4));
+  const comDado=CONTR.filter(r=>vSel.has(r.vig_cobranca)).map(r=>r.vig_cobranca.slice(0,4));
   const ano=(selAno.size===1?[...selAno][0]:null)
         || comDado.sort().pop()
         || String(new Date().getFullYear());
   const meses=Array.from({length:12},(_,i)=>ano+'-'+String(i+1).padStart(2,'0'));
   const base=CONTR.filter(r=>uSel.has(r.unidade)
     && (!pSel || !r.projeto || pSel.includes(String(r.projeto).toUpperCase())));
-  const noFiltro=r=>vSel.has(r.vig_km);
+  const noFiltro=r=>vSel.has(r.vig_cobranca);
 
   if(!CONTR_OK){
     $('tbl-consol').innerHTML=`<tbody><tr><td><div class="vazio">Carregando…</div></td></tr></tbody>`;
@@ -1469,8 +1478,8 @@ function renderConsol(){
   base.forEach(r=>{
     const k=UNIT_BASE(r.unidade)||'—';
     const a=linhas.get(k)||{mes:{},tot:0};
-    if(noFiltro(r) && r.vig_km.slice(0,4)===ano){
-      a.mes[r.vig_km]=(a.mes[r.vig_km]||0)+(+r.custo_vig||0); a.tot+=+r.custo_vig||0; }
+    if(noFiltro(r) && r.vig_cobranca.slice(0,4)===ano){
+      a.mes[r.vig_cobranca]=(a.mes[r.vig_cobranca]||0)+(+r.custo_vig||0); a.tot+=+r.custo_vig||0; }
     linhas.set(k,a);
   });
   const ord=[...linhas.entries()].sort((a,b)=>b[1].tot-a[1].tot);
@@ -1479,7 +1488,7 @@ function renderConsol(){
   // o gráfico mostra TODOS os meses do ano que têm valor (o filtro só decide o
   // foco): a tabela responde ao filtro, o gráfico dá o ano inteiro de contexto
   const tAno={};
-  base.forEach(r=>{ if(r.vig_km.slice(0,4)===ano) tAno[r.vig_km]=(tAno[r.vig_km]||0)+(+r.custo_vig||0); });
+  base.forEach(r=>{ if(r.vig_cobranca.slice(0,4)===ano) tAno[r.vig_cobranca]=(tAno[r.vig_cobranca]||0)+(+r.custo_vig||0); });
   anoChart('ch-consol', meses.map(m=>MESES[+m.slice(5)-1]), meses.map(m=>tAno[m]||0), meses.map(m=>vSel.has(m)));
   set('co-gsub', `fixo + variável por vigência · ${ano}`);
   let h='<thead><tr><th>Unidade</th>'
@@ -1600,6 +1609,6 @@ initPdfExport({ btnContainer:'#pdf-slot', btnClass:'s-item', btnAoFim:true,
   viewAtual:()=>VW, irPara:setVw,
   isLight:()=>document.body.classList.contains('claro'), setTheme:aplicaTema });
 </script>
-<script src="../assets/build-check.js?v=202609050450"></script>
+<script src="../assets/build-check.js?v=202609050510"></script>
 </body>
 </html>
