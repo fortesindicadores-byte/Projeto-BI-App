@@ -446,3 +446,156 @@ revoke all on function public.ce_app_cadastro(text, text, text)  from public;
 grant execute on function public.ce_app_cadastro_lista(text)       to anon, authenticated;
 grant execute on function public.ce_app_cadastro(text, text, text) to anon, authenticated;
 notify pgrst, 'reload schema';
+
+-- ============================================================
+-- 13) UNIDADES NO PROGRAMA (Renan, 06/09/2026): "por enquanto deixe só
+--     Piraí... ou deixe uma opção de eu liberar unidades". A lista fica em
+--     ce_app_regras.unidades (null/vazio = todas). Motorista de unidade fora
+--     da lista não cria senha, não entra e não se autocadastra; o admin
+--     continua vendo todo mundo e liga/desliga unidades pelo próprio app
+--     (tela "Selecione o motorista" → chips "Unidades no programa").
+-- ============================================================
+alter table public.ce_app_regras add column if not exists unidades text[];
+update public.ce_app_regras set unidades = array['EMP PIRAI'] where id = 1 and unidades is null;
+
+create or replace function public.ce_app_unidade_ativa(p_unidade text)
+returns boolean language sql stable security definer set search_path = public, extensions as $$
+  select coalesce((select unidades is null or cardinality(unidades) = 0 or (p_unidade is not null and p_unidade = any(unidades))
+                   from ce_app_regras where id = 1), true)
+$$;
+
+-- criar PIN: só em unidade liberada
+create or replace function public.ce_app_criar_pin(p_cpf text, p_pin text)
+returns jsonb language plpgsql security definer set search_path = public, extensions as $$
+declare v_cpf text := ce_app_so_digitos(p_cpf); v_pin text := ce_app_so_digitos(p_pin); m record;
+begin
+  if length(v_cpf) <> 11 then return jsonb_build_object('ok', false, 'erro', 'CPF precisa ter 11 números.'); end if;
+  if length(v_pin) <> 4  then return jsonb_build_object('ok', false, 'erro', 'A senha são 4 números.'); end if;
+  select chave, unidade into m from ce_motoristas where cpf = v_cpf and ativo;
+  if m is null then return jsonb_build_object('ok', false, 'erro', 'CPF não está no programa. Fale com o seu gestor.'); end if;
+  if not ce_app_unidade_ativa(m.unidade) then return jsonb_build_object('ok', false, 'erro', 'O DriverPro ainda não chegou na sua unidade. Em breve!'); end if;
+  if exists (select 1 from ce_app_acesso where chave = m.chave) then
+    return jsonb_build_object('ok', false, 'erro', 'Este CPF já tem senha. Se esqueceu, fale com o seu gestor.');
+  end if;
+  insert into ce_app_acesso (chave, pin_hash) values (m.chave, crypt(v_pin, gen_salt('bf')));
+  return ce_app_login(v_cpf, v_pin);
+end $$;
+
+-- login: admin sempre; motorista só em unidade liberada
+create or replace function public.ce_app_login(p_cpf text, p_pin text)
+returns jsonb language plpgsql security definer set search_path = public, extensions as $$
+declare v_cpf text := ce_app_so_digitos(p_cpf); v_pin text := ce_app_so_digitos(p_pin);
+        m record; a record; adm record; v_token uuid;
+begin
+  select * into adm from ce_app_admins where cpf = v_cpf;
+  if adm is not null then
+    if adm.pin_hash <> crypt(v_pin, adm.pin_hash) then return jsonb_build_object('ok', false, 'erro', 'Senha errada.'); end if;
+    insert into ce_app_sessao (admin_cpf) values (v_cpf) returning token into v_token;
+    return jsonb_build_object('ok', true, 'token', v_token, 'nome', adm.nome, 'admin', true);
+  end if;
+  select * into m from ce_motoristas where cpf = v_cpf and ativo;
+  if m is null then return jsonb_build_object('ok', false, 'erro', 'CPF não está no programa.'); end if;
+  if not ce_app_unidade_ativa(m.unidade) then return jsonb_build_object('ok', false, 'erro', 'O DriverPro ainda não chegou na sua unidade. Em breve!'); end if;
+  select * into a from ce_app_acesso where chave = m.chave;
+  if a is null then return jsonb_build_object('ok', false, 'erro', 'Primeira vez? Crie sua senha.', 'primeira_vez', true); end if;
+  if a.bloqueado_ate is not null and a.bloqueado_ate > now() then
+    return jsonb_build_object('ok', false, 'erro', 'Muitas tentativas. Espere ' ||
+      ceil(extract(epoch from (a.bloqueado_ate - now())) / 60) || ' min.');
+  end if;
+  if a.pin_hash <> crypt(v_pin, a.pin_hash) then
+    update ce_app_acesso set
+      bloqueado_ate = case when tentativas + 1 >= 5 then now() + interval '15 minutes' else null end,
+      tentativas = case when tentativas + 1 >= 5 then 0 else tentativas + 1 end
+      where chave = m.chave;
+    return jsonb_build_object('ok', false, 'erro', 'Senha errada.');
+  end if;
+  update ce_app_acesso set tentativas = 0, bloqueado_ate = null, ultimo_acesso = now() where chave = m.chave;
+  delete from ce_app_sessao where chave = m.chave and expira_em < now();
+  insert into ce_app_sessao (chave) values (m.chave) returning token into v_token;
+  return jsonb_build_object('ok', true, 'token', v_token, 'nome', m.nome, 'unidade', m.unidade);
+end $$;
+
+-- autocadastro: só lista e aceita unidades liberadas
+create or replace function public.ce_app_cadastro_lista(p_unidade text default null)
+returns jsonb language plpgsql security definer set search_path = public, extensions as $$
+begin
+  if p_unidade is null then
+    return jsonb_build_object('ok', true, 'unidades', coalesce((
+      select jsonb_agg(u order by u) from (select distinct unidade as u from ce_scores_mensais
+        where pontuacao is not null and chave not like 'semlogin:%' and unidade is not null) z
+      where ce_app_unidade_ativa(u)), '[]'::jsonb));
+  end if;
+  if not ce_app_unidade_ativa(p_unidade) then return jsonb_build_object('ok', true, 'motoristas', '[]'::jsonb); end if;
+  return jsonb_build_object('ok', true, 'motoristas', coalesce((
+    select jsonb_agg(jsonb_build_object('chave', x.chave, 'nome', x.motorista) order by x.motorista)
+    from (select distinct on (s.chave) s.chave, s.motorista from ce_scores_mensais s
+          where s.unidade = p_unidade and s.pontuacao is not null and s.chave not like 'semlogin:%'
+          order by s.chave, s.competencia desc) x
+    left join ce_motoristas mo on mo.chave = x.chave
+    where mo.cpf is null), '[]'::jsonb));
+end $$;
+
+create or replace function public.ce_app_cadastro(p_cpf text, p_pin text, p_chave text)
+returns jsonb language plpgsql security definer set search_path = public, extensions as $$
+declare v_cpf text := ce_app_so_digitos(p_cpf); v_pin text := ce_app_so_digitos(p_pin); sc record;
+begin
+  if length(v_cpf) <> 11 or v_cpf ~ '^(\d)\1{10}$' then return jsonb_build_object('ok', false, 'erro', 'CPF inválido.'); end if;
+  if length(v_pin) <> 4 then return jsonb_build_object('ok', false, 'erro', 'A senha são 4 números.'); end if;
+  if exists (select 1 from ce_motoristas where cpf = v_cpf) then
+    return jsonb_build_object('ok', false, 'erro', 'Este CPF já tem cadastro. Entre com a sua senha.');
+  end if;
+  if exists (select 1 from ce_motoristas where chave = p_chave and cpf is not null) then
+    return jsonb_build_object('ok', false, 'erro', 'Este motorista já foi cadastrado. Se é você, fale com o seu gestor.');
+  end if;
+  select motorista, unidade, fonte into sc from ce_scores_mensais where chave = p_chave and pontuacao is not null order by competencia desc limit 1;
+  if sc is null then return jsonb_build_object('ok', false, 'erro', 'Motorista não encontrado.'); end if;
+  if not ce_app_unidade_ativa(sc.unidade) then return jsonb_build_object('ok', false, 'erro', 'O DriverPro ainda não chegou na sua unidade. Em breve!'); end if;
+  insert into ce_motoristas (chave, nome, unidade, fonte, ativo, cpf) values (p_chave, sc.motorista, sc.unidade, sc.fonte, true, v_cpf)
+    on conflict (chave) do update set cpf = excluded.cpf, ativo = true;
+  delete from ce_app_acesso where chave = p_chave;
+  insert into ce_app_acesso (chave, pin_hash) values (p_chave, crypt(v_pin, gen_salt('bf')));
+  return ce_app_login(v_cpf, v_pin);
+end $$;
+
+-- admin: lista de unidades com o estado e quantos motoristas cada uma tem
+create or replace function public.ce_app_unidades(p_token uuid)
+returns jsonb language plpgsql security definer set search_path = public, extensions as $$
+declare s record; v_vig date := date_trunc('month', now())::date;
+begin
+  select * into s from ce_app_sessao where token = p_token and expira_em > now();
+  if s is null or s.admin_cpf is null then return jsonb_build_object('ok', false, 'erro', 'Só administrador.'); end if;
+  return jsonb_build_object('ok', true, 'todas', coalesce((select cardinality(unidades) = 0 or unidades is null from ce_app_regras where id = 1), true),
+    'unidades', coalesce((
+    select jsonb_agg(jsonb_build_object('unidade', u.unidade, 'ativa', ce_app_unidade_ativa(u.unidade),
+             'com_nota', u.n, 'com_senha', coalesce(a.n, 0)) order by u.unidade)
+    from (select unidade, count(distinct chave) as n from ce_scores_mensais
+          where pontuacao is not null and chave not like 'semlogin:%' and unidade is not null and competencia >= v_vig - interval '1 month'
+          group by unidade) u
+    left join (select mo.unidade, count(*) as n from ce_app_acesso ac join ce_motoristas mo on mo.chave = ac.chave group by mo.unidade) a
+      on a.unidade = u.unidade), '[]'::jsonb));
+end $$;
+
+-- admin: liga/desliga uma unidade
+create or replace function public.ce_app_unidade_set(p_token uuid, p_unidade text, p_ativa boolean)
+returns jsonb language plpgsql security definer set search_path = public, extensions as $$
+declare s record; v_uni text[];
+begin
+  select * into s from ce_app_sessao where token = p_token and expira_em > now();
+  if s is null or s.admin_cpf is null then return jsonb_build_object('ok', false, 'erro', 'Só administrador.'); end if;
+  select coalesce(unidades, '{}') into v_uni from ce_app_regras where id = 1;
+  if p_ativa then
+    if not (p_unidade = any(v_uni)) then v_uni := v_uni || p_unidade; end if;
+  else
+    v_uni := array_remove(v_uni, p_unidade);
+  end if;
+  update ce_app_regras set unidades = v_uni where id = 1;
+  return ce_app_unidades(p_token);
+end $$;
+
+revoke all on function public.ce_app_unidade_ativa(text)                 from public;
+revoke all on function public.ce_app_unidades(uuid)                      from public;
+revoke all on function public.ce_app_unidade_set(uuid, text, boolean)    from public;
+grant execute on function public.ce_app_unidade_ativa(text)              to anon, authenticated;
+grant execute on function public.ce_app_unidades(uuid)                   to anon, authenticated;
+grant execute on function public.ce_app_unidade_set(uuid, text, boolean) to anon, authenticated;
+notify pgrst, 'reload schema';
