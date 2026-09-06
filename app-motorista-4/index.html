@@ -7,7 +7,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="DriverPro">
-<meta name="build" content="202609062330">
+<meta name="build" content="202609061210">
 <title>DriverPro</title>
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="img/icone-192.png">
@@ -385,14 +385,17 @@ var n1 = function(v){ return (Math.round(v * 10) / 10).toLocaleString('pt-BR'); 
 var PILARES = [
   { k:'rpm',  nome:'Uso da faixa verde (até 1.700 RPM)',
     mede: function(n){ return Math.round(n) + '% do tempo rodando na faixa verde'; },
+    curto: function(n){ return Math.round(n) + '% na faixa verde'; },
     regra:'A nota é a porcentagem do tempo em movimento com o motor na faixa verde: 100% na faixa = nota 100; 63% = nota 63.',
     dica:'Trocar a marcha antes de o motor gritar mantém o giro na faixa verde. É o que mais pesa no seu saldo.' },
   { k:'idle', nome:'Motor ligado sem rodar',
     mede: function(n){ return n1((100 - n) * REGUA.idle / 100) + '% do tempo parado com o motor ligado'; },
+    curto: function(n){ return n1((100 - n) * REGUA.idle / 100) + '% parado ligado'; },
     regra:'Nenhum tempo parado com motor ligado = nota 100. ' + REGUA.idle + '% do tempo de direção parado com motor ligado = nota 0. No meio, proporcional.',
     dica:'Parada de mais de um minuto, desliga. Motor ligado sem rodar gasta diesel e não anda um metro.' },
   { k:'acel', nome:'Acelerações bruscas',
     mede: function(n){ return n1((100 - n) * REGUA.acel / 100) + ' acelerações bruscas a cada 100 km'; },
+    curto: function(n){ return n1((100 - n) * REGUA.acel / 100) + ' a cada 100 km'; },
     regra:'Nenhuma aceleração brusca = nota 100. ' + REGUA.acel + ' a cada 100 km = nota 0. Cada uma a cada 100 km tira ' + Math.round(100 / REGUA.acel) + ' pontos.',
     dica:'Sair suave do sinal gasta menos e chega junto. Cada aceleração brusca custa do seu saldo.' },
 ];
@@ -441,7 +444,7 @@ function pinta(){
     var v = pd[p.k], n = atual ? atual[p.k] : null;
     if (v == null) return linha(ICO[p.k], p.nome, 'sem medição ainda', '—', '');
     var ok = v < 0.005;
-    return linha(ICO[p.k], p.nome, p.mede(n) + ' · nota ' + Math.round(n), ok ? 'tudo certo' : '− ' + brl(v), ok ? 'pos' : 'neg');
+    return linha(ICO[p.k], p.nome, p.curto(n) + ' · nota ' + Math.round(n), ok ? 'tudo certo' : '− ' + brl(v), ok ? 'pos' : 'neg');
   }).join('');
 
   // ── pódio + elegibilidade ──
