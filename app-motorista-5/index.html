@@ -7,7 +7,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="DriverPro">
-<meta name="build" content="202609061210">
+<meta name="build" content="202609061230">
 <title>DriverPro</title>
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="img/icone-192.png">
@@ -623,7 +623,7 @@ function escolheMotorista(){
   $('selLista').innerHTML = '<div class="li"><div class="tx"><span>Carregando…</span></div></div>';
   rpc('ce_app_motoristas', { p_token: t }).then(function(r){
     if (!r.ok) { sair(); return erroLogin(r.erro || 'Entre de novo.'); }
-    MOTORISTAS = r.motoristas || []; $('selSub').textContent = MOTORISTAS.length + ' motoristas com nota'; filtraMotoristas();
+    MOTORISTAS = r.motoristas || []; filtraMotoristas();
   }).catch(function(e){ $('selLista').innerHTML = '<div class="li"><div class="tx"><span>Sem conexão. Tente de novo.</span></div></div>'; console.warn(e); });
 }
 /* admin: unidades liberadas no programa (Renan, 06/09/2026: começa só com
@@ -633,11 +633,12 @@ var UNIS = [];
 function carregaUnidades(t){
   $('selUnis').style.display = 'none';
   rpc('ce_app_unidades', { p_token: t }).then(function(r){
-    if (!r.ok) return; UNIS = r.unidades || []; pintaUnidades(r.todas);
+    if (!r.ok) return; UNIS = r.unidades || []; pintaUnidades(r.todas); filtraMotoristas();
   }).catch(function(){});
 }
 function pintaUnidades(todas){
   $('selUnis').style.display = '';
+  if (todas) UNIS.forEach(function(u){ u.ativa = true; });
   var n = UNIS.filter(function(u){ return u.ativa; }).length;
   $('selUnisSub').textContent = todas ? '· todas liberadas' : '· ' + n + ' de ' + UNIS.length + ' liberadas · toque para ligar/desligar';
   $('selUnisLista').innerHTML = UNIS.map(function(u){
@@ -652,12 +653,18 @@ $('selUnisLista').addEventListener('click', function(e){
   el.classList.add('busy');
   rpc('ce_app_unidade_set', { p_token: t, p_unidade: u.unidade, p_ativa: !u.ativa }).then(function(r){
     if (!r.ok) { alert(r.erro || 'Não deu certo.'); el.classList.remove('busy'); return; }
-    UNIS = r.unidades || []; pintaUnidades(r.todas);
+    UNIS = r.unidades || []; pintaUnidades(r.todas); filtraMotoristas();
   }).catch(function(){ el.classList.remove('busy'); alert('Sem conexão. Tente de novo.'); });
 });
+function unidadeLiberada(u){
+  if (CAD || !UNIS.length) return true;                 // autocadastro já vem filtrado pelo banco
+  if (UNIS.every(function(x){ return !x.ativa; })) return true;   // nenhuma marcada = todas
+  return UNIS.some(function(x){ return x.unidade === u && x.ativa; });
+}
 function filtraMotoristas(){
   var q = ($('selBusca').value || '').toLowerCase();
-  var l = MOTORISTAS.filter(function(m){ return !q || (m.nome + ' ' + (m.unidade || '')).toLowerCase().indexOf(q) >= 0; });
+  var l = MOTORISTAS.filter(function(m){ return unidadeLiberada(m.unidade) && (!q || (m.nome + ' ' + (m.unidade || '')).toLowerCase().indexOf(q) >= 0); });
+  if (!CAD && MOTORISTAS.length) $('selSub').textContent = MOTORISTAS.filter(function(m){ return unidadeLiberada(m.unidade); }).length + ' motoristas com nota nas unidades liberadas';
   $('selLista').innerHTML = l.slice(0, 200).map(function(m){
     var ini = m.nome.split(' ').map(function(p){return p[0];}).join('').slice(0,2).toUpperCase();
     return '<div class="li" data-chave="' + m.chave + '"><div class="ic"><b style="font-size:11px">' + ini + '</b></div><div class="tx"><b>' + m.nome + '</b><span>' + (m.unidade || 'sem unidade') + '</span></div></div>';
