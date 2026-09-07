@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
-<meta name="build" content="202609070010">
+<meta name="build" content="202609070100">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <title>Condução Econômica · Gestão em Movimento</title>
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -273,6 +273,9 @@ table.dre td.cg-t,.cg-t{color:var(--verde)!important;font-weight:700;}
    ============================================================ */
 /* miolo do Resumo: gráfico maior à esquerda, regras à direita */
 .ce-kpis{grid-template-columns:repeat(3,1fr);margin-top:14px;}
+.cart-kpis{grid-template-columns:repeat(5,1fr);margin-top:0;margin-bottom:12px;flex:0 0 auto;}
+#vw-carteira{display:none;flex-direction:column;} #vw-carteira.on{display:flex;}
+.cart-td b{font-weight:800;} .cart-neg{color:var(--txt3);}
 /* A FILEIRA DE BAIXO USA A MESMA GRADE DOS CARDS (Renan, 04/09/2026): o
    gráfico ocupa as duas primeiras colunas e as Regras a terceira, então as
    bordas batem com os cards de cima. Proporção em fração (1.55fr 1fr) nunca
@@ -424,6 +427,10 @@ table.dre thead th.sortable:hover{color:var(--laranja);}
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 21h8M12 17v4"/><path d="M7 4h10v6a5 5 0 0 1-10 0z"/><path d="M7 6H4a3 3 0 0 0 3 4M17 6h3a3 3 0 0 1-3 4"/></svg>
       Ranking Geral
     </button>
+    <button class="s-item" data-vw="carteira">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="6" width="20" height="13" rx="2"/><path d="M16 12h4"/><path d="M2 10h20"/></svg>
+      Carteira em R$
+    </button>
 
     <div class="s-sec">Atalhos</div>
     <div id="pdf-slot"></div>
@@ -562,6 +569,21 @@ table.dre thead th.sortable:hover{color:var(--laranja);}
         </div>
       </section>
 
+      <!-- ══ 3 · CARTEIRA EM R$ (Renan, 07/09/2026: "uma visão que dê para
+           olhar o ranking em grana dos motoristas") — a MESMA conta do app:
+           carteira = saldo × nota ÷ 100 para quem é elegível na regra da
+           própria unidade (km mínimo + cota, ce_app_criterios), pódio para
+           os 3 primeiros do GRUPO. Várias vigências somam. ══ -->
+      <section class="vw" id="vw-carteira">
+        <div class="kpis ce-kpis cart-kpis" id="cart-kpis"></div>
+        <div class="rank-sec">
+          <div class="twrap"><table class="dre" id="cart-table" data-no-sort>
+            <thead><tr><th style="width:34px;">#</th><th>Motorista</th><th>Unidade</th><th class="num">Km</th><th class="num">Nota</th><th class="num">Meses elegível</th><th class="num">Carteira</th><th class="num">Pódio</th><th class="num">Total</th></tr></thead>
+            <tbody id="cart-tbody"></tbody>
+          </table></div>
+        </div>
+      </section>
+
     </div>
   </main>
 </div>
@@ -584,10 +606,10 @@ const br=(v,d)=>(+v||0).toFixed(d).replace('.',',');
    reporta na frota. O freio_pontos da vFleets continuará sendo gravado.
    "Câmbio" virou "Uso de Marchas" (Renan, 01/09/2026): nome genérico demais. */
 const PILAR = {
-  rpm:   {nome:'Faixa Verde',    full:'Faixa Verde de RPM',      peso:25, both:true,  fmt:s=>Math.round(s)+'%',        calc:'% do tempo em movimento com o RPM na faixa verde (econômica/potência).'},
-  idle:  {nome:'Motor Ocioso',   full:'Motor Ocioso (idle)',     peso:20, both:true,  fmt:s=>br((100-s)/4,1)+'%',      calc:'% do tempo de motor ligado parado, sem rodar (motor ocioso).'},
+  rpm:   {nome:'Faixa Verde',    full:'Faixa Verde de RPM',      peso:50, both:true,  fmt:s=>Math.round(s)+'%',        calc:'% do tempo em movimento com o RPM na faixa verde (econômica/potência).'},
+  idle:  {nome:'Motor Ocioso',   full:'Motor Ocioso (idle)',     peso:30, both:true,  fmt:s=>br((100-s)/4,1)+'%',      calc:'% do tempo de motor ligado parado, sem rodar (motor ocioso).'},
   // régua: 3 acelerações bruscas/100 km → 0 (Renan, 03/09/2026)
-  acel:  {nome:'Aceleração',     full:'Aceleração',              peso:15, both:true,  fmt:s=>br((100-s)*3/100,1)+'/100km', calc:'nº de acelerações bruscas a cada 100 km rodados (regra padrão do Geotab, 0,29 G); 3/100 km zera a nota.'},
+  acel:  {nome:'Aceleração',     full:'Aceleração',              peso:20, both:true,  fmt:s=>br((100-s)*3/100,1)+'/100km', calc:'nº de acelerações bruscas a cada 100 km rodados (regra padrão do Geotab, 0,29 G); 3/100 km zera a nota.'},
   // DEFLATOR (Renan, 02/09/2026): excesso de velocidade não compensa bom RPM —
   // ele derruba o conjunto. Não entra na média com peso: MULTIPLICA a pontuação
   // dos demais. Sem dado de velocidade o deflator é 1 (não penaliza).
@@ -913,6 +935,7 @@ function atualizar(){
   const data=getFiltered();
   renderHero(data);
   renderRanking(data);
+  renderCarteira(data);
   renderChart();
 }
 
@@ -1045,6 +1068,60 @@ function ajustaAlturaLinhas(){
   tabela.style.setProperty('--rk-pad', pad.toFixed(1) + 'px');
 }
 addEventListener('resize', ()=>requestAnimationFrame(ajustaAlturaLinhas));
+
+/* ── Carteira em R$ (mesma conta do app; regras de ce_app_criterios) ── */
+const brl = v => 'R$ ' + (+v||0).toLocaleString('pt-BR',{minimumFractionDigits:2, maximumFractionDigits:2});
+function carteiraDe(data){
+  const saldo = +(CRIT.regras.saldo_inicial ?? 200), podio = CRIT.regras.podio || [300,150,100];
+  const porVig = {};
+  data.forEach(r=>{ (porVig[r.vig] = porVig[r.vig] || []).push(r); });
+  const acc = {};
+  Object.values(porVig).forEach(rows=>{
+    const porMot = {};
+    rows.forEach(r=>{ const a = porMot[r.unit] || (porMot[r.unit] = { unit:r.unit, km:0, pts:[], uni: UNI_OF[r.unit] || COD_OF[r.unit] || '—' });
+      a.km += +r.km||0; if(r.pont!=null) a.pts.push(r.pont); });
+    const lista = Object.values(porMot).filter(a=>a.pts.length).map(a=>({ ...a, pont: a.pts.reduce((x,y)=>x+y,0)/a.pts.length, crit: critDe(a.uni) }));
+    // posição dentro da unidade (cota) e dentro do grupo (pódio)
+    const porUni = {}, porGrp = {};
+    lista.forEach(a=>{ (porUni[a.uni] = porUni[a.uni] || []).push(a); (porGrp[a.crit.grupo] = porGrp[a.crit.grupo] || []).push(a); });
+    Object.values(porUni).forEach(l=>l.sort((x,y)=>y.pont-x.pont || y.km-x.km).forEach((a,i)=>a.posUni=i+1));
+    Object.values(porGrp).forEach(l=>l.sort((x,y)=>y.pont-x.pont || y.km-x.km).forEach((a,i)=>a.posGrp=i+1));
+    lista.forEach(a=>{
+      const eleg = a.km >= a.crit.km_min && (a.crit.top_n <= 0 || a.posUni <= a.crit.top_n);
+      const cart = eleg ? saldo * a.pont / 100 : 0;
+      const pod  = eleg && a.posGrp <= podio.length ? +podio[a.posGrp-1] : 0;
+      const t = acc[a.unit] || (acc[a.unit] = { unit:a.unit, uni:a.uni, km:0, pts:[], meses:0, eleg:0, cart:0, pod:0 });
+      t.km += a.km; t.pts.push(a.pont); t.meses++; if(eleg) t.eleg++; t.cart += cart; t.pod += pod;
+    });
+  });
+  return Object.values(acc).map(t=>({ ...t, pont: t.pts.reduce((x,y)=>x+y,0)/t.pts.length, total: t.cart + t.pod }))
+    .sort((a,b)=>b.total-a.total || b.pont-a.pont);
+}
+function renderCarteira(data){
+  const rows = carteiraDe(data);
+  const tot = rows.reduce((s,r)=>({ cart:s.cart+r.cart, pod:s.pod+r.pod, eleg:s.eleg+r.eleg }), { cart:0, pod:0, eleg:0 });
+  const nv = new Set(data.map(r=>r.vig)).size;
+  const box=$('cart-kpis');
+  if(box) box.innerHTML = [
+    ['Custo do programa', brl(tot.cart+tot.pod), `${nv} mês(es) no recorte`],
+    ['Carteiras pagas', brl(tot.cart), 'saldo × nota ÷ 100 dos elegíveis'],
+    ['Pódios', brl(tot.pod), (CRIT.regras.podio||[300,150,100]).map(v=>'R$ '+v).join(' · ')],
+    ['Motoristas elegíveis', String(tot.eleg), `de ${rows.length} com nota (motorista-mês)`],
+    ['Maior ganho', rows.length ? brl(rows[0].total) : '—', rows.length ? rows[0].unit : ''],
+  ].map(([l,v,m])=>`<div class="kpi"><div class="kl">${l}</div><div class="kv">${v}</div><div class="km">${m}</div></div>`).join('');
+  const medals=['🥇','🥈','🥉'];
+  $('cart-tbody').innerHTML = rows.map((r,i)=>`<tr class="rank-${i<3?i+1:'x'}">
+      <td class="rank-num">${i<3&&r.total>0?medals[i]:i+1}</td>
+      <td class="conta">${r.unit}<div class="mot-sub">${SRC_OF[r.unit]||''}</div></td>
+      <td>${COD_OF[r.unit]||'—'}${critDe(r.uni).grupo!==r.uni?`<div class="mot-sub">${critDe(r.uni).grupo}</div>`:''}</td>
+      <td class="num">${Math.round(r.km).toLocaleString('pt-BR')}</td>
+      <td class="num">${scorePill(r.pont)}</td>
+      <td class="num">${r.eleg}/${r.meses}</td>
+      <td class="num cart-td ${r.cart?'':'cart-neg'}">${brl(r.cart)}</td>
+      <td class="num cart-td ${r.pod?'':'cart-neg'}">${brl(r.pod)}</td>
+      <td class="num cart-td"><b>${brl(r.total)}</b></td>
+    </tr>`).join('') || '<tr><td colspan="9">Sem dados no recorte.</td></tr>';
+}
 
 /* ── Regras de Pontuação ── */
 function renderPesos(){
@@ -1198,7 +1275,7 @@ async function recarregar(){
 }
 
 /* ── navegação entre as visões ── */
-const TIT={resumo:'Resumo Gerencial', ranking:'Ranking Geral'};
+const TIT={resumo:'Resumo Gerencial', ranking:'Ranking Geral', carteira:'Carteira em R$'};
 function setVw(v){
   VW=v;
   document.querySelectorAll('.s-item[data-vw]').forEach(b=>b.classList.toggle('on',b.dataset.vw===v));
