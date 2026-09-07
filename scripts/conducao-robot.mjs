@@ -505,6 +505,15 @@ async function geotabDia(dia, cred, cacheUsuarios, regras, uniPorDev, rpmPorDev,
     for (const x of a) if (!x.usado && x.t >= ini - 60e3 && x.t <= fim + 180e3) { soma += x.l; x.usado = true; }
     return soma;
   };
+  // soma os litros da viagem no acumulador E o km dela — o km/L só pode
+  // dividir km de viagem que tem litros (Renan, 07/09/2026: "médias irreais").
+  // Viagem acima de 12 km/L é leitura ruim do veículo: descarta os litros dela.
+  const somaLitros = (g, dev, ini, fim, km) => {
+    const l = litrosDa(dev, ini, fim);
+    if (!(l > 0)) return;
+    if (km / l > 12) { g.litRuim = (g.litRuim || 0) + 1; return; }
+    g.lit = (g.lit || 0) + l; g.kmLit = (g.kmLit || 0) + km;
+  };
 
   // eventos por motorista; quando o evento não traz motorista, cai no device
   const nomeRegra = id => (regras.get(id) || '');
@@ -543,7 +552,7 @@ async function geotabDia(dia, cred, cacheUsuarios, regras, uniPorDev, rpmPorDev,
         const dev = t.device?.id;
         const am = rpmPorDev && rpmPorDev.get(dev);
         const ti = new Date(t.start).getTime(), tf = new Date(t.stop).getTime();
-        g.lit = (g.lit || 0) + litrosDa(dev, ti, tf);
+        somaLitros(g, dev, ti, tf, +t.distance || 0);
         if (am) { const j = rpmJanela(am, ti, tf); g.rpmV += j.verde; g.rpmR += j.rodando; }
         if (mch && am) { const k = marchaJanela(mch.porDev.get(dev), am, ti, tf, mch.maxG.get(dev));
                          g.mchR = (g.mchR || 0) + k.ruim; g.mchT = (g.mchT || 0) + k.total; }
@@ -564,7 +573,7 @@ async function geotabDia(dia, cred, cacheUsuarios, regras, uniPorDev, rpmPorDev,
     // eventos órfãos do mesmo veículo dentro da janela da viagem
     const ini = new Date(t.start).getTime(), fim = new Date(t.stop).getTime();
     porDev.forEach(x => { if (x.dev === t.device?.id && x.t >= ini && x.t <= fim && !x.usado) { soma(g, x.qual, x.seg); x.usado = true; } });
-    g.lit = (g.lit || 0) + litrosDa(t.device?.id, ini, fim);
+    somaLitros(g, t.device?.id, ini, fim, +t.distance || 0);
     const pl = GT_PLACA.get(t.device?.id);
     if (pl) { g.pla = g.pla || {}; g.pla[pl] = (g.pla[pl] || 0) + (+t.distance || 0); }
     const am = rpmPorDev && rpmPorDev.get(t.device?.id);
@@ -619,6 +628,8 @@ async function geotabDia(dia, cred, cacheUsuarios, regras, uniPorDev, rpmPorDev,
                banguela: { neutro: Math.round(g.bgN || 0), movimento: Math.round(g.bgM || 0) },
                // km por placa no dia — o mensal escolhe a mais rodada
                placas: g.pla ? Object.fromEntries(Object.entries(g.pla).map(([k, v]) => [k, Math.round(v)])) : undefined,
+               // km SÓ das viagens com litros (é o numerador do km/L) e viagens descartadas por leitura ruim
+               kmLitros: g.lit > 0 ? Math.round(g.kmLit) : undefined, litRuim: g.litRuim || undefined,
                eventos: { acel: g.acel, frea: g.frea, vel: g.vel },
                velArgus: { s1: Math.round(g.svel1 || 0), s2: Math.round(g.svel2 || 0), s3: Math.round(g.svel3 || 0) } },
       _nome: (u.firstName || u.lastName) ? `${u.firstName || ''} ${u.lastName || ''}`.trim() : (u.name || id),
@@ -643,6 +654,7 @@ async function geotabDia(dia, cred, cacheUsuarios, regras, uniPorDev, rpmPorDev,
       cambio_ruim_pct: (g.mchT || 0) > 60 ? g.mchR / g.mchT * 100 : null,
       registros: g.n,
       bruto: { semLogin: true, viagens: g.n, seg: { dir: g.dir, idle: g.idle, v1: g.v1, v2: g.v2, v3: g.v3 },
+               kmLitros: g.lit > 0 ? Math.round(g.kmLit) : undefined, litRuim: g.litRuim || undefined,
                rpm: { verde: Math.round(g.rpmV || 0), rodando: Math.round(g.rpmR || 0) },
                marcha: { ruim: Math.round(g.mchR || 0), total: Math.round(g.mchT || 0) },
                banguela: { neutro: Math.round(g.bgN || 0), movimento: Math.round(g.bgM || 0) } },
@@ -875,6 +887,8 @@ async function recalculaMes(de, ate) {
       vel_excessos: ds.reduce((s, d) => s + (+(d.bruto && d.bruto.eventos && d.bruto.eventos.vel) || 0), 0),
       // litros do mês = soma dos dias que tiveram FuelUsed (null se nenhum)
       litros: (() => { const v = ds.filter(d => d.litros != null); return v.length ? +v.reduce((s, d) => s + (+d.litros || 0), 0).toFixed(1) : null; })(),
+      // km das viagens com litros no mês — numerador do km/L (nunca o km inteiro)
+      km_litros: (() => { const v = ds.filter(d => d.litros != null); return v.length ? v.reduce((s, d) => s + (+(d.bruto && d.bruto.kmLitros) || 0), 0) : null; })(),
       // placa mais rodada no mês (Σ km por placa dos dias) — casa com a base Ativos
       placa: (() => {
         const km = {};
@@ -2816,7 +2830,7 @@ if (MODE === 'litros') {
         if (!a) { semLinha++; continue; }
         // `fonte` é NOT NULL e é validada antes do ON CONFLICT (ver modo eventos);
         // o bruto leva também o km por placa (modelo mais dirigido no painel)
-        const bruto = { ...(a.bruto || {}), placas: l.bruto && l.bruto.placas };
+        const bruto = { ...(a.bruto || {}), placas: l.bruto && l.bruto.placas, kmLitros: l.bruto && l.bruto.kmLitros, litRuim: l.bruto && l.bruto.litRuim };
         patch.push({ dia, chave: l.chave, fonte: 'Geotab', litros: l.litros, bruto });
       }
       let gravadas = 0;
@@ -2837,11 +2851,13 @@ if (MODE === 'litros') {
       }
       const comLit = novas.filter(l => l.litros != null);
       const km = novas.reduce((s, l) => s + (+l.km || 0), 0);
-      const lit = comLit.reduce((s, l) => s + l.litros, 0), kmL = comLit.reduce((s, l) => s + (+l.km || 0), 0);
+      const lit = comLit.reduce((s, l) => s + l.litros, 0), kmL = comLit.reduce((s, l) => s + (+(l.bruto && l.bruto.kmLitros) || 0), 0);
+      const ruim = novas.reduce((s, l) => s + (+(l.bruto && l.bruto.litRuim) || 0), 0);
       litTot += lit; kmLit += kmL; kmTot += km;
       console.log(`${dia}: FuelUsed ${f.reg || 0} registro(s), ${f.casados || 0} casado(s) com viagem`
         + ` · litros em ${comLit.length}/${novas.length} motorista(s) · ${Math.round(lit)} L`
         + ` · ${lit ? (kmL / lit).toFixed(2) : '—'} km/L (${Math.round(kmL)} de ${Math.round(km)} km com combustível)`
+        + (ruim ? ` · ${ruim} viagem(ns) com leitura ruim descartada(s)` : '')
         + (f.erro ? ` · FuelUsed FALHOU (${f.erro.slice(0, 80)})` : '')
         + (semColuna ? '' : ` · ${gravadas} gravada(s)`));
       dias++; linhasOk += gravadas;

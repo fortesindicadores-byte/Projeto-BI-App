@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
-<meta name="build" content="202609070600">
+<meta name="build" content="202609070700">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <title>Condução Econômica · Gestão em Movimento</title>
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -279,9 +279,11 @@ table.dre td.cg-t,.cg-t{color:var(--verde)!important;font-weight:700;}
 /* Consumo (Renan, 07/09/2026): litros por viagem da telemetria — KPIs, km/L
    por mês e a tabela por motorista. O gráfico tem teto de altura para a
    tabela ficar com a sobra (a regra da sobra dividida). */
-#vw-consumo{display:none;flex-direction:column;} #vw-consumo.on{display:flex;}
-#vw-consumo .gr2{max-height:none;margin-top:14px;}
-#vw-consumo table.dre{font-size:10.5px;} #vw-consumo table.dre td{padding:6px 8px;}
+#vw-consumo,#vw-consrank{display:none;flex-direction:column;} #vw-consumo.on,#vw-consrank.on{display:flex;}
+/* o gráfico do ano tem TETO de altura (regra da sobra dividida): sozinho na
+   visão ele tomava a tela inteira (Renan, 07/09/2026: "ficou muito alto") */
+#vw-consumo .gr2{grid-template-columns:1fr;max-height:46vh;margin-top:14px;flex:0 1 auto;}
+@media(max-width:860px){#vw-consumo .gr2{max-height:none;}}
 /* A FILEIRA DE BAIXO USA A MESMA GRADE DOS CARDS (Renan, 04/09/2026): o
    gráfico ocupa as duas primeiras colunas e as Regras a terceira, então as
    bordas batem com os cards de cima. Proporção em fração (1.55fr 1fr) nunca
@@ -439,7 +441,11 @@ table.dre thead th.sortable:hover{color:var(--laranja);}
     </button>
     <button class="s-item" data-vw="consumo">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3s6 6.5 6 11a6 6 0 0 1-12 0c0-4.5 6-11 6-11z"/></svg>
-      Consumo
+      Km/L Gerencial
+    </button>
+    <button class="s-item" data-vw="consrank">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h10M4 18h6"/></svg>
+      Ranking Km/L
     </button>
 
     <div class="s-sec">Atalhos</div>
@@ -594,13 +600,14 @@ table.dre thead th.sortable:hover{color:var(--laranja);}
         </div>
       </section>
 
-      <!-- ══ 4 · CONSUMO (Renan, 07/09/2026: "você lê hoje o consumo também da
-           telemetria? Legal ter também… mais uma visão"). Litros que o
-           veículo reporta viagem a viagem no Geotab (FuelUsed), somados por
-           motorista pelo robô. Mesmo desenho do Resumo Gerencial: hero sem
-           card com o km/L, km e litros pequenos embaixo, gráfico do ano maior
-           e a tabela menor ao lado. Km/L = Σ km ÷ Σ litros SÓ dos meses com
-           litros, para a conta não misturar km sem combustível reportado. ══ -->
+      <!-- ══ 4 · KM/L GERENCIAL (Renan, 07/09/2026: "você lê hoje o consumo
+           também da telemetria? Legal ter também… mais uma visão" e depois
+           "vamos fazer um Km/L gerencial e um de ranking, duas visões").
+           Litros que o veículo reporta viagem a viagem no Geotab (FuelUsed),
+           somados por motorista pelo robô. Km/L = Σ km ÷ Σ litros SÓ das
+           viagens com litros — o km inteiro do mês dividido pelos litros de
+           poucas viagens dava 700 km/L. Mesmo desenho do Resumo: hero sem
+           card, km e litros pequenos embaixo, gráfico do ano com teto. ══ -->
       <section class="vw" id="vw-consumo">
         <div class="fin-hero">
           <div>
@@ -612,22 +619,26 @@ table.dre thead th.sortable:hover{color:var(--laranja);}
             </div>
           </div>
         </div>
-        <div class="gr2 ce-gr">
+        <div class="gr2">
           <div class="card gcard">
             <div class="thead-row" style="margin-bottom:0">
-              <div><div class="gtit">Km/L por mês</div><div class="gsub">Σ km ÷ Σ litros reportados pelo veículo · 2026</div></div>
+              <div><div class="gtit">Km/L por mês</div><div class="gsub">Σ km ÷ Σ litros das viagens com combustível reportado · 2026</div></div>
             </div>
             <div class="gleg" id="cons-leg"></div>
             <div class="gcv"><canvas id="chartConsumo"></canvas></div>
           </div>
-          <div class="card gcard">
-            <div class="gtit">Ranking Km/L</div>
-            <div class="gsub">Motorista, modelo mais dirigido, unidade e projeto</div>
-            <div class="twrap"><table class="dre" id="cons-table">
-              <thead><tr><th style="width:28px;">#</th><th>Motorista</th><th>Modelo</th><th>Unidade</th><th>Projeto</th><th class="num">Km/L</th></tr></thead>
-              <tbody id="cons-tbody"></tbody>
-            </table></div>
-          </div>
+        </div>
+      </section>
+
+      <!-- ══ 5 · RANKING KM/L — motorista, modelo mais dirigido (placa mais
+           rodada × base Ativos do Ginfo), unidade, projeto e km/L. Km e litros
+           ficam ao lado para o km/L ser conferível. ══ -->
+      <section class="vw" id="vw-consrank">
+        <div class="rank-sec">
+          <div class="twrap"><table class="dre" id="cons-table">
+            <thead><tr><th style="width:34px;">#</th><th>Motorista</th><th>Modelo mais dirigido</th><th>Unidade</th><th>Projeto</th><th class="num">Km com combustível</th><th class="num">Litros</th><th class="num">Km/L</th></tr></thead>
+            <tbody id="cons-tbody"></tbody>
+          </table></div>
         </div>
       </section>
 
@@ -806,14 +817,14 @@ async function fetchFromSupabase() {
   for (let de = 0; ; de += PASSO) {
     // `viagens` é coluna nova: enquanto o SQL não roda no banco, o select cai
     // para a versão sem ela em vez de derrubar o painel inteiro
-    const COLS = 'competencia,chave,motorista,unidade,fonte,km,dias,litros,placa,rpm_pontos,idle_pontos,acel_pontos,vel_pontos,pontuacao,atualizado_em';
+    const COLS = 'competencia,chave,motorista,unidade,fonte,km,dias,litros,placa,km_litros,rpm_pontos,idle_pontos,acel_pontos,vel_pontos,pontuacao,atualizado_em';
     let { data: lote, error } = await sbClient()
       .from('ce_scores_mensais').select(COLS + ',viagens,vel_excessos')
       .order('competencia', { ascending: true }).order('chave', { ascending: true })
       .range(de, de + PASSO - 1);
     if (error && /viagens|vel_excessos|litros|placa/.test(error.message || '')) {
       ({ data: lote, error } = await sbClient()
-        .from('ce_scores_mensais').select(COLS.replace(',litros,placa', ''))
+        .from('ce_scores_mensais').select(COLS.replace(',litros,placa,km_litros', ''))
         .order('competencia', { ascending: true }).order('chave', { ascending: true })
         .range(de, de + PASSO - 1));
     }
@@ -847,6 +858,7 @@ async function fetchFromSupabase() {
     km: +r.km || 0, viagens: +r.viagens || 0, velx: +r.vel_excessos || 0,
     lit: r.litros == null ? null : +r.litros,      // litros do mês (FuelUsed), null = sem leitura
     placa: r.placa || null,                        // placa mais rodada no mês
+    kmLit: r.km_litros == null ? null : +r.km_litros,  // km SÓ das viagens com litros (numerador do km/L)
     pont: r.pontuacao,
   }));
 }
@@ -1205,7 +1217,9 @@ function consumoDe(data){
   data.forEach(r=>{
     const a=acc[r.unit]||(acc[r.unit]={unit:r.unit,km:0,lit:0,kmTot:0,pla:{}});
     a.kmTot+=+r.km||0;
-    if(r.lit>0){ a.km+=+r.km||0; a.lit+=r.lit; }
+    // km/L só com o km das viagens que têm litros; mês sem km_litros
+    // (histórico antigo) não entra na conta
+    if(r.lit>0 && r.kmLit>0){ a.km+=r.kmLit; a.lit+=r.lit; }
     if(r.placa){ const pl=placaNorm(r.placa); a.pla[pl]=(a.pla[pl]||0)+(+r.km||0); }
   });
   return Object.values(acc).map(a=>{
@@ -1222,12 +1236,14 @@ function renderConsumo(data){
   set('cons-lit', lit ? Math.round(lit).toLocaleString('pt-BR')+' L' : '—');
   $('cons-tbody').innerHTML = rows.map((r,i)=>`<tr>
       <td class="rank-num">${i+1}</td>
-      <td class="conta">${r.unit}</td>
+      <td class="conta">${r.unit}<div class="mot-sub">${SRC_OF[r.unit]||''}</div></td>
       <td title="${r.placa||''}">${r.modelo||'—'}</td>
       <td>${COD_OF[r.unit]||'—'}</td>
       <td>${r.proj||'—'}</td>
+      <td class="num">${r.lit>0?Math.round(r.km).toLocaleString('pt-BR'):'—'}</td>
+      <td class="num">${r.lit>0?Math.round(r.lit).toLocaleString('pt-BR'):'—'}</td>
       <td class="num"><b>${kmL(r.km,r.lit)}</b></td>
-    </tr>`).join('') || '<tr><td colspan="6">Sem dados no recorte.</td></tr>';
+    </tr>`).join('') || '<tr><td colspan="8">Sem dados no recorte.</td></tr>';
   renderConsChart();
 }
 let chartConsumo=null;
@@ -1246,8 +1262,8 @@ function renderConsChart(){
   const sv=selVigKeys(), allVigs=[...new Set(RAW.map(r=>r.vig))];
   const filtroAtivo = sv.length>0 && sv.length<allVigs.length;
   const porMes=Array.from({length:12},(_,i)=>{
-    const rows=base.filter(r=>vigMonth(r.vig)===i+1 && r.lit>0);
-    const k=rows.reduce((s,r)=>s+(+r.km||0),0), l=rows.reduce((s,r)=>s+r.lit,0);
+    const rows=base.filter(r=>vigMonth(r.vig)===i+1 && r.lit>0 && r.kmLit>0);
+    const k=rows.reduce((s,r)=>s+r.kmLit,0), l=rows.reduce((s,r)=>s+r.lit,0);
     return l>0 ? k/l : null;
   });
   const vigPos=Array.from({length:12},(_,i)=>{ const r=base.find(x=>vigMonth(x.vig)===i+1); return r?r.vig:null; });
@@ -1424,7 +1440,7 @@ async function recarregar(){
 }
 
 /* ── navegação entre as visões ── */
-const TIT={resumo:'Resumo Gerencial', ranking:'Ranking Geral', carteira:'Carteira em R$', consumo:'Consumo'};
+const TIT={resumo:'Resumo Gerencial', ranking:'Ranking Geral', carteira:'Carteira em R$', consumo:'Km/L Gerencial', consrank:'Ranking Km/L'};
 function setVw(v){
   VW=v;
   document.querySelectorAll('.s-item[data-vw]').forEach(b=>b.classList.toggle('on',b.dataset.vw===v));
