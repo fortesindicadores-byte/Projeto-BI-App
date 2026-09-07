@@ -2,11 +2,10 @@
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
-<meta name="build" content="202609071200">
+<meta name="build" content="202609071300">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <title>Condução Econômica · Gestão em Movimento</title>
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-<script src="../../assets/gviz-cache.js?v=202609050530"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0"></script>
@@ -624,7 +623,6 @@ table.dre thead th.sortable:hover{color:var(--laranja);}
             <div class="hdel">
               <div>Km rodado<b id="cons-km">—</b></div>
               <div>Litros consumidos<b id="cons-lit">—</b></div>
-              <div>Km/L remunerado<b id="cons-rem">—</b></div>
             </div>
           </div>
         </div>
@@ -649,7 +647,7 @@ table.dre thead th.sortable:hover{color:var(--laranja);}
       <section class="vw" id="vw-consrank">
         <div class="rank-sec">
           <div class="twrap"><table class="dre" id="cons-table">
-            <thead><tr><th style="width:34px;">#</th><th>Motorista</th><th>Modelo mais dirigido</th><th>Unidade</th><th>Projeto</th><th class="num">Km com combustível</th><th class="num">Litros</th><th class="num">Km/L rem.</th><th class="num">Km/L</th></tr></thead>
+            <thead><tr><th style="width:34px;">#</th><th>Motorista</th><th>Modelo mais dirigido</th><th>Unidade</th><th>Projeto</th><th class="num">Km com combustível</th><th class="num">Litros</th><th class="num">Km/L</th></tr></thead>
             <tbody id="cons-tbody"></tbody>
           </table></div>
         </div>
@@ -804,62 +802,6 @@ async function fetchAtivos(){
       if (pl) ATIVOS[pl] = { modelo: String(r[K.mod] || '').trim(), marca: String(r[K.mar] || '').trim(), proj: String(r[K.proj] || '').trim() }; });
   } catch (e) { console.warn('ativos:', e.message); }
 }
-
-/* Km/L REMUNERADO (Renan, 07/09/2026: "aplique o rem em linha pontilhada e
-   condicionais, nosso padrão em Eficiência Km/L"): aba Km/L do workbook
-   Consumo (KML_ID), a mesma do painel Eficiência — col 0 vigência, col 4
-   "Km/L Rem Médio", col 14 "PROJETO - UNIDADE", col 22 km rodado. O rem do
-   motorista é o do projeto (base Ativos) na unidade dele; sem projeto casado,
-   cai no rem da unidade ponderado por km (tier decide EMPURRADA × demais). */
-const KML_ID = '1ZZdvG_RK5cTBLdPl3TWCbNeqw-Y4fTYwWsQV4w-e__A', KML_TAB = 'Km/L';
-let REM = {};                                     // {vig:{uniBase:{proj:{P:{sum,cnt}}, all:[{proj,rem,km}]}}}
-function gvJsonp(id, tab){
-  return new Promise((resolve, reject) => {
-    const fn = '_gvCe' + Math.floor(Math.random() * 1e9);
-    const sc = document.createElement('script');
-    const clr = () => { try { delete window[fn]; sc.remove(); } catch (e) {} };
-    window[fn] = r => { clr(); if (r.status !== 'ok') return reject(new Error(tab + ' status ' + r.status)); resolve(r.table.rows || []); };
-    sc.onerror = () => { clr(); reject(new Error('sem acesso à planilha ' + tab)); };
-    sc.src = `https://docs.google.com/spreadsheets/d/${id}/gviz/tq?sheet=${encodeURIComponent(tab)}&tqx=out:json;responseHandler:${fn}`;
-    document.head.appendChild(sc);
-  });
-}
-function gvVig(c){ if (!c) return null; const v = c.v;
-  let m = String(v).match(/Date\((\d+),(\d+)/); if (m) return m[1] + '-' + String(+m[2] + 1).padStart(2, '0');
-  const f = String(c.f != null ? c.f : (v != null ? v : '')); m = f.match(/(\d{1,2})[\/\-](\d{4})/); if (m) return m[2] + '-' + m[1].padStart(2, '0');
-  m = f.match(/(\d{4})[\/\-](\d{1,2})/); if (m) return m[1] + '-' + m[2].padStart(2, '0');
-  // "jan./2026", "Fev/26" — o formato de texto da aba
-  const MES = { jan:1, fev:2, mar:3, abr:4, mai:5, jun:6, jul:7, ago:8, set:9, out:10, nov:11, dez:12 };
-  m = NK(f).toLowerCase().match(/^([a-z]{3})[a-z]*\.?\s*\/\s*(\d{2,4})$/);
-  if (m && MES[m[1]]) { let y = +m[2]; if (y < 100) y += 2000; return y + '-' + String(MES[m[1]]).padStart(2, '0'); }
-  return null; }
-async function fetchKmlRem(){
-  try {
-    const rows = await gvJsonp(KML_ID, KML_TAB);
-    REM = {};
-    rows.forEach(r => {
-      const c = r.c || []; const vig = gvVig(c[0]); if (!vig) return;
-      const pu = String(c[14] && c[14].v != null ? c[14].v : ''); const i = pu.indexOf('-'); if (i < 0) return;
-      const proj = NK(pu.slice(0, i)), uni = NK(pu.slice(i + 1));
-      const rem = +(c[4] && c[4].v) || 0, km = +(c[22] && c[22].v) || 0;
-      if (!(rem > 0)) return;
-      const u = ((REM[vig] = REM[vig] || {})[uni] = REM[vig][uni] || { proj: {}, all: [] });
-      const e = (u.proj[proj] = u.proj[proj] || { sum: 0, cnt: 0 }); e.sum += rem; e.cnt++;   // média burra no projeto
-      u.all.push({ proj, rem, km });
-    });
-  } catch (e) { console.warn('Km/L remunerado:', e.message); }
-}
-// rem do motorista-mês: projeto na unidade; sem projeto, unidade ponderada por km
-function remDe(vig, cod, proj){
-  const uni = String(cod || '').split(' ')[0];
-  const u = REM[vig] && REM[vig][uni]; if (!u) return null;
-  const p = NK(proj), e = p && u.proj[p]; if (e && e.cnt) return e.sum / e.cnt;
-  const emp = /\bT1\b/.test(cod) && !/WH|INS/.test(cod) ? true : /\bT2\b/.test(cod) ? false : null;
-  let s = 0, k = 0;
-  u.all.forEach(x => { if (emp != null && /EMPURRAD/.test(x.proj) !== emp) return; if (x.km > 0) { s += x.rem * x.km; k += x.km; } });
-  return k ? s / k : null;
-}
-const remDoMes = r => { const at = r.placa && ATIVOS[placaNorm(r.placa)]; return remDe(r.vig.slice(0, 7).replace('/', '-'), COD_OF[r.unit], at ? at.proj : ''); };
 
 /* ── Estado ── */
 let RAW = [], ORIGEM = 'exemplo', ULT_COLETA = null, VW = 'resumo';
@@ -1284,53 +1226,42 @@ const kmL=(km,l)=> l>0 ? (km/l).toFixed(2).replace('.',',') : '—';
 function consumoDe(data){
   const acc={};
   data.forEach(r=>{
-    const a=acc[r.unit]||(acc[r.unit]={unit:r.unit,km:0,lit:0,kmTot:0,pla:{},kmRem:0,litRem:0,litEsp:0});
+    const a=acc[r.unit]||(acc[r.unit]={unit:r.unit,km:0,lit:0,kmTot:0,pla:{}});
     a.kmTot+=+r.km||0;
     // km/L só com o km das viagens que têm litros; mês sem km_litros
     // (histórico antigo) não entra na conta
-    if(r.lit>0 && r.kmLit>0){
-      a.km+=r.kmLit; a.lit+=r.lit;
-      // remunerado do mês → litros ESPERADOS (Σkm ÷ Σ(km/rem) é o rem equivalente
-      // do recorte, sem média de médias)
-      const rm=remDoMes(r); if(rm>0){ a.kmRem+=r.kmLit; a.litRem+=r.lit; a.litEsp+=r.kmLit/rm; }
-    }
+    if(r.lit>0 && r.kmLit>0){ a.km+=r.kmLit; a.lit+=r.lit; }
     if(r.placa){ const pl=placaNorm(r.placa); a.pla[pl]=(a.pla[pl]||0)+(+r.km||0); }
   });
   return Object.values(acc).map(a=>{
     const top=Object.entries(a.pla).sort((x,y)=>y[1]-x[1])[0];
     const at=top ? ATIVOS[top[0]] : null;
-    return {...a, placa: top?top[0]:null, modelo: at ? (at.modelo || at.marca) : '', proj: at ? at.proj : '',
-            kml: a.lit>0 ? a.km/a.lit : null, rem: a.litEsp>0 ? a.kmRem/a.litEsp : null};
+    return {...a, placa: top?top[0]:null, modelo: at ? (at.modelo || at.marca) : '', proj: at ? at.proj : '', kml: a.lit>0 ? a.km/a.lit : null};
   }).sort((a,b)=>((b.kml??-1)-(a.kml??-1)) || b.kmTot-a.kmTot);
 }
 function renderConsumo(data){
   const rows=consumoDe(data);
   const km=rows.reduce((s,r)=>s+r.km,0), lit=rows.reduce((s,r)=>s+r.lit,0);
-  const kmRem=rows.reduce((s,r)=>s+r.kmRem,0), litEsp=rows.reduce((s,r)=>s+r.litEsp,0);
-  const rem = litEsp>0 ? kmRem/litEsp : null, real = lit>0 ? km/lit : null;
   set('cons-kml', kmL(km,lit));
-  const hv=$('cons-kml'); if(hv) hv.className = 'hval ' + (rem!=null && real!=null ? (real>=rem?'cg':'cr') : '');
   set('cons-km',  km ? Math.round(km).toLocaleString('pt-BR')+' km' : '—');
   set('cons-lit', lit ? Math.round(lit).toLocaleString('pt-BR')+' L' : '—');
-  set('cons-rem', rem!=null ? rem.toFixed(2).replace('.',',') : '—');
-  // insights do recorte
-  const f2=v=>v.toFixed(2).replace('.',','), sg=v=>(v>=0?'+':'−')+f2(Math.abs(v)), nI=v=>Math.round(Math.abs(v)).toLocaleString('pt-BR');
-  const dKml = (rem!=null && real!=null) ? real-rem : null;
-  const dLit = litEsp>0 ? litEsp - rows.reduce((s,r)=>s+r.litRem,0) : null;   // litros esperados − gastos, só nos meses com rem
-  const comRem = rows.filter(r=>r.kml!=null && r.rem!=null), acima = comRem.filter(r=>r.kml>=r.rem).length;
+  // insights do recorte — só o que a telemetria responde sozinha
+  const f2=v=>v.toFixed(2).replace('.',',');
+  const comLit = rows.filter(r=>r.lit>0);
   const meses = {}; data.forEach(r=>{ if(r.lit>0 && r.kmLit>0){ const m=(meses[r.vig]=meses[r.vig]||{k:0,l:0}); m.k+=r.kmLit; m.l+=r.lit; } });
   const mm = Object.entries(meses).map(([v,m])=>({v, kml:m.k/m.l})).sort((a,b)=>b.kml-a.kml);
   const kmTot = rows.reduce((s,r)=>s+r.kmTot,0);
   const LAB=['jan.','fev.','mar.','abr.','mai.','jun.','jul.','ago.','set.','out.','nov.','dez.'];
   const mesLbl = v => LAB[vigMonth(v)-1] || v;
   const box=$('cons-kpis');
+  const top = comLit.length ? comLit.reduce((a,b)=>b.kml>a.kml?b:a) : null, low = comLit.length ? comLit.reduce((a,b)=>b.kml<a.kml?b:a) : null;
   if(box) box.innerHTML = [
-    ['Δ vs remunerado', dKml==null?'—':sg(dKml)+' km/L', dKml==null?'sem remunerado no recorte':(rem!=null?`${(dKml/rem*100>=0?'+':'−')}${Math.abs(dKml/rem*100).toFixed(1).replace('.',',')}% sobre ${f2(rem)}`:''), dKml==null?'':(dKml>=0?'cg':'cr')],
-    ['Litros vs remunerado', dLit==null?'—':(dLit>=0?'−':'+')+nI(dLit)+' L', dLit==null?'sem remunerado no recorte':(dLit>=0?'economia: gastou menos que o esperado':'perda: gastou mais que o esperado'), dLit==null?'':(dLit>=0?'cg':'cr')],
-    ['Acima do remunerado', comRem.length?`${acima} de ${comRem.length}`:'—', comRem.length?`${Math.round(acima/comRem.length*100)}% dos motoristas com remunerado`:'sem remunerado no recorte', ''],
-    ['Melhor · pior mês', mm.length?`${mesLbl(mm[0].v)} ${f2(mm[0].kml)}`:'—', mm.length>1?`pior: ${mesLbl(mm[mm.length-1].v)} ${f2(mm[mm.length-1].kml)} km/L`:(mm.length?'um mês só no recorte':''), ''],
-    ['Km com combustível', kmTot?`${Math.round(km/kmTot*100)}%`:'—', kmTot?`${Math.round(km).toLocaleString('pt-BR')} de ${Math.round(kmTot).toLocaleString('pt-BR')} km reportaram litros`:'', ''],
-  ].map(([l,v,m,c])=>`<div class="kpi"><div class="kl">${l}</div><div class="kv ${c}">${v}</div><div class="km">${m}</div></div>`).join('');
+    ['Melhor mês', mm.length?`${mesLbl(mm[0].v)} ${f2(mm[0].kml)}`:'—', mm.length?'km/L do mês, Σ km ÷ Σ litros':'sem litros no recorte'],
+    ['Pior mês', mm.length>1?`${mesLbl(mm[mm.length-1].v)} ${f2(mm[mm.length-1].kml)}`:'—', mm.length>1?'km/L do mês, Σ km ÷ Σ litros':(mm.length?'um mês só no recorte':'')],
+    ['Motoristas com litros', String(comLit.length), `de ${rows.length} com nota no recorte`],
+    ['Melhor · pior motorista', top?`${f2(top.kml)} · ${f2(low.kml)}`:'—', top?`${top.unit.split(' ')[0]} · ${low.unit.split(' ')[0]}`:''],
+    ['Km com combustível', kmTot?`${Math.round(km/kmTot*100)}%`:'—', kmTot?`${Math.round(km).toLocaleString('pt-BR')} de ${Math.round(kmTot).toLocaleString('pt-BR')} km reportaram litros`:''],
+  ].map(([l,v,m])=>`<div class="kpi"><div class="kl">${l}</div><div class="kv">${v}</div><div class="km">${m}</div></div>`).join('');
   $('cons-tbody').innerHTML = rows.map((r,i)=>`<tr>
       <td class="rank-num">${i+1}</td>
       <td class="conta">${r.unit}<div class="mot-sub">${SRC_OF[r.unit]||''}</div></td>
@@ -1339,9 +1270,8 @@ function renderConsumo(data){
       <td>${r.proj||'—'}</td>
       <td class="num">${r.lit>0?Math.round(r.km).toLocaleString('pt-BR'):'—'}</td>
       <td class="num">${r.lit>0?Math.round(r.lit).toLocaleString('pt-BR'):'—'}</td>
-      <td class="num">${r.rem!=null?r.rem.toFixed(2).replace('.',','):'—'}</td>
-      <td class="num ${r.kml!=null&&r.rem!=null?(r.kml>=r.rem?'cg':'cr'):''}"><b>${kmL(r.km,r.lit)}</b></td>
-    </tr>`).join('') || '<tr><td colspan="9">Sem dados no recorte.</td></tr>';
+      <td class="num"><b>${kmL(r.km,r.lit)}</b></td>
+    </tr>`).join('') || '<tr><td colspan="8">Sem dados no recorte.</td></tr>';
   renderConsChart();
 }
 let chartConsumo=null;
@@ -1359,26 +1289,19 @@ function renderConsChart(){
   const base=RAW.filter(r=>(!su.length||su.includes(COD_OF[r.unit]||'—'))&&(!sm.length||sm.includes(r.unit)));
   const sv=selVigKeys(), allVigs=[...new Set(RAW.map(r=>r.vig))];
   const filtroAtivo = sv.length>0 && sv.length<allVigs.length;
-  const remMes=[];
   const porMes=Array.from({length:12},(_,i)=>{
     const rows=base.filter(r=>vigMonth(r.vig)===i+1 && r.lit>0 && r.kmLit>0);
     const k=rows.reduce((s,r)=>s+r.kmLit,0), l=rows.reduce((s,r)=>s+r.lit,0);
-    let kr=0, le=0; rows.forEach(r=>{ const rm=remDoMes(r); if(rm>0){ kr+=r.kmLit; le+=r.kmLit/rm; } });
-    remMes[i] = le>0 ? kr/le : null;
     return l>0 ? k/l : null;
   });
   const vigPos=Array.from({length:12},(_,i)=>{ const r=base.find(x=>vigMonth(x.vig)===i+1); return r?r.vig:null; });
   const sel=i=>!filtroAtivo||(vigPos[i]&&sv.includes(vigPos[i]));
-  // condicional contra o remunerado do mês: real ≥ rem = verde, abaixo = vermelho; sem rem = laranja
-  const cor=porMes.map((v,i)=>{ if(v==null) return 'rgba(100,100,100,.18)'; const a=sel(i)?'.9':'.18'; const rm=remMes[i];
-    return rm==null ? `rgba(249,115,22,${a})` : v>=rm ? `rgba(59,179,59,${a})` : `rgba(255,82,82,${a})`; });
-  const remC = isLight ? '#161D2B' : '#EEF2FA';
-  const vals=[...porMes, ...remMes].filter(v=>v!=null);
+  const cor=porMes.map((v,i)=>v==null?'rgba(100,100,100,.18)':`rgba(249,115,22,${sel(i)?'.9':'.18'})`);
+  const vals=porMes.filter(v=>v!=null);
   // eixo justo aos dados: 0,3 abaixo do menor mês e 0,3 acima do maior
   const yMin = vals.length ? Math.max(0, Math.floor((Math.min(...vals)-0.3)*10)/10) : 0;
   const yMax = vals.length ? Math.ceil((Math.max(...vals)+0.3)*10)/10 : 5;
-  // legenda NEUTRA para a série condicional; o rem é a linha pontilhada
-  $('cons-leg').innerHTML = `<span><i class="sq" style="background:var(--txt3)"></i>Km/L do mês</span><span style="color:var(--txt)"><i></i>Remunerado</span>`;
+  $('cons-leg').innerHTML = `<span><i class="sq" style="background:var(--laranja)"></i>Km/L do mês</span>`;
   if(chartConsumo) chartConsumo.destroy();
   chartConsumo=new Chart(cv.getContext('2d'),{
     type:'bar',
@@ -1386,12 +1309,10 @@ function renderConsChart(){
       barPercentage:.97, categoryPercentage:.94,
       datalabels:{ display:c=>porMes[c.dataIndex]!=null && sel(c.dataIndex),
         color:isLight?'#161D2B':'#EEF2FA', font:{family:'Montserrat',size:11,weight:'700'},
-        formatter:v=>v!=null?v.toFixed(2).replace('.',','):'', anchor:'end', align:'end', offset:1 } },
-      { label:'Remunerado', data:remMes, type:'line', borderColor:remC, borderWidth:2, borderDash:[5,3], tension:.3,
-        fill:false, spanGaps:true, pointRadius:0, order:0, datalabels:{display:false} }]},
+        formatter:v=>v!=null?v.toFixed(2).replace('.',','):'', anchor:'end', align:'end', offset:1 } }]},
     options:{ responsive:true, maintainAspectRatio:false,
       plugins:{ legend:{display:false}, datalabels:{display:false},
-        tooltip:{...tooltip, callbacks:{ label:c=>c.raw!=null?' '+(c.dataset.label||'')+' '+c.raw.toFixed(2).replace('.',',')+' km/L':'' }} },
+        tooltip:{...tooltip, callbacks:{ label:c=>c.raw!=null?' '+c.raw.toFixed(2).replace('.',',')+' km/L':'' }} },
       scales:{ x:{ grid:{display:false}, border:{display:false}, ticks:{color:tickC, font:{family:'Montserrat',size:11}} },
                y:{ display:false, min:yMin, max:yMax } } },
   });
@@ -1529,7 +1450,7 @@ function semRpmFora(linhas){
 }
 let SUB_BASE = '';        // "N motorista(s) · coleta dd/mm/aaaa"
 async function recarregar(){
-  await Promise.all([fetchCriterios(), fetchAtivos(), fetchKmlRem()]);
+  await Promise.all([fetchCriterios(), fetchAtivos()]);
   set('titSub','Carregando…');
   try{
     let linhas=[];
