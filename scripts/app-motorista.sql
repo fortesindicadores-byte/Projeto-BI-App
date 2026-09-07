@@ -599,3 +599,197 @@ grant execute on function public.ce_app_unidade_ativa(text)              to anon
 grant execute on function public.ce_app_unidades(uuid)                   to anon, authenticated;
 grant execute on function public.ce_app_unidade_set(uuid, text, boolean) to anon, authenticated;
 notify pgrst, 'reload schema';
+
+-- ============================================================
+-- 14) CRITÉRIOS POR UNIDADE E GRUPO "PIRAÍ" (Renan, 06/09/2026):
+--     "Lata 5, Empurrada 15. Mas serão olhados juntos como unidade Piraí.
+--      Lata elegibilidade será 500 km."
+--     · ce_app_unidade_cfg: por unidade do Geotab, o nº de elegíveis (top_n),
+--       o km mínimo (km_min) e o GRUPO em que ela é olhada. Campo nulo cai na
+--       regra geral (ce_app_regras) — e, para o top_n, na regra do QLP
+--       (top_pct% × qlp, mínimo top_min) quando o QLP estiver informado.
+--     · Grupo = UM ranking e UM pódio para todas as unidades do grupo. A cota
+--       de elegíveis e o km mínimo continuam sendo os da unidade de cada um:
+--       os 15 melhores da Empurrada (1.000 km) + os 5 melhores da Lata (500 km)
+--       disputam o pódio de Piraí juntos.
+--     · O admin edita tudo tocando no rótulo dentro do chip da unidade.
+-- ============================================================
+alter table public.ce_app_regras add column if not exists top_pct numeric default 15;
+alter table public.ce_app_regras add column if not exists top_min int default 3;
+update public.ce_app_regras set top_pct = 15 where id = 1 and top_pct is null;
+update public.ce_app_regras set top_min = 3  where id = 1 and top_min is null;
+
+create table if not exists public.ce_app_unidade_cfg (
+  unidade        text primary key,
+  grupo          text,                         -- nulo = a própria unidade
+  top_n          int  check (top_n is null or top_n >= 0),
+  km_min         int  check (km_min is null or km_min >= 0),
+  qlp            int  check (qlp is null or qlp > 0),
+  atualizado_em  timestamptz not null default now()
+);
+alter table public.ce_app_unidade_cfg enable row level security;   -- sem policy: só as funções
+drop table if exists public.ce_app_unidade_qlp;
+
+insert into public.ce_app_unidade_cfg (unidade, grupo, top_n, km_min) values
+  ('EMP PIRAI',      'PIRAI', 15, 1000),
+  ('INS LATA PIRAI', 'PIRAI',  5,  500)
+on conflict (unidade) do update set grupo = excluded.grupo, top_n = excluded.top_n, km_min = excluded.km_min, atualizado_em = now();
+
+create or replace function public.ce_app_top_n(p_unidade text)
+returns int language sql stable security definer set search_path = public, extensions as $$
+  select coalesce(c.top_n,
+                  case when c.qlp is not null and r.top_pct is not null
+                       then greatest(coalesce(r.top_min, 3), round(r.top_pct / 100.0 * c.qlp)::int) end,
+                  r.top_n)
+  from ce_app_regras r left join ce_app_unidade_cfg c on c.unidade = p_unidade
+  where r.id = 1
+$$;
+create or replace function public.ce_app_km_min(p_unidade text)
+returns int language sql stable security definer set search_path = public, extensions as $$
+  select coalesce(c.km_min, r.km_min)
+  from ce_app_regras r left join ce_app_unidade_cfg c on c.unidade = p_unidade where r.id = 1
+$$;
+create or replace function public.ce_app_grupo(p_unidade text)
+returns text language sql stable security definer set search_path = public, extensions as $$
+  select coalesce((select grupo from ce_app_unidade_cfg where unidade = p_unidade), p_unidade)
+$$;
+
+-- critérios abertos (o painel de BI lê daqui, sem login): regra geral + unidades
+create or replace function public.ce_app_criterios()
+returns jsonb language sql stable security definer set search_path = public, extensions as $$
+  select jsonb_build_object(
+    'regras', (select jsonb_build_object('saldo_inicial', saldo_inicial, 'km_min', km_min, 'top_n', top_n,
+                 'top_pct', top_pct, 'top_min', top_min, 'podio', to_jsonb(podio), 'unidades', to_jsonb(unidades))
+               from ce_app_regras where id = 1),
+    'unidades', coalesce((select jsonb_agg(jsonb_build_object('unidade', unidade, 'grupo', grupo, 'top_n', top_n,
+                 'km_min', km_min, 'qlp', qlp) order by unidade) from ce_app_unidade_cfg), '[]'::jsonb))
+$$;
+
+-- dados: ranking e pódio do GRUPO; cota e km mínimo da UNIDADE do motorista
+create or replace function public.ce_app_dados(p_token uuid, p_chave text default null)
+returns jsonb language plpgsql security definer set search_path = public, extensions as $$
+declare s record; m record; R record; v_vig date := date_trunc('month', now())::date;
+        v_chave text; v_meses jsonb; v_rank jsonb; v_pos int; v_top int; v_km int; v_grupo text;
+begin
+  select * into s from ce_app_sessao where token = p_token and expira_em > now();
+  if s is null then return jsonb_build_object('ok', false, 'erro', 'Sessão expirada. Entre de novo.'); end if;
+  v_chave := case when s.admin_cpf is not null then p_chave else s.chave end;
+  if v_chave is null then return jsonb_build_object('ok', false, 'erro', 'Escolha um motorista.', 'admin', true); end if;
+  select coalesce(mo.nome, sc.motorista) as nome, coalesce(mo.unidade, sc.unidade) as unidade into m
+    from (select 1) z
+    left join ce_motoristas mo on mo.chave = v_chave
+    left join lateral (select motorista, unidade from ce_scores_mensais where chave = v_chave order by competencia desc limit 1) sc on true;
+  if m.nome is null then return jsonb_build_object('ok', false, 'erro', 'Motorista sem dados.'); end if;
+  select * into R from ce_app_regras where id = 1;
+  v_top := coalesce(ce_app_top_n(m.unidade), R.top_n);
+  v_km  := coalesce(ce_app_km_min(m.unidade), R.km_min);
+  v_grupo := ce_app_grupo(m.unidade);
+
+  -- ranking do mês vigente: todo o GRUPO
+  with u as (
+    select x.chave, x.motorista, x.pontuacao,
+           row_number() over (order by x.pontuacao desc nulls last, x.km desc nulls last) as pos
+    from ce_scores_mensais x
+    where x.competencia = v_vig and ce_app_grupo(x.unidade) = v_grupo
+      and x.pontuacao is not null and x.chave not like 'semlogin:%'
+  )
+  select coalesce(jsonb_agg(jsonb_build_object('pos', pos, 'nome', ce_app_abrevia(motorista),
+                   'pontuacao', round(pontuacao::numeric, 1), 'eu', chave = v_chave) order by pos), '[]'::jsonb),
+         max(pos) filter (where chave = v_chave)
+    into v_rank, v_pos from u;
+
+  -- histórico: posição no GRUPO (pódio) e posição na UNIDADE (cota)
+  with h as (
+    select x.*,
+           row_number() over (partition by x.competencia
+                              order by x.pontuacao desc nulls last, x.km desc nulls last) as pos,
+           row_number() over (partition by x.competencia, x.unidade
+                              order by x.pontuacao desc nulls last, x.km desc nulls last) as pos_uni
+    from ce_scores_mensais x
+    where x.competencia <= v_vig and ce_app_grupo(x.unidade) = v_grupo
+      and x.pontuacao is not null and x.chave not like 'semlogin:%'
+  ), meu as (
+    select h.*,
+      (coalesce(h.km,0)      >= v_km)          and (coalesce(h.viagens,0) >= R.viagens_min)
+      and (coalesce(h.dias,0) >= R.dias_min)   and (coalesce(h.pontuacao,0) >= R.score_min)
+      and (v_top = 0 or h.pos_uni <= v_top) as elegivel
+    from h where h.chave = v_chave
+  )
+  select coalesce(jsonb_agg(jsonb_build_object(
+      'competencia', to_char(competencia, 'YYYY-MM'),
+      'nota', round(pontuacao::numeric, 1), 'km', round(coalesce(km,0)::numeric), 'dias', dias, 'viagens', viagens,
+      'posicao', pos, 'posicao_unidade', pos_uni, 'elegivel', elegivel,
+      'carteira', case when elegivel then round(R.saldo_inicial * pontuacao / 100, 2) else 0 end,
+      'podio',    case when elegivel and pos <= coalesce(array_length(R.podio,1),0) then R.podio[pos] else 0 end,
+      'rpm', round(rpm_pontos::numeric,1), 'idle', round(idle_pontos::numeric,1), 'acel', round(acel_pontos::numeric,1),
+      'vel', round(vel_pontos::numeric,1),
+      'motivo', case when elegivel then null
+                     when coalesce(km,0) < v_km then 'não bateu os ' || v_km || ' km'
+                     when coalesce(viagens,0) < R.viagens_min then 'não bateu as ' || R.viagens_min || ' viagens'
+                     when coalesce(dias,0) < R.dias_min then 'menos de ' || R.dias_min || ' dias medidos'
+                     when coalesce(pontuacao,0) < R.score_min then 'nota abaixo de ' || R.score_min
+                     else 'fora dos ' || v_top || ' primeiros' end
+    ) order by competencia desc), '[]'::jsonb)
+    into v_meses from meu;
+
+  return jsonb_build_object(
+    'ok', true, 'admin', s.admin_cpf is not null,
+    'nome', m.nome, 'unidade', v_grupo, 'unidade_real', m.unidade, 'chave', v_chave,
+    'vigente', to_char(v_vig, 'YYYY-MM'),
+    'regras', jsonb_build_object('saldo_inicial', R.saldo_inicial, 'km_min', v_km, 'viagens_min', R.viagens_min,
+       'dias_min', R.dias_min, 'score_min', R.score_min, 'top_n', v_top, 'podio', to_jsonb(R.podio),
+       'pesos', jsonb_build_object('rpm', R.peso_rpm, 'idle', R.peso_idle, 'acel', R.peso_acel)),
+    'posicao', v_pos,
+    'ranking', v_rank,
+    'meses', v_meses
+  );
+end $$;
+
+-- admin: unidades com grupo, cota, km mínimo e QLP
+create or replace function public.ce_app_unidades(p_token uuid)
+returns jsonb language plpgsql security definer set search_path = public, extensions as $$
+declare s record; v_vig date := date_trunc('month', now())::date;
+begin
+  select * into s from ce_app_sessao where token = p_token and expira_em > now();
+  if s is null or s.admin_cpf is null then return jsonb_build_object('ok', false, 'erro', 'Só administrador.'); end if;
+  return jsonb_build_object('ok', true, 'todas', coalesce((select cardinality(unidades) = 0 or unidades is null from ce_app_regras where id = 1), true),
+    'top_pct', (select top_pct from ce_app_regras where id = 1),
+    'unidades', coalesce((
+    select jsonb_agg(jsonb_build_object('unidade', u.unidade, 'ativa', ce_app_unidade_ativa(u.unidade),
+             'com_nota', u.n, 'com_senha', coalesce(a.n, 0),
+             'grupo', c.grupo, 'qlp', c.qlp, 'top_n', ce_app_top_n(u.unidade), 'km_min', ce_app_km_min(u.unidade),
+             'top_fixo', c.top_n is not null, 'km_fixo', c.km_min is not null) order by u.unidade)
+    from (select unidade, count(distinct chave) as n from ce_scores_mensais
+          where pontuacao is not null and chave not like 'semlogin:%' and unidade is not null and competencia >= v_vig - interval '1 month'
+          group by unidade) u
+    left join (select mo.unidade, count(*) as n from ce_app_acesso ac join ce_motoristas mo on mo.chave = ac.chave group by mo.unidade) a
+      on a.unidade = u.unidade
+    left join ce_app_unidade_cfg c on c.unidade = u.unidade), '[]'::jsonb));
+end $$;
+
+-- admin: grava grupo / cota / km mínimo / QLP da unidade (null ou 0 = volta à regra geral)
+create or replace function public.ce_app_unidade_cfg_set(p_token uuid, p_unidade text, p_grupo text, p_top_n int, p_km_min int, p_qlp int)
+returns jsonb language plpgsql security definer set search_path = public, extensions as $$
+declare s record;
+begin
+  select * into s from ce_app_sessao where token = p_token and expira_em > now();
+  if s is null or s.admin_cpf is null then return jsonb_build_object('ok', false, 'erro', 'Só administrador.'); end if;
+  insert into ce_app_unidade_cfg (unidade, grupo, top_n, km_min, qlp)
+    values (p_unidade, nullif(trim(p_grupo), ''), nullif(p_top_n, 0), nullif(p_km_min, 0), nullif(p_qlp, 0))
+    on conflict (unidade) do update set grupo = excluded.grupo, top_n = excluded.top_n, km_min = excluded.km_min, qlp = excluded.qlp, atualizado_em = now();
+  delete from ce_app_unidade_cfg where unidade = p_unidade and grupo is null and top_n is null and km_min is null and qlp is null;
+  return ce_app_unidades(p_token);
+end $$;
+
+drop function if exists public.ce_app_unidade_qlp_set(uuid, text, int);
+revoke all on function public.ce_app_top_n(text)    from public;
+revoke all on function public.ce_app_km_min(text)   from public;
+revoke all on function public.ce_app_grupo(text)    from public;
+revoke all on function public.ce_app_criterios()    from public;
+revoke all on function public.ce_app_unidade_cfg_set(uuid, text, text, int, int, int) from public;
+grant execute on function public.ce_app_top_n(text)    to anon, authenticated;
+grant execute on function public.ce_app_km_min(text)   to anon, authenticated;
+grant execute on function public.ce_app_grupo(text)    to anon, authenticated;
+grant execute on function public.ce_app_criterios()    to anon, authenticated;
+grant execute on function public.ce_app_unidade_cfg_set(uuid, text, text, int, int, int) to anon, authenticated;
+notify pgrst, 'reload schema';
