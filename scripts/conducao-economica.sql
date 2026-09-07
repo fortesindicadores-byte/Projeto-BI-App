@@ -86,6 +86,7 @@ alter table public.ce_scores_mensais add column if not exists vel_excessos int; 
 -- 07/09/2026: combustível por viagem (Geotab `FuelUsed`, casado às viagens do motorista)
 alter table public.ce_diario         add column if not exists litros numeric;   -- litros consumidos no dia
 alter table public.ce_scores_mensais add column if not exists litros numeric;   -- litros no mês (soma dos dias com FuelUsed)
+alter table public.ce_scores_mensais add column if not exists placa  text;      -- placa mais rodada no mês (modelo/projeto via base Ativos)
 
 -- ---------- 4) RLS: leitura para quem está logado, escrita só do robô -------
 alter table public.ce_motoristas     enable row level security;
