@@ -477,10 +477,33 @@ async function geotabDia(dia, cred, cacheUsuarios, regras, uniPorDev, rpmPorDev,
   // a janela é o dia em BRT (UTC-3), não em UTC
   const de = `${dia}T03:00:00.000Z`;
   const ate = new Date(new Date(de).getTime() + 864e5 - 1).toISOString();
-  const [trips, excs] = await Promise.all([
+  /* LITROS POR VIAGEM (Renan, 07/09/2026: "você lê hoje o consumo também da
+     telemetria? Legal ter também"): `FuelUsed` traz, por veículo, o combustível
+     consumido em cada viagem (totalFuelUsed, em litros; dateTime = fim da
+     viagem). Cada registro é casado com a viagem do mesmo veículo cuja janela
+     o contém, e vai para o motorista dela (ou para o Sem Login da unidade).
+     Falha aqui NÃO derruba o dia — os litros só ficam vazios. */
+  let fuelErro = null;
+  const [trips, excs, fuel] = await Promise.all([
     geotabRpc('Get', { typeName: 'Trip', search: { fromDate: de, toDate: ate } }, cred),
     geotabRpc('Get', { typeName: 'ExceptionEvent', search: { fromDate: de, toDate: ate } }, cred),
+    geotabRpc('Get', { typeName: 'FuelUsed', search: { fromDate: de, toDate: ate } }, cred)
+      .catch(e => { fuelErro = String(e.message || e); return []; }),
   ]);
+  const litPorDev = new Map();
+  for (const f of (fuel || [])) {
+    const id = f.device && f.device.id; if (!id || !(+f.totalFuelUsed > 0)) continue;
+    let a = litPorDev.get(id); if (!a) { a = []; litPorDev.set(id, a); }
+    a.push({ t: new Date(f.dateTime).getTime(), l: +f.totalFuelUsed, usado: false });
+  }
+  // litros dos registros do veículo que caem na janela da viagem (fim da
+  // viagem, com folga de 1 min antes e 3 min depois); cada registro conta uma vez
+  const litrosDa = (dev, ini, fim) => {
+    const a = litPorDev.get(dev); if (!a) return 0;
+    let soma = 0;
+    for (const x of a) if (!x.usado && x.t >= ini - 60e3 && x.t <= fim + 180e3) { soma += x.l; x.usado = true; }
+    return soma;
+  };
 
   // eventos por motorista; quando o evento não traz motorista, cai no device
   const nomeRegra = id => (regras.get(id) || '');
@@ -519,6 +542,7 @@ async function geotabDia(dia, cred, cacheUsuarios, regras, uniPorDev, rpmPorDev,
         const dev = t.device?.id;
         const am = rpmPorDev && rpmPorDev.get(dev);
         const ti = new Date(t.start).getTime(), tf = new Date(t.stop).getTime();
+        g.lit = (g.lit || 0) + litrosDa(dev, ti, tf);
         if (am) { const j = rpmJanela(am, ti, tf); g.rpmV += j.verde; g.rpmR += j.rodando; }
         if (mch && am) { const k = marchaJanela(mch.porDev.get(dev), am, ti, tf, mch.maxG.get(dev));
                          g.mchR = (g.mchR || 0) + k.ruim; g.mchT = (g.mchT || 0) + k.total; }
@@ -539,6 +563,7 @@ async function geotabDia(dia, cred, cacheUsuarios, regras, uniPorDev, rpmPorDev,
     // eventos órfãos do mesmo veículo dentro da janela da viagem
     const ini = new Date(t.start).getTime(), fim = new Date(t.stop).getTime();
     porDev.forEach(x => { if (x.dev === t.device?.id && x.t >= ini && x.t <= fim && !x.usado) { soma(g, x.qual, x.seg); x.usado = true; } });
+    g.lit = (g.lit || 0) + litrosDa(t.device?.id, ini, fim);
     const am = rpmPorDev && rpmPorDev.get(t.device?.id);
     if (am) { const j = rpmJanela(am, ini, fim); g.rpmV = (g.rpmV || 0) + j.verde; g.rpmR = (g.rpmR || 0) + j.rodando; }
     if (mch && am) { const k = marchaJanela(mch.porDev.get(t.device?.id), am, ini, fim, mch.maxG.get(t.device?.id));
@@ -567,6 +592,7 @@ async function geotabDia(dia, cred, cacheUsuarios, regras, uniPorDev, rpmPorDev,
     return {
       dia, chave: gtChave(u), fonte: 'Geotab',
       km: g.km || null,
+      litros: g.lit > 0 ? +g.lit.toFixed(3) : null,       // FuelUsed casado às viagens dele
       h_motor: (g.dir + g.idle) ? (g.dir + g.idle) / 3600 : null,
       // reconstruída das amostras cruas; menos de 1 min rodando não vale nota
       rpm_verde_pct: (g.rpmR || 0) > 60 ? g.rpmV / g.rpmR * 100 : null,
@@ -601,6 +627,7 @@ async function geotabDia(dia, cred, cacheUsuarios, regras, uniPorDev, rpmPorDev,
     linhas.push({
       dia, chave: 'semlogin:' + uni, fonte: 'Geotab',
       km: g.km || null,
+      litros: g.lit > 0 ? +g.lit.toFixed(3) : null,
       h_motor: (g.dir + g.idle) ? (g.dir + g.idle) / 3600 : null,
       rpm_verde_pct: (g.rpmR || 0) > 60 ? g.rpmV / g.rpmR * 100 : null,
       idle_pct: (g.dir + g.idle) ? g.idle / (g.dir + g.idle) * 100 : null,
@@ -617,6 +644,9 @@ async function geotabDia(dia, cred, cacheUsuarios, regras, uniPorDev, rpmPorDev,
       _nome: 'Sem Login · ' + uni, _uo: null, _uni: uni,
     });
   }
+  // cobertura do combustível, para o log (propriedade do array, não é linha)
+  const regs = [...litPorDev.values()].flat();
+  linhas._fuel = { reg: (fuel || []).length, casados: regs.filter(x => x.usado).length, erro: fuelErro };
   return linhas;
 }
 
@@ -838,6 +868,8 @@ async function recalculaMes(de, ate) {
       // excessos de velocidade = eventos da regra de speeding do Geotab no mês
       // (Renan, 03/09/2026: a coluna do painel mostra OK/NOK e a quantidade)
       vel_excessos: ds.reduce((s, d) => s + (+(d.bruto && d.bruto.eventos && d.bruto.eventos.vel) || 0), 0),
+      // litros do mês = soma dos dias que tiveram FuelUsed (null se nenhum)
+      litros: (() => { const v = ds.filter(d => d.litros != null); return v.length ? +v.reduce((s, d) => s + (+d.litros || 0), 0).toFixed(1) : null; })(),
       rpm_pontos: notas.rpm, idle_pontos: notas.idle, acel_pontos: notas.acel, frea_pontos: null,
       vel_pontos: notas.vel, freio_pontos: notas.freio, cambio_pontos: notas.cambio,
       pontuacao: score(notas), atualizado_em: new Date().toISOString(),
@@ -2744,6 +2776,64 @@ if (MODE === 'eventos') {
   process.exit(0);
 }
 
+if (MODE === 'litros') {
+  /* HISTÓRICO DOS LITROS (07/09/2026): a coleta diária passou a gravar
+     ce_diario.litros (FuelUsed casado às viagens). Este modo preenche os dias
+     já coletados: baixa só viagens + FuelUsed do dia e grava `litros` nas
+     linhas que JÁ existem — RPM, marcha, banguela e eventos ficam intactos.
+     Sem a coluna no banco, só mede a cobertura e avisa. Depois, recalcula o mês. */
+  if (!GT) { console.error('Geotab: sem credencial'); process.exit(1); }
+  if (!SB_KEY) { console.error('GEM_SUPABASE_SERVICE_KEY ausente'); process.exit(1); }
+  console.log(`litros por viagem · ${DE} → ${ATE}`);
+  let dias = 0, linhasOk = 0, semLinha = 0, semColuna = false, regTot = 0, casTot = 0, litTot = 0, kmLit = 0, kmTot = 0;
+  for (let d = new Date(DE + 'T12:00:00Z'); iso(d) <= ATE; d = new Date(d.getTime() + 864e5)) {
+    const dia = iso(d);
+    try {
+      const novas = await geotabDia(dia, GT, GT_USERS, GT_RULES, GT_UNIDEV, null, null, null);
+      const f = novas._fuel || {}; regTot += f.reg || 0; casTot += f.casados || 0;
+      const atuais = await sbTodos(`ce_diario?select=id,chave&dia=eq.${dia}&fonte=eq.Geotab`);
+      const tem = new Set(atuais.map(a => a.chave));
+      const patch = [];
+      for (const l of novas) {
+        if (!tem.has(l.chave)) { semLinha++; continue; }
+        // `fonte` é NOT NULL e é validada antes do ON CONFLICT (ver modo eventos)
+        patch.push({ dia, chave: l.chave, fonte: 'Geotab', litros: l.litros });
+      }
+      let gravadas = 0;
+      if (!semColuna) for (let i = 0; i < patch.length; i += 500) {
+        const r = await fetch(`${SB_URL}/rest/v1/ce_diario?on_conflict=dia,chave`, {
+          method: 'POST', headers: { ...H_SB, Prefer: 'resolution=merge-duplicates' },
+          body: JSON.stringify(patch.slice(i, i + 500)) });
+        if (!r.ok) {
+          const txt = await r.text();
+          if (r.status === 400 && /'litros' column/.test(txt)) {
+            semColuna = true;
+            console.log('⚠ ce_diario ainda não tem a coluna `litros` — rodar o SQL de scripts/conducao-economica.sql; seguindo só para medir a cobertura');
+            break;
+          }
+          throw new Error(`ce_diario: ${r.status} ${txt.slice(0, 200)}`);
+        }
+        gravadas += Math.min(500, patch.length - i);
+      }
+      const comLit = novas.filter(l => l.litros != null);
+      const km = novas.reduce((s, l) => s + (+l.km || 0), 0);
+      const lit = comLit.reduce((s, l) => s + l.litros, 0), kmL = comLit.reduce((s, l) => s + (+l.km || 0), 0);
+      litTot += lit; kmLit += kmL; kmTot += km;
+      console.log(`${dia}: FuelUsed ${f.reg || 0} registro(s), ${f.casados || 0} casado(s) com viagem`
+        + ` · litros em ${comLit.length}/${novas.length} motorista(s) · ${Math.round(lit)} L`
+        + ` · ${lit ? (kmL / lit).toFixed(2) : '—'} km/L (${Math.round(kmL)} de ${Math.round(km)} km com combustível)`
+        + (f.erro ? ` · FuelUsed FALHOU (${f.erro.slice(0, 80)})` : '')
+        + (semColuna ? '' : ` · ${gravadas} gravada(s)`));
+      dias++; linhasOk += gravadas;
+    } catch (e) { console.log(`${dia}: FALHOU (${String(e.message || e).slice(0, 120)})`); }
+  }
+  console.log(`\n${dias} dia(s) · ${linhasOk} linha(s) com litros gravados · ${semLinha} motorista-dia sem linha no banco (ignorados)`
+    + ` · FuelUsed: ${casTot}/${regTot} registro(s) casados com viagem`
+    + ` · ${Math.round(litTot)} L em ${Math.round(kmLit)} km (${kmTot ? Math.round(kmLit / kmTot * 100) : 0}% do km) → ${litTot ? (kmLit / litTot).toFixed(2) : '—'} km/L`);
+  if (dias && !semColuna) { const n = await recalculaMes(DE.slice(0, 8) + '01', ATE); console.log(`recalculado: ${n} linha(s) em ce_scores_mensais`); }
+  process.exit(0);
+}
+
 if (MODE === 'reproc') {
   if (!VF_TOKEN) { console.error('reproc é da vFleets — sem VFLEETS_TOKEN não há o que reprocessar.'); process.exit(1); }
   const { dias, erro } = await vfleetsReprocessados(DE, ATE);
@@ -2829,7 +2919,9 @@ for (let i = 0; i < AGENDA.length; i++) {
       console.log(`${dia}: Geotab → ${lg.length} motorista(s) · ${Math.round(lg.reduce((s, l) => s + (+l.km || 0), 0))} km`
         + rpmRot + (rpmDev ? ` · faixa verde em ${comRpm} linha(s)` : '')
         + mchRot + (mchDia ? ` · marchas em ${comMch} linha(s)` : '')
-        + bgRot + (velDia ? ` · banguela em ${lg.filter(l => l.banguela_pct != null).length} linha(s)` : ''));
+        + bgRot + (velDia ? ` · banguela em ${lg.filter(l => l.banguela_pct != null).length} linha(s)` : '')
+        + ` · litros em ${lg.filter(l => l.litros != null).length} linha(s)`
+        + (lg._fuel && lg._fuel.erro ? ` · FuelUsed FALHOU (${lg._fuel.erro.slice(0, 80)})` : ''));
     } catch (e) { console.log(`${dia} Geotab: ${e.message}`); falhas++; }
   }
   // a pausa longa é o limite da vFleets (1 req/5 min); o Geotab não tem isso
