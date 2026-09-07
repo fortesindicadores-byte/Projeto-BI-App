@@ -473,6 +473,7 @@ function marchaJanela(marchas, rpmAm, ini, fim, maxMarcha) {
   return { ruim, total };
 }
 
+var GT_PLACA = new Map();   // device → placa, preenchido no login (ver abaixo)
 async function geotabDia(dia, cred, cacheUsuarios, regras, uniPorDev, rpmPorDev, mch, velPorDev) {
   // a janela é o dia em BRT (UTC-3), não em UTC
   const de = `${dia}T03:00:00.000Z`;
@@ -564,6 +565,8 @@ async function geotabDia(dia, cred, cacheUsuarios, regras, uniPorDev, rpmPorDev,
     const ini = new Date(t.start).getTime(), fim = new Date(t.stop).getTime();
     porDev.forEach(x => { if (x.dev === t.device?.id && x.t >= ini && x.t <= fim && !x.usado) { soma(g, x.qual, x.seg); x.usado = true; } });
     g.lit = (g.lit || 0) + litrosDa(t.device?.id, ini, fim);
+    const pl = GT_PLACA.get(t.device?.id);
+    if (pl) { g.pla = g.pla || {}; g.pla[pl] = (g.pla[pl] || 0) + (+t.distance || 0); }
     const am = rpmPorDev && rpmPorDev.get(t.device?.id);
     if (am) { const j = rpmJanela(am, ini, fim); g.rpmV = (g.rpmV || 0) + j.verde; g.rpmR = (g.rpmR || 0) + j.rodando; }
     if (mch && am) { const k = marchaJanela(mch.porDev.get(t.device?.id), am, ini, fim, mch.maxG.get(t.device?.id));
@@ -614,6 +617,8 @@ async function geotabDia(dia, cred, cacheUsuarios, regras, uniPorDev, rpmPorDev,
                rpm: { verde: Math.round(g.rpmV || 0), rodando: Math.round(g.rpmR || 0) },
                marcha: { ruim: Math.round(g.mchR || 0), total: Math.round(g.mchT || 0) },
                banguela: { neutro: Math.round(g.bgN || 0), movimento: Math.round(g.bgM || 0) },
+               // km por placa no dia — o mensal escolhe a mais rodada
+               placas: g.pla ? Object.fromEntries(Object.entries(g.pla).map(([k, v]) => [k, Math.round(v)])) : undefined,
                eventos: { acel: g.acel, frea: g.frea, vel: g.vel },
                velArgus: { s1: Math.round(g.svel1 || 0), s2: Math.round(g.svel2 || 0), s3: Math.round(g.svel3 || 0) } },
       _nome: (u.firstName || u.lastName) ? `${u.firstName || ''} ${u.lastName || ''}`.trim() : (u.name || id),
@@ -870,6 +875,13 @@ async function recalculaMes(de, ate) {
       vel_excessos: ds.reduce((s, d) => s + (+(d.bruto && d.bruto.eventos && d.bruto.eventos.vel) || 0), 0),
       // litros do mês = soma dos dias que tiveram FuelUsed (null se nenhum)
       litros: (() => { const v = ds.filter(d => d.litros != null); return v.length ? +v.reduce((s, d) => s + (+d.litros || 0), 0).toFixed(1) : null; })(),
+      // placa mais rodada no mês (Σ km por placa dos dias) — casa com a base Ativos
+      placa: (() => {
+        const km = {};
+        ds.forEach(d => { const p = d.bruto && d.bruto.placas; if (p) Object.entries(p).forEach(([k, v]) => { km[k] = (km[k] || 0) + (+v || 0); }); });
+        const top = Object.entries(km).sort((a, b) => b[1] - a[1])[0];
+        return top ? top[0] : null;
+      })(),
       rpm_pontos: notas.rpm, idle_pontos: notas.idle, acel_pontos: notas.acel, frea_pontos: null,
       vel_pontos: notas.vel, freio_pontos: notas.freio, cambio_pontos: notas.cambio,
       pontuacao: score(notas), atualizado_em: new Date().toISOString(),
@@ -903,16 +915,17 @@ async function recalculaMes(de, ate) {
     const gravar = async ls => fetch(`${SB_URL}/rest/v1/ce_scores_mensais?on_conflict=competencia,chave`, {
       method: 'POST', headers: { ...H_SB, Prefer: 'resolution=merge-duplicates' }, body: JSON.stringify(ls),
     });
-    let r2 = await gravar(linhas);
-    if (!r2.ok) {
+    let r2 = await gravar(linhas), ls = linhas;
+    // pode faltar mais de uma coluna (litros + placa entraram juntas, 07/09/2026)
+    for (let tent = 0; !r2.ok && tent < 3; tent++) {
       const txt = await r2.text();
       const m = /Could not find the '([a-z_]+)' column/.exec(txt);
-      if (r2.status === 400 && m) {
-        console.log(`⚠ ce_scores_mensais sem a coluna '${m[1]}' — gravando sem ela (rodar o SQL em scripts/conducao-economica.sql)`);
-        r2 = await gravar(linhas.map(({ [m[1]]: _, ...l }) => l));
-        if (!r2.ok) throw new Error(`ce_scores_mensais: ${r2.status} ${(await r2.text()).slice(0, 300)}`);
-      } else throw new Error(`ce_scores_mensais: ${r2.status} ${txt.slice(0, 300)}`);
+      if (!(r2.status === 400 && m)) { r2 = { ok: false, status: r2.status, text: async () => txt }; break; }
+      console.log(`⚠ ce_scores_mensais sem a coluna '${m[1]}' — gravando sem ela (rodar o SQL em scripts/conducao-economica.sql)`);
+      ls = ls.map(({ [m[1]]: _, ...l }) => l);
+      r2 = await gravar(ls);
     }
+    if (!r2.ok) throw new Error(`ce_scores_mensais: ${r2.status} ${(await r2.text()).slice(0, 300)}`);
   }
   return linhas.length;
 }
@@ -2680,6 +2693,9 @@ if (MODE === 'recalc') {
 
 // Geotab: login uma vez só (a sessão vale ~2 semanas) e caches reaproveitados
 let GT = null, GT_USERS = new Map(), GT_RULES = new Map(), GT_UNIDEV = new Map();
+// device → placa (Renan, 07/09/2026: o ranking de consumo mostra o MODELO mais
+// dirigido — a placa mais rodada do mês casa com a base Ativos do Ginfo)
+GT_PLACA = new Map();
 try {
   GT = await geotabLogin();
   if (GT) {
@@ -2696,6 +2712,7 @@ try {
     devs.forEach(d => {
       const uni = (d.groups || []).map(g => gNome.get(g.id) || '').find(n => /^UNI_/.test(n));
       if (uni) GT_UNIDEV.set(d.id, uni.replace(/^UNI_/, ''));
+      GT_PLACA.set(d.id, String(d.licensePlate || d.name || d.id).toUpperCase().replace(/[^A-Z0-9]/g, ''));
     });
     // sincroniza o cadastro INTEIRO de uma vez: quem já está no banco com
     // unidade nula (das coletas antigas) ganha a unidade do grupo agora
@@ -2791,13 +2808,16 @@ if (MODE === 'litros') {
     try {
       const novas = await geotabDia(dia, GT, GT_USERS, GT_RULES, GT_UNIDEV, null, null, null);
       const f = novas._fuel || {}; regTot += f.reg || 0; casTot += f.casados || 0;
-      const atuais = await sbTodos(`ce_diario?select=id,chave&dia=eq.${dia}&fonte=eq.Geotab`);
-      const tem = new Set(atuais.map(a => a.chave));
+      const atuais = await sbTodos(`ce_diario?select=id,chave,bruto&dia=eq.${dia}&fonte=eq.Geotab`);
+      const porChave = new Map(atuais.map(a => [a.chave, a]));
       const patch = [];
       for (const l of novas) {
-        if (!tem.has(l.chave)) { semLinha++; continue; }
-        // `fonte` é NOT NULL e é validada antes do ON CONFLICT (ver modo eventos)
-        patch.push({ dia, chave: l.chave, fonte: 'Geotab', litros: l.litros });
+        const a = porChave.get(l.chave);
+        if (!a) { semLinha++; continue; }
+        // `fonte` é NOT NULL e é validada antes do ON CONFLICT (ver modo eventos);
+        // o bruto leva também o km por placa (modelo mais dirigido no painel)
+        const bruto = { ...(a.bruto || {}), placas: l.bruto && l.bruto.placas };
+        patch.push({ dia, chave: l.chave, fonte: 'Geotab', litros: l.litros, bruto });
       }
       let gravadas = 0;
       if (!semColuna) for (let i = 0; i < patch.length; i += 500) {

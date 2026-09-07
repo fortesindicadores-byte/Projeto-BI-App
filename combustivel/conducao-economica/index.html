@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
-<meta name="build" content="202609070500">
+<meta name="build" content="202609070600">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <title>Condução Econômica · Gestão em Movimento</title>
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -279,10 +279,9 @@ table.dre td.cg-t,.cg-t{color:var(--verde)!important;font-weight:700;}
 /* Consumo (Renan, 07/09/2026): litros por viagem da telemetria — KPIs, km/L
    por mês e a tabela por motorista. O gráfico tem teto de altura para a
    tabela ficar com a sobra (a regra da sobra dividida). */
-.cons-kpis{grid-template-columns:repeat(4,1fr);margin-top:0;margin-bottom:12px;flex:0 0 auto;}
 #vw-consumo{display:none;flex-direction:column;} #vw-consumo.on{display:flex;}
-.cons-g{flex:0 0 auto;height:30vh;min-height:170px;margin-bottom:12px;}
-@media(max-width:860px){.cons-g{height:260px;}}
+#vw-consumo .gr2{max-height:none;margin-top:14px;}
+#vw-consumo table.dre{font-size:10.5px;} #vw-consumo table.dre td{padding:6px 8px;}
 /* A FILEIRA DE BAIXO USA A MESMA GRADE DOS CARDS (Renan, 04/09/2026): o
    gráfico ocupa as duas primeiras colunas e as Regras a terceira, então as
    bordas batem com os cards de cima. Proporção em fração (1.55fr 1fr) nunca
@@ -598,22 +597,37 @@ table.dre thead th.sortable:hover{color:var(--laranja);}
       <!-- ══ 4 · CONSUMO (Renan, 07/09/2026: "você lê hoje o consumo também da
            telemetria? Legal ter também… mais uma visão"). Litros que o
            veículo reporta viagem a viagem no Geotab (FuelUsed), somados por
-           motorista pelo robô. Km/L = Σ km ÷ Σ litros SÓ dos meses com litros,
-           para a conta não misturar km sem combustível reportado. ══ -->
+           motorista pelo robô. Mesmo desenho do Resumo Gerencial: hero sem
+           card com o km/L, km e litros pequenos embaixo, gráfico do ano maior
+           e a tabela menor ao lado. Km/L = Σ km ÷ Σ litros SÓ dos meses com
+           litros, para a conta não misturar km sem combustível reportado. ══ -->
       <section class="vw" id="vw-consumo">
-        <div class="kpis ce-kpis cons-kpis" id="cons-kpis"></div>
-        <div class="card gcard cons-g">
-          <div class="thead-row" style="margin-bottom:0">
-            <div><div class="gtit">Km/L por mês</div><div class="gsub">Σ km ÷ Σ litros das viagens com combustível reportado · 2026</div></div>
+        <div class="fin-hero">
+          <div>
+            <div class="hlbl">Km/L</div>
+            <div class="hval" id="cons-kml">—</div>
+            <div class="hdel">
+              <div>Km rodado<b id="cons-km">—</b></div>
+              <div>Litros consumidos<b id="cons-lit">—</b></div>
+            </div>
           </div>
-          <div class="gleg" id="cons-leg"></div>
-          <div class="gcv"><canvas id="chartConsumo"></canvas></div>
         </div>
-        <div class="rank-sec">
-          <div class="twrap"><table class="dre" id="cons-table">
-            <thead><tr><th style="width:34px;">#</th><th>Motorista</th><th>Unidade</th><th class="num">Km com combustível</th><th class="num">Litros</th><th class="num">Km/L</th><th class="num">Nota</th></tr></thead>
-            <tbody id="cons-tbody"></tbody>
-          </table></div>
+        <div class="gr2 ce-gr">
+          <div class="card gcard">
+            <div class="thead-row" style="margin-bottom:0">
+              <div><div class="gtit">Km/L por mês</div><div class="gsub">Σ km ÷ Σ litros reportados pelo veículo · 2026</div></div>
+            </div>
+            <div class="gleg" id="cons-leg"></div>
+            <div class="gcv"><canvas id="chartConsumo"></canvas></div>
+          </div>
+          <div class="card gcard">
+            <div class="gtit">Ranking Km/L</div>
+            <div class="gsub">Motorista, modelo mais dirigido, unidade e projeto</div>
+            <div class="twrap"><table class="dre" id="cons-table">
+              <thead><tr><th style="width:28px;">#</th><th>Motorista</th><th>Modelo</th><th>Unidade</th><th>Projeto</th><th class="num">Km/L</th></tr></thead>
+              <tbody id="cons-tbody"></tbody>
+            </table></div>
+          </div>
         </div>
       </section>
 
@@ -748,6 +762,25 @@ async function fetchCriterios(){
   } catch (e) { console.warn('critérios:', e.message); }
 }
 
+/* base Ativos do Ginfo (ginfo_snapshot['ativos']): placa → modelo/projeto,
+   para o ranking de consumo mostrar o modelo mais dirigido e o projeto */
+let ATIVOS = {};
+const placaNorm = v => { let t = String(v || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+  if (/^[A-Z]{3}\d{4}$/.test(t)) t = t.slice(0, 4) + 'ABCDEFGHIJ'[+t[4]] + t.slice(5);   // LLLNNNN → Mercosul
+  return t; };
+async function fetchAtivos(){
+  try {
+    await sbClient().auth.getSession();
+    const { data: row, error } = await sbClient().from('ginfo_snapshot').select('data').eq('chave', 'ativos').maybeSingle();
+    if (error || !row || !Array.isArray(row.data) || !row.data.length) return;
+    const smp = row.data[0];
+    const kDe = (...ns) => Object.keys(smp).find(k => ns.some(n => k.trim().toLowerCase() === n.toLowerCase())) || ns[0];
+    const K = { pla: kDe('Placa'), mod: kDe('Modelo'), mar: kDe('Marca'), proj: kDe('Projeto') };
+    row.data.forEach(r => { const pl = placaNorm(r[K.pla]);
+      if (pl) ATIVOS[pl] = { modelo: String(r[K.mod] || '').trim(), marca: String(r[K.mar] || '').trim(), proj: String(r[K.proj] || '').trim() }; });
+  } catch (e) { console.warn('ativos:', e.message); }
+}
+
 /* ── Estado ── */
 let RAW = [], ORIGEM = 'exemplo', ULT_COLETA = null, VW = 'resumo';
 let chartTemporal = null, activeInd = 'media_geral';
@@ -773,14 +806,14 @@ async function fetchFromSupabase() {
   for (let de = 0; ; de += PASSO) {
     // `viagens` é coluna nova: enquanto o SQL não roda no banco, o select cai
     // para a versão sem ela em vez de derrubar o painel inteiro
-    const COLS = 'competencia,chave,motorista,unidade,fonte,km,dias,litros,rpm_pontos,idle_pontos,acel_pontos,vel_pontos,pontuacao,atualizado_em';
+    const COLS = 'competencia,chave,motorista,unidade,fonte,km,dias,litros,placa,rpm_pontos,idle_pontos,acel_pontos,vel_pontos,pontuacao,atualizado_em';
     let { data: lote, error } = await sbClient()
       .from('ce_scores_mensais').select(COLS + ',viagens,vel_excessos')
       .order('competencia', { ascending: true }).order('chave', { ascending: true })
       .range(de, de + PASSO - 1);
-    if (error && /viagens|vel_excessos|litros/.test(error.message || '')) {
+    if (error && /viagens|vel_excessos|litros|placa/.test(error.message || '')) {
       ({ data: lote, error } = await sbClient()
-        .from('ce_scores_mensais').select(COLS.replace(',litros', ''))
+        .from('ce_scores_mensais').select(COLS.replace(',litros,placa', ''))
         .order('competencia', { ascending: true }).order('chave', { ascending: true })
         .range(de, de + PASSO - 1));
     }
@@ -813,6 +846,7 @@ async function fetchFromSupabase() {
     // recoletar quando a malha de nós (fábricas e CDs) chegar.
     km: +r.km || 0, viagens: +r.viagens || 0, velx: +r.vel_excessos || 0,
     lit: r.litros == null ? null : +r.litros,      // litros do mês (FuelUsed), null = sem leitura
+    placa: r.placa || null,                        // placa mais rodada no mês
     pont: r.pontuacao,
   }));
 }
@@ -1169,34 +1203,31 @@ const kmL=(km,l)=> l>0 ? (km/l).toFixed(2).replace('.',',') : '—';
 function consumoDe(data){
   const acc={};
   data.forEach(r=>{
-    const a=acc[r.unit]||(acc[r.unit]={unit:r.unit,km:0,kmTot:0,lit:0,pts:[]});
-    a.kmTot+=+r.km||0; if(r.pont!=null) a.pts.push(r.pont);
+    const a=acc[r.unit]||(acc[r.unit]={unit:r.unit,km:0,lit:0,kmTot:0,pla:{}});
+    a.kmTot+=+r.km||0;
     if(r.lit>0){ a.km+=+r.km||0; a.lit+=r.lit; }
+    if(r.placa){ const pl=placaNorm(r.placa); a.pla[pl]=(a.pla[pl]||0)+(+r.km||0); }
   });
-  return Object.values(acc)
-    .map(a=>({...a, pont:a.pts.length?a.pts.reduce((x,y)=>x+y,0)/a.pts.length:null, kml:a.lit>0?a.km/a.lit:null}))
-    .sort((a,b)=>((b.kml??-1)-(a.kml??-1)) || b.kmTot-a.kmTot);
+  return Object.values(acc).map(a=>{
+    const top=Object.entries(a.pla).sort((x,y)=>y[1]-x[1])[0];
+    const at=top ? ATIVOS[top[0]] : null;
+    return {...a, placa: top?top[0]:null, modelo: at ? (at.modelo || at.marca) : '', proj: at ? at.proj : '', kml: a.lit>0 ? a.km/a.lit : null};
+  }).sort((a,b)=>((b.kml??-1)-(a.kml??-1)) || b.kmTot-a.kmTot);
 }
 function renderConsumo(data){
   const rows=consumoDe(data);
-  const km=rows.reduce((s,r)=>s+r.km,0), lit=rows.reduce((s,r)=>s+r.lit,0), kmTot=rows.reduce((s,r)=>s+r.kmTot,0);
-  const com=rows.filter(r=>r.lit>0).length;
-  const box=$('cons-kpis');
-  if(box) box.innerHTML = [
-    ['Km/L do recorte', kmL(km,lit), 'Σ km ÷ Σ litros, só onde há litros'],
-    ['Litros', lit?Math.round(lit).toLocaleString('pt-BR'):'—', 'reportados pelo veículo, viagem a viagem'],
-    ['Km com combustível', km?Math.round(km).toLocaleString('pt-BR'):'—', kmTot?`${Math.round(km/kmTot*100)}% dos ${Math.round(kmTot).toLocaleString('pt-BR')} km do recorte`:'—'],
-    ['Motoristas com litros', String(com), `de ${rows.length} com nota`],
-  ].map(([l,v,m])=>`<div class="kpi"><div class="kl">${l}</div><div class="kv">${v}</div><div class="km">${m}</div></div>`).join('');
+  const km=rows.reduce((s,r)=>s+r.km,0), lit=rows.reduce((s,r)=>s+r.lit,0);
+  set('cons-kml', kmL(km,lit));
+  set('cons-km',  km ? Math.round(km).toLocaleString('pt-BR')+' km' : '—');
+  set('cons-lit', lit ? Math.round(lit).toLocaleString('pt-BR')+' L' : '—');
   $('cons-tbody').innerHTML = rows.map((r,i)=>`<tr>
       <td class="rank-num">${i+1}</td>
-      <td class="conta">${r.unit}<div class="mot-sub">${SRC_OF[r.unit]||''}</div></td>
+      <td class="conta">${r.unit}</td>
+      <td title="${r.placa||''}">${r.modelo||'—'}</td>
       <td>${COD_OF[r.unit]||'—'}</td>
-      <td class="num">${r.lit>0?Math.round(r.km).toLocaleString('pt-BR'):'—'}</td>
-      <td class="num">${r.lit>0?Math.round(r.lit).toLocaleString('pt-BR'):'—'}</td>
+      <td>${r.proj||'—'}</td>
       <td class="num"><b>${kmL(r.km,r.lit)}</b></td>
-      <td class="num">${r.pont!=null?scorePill(r.pont):'—'}</td>
-    </tr>`).join('') || '<tr><td colspan="7">Sem dados no recorte.</td></tr>';
+    </tr>`).join('') || '<tr><td colspan="6">Sem dados no recorte.</td></tr>';
   renderConsChart();
 }
 let chartConsumo=null;
@@ -1373,7 +1404,7 @@ function semRpmFora(linhas){
 }
 let SUB_BASE = '';        // "N motorista(s) · coleta dd/mm/aaaa"
 async function recarregar(){
-  await fetchCriterios();
+  await Promise.all([fetchCriterios(), fetchAtivos()]);
   set('titSub','Carregando…');
   try{
     let linhas=[];
