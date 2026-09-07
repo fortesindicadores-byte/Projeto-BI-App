@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
-<meta name="build" content="202609042300">
+<meta name="build" content="202609070010">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <title>Condução Econômica · Gestão em Movimento</title>
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -674,7 +674,24 @@ const DRIVERS = [
   {nome:'Paulo Henrique', un:'RON', src:'vFleets'}, {nome:'Rafael Gomes',   un:'CGR', src:'vFleets'},
   {nome:'Sérgio Antunes', un:'BLC', src:'Geotab'},  {nome:'Thiago Mendes',  un:'CBA T2', src:'vFleets'},
 ];
-const COD_OF = {}, SRC_OF = {};
+const COD_OF = {}, SRC_OF = {}, UNI_OF = {};   // UNI_OF = nome da unidade como vem do Geotab (chave dos critérios)
+/* CRITÉRIOS DE ELEGIBILIDADE vêm do banco (ce_app_criterios, sem login), os
+   mesmos do app: km mínimo e cota (top N) por unidade, com o grupo em que a
+   unidade é olhada. Renan, 06/09/2026: "Lata 5, Empurrada 15, olhados juntos
+   como unidade Piraí; Lata elegibilidade 500 km". Sem banco, fica a regra
+   geral (1.000 km + top 15). */
+let CRIT = { regras: { km_min: 1000, top_n: 15 }, unidades: [] };
+function critDe(uniRaw){
+  const c = CRIT.unidades.find(u => u.unidade === uniRaw) || {};
+  return { km_min: c.km_min ?? CRIT.regras.km_min ?? 1000, top_n: c.top_n ?? CRIT.regras.top_n ?? 15, grupo: c.grupo || uniRaw };
+}
+async function fetchCriterios(){
+  try {
+    const r = await fetch(SB_URL + '/rest/v1/rpc/ce_app_criterios', { method:'POST',
+      headers:{ 'Content-Type':'application/json', apikey:SB_KEY, Authorization:'Bearer ' + SB_KEY }, body:'{}' });
+    if (r.ok) { const j = await r.json(); if (j && j.regras) CRIT = { regras: j.regras, unidades: j.unidades || [] }; }
+  } catch (e) { console.warn('critérios:', e.message); }
+}
 
 /* ── Estado ── */
 let RAW = [], ORIGEM = 'exemplo', ULT_COLETA = null, VW = 'resumo';
@@ -722,7 +739,7 @@ async function fetchFromSupabase() {
   Object.keys(COD_OF).forEach(k => { delete COD_OF[k]; delete SRC_OF[k]; });
   data.forEach(r => {
     const dp = deParaGeo(r.unidade);
-    COD_OF[r.motorista] = dp.cod; SRC_OF[r.motorista] = r.fonte;
+    COD_OF[r.motorista] = dp.cod; SRC_OF[r.motorista] = r.fonte; UNI_OF[r.motorista] = r.unidade;
   });
   ULT_COLETA = data.reduce((m, r) => (r.atualizado_em > m ? r.atualizado_em : m), '');
 
@@ -857,23 +874,24 @@ function populateFilters(){
    conjunto ANTES do próprio filtro de elegibilidade, senão escolher "Não"
    esvaziaria a lista e, na rodada seguinte, os que sobraram virariam os 15
    primeiros de si mesmos. */
-const KM_MIN_ELEG = 1000, TOP_ELEG = 15;
 function elegiveisDe(rows){
+  // km mínimo e cota são da UNIDADE do motorista (critDe); o grupo só junta o ranking/pódio
   const agg = {};
   rows.forEach(r=>{
-    const a = agg[r.unit] || (agg[r.unit] = { km:0, pts:[], uni: COD_OF[r.unit]||'—' });
+    const a = agg[r.unit] || (agg[r.unit] = { km:0, pts:[], uni: UNI_OF[r.unit] || COD_OF[r.unit] || '—' });
     a.km += +r.km||0;
     if(r.pont!=null) a.pts.push(r.pont);
   });
   const porUni = {};
   Object.entries(agg).forEach(([mot,a])=>{
-    if(a.km < KM_MIN_ELEG || !a.pts.length) return;
+    const c = critDe(a.uni);
+    if(a.km < c.km_min || !a.pts.length) return;
     const pont = a.pts.reduce((x,y)=>x+y,0)/a.pts.length;
-    (porUni[a.uni] = porUni[a.uni] || []).push({ mot, pont });
+    (porUni[a.uni] = porUni[a.uni] || { top: c.top_n, l: [] }).l.push({ mot, pont });
   });
   const ok = new Set();
-  Object.values(porUni).forEach(arr=>arr
-    .sort((a,b)=>b.pont-a.pont).slice(0,TOP_ELEG).forEach(l=>ok.add(l.mot)));
+  Object.values(porUni).forEach(u=>u.l
+    .sort((a,b)=>b.pont-a.pont).slice(0, u.top > 0 ? u.top : u.l.length).forEach(l=>ok.add(l.mot)));
   return ok;
 }
 function getFiltered(){
@@ -1160,6 +1178,7 @@ function semRpmFora(linhas){
 }
 let SUB_BASE = '';        // "N motorista(s) · coleta dd/mm/aaaa"
 async function recarregar(){
+  await fetchCriterios();
   set('titSub','Carregando…');
   try{
     let linhas=[];

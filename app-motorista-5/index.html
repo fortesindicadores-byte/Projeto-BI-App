@@ -7,7 +7,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="DriverPro">
-<meta name="build" content="202609061230">
+<meta name="build" content="202609070010">
 <title>DriverPro</title>
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="img/icone-192.png">
@@ -154,6 +154,7 @@ body.claro .nav button.on{color:#fff;}
 .unis{display:flex;flex-wrap:wrap;gap:6px;}
 .uni{font-size:11px;font-weight:600;padding:6px 10px;border-radius:999px;border:1px solid var(--brd);color:var(--txt2);cursor:pointer;background:var(--linha);user-select:none;}
 .uni small{font-weight:400;color:var(--txt3);margin-left:4px;}
+.uni .qlp{display:block;font-style:normal;font-size:9px;font-weight:500;letter-spacing:0;text-transform:none;opacity:.75;margin-top:2px;}
 .uni.on{background:var(--acc);border-color:var(--acc);color:#fff;}
 .uni.on small{color:rgba(255,255,255,.75);}
 .uni.busy{opacity:.5;pointer-events:none;}
@@ -424,7 +425,7 @@ function pinta(){
 
   $('ola').textContent = 'Olá, ' + D.nome.split(' ')[0] + '!';
   $('sub').textContent = vig.nome.charAt(0).toUpperCase() + vig.nome.slice(1) + ', ' + vig.ano;
-  $('unid').textContent = D.unidade || '';
+  $('unid').textContent = (D.unidade || '') + (D.unidade_real && D.unidade_real !== D.unidade ? ' · ' + D.unidade_real : '');
   $('av').textContent = D.nome.split(' ').map(function(p){return p[0];}).join('').slice(0,2).toUpperCase();
 
   // ── saldo + meta do mês ──
@@ -449,14 +450,15 @@ function pinta(){
 
   // ── pódio + elegibilidade ──
   var pos = D.posicao, podio = atual ? +atual.podio : 0, km = atual ? +atual.km : 0;
-  var okKm = R.km_min <= 0 || km >= R.km_min, okPos = R.top_n <= 0 || (pos != null && pos <= R.top_n);
+  var posU = (atual && atual.posicao_unidade != null) ? +atual.posicao_unidade : pos;   // cota é da unidade; pódio é do grupo
+  var okKm = R.km_min <= 0 || km >= R.km_min, okPos = R.top_n <= 0 || (posU != null && posU <= R.top_n);
   var podTxt = R.podio.map(function(v, i){ return (i+1) + 'º R$ ' + v; }).join(' · ');
   $('extras').innerHTML =
       linha(ICO.trof, 'Prêmio do pódio', podTxt, podio ? '+ ' + brl(podio) : (pos ? pos + 'º lugar' : '—'), podio ? 'pos' : '',
             podio ? pos + 'º lugar' : 'o pódio é até o ' + R.podio.length + 'º', podio ? ' eu' : '')
     + (R.km_min > 0 ? linha(ICO.km, 'Rodar ' + R.km_min.toLocaleString('pt-BR') + ' km', okKm ? 'você já rodou' : 'faltam ' + Math.max(0, R.km_min - km).toLocaleString('pt-BR') + ' km',
             km.toLocaleString('pt-BR') + ' km', okKm ? 'pos' : 'neg') : '')
-    + (R.top_n > 0 ? linha(ICO.trof, 'Ficar entre os ' + R.top_n, okPos ? 'da sua unidade' : 'precisa subir ' + (pos - R.top_n), pos ? pos + 'º' : '—', okPos ? 'pos' : 'neg') : '');
+    + (R.top_n > 0 ? linha(ICO.trof, 'Ficar entre os ' + R.top_n, okPos ? 'da sua unidade' : 'precisa subir ' + (posU - R.top_n), posU ? posU + 'º' : '—', okPos ? 'pos' : 'neg') : '');
 
   // ── ganhos, nota, ranking, regras ──
   renderGanhos();
@@ -629,11 +631,11 @@ function escolheMotorista(){
 /* admin: unidades liberadas no programa (Renan, 06/09/2026: começa só com
    EMP PIRAI; ele liga as outras aqui). Motorista de unidade desligada não
    cria senha nem entra — o banco recusa (ce_app_unidade_ativa). */
-var UNIS = [];
+var UNIS = [], TOP_PCT = 15;
 function carregaUnidades(t){
   $('selUnis').style.display = 'none';
   rpc('ce_app_unidades', { p_token: t }).then(function(r){
-    if (!r.ok) return; UNIS = r.unidades || []; pintaUnidades(r.todas); filtraMotoristas();
+    if (!r.ok) return; UNIS = r.unidades || []; TOP_PCT = r.top_pct || 15; pintaUnidades(r.todas); filtraMotoristas();
   }).catch(function(){});
 }
 function pintaUnidades(todas){
@@ -642,10 +644,29 @@ function pintaUnidades(todas){
   var n = UNIS.filter(function(u){ return u.ativa; }).length;
   $('selUnisSub').textContent = todas ? '· todas liberadas' : '· ' + n + ' de ' + UNIS.length + ' liberadas · toque para ligar/desligar';
   $('selUnisLista').innerHTML = UNIS.map(function(u){
-    return '<span class="uni' + (u.ativa ? ' on' : '') + '" data-uni="' + u.unidade + '">' + u.unidade + '<small>' + u.com_nota + '</small></span>';
+    return '<span class="uni' + (u.ativa ? ' on' : '') + '" data-uni="' + u.unidade + '">' + u.unidade + '<small>' + u.com_nota + '</small>'
+      + '<i class="qlp" data-qlp="' + u.unidade + '" title="cota · km mínimo · grupo">top ' + u.top_n + ' · ' + (u.km_min || 0).toLocaleString('pt-BR') + ' km' + (u.grupo ? ' · ' + u.grupo : '') + '</i></span>';
   }).join('');
 }
 $('selUnisLista').addEventListener('click', function(e){
+  var q = e.target.closest('.qlp[data-qlp]');
+  if (q) {   // QLP da unidade → elegíveis = top_pct% do QLP (mín. 3)
+    e.stopPropagation();
+    var uq = UNIS.filter(function(x){ return x.unidade === q.dataset.qlp; })[0]; if (!uq) return;
+    var vTop = prompt(uq.unidade + '\nQuantos elegíveis (os N melhores da unidade)?\nVazio = regra geral.', uq.top_fixo ? uq.top_n : '');
+    if (vTop === null) return;
+    var vKm = prompt(uq.unidade + '\nKm mínimo no mês para receber?\nVazio = regra geral.', uq.km_fixo ? uq.km_min : '');
+    if (vKm === null) return;
+    var vGr = prompt(uq.unidade + '\nGrupo (unidades do mesmo grupo têm UM ranking e UM pódio)?\nEx.: PIRAI. Vazio = sozinha.', uq.grupo || '');
+    if (vGr === null) return;
+    var tq = null; try { tq = localStorage.getItem('app4_token'); } catch(e){}
+    rpc('ce_app_unidade_cfg_set', { p_token: tq, p_unidade: uq.unidade, p_grupo: vGr.trim() || null,
+        p_top_n: vTop.trim() ? parseInt(vTop, 10) : null, p_km_min: vKm.trim() ? parseInt(vKm, 10) : null, p_qlp: uq.qlp || null }).then(function(r){
+      if (!r.ok) { alert(r.erro || 'Não deu certo.'); return; }
+      UNIS = r.unidades || []; TOP_PCT = r.top_pct; pintaUnidades(r.todas); filtraMotoristas();
+    }).catch(function(){ alert('Sem conexão. Tente de novo.'); });
+    return;
+  }
   var el = e.target.closest('.uni[data-uni]'); if (!el) return;
   var u = UNIS.filter(function(x){ return x.unidade === el.dataset.uni; })[0]; if (!u) return;
   var t = null; try { t = localStorage.getItem('app4_token'); } catch(e){}
