@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
-<meta name="build" content="202609071100">
+<meta name="build" content="202609071200">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <title>Condução Econômica · Gestão em Movimento</title>
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -827,7 +827,12 @@ function gvJsonp(id, tab){
 function gvVig(c){ if (!c) return null; const v = c.v;
   let m = String(v).match(/Date\((\d+),(\d+)/); if (m) return m[1] + '-' + String(+m[2] + 1).padStart(2, '0');
   const f = String(c.f != null ? c.f : (v != null ? v : '')); m = f.match(/(\d{1,2})[\/\-](\d{4})/); if (m) return m[2] + '-' + m[1].padStart(2, '0');
-  m = f.match(/(\d{4})[\/\-](\d{1,2})/); if (m) return m[1] + '-' + m[2].padStart(2, '0'); return null; }
+  m = f.match(/(\d{4})[\/\-](\d{1,2})/); if (m) return m[1] + '-' + m[2].padStart(2, '0');
+  // "jan./2026", "Fev/26" — o formato de texto da aba
+  const MES = { jan:1, fev:2, mar:3, abr:4, mai:5, jun:6, jul:7, ago:8, set:9, out:10, nov:11, dez:12 };
+  m = NK(f).toLowerCase().match(/^([a-z]{3})[a-z]*\.?\s*\/\s*(\d{2,4})$/);
+  if (m && MES[m[1]]) { let y = +m[2]; if (y < 100) y += 2000; return y + '-' + String(MES[m[1]]).padStart(2, '0'); }
+  return null; }
 async function fetchKmlRem(){
   try {
     const rows = await gvJsonp(KML_ID, KML_TAB);
