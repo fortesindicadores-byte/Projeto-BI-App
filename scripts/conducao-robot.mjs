@@ -91,7 +91,11 @@ const REGUA = {
    não pontua nelas. O diário continua guardando vel_excesso_pct e os eventos,
    e o mensal continua gravando vel_pontos/vel_excessos — só não entra na
    pontuação nem na tela. */
-const PESOS = { rpm: 25, idle: 20, acel: 15 };
+/* PESOS EM BASE 100 (Renan, 07/09/2026: "não deveria ser 100? eu também
+   aumentaria o peso da faixa verde"): 50 / 30 / 20. Antes era 25/20/15 (soma
+   60, resto do desenho de seis pilares). Mudou → rodar o modo `recalc` no ano
+   inteiro, e os mesmos pesos ficam em ce_app_regras (app) e em PILAR (painel). */
+const PESOS = { rpm: 50, idle: 30, acel: 20 };
 
 const nota = (pilar, valor) => {
   if (valor == null || !isFinite(valor)) return null;
