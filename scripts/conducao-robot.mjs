@@ -2822,6 +2822,9 @@ if (MODE === 'litros') {
     try {
       const novas = await geotabDia(dia, GT, GT_USERS, GT_RULES, GT_UNIDEV, null, null, null);
       const f = novas._fuel || {}; regTot += f.reg || 0; casTot += f.casados || 0;
+      // FuelUsed falhou (Geotab instável): NÃO gravar — gravaria litros vazios
+      // por cima do que a coleta diária já trouxe (aconteceu em 06/09/2026)
+      if (f.erro) { console.log(`${dia}: FuelUsed FALHOU (${f.erro.slice(0, 80)}) — dia pulado, nada gravado`); continue; }
       const atuais = await sbTodos(`ce_diario?select=id,chave,bruto&dia=eq.${dia}&fonte=eq.Geotab`);
       const porChave = new Map(atuais.map(a => [a.chave, a]));
       const patch = [];
