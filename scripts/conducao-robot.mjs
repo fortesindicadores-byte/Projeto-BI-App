@@ -1219,7 +1219,7 @@ if (MODE === 'carteira') {
   if (!todos.length) { console.log('sem gente na unidade neste mês.'); process.exit(0); }
 
   // pesos do score de hoje — velocidade é deflator, não entra na média
-  const PES = { rpm: 25, idle: 20, acel: 15 };   // velocidade fora do score (03/09/2026)
+  const PES = PESOS;   // os MESMOS pesos do score (velocidade fora, 03/09/2026)
   const ROT = { rpm: 'Faixa Verde', idle: 'Motor Ocioso', acel: 'Aceleração', vel: 'Velocidade' };
   const conta = (r, S) => {
     const v = { rpm: r.rpm_pontos, idle: r.idle_pontos, acel: r.acel_pontos, vel: r.vel_pontos };
@@ -1363,7 +1363,7 @@ if (MODE === 'programa') {
   const PODIO  = String(process.env.CE_PODIO || '300,150,100').split(',')
     .map(s => +s.trim()).filter(v => v > 0);
   const brl = v => 'R$ ' + v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  const PES = { rpm: 25, idle: 20, acel: 15 };
+  const PES = PESOS;   // os MESMOS pesos do score
   const ROT = { rpm: 'Faixa Verde', idle: 'Motor Ocioso', acel: 'Aceleração' };
   const conta = (r, S) => {
     const v = { rpm: r.rpm_pontos, idle: r.idle_pontos, acel: r.acel_pontos };
