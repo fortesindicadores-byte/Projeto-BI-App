@@ -83,6 +83,9 @@ create index if not exists ce_scores_comp_idx on public.ce_scores_mensais (compe
 -- reexecutável: colunas que entraram depois
 alter table public.ce_scores_mensais add column if not exists viagens      int;   -- ciclos de ignição no mês (Geotab Trip)
 alter table public.ce_scores_mensais add column if not exists vel_excessos int;   -- eventos de excesso de velocidade no mês
+-- 07/09/2026: combustível por viagem (Geotab `FuelUsed`, casado às viagens do motorista)
+alter table public.ce_diario         add column if not exists litros numeric;   -- litros consumidos no dia
+alter table public.ce_scores_mensais add column if not exists litros numeric;   -- litros no mês (soma dos dias com FuelUsed)
 
 -- ---------- 4) RLS: leitura para quem está logado, escrita só do robô -------
 alter table public.ce_motoristas     enable row level security;

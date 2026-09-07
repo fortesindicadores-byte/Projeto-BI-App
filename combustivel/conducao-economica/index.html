@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
-<meta name="build" content="202609070400">
+<meta name="build" content="202609070500">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <title>Condução Econômica · Gestão em Movimento</title>
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -276,6 +276,13 @@ table.dre td.cg-t,.cg-t{color:var(--verde)!important;font-weight:700;}
 .cart-kpis{grid-template-columns:repeat(5,1fr);margin-top:0;margin-bottom:12px;flex:0 0 auto;}
 #vw-carteira{display:none;flex-direction:column;} #vw-carteira.on{display:flex;}
 .cart-td b{font-weight:800;} .cart-neg{color:var(--txt3);}
+/* Consumo (Renan, 07/09/2026): litros por viagem da telemetria — KPIs, km/L
+   por mês e a tabela por motorista. O gráfico tem teto de altura para a
+   tabela ficar com a sobra (a regra da sobra dividida). */
+.cons-kpis{grid-template-columns:repeat(4,1fr);margin-top:0;margin-bottom:12px;flex:0 0 auto;}
+#vw-consumo{display:none;flex-direction:column;} #vw-consumo.on{display:flex;}
+.cons-g{flex:0 0 auto;height:30vh;min-height:170px;margin-bottom:12px;}
+@media(max-width:860px){.cons-g{height:260px;}}
 /* A FILEIRA DE BAIXO USA A MESMA GRADE DOS CARDS (Renan, 04/09/2026): o
    gráfico ocupa as duas primeiras colunas e as Regras a terceira, então as
    bordas batem com os cards de cima. Proporção em fração (1.55fr 1fr) nunca
@@ -431,6 +438,10 @@ table.dre thead th.sortable:hover{color:var(--laranja);}
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="6" width="20" height="13" rx="2"/><path d="M16 12h4"/><path d="M2 10h20"/></svg>
       Carteira em R$
     </button>
+    <button class="s-item" data-vw="consumo">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3s6 6.5 6 11a6 6 0 0 1-12 0c0-4.5 6-11 6-11z"/></svg>
+      Consumo
+    </button>
 
     <div class="s-sec">Atalhos</div>
     <div id="pdf-slot"></div>
@@ -580,6 +591,28 @@ table.dre thead th.sortable:hover{color:var(--laranja);}
           <div class="twrap"><table class="dre" id="cart-table">
             <thead><tr><th style="width:34px;">#</th><th>Motorista</th><th>Unidade</th><th class="num">Km</th><th class="num">Nota</th><th class="num">Meses elegível</th><th class="num">Carteira</th><th class="num">Pódio</th><th class="num">Total</th></tr></thead>
             <tbody id="cart-tbody"></tbody>
+          </table></div>
+        </div>
+      </section>
+
+      <!-- ══ 4 · CONSUMO (Renan, 07/09/2026: "você lê hoje o consumo também da
+           telemetria? Legal ter também… mais uma visão"). Litros que o
+           veículo reporta viagem a viagem no Geotab (FuelUsed), somados por
+           motorista pelo robô. Km/L = Σ km ÷ Σ litros SÓ dos meses com litros,
+           para a conta não misturar km sem combustível reportado. ══ -->
+      <section class="vw" id="vw-consumo">
+        <div class="kpis ce-kpis cons-kpis" id="cons-kpis"></div>
+        <div class="card gcard cons-g">
+          <div class="thead-row" style="margin-bottom:0">
+            <div><div class="gtit">Km/L por mês</div><div class="gsub">Σ km ÷ Σ litros das viagens com combustível reportado · 2026</div></div>
+          </div>
+          <div class="gleg" id="cons-leg"></div>
+          <div class="gcv"><canvas id="chartConsumo"></canvas></div>
+        </div>
+        <div class="rank-sec">
+          <div class="twrap"><table class="dre" id="cons-table">
+            <thead><tr><th style="width:34px;">#</th><th>Motorista</th><th>Unidade</th><th class="num">Km com combustível</th><th class="num">Litros</th><th class="num">Km/L</th><th class="num">Nota</th></tr></thead>
+            <tbody id="cons-tbody"></tbody>
           </table></div>
         </div>
       </section>
@@ -740,14 +773,14 @@ async function fetchFromSupabase() {
   for (let de = 0; ; de += PASSO) {
     // `viagens` é coluna nova: enquanto o SQL não roda no banco, o select cai
     // para a versão sem ela em vez de derrubar o painel inteiro
-    const COLS = 'competencia,chave,motorista,unidade,fonte,km,dias,rpm_pontos,idle_pontos,acel_pontos,vel_pontos,pontuacao,atualizado_em';
+    const COLS = 'competencia,chave,motorista,unidade,fonte,km,dias,litros,rpm_pontos,idle_pontos,acel_pontos,vel_pontos,pontuacao,atualizado_em';
     let { data: lote, error } = await sbClient()
       .from('ce_scores_mensais').select(COLS + ',viagens,vel_excessos')
       .order('competencia', { ascending: true }).order('chave', { ascending: true })
       .range(de, de + PASSO - 1);
-    if (error && /viagens|vel_excessos/.test(error.message || '')) {
+    if (error && /viagens|vel_excessos|litros/.test(error.message || '')) {
       ({ data: lote, error } = await sbClient()
-        .from('ce_scores_mensais').select(COLS)
+        .from('ce_scores_mensais').select(COLS.replace(',litros', ''))
         .order('competencia', { ascending: true }).order('chave', { ascending: true })
         .range(de, de + PASSO - 1));
     }
@@ -779,6 +812,7 @@ async function fetchFromSupabase() {
     // sendo LIDO e guardado, como a freada brusca, para não precisar
     // recoletar quando a malha de nós (fábricas e CDs) chegar.
     km: +r.km || 0, viagens: +r.viagens || 0, velx: +r.vel_excessos || 0,
+    lit: r.litros == null ? null : +r.litros,      // litros do mês (FuelUsed), null = sem leitura
     pont: r.pontuacao,
   }));
 }
@@ -941,6 +975,7 @@ function atualizar(){
   renderHero(data);
   renderRanking(data);
   renderCarteira(data);
+  renderConsumo(data);
   renderChart();
 }
 
@@ -1129,6 +1164,83 @@ function renderCarteira(data){
     </tr>`).join('') || '<tr><td colspan="9">Sem dados no recorte.</td></tr>';
 }
 
+/* ── Consumo (litros por viagem da telemetria) ── */
+const kmL=(km,l)=> l>0 ? (km/l).toFixed(2).replace('.',',') : '—';
+function consumoDe(data){
+  const acc={};
+  data.forEach(r=>{
+    const a=acc[r.unit]||(acc[r.unit]={unit:r.unit,km:0,kmTot:0,lit:0,pts:[]});
+    a.kmTot+=+r.km||0; if(r.pont!=null) a.pts.push(r.pont);
+    if(r.lit>0){ a.km+=+r.km||0; a.lit+=r.lit; }
+  });
+  return Object.values(acc)
+    .map(a=>({...a, pont:a.pts.length?a.pts.reduce((x,y)=>x+y,0)/a.pts.length:null, kml:a.lit>0?a.km/a.lit:null}))
+    .sort((a,b)=>((b.kml??-1)-(a.kml??-1)) || b.kmTot-a.kmTot);
+}
+function renderConsumo(data){
+  const rows=consumoDe(data);
+  const km=rows.reduce((s,r)=>s+r.km,0), lit=rows.reduce((s,r)=>s+r.lit,0), kmTot=rows.reduce((s,r)=>s+r.kmTot,0);
+  const com=rows.filter(r=>r.lit>0).length;
+  const box=$('cons-kpis');
+  if(box) box.innerHTML = [
+    ['Km/L do recorte', kmL(km,lit), 'Σ km ÷ Σ litros, só onde há litros'],
+    ['Litros', lit?Math.round(lit).toLocaleString('pt-BR'):'—', 'reportados pelo veículo, viagem a viagem'],
+    ['Km com combustível', km?Math.round(km).toLocaleString('pt-BR'):'—', kmTot?`${Math.round(km/kmTot*100)}% dos ${Math.round(kmTot).toLocaleString('pt-BR')} km do recorte`:'—'],
+    ['Motoristas com litros', String(com), `de ${rows.length} com nota`],
+  ].map(([l,v,m])=>`<div class="kpi"><div class="kl">${l}</div><div class="kv">${v}</div><div class="km">${m}</div></div>`).join('');
+  $('cons-tbody').innerHTML = rows.map((r,i)=>`<tr>
+      <td class="rank-num">${i+1}</td>
+      <td class="conta">${r.unit}<div class="mot-sub">${SRC_OF[r.unit]||''}</div></td>
+      <td>${COD_OF[r.unit]||'—'}</td>
+      <td class="num">${r.lit>0?Math.round(r.km).toLocaleString('pt-BR'):'—'}</td>
+      <td class="num">${r.lit>0?Math.round(r.lit).toLocaleString('pt-BR'):'—'}</td>
+      <td class="num"><b>${kmL(r.km,r.lit)}</b></td>
+      <td class="num">${r.pont!=null?scorePill(r.pont):'—'}</td>
+    </tr>`).join('') || '<tr><td colspan="7">Sem dados no recorte.</td></tr>';
+  renderConsChart();
+}
+let chartConsumo=null;
+function renderConsChart(){
+  const cv=$('chartConsumo'); if(!cv || !cv.offsetParent) return;   // só desenha se a visão está na tela
+  const isLight=document.body.classList.contains('claro');
+  const tickC = isLight?'#4A5568':'#B2BCD2';
+  const tooltip = isLight
+    ? {backgroundColor:'#FFFFFF',titleColor:'#D95E08',bodyColor:'#161D2B',borderColor:'rgba(15,23,42,.15)',borderWidth:1,titleFont:{family:'Montserrat'},bodyFont:{family:'Montserrat'}}
+    : {backgroundColor:'#26262B',titleColor:'#F97316',bodyColor:'#EEF2FA',borderColor:'rgba(255,255,255,.12)',borderWidth:1,titleFont:{family:'Montserrat'},bodyFont:{family:'Montserrat'}};
+  const LABELS=['jan.','fev.','mar.','abr.','mai.','jun.','jul.','ago.','set.','out.','nov.','dez.'];
+  // mesmo recorte de unidade/motorista do topo, o ano inteiro; a vigência
+  // selecionada só fica em destaque (igual à Evolução Temporal)
+  const su=getMsValues('ms-uni'), sm=getMsValues('ms-mot');
+  const base=RAW.filter(r=>(!su.length||su.includes(COD_OF[r.unit]||'—'))&&(!sm.length||sm.includes(r.unit)));
+  const sv=selVigKeys(), allVigs=[...new Set(RAW.map(r=>r.vig))];
+  const filtroAtivo = sv.length>0 && sv.length<allVigs.length;
+  const porMes=Array.from({length:12},(_,i)=>{
+    const rows=base.filter(r=>vigMonth(r.vig)===i+1 && r.lit>0);
+    const k=rows.reduce((s,r)=>s+(+r.km||0),0), l=rows.reduce((s,r)=>s+r.lit,0);
+    return l>0 ? k/l : null;
+  });
+  const vigPos=Array.from({length:12},(_,i)=>{ const r=base.find(x=>vigMonth(x.vig)===i+1); return r?r.vig:null; });
+  const sel=i=>!filtroAtivo||(vigPos[i]&&sv.includes(vigPos[i]));
+  const cor=porMes.map((v,i)=>v==null?'rgba(100,100,100,.18)':`rgba(249,115,22,${sel(i)?'.9':'.18'})`);
+  const vals=porMes.filter(v=>v!=null);
+  const yMax = vals.length ? Math.max(...vals)*1.18 : 5;
+  $('cons-leg').innerHTML = `<span><i class="sq" style="background:var(--laranja)"></i>Km/L do mês</span>`;
+  if(chartConsumo) chartConsumo.destroy();
+  chartConsumo=new Chart(cv.getContext('2d'),{
+    type:'bar',
+    data:{ labels:LABELS, datasets:[{ label:'Km/L', data:porMes, backgroundColor:cor, borderWidth:0, borderRadius:0,
+      barPercentage:.97, categoryPercentage:.94,
+      datalabels:{ display:c=>porMes[c.dataIndex]!=null && sel(c.dataIndex),
+        color:isLight?'#161D2B':'#EEF2FA', font:{family:'Montserrat',size:11,weight:'700'},
+        formatter:v=>v!=null?v.toFixed(2).replace('.',','):'', anchor:'end', align:'end', offset:1 } }]},
+    options:{ responsive:true, maintainAspectRatio:false,
+      plugins:{ legend:{display:false}, datalabels:{display:false},
+        tooltip:{...tooltip, callbacks:{ label:c=>c.raw!=null?' '+c.raw.toFixed(2).replace('.',',')+' km/L':'' }} },
+      scales:{ x:{ grid:{display:false}, border:{display:false}, ticks:{color:tickC, font:{family:'Montserrat',size:11}} },
+               y:{ display:false, min:0, max:yMax } } },
+  });
+}
+
 /* ── Regras de Pontuação ── */
 function renderPesos(){
   // o DEFLATOR não divide peso com os pilares — os 100% são só de quem soma
@@ -1281,13 +1393,14 @@ async function recarregar(){
 }
 
 /* ── navegação entre as visões ── */
-const TIT={resumo:'Resumo Gerencial', ranking:'Ranking Geral', carteira:'Carteira em R$'};
+const TIT={resumo:'Resumo Gerencial', ranking:'Ranking Geral', carteira:'Carteira em R$', consumo:'Consumo'};
 function setVw(v){
   VW=v;
   document.querySelectorAll('.s-item[data-vw]').forEach(b=>b.classList.toggle('on',b.dataset.vw===v));
   document.querySelectorAll('.vw').forEach(s=>s.classList.toggle('on', s.id==='vw-'+v));
   set('tit', TIT[v]||'');
   if(v==='resumo') setTimeout(renderChart,30);     // o canvas precisa estar visível
+  if(v==='consumo') setTimeout(renderConsChart,30);
   // o .twrap do ranking só tem altura depois de a seção ficar visível
   if(v==='ranking') requestAnimationFrame(ajustaAlturaLinhas);
 }
@@ -1318,7 +1431,7 @@ function trocaMini(){
   const l=document.querySelector('.side').classList.toggle('mini');
   localStorage.setItem('ce_mini', l?'1':'0');
   const b=$('btMini'); if(b) b.title=l?'Expandir menu':'Recolher menu';
-  setTimeout(renderChart,260);
+  setTimeout(()=>{ renderChart(); renderConsChart(); },260);
 }
 if(localStorage.getItem('ce_mini')==='1'){ document.querySelector('.side').classList.add('mini'); $('btMini').title='Expandir menu'; }
 
@@ -1329,7 +1442,7 @@ function aplicaTema(t){
   document.body.classList.toggle('claro', t==='light');
   localStorage.setItem('bi_theme', t);
   const b=$('btTema'); if(b) b.innerHTML = t==='light'?_LUA:_SOL;
-  if(RAW.length) renderChart();
+  if(RAW.length){ renderChart(); renderConsChart(); }
 }
 function trocaTema(){ aplicaTema(document.body.classList.contains('claro')?'dark':'light'); }
 aplicaTema(localStorage.getItem('bi_theme')||'dark');
