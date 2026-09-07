@@ -863,6 +863,8 @@ O CSS controla o **modo escuro**: `--gem-foto` (a imagem) + `--gem-scrim` (o esc
 
 **FILTRO NA ABA DO SHEETS ESCONDE DADO DO PAINEL (24/08/2026):** se alguém deixa um filtro aplicado na aba, o gviz devolve **só as linhas visíveis** — sem erro, sem aviso. Sintoma: cards zerados para todo recorte que "sumiu". Foi o caso da Árvore de Combustível, em que KM/L e R$/L vieram 0,00 enquanto Custo e KM Rodado traziam valor: a aba `Km/L` estava filtrada e o gviz entregou 32 linhas (só `ROTA - MCC` de jul/2026) das milhares que existem. **Antes de caçar bug no código, conferir se a aba está filtrada.** O workflow **KmL Aba Inspect** (`scripts/kml-aba-inspect.mjs`) mostra em segundos quantas linhas, vigências e projetos a aba está entregando; o **Arvore Comb Inspect** compara os rótulos de projeto das três fontes da Árvore.
 
+**PRÓXIMO PASSO — SHEETS PARA O SUPABASE (Renan, 07/09/2026: "vamos fazer amanhã algo para jogar tudo para o Supabase"):** o filtro na aba `Km/L` voltou a esconder o dado (586 linhas, só jan./2026, confirmado pelo KmL Aba Inspect) e derrubou o remunerado da Condução Econômica, o Eficiência Km/L e a meta de combustível do Gerot. Decisão: parar de ler abas por gviz e ter o robô gravando cada aba numa tabela do Supabase (linhas, não texto cru como o `gviz_snapshot`), com os painéis lendo de lá. Começar pela `Km/L` do workbook Consumo. O remunerado da Condução Econômica (linha pontilhada + condicionais, código no histórico do PR #1044) volta quando essa base existir.
+
 ## Snapshot do gviz (abertura rápida de TODOS os painéis) — 19/08/2026
 
 Renan aprovou ("pode fazer todos"): a abertura dos painéis não espera mais o gviz do Google (1–4s/aba). Três peças:
